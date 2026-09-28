@@ -48,11 +48,13 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
 const RESIZE_DEBOUNCE_MS = 150;
-/** Rows of a window folded to its header (its controls may wrap on two lines). */
+/** Rows of a folded window: its one-line header and its summary. */
 const FOLDED_ROWS = 2;
 const ONE_COLUMN_MAX_WIDTH = 768;
 const CELL_HEIGHT = "4rem";
-const GAP = "0.5rem";
+/** The row height on one column, where a window's header takes two lines. */
+const ONE_COLUMN_CELL_HEIGHT = "5.5rem";
+const GAP = "0.375rem";
 
 /**
  * The Compare windows on a gridstack grid. gridstack adopts none of the
@@ -73,8 +75,10 @@ const GAP = "0.5rem";
  * nearest its place, without scrolling the page unless that window is
  * entirely off the screen; the grid keeps its height until the windows left
  * reach the bottom of the screen again (at once, or once the reader scrolls
- * up), so that the page does not shorten under the reader and move. Under 768 px the windows are listed on one
- * column, never saved; back on 12 columns, the saved places are put back.
+ * up), so that the page does not shorten under the reader and move. Under
+ * 768 px the windows are listed on one column, with taller rows (a header
+ * takes two lines there), never saved; back on 12 columns, the saved places
+ * are put back. The grid lies on the workspace surface.
  * « Rearrange » lays the windows shown out again, forgets every saved place
  * (the hidden windows', `retained`, included: they come back at the end)
  * and saves the new ones; the hidden, folded and open windows stay as they
@@ -273,6 +277,7 @@ onMounted(() => {
     created.on("change", onGridChange);
     created.on("resizestop", scheduleResize);
     shownColumns = created.getColumn();
+    fitRows();
     syncFromGrid();
     observer = new ResizeObserver(onGridResized);
     observer.observe(element);
@@ -448,11 +453,21 @@ function onGridChange(): void {
     const columns = grid?.getColumn() ?? GRID_COLUMNS;
     if (columns !== shownColumns) {
         shownColumns = columns;
+        fitRows();
         scheduleResize();
         if (columns === GRID_COLUMNS) queueMicrotask(restoreSaved);
         return;
     }
     if (saving && columns === GRID_COLUMNS) saveGrid();
+}
+
+/** Gives the rows the height of the column count shown. */
+function fitRows(): void {
+    grid?.cellHeight(
+        grid.getColumn() === GRID_COLUMNS
+            ? CELL_HEIGHT
+            : ONE_COLUMN_CELL_HEIGHT,
+    );
 }
 
 function saveGrid(): void {
@@ -740,36 +755,45 @@ function rearrange(): void {
                 <span>{{ $gettext("Rearrange") }}</span>
             </button>
         </div>
-        <div
-            ref="gridElement"
-            class="grid-stack"
-        >
+        <div class="workspace">
             <div
-                v-for="window in windows"
-                :key="window.id"
-                class="grid-stack-item"
-                :data-window-id="window.id"
+                ref="gridElement"
+                class="grid-stack"
             >
-                <div class="grid-stack-item-content">
-                    <CompareWindow
-                        :title="window.title"
-                        :kind="window.kind"
-                        :subtitle="window.subtitle"
-                        :hides="window.hides ?? true"
-                        :position="positionOf(window.id)"
-                        :total="windows.length"
-                        :size="sizes[window.id] ?? null"
-                        :folded="foldedOf(window)"
-                        :enlarged="enlargedId === window.id"
-                        :enlarge-target="`#${dialogBodyId}`"
-                        @move="move(window.id, $event.step)"
-                        @size-chosen="resize(window.id, $event.size)"
-                        @fold-toggled="toggleFold(window.id)"
-                        @enlarge-toggled="toggleEnlarge(window.id)"
-                        @close="close(window.id)"
-                    >
-                        <slot :window="window" />
-                    </CompareWindow>
+                <div
+                    v-for="window in windows"
+                    :key="window.id"
+                    class="grid-stack-item"
+                    :data-window-id="window.id"
+                >
+                    <div class="grid-stack-item-content">
+                        <CompareWindow
+                            :title="window.title"
+                            :kind="window.kind"
+                            :subtitle="window.subtitle"
+                            :hides="window.hides ?? true"
+                            :position="positionOf(window.id)"
+                            :total="windows.length"
+                            :size="sizes[window.id] ?? null"
+                            :folded="foldedOf(window)"
+                            :enlarged="enlargedId === window.id"
+                            :enlarge-target="`#${dialogBodyId}`"
+                            @move="move(window.id, $event.step)"
+                            @size-chosen="resize(window.id, $event.size)"
+                            @fold-toggled="toggleFold(window.id)"
+                            @enlarge-toggled="toggleEnlarge(window.id)"
+                            @close="close(window.id)"
+                        >
+                            <slot :window="window" />
+                            <template #summary="{ unfold }">
+                                <slot
+                                    name="summary"
+                                    :window="window"
+                                    :unfold="unfold"
+                                />
+                            </template>
+                        </CompareWindow>
+                    </div>
                 </div>
             </div>
         </div>
@@ -790,7 +814,7 @@ function rearrange(): void {
 <style scoped>
 .window-grid {
     display: grid;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .window-grid .toolbar {
@@ -814,6 +838,12 @@ function rearrange(): void {
 .window-grid .rearrange:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+.window-grid .workspace {
+    padding: 0.375rem;
+    border-radius: 0.875rem;
+    background: var(--bg-alt);
 }
 
 .window-grid .grid-stack-item-content {

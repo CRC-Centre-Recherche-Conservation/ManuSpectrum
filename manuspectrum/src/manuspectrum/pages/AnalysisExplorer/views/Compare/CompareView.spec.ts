@@ -399,6 +399,25 @@ describe("CompareView", () => {
         ).toBe("true");
     });
 
+    it("sums a folded XY window up under its header and draws it from there", async () => {
+        select(XRF_ITEM, RAMAN_ITEM, FORS_ITEM, FTIR_ITEM);
+        const view = await mountView();
+        const folded = windowOf(view, `auto:xy:${FTIR}`);
+        expect(folded.find(".folded-summary .line").text()).toBe(
+            "1 XRF spectrum, not drawn",
+        );
+        expect(
+            folded.findAll(".folded-summary .slots li").map((li) => li.text()),
+        ).toEqual(["A4"]);
+        expect(
+            windowOf(view, `auto:xy:${FORS}`).find(".folded-summary").exists(),
+        ).toBe(false);
+        await folded.find(".folded-summary button.unfold").trigger("click");
+        await flushPromises();
+        expect(seriesCalls()).toContain(`${SERIES_PATH}${uuid(706)}?n=full`);
+        expect(folded.find(".folded-summary").exists()).toBe(false);
+    });
+
     it("reads the spectra of a folded XY window only once it is unfolded", async () => {
         select(XRF_ITEM, RAMAN_ITEM, FORS_ITEM, FTIR_ITEM);
         const view = await mountView();

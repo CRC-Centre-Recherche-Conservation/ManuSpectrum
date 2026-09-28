@@ -141,6 +141,14 @@ export class FakeGridStack {
 
     destroy = vi.fn((): FakeGridStack => this);
 
+    /** gridstack.js:831: the height of a row, as the grid's option. */
+    cellHeight = vi.fn(
+        (value: GridStackOptions["cellHeight"]): FakeGridStack => {
+            this.options.cellHeight = value;
+            return this;
+        },
+    );
+
     /** gridstack.js:1019: the grid's item children, in DOM order. */
     getGridItems(): GridItemHTMLElement[] {
         return [...this.el.children].filter(

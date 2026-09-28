@@ -229,6 +229,18 @@ describe("WindowGrid", () => {
         expect(stored()).toBeNull();
     });
 
+    it("gives each row more height in one column, where a header takes two lines, and the usual height back on 12 columns", async () => {
+        mountGrid();
+        const grid = lastGrid();
+        expect(grid.options.cellHeight).toBe("4rem");
+        grid.setColumns(1);
+        await flushPromises();
+        expect(grid.cellHeight).toHaveBeenLastCalledWith("5.5rem");
+        grid.setColumns(12);
+        await flushPromises();
+        expect(grid.cellHeight).toHaveBeenLastCalledWith("4rem");
+    });
+
     it("grows to one column under 768 px", () => {
         mountGrid();
         expect(lastGrid().options.columnOpts).toEqual({
@@ -644,6 +656,33 @@ describe("WindowGrid", () => {
         await view.find("button.rearrange").trigger("click");
         await flushPromises();
         expect(node(XRF.id)).toEqual({ id: XRF.id, x: 4, y: 0, w: 6, h: 5 });
+    });
+
+    it("shows a folded window's summary under its header, whose action unfolds it", async () => {
+        const folded: CompareWindowSpec = { ...XRF, folded: true };
+        wrapper = mount(WindowGrid, {
+            props: { windows: [MICRO, folded] },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+            slots: {
+                default: `<template #default="{ window }"><p class="content">{{ window.id }}</p></template>`,
+                summary: `<template #summary="{ window, unfold }"><button class="draw" @click="unfold">{{ window.id }}</button></template>`,
+            },
+        });
+        const summary = item(XRF.id).querySelector(".summary");
+        expect(summary?.querySelector(".draw")?.textContent).toBe(XRF.id);
+        expect(item(XRF.id).querySelector(".content")).toBeNull();
+        expect(item(MICRO.id).querySelector(".summary")).toBeNull();
+        item(XRF.id).querySelector<HTMLButtonElement>(".draw")!.click();
+        await nextTick();
+        expect(lastGrid().update).toHaveBeenLastCalledWith(item(XRF.id), {
+            h: 5,
+        });
+        expect(item(XRF.id).querySelector(".summary")).toBeNull();
+        expect(item(XRF.id).querySelector(".content")?.textContent).toBe(
+            XRF.id,
+        );
+        expect(announce).toHaveBeenLastCalledWith("XRF: unfolded");
     });
 
     it("keeps what a window shows while it is folded", async () => {

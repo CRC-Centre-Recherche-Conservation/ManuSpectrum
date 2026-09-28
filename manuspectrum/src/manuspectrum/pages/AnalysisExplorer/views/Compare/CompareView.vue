@@ -16,6 +16,7 @@ import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftB
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
+import FoldedSummary from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue";
 import HiddenWindowsMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HiddenWindowsMenu.vue";
 import SelectionIndicator from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue";
 import ToolMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue";
@@ -40,6 +41,7 @@ import {
     writeHidden,
     writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
+import { foldedSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/folded-summary.ts";
 import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
 import { offeredTools } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
@@ -109,7 +111,9 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * The view provides the linked selection of its windows
  * (`useLinkedSelection`, `LINKED_SELECTION_KEY`), shown in the toolbar by
  * `SelectionIndicator` before « Hidden windows » and « + Tool ». Its
- * windows mark the linked with the `--linked-*` tokens of the page.
+ * windows mark the linked with the `--linked-*` tokens of the page. A
+ * folded window sums up what it holds (`FoldedSummary`), with the button
+ * that unfolds it.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -153,6 +157,15 @@ const windows = computed<AutoWindow[]>((previous) =>
 );
 const windowById = computed(
     () => new Map(windows.value.map((window) => [window.id, window])),
+);
+const summaries = computed(
+    () =>
+        new Map(
+            windows.value.flatMap((window) => {
+                const summary = foldedSummary(window);
+                return summary ? [[window.id, summary] as const] : [];
+            }),
+        ),
 );
 const specs = computed<CompareWindowSpec[]>(() =>
     windows.value.map((window) => ({
@@ -472,6 +485,14 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
                         :status="synthesis.status.value"
                         @choose="chooseTool"
                         @retry="synthesis.retry"
+                    />
+                </template>
+                <template #summary="{ window: spec, unfold }">
+                    <FoldedSummary
+                        v-if="summaries.get(spec.id)"
+                        :summary="summaries.get(spec.id)!"
+                        :title="spec.title"
+                        @unfold="unfold"
                     />
                 </template>
                 <template #default="{ window: spec }">

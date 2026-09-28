@@ -15,8 +15,10 @@ import { provideWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/comp
 import type { WindowSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
 /**
- * The frame of one Compare window, its header on one line: a drag handle,
- * the title (after a small-caps `kind`, before a counted `subtitle`), the
+ * The frame of one Compare window, its header on one line (in a narrow
+ * window it wraps, the button groups at the end of the next line): a drag
+ * handle, the title (after an upper-case `kind`, before a counted
+ * `subtitle`), the
  * actions its body declares (`useWindowActions`), then its own: the size
  * (`SizePicker`), « Enlarge », the fold disclosure of a window that folds
  * (its state in `aria-expanded`), « More » (a menu: move before or after,
@@ -31,7 +33,8 @@ import type { WindowSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Com
  * only, and the grid cell says the window is shown enlarged, with
  * « Restore ». A window that opens folded mounts its content when first
  * unfolded or enlarged; folding it again only hides the content, which
- * keeps its state. `position` is 1-based in reading order; `size` is null
+ * keeps its state. Folded, it shows its `summary` slot under the header,
+ * which receives `unfold`. `position` is 1-based in reading order; `size` is null
  * for a size set by hand.
  */
 const props = withDefaults(
@@ -111,6 +114,10 @@ function onMove(step: -1 | 1): void {
     if ((step < 0 && isFirst.value) || (step > 0 && isLast.value)) return;
     closeMenu(true);
     emit("move", { step });
+}
+
+function unfold(): void {
+    if (bodyHidden.value) emit("fold-toggled");
 }
 
 function onMenuClose(): void {
@@ -366,6 +373,15 @@ function onMenuClose(): void {
                     </div>
                 </header>
                 <div
+                    v-if="bodyHidden"
+                    class="summary"
+                >
+                    <slot
+                        name="summary"
+                        :unfold="unfold"
+                    />
+                </div>
+                <div
                     :id="bodyId"
                     class="body"
                     :hidden="bodyHidden"
@@ -383,9 +399,10 @@ function onMenuClose(): void {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     block-size: 100%;
-    border: 0.0625rem solid var(--border-hover);
+    border: 0.0625rem solid var(--border);
     border-radius: var(--explorer-radius, 0.625rem);
     background: var(--surface);
+    box-shadow: var(--shadow-sm);
 }
 
 .compare-window:focus-visible {
@@ -431,15 +448,17 @@ function onMenuClose(): void {
     grid-template-rows: auto minmax(0, 1fr);
     min-block-size: 0;
     block-size: 100%;
+    font-size: 0.8125rem;
 }
 
 .compare-window-frame .head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
     min-block-size: 2.5rem;
     padding-block: 0.125rem;
-    padding-inline: 0.25rem;
+    padding-inline: 0.25rem 0.375rem;
     border-block-end: 0.0625rem solid var(--border);
 }
 
@@ -461,7 +480,7 @@ function onMenuClose(): void {
 
 .compare-window-frame .title {
     display: flex;
-    flex: 1;
+    flex: 1 1 14rem;
     align-items: baseline;
     gap: 0.5rem;
     min-inline-size: 0;
@@ -480,8 +499,9 @@ function onMenuClose(): void {
 .compare-window-frame .title .kind {
     color: var(--ink-muted);
     font-size: 0.6875rem;
-    font-variant-caps: all-small-caps;
-    letter-spacing: 0.06em;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .compare-window-frame .title .name {
@@ -501,6 +521,7 @@ function onMenuClose(): void {
 .compare-window-frame .controls {
     display: flex;
     flex: none;
+    margin-inline-start: auto;
     align-items: center;
     gap: 0.125rem;
 }
@@ -568,9 +589,17 @@ function onMenuClose(): void {
     outline-offset: -0.125rem;
 }
 
-.compare-window-frame .body {
+.compare-window-frame .summary {
+    display: grid;
+    align-content: center;
     min-block-size: 0;
-    padding: 0.5rem;
+    overflow: hidden;
+}
+
+.compare-window-frame .body {
+    position: relative;
+    min-block-size: 0;
+    padding: 0.75rem;
     border-end-start-radius: var(--explorer-radius, 0.625rem);
     border-end-end-radius: var(--explorer-radius, 0.625rem);
     overflow: auto;
