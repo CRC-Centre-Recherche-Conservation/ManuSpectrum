@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 05:26-0500\n"
+"POT-Creation-Date: 2026-09-28 05:24-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3918,26 +3918,26 @@ msgstr ""
 "The platform's source code is published under the GNU General Public License "
 "v3. Reading and downloading published data needs no account."
 
-#: views/biblissima_proxy.py:563
+#: views/biblissima_proxy.py:569
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 
 # Biblissima search & workflow — added in the progressive-loading refactor
-#: views/biblissima_proxy.py:576
+#: views/biblissima_proxy.py:582
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 
-#: views/biblissima_proxy.py:587
+#: views/biblissima_proxy.py:593
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 
-#: views/biblissima_proxy.py:600
+#: views/biblissima_proxy.py:606
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -3946,24 +3946,24 @@ msgstr ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
 "moment."
 
-#: views/biblissima_proxy.py:612 views/biblissima_proxy.py:621
+#: views/biblissima_proxy.py:618 views/biblissima_proxy.py:627
 msgid "Invalid response from the Biblissima portal."
 msgstr "Invalid response from the Biblissima portal."
 
-#: views/biblissima_proxy.py:629
+#: views/biblissima_proxy.py:635
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
 
-#: views/biblissima_proxy.py:2361
+#: views/biblissima_proxy.py:2371
 #, python-format
 msgid "Select at most %(max)s descriptors."
 msgstr "Select at most %(max)s descriptors."
 
-#: views/biblissima_proxy.py:2370
+#: views/biblissima_proxy.py:2380
 msgid "The descriptor list is malformed."
 msgstr "The descriptor list is malformed."
 
-#: views/biblissima_proxy.py:2930
+#: views/biblissima_proxy.py:2940
 msgid "The manuscript identifier is malformed."
 msgstr "The manuscript identifier is malformed."
 
@@ -4047,13 +4047,21 @@ msgstr "<h1>Renderers do not exist</h1>"
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>Renderers config does not exist</h1>"
 
-#: views/renderer_config.py:129
+#: views/renderer_config.py:127
+msgid "The configuration must be a JSON object with a renderer and a name."
+msgstr "The configuration must be a JSON object with a renderer and a name."
+
+#: views/renderer_config.py:152
 msgid ""
 "This configuration is part of the shared baseline and can only be edited by "
 "an administrator. Duplicate it to make your own."
 msgstr ""
 
-#: views/renderer_config.py:172
+#: views/renderer_config.py:168 views/renderer_config.py:226
+msgid "This configuration no longer exists."
+msgstr "This configuration no longer exists."
+
+#: views/renderer_config.py:212
 msgid ""
 "This configuration is part of the shared baseline and cannot be deleted."
 msgstr ""
