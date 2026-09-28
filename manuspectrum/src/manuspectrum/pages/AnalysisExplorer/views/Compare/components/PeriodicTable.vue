@@ -14,8 +14,9 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
  * 18-column periodic table: an element found is a toggle button showing its
  * count, named « Cu, 5 », pressed when it is the filter; the others are
  * greyed and left to assistive technologies. An element the table does not
- * hold is listed after it. Under 768 px the table gives way to a list of
- * the elements found, most frequent first, with their best level.
+ * hold is listed after it. In a window narrower than the table's 18
+ * columns (34rem) the table gives way to a list of the elements found,
+ * most frequent first, with their best level.
  */
 const props = defineProps<{
     elements: readonly SynthesisElement[];
@@ -132,6 +133,7 @@ function isPressed(symbol: string): "true" | "false" {
 .periodic-table {
     display: grid;
     gap: 0.5rem;
+    container-type: inline-size;
 }
 
 .periodic-table .grid {
@@ -209,7 +211,7 @@ function isPressed(symbol: string): "true" | "false" {
     display: none;
 }
 
-@media (max-width: 47.99rem) {
+@container (max-width: 33.99rem) {
     .periodic-table .grid,
     .periodic-table .others {
         display: none;
