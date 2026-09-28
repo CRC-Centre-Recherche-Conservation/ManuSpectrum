@@ -232,6 +232,24 @@ describe("AnalysisExplorer", () => {
         expect(wrapper.find(".active-filters").exists()).toBe(true);
     });
 
+    it("leaves the Corpus filters bar to Corpus, the filters kept for its return", async () => {
+        window.history.replaceState(null, "", "/en/discover?q=gold");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        const store = useExplorerStore();
+        store.setView("compare");
+        await flushPromises();
+        expect(wrapper.find(".active-filters").exists()).toBe(false);
+        expect(store.filters.q).toBe("gold");
+        expect(window.location.search).toContain("q=gold");
+        store.setView("corpus");
+        await flushPromises();
+        expect(wrapper.find(".active-filters").exists()).toBe(true);
+        wrapper.unmount();
+    });
+
     it("names the screen shown on the page body, for the page intro", async () => {
         window.history.replaceState(null, "", "/en/discover?q=gold");
         const wrapper = mount(AnalysisExplorer, {

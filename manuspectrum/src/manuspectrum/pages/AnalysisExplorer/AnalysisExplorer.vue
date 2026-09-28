@@ -227,7 +227,7 @@ function onSelectionResolved(message: string): void {
             :selection="sharedSelection"
             @resolved="onSelectionResolved"
         />
-        <ActiveFiltersBar />
+        <ActiveFiltersBar v-if="store.view !== 'compare'" />
         <CorpusView v-if="store.view === 'corpus'" />
         <template v-else-if="store.view === 'compare'">
             <component
