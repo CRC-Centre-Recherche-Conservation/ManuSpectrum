@@ -882,6 +882,38 @@ describe("WindowGrid", () => {
         expect(document.documentElement.style.overflow).toBe("");
     });
 
+    it("gives the focus to the window nearest the one enlarged when it leaves the grid", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+                [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+            }),
+        );
+        const view = mountGrid([XRF, MICRO, MATERIALS]);
+        control(XRF.id, "enlarge").click();
+        await flushPromises();
+        await view.setProps({ windows: [MICRO, MATERIALS] });
+        await flushPromises();
+        expect(dialog().open).toBe(false);
+        expect(document.activeElement).toBe(
+            item(MATERIALS.id).querySelector(".compare-window"),
+        );
+    });
+
+    it("leaves no resize pending once unmounted while a window is enlarged", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const view = mountGrid();
+        control(XRF.id, "enlarge").click();
+        await vi.advanceTimersByTimeAsync(300);
+        view.unmount();
+        wrapper = null;
+        await flushPromises();
+        expect(vi.getTimerCount()).toBe(0);
+        expect(document.documentElement.style.overflow).toBe("");
+    });
+
     it("tells the windows to draw again when the dialog opens, closes or changes size", async () => {
         // Vue skips a handler attached at the time a bubbling event was first handled: a frozen Date would drop the button's own.
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });

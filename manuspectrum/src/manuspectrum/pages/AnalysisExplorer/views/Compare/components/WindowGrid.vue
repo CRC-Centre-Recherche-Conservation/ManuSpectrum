@@ -69,9 +69,10 @@ const GAP = "0.375rem";
  * the grid loses its place unless `retained` names it. With nothing saved,
  * gridstack places the windows (`autoPosition`); a window that appears
  * later goes back to its place, else under the others, without the focus,
- * and is announced. A window that leaves the grid leaves no hole: the
- * windows under it move up (gridstack's `top` packing, run once), none
- * changes column. When the reader closed it, the focus goes to the window
+ * and is announced. A window that leaves the grid leaves no hole: the grid
+ * is packed to the top once (gridstack's `top` mode), so every window with
+ * room above it moves up, the windows under it and any other; none changes
+ * column. When the reader closed it, the focus goes to the window
  * nearest its place, without scrolling the page unless that window is
  * entirely off the screen; the grid keeps its height until the windows left
  * reach the bottom of the screen again (at once, or once the reader scrolls
@@ -96,7 +97,8 @@ const GAP = "0.375rem";
  * instance, `CompareWindow`) and its cell keeps its place. The title takes
  * the focus on opening; the page does not scroll while the dialog is open.
  * « Restore », Escape, or the window leaving the grid close it: the focus
- * goes back to the window's « Enlarge » without scrolling the page. The
+ * goes back to the window's « Enlarge » without scrolling the page, or, the
+ * window gone, to the window nearest its place (as after a close). The
  * windows are told to draw again when the dialog opens, closes or changes
  * size.
  */
@@ -159,6 +161,10 @@ let closing: { id: string; box: WindowBox } | null = null;
 let dialogObserver: ResizeObserver | null = null;
 /** The page's `overflow` before the dialog locked its scroll. */
 let pageOverflow: string | null = null;
+/** The box of the enlarged window that left the grid, until the dialog has closed. */
+let enlargedGoneBox: WindowBox | null = null;
+/** Set on unmount: the dialog's late `close` event then does nothing. */
+let unmounted = false;
 
 const enlargedTitle = computed(() =>
     enlargedId.value === null ? undefined : titleOf(enlargedId.value),
@@ -175,11 +181,16 @@ watch(
     () => props.windows.map((window) => window.id),
     (ids, previous) => {
         const gone = previous.filter((id) => !ids.includes(id));
+        const enlargedNode =
+            enlargedId.value !== null && gone.includes(enlargedId.value)
+                ? gridNodes().find((node) => node.id === enlargedId.value)
+                : undefined;
         for (const id of gone) {
             const element = itemElement(id);
             if (grid && element) grid.removeWidget(element, false, true);
         }
         if (enlargedId.value !== null && gone.includes(enlargedId.value)) {
+            enlargedGoneBox = enlargedNode ? boxOf(enlargedNode) : null;
             dialogElement.value?.close();
         }
         if (gone.length > 0) {
@@ -288,6 +299,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    unmounted = true;
     releaseHeight();
     unlockPage();
     if (dialogElement.value?.open) dialogElement.value.close();
@@ -523,7 +535,12 @@ function positionOf(id: string): number {
     return order.value.indexOf(id) + 1;
 }
 
-/** Moves the windows up into the room left free, once (gridstack's `top` mode), then lets them float again. */
+/**
+ * Packs the grid to the top once (gridstack's `top` mode), then lets it
+ * float again: every window with room above it moves up as far as it can,
+ * not only the windows under the one gone, a hole the reader left
+ * elsewhere included; none changes column.
+ */
 function closeHoles(): void {
     grid?.mode("top");
     grid?.mode("float");
@@ -686,17 +703,26 @@ async function enlarge(id: string): Promise<void> {
     scheduleResize();
 }
 
-/** The dialog closed (Restore, Escape, or its window gone): the window goes back to its cell. */
+/**
+ * The dialog closed (Restore, Escape, or its window gone): the window goes
+ * back to its cell and its « Enlarge » takes the focus; a window gone
+ * gives the focus to the window nearest its place. Nothing once unmounted.
+ */
 async function onDialogClosed(): Promise<void> {
+    if (unmounted) return;
     const id = enlargedId.value;
+    const goneBox = enlargedGoneBox;
     enlargedId.value = null;
+    enlargedGoneBox = null;
     unlockPage();
     scheduleResize();
     if (id === null) return;
     await nextTick();
-    itemElement(id)
-        ?.querySelector<HTMLElement>('[data-action="enlarge"]')
-        ?.focus({ preventScroll: true });
+    const enlargeButton = itemElement(id)?.querySelector<HTMLElement>(
+        '[data-action="enlarge"]',
+    );
+    if (enlargeButton) enlargeButton.focus({ preventScroll: true });
+    else if (goneBox) focusNearest(goneBox);
 }
 
 /**
