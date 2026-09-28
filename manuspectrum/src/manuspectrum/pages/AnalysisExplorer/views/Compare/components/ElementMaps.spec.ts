@@ -42,6 +42,9 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
         `/en/api/explorer/document/${parameters.resourceid}`,
 }));
 
+const REAL_SIDE_BY_SIDE = L.control.sideBySide;
+const REAL_IIIF = (L.tileLayer as unknown as { iiif: unknown }).iiif;
+
 const C1 = "https://iiif.example/c1";
 const ZONE = { type: "rect" as const, x: 100, y: 100, w: 800, h: 400 };
 const DOCUMENT: DocumentPayload = documentPayload({
@@ -138,6 +141,8 @@ afterEach(() => {
     wrapper = null;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    L.control.sideBySide = REAL_SIDE_BY_SIDE;
+    (L.tileLayer as unknown as { iiif: unknown }).iiif = REAL_IIIF;
 });
 
 async function mountMaps(maps: MapLine[] = XRF_MAPS): Promise<VueWrapper> {
