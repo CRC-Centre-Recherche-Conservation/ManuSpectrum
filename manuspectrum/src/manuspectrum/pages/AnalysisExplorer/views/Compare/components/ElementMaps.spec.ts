@@ -264,4 +264,29 @@ describe("ElementMaps", () => {
         await flushPromises();
         expect(resize).toHaveBeenCalledTimes(2);
     });
+
+    it("takes each map down with its page and its curtain when the window closes", async () => {
+        const iiif = stubIiifLayer({ laid: true });
+        const view = await mountMaps();
+        const pages = iiif.mock.results.map((result) => result.value);
+        expect(pages).toHaveLength(2);
+        const removeLayer = vi.spyOn(L.Map.prototype, "removeLayer");
+        const removeMap = vi.spyOn(L.Map.prototype, "remove");
+        view.unmount();
+        wrapper = null;
+        expect(removeMap).toHaveBeenCalledTimes(2);
+        const lastMapRemoved = Math.max(...removeMap.mock.invocationCallOrder);
+        for (const page of pages) {
+            const call = removeLayer.mock.calls.findIndex(
+                ([layer]) => layer === page,
+            );
+            expect(call).toBeGreaterThanOrEqual(0);
+            expect(removeLayer.mock.invocationCallOrder[call]).toBeLessThan(
+                lastMapRemoved,
+            );
+        }
+        for (const result of sideBySide.mock.results) {
+            expect(result.value.remove).toHaveBeenCalled();
+        }
+    });
 });

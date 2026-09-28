@@ -7,9 +7,15 @@ import { vi } from "vitest";
  * `vi.hoisted` block, which runs before this module imports Leaflet.
  */
 
-/** `L.tileLayer.iiif` without the network: an empty layer group, recorded for assertions. */
-export function stubIiifLayer(): ReturnType<typeof vi.fn> {
-    const factory = vi.fn(() => L.layerGroup());
+/**
+ * `L.tileLayer.iiif` without the network: an empty layer group, recorded for
+ * assertions. Its info.json reads as refused unless `laid`, when it gives
+ * one image size and the page is laid on the map.
+ */
+export function stubIiifLayer({ laid = false } = {}): ReturnType<typeof vi.fn> {
+    const factory = vi.fn(() =>
+        Object.assign(L.layerGroup(), laid ? { _imageSizes: [{}] } : {}),
+    );
     (L.tileLayer as unknown as { iiif: unknown }).iiif = factory;
     return factory;
 }
