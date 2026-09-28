@@ -706,6 +706,7 @@ function rearrange(): void {
 .window-grid .toolbar {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 0.5rem;
 }
 

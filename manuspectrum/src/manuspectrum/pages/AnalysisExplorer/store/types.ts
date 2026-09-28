@@ -90,12 +90,6 @@ export interface ToolWindow {
     params: Record<string, string>;
 }
 
-export interface ToolFilters {
-    element: string | null;
-    cell: [string, string] | null;
-    pair: [string | null, string] | null;
-}
-
 export interface LayerToggles {
     points: boolean;
     zones: boolean;

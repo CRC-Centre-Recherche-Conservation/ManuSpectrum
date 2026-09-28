@@ -4,12 +4,20 @@ import { createPinia, setActivePinia } from "pinia";
 
 import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 
-import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    LINKED_SELECTION_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     technique,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    cellNode,
+    elementNode,
+    pairNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { Pinia } from "pinia";
 import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -115,74 +123,58 @@ function mountBody(props: Partial<BodyProps> & Pick<BodyProps, "kind">) {
 }
 
 describe("ToolWindowBody", () => {
-    it("filters the other tools by the element clicked, and says so", async () => {
+    it("selects the element clicked, pressed, without filtering the other tools", async () => {
         const periodic = mountBody({ kind: "periodic" });
         const table = mountBody({ kind: "colour-material" });
         const matrix = mountBody({ kind: "coverage" });
-        await periodic
-            .find('.grid button[aria-label="Cu, 2"]')
-            .trigger("click");
-        expect(useExplorerStore().compare.toolFilters.element).toBe("Cu");
-        expect(announce).toHaveBeenLastCalledWith("Tools filtered by Cu");
-        expect(
-            periodic
-                .find('.grid button[aria-label="Cu, 2"]')
-                .attributes("aria-pressed"),
-        ).toBe("true");
+        const cu = () => periodic.find('.grid button[aria-label="Cu, 2"]');
+        await cu().trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
+        expect(cu().attributes("aria-pressed")).toBe("true");
         expect(periodic.find(".chip").exists()).toBe(false);
-        expect(table.find(".chip").text()).toBe("Filtered by Cu×");
-        expect(table.findAll("tbody tr")).toHaveLength(1);
-        expect(
-            matrix.findAll("tbody tr").map((row) => row.find("th").text()),
-        ).toEqual(["f. 1r"]);
+        expect(table.findAll("tbody tr")).toHaveLength(2);
+        expect(matrix.findAll("tbody tr")).toHaveLength(2);
+        await cu().trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([]);
+        expect(cu().attributes("aria-pressed")).toBe("false");
     });
 
-    it("clears a filter from its chip, or by clicking the pressed control again", async () => {
+    it("adds each pair and cell clicked to the selection, several at once", async () => {
         const table = mountBody({ kind: "colour-material" });
-        const periodic = mountBody({ kind: "periodic" });
-        await table.findAll("tbody tr")[1].trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toEqual([
-            null,
-            CHALK.id,
-        ]);
-        const chip = periodic.find(".chip");
-        expect(chip.text()).toBe("Filtered by Chalk×");
-        expect(chip.attributes("aria-label")).toBe(
-            "Filtered by Chalk. Remove this filter",
-        );
-        expect(periodic.findAll(".grid button")).toHaveLength(1);
-        await chip.trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toBeNull();
-        expect(announce).toHaveBeenLastCalledWith("Filter removed: Chalk");
-        await table.findAll("tbody tr")[0].trigger("click");
-        await table.findAll("tbody tr")[0].trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toBeNull();
-    });
-
-    it("filters by a coverage cell, named by its folio and technique", async () => {
         const matrix = mountBody({ kind: "coverage" });
-        const periodic = mountBody({ kind: "periodic" });
+        await table.findAll("tbody tr")[1].trigger("click");
+        await table.findAll("tbody tr")[0].trigger("click");
         await matrix.findAll("tbody button")[1].trigger("click");
-        expect(useExplorerStore().compare.toolFilters.cell).toEqual([
-            "c2",
-            "xrf",
+        expect(useExplorerStore().compare.selection).toEqual([
+            pairNode(null, CHALK.id),
+            pairNode(BLUE.id, AZURITE.id),
+            cellNode("c2", "xrf"),
         ]);
-        expect(periodic.find(".chip").text()).toBe("Filtered by f. 1v · XRF×");
         expect(
-            periodic
-                .findAll(".grid button")
-                .map((button) => button.attributes("aria-label")),
-        ).toEqual(["Ca, 1"]);
+            table
+                .findAll("tbody button")
+                .map((button) => button.attributes("aria-pressed")),
+        ).toEqual(["true", "true"]);
+        expect(
+            matrix
+                .findAll("tbody button")
+                .map((button) => button.attributes("aria-pressed")),
+        ).toEqual(["false", "true"]);
     });
 
-    it("says when nothing matches the filters", async () => {
-        useExplorerStore().setToolFilter("element", "Cu");
-        useExplorerStore().setToolFilter("cell", ["c2", "xrf"]);
-        const table = mountBody({ kind: "colour-material" });
-        expect(table.find(".empty").text()).toBe(
-            "Nothing matches the filters.",
-        );
-        expect(table.findAll(".chip")).toHaveLength(2);
+    it("toggles through the linked selection of the view when there is one", async () => {
+        const toggle = vi.fn();
+        const periodic = mount(ToolWindowBody, {
+            props: { kind: "periodic", status: "ready", synthesis: SYNTHESIS },
+            global: {
+                plugins: [pinia],
+                provide: { [LINKED_SELECTION_KEY as symbol]: { toggle } },
+            },
+        });
+        await periodic
+            .find('.grid button[aria-label="Ca, 1"]')
+            .trigger("click");
+        expect(toggle).toHaveBeenCalledWith("el:Ca");
     });
 
     it("says when the Selection has nothing for the tool", () => {
@@ -254,11 +246,10 @@ describe("ToolWindowBody", () => {
         const failed = mountBody({ kind: "periodic", status: "error" });
         expect(failed.find(".unavailable-state").exists()).toBe(true);
         expect(failed.find(".periodic-table").exists()).toBe(false);
-        expect(failed.find(".chips").exists()).toBe(false);
     });
 
-    it("says the synthesis is being read over the previous one, and takes no filter from it", async () => {
-        useExplorerStore().setToolFilter("pair", [null, CHALK.id]);
+    it("says the synthesis is being read over the previous one, and selects nothing from it", async () => {
+        useExplorerStore().toggleSelection(elementNode("Ca"));
         const periodic = mountBody({ kind: "periodic", status: "loading" });
         expect(periodic.find(".loading").text()).toBe("Reading the Selection…");
         expect(periodic.find(".view .loading").exists()).toBe(false);
@@ -273,15 +264,10 @@ describe("ToolWindowBody", () => {
                 (button) => button.attributes("aria-disabled") === "true",
             ),
         ).toBe(true);
-        await periodic.find(".chip").trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toEqual([
-            null,
-            CHALK.id,
-        ]);
         await periodic
-            .find('.grid button[aria-label="Ca, 1"]')
+            .find('.grid button[aria-label="Cu, 2"]')
             .trigger("click");
-        expect(useExplorerStore().compare.toolFilters.element).toBeNull();
+        expect(useExplorerStore().compare.selection).toEqual(["el:Ca"]);
         expect(announce).not.toHaveBeenCalled();
     });
 

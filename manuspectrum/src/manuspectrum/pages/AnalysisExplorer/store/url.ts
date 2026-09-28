@@ -238,16 +238,20 @@ export function applySnapshot(
     });
 }
 
+/** The address of a document screen, on `canvas` and focused on `focus` when given, in the Corpus view. */
 export function documentHref(
     snapshot: UrlSnapshot,
     documentId: string,
+    canvas: string | null = null,
+    focus: Focus | null = null,
 ): string {
     const query = toQuery({
         ...snapshot,
+        view: "corpus",
         corpusScreen: "document",
-        document: { id: documentId, canvas: null },
-        focus: null,
-        folioView: "analyses",
+        document: { id: documentId, canvas },
+        focus,
+        folioView: folioViewOf(focus),
     });
     return `?${query.toString()}`;
 }

@@ -4,6 +4,7 @@ import {
     inject,
     nextTick,
     onBeforeUnmount,
+    provide,
     ref,
     shallowRef,
     useTemplateRef,
@@ -16,15 +17,18 @@ import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/Loa
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
 import HiddenWindowsMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HiddenWindowsMenu.vue";
+import SelectionIndicator from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue";
 import ToolMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue";
 import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
+import { useLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import { useSynthesis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import {
     ANNOUNCE_KEY,
+    LINKED_SELECTION_KEY,
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { setFullSeriesRoom } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -37,10 +41,7 @@ import {
     writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
-import {
-    offeredTools,
-    staleToolFilters,
-} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
+import { offeredTools } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
     autoWindows,
     keepUnchangedCurves,
@@ -99,12 +100,15 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * synthesis of the Selection (`useSynthesis`, read while the view is shown)
  * has something for. A tool window follows the grid like the others,
  * after them; « Close » closes the tool. The tools open are kept with the
- * layout and opened again with the view; a tool filter naming a value the
- * Selection no longer holds is dropped. While a tool is open, the drafts
+ * layout and opened again with the view. While a tool is open, the drafts
  * the synthesis reads are counted above the windows (the last count while
  * the next synthesis is read). When the last window
  * shown is hidden or closed, the focus goes to « Hidden windows », else to
  * the heading.
+ *
+ * The view provides the linked selection of its windows
+ * (`useLinkedSelection`, `LINKED_SELECTION_KEY`), shown in the toolbar by
+ * `SelectionIndicator` before « Hidden windows » and « + Tool ».
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -112,6 +116,12 @@ const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
 const store = useExplorerStore();
 const selection = selectionItems();
 const synthesis = useSynthesis(() => store.basket.map((item) => item.key));
+const linked = useLinkedSelection({
+    items: selection,
+    synthesis,
+    announce: (message) => announce(message),
+});
+provide(LINKED_SELECTION_KEY, linked);
 const { $gettext, $ngettext, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -221,17 +231,6 @@ watch(() => xySpectraCount(windows.value), setFullSeriesRoom, {
 watch(
     () => store.compare.tools,
     (open) => writeTools(open),
-);
-
-watch(
-    () => (synthesis.status.value === "ready" ? synthesis.data.value : null),
-    (answer) => {
-        if (!answer) return;
-        for (const key of staleToolFilters(answer, store.compare.toolFilters)) {
-            store.setToolFilter(key, null);
-        }
-    },
-    { immediate: true },
 );
 
 watch(windows, (next) => {
@@ -430,6 +429,7 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
                 @close="closeWindow"
             >
                 <template #toolbar>
+                    <SelectionIndicator />
                     <HiddenWindowsMenu
                         :windows="hiddenEntries"
                         @show="showWindow"

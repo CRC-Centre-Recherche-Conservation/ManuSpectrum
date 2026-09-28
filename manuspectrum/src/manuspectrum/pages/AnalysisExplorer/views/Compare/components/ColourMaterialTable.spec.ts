@@ -39,7 +39,7 @@ const PAIRS: SynthesisPair[] = [
     },
 ];
 
-function mountTable(pressed: [string | null, string] | null = null) {
+function mountTable(pressed: [string | null, string][] = []) {
     return mount(ColourMaterialTable, {
         props: {
             pairs: PAIRS,
@@ -66,8 +66,8 @@ describe("ColourMaterialTable", () => {
         );
     });
 
-    it("presses the row of the filter and emits the pair of a row clicked", async () => {
-        const view = mountTable([BLUE.id, AZURITE.id]);
+    it("presses the rows selected and emits the pair of a row clicked", async () => {
+        const view = mountTable([[BLUE.id, AZURITE.id]]);
         const buttons = view.findAll("tbody button");
         expect(
             buttons.map((button) => button.attributes("aria-pressed")),

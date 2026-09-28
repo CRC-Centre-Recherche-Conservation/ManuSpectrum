@@ -256,22 +256,36 @@ describe("Selection", () => {
 });
 
 describe("Compare state", () => {
-    it("opens and closes tools and sets tool filters", () => {
+    it("opens and closes tools", () => {
         const store = useExplorerStore();
         const id = store.openTool("periodic", { scope: "basket" });
         expect(store.compare.tools).toEqual([
             { id, kind: "periodic", params: { scope: "basket" } },
         ]);
-        store.setToolFilter("element", "Cu");
-        expect(store.compare.toolFilters.element).toBe("Cu");
-        store.clearToolFilters();
-        expect(store.compare.toolFilters).toEqual({
-            element: null,
-            cell: null,
-            pair: null,
-        });
         store.closeTool(id);
         expect(store.compare.tools).toEqual([]);
+    });
+
+    it("adds a node to the linked selection or removes it, and clears it", () => {
+        const store = useExplorerStore();
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Cu");
+        expect(store.compare.selection).toEqual(["el:Fe", "el:Cu"]);
+        store.toggleSelection("el:Fe");
+        expect(store.compare.selection).toEqual(["el:Cu"]);
+        store.clearSelection();
+        expect(store.compare.selection).toEqual([]);
+    });
+
+    it("prunes the selected nodes a test refuses and says which", () => {
+        const store = useExplorerStore();
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Cu");
+        expect(store.pruneSelection((id) => id !== "el:Fe")).toEqual(["el:Fe"]);
+        expect(store.compare.selection).toEqual(["el:Cu"]);
+        const kept = store.compare.selection;
+        expect(store.pruneSelection(() => true)).toEqual([]);
+        expect(store.compare.selection).toBe(kept);
     });
 
     it("names a tool by its kind and parameters and opens it once", () => {

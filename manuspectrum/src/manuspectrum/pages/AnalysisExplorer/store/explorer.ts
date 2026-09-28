@@ -31,10 +31,10 @@ import type {
     ListFilterKey,
     Overlay,
     PageSize,
-    ToolFilters,
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
@@ -104,10 +104,6 @@ export function toolWindowId(
     return `tool:${kind}:${query || "-"}`;
 }
 
-function emptyToolFilters(): ToolFilters {
-    return { element: null, cell: null, pair: null };
-}
-
 /** Filters that restrict Corpus results; `eventType` (Map only) and the display options (grain, empty, size) are not among them. */
 export function hasActiveFilters(filters: Filters): boolean {
     return countCorpusFilters(filters) > 0;
@@ -160,8 +156,9 @@ export const useExplorerStore = defineStore("explorer", () => {
     });
     const overlays = ref<Record<string, Overlay>>({});
     const basket = ref<BasketItem[]>([]);
-    const compare = ref<{ toolFilters: ToolFilters; tools: ToolWindow[] }>({
-        toolFilters: emptyToolFilters(),
+    /** Compare: the tools open, and the nodes the reader selected to see what is linked to them (never saved). */
+    const compare = ref<{ selection: NodeId[]; tools: ToolWindow[] }>({
+        selection: [],
         tools: [],
     });
     /** Rail groups folded to their heading; not in the address. */
@@ -402,18 +399,31 @@ export const useExplorerStore = defineStore("explorer", () => {
         };
     }
 
-    function setToolFilter<K extends keyof ToolFilters>(
-        key: K,
-        value: ToolFilters[K],
-    ): void {
+    /** Adds a node to the linked selection, or removes it when it is there. */
+    function toggleSelection(id: NodeId): void {
+        const current = compare.value.selection;
         compare.value = {
             ...compare.value,
-            toolFilters: { ...compare.value.toolFilters, [key]: value },
+            selection: current.includes(id)
+                ? current.filter((entry) => entry !== id)
+                : [...current, id],
         };
     }
 
-    function clearToolFilters(): void {
-        compare.value = { ...compare.value, toolFilters: emptyToolFilters() };
+    function clearSelection(): void {
+        compare.value = { ...compare.value, selection: [] };
+    }
+
+    /** Drops the selected nodes `keep` refuses; returns them, in selection order. */
+    function pruneSelection(keep: (id: NodeId) => boolean): NodeId[] {
+        const dropped = compare.value.selection.filter((id) => !keep(id));
+        if (dropped.length > 0) {
+            compare.value = {
+                ...compare.value,
+                selection: compare.value.selection.filter(keep),
+            };
+        }
+        return dropped;
     }
 
     return {
@@ -456,8 +466,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         setOverlay,
         openTool,
         closeTool,
-        setToolFilter,
-        clearToolFilters,
+        toggleSelection,
+        clearSelection,
+        pruneSelection,
     };
 });
 

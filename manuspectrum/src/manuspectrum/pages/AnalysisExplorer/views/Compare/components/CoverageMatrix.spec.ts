@@ -19,7 +19,7 @@ const ROWS: SynthesisCoverage[] = [
     { canvas: "c2", label: "f. 1v", document: "d", counts: { fors: 1 } },
 ];
 
-function mountMatrix(pressed: [string, string] | null = null) {
+function mountMatrix(pressed: [string, string][] = []) {
     return mount(CoverageMatrix, {
         props: { rows: ROWS, techniques: [FORS, XRF], pressed },
     });
@@ -47,8 +47,8 @@ describe("CoverageMatrix", () => {
         expect(cells[1].text()).toContain("No published analysis");
     });
 
-    it("presses the cell of the filter and emits the cell clicked", async () => {
-        const view = mountMatrix(["c1", "xrf"]);
+    it("presses the cells selected and emits the cell clicked", async () => {
+        const view = mountMatrix([["c1", "xrf"]]);
         const pressed = view
             .findAll("tbody button")
             .filter((button) => button.attributes("aria-pressed") === "true");
@@ -63,7 +63,7 @@ describe("CoverageMatrix", () => {
 
     it("leaves out a technique no row shown counts", () => {
         const view = mount(CoverageMatrix, {
-            props: { rows: [ROWS[1]], techniques: [FORS, XRF], pressed: null },
+            props: { rows: [ROWS[1]], techniques: [FORS, XRF], pressed: [] },
         });
         expect(
             view.findAll('thead th[scope="col"]').map((th) => th.text()),

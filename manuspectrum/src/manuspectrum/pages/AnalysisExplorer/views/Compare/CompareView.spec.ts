@@ -776,16 +776,45 @@ describe("CompareView", () => {
             ]);
         });
 
-        it("drops a tool filter whose value left with the Selection", async () => {
+        it("links the windows through the selection shown in the toolbar, and clears it on Escape", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            const indicator = view.find(".toolbar .selection-indicator");
+            expect(indicator.find(".summary").text()).toBe("Nothing selected");
+            await openTool(view, "periodic");
+            await windowOf(view, "tool:periodic:-")
+                .find('.grid button[aria-label="Cu, 1"]')
+                .trigger("click");
+            expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
+            expect(indicator.find(".summary").text()).toBe(
+                "1 selected · 0 related",
+            );
+            expect(announce).toHaveBeenLastCalledWith("1 selected · 0 related");
+            document.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Escape",
+                    cancelable: true,
+                }),
+            );
+            await flushPromises();
+            expect(useExplorerStore().compare.selection).toEqual([]);
+            expect(indicator.find(".summary").text()).toBe("Nothing selected");
+        });
+
+        it("drops a selected element that left with the Selection", async () => {
             select(XRF_ITEM);
             const store = useExplorerStore();
-            store.setToolFilter("element", "Cu");
             await mountView();
-            expect(store.compare.toolFilters.element).toBe("Cu");
+            store.toggleSelection("el:Cu");
+            await flushPromises();
+            expect(store.compare.selection).toEqual(["el:Cu"]);
             synthesis = { ...SYNTHESIS, elements: [] };
             select(MATERIAL);
             await flushPromises();
-            expect(store.compare.toolFilters.element).toBeNull();
+            expect(store.compare.selection).toEqual([]);
+            expect(announce).toHaveBeenCalledWith(
+                "1 selected node is no longer linked to the Selection and was unselected.",
+            );
         });
     });
 });

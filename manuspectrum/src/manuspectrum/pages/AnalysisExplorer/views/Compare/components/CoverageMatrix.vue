@@ -12,15 +12,14 @@ import type {
 /**
  * The coverage matrix of the Selection: its canvases in rows, techniques in
  * columns (those the rows shown count), the number of analyses in each cell. A cell with analyses is a
- * toggle button naming its canvas, technique and count; the cell `pressed`
- * names is pressed. An empty cell says it holds no published analysis.
- * The other tools' filters narrow the rows only (`toolView`): a column
- * stays while a row shown counts its technique, even one no kept pair cites.
+ * toggle button naming its canvas, technique and count, pressed while
+ * `pressed` names it. An empty cell says it holds no published analysis.
  */
 const props = defineProps<{
     rows: readonly SynthesisCoverage[];
     techniques: readonly Technique[];
-    pressed: readonly [string, string] | null;
+    /** The cells selected, as [canvas, technique id]. */
+    pressed: readonly (readonly [string, string])[];
     /** Marks every toggle `aria-disabled` (a stale matrix while the next one is read). */
     disabled?: boolean;
 }>();
@@ -42,10 +41,8 @@ function countOf(row: SynthesisCoverage, technique: Technique): number {
 }
 
 function isPressed(row: SynthesisCoverage, technique: Technique): boolean {
-    return (
-        props.pressed !== null &&
-        props.pressed[0] === row.canvas &&
-        props.pressed[1] === technique.id
+    return props.pressed.some(
+        ([canvas, id]) => canvas === row.canvas && id === technique.id,
     );
 }
 

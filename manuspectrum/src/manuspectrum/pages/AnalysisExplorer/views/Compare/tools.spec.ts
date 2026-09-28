@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    filterParts,
     folioMarks,
     offeredTools,
-    restrictingFilters,
     selectionSlots,
-    staleToolFilters,
-    toolView,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
     characterization,
@@ -22,7 +18,6 @@ import type {
     SynthesisPair,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { ToolFilters } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const C1 = "https://iiif.example/c1";
 const C2 = "https://iiif.example/c2";
@@ -107,8 +102,6 @@ const SYNTHESIS: SynthesisResponse = {
     unpublishedCount: 0,
 };
 
-const NONE: ToolFilters = { element: null, cell: null, pair: null };
-
 describe("offeredTools", () => {
     it("offers every tool whose payload holds something", () => {
         expect(offeredTools(SYNTHESIS)).toEqual([
@@ -158,191 +151,6 @@ describe("offeredTools", () => {
             "colour-material",
             "periodic",
         ]);
-    });
-});
-
-describe("toolView", () => {
-    it("shows everything without a filter", () => {
-        expect(toolView(SYNTHESIS, NONE, "coverage").coverage).toHaveLength(3);
-        expect(toolView(SYNTHESIS, NONE, "colour-material").pairs).toHaveLength(
-            2,
-        );
-        expect(toolView(SYNTHESIS, NONE, "periodic").elements).toHaveLength(2);
-    });
-
-    it("an element keeps the pairs naming it and the canvases of those pairs", () => {
-        const filters = { ...NONE, element: "Cu" };
-        expect(toolView(SYNTHESIS, filters, "colour-material").pairs).toEqual([
-            AZURITE_PAIR,
-        ]);
-        expect(
-            toolView(SYNTHESIS, filters, "coverage").coverage.map(
-                (row) => row.canvas,
-            ),
-        ).toEqual([C1]);
-    });
-
-    it("a cell keeps the pairs on its canvas and their elements", () => {
-        const filters: ToolFilters = { ...NONE, cell: [C2, "xrf"] };
-        expect(toolView(SYNTHESIS, filters, "colour-material").pairs).toEqual([
-            CHALK_PAIR,
-        ]);
-        expect(
-            toolView(SYNTHESIS, filters, "periodic").elements.map(
-                (element) => element.symbol,
-            ),
-        ).toEqual(["Ca"]);
-    });
-
-    it("a cell keeps only the pairs carrying its technique", () => {
-        const ochre = pair({
-            material: valueRef("http://example.org/ochre", "Ochre"),
-            canvases: [C2],
-            cells: [[C2, "fors"]],
-        });
-        const synthesis = {
-            ...SYNTHESIS,
-            pairs: [AZURITE_PAIR, CHALK_PAIR, ochre],
-        };
-        expect(
-            toolView(
-                synthesis,
-                { ...NONE, cell: [C2, "xrf"] },
-                "colour-material",
-            ).pairs,
-        ).toEqual([CHALK_PAIR]);
-        expect(
-            toolView(
-                synthesis,
-                { ...NONE, cell: [C2, "fors"] },
-                "colour-material",
-            ).pairs,
-        ).toEqual([ochre]);
-    });
-
-    it("a cell keeps a pair only when one of its materials is on that canvas by that technique", () => {
-        const mixed = pair({
-            material: valueRef("http://example.org/ochre", "Ochre"),
-            canvases: [C1, C2],
-            cells: [
-                [C1, "xrf"],
-                [C2, "fors"],
-            ],
-        });
-        const synthesis = { ...SYNTHESIS, pairs: [mixed] };
-        expect(
-            toolView(
-                synthesis,
-                { ...NONE, cell: [C2, "xrf"] },
-                "colour-material",
-            ).pairs,
-        ).toEqual([]);
-        expect(
-            toolView(
-                synthesis,
-                { ...NONE, cell: [C1, "xrf"] },
-                "colour-material",
-            ).pairs,
-        ).toEqual([mixed]);
-    });
-
-    it("a pair keeps its canvases and its elements", () => {
-        const filters: ToolFilters = { ...NONE, pair: [BLUE.id, AZURITE.id] };
-        expect(
-            toolView(SYNTHESIS, filters, "coverage").coverage.map(
-                (row) => row.canvas,
-            ),
-        ).toEqual([C1]);
-        expect(
-            toolView(SYNTHESIS, filters, "periodic").elements.map(
-                (element) => element.symbol,
-            ),
-        ).toEqual(["Cu"]);
-    });
-
-    it("a pair without colour is told apart from the colours of its material", () => {
-        const filters: ToolFilters = { ...NONE, pair: [null, CHALK.id] };
-        expect(
-            toolView(SYNTHESIS, filters, "coverage").coverage.map(
-                (row) => row.canvas,
-            ),
-        ).toEqual([C2]);
-    });
-
-    it("never filters a tool by its own filter", () => {
-        const filters: ToolFilters = {
-            element: "Cu",
-            cell: [C2, "xrf"],
-            pair: [null, CHALK.id],
-        };
-        expect(toolView(SYNTHESIS, filters, "periodic").elements).toEqual([
-            { symbol: "Ca", level: null, count: 1, materials: [] },
-        ]);
-        expect(toolView(SYNTHESIS, filters, "colour-material").pairs).toEqual(
-            [],
-        );
-    });
-});
-
-describe("restrictingFilters", () => {
-    it("lists the filters set by the other tools", () => {
-        const filters: ToolFilters = {
-            element: "Cu",
-            cell: [C1, "xrf"],
-            pair: null,
-        };
-        expect(restrictingFilters("coverage", filters)).toEqual(["element"]);
-        expect(restrictingFilters("periodic", filters)).toEqual(["cell"]);
-        expect(restrictingFilters("colour-material", filters)).toEqual([
-            "element",
-            "cell",
-        ]);
-        expect(restrictingFilters("folio", filters)).toEqual([]);
-    });
-});
-
-describe("staleToolFilters", () => {
-    it("names the filters whose value the synthesis no longer holds", () => {
-        expect(
-            staleToolFilters(SYNTHESIS, {
-                element: "Pb",
-                cell: [C3, "fors"],
-                pair: [BLUE.id, CHALK.id],
-            }),
-        ).toEqual(["element", "cell", "pair"]);
-        expect(
-            staleToolFilters(SYNTHESIS, {
-                element: "Cu",
-                cell: [C3, "xrf"],
-                pair: [null, CHALK.id],
-            }),
-        ).toEqual([]);
-    });
-});
-
-describe("filterParts", () => {
-    it("names what each filter holds", () => {
-        const filters: ToolFilters = {
-            element: "Cu",
-            cell: [C1, "xrf"],
-            pair: [BLUE.id, AZURITE.id],
-        };
-        expect(filterParts(SYNTHESIS, filters, "element")).toEqual(["Cu"]);
-        expect(filterParts(SYNTHESIS, filters, "cell")).toEqual([
-            "f. 1r",
-            "XRF",
-        ]);
-        expect(filterParts(SYNTHESIS, filters, "pair")).toEqual([
-            "Blue",
-            "Azurite",
-        ]);
-        expect(
-            filterParts(
-                SYNTHESIS,
-                { ...filters, pair: [null, CHALK.id] },
-                "pair",
-            ),
-        ).toEqual(["Chalk"]);
     });
 });
 

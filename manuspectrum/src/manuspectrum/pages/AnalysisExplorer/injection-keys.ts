@@ -1,6 +1,7 @@
 import type { InjectionKey, Ref } from "vue";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
@@ -65,3 +66,7 @@ export const WINDOW_RESIZE_KEY: InjectionKey<Readonly<Ref<number>>> =
 /** The one reading of the Selection's items, shared by the Selection panel and the Compare view; created on first call. Provided by the shell. */
 export const SELECTION_ITEMS_KEY: InjectionKey<() => SelectionItems> =
     Symbol("selection-items");
+
+/** The linked selection of the Compare view shown (`useLinkedSelection`); provided by the Compare view. */
+export const LINKED_SELECTION_KEY: InjectionKey<LinkedSelection> =
+    Symbol("linked-selection");

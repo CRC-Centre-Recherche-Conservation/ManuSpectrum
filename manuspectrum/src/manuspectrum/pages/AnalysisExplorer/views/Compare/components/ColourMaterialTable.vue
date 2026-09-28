@@ -8,15 +8,16 @@ import type { SynthesisPair } from "@/manuspectrum/pages/AnalysisExplorer/api/ty
  * The colours × materials of the Selection's identified materials, one row
  * per pair: colour, material, elements (by symbol when they have one),
  * folios, best certainty, number of identified materials. A click on a row
- * toggles its pair as the filter; the material's button carries the same
+ * adds its pair to the selection or removes it; the material's button carries the same
  * toggle for the keyboard, named by the row's visible colour and material
- * cells (each in its own language), pressed on the pair `pressed` names. A folio is named by its label when
+ * cells (each in its own language), pressed while `pressed` names its pair. A folio is named by its label when
  * `canvasLabels` knows it, the others are counted.
  */
 const props = defineProps<{
     pairs: readonly SynthesisPair[];
     canvasLabels: ReadonlyMap<string, string>;
-    pressed: readonly [string | null, string] | null;
+    /** The pairs selected, as [colour id or null, material id]. */
+    pressed: readonly (readonly [string | null, string])[];
     /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
     disabled?: boolean;
 }>();
@@ -40,10 +41,9 @@ function keyOf(pair: SynthesisPair): string {
 }
 
 function isPressed(pair: SynthesisPair): boolean {
-    return (
-        props.pressed !== null &&
-        props.pressed[0] === colourId(pair) &&
-        props.pressed[1] === pair.material.id
+    return props.pressed.some(
+        ([colour, material]) =>
+            colour === colourId(pair) && material === pair.material.id,
     );
 }
 

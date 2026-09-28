@@ -16,7 +16,7 @@ const ELEMENTS = [
     { symbol: "Xy", level: null, count: 1, materials: [] },
 ];
 
-function mountTable(pressed: string | null = null) {
+function mountTable(pressed: string[] = []) {
     return mount(PeriodicTable, { props: { elements: ELEMENTS, pressed } });
 }
 
@@ -52,8 +52,8 @@ describe("PeriodicTable", () => {
         ).toEqual(["Cu5Major", "Pb2", "Xy1"]);
     });
 
-    it("presses the element of the filter and emits the element clicked", async () => {
-        const view = mountTable("Pb");
+    it("presses the elements selected and emits the element clicked", async () => {
+        const view = mountTable(["Pb"]);
         expect(
             view
                 .findAll(".grid button")

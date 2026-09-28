@@ -12,7 +12,7 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
 /**
  * The elements of the Selection's identified materials on the standard
  * 18-column periodic table: an element found is a toggle button showing its
- * count, named « Cu, 5 », pressed when it is the filter; the others are
+ * count, named « Cu, 5 », pressed while it is selected; the others are
  * greyed and left to assistive technologies. An element the table does not
  * hold is listed after it. In a window narrower than the table's 18
  * columns (34rem) the table gives way to a list of the elements found,
@@ -20,7 +20,8 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
  */
 const props = defineProps<{
     elements: readonly SynthesisElement[];
-    pressed: string | null;
+    /** The symbols selected. */
+    pressed: readonly string[];
     /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
     disabled?: boolean;
 }>();
@@ -43,7 +44,7 @@ function elementLabel(element: SynthesisElement): string {
 }
 
 function isPressed(symbol: string): "true" | "false" {
-    return props.pressed === symbol ? "true" : "false";
+    return props.pressed.includes(symbol) ? "true" : "false";
 }
 </script>
 
