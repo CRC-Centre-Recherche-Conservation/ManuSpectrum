@@ -95,7 +95,8 @@ def parse_save_body(raw):
     """Return the POST body as a dict, or None when it is not a valid one.
 
     Valid: a JSON object whose ``rendererId`` is a UUID and whose ``name`` is a
-    non-empty string. Undecodable bytes count as invalid JSON.
+    string holding more than whitespace. Undecodable bytes count as invalid
+    JSON.
     """
     try:
         body = json.loads(raw)
@@ -104,7 +105,7 @@ def parse_save_body(raw):
     if not isinstance(body, dict):
         return None
     name = body.get("name")
-    if not isinstance(name, str) or not name:
+    if not isinstance(name, str) or not name.strip():
         return None
     try:
         uuid.UUID(str(body.get("rendererId")))

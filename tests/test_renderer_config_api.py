@@ -348,6 +348,11 @@ class RendererConfigSaveTests(WriteTestCase):
 
         self.assert_invalid(RendererConfigView().post(request))
 
+    def test_a_blank_name_is_a_400(self):
+        request = self._request("post", {"rendererId": RENDERER_ID, "name": " \t "})
+
+        self.assert_invalid(RendererConfigView().post(request))
+
 
 class RendererConfigDeleteTests(WriteTestCase):
     def _delete(self, renderer_config_id, in_use=False, is_superuser=False):
