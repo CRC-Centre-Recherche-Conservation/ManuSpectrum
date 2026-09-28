@@ -21,6 +21,8 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
 const props = defineProps<{
     elements: readonly SynthesisElement[];
     pressed: string | null;
+    /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
+    disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -63,6 +65,7 @@ function isPressed(symbol: string): "true" | "false" {
                     :class="[`row-${place.row}`, `column-${place.column}`]"
                     :aria-label="elementLabel(bySymbol.get(place.symbol)!)"
                     :aria-pressed="isPressed(place.symbol)"
+                    :aria-disabled="props.disabled ? 'true' : undefined"
                     @click="emit('toggle', { symbol: place.symbol })"
                 >
                     <span class="symbol">{{ place.symbol }}</span>
@@ -93,6 +96,7 @@ function isPressed(symbol: string): "true" | "false" {
                     class="found"
                     :aria-label="elementLabel(element)"
                     :aria-pressed="isPressed(element.symbol)"
+                    :aria-disabled="props.disabled ? 'true' : undefined"
                     @click="emit('toggle', { symbol: element.symbol })"
                 >
                     <span class="symbol">{{ element.symbol }}</span>
@@ -113,6 +117,7 @@ function isPressed(symbol: string): "true" | "false" {
                     class="found"
                     :aria-label="elementLabel(element)"
                     :aria-pressed="isPressed(element.symbol)"
+                    :aria-disabled="props.disabled ? 'true' : undefined"
                     @click="emit('toggle', { symbol: element.symbol })"
                 >
                     <span class="symbol">{{ element.symbol }}</span>
@@ -171,6 +176,10 @@ function isPressed(symbol: string): "true" | "false" {
     border-color: var(--ink);
     background: var(--ink);
     color: var(--surface);
+}
+
+.periodic-table .found[aria-disabled="true"] {
+    cursor: default;
 }
 
 .periodic-table .found:focus-visible {

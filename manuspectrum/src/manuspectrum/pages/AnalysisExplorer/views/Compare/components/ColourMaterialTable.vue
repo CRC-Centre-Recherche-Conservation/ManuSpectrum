@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import type { SynthesisPair } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -8,14 +9,16 @@ import type { SynthesisPair } from "@/manuspectrum/pages/AnalysisExplorer/api/ty
  * per pair: colour, material, elements (by symbol when they have one),
  * folios, best certainty, number of identified materials. A click on a row
  * toggles its pair as the filter; the material's button carries the same
- * toggle for the keyboard, named by the colour and the material, pressed
- * on the pair `pressed` names. A folio is named by its label when
+ * toggle for the keyboard, named by the row's visible colour and material
+ * cells (each in its own language), pressed on the pair `pressed` names. A folio is named by its label when
  * `canvasLabels` knows it, the others are counted.
  */
 const props = defineProps<{
     pairs: readonly SynthesisPair[];
     canvasLabels: ReadonlyMap<string, string>;
     pressed: readonly [string | null, string] | null;
+    /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
+    disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -26,6 +29,7 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
+const baseId = useId();
 
 function colourId(pair: SynthesisPair): string | null {
     return pair.colour?.id ?? null;
@@ -66,15 +70,16 @@ function foliosText(pair: SynthesisPair): string {
     return [...named, counted].join(", ");
 }
 
-function toggleLabel(pair: SynthesisPair): string {
-    return interpolate(
-        $gettext("%{colour}, %{material}"),
-        {
-            colour: pair.colour?.label.value ?? $gettext("No colour"),
-            material: pair.material.label.value,
-        },
-        true,
-    );
+function colourCellId(index: number): string {
+    return `${baseId}-colour-${index}`;
+}
+
+function materialCellId(index: number): string {
+    return `${baseId}-material-${index}`;
+}
+
+function toggleLabelledBy(index: number): string {
+    return `${colourCellId(index)} ${materialCellId(index)}`;
 }
 
 function toggle(pair: SynthesisPair): void {
@@ -83,7 +88,10 @@ function toggle(pair: SynthesisPair): void {
 </script>
 
 <template>
-    <div class="colour-material-table">
+    <div
+        class="colour-material-table"
+        :class="{ 'is-disabled': props.disabled }"
+    >
         <table>
             <thead>
                 <tr>
@@ -109,7 +117,7 @@ function toggle(pair: SynthesisPair): void {
             </thead>
             <tbody>
                 <tr
-                    v-for="pair in props.pairs"
+                    v-for="(pair, index) in props.pairs"
                     :key="keyOf(pair)"
                     :class="{ 'is-pressed': isPressed(pair) }"
                     @click="toggle(pair)"
@@ -117,11 +125,13 @@ function toggle(pair: SynthesisPair): void {
                     <td>
                         <span
                             v-if="pair.colour"
+                            :id="colourCellId(index)"
                             :lang="pair.colour.label.lang"
                             >{{ pair.colour.label.value }}</span
                         >
                         <span
                             v-else
+                            :id="colourCellId(index)"
                             class="none"
                             >{{ $gettext("No colour stated") }}</span
                         >
@@ -129,12 +139,15 @@ function toggle(pair: SynthesisPair): void {
                     <th scope="row">
                         <button
                             type="button"
-                            :aria-label="toggleLabel(pair)"
+                            :aria-labelledby="toggleLabelledBy(index)"
                             :aria-pressed="isPressed(pair) ? 'true' : 'false'"
+                            :aria-disabled="props.disabled ? 'true' : undefined"
                         >
-                            <span :lang="pair.material.label.lang">{{
-                                pair.material.label.value
-                            }}</span>
+                            <span
+                                :id="materialCellId(index)"
+                                :lang="pair.material.label.lang"
+                                >{{ pair.material.label.value }}</span
+                            >
                         </button>
                     </th>
                     <td>
@@ -210,6 +223,11 @@ function toggle(pair: SynthesisPair): void {
     border-color: var(--ink);
     background: var(--ink);
     color: var(--surface);
+}
+
+.colour-material-table.is-disabled tbody tr,
+.colour-material-table button[aria-disabled="true"] {
+    cursor: default;
 }
 
 .colour-material-table button:focus-visible {

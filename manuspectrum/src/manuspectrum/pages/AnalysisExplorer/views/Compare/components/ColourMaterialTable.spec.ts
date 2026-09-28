@@ -24,7 +24,7 @@ const PAIRS: SynthesisPair[] = [
             rank: 1,
         },
         count: 2,
-        techniques: [],
+        cells: [],
     },
     {
         colour: null,
@@ -33,7 +33,7 @@ const PAIRS: SynthesisPair[] = [
         canvases: [],
         confidenceBest: null,
         count: 1,
-        techniques: [],
+        cells: [],
     },
 ];
 
@@ -78,12 +78,23 @@ describe("ColourMaterialTable", () => {
         ]);
     });
 
-    it("names each row's toggle by its colour and material", () => {
+    it("names each row's toggle by its visible colour and material, in their languages", () => {
         const view = mountTable();
+        const names = view
+            .findAll("tbody button")
+            .map((button) =>
+                (button.attributes("aria-labelledby") ?? "")
+                    .split(" ")
+                    .map((id) => view.find(`[id="${id}"]`)),
+            );
         expect(
-            view
-                .findAll("tbody button")
-                .map((button) => button.attributes("aria-label")),
-        ).toEqual(["Blue, Azurite", "No colour, Chalk"]);
+            names.map((parts) => parts.map((part) => part.text()).join(" ")),
+        ).toEqual(["Blue Azurite", "No colour stated Chalk"]);
+        expect(
+            names.map((parts) => parts.map((part) => part.attributes("lang"))),
+        ).toEqual([
+            ["en", "en"],
+            [undefined, "en"],
+        ]);
     });
 });

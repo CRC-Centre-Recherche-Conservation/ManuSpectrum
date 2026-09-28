@@ -95,8 +95,8 @@ const DOCUMENT: DocumentPayload = documentPayload({
     ],
 });
 const CANVASES = [
-    { canvas: C1, label: "f. 12r", document: uuid(1) },
-    { canvas: C2, label: "f. 12v", document: uuid(1) },
+    { canvas: C1, label: "f. 12r", document: uuid(1), selected: true },
+    { canvas: C2, label: "f. 12v", document: uuid(1), selected: true },
 ];
 const SLOTS = new Map([
     [uuid(101), [0]],
@@ -180,6 +180,42 @@ describe("FolioTool", () => {
         expect(Number(halo.attributes("stroke-width"))).toBeGreaterThan(
             Number(frame.attributes("stroke-width")),
         );
+    });
+
+    it("draws every halo under every frame", async () => {
+        const [first, second] = DOCUMENT.analyses;
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({
+                ...DOCUMENT,
+                analyses: [
+                    first,
+                    {
+                        ...second,
+                        zones: [
+                            {
+                                canvas: 0,
+                                shape: {
+                                    type: "rect",
+                                    x: 50,
+                                    y: 50,
+                                    w: 100,
+                                    h: 100,
+                                },
+                                feature: "f2",
+                            },
+                        ],
+                    },
+                ],
+            }),
+        );
+        const view = await mountTool();
+        expect(
+            view
+                .findAll("path")
+                .map((path) =>
+                    path.classes("folio-tool-halo") ? "halo" : "frame",
+                ),
+        ).toEqual(["halo", "halo", "frame", "frame"]);
     });
 
     it("sizes and centres a marker on the width of its label", async () => {

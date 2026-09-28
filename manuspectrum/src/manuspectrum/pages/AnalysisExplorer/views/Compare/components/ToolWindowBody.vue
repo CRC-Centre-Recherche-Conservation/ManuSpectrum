@@ -13,6 +13,7 @@ import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-ke
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     filterParts,
+    folioCanvases,
     restrictingFilters,
     selectionSlots,
     toolView,
@@ -36,8 +37,8 @@ import type { FilterKey } from "@/manuspectrum/pages/AnalysisExplorer/views/Comp
  * items on one of the canvases they are placed on. When the synthesis
  * failed the window shows only that, with Retry; when nothing in the
  * Selection is visible it says so. While the synthesis is read the window
- * says so and is busy: a previous synthesis stays shown, but sets no
- * filter.
+ * says so above a previous synthesis, which stays shown busy with its
+ * toggles disabled and sets no filter.
  */
 const props = defineProps<{
     kind: ToolKind;
@@ -72,6 +73,9 @@ const canvasLabels = computed(
         ),
 );
 const slots = computed(() => selectionSlots(store.basket));
+const folio = computed(() =>
+    props.synthesis ? folioCanvases(props.synthesis) : [],
+);
 /** Whether the Selection has nothing for this tool, filters aside. */
 const emptyPayload = computed(() => {
     const synthesis = props.synthesis;
@@ -82,7 +86,7 @@ const emptyPayload = computed(() => {
         case "periodic":
             return synthesis.elements.length === 0;
         case "folio":
-            return synthesis.canvases.length === 0;
+            return folio.value.length === 0;
         default:
             return synthesis.coverage.length === 0;
     }
@@ -173,10 +177,7 @@ function onElement({ symbol }: { symbol: string }): void {
 </script>
 
 <template>
-    <div
-        class="tool-window-body"
-        :aria-busy="loading ? 'true' : undefined"
-    >
+    <div class="tool-window-body">
         <UnavailableState
             v-if="props.status === 'error'"
             status="error"
@@ -199,12 +200,14 @@ function onElement({ symbol }: { symbol: string }): void {
             <LoadingSpinner />
             <span>{{ $gettext("Reading the Selection…") }}</span>
         </p>
-        <template
+        <div
             v-if="
                 props.status !== 'unavailable' &&
                 props.status !== 'error' &&
                 view
             "
+            class="view"
+            :aria-busy="loading ? 'true' : undefined"
         >
             <ul
                 v-if="restricting.length > 0"
@@ -219,6 +222,7 @@ function onElement({ symbol }: { symbol: string }): void {
                         class="chip"
                         :data-filter="key"
                         :aria-label="removeLabel(key)"
+                        :aria-disabled="loading ? 'true' : undefined"
                         @click="setFilter(key, null)"
                     >
                         <span>{{ chipLabel(key) }}</span>
@@ -245,6 +249,7 @@ function onElement({ symbol }: { symbol: string }): void {
                 :rows="view.coverage"
                 :techniques="props.synthesis!.techniques"
                 :pressed="filters.cell"
+                :disabled="loading"
                 @toggle="onCell"
             />
             <ColourMaterialTable
@@ -252,20 +257,22 @@ function onElement({ symbol }: { symbol: string }): void {
                 :pairs="view.pairs"
                 :canvas-labels="canvasLabels"
                 :pressed="filters.pair"
+                :disabled="loading"
                 @toggle="onPair"
             />
             <PeriodicTable
                 v-else-if="props.kind === 'periodic'"
                 :elements="view.elements"
                 :pressed="filters.element"
+                :disabled="loading"
                 @toggle="onElement"
             />
             <FolioTool
                 v-else-if="props.kind === 'folio'"
-                :canvases="props.synthesis!.canvases"
+                :canvases="folio"
                 :slots="slots"
             />
-        </template>
+        </div>
     </div>
 </template>
 
@@ -275,6 +282,13 @@ function onElement({ symbol }: { symbol: string }): void {
     align-content: start;
     gap: 0.5rem;
     block-size: 100%;
+}
+
+.tool-window-body .view {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    min-block-size: 0;
 }
 
 .tool-window-body .loading {
@@ -310,6 +324,10 @@ function onElement({ symbol }: { symbol: string }): void {
     font: inherit;
     font-size: 0.8125rem;
     cursor: pointer;
+}
+
+.tool-window-body .chip[aria-disabled="true"] {
+    cursor: default;
 }
 
 .tool-window-body .chip:focus-visible {

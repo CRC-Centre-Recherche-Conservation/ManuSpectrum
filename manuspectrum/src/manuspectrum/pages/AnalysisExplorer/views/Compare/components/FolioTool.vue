@@ -208,12 +208,13 @@ function frameLayer(
     });
 }
 
-/** A marker on each item's first zone with an extent, else its first point; every extent framed in the slot colour over a halo. */
+/** A marker on each item's first zone with an extent, else its first point; every extent framed in the slot colour, every halo drawn under every frame. */
 function drawMarks(): void {
     if (!map) return;
     drawn?.remove();
     drawn = L.layerGroup().addTo(map);
     const markers: L.Marker[] = [];
+    const framed: [FolioMark, Feature[]][] = [];
     for (const mark of marks.value) {
         const anchor =
             mark.shapes.find((shape) => shapeBounds(shape) !== null) ??
@@ -235,7 +236,12 @@ function drawMarks(): void {
                     : shapeFeature(shape, { id: mark.id });
             return feature ? [feature] : [];
         });
+        framed.push([mark, frames]);
+    }
+    for (const [, frames] of framed) {
         drawn.addLayer(frameLayer(frames, "folio-tool-halo", HALO_WEIGHT));
+    }
+    for (const [mark, frames] of framed) {
         drawn.addLayer(
             frameLayer(
                 frames,

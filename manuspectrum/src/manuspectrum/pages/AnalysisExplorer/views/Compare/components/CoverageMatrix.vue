@@ -14,11 +14,15 @@ import type {
  * columns (those the rows shown count), the number of analyses in each cell. A cell with analyses is a
  * toggle button naming its canvas, technique and count; the cell `pressed`
  * names is pressed. An empty cell says it holds no published analysis.
+ * The other tools' filters narrow the rows only (`toolView`): a column
+ * stays while a row shown counts its technique, even one no kept pair cites.
  */
 const props = defineProps<{
     rows: readonly SynthesisCoverage[];
     techniques: readonly Technique[];
     pressed: readonly [string, string] | null;
+    /** Marks every toggle `aria-disabled` (a stale matrix while the next one is read). */
+    disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -103,6 +107,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                             :aria-pressed="
                                 isPressed(row, technique) ? 'true' : 'false'
                             "
+                            :aria-disabled="props.disabled ? 'true' : undefined"
                             @click="
                                 emit('toggle', {
                                     canvas: row.canvas,
@@ -183,6 +188,10 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
     border-color: var(--ink);
     background: var(--ink);
     color: var(--surface);
+}
+
+.coverage-matrix button[aria-disabled="true"] {
+    cursor: default;
 }
 
 .coverage-matrix button:focus-visible {

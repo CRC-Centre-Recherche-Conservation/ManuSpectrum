@@ -98,7 +98,8 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * after them; « Close » closes the tool. The tools open are kept with the
  * layout and opened again with the view; a tool filter naming a value the
  * Selection no longer holds is dropped. While a tool is open, the drafts
- * the synthesis reads are counted above the windows. When the last window
+ * the synthesis reads are counted above the windows (the last count while
+ * the next synthesis is read). When the last window
  * shown is hidden or closed, the focus goes to « Hidden windows », else to
  * the heading.
  */
@@ -167,7 +168,8 @@ const gridSpecs = computed(() => [
     ...toolSpecs.value,
 ]);
 const draftCount = computed(() =>
-    tools.value.length > 0 && synthesis.status.value === "ready"
+    tools.value.length > 0 &&
+    (synthesis.status.value === "ready" || synthesis.status.value === "loading")
         ? synthesis.data.value?.unpublishedCount ?? 0
         : 0,
 );

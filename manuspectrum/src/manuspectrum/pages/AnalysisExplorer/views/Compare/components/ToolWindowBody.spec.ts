@@ -23,9 +23,9 @@ const SYNTHESIS: SynthesisResponse = {
         { canvas: "c2", label: "f. 1v", document: "d", counts: { xrf: 1 } },
     ],
     canvases: [
-        { canvas: "c1", label: "f. 1r", document: "d" },
-        { canvas: "c2", label: "f. 1v", document: "d" },
-        { canvas: "c3", label: "f. 2r", document: "d" },
+        { canvas: "c1", label: "f. 1r", document: "d", selected: true },
+        { canvas: "c2", label: "f. 1v", document: "d", selected: true },
+        { canvas: "c3", label: "f. 2r", document: "d", selected: false },
     ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [
@@ -41,7 +41,10 @@ const SYNTHESIS: SynthesisResponse = {
             canvases: ["c1", "c3"],
             confidenceBest: null,
             count: 2,
-            techniques: ["xrf"],
+            cells: [
+                ["c1", "xrf"],
+                ["c3", "xrf"],
+            ],
         },
         {
             colour: null,
@@ -55,7 +58,7 @@ const SYNTHESIS: SynthesisResponse = {
             canvases: ["c2"],
             confidenceBest: null,
             count: 1,
-            techniques: ["xrf"],
+            cells: [["c2", "xrf"]],
         },
     ],
     elements: [
@@ -199,7 +202,7 @@ describe("ToolWindowBody", () => {
         );
     });
 
-    it("gives the folio image every placed canvas, with or without coverage", () => {
+    it("gives the folio image the canvases holding a Selection item, with or without coverage", () => {
         const folio = mountBody({
             kind: "folio",
             synthesis: { ...SYNTHESIS, coverage: [] },
@@ -207,7 +210,20 @@ describe("ToolWindowBody", () => {
         expect(folio.find(".empty").exists()).toBe(false);
         expect(
             folio.findComponent({ name: "FolioTool" }).props("canvases"),
-        ).toEqual(SYNTHESIS.canvases);
+        ).toEqual(SYNTHESIS.canvases.slice(0, 2));
+    });
+
+    it("has no folio image when only citing materials are placed", () => {
+        const folio = mountBody({
+            kind: "folio",
+            synthesis: {
+                ...SYNTHESIS,
+                canvases: [SYNTHESIS.canvases[2]],
+            },
+        });
+        expect(folio.find(".empty").text()).toBe(
+            "Nothing to show for this Selection.",
+        );
     });
 
     it("shows only the failure and Retry when the synthesis failed, whatever it showed before", () => {
@@ -218,15 +234,47 @@ describe("ToolWindowBody", () => {
     });
 
     it("says the synthesis is being read over the previous one, and takes no filter from it", async () => {
+        useExplorerStore().setToolFilter("pair", [null, CHALK.id]);
         const periodic = mountBody({ kind: "periodic", status: "loading" });
         expect(periodic.find(".loading").text()).toBe("Reading the Selection…");
-        expect(periodic.find(".tool-window-body").attributes("aria-busy")).toBe(
-            "true",
-        );
+        expect(periodic.find(".view .loading").exists()).toBe(false);
+        expect(
+            periodic.find(".tool-window-body").attributes("aria-busy"),
+        ).toBeUndefined();
+        expect(periodic.find(".view").attributes("aria-busy")).toBe("true");
+        const toggles = periodic.findAll(".view button");
+        expect(toggles.length).toBeGreaterThan(1);
+        expect(
+            toggles.every(
+                (button) => button.attributes("aria-disabled") === "true",
+            ),
+        ).toBe(true);
+        await periodic.find(".chip").trigger("click");
+        expect(useExplorerStore().compare.toolFilters.pair).toEqual([
+            null,
+            CHALK.id,
+        ]);
         await periodic
-            .find('.grid button[aria-label="Cu, 2"]')
+            .find('.grid button[aria-label="Ca, 1"]')
             .trigger("click");
         expect(useExplorerStore().compare.toolFilters.element).toBeNull();
         expect(announce).not.toHaveBeenCalled();
+    });
+
+    it("marks the stale matrix and table toggles disabled while the synthesis is read", () => {
+        for (const kind of ["coverage", "colour-material"] as const) {
+            const body = mountBody({ kind, status: "loading" });
+            const toggles = body.findAll(".view tbody button");
+            expect(toggles.length).toBeGreaterThan(0);
+            expect(
+                toggles.every(
+                    (button) => button.attributes("aria-disabled") === "true",
+                ),
+            ).toBe(true);
+        }
+        const ready = mountBody({ kind: "coverage" });
+        expect(
+            ready.find(".view tbody button").attributes("aria-disabled"),
+        ).toBeUndefined();
     });
 });

@@ -74,6 +74,7 @@ const SYNTHESIS: SynthesisResponse = {
             canvas: "https://iiif.example/c1",
             label: "f. 12r",
             document: uuid(1),
+            selected: true,
         },
     ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
@@ -715,6 +716,22 @@ describe("CompareView", () => {
             const view = await mountView();
             expect(view.find(".draft-banner").exists()).toBe(false);
             await openTool(view, "periodic");
+            expect(view.find(".draft-banner").text()).toBe(
+                "The tools read 2 drafts, not published yet.",
+            );
+        });
+
+        it("keeps the last draft count while the next synthesis is read", async () => {
+            synthesis = { ...SYNTHESIS, unpublishedCount: 2 };
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            fetchMock.mockImplementation(() => new Promise(() => undefined));
+            select(MATERIAL);
+            await flushPromises();
+            expect(
+                windowOf(view, "tool:periodic:-").find(".loading").exists(),
+            ).toBe(true);
             expect(view.find(".draft-banner").text()).toBe(
                 "The tools read 2 drafts, not published yet.",
             );
