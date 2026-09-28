@@ -74,6 +74,14 @@ class ReadSqlTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             read_sql("body.sql", TECHNIQUE_NODE_GROUP="a-uuid")
 
+    def test_a_lower_case_placeholder_left_over_raises(self):
+        self._sql_dir(**{"body.sql": "WHEN @@KNOWN@@ THEN @@technique_map@@"})
+
+        with self.assertRaises(ValueError) as raised:
+            read_sql("body.sql", KNOWN="a-uuid")
+
+        self.assertIn("@@technique_map@@", str(raised.exception))
+
 
 class DropTriggerSqlTests(SimpleTestCase):
     def test_it_drops_both_the_trigger_and_the_function_it_calls(self):
