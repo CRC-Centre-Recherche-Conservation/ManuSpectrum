@@ -172,9 +172,8 @@ export function curveState(
 
 /**
  * A1…A8 in their series colour at 1.5 px; later slots in grey context at
- * 1.25 px, drawn in ink when emphasised; every
- * emphasised curve at 2.5 px. A hidden curve keeps its line, at opacity 0,
- * out of the hover.
+ * 1.25 px, drawn in ink when emphasised; every emphasised curve at 2.5 px.
+ * A hidden curve keeps its line, at opacity 0, out of the hover.
  */
 export function curvePaint(
     palette: CurvePalette,

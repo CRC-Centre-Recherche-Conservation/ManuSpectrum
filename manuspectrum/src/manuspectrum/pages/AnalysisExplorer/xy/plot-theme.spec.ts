@@ -36,8 +36,8 @@ describe("plot theme", () => {
     });
 
     it("reads the grey of context curves", () => {
-        setTokens({ "--series-context": "#9a99a8" });
-        expect(readPlotTheme().context).toBe("#9a99a8");
+        setTokens({ "--series-context": "#8a8999" });
+        expect(readPlotTheme().context).toBe("#8a8999");
     });
 
     it("draws readable axes: ink titles, outside mono ticks, SI exponents, dotted spikes, margins made to fit", () => {

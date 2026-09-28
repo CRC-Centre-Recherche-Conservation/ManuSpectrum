@@ -80,7 +80,7 @@ interface FakeLinked {
 }
 
 const INK = "#1a1a2e";
-const CONTEXT = "#9a99a8";
+const CONTEXT = "#8a8999";
 const BACKGROUND = "#faf9f7";
 const COLOURS = [
     "#1d4ed8",
