@@ -13,12 +13,36 @@ function mountTip() {
     return mount(HelpTip, {
         props: { text: HELP },
         slots: {
-            default: ({ describedby }: { describedby: string }) =>
+            default: ({ describedby }: { describedby?: string }) =>
                 h(
                     "button",
                     { type: "button", "aria-describedby": describedby },
                     "Copy",
                 ),
+        },
+        attachTo: document.body,
+    });
+}
+
+const LABEL = "Download CSV";
+const DETAIL = "Two columns per curve.";
+
+function mountLabel(detail?: string) {
+    return mount(HelpTip, {
+        props: { text: LABEL, mode: "label", detail },
+        slots: {
+            default: ({
+                labelledby,
+                describedby,
+            }: {
+                labelledby?: string;
+                describedby?: string;
+            }) =>
+                h("button", {
+                    type: "button",
+                    "aria-labelledby": labelledby,
+                    "aria-describedby": describedby,
+                }),
         },
         attachTo: document.body,
     });
@@ -205,6 +229,46 @@ describe("HelpTip", () => {
         );
         await wrapper.vm.$nextTick();
         expect(shown()).not.toBeNull();
+    });
+
+    it("names its control in the label role, without describing it with the same text", () => {
+        const wrapper = mountLabel();
+        const button = wrapper.find("button");
+        const name = document.getElementById(
+            button.attributes("aria-labelledby") ?? "",
+        );
+
+        expect(name?.textContent).toBe(LABEL);
+        expect(name?.closest('[role="tooltip"]')?.hasAttribute("hidden")).toBe(
+            true,
+        );
+        expect(button.attributes("aria-describedby")).toBeUndefined();
+    });
+
+    it("describes its control by the detail alone in the label role, and shows both", async () => {
+        const wrapper = mountLabel(DETAIL);
+        const button = wrapper.find("button");
+        const name = document.getElementById(
+            button.attributes("aria-labelledby") ?? "",
+        );
+        const description = document.getElementById(
+            button.attributes("aria-describedby") ?? "",
+        );
+
+        expect(name?.textContent).toBe(LABEL);
+        expect(description?.textContent).toBe(DETAIL);
+        button.element.focus();
+        vi.advanceTimersByTime(DELAY_MS);
+        await wrapper.vm.$nextTick();
+        expect(shown()?.textContent).toContain(LABEL);
+        expect(shown()?.textContent).toContain(DETAIL);
+    });
+
+    it("gives no label to its control in the description role", () => {
+        const wrapper = mountTip();
+        expect(wrapper.find("button").attributes("aria-labelledby")).toBe(
+            undefined,
+        );
     });
 
     it("cancels a pending show and its listener when unmounted", async () => {

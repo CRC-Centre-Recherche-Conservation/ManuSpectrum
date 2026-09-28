@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, useId } from "vue";
+import { computed, onBeforeUnmount, ref, useId } from "vue";
 
 const SHOW_DELAY_MS = 500;
 const FOCUS_VISIBLE = ":focus-visible";
 
 /**
- * A help tooltip for the control in its slot. The slot receives
- * `describedby`, the id of the one tooltip node, for the control's
- * `aria-describedby`: the node stays in the DOM, `hidden` until shown, so the
- * text is always the control's description and is never read twice.
+ * A tooltip for the control in its slot, in one of two roles. As a
+ * description (the default), the slot receives `describedby`, the id of the
+ * one tooltip node, for the control's `aria-describedby`. As a label, the
+ * slot receives `labelledby`, the id of the text in the tooltip, for the
+ * control's `aria-labelledby`: the tooltip names the control (an icon
+ * button) and its text is not read a second time as a description; a
+ * `detail` shown under the text is then the control's description
+ * (`describedby`). The node stays in the DOM, `hidden` until shown.
+ * `placement` puts it above (the default) or below the control, `align`
+ * lines it up with the control's start (the default) or end.
  *
  * Shown `SHOW_DELAY_MS` after a mouse or pen hover, or after a keyboard focus
  * (`:focus-visible`); never after a click or a tap, which also hide it and
@@ -17,13 +23,36 @@ const FOCUS_VISIBLE = ":focus-visible";
  * hover area, so it can be hovered), on blur, and on Escape wherever focus is:
  * the document listener exists only while a show is pending or shown.
  */
-const props = defineProps<{ text: string }>();
+const props = withDefaults(
+    defineProps<{
+        text: string;
+        mode?: "description" | "label";
+        detail?: string;
+        placement?: "above" | "below";
+        align?: "start" | "end";
+    }>(),
+    {
+        mode: "description",
+        detail: "",
+        placement: "above",
+        align: "start",
+    },
+);
 
 const helpId = useId();
+const labelId = useId();
+const detailId = useId();
 
 const shown = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
 let suppressed = false;
+
+const labelling = computed(() => props.mode === "label");
+const labelledby = computed(() => (labelling.value ? labelId : undefined));
+const describedby = computed(() => {
+    if (!labelling.value) return helpId;
+    return props.detail ? detailId : undefined;
+});
 
 onBeforeUnmount(hide);
 
@@ -89,14 +118,34 @@ function onDocumentKeydown(event: KeyboardEvent): void {
         @focusin="onFocusIn"
         @focusout="onFocusOut"
     >
-        <slot :describedby="helpId" />
+        <slot
+            :describedby="describedby"
+            :labelledby="labelledby"
+        />
         <span
             :id="helpId"
             class="bubble"
+            :class="[props.placement, props.align]"
             role="tooltip"
             :hidden="!shown"
         >
-            <span class="body">{{ props.text }}</span>
+            <span
+                v-if="labelling"
+                class="body"
+            >
+                <span :id="labelId">{{ props.text }}</span>
+                <span
+                    v-if="props.detail"
+                    :id="detailId"
+                    class="detail"
+                    >{{ props.detail }}</span
+                >
+            </span>
+            <span
+                v-else
+                class="body"
+                >{{ props.text }}</span
+            >
         </span>
     </span>
 </template>
@@ -118,6 +167,15 @@ function onDocumentKeydown(event: KeyboardEvent): void {
     padding-block-end: 0.375rem;
 }
 
+.help-tip .bubble.below {
+    inset-block: 100% auto;
+    padding-block: 0.375rem 0;
+}
+
+.help-tip .bubble.end {
+    inset-inline: auto 0;
+}
+
 .help-tip .bubble[hidden] {
     display: none;
 }
@@ -131,5 +189,12 @@ function onDocumentKeydown(event: KeyboardEvent): void {
     color: var(--surface);
     font-size: 0.8125rem;
     line-height: 1.4;
+    white-space: normal;
+}
+
+.help-tip .bubble .detail {
+    display: block;
+    padding-block-start: 0.25rem;
+    font-size: 0.75rem;
 }
 </style>
