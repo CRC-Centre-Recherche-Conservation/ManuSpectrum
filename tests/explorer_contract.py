@@ -207,6 +207,7 @@ SHAPES = {
     "ShareExport": {"files": int, "bytes": int, "overLimit": bool, "documents": list},
     "SynthesisResponse": {
         "coverage": list,
+        "canvases": list,
         "techniques": list,
         "pairs": list,
         "elements": list,
@@ -218,6 +219,7 @@ SHAPES = {
         "document": str,
         "counts": dict,
     },
+    "SynthesisCanvas": {"canvas": str, "document": str, "label": str},
     "SynthesisPair": {
         "colour": ("ValueRef", None),
         "material": "ValueRef",
@@ -225,6 +227,7 @@ SHAPES = {
         "canvases": list,
         "confidenceBest": ("RankedValue", None),
         "count": int,
+        "techniques": list,
     },
     "SynthesisElementRef": {
         "id": str,

@@ -47,6 +47,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 const KEY = "ch:00000000-0000-4000-8000-000000000001:-";
 const EMPTY_SYNTHESIS = {
     coverage: [],
+    canvases: [],
     techniques: [],
     pairs: [],
     elements: [],

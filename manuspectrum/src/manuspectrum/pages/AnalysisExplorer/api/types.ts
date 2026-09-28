@@ -401,11 +401,19 @@ export interface ItemsResponse {
 /** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
 export interface SynthesisCoverage {
     canvas: string;
-    /** The canvas label, prefixed with its document's name when the rows span several documents. */
+    /** The canvas label, prefixed with its document's name when the placed canvases span several documents. */
     label: string;
     /** Id of the document whose manifest lists the canvas. */
     document: string;
     counts: Record<string, number>;
+}
+
+/** A canvas an item of the Selection is placed on, labelled as in `SynthesisCoverage`. */
+export interface SynthesisCanvas {
+    canvas: string;
+    /** Id of the document whose manifest lists the canvas. */
+    document: string;
+    label: string;
 }
 
 /** An element of an identified material; `symbol` null when its labels give none. */
@@ -421,6 +429,8 @@ export interface SynthesisPair {
     confidenceBest: RankedValue | null;
     /** Number of identified materials. */
     count: number;
+    /** Technique ids of the identified materials' evidence analyses in the Selection, by label. */
+    techniques: string[];
 }
 
 /** An element with a symbol, counted once per identified material naming it, with its best level. */
@@ -437,6 +447,8 @@ export interface SynthesisElement {
  */
 export interface SynthesisResponse {
     coverage: SynthesisCoverage[];
+    /** Every canvas an analysis (with or without technique) or identified material is placed on, in document then page order. */
+    canvases: SynthesisCanvas[];
     /** The techniques `coverage` counts, by label. */
     techniques: Technique[];
     /** Most frequent first. */
@@ -710,6 +722,7 @@ export const SHAPE_KEYS = {
     } satisfies Record<keyof ShareLinks, true>,
     SynthesisResponse: {
         coverage: true,
+        canvases: true,
         techniques: true,
         pairs: true,
         elements: true,
@@ -721,6 +734,11 @@ export const SHAPE_KEYS = {
         document: true,
         counts: true,
     } satisfies Record<keyof SynthesisCoverage, true>,
+    SynthesisCanvas: {
+        canvas: true,
+        document: true,
+        label: true,
+    } satisfies Record<keyof SynthesisCanvas, true>,
     SynthesisPair: {
         colour: true,
         material: true,
@@ -728,6 +746,7 @@ export const SHAPE_KEYS = {
         canvases: true,
         confidenceBest: true,
         count: true,
+        techniques: true,
     } satisfies Record<keyof SynthesisPair, true>,
     SynthesisElementRef: {
         id: true,

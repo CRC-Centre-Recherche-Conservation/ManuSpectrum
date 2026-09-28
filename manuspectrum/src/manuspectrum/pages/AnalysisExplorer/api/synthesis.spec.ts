@@ -19,6 +19,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 
 const EMPTY: SynthesisResponse = {
     coverage: [],
+    canvases: [],
     techniques: [],
     pairs: [],
     elements: [],

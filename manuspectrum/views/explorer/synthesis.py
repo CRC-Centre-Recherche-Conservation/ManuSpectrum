@@ -11,7 +11,9 @@ the visitor's rights (D59), per request; nothing is memoised.
 - Canvases are placed by the manifest's rule (``manifest._placements``):
   an analysis on every canvas of its document carrying one of its zones,
   an identified material on the canvas of its first zone
-  (``iiif.facts.CharacterizationZones``).
+  (``iiif.facts.CharacterizationZones``). A canvas is labelled the same way
+  wherever it appears: prefixed with its document's name when the placed
+  canvases span several documents.
 """
 
 import dataclasses
@@ -43,15 +45,36 @@ def _best(ranked):
     return min(found, key=lambda r: (r["rank"], r["id"])) if found else None
 
 
-def _coverage(placements, bundle):
-    """``(coverage rows, techniques)``: analyses per canvas and technique, canvases in document then page order.
+def _canvases(placements, bundle):
+    """Every canvas an item of the scope is placed on, as ``{canvas, document, label}``, in document then page order.
 
-    A canvas is a row when an analysis with a technique is placed on it. A
-    row's label is the canvas's label, prefixed with its document's name
-    when the rows span several documents; ``document`` is the id of the
-    document whose manifest lists the canvas.
+    ``document`` is the id of the document whose manifest lists the canvas.
     """
-    rows, techniques = [], {}
+    rows = [
+        (placement.document, canvas, placement.position[canvas]["label"])
+        for placement in placements
+        for canvas in placement.kept
+    ]
+    several = len({document for document, *_ in rows}) > 1
+    return [
+        {
+            "canvas": canvas,
+            "document": str(document),
+            "label": (
+                f"{bundle.label_of[document]['value']} — {label}" if several else label
+            ),
+        }
+        for document, canvas, label in rows
+    ]
+
+
+def _coverage(placements, canvases, bundle):
+    """``(coverage rows, techniques)``: analyses per canvas and technique, in the order of *canvases*.
+
+    A canvas is a row when an analysis with a technique is placed on it; it
+    keeps its entry of *canvases* (``_canvases``) with the counts.
+    """
+    counted, techniques = {}, {}
     for placement in placements:
         for canvas in placement.kept:
             counts = defaultdict(int)
@@ -61,24 +84,32 @@ def _coverage(placements, bundle):
                     counts[technique["id"]] += 1
                     techniques.setdefault(technique["id"], technique)
             if counts:
-                label = placement.position[canvas]["label"]
-                rows.append((placement.document, canvas, label, dict(counts)))
-    several = len({document for document, *_ in rows}) > 1
+                counted[str(placement.document), canvas] = dict(counts)
     coverage = [
-        {
-            "canvas": canvas,
-            "label": (
-                f"{bundle.label_of[document]['value']} — {label}" if several else label
-            ),
-            "document": str(document),
-            "counts": counts,
-        }
-        for document, canvas, label, counts in rows
+        {**entry, "counts": counted[entry["document"], entry["canvas"]]}
+        for entry in canvases
+        if (entry["document"], entry["canvas"]) in counted
     ]
-    ordered = sorted(
-        techniques.values(), key=lambda t: (t["label"]["value"].casefold(), t["id"])
-    )
-    return coverage, ordered
+    return coverage, _by_label(techniques.values())
+
+
+def _by_label(techniques):
+    """*techniques* sorted by label, then id."""
+    return sorted(techniques, key=lambda t: (t["label"]["value"].casefold(), t["id"]))
+
+
+def _material_techniques(materials, scope):
+    """``{identified material: {technique id: technique}}``: the techniques of its evidence analyses in *scope*."""
+    bundle, analyses = scope.bundle, set(scope.analyses)
+    found = {}
+    for c in materials:
+        techniques = {}
+        for a in analyses.intersection(bundle.visible.evidence.get(c, ())):
+            technique = bundle.by_id[a]["technique"]
+            if technique:
+                techniques.setdefault(technique["id"], technique)
+        found[c] = techniques
+    return found
 
 
 def _material_canvases(placements):
@@ -93,13 +124,14 @@ def _material_canvases(placements):
     return canvases, order
 
 
-def _pairs_and_elements(materials, canvases_of, order, reader, language):
+def _pairs_and_elements(materials, canvases_of, techniques_of, order, reader, language):
     """``(pairs, elements)`` of the identified materials *materials*.
 
     A pair is one colour (None for a material without colour) × one
     material value; it gathers the identified materials carrying both, the
-    union of their elements (with their symbol), their canvases, the best
-    certainty of that material value and their number. An element is
+    union of their elements (with their symbol), their canvases, the
+    techniques of their evidence analyses in scope (*techniques_of*), the
+    best certainty of that material value and their number. An element is
     counted once per identified material naming its symbol, with the best
     level it is given; an element without a symbol is left out of
     ``elements`` (it stays in its pairs, ``symbol`` None).
@@ -133,6 +165,7 @@ def _pairs_and_elements(materials, canvases_of, order, reader, language):
                             "material": material,
                             "elements": {},
                             "canvases": set(),
+                            "techniques": {},
                             "confidences": [],
                             "materials": set(),
                         },
@@ -140,6 +173,7 @@ def _pairs_and_elements(materials, canvases_of, order, reader, language):
                     pair["confidences"].append(confidence)
                     pair["materials"].add(c)
                     pair["canvases"].update(canvases_of.get(c, ()))
+                    pair["techniques"].update(techniques_of[c])
                     for element_id, element in elements.items():
                         pair["elements"].setdefault(element_id, element)
     shown_pairs = [
@@ -153,6 +187,7 @@ def _pairs_and_elements(materials, canvases_of, order, reader, language):
             "canvases": sorted(pair["canvases"], key=order.__getitem__),
             "confidenceBest": _best(pair["confidences"]),
             "count": len(pair["materials"]),
+            "techniques": [t["id"] for t in _by_label(pair["techniques"].values())],
         }
         for pair in pairs.values()
     ]
@@ -183,8 +218,10 @@ def _pairs_and_elements(materials, canvases_of, order, reader, language):
 def synthesis_payload(scope):
     """``SynthesisResponse`` of the Selection *scope* (an ``ids`` scope from ``resolve_scope``).
 
-    ``coverage`` counts the scope's analyses per canvas and technique,
-    ``techniques`` lists the techniques it counts by label, ``pairs`` and
+    ``canvases`` lists every canvas an analysis (with or without technique)
+    or identified material of the synthesis is placed on, ``coverage``
+    counts the scope's analyses per canvas and technique, ``techniques``
+    lists the techniques it counts by label, ``pairs`` and
     ``elements`` describe the identified materials of ``synthesis_materials``
     (most frequent first), ``unpublishedCount`` counts the analyses and
     identified materials in a Draft state.
@@ -197,13 +234,20 @@ def synthesis_payload(scope):
         documents=_documents(bundle, scope.analyses, materials),
     )
     placements = list(_placements(placed, bounded=False))
-    coverage, techniques = _coverage(placements, bundle)
+    canvases = _canvases(placements, bundle)
+    coverage, techniques = _coverage(placements, canvases, bundle)
     canvases_of, order = _material_canvases(placements)
     pairs, elements = _pairs_and_elements(
-        materials, canvases_of, order, scope.reader, scope.language
+        materials,
+        canvases_of,
+        _material_techniques(materials, scope),
+        order,
+        scope.reader,
+        scope.language,
     )
     return {
         "coverage": coverage,
+        "canvases": canvases,
         "techniques": techniques,
         "pairs": pairs,
         "elements": elements,

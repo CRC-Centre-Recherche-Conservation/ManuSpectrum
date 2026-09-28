@@ -15,6 +15,7 @@ from arches_controlled_lists.models import List, ListItem
 from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import (
     CANVAS,
+    CANVAS_2,
     CANVAS_3,
     FETCH,
     MANIFEST,
@@ -143,13 +144,17 @@ class SynthesisShapeTests(SynthesisCase):
             assert_shape(self, row, "SynthesisCoverage")
         for technique in payload["techniques"]:
             assert_shape(self, technique, "Technique")
+        for canvas in payload["canvases"]:
+            assert_shape(self, canvas, "SynthesisCanvas")
         for pair in payload["pairs"]:
             assert_shape(self, pair, "SynthesisPair")
             for element in pair["elements"]:
                 assert_shape(self, element, "SynthesisElementRef")
         for element in payload["elements"]:
             assert_shape(self, element, "SynthesisElement")
-        self.assertTrue(payload["coverage"] and payload["pairs"])
+        self.assertTrue(
+            payload["coverage"] and payload["canvases"] and payload["pairs"]
+        )
 
 
 class CoverageTests(SynthesisCase):
@@ -192,6 +197,16 @@ class CoverageTests(SynthesisCase):
 
         self.assertEqual((payload["coverage"], payload["techniques"]), ([], []))
         self.assertEqual(payload["pairs"][0]["canvases"], [CANVAS_3])
+        self.assertEqual(
+            payload["canvases"],
+            [
+                {
+                    "canvas": CANVAS_3,
+                    "document": str(self.documents["open"].pk),
+                    "label": "f. 3r",
+                }
+            ],
+        )
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=1)
     def test_the_manifest_canvas_bound_does_not_limit_the_synthesis(self):
@@ -219,6 +234,53 @@ class CoverageTests(SynthesisCase):
         )
 
 
+class CanvasesTests(SynthesisCase):
+    def test_every_canvas_an_item_is_placed_on_is_listed_with_or_without_technique(
+        self,
+    ):
+        untyped = self.new_resource("analysis", "RTI_01 — f. 2r")
+        self.tile(untyped, "component_observed", self.refs(self.components["open"]))
+        self.zone(untyped, [("0a0a0a0a-0000-4000-8000-00000000000c", CANVAS_2, POINT)])
+
+        payload = self.payload(
+            [
+                self.an("open"),
+                f"an:{untyped.pk}:-",
+                f"ch:{self.characterization.pk}:-",
+            ]
+        )
+
+        document = str(self.documents["open"].pk)
+        self.assertEqual(
+            payload["canvases"],
+            [
+                {"canvas": CANVAS, "document": document, "label": "f. 1v"},
+                {"canvas": CANVAS_2, "document": document, "label": "f. 2r"},
+                {"canvas": CANVAS_3, "document": document, "label": "f. 3r"},
+            ],
+        )
+        self.assertEqual([r["canvas"] for r in payload["coverage"]], [CANVAS])
+
+    def test_canvases_of_several_documents_are_named_with_their_document(self):
+        self.tile(self.documents["embargoed"], "facsimiles", MANIFEST_2)
+        self.zone(
+            self.analyses["embargoed"],
+            [("0a0a0a0a-0000-4000-8000-00000000000b", CANVAS_B, POINT)],
+        )
+        sources = {MANIFEST: SOURCE_MANIFEST, MANIFEST_2: SOURCE_2}
+
+        with mock.patch(FETCH, side_effect=sources.get):
+            payload = self.payload(
+                [self.an("embargoed"), f"ch:{self.characterization.pk}:-"]
+            )
+
+        self.assertEqual(
+            [(c["canvas"], c["label"]) for c in payload["canvases"]],
+            [(CANVAS_B, "Ms 211 — f. 1r"), (CANVAS_3, "Ms 59 — f. 3r")],
+        )
+        self.assertEqual([r["label"] for r in payload["coverage"]], ["Ms 211 — f. 1r"])
+
+
 class PairsAndElementsTests(SynthesisCase):
     def test_materials_citing_a_selected_analysis_count_without_their_key(self):
         payload = self.payload([self.an("open")])
@@ -241,6 +303,7 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 1)],
         )
+        self.assertEqual(pair["techniques"], [item_id(XRF)])
 
     def test_one_pair_gathers_its_materials_with_the_best_confidence_and_level(self):
         payload = self.payload([self.an("open"), self.an("on_document")])
@@ -258,6 +321,7 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 2)],
         )
+        self.assertEqual(pair["techniques"], [item_id(FORS), item_id(XRF)])
 
     def test_a_material_without_colour_or_confidence_pairs_with_null(self):
         payload = self.payload([f"ch:{self.chalk.pk}:-"])
@@ -270,6 +334,7 @@ class PairsAndElementsTests(SynthesisCase):
             [(None, CHALK, None, 1)],
         )
         self.assertEqual(payload["elements"], [])
+        self.assertEqual(payload["pairs"][0]["techniques"], [])
 
 
 class SynthesisPermissionTests(SynthesisCase):
