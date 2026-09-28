@@ -24,11 +24,11 @@ import orjson
 from django.conf import settings
 from django.http import (
     HttpResponse,
-    QueryDict,
     HttpResponseBadRequest,
     HttpResponseNotFound,
     HttpResponseNotModified,
     HttpResponsePermanentRedirect,
+    QueryDict,
 )
 from django.utils import translation
 from django.utils.decorators import method_decorator
@@ -46,7 +46,6 @@ from manuspectrum.views.explorer.scopes import (
     resolve_scope,
     share_payload,
 )
-from manuspectrum.views.explorer.synthesis import synthesis_payload
 from manuspectrum.views.explorer.service import (
     FACET_KEYS,
     analysis_payload,
@@ -62,6 +61,7 @@ from manuspectrum.views.explorer.service import (
     search_payload,
     wants_facets,
 )
+from manuspectrum.views.explorer.synthesis import synthesis_payload
 from manuspectrum.views.iiif.cors import iiif_cors
 
 HOME_DAY_MARGIN = datetime.timedelta(days=1)
