@@ -3,6 +3,7 @@ import type { InjectionKey, Ref } from "vue";
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
 export interface ResultsMemo {
@@ -70,3 +71,7 @@ export const SELECTION_ITEMS_KEY: InjectionKey<() => SelectionItems> =
 /** The linked selection of the Compare view shown (`useLinkedSelection`); provided by the Compare view. */
 export const LINKED_SELECTION_KEY: InjectionKey<LinkedSelection> =
     Symbol("linked-selection");
+
+/** Where the body of a Compare window declares its actions, shown in the window's header (`useWindowActions`); provided by the window. */
+export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
+    Symbol("window-actions");

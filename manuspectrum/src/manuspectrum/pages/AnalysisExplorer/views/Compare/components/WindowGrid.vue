@@ -8,6 +8,7 @@ import {
     provide,
     readonly,
     ref,
+    useId,
     watch,
 } from "vue";
 import { GridStack } from "gridstack";
@@ -85,6 +86,15 @@ const GAP = "0.5rem";
  * told to draw again (`WINDOW_RESIZE_KEY`) when the grid's width or a
  * window's size changes, not when a drag makes the grid taller. The
  * `toolbar` slot is laid before « Rearrange ».
+ *
+ * « Enlarge » shows one window at a time in a modal `<dialog>` held here
+ * (`showModal`): the window moves its header and body into it (the same
+ * instance, `CompareWindow`) and its cell keeps its place. The title takes
+ * the focus on opening; the page does not scroll while the dialog is open.
+ * « Restore », Escape, or the window leaving the grid close it: the focus
+ * goes back to the window's « Enlarge » without scrolling the page. The
+ * windows are told to draw again when the dialog opens, closes or changes
+ * size.
  */
 const props = withDefaults(
     defineProps<{
@@ -102,7 +112,12 @@ const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 
+const dialogBodyId = `compare-enlarged-${useId()}`;
+
 const rootElement = ref<HTMLElement | null>(null);
+const dialogElement = ref<HTMLDialogElement | null>(null);
+/** The window shown enlarged, if any. */
+const enlargedId = ref<string | null>(null);
 const gridElement = ref<HTMLElement | null>(null);
 /** The grid's height before a close, in px, kept until the page may shorten without moving. */
 const heldHeight = ref<number | null>(null);
@@ -137,7 +152,13 @@ let shownColumns = GRID_COLUMNS;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
 /** The window the reader is closing, and its box then. */
 let closing: { id: string; box: WindowBox } | null = null;
+let dialogObserver: ResizeObserver | null = null;
+/** The page's `overflow` before the dialog locked its scroll. */
+let pageOverflow: string | null = null;
 
+const enlargedTitle = computed(() =>
+    enlargedId.value === null ? undefined : titleOf(enlargedId.value),
+);
 const heldStyle = computed(() =>
     heldHeight.value === null
         ? undefined
@@ -153,6 +174,9 @@ watch(
         for (const id of gone) {
             const element = itemElement(id);
             if (grid && element) grid.removeWidget(element, false, true);
+        }
+        if (enlargedId.value !== null && gone.includes(enlargedId.value)) {
+            dialogElement.value?.close();
         }
         if (gone.length > 0) {
             closeHoles();
@@ -252,10 +276,17 @@ onMounted(() => {
     syncFromGrid();
     observer = new ResizeObserver(onGridResized);
     observer.observe(element);
+    if (dialogElement.value) {
+        dialogObserver = new ResizeObserver(scheduleResize);
+        dialogObserver.observe(dialogElement.value);
+    }
 });
 
 onBeforeUnmount(() => {
     releaseHeight();
+    unlockPage();
+    if (dialogElement.value?.open) dialogElement.value.close();
+    dialogObserver?.disconnect();
     observer?.disconnect();
     clearTimeout(resizeTimer);
     grid?.destroy(false);
@@ -552,9 +583,7 @@ function move(id: string, step: -1 | 1): void {
         ),
     );
     itemElement(id)
-        ?.querySelector<HTMLElement>(
-            `[data-action="${step < 0 ? "move-before" : "move-after"}"]`,
-        )
+        ?.querySelector<HTMLElement>('[data-action="more"]')
         ?.focus();
 }
 
@@ -609,6 +638,50 @@ function close(id: string): void {
     closing = node ? { id, box: boxOf(node) } : null;
     holdHeight();
     emit("close", { id });
+}
+
+function lockPage(): void {
+    if (pageOverflow !== null) return;
+    pageOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+}
+
+function unlockPage(): void {
+    if (pageOverflow === null) return;
+    document.documentElement.style.overflow = pageOverflow;
+    pageOverflow = null;
+}
+
+/** Shows a window enlarged, or restores the one shown. */
+function toggleEnlarge(id: string): void {
+    if (enlargedId.value === id) dialogElement.value?.close();
+    else void enlarge(id);
+}
+
+async function enlarge(id: string): Promise<void> {
+    const dialog = dialogElement.value;
+    if (!dialog || dialog.open) return;
+    enlargedId.value = id;
+    await nextTick();
+    dialog.showModal();
+    lockPage();
+    dialog
+        .querySelector<HTMLElement>(".compare-window-frame .title")
+        ?.focus({ preventScroll: true });
+    scheduleResize();
+}
+
+/** The dialog closed (Restore, Escape, or its window gone): the window goes back to its cell. */
+async function onDialogClosed(): Promise<void> {
+    const id = enlargedId.value;
+    enlargedId.value = null;
+    unlockPage();
+    scheduleResize();
+    if (id === null) return;
+    await nextTick();
+    itemElement(id)
+        ?.querySelector<HTMLElement>('[data-action="enlarge"]')
+        ?.focus({ preventScroll: true });
 }
 
 /**
@@ -680,13 +753,19 @@ function rearrange(): void {
                 <div class="grid-stack-item-content">
                     <CompareWindow
                         :title="window.title"
+                        :kind="window.kind"
+                        :subtitle="window.subtitle"
+                        :hides="window.hides ?? true"
                         :position="positionOf(window.id)"
                         :total="windows.length"
                         :size="sizes[window.id] ?? null"
                         :folded="foldedOf(window)"
+                        :enlarged="enlargedId === window.id"
+                        :enlarge-target="`#${dialogBodyId}`"
                         @move="move(window.id, $event.step)"
                         @size-chosen="resize(window.id, $event.size)"
                         @fold-toggled="toggleFold(window.id)"
+                        @enlarge-toggled="toggleEnlarge(window.id)"
                         @close="close(window.id)"
                     >
                         <slot :window="window" />
@@ -694,6 +773,17 @@ function rearrange(): void {
                 </div>
             </div>
         </div>
+        <dialog
+            ref="dialogElement"
+            class="enlarged-dialog"
+            :aria-label="enlargedTitle"
+            @close="onDialogClosed"
+        >
+            <div
+                :id="dialogBodyId"
+                class="enlarged-body"
+            ></div>
+        </dialog>
     </div>
 </template>
 
@@ -728,5 +818,28 @@ function rearrange(): void {
 
 .window-grid .grid-stack-item-content {
     overflow: visible;
+}
+
+.window-grid .enlarged-dialog {
+    inline-size: min(92vw, 80rem);
+    max-inline-size: none;
+    block-size: min(88vh, 56rem);
+    max-block-size: none;
+    margin: auto;
+    padding: 0;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: var(--explorer-radius, 0.625rem);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    color: var(--ink);
+    overflow: hidden;
+}
+
+.window-grid .enlarged-dialog::backdrop {
+    background: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.window-grid .enlarged-body {
+    block-size: 100%;
 }
 </style>

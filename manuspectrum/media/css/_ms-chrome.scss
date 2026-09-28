@@ -114,6 +114,12 @@
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;
     --map-coast: #b7c4cf;
+    // Compare's linked selection: the mark of what it links, the tint of a
+    // linked row, the opacity of what it does not link, the linked bar's width.
+    --linked-mark: var(--blue-text);
+    --linked-tint: var(--bg-alt);
+    --linked-fade: 0.35;
+    --linked-bar: 0.1875rem;
 
     // Typography
     --font-display: 'Cormorant Garamond', Georgia, serif;

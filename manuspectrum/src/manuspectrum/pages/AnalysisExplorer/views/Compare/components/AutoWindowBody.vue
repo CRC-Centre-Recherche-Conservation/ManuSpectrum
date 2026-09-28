@@ -7,14 +7,15 @@ import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import type { AutoWindow } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
-/** The content of a window arranged from the Selection, by its kind. */
-const props = defineProps<{ window: AutoWindow }>();
+/** The content of a window arranged from the Selection, by its kind; `title` is the window's, for what the content exports. */
+const props = defineProps<{ window: AutoWindow; title: string }>();
 </script>
 
 <template>
     <XyWorkshop
         v-if="props.window.kind === 'xy'"
         :curves="props.window.curves"
+        :title="props.title"
     />
     <ElementMaps
         v-else-if="props.window.kind === 'maps'"

@@ -3,6 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import CompareView from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue";
+import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -15,6 +16,10 @@ import {
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    installDialog,
+    pressEscape,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/dialog.ts";
 import { resetFakeGrids } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
 import {
     plotly,
@@ -158,8 +163,10 @@ let announce: ReturnType<typeof vi.fn>;
 let fetchMock: ReturnType<typeof vi.fn>;
 let synthesis: SynthesisResponse;
 let wrapper: VueWrapper | null = null;
+let uninstallDialog: () => void;
 
 beforeEach(() => {
+    uninstallDialog = installDialog();
     resetFakeGrids();
     forgetPayloads();
     window.localStorage.clear();
@@ -191,6 +198,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
+    uninstallDialog();
     vi.unstubAllGlobals();
 });
 
@@ -315,13 +323,37 @@ describe("CompareView", () => {
             "auto:not-in-chart",
         ]);
         expect(
-            view.findAll(".compare-window h3").map((title) => title.text()),
+            view
+                .findAll(".compare-window h3 .name")
+                .map((title) => title.text()),
         ).toEqual([
             "Intensity against Raman shift (cm-1)",
             "XRF — energy / counts",
             "Micro-images",
             "Identified materials",
             "Without visualisation",
+        ]);
+        expect(
+            view
+                .findAll(".compare-window h3")
+                .map((title) => title.find(".kind").exists()),
+        ).toEqual([true, true, false, false, false]);
+        expect(
+            view
+                .findAll(".compare-window h3 .subtitle")
+                .map((title) => title.text()),
+        ).toEqual([
+            "1 spectrum",
+            "1 spectrum",
+            "1 image",
+            "1 material",
+            "1 item",
+        ]);
+        expect(
+            view.findAllComponents(XyWorkshop).map((xy) => xy.props("title")),
+        ).toEqual([
+            "Intensity against Raman shift (cm-1)",
+            "XRF — energy / counts",
         ]);
         expect(
             plotly.react.mock.calls.flatMap(([, traces]) =>
@@ -344,7 +376,7 @@ describe("CompareView", () => {
         const view = await mountView();
         expect(windowIds(view)).toEqual(["auto:maps", "auto:not-in-chart"]);
         const maps = windowOf(view, "auto:maps");
-        expect(maps.find("h3").text()).toBe("Element maps");
+        expect(maps.find("h3 .name").text()).toBe("Element maps");
         expect(maps.find("figcaption").text()).toContain("A1");
         expect(maps.find(".layer-picker label").text()).toBe("Element");
         expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
@@ -656,9 +688,9 @@ describe("CompareView", () => {
                 `auto:xy:${XRF}`,
                 "tool:periodic:-",
             ]);
-            expect(windowOf(view, "tool:periodic:-").find("h3").text()).toBe(
-                "Periodic table",
-            );
+            expect(
+                windowOf(view, "tool:periodic:-").find("h3 .name").text(),
+            ).toBe("Periodic table");
             expect(
                 windowOf(view, "tool:periodic:-")
                     .find('.grid button[aria-label="Cu, 1"]')
@@ -799,6 +831,37 @@ describe("CompareView", () => {
             await flushPromises();
             expect(useExplorerStore().compare.selection).toEqual([]);
             expect(indicator.find(".summary").text()).toBe("Nothing selected");
+        });
+
+        it("keeps the selection when Escape closes an enlarged window", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            await windowOf(view, "tool:periodic:-")
+                .find('.grid button[aria-label="Cu, 1"]')
+                .trigger("click");
+            await windowOf(view, `auto:xy:${XRF}`)
+                .find('[data-action="enlarge"]')
+                .trigger("click");
+            await flushPromises();
+            const dialog = document.querySelector("dialog")!;
+            expect(dialog.open).toBe(true);
+            pressEscape(dialog);
+            await flushPromises();
+            expect(dialog.open).toBe(false);
+            expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
+        });
+
+        it("names a tool « Tool » over its title and closes it from its « More » menu", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            const tool = windowOf(view, "tool:periodic:-");
+            expect(tool.find("h3 .kind").text()).toBe("Tool");
+            await tool.find('[data-action="more"]').trigger("click");
+            await tool.find('[data-action="menu-close"]').trigger("click");
+            await flushPromises();
+            expect(useExplorerStore().compare.tools).toEqual([]);
         });
 
         it("drops a selected element that left with the Selection", async () => {

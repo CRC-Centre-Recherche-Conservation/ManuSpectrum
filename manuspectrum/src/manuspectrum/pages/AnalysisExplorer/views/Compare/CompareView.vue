@@ -108,8 +108,8 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  *
  * The view provides the linked selection of its windows
  * (`useLinkedSelection`, `LINKED_SELECTION_KEY`), shown in the toolbar by
- * `SelectionIndicator` before « Hidden windows » and « + Tool », and the
- * tokens its windows mark the linked with (`--linked-*`).
+ * `SelectionIndicator` before « Hidden windows » and « + Tool ». Its
+ * windows mark the linked with the `--linked-*` tokens of the page.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -158,6 +158,8 @@ const specs = computed<CompareWindowSpec[]>(() =>
     windows.value.map((window) => ({
         id: window.id,
         title: titleOf(window),
+        kind: window.kind === "xy" ? $gettext("Spectra") : undefined,
+        subtitle: subtitleOf(window),
         size: FIRST_SIZE[window.kind],
         folded:
             window.kind === "xy" || window.kind === "maps"
@@ -174,7 +176,9 @@ const toolSpecs = computed<CompareWindowSpec[]>(() => {
     return tools.value.map((tool) => ({
         id: tool.id,
         title: titles[tool.kind],
+        kind: $gettext("Tool"),
         size: TOOL_SIZE[tool.kind],
+        hides: false,
     }));
 });
 const gridSpecs = computed(() => [
@@ -290,6 +294,34 @@ function titleOf(window: AutoWindow): string {
         case "not-in-chart":
             return $gettext("Without visualisation");
     }
+}
+
+/** What the window holds, counted. */
+function subtitleOf(window: AutoWindow): string {
+    let count: number;
+    let message: string;
+    switch (window.kind) {
+        case "xy":
+            count = window.curves.length;
+            message = $ngettext("%{n} spectrum", "%{n} spectra", count);
+            break;
+        case "maps":
+            count = window.maps.length;
+            message = $ngettext("%{n} map", "%{n} maps", count);
+            break;
+        case "micro":
+            count = window.images.length;
+            message = $ngettext("%{n} image", "%{n} images", count);
+            break;
+        case "characterizations":
+            count = window.rows.length;
+            message = $ngettext("%{n} material", "%{n} materials", count);
+            break;
+        default:
+            count = window.entries.length;
+            message = $ngettext("%{n} item", "%{n} items", count);
+    }
+    return interpolate(message, { n: count }, true);
 }
 
 function specTitle(id: string): string {
@@ -446,6 +478,7 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
                     <AutoWindowBody
                         v-if="windowById.get(spec.id)"
                         :window="windowById.get(spec.id)!"
+                        :title="spec.title"
                     />
                     <ToolWindowBody
                         v-else-if="toolById.get(spec.id)"
@@ -462,11 +495,6 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
 
 <style scoped>
 .compare-view {
-    --linked-mark: var(--blue-text);
-    --linked-tint: var(--bg-alt);
-    --linked-fade: 0.35;
-    --linked-bar: 0.1875rem;
-
     display: grid;
     gap: 1rem;
 }

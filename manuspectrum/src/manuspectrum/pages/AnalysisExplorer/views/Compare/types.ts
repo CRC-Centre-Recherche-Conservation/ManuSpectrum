@@ -11,6 +11,12 @@ export interface CompareWindowSpec {
     title: string;
     size: WindowSize;
     folded?: boolean;
+    /** Shown in small capitals before the title. */
+    kind?: string;
+    /** What the window holds, counted, after the title. */
+    subtitle?: string;
+    /** « Close » closes a tool (false) rather than hiding the window. */
+    hides?: boolean;
 }
 
 /** A window's place on the grid, in cells. */
