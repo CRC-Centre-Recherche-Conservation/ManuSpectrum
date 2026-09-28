@@ -283,7 +283,7 @@ describe("XyWorkshop", () => {
         expect(traces.map((trace) => trace.line.width)).toEqual([
             1.25, 1.5, 1.5, 1.5,
         ]);
-        expect(traces.map((trace) => trace.opacity)).toEqual([0.85, 1, 1, 1]);
+        expect(traces.map((trace) => trace.opacity)).toEqual([1, 1, 1, 1]);
         expect(traces[1].hovertemplate).toBe(
             "%{meta[0]}: %{y:.4~g}<extra></extra>",
         );
@@ -714,7 +714,31 @@ describe("XyWorkshop", () => {
         expect(
             (plotly.restyle.mock.calls[1][1] as Record<string, unknown[]>)
                 .opacity,
-        ).toEqual([0.85, 1, 1]);
+        ).toEqual([1, 1, 1]);
+    });
+
+    it("restyles again to states it failed to show", async () => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        plotly.restyle.mockRejectedValueOnce(new Error("restyle failed"));
+        const linkedLevels = (): Map<NodeId, RelationLevel> =>
+            new Map([[analysisNode(analysisHit(1).id), "self"]]);
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = linkedLevels();
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.restyle).toHaveBeenCalledTimes(1);
+        expect(error).toHaveBeenCalled();
+
+        fake.levels.value = linkedLevels();
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.restyle).toHaveBeenCalledTimes(2);
+
+        fake.levels.value = linkedLevels();
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.restyle).toHaveBeenCalledTimes(2);
     });
 
     it("draws a legend swatch as the chart draws its curve: in slot colour, a grey context slot in ink while linked", async () => {
@@ -819,6 +843,33 @@ describe("XyWorkshop", () => {
         expect(fake.toggle).toHaveBeenCalledWith(
             analysisNode(analysisHit(2).id),
         );
+    });
+
+    it("ends the preview it started when it leaves the chart for the table or unmounts, and only then", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+        expect(fake.preview).not.toHaveBeenCalled();
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+
+        const chart = view.find(".chart").element;
+        emitPlotly(chart, "plotly_hover", {
+            points: [{ curveNumber: 1, y: 30 }],
+            event: { pointerType: "mouse" },
+        });
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+        expect(fake.preview).toHaveBeenLastCalledWith(null);
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+
+        fake.preview.mockClear();
+        const entry = view.findAll(".xy-legend .entry")[0];
+        await entry.trigger("pointerenter", { pointerType: "mouse" });
+        view.unmount();
+        wrapper = null;
+        expect(fake.preview).toHaveBeenLastCalledWith(null);
     });
 
     it("marks how the selection links each row of the table layout", async () => {

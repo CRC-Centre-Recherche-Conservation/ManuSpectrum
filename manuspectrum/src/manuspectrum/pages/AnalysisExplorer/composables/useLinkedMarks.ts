@@ -1,4 +1,4 @@
-import { computed, inject } from "vue";
+import { computed, inject, onScopeDispose } from "vue";
 
 import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -55,10 +55,13 @@ function strongest(
  * `data-rel` while something is selected and as `data-preview` while a
  * node is previewed, the pressed state of its toggles, and the toggle and
  * preview actions. Outside a Compare view nothing is marked and a toggle
- * goes to the store.
+ * goes to the store. A preview started here and not ended by `leave` ends
+ * when the component goes.
  */
 export function useLinkedMarks(): LinkedMarks {
     const linked = inject(LINKED_SELECTION_KEY, null);
+    /** Whether a preview started here is not ended yet. */
+    let previewing = false;
 
     const active = computed(() => (linked?.selection.value.length ?? 0) > 0);
 
@@ -90,11 +93,17 @@ export function useLinkedMarks(): LinkedMarks {
 
     function enter(id: NodeId, event: Pick<PointerEvent, "pointerType">): void {
         linked?.preview(id, event);
+        previewing = true;
     }
 
     function leave(event: Pick<PointerEvent, "pointerType">): void {
         linked?.preview(null, event);
+        previewing = false;
     }
+
+    onScopeDispose(() => {
+        if (previewing) linked?.preview(null);
+    });
 
     return { linked, active, rel, previewRel, pressed, toggle, enter, leave };
 }

@@ -23,9 +23,12 @@ import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/comp
 
 let stop: (() => void) | null = null;
 
+let unmountLast: () => void = () => undefined;
+
+/** The marks of a component mounted under `linked`; `unmountLast` unmounts that component. */
 function marksWith(linked: LinkedSelection | null): LinkedMarks {
     let marks: LinkedMarks | null = null;
-    mount(
+    const view = mount(
         defineComponent({
             setup() {
                 marks = useLinkedMarks();
@@ -40,6 +43,7 @@ function marksWith(linked: LinkedSelection | null): LinkedMarks {
             },
         },
     );
+    unmountLast = () => view.unmount();
     return marks!;
 }
 
@@ -96,6 +100,30 @@ describe("useLinkedMarks", () => {
         marks.leave({ pointerType: "mouse" });
         vi.runAllTimers();
         expect(marks.previewRel(analysisNode(AN1))).toBeUndefined();
+    });
+
+    it("ends its preview when the thing previewed goes, not another's", () => {
+        vi.useFakeTimers();
+        const started = startLinkedSelection();
+        stop = started.stop;
+        const other = marksWith(started.linked);
+        const gone = marksWith(started.linked);
+        gone.enter(elementNode("Fe"), { pointerType: "mouse" });
+        vi.runAllTimers();
+        expect(started.linked.previewing.value).toBe(elementNode("Fe"));
+        unmountLast();
+        vi.runAllTimers();
+        expect(started.linked.previewing.value).toBeNull();
+
+        const left = marksWith(started.linked);
+        left.enter(elementNode("Fe"), { pointerType: "mouse" });
+        left.leave({ pointerType: "mouse" });
+        vi.runAllTimers();
+        other.enter(elementNode("Cu"), { pointerType: "mouse" });
+        vi.runAllTimers();
+        unmountLast();
+        vi.runAllTimers();
+        expect(started.linked.previewing.value).toBe(elementNode("Cu"));
     });
 
     it("toggles in the store outside a Compare view", () => {

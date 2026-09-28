@@ -159,7 +159,8 @@ const DEFAULT_POINTER = "mouse";
  * and is then drawn again for the size (labels, panels); small multiples
  * that no longer need a height of their own are drawn once more at the
  * size the chart shrinks to. The table layout and the unmount purge it,
- * and a drawing that ends after the unmount is purged too.
+ * and end a preview the chart or its legend started; a drawing that ends
+ * after the unmount is purged too.
  */
 const props = defineProps<{ curves: readonly FileLine[]; title?: string }>();
 
@@ -193,6 +194,8 @@ const boundCharts = new WeakSet<HTMLElement>();
 let drawnSize = "";
 /** Set on unmount: a drawing still waiting stops, and one that ends late is purged. */
 let disposed = false;
+/** Whether a preview started here (a curve or a legend entry) is not ended yet. */
+let previewing = false;
 
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
@@ -535,7 +538,7 @@ function entryNode(curve: Curve): NodeId {
         : analysisNode(curve.line.analysis.id);
 }
 
-/** Frees the chart Plotly drew, and forgets it. */
+/** Frees the chart Plotly drew, and forgets it; a preview started on it or its legend ends. */
 function purgeChart(): void {
     if (plotly && drawnOn) {
         plotly.purge(drawnOn);
@@ -544,6 +547,8 @@ function purgeChart(): void {
     drawnOn = null;
     lastFigure = null;
     shownStates = "";
+    if (previewing) linked?.preview(null);
+    previewing = false;
 }
 
 function layoutName(name: WorkshopLayout): string {
@@ -651,7 +656,12 @@ function scheduleRestyle(): void {
     });
 }
 
-/** Shows the current curve states on the drawn chart through style attributes only; nothing when they are shown already. */
+/**
+ * Shows the current curve states on the drawn chart through style
+ * attributes only; nothing when they are shown already. The states count
+ * as shown once Plotly has taken them: after a failure the next restyle
+ * tries them again.
+ */
 async function restyle(): Promise<void> {
     const element = drawnOn;
     const figure = lastFigure;
@@ -660,7 +670,6 @@ async function restyle(): Promise<void> {
     if (figure.order.length !== drawn.value.length) return;
     const key = states.value.join();
     if (key === shownStates) return;
-    shownStates = key;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
     try {
@@ -677,9 +686,12 @@ async function restyle(): Promise<void> {
                 update[`annotations[${index}].opacity`] = opacity;
             }
         });
-        shownOpacities = opacities;
         if (Object.keys(update).length > 0) {
             await plotly.relayout(element, update);
+        }
+        if (lastFigure === figure) {
+            shownOpacities = opacities;
+            shownStates = key;
         }
     } catch (error: unknown) {
         console.error("Spectra comparison could not be restyled", error);
@@ -695,10 +707,10 @@ function bindEvents(element: HTMLElement): void {
     });
     target.on("plotly_hover", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
-        if (curve) linked?.preview(entryNode(curve), pointerOf(event));
+        if (curve) preview(entryNode(curve), pointerOf(event));
     });
     target.on("plotly_unhover", (event: PlotMouseEvent) => {
-        linked?.preview(null, pointerOf(event));
+        preview(null, pointerOf(event));
     });
     target.on("plotly_click", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
@@ -750,7 +762,15 @@ function onLegendToggle({ node }: LegendToggleEvent): void {
 }
 
 function onLegendPreview({ node, pointerType }: LegendPreviewEvent): void {
-    linked?.preview(node, { pointerType });
+    preview(node, { pointerType });
+}
+
+function preview(
+    node: NodeId | null,
+    event: Pick<PointerEvent, "pointerType">,
+): void {
+    linked?.preview(node, event);
+    previewing = node !== null;
 }
 
 async function reset(): Promise<void> {
