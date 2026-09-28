@@ -25,6 +25,8 @@ import {
     sharedViews,
     spreadLabels,
     treat,
+    slipZoom,
+    undoZoom,
     workshopCsv,
     zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
@@ -91,6 +93,66 @@ describe("workshop", () => {
             false,
         );
         expect(zoomedAfter(null, true)).toBe(true);
+    });
+
+    it("reads a zoom box narrower than 20 px on an axis it zooms as a press that slipped", () => {
+        const before = {
+            xaxis: {
+                range: [100, 1997] as const,
+                autorange: true,
+                length: 440,
+            },
+            yaxis: {
+                range: [-360, 11227] as const,
+                autorange: true,
+                length: 288,
+            },
+        };
+        const slipped = {
+            "xaxis.range[0]": 240.7,
+            "xaxis.range[1]": 280.1,
+            "yaxis.range[0]": 2635.1,
+            "yaxis.range[1]": 3045.3,
+        };
+        expect(slipZoom(slipped, before)).toBe(true);
+        expect(
+            slipZoom({ "xaxis.range[0]": 668, "xaxis.range[1]": 1231 }, before),
+        ).toBe(false);
+        expect(slipZoom({ "yaxis.range": [4811.2, 4813.2] }, before)).toBe(
+            true,
+        );
+        expect(slipZoom({ "xaxis.autorange": true }, before)).toBe(false);
+        expect(slipZoom({ "annotations[0].opacity": 0 }, before)).toBe(false);
+        expect(
+            slipZoom({ "xaxis2.range[0]": 1, "xaxis2.range[1]": 2 }, before),
+        ).toBe(false);
+        expect(slipZoom(null, before)).toBe(false);
+    });
+
+    it("puts back the axes a slipped zoom moved: on autorange when they followed their data, else on their range", () => {
+        const before = {
+            xaxis: {
+                range: [2000, 100] as const,
+                autorange: true,
+                length: 440,
+            },
+            yaxis: { range: [0, 5] as const, autorange: false, length: 288 },
+            xaxis2: { range: [0, 1] as const, autorange: true, length: 200 },
+        };
+        expect(
+            undoZoom(
+                {
+                    "xaxis.range[0]": 1366,
+                    "xaxis.range[1]": 1367,
+                    "yaxis.range[0]": 1,
+                    "yaxis.range[1]": 1.01,
+                },
+                before,
+            ),
+        ).toEqual({
+            "xaxis.autorange": "reversed",
+            "yaxis.range": [0, 5],
+        });
     });
 
     it("dashes the 2nd, 3rd… file of a slot with short dashes, the first solid", () => {
@@ -288,16 +350,16 @@ describe("workshop", () => {
         expect(panelGrid(4, 200)).toEqual({ rows: 4, columns: 1 });
     });
 
-    it("spaces the panels in pixels, each at least 110 px high", () => {
+    it("spaces the panels in pixels, 46 px down so a panel's X tick labels clear the title of the panel below, each at least 110 px high", () => {
         expect(panelSpacing({ rows: 2, columns: 2 }, 488, 400)).toEqual({
             xgap: 44 / 244,
-            ygap: 30 / 200,
+            ygap: 46 / 200,
             height: 400,
         });
         expect(panelSpacing({ rows: 4, columns: 1 }, 300, 200)).toEqual({
             xgap: 0,
-            ygap: 30 / 132.5,
-            height: 4 * 110 + 3 * 30,
+            ygap: 46 / 144.5,
+            height: 4 * 110 + 3 * 46,
         });
     });
 

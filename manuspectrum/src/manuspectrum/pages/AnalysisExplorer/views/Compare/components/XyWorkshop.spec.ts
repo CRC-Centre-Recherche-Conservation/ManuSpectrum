@@ -631,6 +631,54 @@ describe("XyWorkshop", () => {
         ).toBe("true");
     });
 
+    it("takes a press on a curve that slipped into a zoom box under 20 px for a click: the axes go back, the curve toggles", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const chart = view.find(".chart").element;
+        Object.assign(chart, {
+            _fullLayout: {
+                xaxis: { range: [1, 3], autorange: true, _length: 400 },
+                yaxis: { range: [10, 30], autorange: true, _length: 300 },
+            },
+        });
+        const actions = (): string[] =>
+            view
+                .findAll(".head .actions [data-action]")
+                .map((button) => button.attributes("data-action")!);
+        emitPlotly(chart, "plotly_hover", {
+            points: [{ curveNumber: 1, y: 30 }],
+            event: { pointerType: "mouse" },
+        });
+        chart.dispatchEvent(new Event("pointerdown"));
+        emitPlotly(chart, "plotly_unhover", { points: [], event: {} });
+        plotly.relayout.mockClear();
+        emitPlotly(chart, "plotly_relayout", {
+            "xaxis.range[0]": 2,
+            "xaxis.range[1]": 2.05,
+            "yaxis.range[0]": 20,
+            "yaxis.range[1]": 20.5,
+        });
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+            "xaxis.autorange": true,
+            "yaxis.autorange": true,
+        });
+        expect(fake.toggle).toHaveBeenCalledWith(
+            analysisNode(analysisHit(2).id),
+        );
+        expect(actions()).toEqual(["png", "csv", "table"]);
+
+        plotly.relayout.mockClear();
+        chart.dispatchEvent(new Event("pointerdown"));
+        emitPlotly(chart, "plotly_relayout", {
+            "xaxis.range[0]": 1.5,
+            "xaxis.range[1]": 2.5,
+        });
+        await flushPromises();
+        expect(plotly.relayout).not.toHaveBeenCalled();
+        expect(fake.toggle).toHaveBeenCalledTimes(1);
+        expect(actions()).toEqual(["reset", "png", "csv", "table"]);
+    });
+
     it("gives back the chart layout it left for the table", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
         await view.find('[data-layout="offset"]').trigger("click");
@@ -658,7 +706,7 @@ describe("XyWorkshop", () => {
                         button.attributes("aria-labelledby")!,
                     )?.textContent,
             );
-        expect(names).toEqual(["Overlay", "Offset", "Small multiples"]);
+        expect(names).toEqual(["Overlay", "Offset", "Grid"]);
         expect(view.find('.layouts [data-layout="table"]').exists()).toBe(
             false,
         );

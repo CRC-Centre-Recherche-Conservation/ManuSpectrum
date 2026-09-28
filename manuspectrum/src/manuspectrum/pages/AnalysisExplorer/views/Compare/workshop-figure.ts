@@ -286,7 +286,7 @@ function panelTitle(input: FigureInput, slot: number, chars: number): string {
 }
 
 /**
- * One panel per slot, in slot order, 44 px apart across and 30 px down,
+ * One panel per slot, in slot order, 44 px apart across and 46 px down,
  * each at least 110 px high, its title cut to its width; the X axes zoom
  * together; one X title and one Y title for the whole grid.
  */

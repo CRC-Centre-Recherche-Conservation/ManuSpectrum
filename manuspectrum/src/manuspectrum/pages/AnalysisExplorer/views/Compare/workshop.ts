@@ -31,7 +31,8 @@ const MAX_COLUMNS = 4;
 const MIN_PANEL_WIDTH = 220;
 const MIN_PANEL_HEIGHT = 110;
 const PANEL_GAP_X = 44;
-const PANEL_GAP_Y = 30;
+/** The room between two rows of panels: the X tick labels of the upper one, then the title of the lower one. */
+const PANEL_GAP_Y = 46;
 const LINE_WIDTH = 1.5;
 const CONTEXT_WIDTH = 1.25;
 const EMPHASIS_WIDTH = 2.5;
@@ -311,6 +312,82 @@ export function zoomedAfter(
     return zoomed;
 }
 
+/** An axis of a drawn chart: its range, its autorange setting, its length in pixels. */
+export interface AxisView {
+    range: readonly [number, number];
+    autorange: boolean | string;
+    length: number;
+}
+
+/** Plotly's smallest zoom box (its `MINZOOM`), in pixels. */
+export const MIN_ZOOM_PX = 20;
+
+const RANGE_PART = /^([xy]axis\d*)\.range(?:\[(\d)\])?$/;
+
+/** The ranges `update` sets, by axis name; an axis given one end only keeps its other end from `before`. */
+function zoomRanges(
+    update: Readonly<Record<string, unknown>> | null | undefined,
+    before: Readonly<Record<string, AxisView>>,
+): Map<string, [number, number]> {
+    const ranges = new Map<string, [number, number]>();
+    for (const [key, value] of Object.entries(update ?? {})) {
+        const match = RANGE_PART.exec(key);
+        const axis = match ? before[match[1]] : undefined;
+        if (!match || !axis) continue;
+        const range = ranges.get(match[1]) ?? [...axis.range];
+        if (match[2] === undefined && Array.isArray(value)) {
+            range[0] = Number(value[0]);
+            range[1] = Number(value[1]);
+        } else if (match[2] !== undefined) {
+            range[Number(match[2])] = Number(value);
+        }
+        ranges.set(match[1], range as [number, number]);
+    }
+    return ranges;
+}
+
+/**
+ * Whether `update` zooms an axis of `before` into a box narrower than
+ * `MIN_ZOOM_PX`: Plotly starts a box zoom once a press moves 8 px, so a
+ * press on a curve that slips a few pixels zooms into a sliver, and a few
+ * of them in a row leave the axes a fraction of a unit wide.
+ */
+export function slipZoom(
+    update: Readonly<Record<string, unknown>> | null | undefined,
+    before: Readonly<Record<string, AxisView>>,
+): boolean {
+    for (const [name, range] of zoomRanges(update, before)) {
+        const axis = before[name];
+        const span = Math.abs(axis.range[1] - axis.range[0]);
+        if (span === 0 || axis.length <= 0) continue;
+        const pixels = (Math.abs(range[1] - range[0]) / span) * axis.length;
+        if (pixels < MIN_ZOOM_PX) return true;
+    }
+    return false;
+}
+
+/**
+ * The relayout that puts back the axes `update` zoomed: on their autorange
+ * when they followed their data (« reversed » for a reversed range, which
+ * Plotly reports as `autorange: true`), else on their range.
+ */
+export function undoZoom(
+    update: Readonly<Record<string, unknown>> | null | undefined,
+    before: Readonly<Record<string, AxisView>>,
+): Record<string, unknown> {
+    const restore: Record<string, unknown> = {};
+    for (const name of zoomRanges(update, before).keys()) {
+        const axis = before[name];
+        if (axis.autorange) {
+            restore[`${name}.autorange`] =
+                axis.autorange === true && axis.range[0] > axis.range[1]
+                    ? "reversed"
+                    : axis.autorange;
+        } else restore[`${name}.range`] = [...axis.range];
+    }
+    return restore;
+}
+
 /** For each curve in order, how many curves of the same slot come before it. */
 export function ranksInSlot(slots: readonly number[]): number[] {
     const seen = new Map<number, number>();
@@ -425,7 +502,7 @@ export function panelGrid(
 }
 
 /**
- * The gaps of a small-multiples grid, 44 px across and 30 px down, as the
+ * The gaps of a small-multiples grid, 44 px across and 46 px down, as the
  * share of one cell Plotly's `grid.xgap`/`ygap` take, for a plotting area
  * of `width` × `height` px; `height` grows so that every panel is at least
  * 110 px high.

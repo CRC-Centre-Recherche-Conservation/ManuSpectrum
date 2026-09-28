@@ -87,7 +87,7 @@ describe("workshop figure", () => {
             curve(slot, [1, 2]),
         );
         const figure = multiplesFigure(input(curves, { height: 300 }));
-        expect(figure.height).toBe(4 * 110 + 3 * 30 + 28 + 52);
+        expect(figure.height).toBe(4 * 110 + 3 * 46 + 28 + 52);
         const texts = (figure.layout.annotations as AnnotationCall[]).map(
             (note) => note.text,
         );

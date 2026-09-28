@@ -49,7 +49,9 @@ import {
     ranksInSlot,
     restyleUpdate,
     sharedViews,
+    slipZoom,
     treat,
+    undoZoom,
     workshopCsv,
     zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
@@ -80,6 +82,7 @@ import type {
     FigureInput,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 import type {
+    AxisView,
     CurveRow,
     CurveState,
     Extent,
@@ -100,6 +103,15 @@ interface Curve extends FigureCurve {
 interface PlotlyTarget extends HTMLElement {
     on?: (name: string, handler: (event: never) => void) => void;
 }
+
+/** What Plotly keeps of an axis it drew, as `_fullLayout` holds it. */
+interface DrawnAxis {
+    range?: unknown[];
+    autorange?: boolean | string;
+    _length?: number;
+}
+
+const AXIS_NAME = /^[xy]axis\d*$/;
 
 /** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
 const CHART_LAYOUTS: Readonly<
@@ -131,9 +143,9 @@ const DEFAULT_POINTER = "mouse";
  * series colours and carry their label at the visual end of their curve;
  * the later slots are grey context under them. The 2nd, 3rd… file of a
  * slot is dashed. Overlaid, offset (each curve lifted above the one before
- * it, no Y tick labels, the real values on hover), in small multiples (one
- * panel per slot, the X axes zoomed together; the default above eight
- * curves or when no slot is in colour) or as a table. A treatment of
+ * it, no Y tick labels, the real values on hover), in a grid of small
+ * multiples (one panel per slot, the X axes zoomed together; the default
+ * above eight curves or when no slot is in colour) or as a table. A treatment of
  * `utils/xy-views.js` runs on every curve and names itself in the Y title.
  * The legend is HTML (`XyLegend`); the exported PNG draws Plotly's, with a
  * title (the window's `title`) and a source line.
@@ -151,7 +163,9 @@ const DEFAULT_POINTER = "mouse";
  * changes only restyle the drawn chart, once per frame (`Plotly.restyle` of
  * style attributes, `Plotly.relayout` of annotation opacities). A click on
  * a legend entry or a curve toggles its node; a mouse resting on either
- * previews it.
+ * previews it. A press on the chart that slips into a zoom box narrower
+ * than `MIN_ZOOM_PX` is the click it was meant to be: the axes go back to
+ * the view the press began on and the curve under it, if any, toggles.
  *
  * A file over the server's ceiling, missing or empty is named and left
  * out. A chart Plotly cannot draw says so in the window. The chart follows
@@ -196,6 +210,11 @@ let drawnSize = "";
 let disposed = false;
 /** Whether a preview started here (a curve or a legend entry) is not ended yet. */
 let previewing = false;
+/** The curve under the mouse, as Plotly last hovered it. */
+let hovered: Curve | null = null;
+/** The curve under the mouse and the axes shown when the last press on the chart began. */
+let press: { curve: Curve | null; axes: Record<string, AxisView> } | null =
+    null;
 
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
@@ -547,6 +566,8 @@ function purgeChart(): void {
     drawnOn = null;
     lastFigure = null;
     shownStates = "";
+    hovered = null;
+    press = null;
     if (previewing) linked?.preview(null);
     previewing = false;
 }
@@ -558,7 +579,7 @@ function layoutName(name: WorkshopLayout): string {
         case "offset":
             return $gettext("Offset");
         case "multiples":
-            return $gettext("Small multiples");
+            return $gettext("Grid");
         default:
             return $gettext("Table");
     }
@@ -702,20 +723,49 @@ function bindEvents(element: HTMLElement): void {
     const target = element as PlotlyTarget;
     if (boundCharts.has(element) || typeof target.on !== "function") return;
     boundCharts.add(element);
+    element.addEventListener("pointerdown", () => {
+        press = { curve: hovered, axes: axesOf(element) };
+    });
     target.on("plotly_relayout", (update: Record<string, unknown>) => {
+        const before = press;
+        press = null;
+        if (before && plotly && slipZoom(update, before.axes)) {
+            void plotly.relayout(element, undoZoom(update, before.axes));
+            if (before.curve) toggle(entryNode(before.curve));
+            return;
+        }
         zoomed.value = zoomedAfter(update, zoomed.value);
     });
     target.on("plotly_hover", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
+        hovered = curve;
         if (curve) preview(entryNode(curve), pointerOf(event));
     });
     target.on("plotly_unhover", (event: PlotMouseEvent) => {
+        hovered = null;
         preview(null, pointerOf(event));
     });
     target.on("plotly_click", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
         if (curve) toggle(entryNode(curve));
     });
+}
+
+/** The axes Plotly shows on `element`, by name: range, autorange and length in pixels. */
+function axesOf(element: HTMLElement): Record<string, AxisView> {
+    const layout = (element as { _fullLayout?: Record<string, unknown> })
+        ._fullLayout;
+    const axes: Record<string, AxisView> = {};
+    for (const [name, value] of Object.entries(layout ?? {})) {
+        const axis = value as DrawnAxis | null;
+        if (!AXIS_NAME.test(name) || !Array.isArray(axis?.range)) continue;
+        axes[name] = {
+            range: [Number(axis.range[0]), Number(axis.range[1])],
+            autorange: axis.autorange ?? false,
+            length: axis._length ?? 0,
+        };
+    }
+    return axes;
 }
 
 function pointerOf(event: PlotMouseEvent): { pointerType: string } {
