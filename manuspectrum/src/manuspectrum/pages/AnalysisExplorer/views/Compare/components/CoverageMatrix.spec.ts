@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 
 import CoverageMatrix from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue";
 
-import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FOLIO_REQUEST_KEY,
+    LINKED_SELECTION_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { technique } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
@@ -128,6 +132,36 @@ describe("CoverageMatrix", () => {
             "f. 1r",
             "1",
         ]);
+    });
+
+    it("shows the folio of a row header or a cell clicked in every folio image tool, and still toggles it", async () => {
+        const show = vi.fn();
+        const mountWith = (disabled: boolean) =>
+            mount(CoverageMatrix, {
+                props: { rows: ROWS, techniques: [FORS, XRF], disabled },
+                global: {
+                    provide: {
+                        [FOLIO_REQUEST_KEY as symbol]: {
+                            asked: ref(null),
+                            show,
+                        },
+                    },
+                },
+            });
+        const view = mountWith(false);
+        await view.findAll("tbody .folio")[1].trigger("click");
+        await view.findAll("tbody .cell")[0].trigger("click");
+        expect(show.mock.calls).toEqual([
+            ["c2", "f. 1v"],
+            ["c1", "f. 1r"],
+        ]);
+        expect(useExplorerStore().compare.selection).toEqual([
+            canvasNode("c2"),
+            cellNode("c1", "fors"),
+        ]);
+        const stale = mountWith(true);
+        await stale.find("tbody .folio").trigger("click");
+        expect(show).toHaveBeenCalledTimes(2);
     });
 
     it("selects nothing while it is disabled", async () => {

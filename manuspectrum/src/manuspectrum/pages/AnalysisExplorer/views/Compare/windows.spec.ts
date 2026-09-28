@@ -235,12 +235,12 @@ describe("autoWindows", () => {
         const windows = derive([images, cube, layers], [0, 2, 1]);
         expect(windowIdsOf(windows)).toEqual([
             `auto:xy:${XRF}`,
-            "auto:maps",
+            "auto:chemical-imaging",
             "auto:micro",
         ]);
         const maps = windows[1];
         expect(
-            maps.kind === "maps" &&
+            maps.kind === "chemical-imaging" &&
                 maps.maps.map((line) => [
                     line.slot,
                     line.file.name,
@@ -251,17 +251,17 @@ describe("autoWindows", () => {
             [2, "HSI", null],
         ]);
         expect(maps.keys).toEqual([layers.key, cube.key]);
-        expect(maps.kind === "maps" && maps.folded).toBe(false);
+        expect(maps.kind === "chemical-imaging" && maps.folded).toBe(false);
     });
 
-    it("opens the maps window folded when three XY windows are already drawn", () => {
+    it("opens the chemical imaging window folded when three XY windows are already drawn", () => {
         const items = [XRF, RAMAN, FORS].map((axisKey, n) =>
             whole(n + 1, [spectrum(n + 1, axisKey)]),
         );
         const maps = derive([...items, whole(4, [imagingEntry()])]).find(
-            (window) => window.kind === "maps",
+            (window) => window.kind === "chemical-imaging",
         );
-        expect(maps?.kind === "maps" && maps.folded).toBe(true);
+        expect(maps?.kind === "chemical-imaging" && maps.folded).toBe(true);
     });
 
     it("reads the older one-file and one-layer keys into the same windows", () => {
@@ -311,13 +311,13 @@ describe("autoWindows", () => {
         const windows = derive([readable, image, raw, other, layer]);
         expect(windowIdsOf(windows)).toEqual([
             `auto:xy:${XRF}`,
-            "auto:maps",
+            "auto:chemical-imaging",
             "auto:micro",
             "auto:not-in-chart",
         ]);
         const maps = windows[1];
         expect(
-            maps.kind === "maps" &&
+            maps.kind === "chemical-imaging" &&
                 maps.maps.map((line) => [line.key, line.named]),
         ).toEqual([[layer.key, 1]]);
         const notInChart = windows[3];

@@ -3,6 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import CompareView from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue";
+import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -11,6 +12,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisHit,
     characterization,
+    documentPayload,
     fileEntry,
     imagingEntry,
     technique,
@@ -371,12 +373,36 @@ describe("CompareView", () => {
         );
     });
 
+    it("opens every window and every tool at size M", async () => {
+        select(
+            MATERIAL,
+            RAMAN_ITEM,
+            XRF_ITEM,
+            MICRO_ITEM,
+            EMPTY_ITEM,
+            MAPS_ITEM,
+        );
+        const view = await mountView();
+        for (const kind of ["coverage", "periodic"]) {
+            await openTool(view, kind);
+        }
+        const sizes = view
+            .findComponent(WindowGrid)
+            .props("windows")
+            .map((spec: { id: string; size: string }) => [spec.id, spec.size]);
+        expect(sizes.length).toBe(8);
+        expect(sizes.filter(([, size]) => size !== "M")).toEqual([]);
+    });
+
     it("puts the layered maps side by side in their own window, not among the items in no chart", async () => {
         select(MAPS_ITEM, EMPTY_ITEM);
         const view = await mountView();
-        expect(windowIds(view)).toEqual(["auto:maps", "auto:not-in-chart"]);
-        const maps = windowOf(view, "auto:maps");
-        expect(maps.find("h3 .name").text()).toBe("Element maps");
+        expect(windowIds(view)).toEqual([
+            "auto:chemical-imaging",
+            "auto:not-in-chart",
+        ]);
+        const maps = windowOf(view, "auto:chemical-imaging");
+        expect(maps.find("h3 .name").text()).toBe("Chemical imaging");
         expect(maps.find("figcaption").text()).toContain("A1");
         expect(maps.find(".layer-picker label").text()).toBe("Element");
         expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
@@ -831,16 +857,16 @@ describe("CompareView", () => {
             select(XRF_ITEM);
             const view = await mountView();
             const indicator = view.find(".toolbar .selection-indicator");
-            expect(indicator.find(".summary").text()).toBe("Nothing selected");
+            expect(indicator.find(".summary").text()).toBe("No focus");
             await openTool(view, "periodic");
             await windowOf(view, "tool:periodic:-")
                 .find('.grid button[aria-label="Cu, 1"]')
                 .trigger("click");
             expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
             expect(indicator.find(".summary").text()).toBe(
-                "1 selected · 0 related",
+                "1 in focus · 0 related",
             );
-            expect(announce).toHaveBeenLastCalledWith("1 selected · 0 related");
+            expect(announce).toHaveBeenLastCalledWith("1 in focus · 0 related");
             document.dispatchEvent(
                 new KeyboardEvent("keydown", {
                     key: "Escape",
@@ -849,7 +875,7 @@ describe("CompareView", () => {
             );
             await flushPromises();
             expect(useExplorerStore().compare.selection).toEqual([]);
-            expect(indicator.find(".summary").text()).toBe("Nothing selected");
+            expect(indicator.find(".summary").text()).toBe("No focus");
         });
 
         it("keeps the selection when Escape closes an enlarged window", async () => {
@@ -883,6 +909,57 @@ describe("CompareView", () => {
             expect(useExplorerStore().compare.tools).toEqual([]);
         });
 
+        it("shows the folio of a coverage row clicked in every folio image tool, and says so once", async () => {
+            const second = {
+                ...SYNTHESIS.canvases[0],
+                canvas: "https://iiif.example/c2",
+                label: "f. 12v",
+            };
+            synthesis = {
+                ...SYNTHESIS,
+                coverage: [
+                    ...SYNTHESIS.coverage,
+                    {
+                        ...SYNTHESIS.coverage[0],
+                        canvas: second.canvas,
+                        label: second.label,
+                    },
+                ],
+                canvases: [...SYNTHESIS.canvases, second],
+            };
+            const answer = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string) =>
+                url === "/en/api/explorer/items"
+                    ? jsonResponse(documentPayload())
+                    : answer(url),
+            );
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            const rowHeader = () =>
+                windowOf(view, "tool:coverage:-").findAll("tbody .folio")[1];
+            await rowHeader().trigger("click");
+            await flushPromises();
+            expect(announce).not.toHaveBeenLastCalledWith(
+                expect.stringContaining("folio image"),
+            );
+            await rowHeader().trigger("click");
+            await openTool(view, "folio");
+            const folios = () =>
+                view
+                    .findAll(".folio-tool select")
+                    .map(
+                        (picker) => (picker.element as HTMLSelectElement).value,
+                    );
+            expect(folios()).toEqual(["https://iiif.example/c1"]);
+            await rowHeader().trigger("click");
+            await flushPromises();
+            expect(folios()).toEqual(["https://iiif.example/c2"]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "1 in focus · 0 related. The folio image shows f. 12v.",
+            );
+        });
+
         it("drops a selected element that left with the Selection", async () => {
             select(XRF_ITEM);
             const store = useExplorerStore();
@@ -895,7 +972,7 @@ describe("CompareView", () => {
             await flushPromises();
             expect(store.compare.selection).toEqual([]);
             expect(announce).toHaveBeenCalledWith(
-                "1 selected node is no longer linked to the Selection and was unselected.",
+                "1 node in focus is no longer linked to the Selection and left the focus.",
             );
         });
     });

@@ -71,10 +71,14 @@ export function sharedLayers(maps: readonly MapLine[]): SharedLayer[] {
         .map(({ id, label, kind }) => ({ id, label, kind }));
 }
 
-/** The layer of `file` that is shared layer `id`; null when the map lacks it. */
-export function layerIn(file: FileEntry, id: string | null): FileLayer | null {
+/** Where shared layer `id` stands in `file.layers`; null when the map lacks it. */
+export function layerPosition(
+    file: FileEntry,
+    id: string | null,
+): number | null {
     if (id === null) return null;
-    return file.layers.find((layer) => layerIdOf(layer) === id) ?? null;
+    const position = file.layers.findIndex((layer) => layerIdOf(layer) === id);
+    return position >= 0 ? position : null;
 }
 
 /** The kind that names the shared layers: theirs when they all share it, else plain layers. */

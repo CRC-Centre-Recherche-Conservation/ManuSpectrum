@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ElementMaps from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue";
+import ChemicalImaging from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImaging.vue";
 import MaterialsTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue";
 import MicroImageGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MicroImageGrid.vue";
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
@@ -17,8 +17,8 @@ const props = defineProps<{ window: AutoWindow; title: string }>();
         :curves="props.window.curves"
         :title="props.title"
     />
-    <ElementMaps
-        v-else-if="props.window.kind === 'maps'"
+    <ChemicalImaging
+        v-else-if="props.window.kind === 'chemical-imaging'"
         :maps="props.window.maps"
     />
     <MicroImageGrid

@@ -13,6 +13,7 @@ import L from "leaflet";
 import { useGettext } from "vue3-gettext";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
@@ -28,7 +29,10 @@ import {
     fitPage,
     layPage,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
-import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FOLIO_REQUEST_KEY,
+    WINDOW_RESIZE_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     analysisNode,
@@ -98,6 +102,11 @@ const SERIES_SLOTS = 8;
  * « Whole page » and another folio fit it again. « Fit to related » frames the
  * linked marks of the page; when linked items of the Selection are placed
  * on other folios they are named, each with a button showing it.
+ *
+ * The folio is picked in a menu between « Previous folio » and « Next
+ * folio » (each unavailable at its end of `canvases`), or asked by Compare
+ * (`FOLIO_REQUEST_KEY`: a folio of the coverage matrix clicked), which the
+ * tool follows when the folio is one of its `canvases`.
  */
 const props = defineProps<{
     canvases: readonly SynthesisCanvas[];
@@ -106,6 +115,7 @@ const props = defineProps<{
 }>();
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, ref(0), false);
+const folioRequests = inject(FOLIO_REQUEST_KEY, null);
 
 const gettext = useGettext();
 const { $gettext, interpolate } = gettext;
@@ -130,6 +140,10 @@ const row = computed(
         props.canvases.find((entry) => entry.canvas === chosen.value) ??
         props.canvases[0] ??
         null,
+);
+/** The position of the folio shown in `canvases`. */
+const position = computed(() =>
+    row.value ? props.canvases.indexOf(row.value) : -1,
 );
 const documentRequest = useDocument(() => row.value?.document ?? null);
 const payload = computed(() =>
@@ -194,6 +208,17 @@ watch(
     (canvases) => {
         if (chosen.value === null || !canvases.includes(chosen.value)) {
             chosen.value = canvases[0] ?? null;
+        }
+    },
+);
+watch(
+    () => folioRequests?.asked.value,
+    (asked) => {
+        if (
+            asked &&
+            props.canvases.some((entry) => entry.canvas === asked.canvas)
+        ) {
+            chosen.value = asked.canvas;
         }
     },
 );
@@ -266,6 +291,12 @@ function slotsText(mark: FolioMark): string {
 
 function onPick(event: Event): void {
     chosen.value = (event.target as HTMLSelectElement).value;
+}
+
+/** Shows the folio `step` places away in `canvases`, if there is one. */
+function step(by: number): void {
+    const next = props.canvases[position.value + by];
+    if (next) chosen.value = next.canvas;
 }
 
 function drawPage(): void {
@@ -474,27 +505,50 @@ function wholePage(): void {
             <label :for="pickerId">
                 <span>{{ $gettext("Folio") }}</span>
             </label>
-            <select
-                :id="pickerId"
-                :value="row?.canvas ?? ''"
-                @change="onPick"
+            <div
+                class="stepper"
+                role="group"
+                :aria-label="$gettext('Folio')"
             >
-                <option
-                    v-for="entry in props.canvases"
-                    :key="entry.canvas"
-                    :value="entry.canvas"
+                <IconButton
+                    data-action="previous-folio"
+                    icon="chevron-left"
+                    :label="$gettext('Previous folio')"
+                    :disabled="position <= 0"
+                    tip-align="start"
+                    @click="step(-1)"
+                />
+                <select
+                    :id="pickerId"
+                    :value="row?.canvas ?? ''"
+                    @change="onPick"
                 >
-                    {{ entry.label }}
-                </option>
-            </select>
-            <button
+                    <option
+                        v-for="entry in props.canvases"
+                        :key="entry.canvas"
+                        :value="entry.canvas"
+                    >
+                        {{ entry.label }}
+                    </option>
+                </select>
+                <IconButton
+                    data-action="next-folio"
+                    icon="chevron-right"
+                    :label="$gettext('Next folio')"
+                    :disabled="
+                        position < 0 || position >= props.canvases.length - 1
+                    "
+                    tip-align="start"
+                    @click="step(1)"
+                />
+            </div>
+            <IconButton
                 v-if="hasImage"
-                type="button"
-                class="whole"
+                data-action="whole-page"
+                icon="search-minus"
+                :label="$gettext('Whole page')"
                 @click="wholePage"
-            >
-                <span>{{ $gettext("Whole page") }}</span>
-            </button>
+            />
         </div>
         <UnavailableState
             v-if="documentRequest.status.value === 'error'"
@@ -652,6 +706,12 @@ function wholePage(): void {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8125rem;
+}
+
+.folio-tool .stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
 }
 
 .folio-tool .picker select,

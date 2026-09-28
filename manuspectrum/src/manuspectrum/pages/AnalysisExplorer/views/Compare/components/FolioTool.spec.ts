@@ -8,6 +8,7 @@ import FolioTool from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/compo
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
+    FOLIO_REQUEST_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -195,7 +196,7 @@ describe("FolioTool", () => {
         tick.value += 1;
         await flushPromises();
         expect(fit).toHaveBeenCalledTimes(1);
-        await wrapper.find("button.whole").trigger("click");
+        await wrapper.find('[data-action="whole-page"]').trigger("click");
         expect(fit).toHaveBeenCalledTimes(2);
         tick.value += 1;
         await flushPromises();
@@ -271,7 +272,7 @@ describe("FolioTool", () => {
         const view = await mountTool();
         expect(
             view
-                .findAll("path")
+                .findAll(".surface path")
                 .map((path) =>
                     path.classes("folio-tool-halo") ? "halo" : "frame",
                 ),
@@ -302,6 +303,70 @@ describe("FolioTool", () => {
         expect(listed(view)).toEqual([["A10", "XRF", "MS1_XRF_02"]]);
         expect(view.find(".no-image").text()).toBe("No image for this page.");
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("fits the whole page from an icon button named by its tooltip", async () => {
+        const view = await mountTool();
+        const whole = view.find('[data-action="whole-page"]');
+        expect(whole.find("svg.icon").exists()).toBe(true);
+        expect(whole.text()).toBe("");
+        expect(
+            document.getElementById(whole.attributes("aria-labelledby")!)
+                ?.textContent,
+        ).toBe("Whole page");
+        expect(view.find("button.whole").exists()).toBe(false);
+    });
+
+    it("steps to the previous or next folio from buttons beside the picker, each unavailable at its end", async () => {
+        const view = await mountTool();
+        const previous = () => view.find('[data-action="previous-folio"]');
+        const next = () => view.find('[data-action="next-folio"]');
+        const picked = () =>
+            (view.find("select").element as HTMLSelectElement).value;
+        const name = (button: ReturnType<typeof previous>) =>
+            document.getElementById(button.attributes("aria-labelledby")!)
+                ?.textContent;
+        expect(name(previous())).toBe("Previous folio");
+        expect(name(next())).toBe("Next folio");
+        expect(previous().attributes("aria-disabled")).toBe("true");
+        expect(next().attributes("aria-disabled")).toBeUndefined();
+        await next().trigger("click");
+        await flushPromises();
+        expect(picked()).toBe(C2);
+        expect(listed(view)).toEqual([["A10", "XRF", "MS1_XRF_02"]]);
+        expect(next().attributes("aria-disabled")).toBe("true");
+        await next().trigger("click");
+        expect(picked()).toBe(C2);
+        await previous().trigger("click");
+        await flushPromises();
+        expect(picked()).toBe(C1);
+    });
+
+    it("shows the folio Compare asks for when it has it, the same folio asked again included", async () => {
+        const asked = ref<{ canvas: string; count: number } | null>(null);
+        wrapper = mount(FolioTool, {
+            attachTo: sizedContainer(),
+            props: { canvases: CANVASES, slots: SLOTS },
+            global: {
+                provide: {
+                    [WINDOW_RESIZE_KEY as symbol]: ref(0),
+                    [FOLIO_REQUEST_KEY as symbol]: { asked, show: vi.fn() },
+                },
+            },
+        });
+        await flushPromises();
+        const picked = () =>
+            (wrapper!.find("select").element as HTMLSelectElement).value;
+        asked.value = { canvas: C2, count: 1 };
+        await flushPromises();
+        expect(picked()).toBe(C2);
+        await wrapper.find("select").setValue(C1);
+        asked.value = { canvas: C2, count: 2 };
+        await flushPromises();
+        expect(picked()).toBe(C2);
+        asked.value = { canvas: "https://iiif.example/other", count: 3 };
+        await flushPromises();
+        expect(picked()).toBe(C2);
     });
 
     it("offers a retry when the document cannot be read", async () => {

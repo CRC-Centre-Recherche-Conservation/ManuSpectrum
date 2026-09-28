@@ -56,7 +56,7 @@ describe("FoldedSummary", () => {
                 slots: [0, 1],
                 names: ["Pb", "Hg"],
             },
-            "Element maps",
+            "Chemical imaging",
         );
         expect(view.find(".line").text()).toBe("2 maps · Pb, Hg");
         expect(view.find("button.unfold").text()).toBe("Show");
@@ -90,7 +90,7 @@ describe("FoldedSummary", () => {
                 slots: [0],
                 names: ["Pb", "Hg", "Fe", "Cu", "Ca", "K", "Zn", "Ti"],
             },
-            "Element maps",
+            "Chemical imaging",
         );
         expect(view.find(".line").text()).toBe(
             "1 map · Pb, Hg, Fe, Cu, Ca, K…",

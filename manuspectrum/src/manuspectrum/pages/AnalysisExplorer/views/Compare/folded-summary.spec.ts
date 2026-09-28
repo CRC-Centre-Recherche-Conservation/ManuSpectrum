@@ -13,7 +13,7 @@ import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.
 import type {
     FileLine,
     MapLine,
-    MapsWindow,
+    ChemicalImagingWindow,
     XyWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
@@ -73,10 +73,10 @@ function mapLine(slot: number, symbols: string[]): MapLine {
     };
 }
 
-function mapsWindow(maps: MapLine[]): MapsWindow {
+function mapsWindow(maps: MapLine[]): ChemicalImagingWindow {
     return {
-        id: "auto:maps",
-        kind: "maps",
+        id: "auto:chemical-imaging",
+        kind: "chemical-imaging",
         keys: maps.map((line) => line.key),
         folded: true,
         maps,
@@ -103,7 +103,7 @@ describe("foldedSummary", () => {
         expect(summary?.names).toEqual([]);
     });
 
-    it("counts the maps of the maps window and lists the layers they share", () => {
+    it("counts the maps of the chemical imaging window and lists the layers they share", () => {
         const summary = foldedSummary(
             mapsWindow([mapLine(3, ["Pb", "Fe"]), mapLine(1, ["Hg", "Pb"])]),
         );

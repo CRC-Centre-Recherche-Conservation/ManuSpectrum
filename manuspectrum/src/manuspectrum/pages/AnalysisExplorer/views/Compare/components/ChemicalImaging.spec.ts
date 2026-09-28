@@ -5,7 +5,7 @@ import PrimeVue from "primevue/config";
 import { ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 
-import ElementMaps from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue";
+import ChemicalImaging from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImaging.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
@@ -165,7 +165,7 @@ afterEach(() => {
 });
 
 async function mountMaps(maps: MapLine[] = XRF_MAPS): Promise<VueWrapper> {
-    wrapper = mount(ElementMaps, {
+    wrapper = mount(ChemicalImaging, {
         attachTo: sizedContainer(),
         props: { maps },
         global: {
@@ -177,17 +177,31 @@ async function mountMaps(maps: MapLine[] = XRF_MAPS): Promise<VueWrapper> {
     return wrapper;
 }
 
-function laidOn(view: VueWrapper): (string | null)[] {
-    return view.findAll(".element-map-card").map((card) => {
-        const image = card.find("img.folio-overlay");
-        if (image.exists()) return image.attributes("alt") ?? null;
+/** What each map shows: the label of its layer, else what it says of the layer it lacks. */
+function shown(view: VueWrapper): string[] {
+    return view.findAll(".chemical-imaging-map").map((card) => {
         const note = card.find(".not-mapped .message");
-        return note.exists() ? note.text() : null;
+        if (note.exists()) return note.text();
+        return card.find(".imaging-preview .current .value").text();
     });
 }
 
-describe("ElementMaps", () => {
-    it("shows the maps side by side, each under its slot and name, with one layer picker over them", async () => {
+function picked(view: VueWrapper): string {
+    const picker = view.find(".layer-picker select")
+        .element as HTMLSelectElement;
+    return picker.selectedOptions[0]?.text.trim() ?? "";
+}
+
+async function lay(view: VueWrapper, index: number): Promise<void> {
+    await view
+        .findAll(".chemical-imaging-map")
+        [index].find("input.lay")
+        .setValue(true);
+    await flushPromises();
+}
+
+describe("ChemicalImaging", () => {
+    it("shows the maps side by side, each under its slot and name, with one layer control over them", async () => {
         const view = await mountMaps();
         expect(
             view.findAll("figcaption").map((caption) => caption.text()),
@@ -200,26 +214,32 @@ describe("ElementMaps", () => {
         expect(picker.findAll("option").map((option) => option.text())).toEqual(
             ["Pb", "Hg", "Cu"],
         );
-        expect(view.text()).toContain("Each map keeps its own contrast.");
+        expect(
+            view.text().split("Each map keeps its own contrast.").length - 1,
+        ).toBe(1);
+        expect(view.findAll(".imaging-preview .scroll")).toHaveLength(0);
     });
 
-    it("reads a document shared by several maps once", async () => {
-        await mountMaps();
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
-
-    it("holds the chosen layer on every map, and says so where a map lacks it", async () => {
+    it("holds the same layer on every map by default, and says so where a map lacks it", async () => {
         const view = await mountMaps();
-        expect(laidOn(view)).toEqual(["Pb", "Pb"]);
+        const sync = view.find("input.sync");
+        expect((sync.element as HTMLInputElement).checked).toBe(true);
+        expect(view.find(".sync").text()).toBe("Same layer on every map");
+        expect(shown(view)).toEqual(["Pb", "Pb"]);
         await view.find(".layer-picker select").setValue(1);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["Hg", "No Hg layer for this map"]);
+        expect(shown(view)).toEqual(["Hg", "No Hg layer for this map"]);
         expect(view.findAll(".not-mapped .held")[0].text()).toBe(
             "Its layers: Cu, Pb",
         );
         await view.find(".layer-picker select").setValue(2);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["No Cu layer for this map", "Cu"]);
+        expect(shown(view)).toEqual(["No Cu layer for this map", "Cu"]);
+    });
+
+    it("reads a document shared by several maps once", async () => {
+        await mountMaps();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("scrolls through the layers of the kind shown only, elements or bands", async () => {
@@ -228,39 +248,34 @@ describe("ElementMaps", () => {
             map(1, [layer(0, "400 nm", "band"), layer(1, "1000 nm", "band")]),
         ]);
         const ends = () =>
-            view.findAll(".scroll .ends span").map((end) => end.text());
+            view.findAll(".shared .scroll .ends span").map((end) => end.text());
         expect(ends()).toEqual(["Pb", "Hg"]);
         expect(
-            view.find(".scroll [role=slider]").attributes("aria-valuetext"),
+            view
+                .find(".shared .scroll [role=slider]")
+                .attributes("aria-valuetext"),
         ).toBe("Pb, layer 1 of 2");
         view.findComponent({ name: "Slider" }).vm.$emit("update:modelValue", 1);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["Hg", "No Hg layer for this map"]);
+        expect(shown(view)).toEqual(["Hg", "No Hg layer for this map"]);
         await view.find(".layer-picker select").setValue(3);
         await flushPromises();
         expect(ends()).toEqual(["400 nm", "1000 nm"]);
-        expect(
-            view.find(".scroll [role=slider]").attributes("aria-valuetext"),
-        ).toBe("1000 nm, layer 2 of 2");
         view.findComponent({ name: "Slider" }).vm.$emit("update:modelValue", 0);
         await flushPromises();
-        expect(laidOn(view)).toEqual([
-            "No 400 nm layer for this map",
-            "400 nm",
-        ]);
+        expect(shown(view)).toEqual(["No 400 nm layer for this map", "400 nm"]);
     });
 
     it("scrolls every map through the layers together, saying where the handle is", async () => {
         const view = await mountMaps();
         view.findComponent({ name: "Slider" }).vm.$emit("update:modelValue", 1);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["Hg", "No Hg layer for this map"]);
+        expect(shown(view)).toEqual(["Hg", "No Hg layer for this map"]);
+        expect(picked(view)).toBe("Hg");
         expect(
-            (view.find(".layer-picker select").element as HTMLSelectElement)
-                .value,
-        ).toBe("1");
-        expect(
-            view.find(".scroll [role=slider]").attributes("aria-valuetext"),
+            view
+                .find(".shared .scroll [role=slider]")
+                .attributes("aria-valuetext"),
         ).toBe("Hg, layer 2 of 3");
     });
 
@@ -273,59 +288,105 @@ describe("ElementMaps", () => {
         expect(
             view.findAll(".layer-picker option").map((option) => option.text()),
         ).toEqual(["400 nm", "450 nm", "650 nm"]);
-        expect(laidOn(view)).toEqual([
-            "400 nm",
-            "No 400 nm layer for this map",
-        ]);
+        expect(shown(view)).toEqual(["400 nm", "No 400 nm layer for this map"]);
     });
 
-    it("puts each map's layer under a curtain of its own, over its page", async () => {
+    it("gives each map its own layer scroll once the maps are no longer held together", async () => {
         const view = await mountMaps();
-        expect(sideBySide).toHaveBeenCalledTimes(2);
-        const card = view.findAll(".element-map-card")[0];
-        await card.find("input.curtain").setValue(false);
-        expect(sideBySide.mock.results[0].value.remove).toHaveBeenCalled();
-        expect(sideBySide.mock.results[1].value.remove).not.toHaveBeenCalled();
+        await view.find(".layer-picker select").setValue(1);
+        await view.find("input.sync").setValue(false);
+        expect(view.find(".layer-picker").exists()).toBe(false);
+        expect(view.findAll(".imaging-preview .scroll")).toHaveLength(2);
+        expect(shown(view)).toEqual(["Hg", "Pb"]);
+        view.findAllComponents({ name: "Slider" })[1].vm.$emit(
+            "update:modelValue",
+            0,
+        );
+        await flushPromises();
+        expect(shown(view)).toEqual(["Hg", "Cu"]);
+        await view.find("input.sync").setValue(true);
+        expect(shown(view)).toEqual(["Hg", "No Hg layer for this map"]);
+    });
+
+    it("lays a map on its own page under a curtain of its own, keeping it out of the document screen", async () => {
+        const view = await mountMaps();
+        expect(view.findAll(".leaflet-container")).toHaveLength(0);
+        await lay(view, 0);
+        const card = view.findAll(".chemical-imaging-map")[0];
+        expect(card.find("img.folio-overlay").attributes("alt")).toBe("Pb");
+        expect(card.find("img.layer-image").exists()).toBe(false);
+        expect(view.findAll(".leaflet-container")).toHaveLength(1);
+        expect(sideBySide).not.toHaveBeenCalled();
+        await card.find("input.curtain").setValue(true);
+        expect(sideBySide).toHaveBeenCalledTimes(1);
         expect(view.text()).toContain(
             "Indicative positioning, not registered.",
         );
+        expect(useExplorerStore().overlays).toEqual({});
     });
 
-    it("shows a map without a zone on a page alone", async () => {
+    it("carries a laid map to the layer held on every map", async () => {
+        const view = await mountMaps();
+        await lay(view, 0);
+        await view.find(".layer-picker select").setValue(1);
+        await flushPromises();
+        const card = view.findAll(".chemical-imaging-map")[0];
+        expect(card.find("img.folio-overlay").attributes("alt")).toBe("Hg");
+    });
+
+    it("shows a map without a zone on a page alone, with nothing to lay it on", async () => {
         const view = await mountMaps([map(0, [layer(0, "Pb")], null)]);
         expect(fetchMock).not.toHaveBeenCalled();
-        const card = view.find(".element-map-card");
+        const card = view.find(".chemical-imaging-map");
         expect(card.find("img.layer-image").attributes("alt")).toBe("Pb");
-        expect(card.find("input.curtain").exists()).toBe(false);
-        expect(card.text()).toContain(
-            "No zone on a page: the map is shown alone.",
-        );
+        expect(card.find("input.lay").attributes("disabled")).toBeDefined();
+        expect(card.text()).toContain("no zone on this page");
     });
 
-    it("says when the image server does not give a map, and lays it again on Retry", async () => {
+    it("says when the image server does not give a map, and asks again on Retry", async () => {
         const view = await mountMaps();
-        const card = view.findAll(".element-map-card")[0];
-        await card.find("img.folio-overlay").trigger("error");
+        const card = view.findAll(".chemical-imaging-map")[0];
+        await card.find("img.layer-image").trigger("error");
         const status = card.find(".unavailable");
-        expect(status.text()).toContain("Map unavailable — image server");
+        expect(status.text()).toContain("Map unavailable (image server)");
         await status.find("button").trigger("click");
+        expect(card.find("img.layer-image").exists()).toBe(true);
+    });
+
+    it("says when a laid map is not given, and lays it again on Retry", async () => {
+        const view = await mountMaps();
+        await lay(view, 0);
+        const card = view.findAll(".chemical-imaging-map")[0];
+        await card.find("img.folio-overlay").trigger("error");
+        expect(card.find(".unavailable").text()).toContain(
+            "Map unavailable (image server)",
+        );
+        await card.find(".unavailable button").trigger("click");
         await flushPromises();
-        expect(card.text()).not.toContain("Map unavailable — image server");
         expect(card.find("img.folio-overlay").exists()).toBe(true);
     });
 
-    it("draws the maps again when the window is resized", async () => {
+    it("draws the laid maps again when the window is resized", async () => {
         const resize = vi.spyOn(L.Map.prototype, "invalidateSize");
-        await mountMaps();
+        const view = await mountMaps();
+        await lay(view, 0);
+        await lay(view, 1);
         resize.mockClear();
         resizeTick.value += 1;
         await flushPromises();
         expect(resize).toHaveBeenCalledTimes(2);
     });
 
-    it("takes each map down with its page and its curtain when the window closes", async () => {
+    it("takes each laid map down with its page and its curtain when the window closes", async () => {
         const iiif = stubIiifLayer({ laid: true });
         const view = await mountMaps();
+        for (const index of [0, 1]) {
+            await lay(view, index);
+            await view
+                .findAll(".chemical-imaging-map")
+                [index].find("input.curtain")
+                .setValue(true);
+        }
         const pages = iiif.mock.results.map((result) => result.value);
         expect(pages).toHaveLength(2);
         const removeLayer = vi.spyOn(L.Map.prototype, "removeLayer");
@@ -343,6 +404,7 @@ describe("ElementMaps", () => {
                 lastMapRemoved,
             );
         }
+        expect(sideBySide).toHaveBeenCalledTimes(2);
         for (const result of sideBySide.mock.results) {
             expect(result.value.remove).toHaveBeenCalled();
         }
@@ -384,7 +446,7 @@ describe("ElementMaps", () => {
                     named: null,
                 },
             ];
-            wrapper = mount(ElementMaps, {
+            wrapper = mount(ChemicalImaging, {
                 attachTo: sizedContainer(),
                 props: { maps },
                 global: {
@@ -400,12 +462,6 @@ describe("ElementMaps", () => {
             return { view: wrapper, linked: started.linked };
         }
 
-        function shown(view: VueWrapper): string {
-            const picker = view.find(".layer-picker select")
-                .element as HTMLSelectElement;
-            return picker.selectedOptions[0]?.text.trim() ?? "";
-        }
-
         afterEach(() => {
             stopLinked?.();
             stopLinked = null;
@@ -414,18 +470,22 @@ describe("ElementMaps", () => {
 
         it("switches the shared layer to an element selected, says so, and brings the previous one back once it is unselected", async () => {
             const { view, linked } = await mountLinked();
-            expect(shown(view)).toBe("Fe Ka");
+            expect(picked(view)).toBe("Fe Ka");
             linked.toggle(elementNode("Pb"));
             await flushPromises();
-            expect(shown(view)).toBe("Pb La");
+            expect(picked(view)).toBe("Pb La");
+            expect(shown(view)).toEqual([
+                "Pb La",
+                "No Pb La layer for this map",
+            ]);
             expect(announce).toHaveBeenLastCalledWith(
-                "1 selected · 3 related. The element maps show Pb La.",
+                "1 in focus · 3 related. The chemical imaging maps show Pb La.",
             );
             linked.toggle(elementNode("Pb"));
             await flushPromises();
-            expect(shown(view)).toBe("Fe Ka");
+            expect(picked(view)).toBe("Fe Ka");
             expect(announce).toHaveBeenLastCalledWith(
-                "Nothing selected. The element maps show Fe Ka again.",
+                "No focus. The chemical imaging maps show Fe Ka again.",
             );
         });
 
@@ -434,10 +494,10 @@ describe("ElementMaps", () => {
             linked.toggle(elementNode("Cu"));
             linked.toggle(elementNode("Zn"));
             await flushPromises();
-            expect(shown(view)).toBe("Cu");
+            expect(picked(view)).toBe("Cu");
             linked.toggle(elementNode("Pb"));
             await flushPromises();
-            expect(shown(view)).toBe("Pb La");
+            expect(picked(view)).toBe("Pb La");
         });
 
         it("keeps the layer the reader picked once the element is unselected", async () => {
@@ -447,7 +507,18 @@ describe("ElementMaps", () => {
             await view.find(".layer-picker select").setValue(2);
             linked.toggle(elementNode("Pb"));
             await flushPromises();
-            expect(shown(view)).toBe("Cu");
+            expect(picked(view)).toBe("Cu");
+        });
+
+        it("moves the maps holding a selected element to it while they are not held together", async () => {
+            const { view, linked } = await mountLinked();
+            await view.find("input.sync").setValue(false);
+            linked.toggle(elementNode("Pb"));
+            await flushPromises();
+            expect(shown(view)).toEqual(["Pb La", "Cu"]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "1 in focus · 3 related. The chemical imaging maps show Pb La.",
+            );
         });
 
         it("never switches the layer on a preview", async () => {
@@ -456,9 +527,9 @@ describe("ElementMaps", () => {
             linked.preview(elementNode("Pb"), { pointerType: "mouse" });
             vi.runAllTimers();
             await view.vm.$nextTick();
-            expect(shown(view)).toBe("Fe Ka");
+            expect(picked(view)).toBe("Fe Ka");
             expect(
-                view.find(".element-map-card").attributes("data-preview"),
+                view.find(".chemical-imaging-map").attributes("data-preview"),
             ).toBe("direct");
         });
 
@@ -468,17 +539,19 @@ describe("ElementMaps", () => {
             await flushPromises();
             expect(
                 view
-                    .findAll(".element-map-card")
+                    .findAll(".chemical-imaging-map")
                     .map((card) => card.attributes("data-rel")),
             ).toEqual(["direct", "none"]);
             linked.clear();
-            await view.find(".element-map-card button.record").trigger("click");
+            await view
+                .find(".chemical-imaging-map button.record")
+                .trigger("click");
             expect(useExplorerStore().compare.selection).toEqual([
                 analysisNode(AN1),
             ]);
-            expect(view.find(".element-map-card").attributes("data-rel")).toBe(
-                "self",
-            );
+            expect(
+                view.find(".chemical-imaging-map").attributes("data-rel"),
+            ).toBe("self");
         });
     });
 });

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import HeatLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HeatLegend.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { FOLIO_REQUEST_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { heatLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/heat.ts";
 import {
     canvasNode,
@@ -27,7 +28,9 @@ import type {
  * toggle button naming its canvas, technique and count (`cell:`); a row's
  * folio (`cv:`) and a column's technique (`tech:`) are toggles too. A
  * click adds the node to the linked selection of Compare or removes it; a
- * toggle is pressed while its node is selected. Rows, headers and cells
+ * toggle is pressed while its node is selected. A row's folio or a cell
+ * clicked also asks the folio image tools to show that folio
+ * (`FOLIO_REQUEST_KEY`). Rows, headers and cells
  * are marked by how they stand to the selection and to the node a mouse
  * previews; an unlinked cell keeps a quarter of its shade. An empty cell
  * says it holds no published analysis.
@@ -41,6 +44,7 @@ const props = defineProps<{
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 const marks = useLinkedMarks();
+const folios = inject(FOLIO_REQUEST_KEY, null);
 
 const shownTechniques = computed(() =>
     props.techniques.filter((technique) =>
@@ -63,6 +67,13 @@ function countOf(row: SynthesisCoverage, technique: Technique): number {
 
 function toggle(node: string): void {
     if (!props.disabled) marks.toggle(node);
+}
+
+/** Toggles `node` and shows the folio of `row` in the folio image tools. */
+function toggleOnFolio(node: string, row: SynthesisCoverage): void {
+    if (props.disabled) return;
+    marks.toggle(node);
+    folios?.show(row.canvas, row.label);
 }
 
 function cellLabel(row: SynthesisCoverage, technique: Technique): string {
@@ -146,7 +157,9 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                                 :aria-disabled="
                                     props.disabled ? 'true' : undefined
                                 "
-                                @click="toggle(canvasNode(row.canvas))"
+                                @click="
+                                    toggleOnFolio(canvasNode(row.canvas), row)
+                                "
                                 @pointerenter="
                                     marks.enter(canvasNode(row.canvas), $event)
                                 "
@@ -186,7 +199,10 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                                     props.disabled ? 'true' : undefined
                                 "
                                 @click="
-                                    toggle(cellNode(row.canvas, technique.id))
+                                    toggleOnFolio(
+                                        cellNode(row.canvas, technique.id),
+                                        row,
+                                    )
                                 "
                                 @pointerenter="
                                     marks.enter(

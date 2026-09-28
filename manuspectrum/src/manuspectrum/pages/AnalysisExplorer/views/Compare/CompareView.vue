@@ -29,6 +29,7 @@ import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composa
 import { useSynthesis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import {
     ANNOUNCE_KEY,
+    FOLIO_REQUEST_KEY,
     LINKED_SELECTION_KEY,
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -59,25 +60,13 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 import type {
     AutoWindow,
-    AutoWindowKind,
     XyWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type { FolioRequest } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
-    xy: "M",
-    maps: "L",
-    micro: "M",
-    characterizations: "L",
-    "not-in-chart": "S",
-};
-
-const TOOL_SIZE: Record<ToolKind, WindowSize> = {
-    coverage: "L",
-    "colour-material": "L",
-    periodic: "L",
-    folio: "M",
-};
+/** The size every window and tool opens at. */
+const FIRST_SIZE: WindowSize = "M";
 
 /**
  * The Compare view: windows arranged from the Selection (`autoWindows`),
@@ -113,7 +102,9 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * `SelectionIndicator` before « Hidden windows » and « + Tool ». Its
  * windows mark the linked with the `--linked-*` tokens of the page. A
  * folded window sums up what it holds (`FoldedSummary`), with the button
- * that unfolds it.
+ * that unfolds it. A folio asked of the folio image tools
+ * (`FOLIO_REQUEST_KEY`, a folio of the coverage matrix clicked) is shown
+ * by every one open, and said once after the selection's count.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -127,6 +118,8 @@ const linked = useLinkedSelection({
     announce: (message) => announce(message),
 });
 provide(LINKED_SELECTION_KEY, linked);
+const folioAsked = ref<FolioRequest | null>(null);
+provide(FOLIO_REQUEST_KEY, { asked: folioAsked, show: showFolio });
 const { $gettext, $ngettext, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -173,9 +166,9 @@ const specs = computed<CompareWindowSpec[]>(() =>
         title: titleOf(window),
         kind: window.kind === "xy" ? $gettext("Spectra") : undefined,
         subtitle: subtitleOf(window),
-        size: FIRST_SIZE[window.kind],
+        size: FIRST_SIZE,
         folded:
-            window.kind === "xy" || window.kind === "maps"
+            window.kind === "xy" || window.kind === "chemical-imaging"
                 ? window.folded
                 : undefined,
     })),
@@ -190,7 +183,7 @@ const toolSpecs = computed<CompareWindowSpec[]>(() => {
         id: tool.id,
         title: titles[tool.kind],
         kind: $gettext("Tool"),
-        size: TOOL_SIZE[tool.kind],
+        size: FIRST_SIZE,
         hides: false,
     }));
 });
@@ -298,8 +291,8 @@ function titleOf(window: AutoWindow): string {
     switch (window.kind) {
         case "xy":
             return xyTitle(window);
-        case "maps":
-            return $gettext("Element maps");
+        case "chemical-imaging":
+            return $gettext("Chemical imaging");
         case "micro":
             return $gettext("Micro-images");
         case "characterizations":
@@ -318,7 +311,7 @@ function subtitleOf(window: AutoWindow): string {
             count = window.curves.length;
             message = $ngettext("%{n} spectrum", "%{n} spectra", count);
             break;
-        case "maps":
+        case "chemical-imaging":
             count = window.maps.length;
             message = $ngettext("%{n} map", "%{n} maps", count);
             break;
@@ -410,6 +403,26 @@ async function showWindow({ id }: { id: string }): Promise<void> {
 }
 
 /** Opens a tool once; a tool already open takes the focus. */
+/** Asks the folio image tools to show `canvas` and, when one is open, says so after the selection's count. */
+function showFolio(canvas: string, label: string): void {
+    folioAsked.value = { canvas, count: (folioAsked.value?.count ?? 0) + 1 };
+    if (!store.compare.tools.some((tool) => tool.kind === "folio")) return;
+    announce(
+        interpolate(
+            $gettext("%{summary}. %{message}"),
+            {
+                summary: linked.summary.value,
+                message: interpolate(
+                    $gettext("The folio image shows %{folio}."),
+                    { folio: label },
+                    true,
+                ),
+            },
+            true,
+        ),
+    );
+}
+
 async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
     const known = store.compare.tools.map((tool) => tool.id);
     const id = store.openTool(kind);

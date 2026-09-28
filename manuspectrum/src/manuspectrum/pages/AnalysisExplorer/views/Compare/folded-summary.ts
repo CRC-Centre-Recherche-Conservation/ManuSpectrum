@@ -32,7 +32,7 @@ export function foldedSummary(window: AutoWindow): FoldedSummary | null {
             names: [...new Set(codes)],
         };
     }
-    if (window.kind === "maps") {
+    if (window.kind === "chemical-imaging") {
         return {
             kind: "maps",
             count: window.maps.length,

@@ -6,7 +6,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
     layerIdOf,
-    layerIn,
+    layerPosition,
     sharedKind,
     sharedLayers,
     startLayer,
@@ -103,16 +103,16 @@ describe("sharedLayers", () => {
     });
 });
 
-describe("layerIn", () => {
-    it("finds the same element, band or layer in another map, else nothing", () => {
+describe("layerPosition", () => {
+    it("finds where the same element, band or layer stands in another map, else nothing", () => {
         const file = imagingEntry({
-            layers: [element(0, "Pb"), band(1, 650), other(2, "RGB")],
+            layers: [element(4, "Pb"), band(1, 650), other(2, "RGB")],
         });
-        expect(layerIn(file, layerIdOf(element(5, "Pb")))?.index).toBe(0);
-        expect(layerIn(file, layerIdOf(band(9, 650)))?.index).toBe(1);
-        expect(layerIn(file, layerIdOf(other(3, "RGB")))?.index).toBe(2);
-        expect(layerIn(file, layerIdOf(element(0, "Cu")))).toBeNull();
-        expect(layerIn(file, null)).toBeNull();
+        expect(layerPosition(file, layerIdOf(element(5, "Pb")))).toBe(0);
+        expect(layerPosition(file, layerIdOf(band(9, 650)))).toBe(1);
+        expect(layerPosition(file, layerIdOf(other(3, "RGB")))).toBe(2);
+        expect(layerPosition(file, layerIdOf(element(0, "Cu")))).toBeNull();
+        expect(layerPosition(file, null)).toBeNull();
     });
 });
 
