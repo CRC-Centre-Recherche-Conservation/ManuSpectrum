@@ -152,8 +152,13 @@ class SynthesisShapeTests(SynthesisCase):
                 assert_shape(self, element, "SynthesisElementRef")
         for element in payload["elements"]:
             assert_shape(self, element, "SynthesisElement")
+        for material in payload["materials"]:
+            assert_shape(self, material, "SynthesisMaterial")
         self.assertTrue(
-            payload["coverage"] and payload["canvases"] and payload["pairs"]
+            payload["coverage"]
+            and payload["canvases"]
+            and payload["pairs"]
+            and payload["materials"]
         )
 
 
@@ -205,6 +210,8 @@ class CoverageTests(SynthesisCase):
                     "document": str(self.documents["open"].pk),
                     "label": "f. 3r",
                     "selected": True,
+                    "analyses": [],
+                    "materials": [str(self.characterization.pk)],
                 }
             ],
         )
@@ -260,18 +267,24 @@ class CanvasesTests(SynthesisCase):
                     "document": document,
                     "label": "f. 1v",
                     "selected": True,
+                    "analyses": [str(self.analyses["open"].pk)],
+                    "materials": [],
                 },
                 {
                     "canvas": CANVAS_2,
                     "document": document,
                     "label": "f. 2r",
                     "selected": True,
+                    "analyses": [str(untyped.pk)],
+                    "materials": [],
                 },
                 {
                     "canvas": CANVAS_3,
                     "document": document,
                     "label": "f. 3r",
                     "selected": True,
+                    "analyses": [],
+                    "materials": [str(self.characterization.pk)],
                 },
             ],
         )
@@ -303,6 +316,132 @@ class CanvasesTests(SynthesisCase):
             [(CANVAS_B, "Ms 211 — f. 1r"), (CANVAS_3, "Ms 59 — f. 3r")],
         )
         self.assertEqual([r["label"] for r in payload["coverage"]], ["Ms 211 — f. 1r"])
+
+
+class CanvasLabelTests(SynthesisCase):
+    def same_labels(self, label):
+        source = copy.deepcopy(SOURCE_MANIFEST)
+        for canvas in source["items"]:
+            canvas["label"] = {"none": [label]}
+        return mock.patch(FETCH, side_effect={MANIFEST: source}.get)
+
+    def test_canvases_sharing_a_label_are_named_by_their_view_number(self):
+        with self.same_labels("f."):
+            payload = self.payload([self.an("on_document")])
+
+        self.assertEqual(
+            [(c["canvas"], c["label"]) for c in payload["canvases"]],
+            [(CANVAS, "f. · view 1"), (CANVAS_3, "f. · view 3")],
+        )
+        self.assertEqual(
+            [(r["canvas"], r["label"]) for r in payload["coverage"]],
+            [(CANVAS, "f. · view 1"), (CANVAS_3, "f. · view 3")],
+        )
+
+    def test_the_view_number_is_translated(self):
+        with self.same_labels("f."):
+            response = self.client.get(
+                "/fr/api/explorer/synthesis", {"ids": self.an("on_document")}
+            )
+
+        self.assertEqual(
+            [c["label"] for c in response.json()["canvases"]],
+            ["f. · vue 1", "f. · vue 3"],
+        )
+
+    def test_a_label_met_once_in_the_response_is_kept_as_is(self):
+        payload = self.payload([self.an("on_document")])
+
+        self.assertEqual([c["label"] for c in payload["canvases"]], ["f. 1v", "f. 3r"])
+
+
+class LinkedIdsTests(SynthesisCase):
+    def ids(self, *resources):
+        return sorted(str(r.pk) for r in resources)
+
+    def test_each_canvas_names_the_analyses_and_materials_placed_on_it(self):
+        payload = self.payload([self.an("open"), self.an("on_document")])
+
+        self.assertEqual(
+            [(c["canvas"], c["analyses"], c["materials"]) for c in payload["canvases"]],
+            [
+                (
+                    CANVAS,
+                    self.ids(self.analyses["open"], self.analyses["on_document"]),
+                    [],
+                ),
+                (
+                    CANVAS_3,
+                    self.ids(self.analyses["on_document"]),
+                    self.ids(self.characterization),
+                ),
+            ],
+        )
+
+    def test_pairs_and_elements_name_their_identified_materials(self):
+        payload = self.payload([self.an("open"), self.an("on_document")])
+
+        self.assertEqual(
+            payload["pairs"][0]["materials"],
+            self.ids(self.characterization, self.second),
+        )
+        self.assertEqual(
+            [(e["symbol"], e["materials"]) for e in payload["elements"]],
+            [("Cu", self.ids(self.characterization, self.second))],
+        )
+
+    def test_each_identified_material_lists_its_evidence_in_scope_canvases_cells_and_objects(
+        self,
+    ):
+        payload = self.payload([self.an("open"), f"ch:{self.chalk.pk}:-"])
+
+        self.assertEqual(
+            payload["materials"],
+            sorted(
+                [
+                    {
+                        "id": str(self.characterization.pk),
+                        "evidence": self.ids(self.analyses["open"]),
+                        "canvases": [CANVAS_3],
+                        "cells": [[CANVAS_3, item_id(XRF)]],
+                        "objects": self.ids(self.components["open"]),
+                    },
+                    {
+                        "id": str(self.chalk.pk),
+                        "evidence": [],
+                        "canvases": [],
+                        "cells": [],
+                        "objects": self.ids(self.documents["open"]),
+                    },
+                ],
+                key=lambda m: m["id"],
+            ),
+        )
+
+    def test_a_pair_holds_the_union_of_its_materials_cells_and_counts_them(self):
+        self.tile(
+            self.second,
+            "location_of_characterization",
+            self.annotation_value(CANVAS, POINT),
+        )
+        selections = (
+            [self.an("open")],
+            [self.an("open"), self.an("on_document")],
+            [self.an("on_document"), self.an("draft"), f"ch:{self.chalk.pk}:-"],
+        )
+        for keys in selections:
+            payload = self.payload(keys)
+            cells = {m["id"]: m["cells"] for m in payload["materials"]}
+            for pair in payload["pairs"]:
+                union = {tuple(cell) for m in pair["materials"] for cell in cells[m]}
+                self.assertEqual({tuple(cell) for cell in pair["cells"]}, union, keys)
+                self.assertEqual(len(pair["cells"]), len(union), keys)
+                self.assertEqual(pair["count"], len(pair["materials"]), keys)
+            self.assertEqual(
+                sorted(cells),
+                sorted({m for p in payload["pairs"] for m in p["materials"]}),
+                keys,
+            )
 
 
 class PairsAndElementsTests(SynthesisCase):
@@ -383,6 +522,24 @@ class PairsAndElementsTests(SynthesisCase):
 
 
 class SynthesisPermissionTests(SynthesisCase):
+    def test_an_embargoed_analysis_or_material_contributes_no_id_anywhere(self):
+        self.tile(
+            self.second,
+            "location_of_characterization",
+            self.annotation_value(CANVAS, POINT),
+        )
+        self.embargo(self.analyses["on_document"])
+        self.embargo(self.second)
+
+        body = self.get(
+            [self.an("open"), self.an("on_document"), f"ch:{self.second.pk}:-"]
+        ).content.decode()
+
+        self.assertIn(str(self.analyses["open"].pk), body)
+        self.assertIn(str(self.characterization.pk), body)
+        self.assertNotIn(str(self.analyses["on_document"].pk), body)
+        self.assertNotIn(str(self.second.pk), body)
+
     def test_a_hidden_identified_material_contributes_nothing(self):
         self.embargo(self.characterization)
 

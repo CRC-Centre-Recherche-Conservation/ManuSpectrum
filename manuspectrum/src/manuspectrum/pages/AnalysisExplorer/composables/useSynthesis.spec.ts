@@ -19,6 +19,7 @@ const EMPTY: SynthesisResponse = {
     techniques: [],
     pairs: [],
     elements: [],
+    materials: [],
     unpublishedCount: 0,
 };
 

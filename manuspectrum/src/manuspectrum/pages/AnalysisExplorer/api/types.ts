@@ -401,21 +401,31 @@ export interface ItemsResponse {
 /** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
 export interface SynthesisCoverage {
     canvas: string;
-    /** The canvas label, prefixed with its document's name when the placed canvases span several documents. */
+    /** The canvas label, as in `SynthesisCanvas`. */
     label: string;
     /** Id of the document whose manifest lists the canvas. */
     document: string;
     counts: Record<string, number>;
 }
 
-/** A canvas an item of the synthesis is placed on, labelled as in `SynthesisCoverage`. */
+/** A canvas an item of the synthesis is placed on. */
 export interface SynthesisCanvas {
     canvas: string;
     /** Id of the document whose manifest lists the canvas. */
     document: string;
+    /**
+     * The manifest label, prefixed with its document's name when the placed
+     * canvases span several documents, then followed by its 1-based position
+     * in the manifest (« f. · view 23 ») when another canvas of the response
+     * shares it; the one label of the canvas in the payload.
+     */
     label: string;
     /** Whether an item of the Selection itself (an analysis or a `ch:` material) is placed on it, not only a material citing one. */
     selected: boolean;
+    /** Ids of the Selection's analyses placed on it, sorted. */
+    analyses: string[];
+    /** Ids of the identified materials of the synthesis placed on it, sorted. */
+    materials: string[];
 }
 
 /** An element of an identified material; `symbol` null when its labels give none. */
@@ -431,8 +441,10 @@ export interface SynthesisPair {
     confidenceBest: RankedValue | null;
     /** Number of identified materials. */
     count: number;
-    /** `[canvas, technique id]` of each identified material: its canvases × the techniques of its evidence analyses in the Selection; by canvas, then technique label. */
+    /** The union of its identified materials' `cells`; by canvas, then technique label. */
     cells: [string, string][];
+    /** Ids of its identified materials, sorted; `count` is their number. */
+    materials: string[];
 }
 
 /** An element with a symbol, counted once per identified material naming it, with its best level. */
@@ -440,6 +452,21 @@ export interface SynthesisElement {
     symbol: string;
     level: RankedValue | null;
     count: number;
+    /** Ids of the identified materials naming it, sorted; `count` is their number. */
+    materials: string[];
+}
+
+/** An identified material of the synthesis with the ids it links. */
+export interface SynthesisMaterial {
+    id: string;
+    /** Ids of the Selection's analyses it cites in evidence, sorted. */
+    evidence: string[];
+    /** Ids of the canvases it is placed on, in document then page order. */
+    canvases: string[];
+    /** `[canvas, technique id]`: its canvases × the techniques of its `evidence`; by canvas, then technique label. */
+    cells: [string, string][];
+    /** Ids of its visible objects observed (documents and components), sorted. */
+    objects: string[];
 }
 
 /**
@@ -457,6 +484,8 @@ export interface SynthesisResponse {
     pairs: SynthesisPair[];
     /** Most frequent first. */
     elements: SynthesisElement[];
+    /** The identified materials of `pairs` and `elements`, by id. */
+    materials: SynthesisMaterial[];
     unpublishedCount: number;
 }
 
@@ -728,6 +757,7 @@ export const SHAPE_KEYS = {
         techniques: true,
         pairs: true,
         elements: true,
+        materials: true,
         unpublishedCount: true,
     } satisfies Record<keyof SynthesisResponse, true>,
     SynthesisCoverage: {
@@ -741,6 +771,8 @@ export const SHAPE_KEYS = {
         document: true,
         label: true,
         selected: true,
+        analyses: true,
+        materials: true,
     } satisfies Record<keyof SynthesisCanvas, true>,
     SynthesisPair: {
         colour: true,
@@ -750,6 +782,7 @@ export const SHAPE_KEYS = {
         confidenceBest: true,
         count: true,
         cells: true,
+        materials: true,
     } satisfies Record<keyof SynthesisPair, true>,
     SynthesisElementRef: {
         id: true,
@@ -761,5 +794,13 @@ export const SHAPE_KEYS = {
         symbol: true,
         level: true,
         count: true,
+        materials: true,
     } satisfies Record<keyof SynthesisElement, true>,
+    SynthesisMaterial: {
+        id: true,
+        evidence: true,
+        canvases: true,
+        cells: true,
+        objects: true,
+    } satisfies Record<keyof SynthesisMaterial, true>,
 } as const;

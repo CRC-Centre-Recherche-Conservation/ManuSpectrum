@@ -211,6 +211,7 @@ SHAPES = {
         "techniques": list,
         "pairs": list,
         "elements": list,
+        "materials": list,
         "unpublishedCount": int,
     },
     "SynthesisCoverage": {
@@ -219,7 +220,14 @@ SHAPES = {
         "document": str,
         "counts": dict,
     },
-    "SynthesisCanvas": {"canvas": str, "document": str, "label": str, "selected": bool},
+    "SynthesisCanvas": {
+        "canvas": str,
+        "document": str,
+        "label": str,
+        "selected": bool,
+        "analyses": list,
+        "materials": list,
+    },
     "SynthesisPair": {
         "colour": ("ValueRef", None),
         "material": "ValueRef",
@@ -228,6 +236,7 @@ SHAPES = {
         "confidenceBest": ("RankedValue", None),
         "count": int,
         "cells": list,
+        "materials": list,
     },
     "SynthesisElementRef": {
         "id": str,
@@ -235,7 +244,19 @@ SHAPES = {
         "label": "Label",
         "symbol": (str, type(None)),
     },
-    "SynthesisElement": {"symbol": str, "level": ("RankedValue", None), "count": int},
+    "SynthesisElement": {
+        "symbol": str,
+        "level": ("RankedValue", None),
+        "count": int,
+        "materials": list,
+    },
+    "SynthesisMaterial": {
+        "id": str,
+        "evidence": list,
+        "canvases": list,
+        "cells": list,
+        "objects": list,
+    },
     "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
     "ProductLink": {"url": str, "path": str},
     "ShareLinks": {

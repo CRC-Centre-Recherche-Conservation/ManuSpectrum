@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 08:36-0500\n"
+"POT-Creation-Date: 2026-09-28 05:32-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -172,7 +172,7 @@ msgstr "Status"
 msgid "Draft"
 msgstr "Draft"
 
-#: iiif/bodies.py:46 iiif/sources.py:224 templates/explorer/export_readme.md:33
+#: iiif/bodies.py:46 iiif/sources.py:276 templates/explorer/export_readme.md:33
 #: templates/views/components/ms-file-workbench.htm:44
 #: templates/views/components/ms-file-workbench.htm:47
 msgid "Attribution"
@@ -211,45 +211,45 @@ msgstr "Elements: %(elements)s"
 msgid "%(name)s (%(qualifier)s)"
 msgstr "%(name)s (%(qualifier)s)"
 
-#: iiif/manifest.py:124
+#: iiif/manifest.py:128
 #, python-format
 msgid "Selection of %(count)d page of %(document)s"
 msgid_plural "Selection of %(count)d pages of %(document)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: iiif/manifest.py:131
+#: iiif/manifest.py:135
 #, python-format
 msgid "Selection of %(count)d page of %(documents)d documents"
 msgid_plural "Selection of %(count)d pages of %(documents)d documents"
 msgstr[0] ""
 msgstr[1] ""
 
-#: iiif/manifest.py:168
+#: iiif/manifest.py:172
 msgid "Without a position on the image"
 msgstr ""
 
-#: iiif/manifest.py:174 views/explorer/export.py:385
-#: views/explorer/series.py:116
+#: iiif/manifest.py:178 views/explorer/export.py:384
+#: views/explorer/series.py:126
 msgid "Contains drafts"
 msgstr ""
 
-#: iiif/pages.py:30
+#: iiif/pages.py:32
 #, python-format
 msgid "Analyses of %(name)s"
 msgstr "Analyses of %(name)s"
 
-#: iiif/pages.py:31
+#: iiif/pages.py:33
 #, python-format
 msgid "Analyses of %(name)s, %(canvas)s"
 msgstr "Analyses of %(name)s, %(canvas)s"
 
-#: iiif/pages.py:34
+#: iiif/pages.py:36
 #, python-format
 msgid "Identified materials of %(name)s"
 msgstr "Identified materials of %(name)s"
 
-#: iiif/pages.py:35
+#: iiif/pages.py:37
 #, python-format
 msgid "Identified materials of %(name)s, %(canvas)s"
 msgstr "Identified materials of %(name)s, %(canvas)s"
@@ -478,7 +478,7 @@ msgid ""
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:507
 msgid "Licences per file"
 msgstr ""
 
@@ -4664,91 +4664,96 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/export.py:378
+#: views/explorer/export.py:377
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer/export.py:510
+#: views/explorer/export.py:509
 msgid "Each file carries its own licence, given with the file."
 msgstr ""
 
-#: views/explorer/export.py:514
+#: views/explorer/export.py:513
 msgid "Licence of the files of this package that name it."
 msgstr ""
 
-#: views/explorer/export.py:797
+#: views/explorer/export.py:796
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
 "%(count)d canvases): open it by document."
 msgstr ""
 
-#: views/explorer/export.py:807
+#: views/explorer/export.py:806
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
 msgstr ""
 
-#: views/explorer/export.py:814
+#: views/explorer/export.py:813
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
 "fetched."
 msgstr ""
 
-#: views/explorer/series.py:84
+#: views/explorer/series.py:94
 #, python-format
 msgid "licence %(licence)s"
 msgstr ""
 
-#: views/explorer/series.py:86
+#: views/explorer/series.py:96
 #, python-format
 msgid "attribution %(text)s"
 msgstr ""
 
-#: views/explorer/series.py:88
+#: views/explorer/series.py:98
 #, python-format
 msgid "configuration %(name)s"
 msgstr ""
 
-#: views/explorer/series.py:93
+#: views/explorer/series.py:103
 #, python-format
 msgid "x axis %(label)s"
 msgstr ""
 
-#: views/explorer/series.py:95
+#: views/explorer/series.py:105
 #, python-format
 msgid "y axis %(label)s"
 msgstr ""
 
-#: views/explorer/series.py:96
+#: views/explorer/series.py:106
 #, python-format
 msgid "raw file %(url)s"
 msgstr ""
 
-#: views/explorer/series.py:112
+#: views/explorer/series.py:122
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr ""
 
-#: views/explorer/series.py:113
+#: views/explorer/series.py:123
 #, python-format
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/series.py:158
+#: views/explorer/series.py:168
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
 "%(url)s"
 msgstr ""
 
-#: views/explorer/series.py:173
+#: views/explorer/series.py:183
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
+msgstr ""
+
+#: views/explorer/synthesis.py:75
+#, python-format
+msgid "%(label)s · view %(number)s"
 msgstr ""
 
 #: views/iiif/auth.py:51

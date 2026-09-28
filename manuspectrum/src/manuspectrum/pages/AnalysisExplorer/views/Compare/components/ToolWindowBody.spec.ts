@@ -23,9 +23,30 @@ const SYNTHESIS: SynthesisResponse = {
         { canvas: "c2", label: "f. 1v", document: "d", counts: { xrf: 1 } },
     ],
     canvases: [
-        { canvas: "c1", label: "f. 1r", document: "d", selected: true },
-        { canvas: "c2", label: "f. 1v", document: "d", selected: true },
-        { canvas: "c3", label: "f. 2r", document: "d", selected: false },
+        {
+            canvas: "c1",
+            label: "f. 1r",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
+        {
+            canvas: "c2",
+            label: "f. 1v",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
+        {
+            canvas: "c3",
+            label: "f. 2r",
+            document: "d",
+            selected: false,
+            analyses: [],
+            materials: [],
+        },
     ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [
@@ -39,6 +60,7 @@ const SYNTHESIS: SynthesisResponse = {
                 },
             ],
             canvases: ["c1", "c3"],
+            materials: [],
             confidenceBest: null,
             count: 2,
             cells: [
@@ -56,15 +78,17 @@ const SYNTHESIS: SynthesisResponse = {
                 },
             ],
             canvases: ["c2"],
+            materials: [],
             confidenceBest: null,
             count: 1,
             cells: [["c2", "xrf"]],
         },
     ],
     elements: [
-        { symbol: "Cu", level: null, count: 2 },
-        { symbol: "Ca", level: null, count: 1 },
+        { symbol: "Cu", level: null, count: 2, materials: [] },
+        { symbol: "Ca", level: null, count: 1, materials: [] },
     ],
+    materials: [],
     unpublishedCount: 0,
 };
 

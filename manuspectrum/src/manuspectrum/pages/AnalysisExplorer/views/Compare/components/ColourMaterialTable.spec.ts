@@ -19,6 +19,7 @@ const PAIRS: SynthesisPair[] = [
             { ...valueRef("http://example.org/pb", "Lead"), symbol: null },
         ],
         canvases: ["c1", "c3"],
+        materials: [],
         confidenceBest: {
             ...valueRef("http://example.org/reliable", "Reliable"),
             rank: 1,
@@ -31,6 +32,7 @@ const PAIRS: SynthesisPair[] = [
         material: CHALK,
         elements: [],
         canvases: [],
+        materials: [],
         confidenceBest: null,
         count: 1,
         cells: [],

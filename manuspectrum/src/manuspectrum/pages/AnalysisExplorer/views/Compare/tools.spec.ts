@@ -43,6 +43,7 @@ function pair(overrides: Partial<SynthesisPair>): SynthesisPair {
         material: CHALK,
         elements: [],
         canvases: [],
+        materials: [],
         confidenceBest: null,
         count: 1,
         cells: [],
@@ -71,16 +72,38 @@ const SYNTHESIS: SynthesisResponse = {
         { canvas: C3, label: "f. 2r", document: "d", counts: { xrf: 1 } },
     ],
     canvases: [
-        { canvas: C1, label: "f. 1r", document: "d", selected: true },
-        { canvas: C2, label: "f. 1v", document: "d", selected: true },
-        { canvas: C3, label: "f. 2r", document: "d", selected: true },
+        {
+            canvas: C1,
+            label: "f. 1r",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
+        {
+            canvas: C2,
+            label: "f. 1v",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
+        {
+            canvas: C3,
+            label: "f. 2r",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
     ],
     techniques: [XRF],
     pairs: [AZURITE_PAIR, CHALK_PAIR],
     elements: [
-        { symbol: "Cu", level: null, count: 2 },
-        { symbol: "Ca", level: null, count: 1 },
+        { symbol: "Cu", level: null, count: 2, materials: [] },
+        { symbol: "Ca", level: null, count: 1, materials: [] },
     ],
+    materials: [],
     unpublishedCount: 0,
 };
 
@@ -127,6 +150,8 @@ describe("offeredTools", () => {
         const citing = SYNTHESIS.canvases.map((entry) => ({
             ...entry,
             selected: false,
+            analyses: [],
+            materials: [],
         }));
         expect(offeredTools({ ...SYNTHESIS, canvases: citing })).toEqual([
             "coverage",
@@ -251,7 +276,7 @@ describe("toolView", () => {
             pair: [null, CHALK.id],
         };
         expect(toolView(SYNTHESIS, filters, "periodic").elements).toEqual([
-            { symbol: "Ca", level: null, count: 1 },
+            { symbol: "Ca", level: null, count: 1, materials: [] },
         ]);
         expect(toolView(SYNTHESIS, filters, "colour-material").pairs).toEqual(
             [],

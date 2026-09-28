@@ -95,8 +95,22 @@ const DOCUMENT: DocumentPayload = documentPayload({
     ],
 });
 const CANVASES = [
-    { canvas: C1, label: "f. 12r", document: uuid(1), selected: true },
-    { canvas: C2, label: "f. 12v", document: uuid(1), selected: true },
+    {
+        canvas: C1,
+        label: "f. 12r",
+        document: uuid(1),
+        selected: true,
+        analyses: [],
+        materials: [],
+    },
+    {
+        canvas: C2,
+        label: "f. 12v",
+        document: uuid(1),
+        selected: true,
+        analyses: [],
+        materials: [],
+    },
 ];
 const SLOTS = new Map([
     [uuid(101), [0]],

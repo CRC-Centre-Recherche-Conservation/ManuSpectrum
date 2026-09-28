@@ -10,9 +10,10 @@ const ELEMENTS = [
         symbol: "Cu",
         level: { ...valueRef("http://example.org/major", "Major"), rank: 0 },
         count: 5,
+        materials: [],
     },
-    { symbol: "Pb", level: null, count: 2 },
-    { symbol: "Xy", level: null, count: 1 },
+    { symbol: "Pb", level: null, count: 2, materials: [] },
+    { symbol: "Xy", level: null, count: 1, materials: [] },
 ];
 
 function mountTable(pressed: string | null = null) {
