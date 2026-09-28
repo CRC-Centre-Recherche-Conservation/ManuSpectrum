@@ -11,8 +11,8 @@ import {
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 /**
- * The micro-images of the Selection side by side, each captioned « A1 ·
- * analysis · file ». Each image stands for its analysis (`an:`): the
+ * The micro-images of the Selection side by side, each in a light well
+ * that the window's height stretches, captioned « A1 · analysis · file ». Each image stands for its analysis (`an:`): the
  * analysis name is its toggle, and the figure is marked by how the
  * analysis stands to the linked selection (an unlinked image fades, its
  * caption stays readable) and to the node a mouse previews.
@@ -60,16 +60,39 @@ const marks = useLinkedMarks();
 <style scoped>
 .micro-image-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-auto-rows: minmax(16rem, 1fr);
     gap: 0.75rem;
+    block-size: 100%;
 }
 
 .micro-image-grid figure {
     display: grid;
-    gap: 0.25rem;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0.375rem;
+    min-block-size: 0;
     margin: 0;
     padding: 0.25rem;
     border-radius: 0.375rem;
+}
+
+.micro-image-grid :deep(.micro-image-preview) {
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0.25rem;
+    min-block-size: 0;
+}
+
+.micro-image-grid :deep(.surface) {
+    isolation: isolate;
+    min-block-size: 10rem;
+    block-size: 100%;
+    border-radius: 0.5rem;
+    background: var(--bg-alt);
+}
+
+.micro-image-grid :deep(.download) {
+    min-block-size: var(--explorer-target, 2rem);
+    font-size: 0.8125rem;
 }
 
 .micro-image-grid figure[data-rel="self"] {

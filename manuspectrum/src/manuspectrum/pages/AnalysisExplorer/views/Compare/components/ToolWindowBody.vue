@@ -28,7 +28,7 @@ import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types
  * window shows only that, with Retry; when nothing in the Selection is
  * visible it says so. While the synthesis is read the window says so above
  * a previous synthesis, which stays shown busy with its toggles disabled
- * and selects nothing.
+ * and selects nothing. The folio image takes the height the window leaves.
  */
 const props = defineProps<{
     kind: ToolKind;
@@ -141,15 +141,16 @@ const emptyPayload = computed(() => {
 
 <style scoped>
 .tool-window-body {
-    display: grid;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
     block-size: 100%;
 }
 
 .tool-window-body .view {
-    display: grid;
-    align-content: start;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
     gap: 0.5rem;
     min-block-size: 0;
 }

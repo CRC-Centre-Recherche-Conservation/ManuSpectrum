@@ -181,7 +181,7 @@ function laidOn(view: VueWrapper): (string | null)[] {
     return view.findAll(".element-map-card").map((card) => {
         const image = card.find("img.folio-overlay");
         if (image.exists()) return image.attributes("alt") ?? null;
-        const note = card.find(".not-mapped");
+        const note = card.find(".not-mapped .message");
         return note.exists() ? note.text() : null;
     });
 }
@@ -213,17 +213,48 @@ describe("ElementMaps", () => {
         expect(laidOn(view)).toEqual(["Pb", "Pb"]);
         await view.find(".layer-picker select").setValue(1);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["Hg", "Element not mapped"]);
+        expect(laidOn(view)).toEqual(["Hg", "No Hg layer for this map"]);
+        expect(view.findAll(".not-mapped .held")[0].text()).toBe(
+            "Its layers: Cu, Pb",
+        );
         await view.find(".layer-picker select").setValue(2);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["Element not mapped", "Cu"]);
+        expect(laidOn(view)).toEqual(["No Cu layer for this map", "Cu"]);
+    });
+
+    it("scrolls through the layers of the kind shown only, elements or bands", async () => {
+        const view = await mountMaps([
+            map(0, [layer(0, "Pb"), layer(1, "Hg")]),
+            map(1, [layer(0, "400 nm", "band"), layer(1, "1000 nm", "band")]),
+        ]);
+        const ends = () =>
+            view.findAll(".scroll .ends span").map((end) => end.text());
+        expect(ends()).toEqual(["Pb", "Hg"]);
+        expect(
+            view.find(".scroll [role=slider]").attributes("aria-valuetext"),
+        ).toBe("Pb, layer 1 of 2");
+        view.findComponent({ name: "Slider" }).vm.$emit("update:modelValue", 1);
+        await flushPromises();
+        expect(laidOn(view)).toEqual(["Hg", "No Hg layer for this map"]);
+        await view.find(".layer-picker select").setValue(3);
+        await flushPromises();
+        expect(ends()).toEqual(["400 nm", "1000 nm"]);
+        expect(
+            view.find(".scroll [role=slider]").attributes("aria-valuetext"),
+        ).toBe("1000 nm, layer 2 of 2");
+        view.findComponent({ name: "Slider" }).vm.$emit("update:modelValue", 0);
+        await flushPromises();
+        expect(laidOn(view)).toEqual([
+            "No 400 nm layer for this map",
+            "400 nm",
+        ]);
     });
 
     it("scrolls every map through the layers together, saying where the handle is", async () => {
         const view = await mountMaps();
         view.findComponent({ name: "Slider" }).vm.$emit("update:modelValue", 1);
         await flushPromises();
-        expect(laidOn(view)).toEqual(["Hg", "Element not mapped"]);
+        expect(laidOn(view)).toEqual(["Hg", "No Hg layer for this map"]);
         expect(
             (view.find(".layer-picker select").element as HTMLSelectElement)
                 .value,
@@ -242,7 +273,10 @@ describe("ElementMaps", () => {
         expect(
             view.findAll(".layer-picker option").map((option) => option.text()),
         ).toEqual(["400 nm", "450 nm", "650 nm"]);
-        expect(laidOn(view)).toEqual(["400 nm", "Band not mapped"]);
+        expect(laidOn(view)).toEqual([
+            "400 nm",
+            "No 400 nm layer for this map",
+        ]);
     });
 
     it("puts each map's layer under a curtain of its own, over its page", async () => {
@@ -273,10 +307,10 @@ describe("ElementMaps", () => {
         const card = view.findAll(".element-map-card")[0];
         await card.find("img.folio-overlay").trigger("error");
         const status = card.find(".unavailable");
-        expect(status.text()).toContain("Map unavailable (image server)");
+        expect(status.text()).toContain("Map unavailable — image server");
         await status.find("button").trigger("click");
         await flushPromises();
-        expect(card.text()).not.toContain("Map unavailable (image server)");
+        expect(card.text()).not.toContain("Map unavailable — image server");
         expect(card.find("img.folio-overlay").exists()).toBe(true);
     });
 

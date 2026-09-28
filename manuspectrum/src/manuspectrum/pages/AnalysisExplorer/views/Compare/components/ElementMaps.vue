@@ -7,10 +7,7 @@ import ElementMapCard from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import {
-    layerKindLabel,
-    notMappedLabel,
-} from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
+import { layerKindLabel } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
 import { parseNodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     elementLayerId,
@@ -33,10 +30,11 @@ interface LayerGroup {
 
 /**
  * The layered maps of the Selection side by side (§9, D46, D47): one layer
- * picker and one layer scroll over the union of their layers (`sharedLayers`),
- * the same layer held on every map; a map lacking it says so. It opens on
- * the layer a one-layer key names, else the first. Each map keeps its own
- * contrast and its own curtain.
+ * picker over the union of their layers (`sharedLayers`, grouped by kind)
+ * and one layer scroll over the layers of the kind shown (elements, or
+ * bands), the same layer held on every map; a map lacking it says so and
+ * lists the layers it has. It opens on the layer a one-layer key names,
+ * else the first. Each map keeps its own contrast and its own curtain.
  *
  * Selecting an element in Compare (`el:`, the last one selected that a map
  * holds) switches the shared layer to it, and that is said; once no
@@ -63,7 +61,23 @@ const position = computed(() => {
     return index >= 0 ? index : startLayer(props.maps, layers.value);
 });
 const current = computed(() => layers.value[position.value] ?? null);
-const labels = computed(() => layers.value.map((layer) => layer.label));
+/** The layers of the kind shown, with their position in `layers`. */
+const kindLayers = computed(() =>
+    layers.value.flatMap((layer, index) =>
+        layer.kind === current.value?.kind ? [{ layer, position: index }] : [],
+    ),
+);
+const labels = computed(() =>
+    kindLayers.value.map((entry) => entry.layer.label),
+);
+const kindPosition = computed(() =>
+    Math.max(
+        0,
+        kindLayers.value.findIndex(
+            (entry) => entry.position === position.value,
+        ),
+    ),
+);
 const groups = computed<LayerGroup[]>(() => {
     const byKind = new Map<LayerKind, LayerGroup>();
     layers.value.forEach((layer, index) => {
@@ -76,9 +90,6 @@ const groups = computed<LayerGroup[]>(() => {
     });
     return [...byKind.values()];
 });
-const notMapped = computed(() =>
-    notMappedLabel($gettext, current.value?.kind ?? "other"),
-);
 /** The layer of the last element selected that a map holds; null when none. */
 const pinnedLayer = computed<string | null>(() => {
     const selection = marks.linked?.selection.value ?? [];
@@ -138,6 +149,11 @@ function followPin(next: string | null, previous: string | null): void {
     );
 }
 
+function scrollTo(next: number): void {
+    const entry = kindLayers.value[next];
+    if (entry) choose(entry.position);
+}
+
 function onPick(event: Event): void {
     choose(Number((event.target as HTMLSelectElement).value));
 }
@@ -182,11 +198,11 @@ function onPick(event: Event): void {
                 </select>
             </div>
             <LayerScroll
-                v-if="layers.length > 1"
+                v-if="labels.length > 1"
                 class="layer-scroll"
                 :labels="labels"
-                :position="position"
-                @update:position="choose"
+                :position="kindPosition"
+                @update:position="scrollTo"
             />
             <p class="note">
                 <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
@@ -200,7 +216,7 @@ function onPick(event: Event): void {
                 :analysis="line.analysis"
                 :file="line.file"
                 :layer="layerIn(line.file, current?.id ?? null)"
-                :not-mapped="notMapped"
+                :wanted="current?.label ?? null"
             />
         </div>
     </div>

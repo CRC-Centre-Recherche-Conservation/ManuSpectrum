@@ -173,6 +173,35 @@ function listed(view: VueWrapper): string[][] {
 }
 
 describe("FolioTool", () => {
+    it("fits the whole page to its stage again when the window changes size, until the reader moves the view", async () => {
+        const fit = vi.fn();
+        (L.tileLayer as unknown as { iiif: unknown }).iiif = vi.fn(() =>
+            Object.assign(L.layerGroup(), {
+                _imageSizes: [{}],
+                _fitBounds: fit,
+            }),
+        );
+        const tick = ref(0);
+        wrapper = mount(FolioTool, {
+            attachTo: sizedContainer(),
+            props: { canvases: CANVASES, slots: SLOTS },
+            global: { provide: { [WINDOW_RESIZE_KEY as symbol]: tick } },
+        });
+        await flushPromises();
+        tick.value += 1;
+        await flushPromises();
+        expect(fit).toHaveBeenCalledTimes(1);
+        await wrapper.find(".surface").trigger("pointerdown");
+        tick.value += 1;
+        await flushPromises();
+        expect(fit).toHaveBeenCalledTimes(1);
+        await wrapper.find("button.whole").trigger("click");
+        expect(fit).toHaveBeenCalledTimes(2);
+        tick.value += 1;
+        await flushPromises();
+        expect(fit).toHaveBeenCalledTimes(3);
+    });
+
     it("opens on the first canvas placed and reads its document once", async () => {
         const view = await mountTool();
         const picker = view.find("select");

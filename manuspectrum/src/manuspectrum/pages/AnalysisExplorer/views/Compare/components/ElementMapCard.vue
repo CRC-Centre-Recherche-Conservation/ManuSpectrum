@@ -24,6 +24,10 @@ import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-lay
 import { layerImageUrl } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import { layPage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ICONS,
+    ICON_VIEW_BOX,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     analysisNode,
@@ -48,7 +52,9 @@ type Mode = "reading" | "folio" | "no-zone" | "no-image" | "error";
 
 /**
  * One map of the « Element maps » window, under its slot and name: the
- * shared layer (`layer`, null when this map lacks it: `notMapped` says so)
+ * shared layer (`layer`, null when this map lacks the layer `wanted`: the
+ * map then says so and lists the layers it has; a layer the image server
+ * does not give is said with Retry)
  * laid over the analysis's zone on its page, under a curtain of its own
  * (D47, on at first), positioned indicatively. Without a zone with an
  * extent, a page image or a readable document, the layer is shown alone.
@@ -63,12 +69,13 @@ const props = defineProps<{
     analysis: AnalysisHit;
     file: FileEntry;
     layer: FileLayer | null;
-    notMapped: string;
+    /** The label of the shared layer shown; null when there is none. */
+    wanted: string | null;
 }>();
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, ref(0), false);
 
-const { $gettext } = useGettext();
+const { $gettext, interpolate } = useGettext();
 const marks = useLinkedMarks();
 const surface = useTemplateRef<HTMLDivElement>("surface");
 
@@ -131,6 +138,28 @@ const overlays = computed<FolioOverlay[]>(() => {
         },
     ];
 });
+const notMappedText = computed(() =>
+    props.wanted === null
+        ? $gettext("No layer for this map")
+        : interpolate(
+              $gettext("No %{layer} layer for this map"),
+              { layer: props.wanted },
+              true,
+          ),
+);
+const heldText = computed(() =>
+    props.file.layers.length === 0
+        ? ""
+        : interpolate(
+              $gettext("Its layers: %{layers}"),
+              {
+                  layers: props.file.layers
+                      .map((layer) => layer.label)
+                      .join(", "),
+              },
+              true,
+          ),
+);
 const aloneUrl = computed(() =>
     props.layer ? layerImageUrl(props.layer.image, PREVIEW_SIZE) : null,
 );
@@ -270,25 +299,60 @@ function onCurtainChange(event: Event): void {
                 ref="surface"
                 class="surface"
             />
-            <p
+            <div
                 v-if="!props.layer"
-                class="not-mapped"
+                class="state not-mapped"
             >
-                <span>{{ props.notMapped }}</span>
-            </p>
-            <p
+                <svg
+                    :viewBox="ICON_VIEW_BOX"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <path
+                        v-for="(path, index) in ICONS.image"
+                        :key="index"
+                        :d="path"
+                    />
+                </svg>
+                <p class="message">
+                    <span>{{ notMappedText }}</span>
+                </p>
+                <p
+                    v-if="heldText"
+                    class="held"
+                >
+                    <span>{{ heldText }}</span>
+                </p>
+            </div>
+            <div
                 v-else-if="layerFailed"
-                class="unavailable"
+                class="state unavailable"
                 role="status"
             >
-                <span>{{ $gettext("Map unavailable (image server)") }}</span>
+                <svg
+                    :viewBox="ICON_VIEW_BOX"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <path
+                        v-for="(path, index) in ICONS.image"
+                        :key="index"
+                        :d="path"
+                    />
+                </svg>
+                <p class="message">
+                    <span>{{
+                        $gettext("Map unavailable — image server")
+                    }}</span>
+                </p>
                 <button
                     type="button"
+                    class="retry"
                     @click="retryLayer"
                 >
                     <span>{{ $gettext("Retry") }}</span>
                 </button>
-            </p>
+            </div>
             <p
                 v-else-if="pageFailed"
                 class="unavailable"
@@ -308,25 +372,60 @@ function onCurtainChange(event: Event): void {
             </p>
         </div>
         <template v-else>
-            <p
+            <div
                 v-if="!props.layer"
-                class="not-mapped"
+                class="state not-mapped"
             >
-                <span>{{ props.notMapped }}</span>
-            </p>
-            <p
+                <svg
+                    :viewBox="ICON_VIEW_BOX"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <path
+                        v-for="(path, index) in ICONS.image"
+                        :key="index"
+                        :d="path"
+                    />
+                </svg>
+                <p class="message">
+                    <span>{{ notMappedText }}</span>
+                </p>
+                <p
+                    v-if="heldText"
+                    class="held"
+                >
+                    <span>{{ heldText }}</span>
+                </p>
+            </div>
+            <div
                 v-else-if="layerFailed"
-                class="unavailable"
+                class="state unavailable"
                 role="status"
             >
-                <span>{{ $gettext("Map unavailable (image server)") }}</span>
+                <svg
+                    :viewBox="ICON_VIEW_BOX"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <path
+                        v-for="(path, index) in ICONS.image"
+                        :key="index"
+                        :d="path"
+                    />
+                </svg>
+                <p class="message">
+                    <span>{{
+                        $gettext("Map unavailable — image server")
+                    }}</span>
+                </p>
                 <button
                     type="button"
+                    class="retry"
                     @click="retryLayer"
                 >
                     <span>{{ $gettext("Retry") }}</span>
                 </button>
-            </p>
+            </div>
             <img
                 v-else-if="aloneUrl"
                 :key="`${aloneUrl}#${attempt}`"
@@ -459,6 +558,7 @@ function onCurtainChange(event: Event): void {
 
 .element-map-card .stage {
     position: relative;
+    isolation: isolate;
     display: grid;
     border-radius: var(--explorer-radius, 0.625rem);
     background: var(--stage);
@@ -470,26 +570,45 @@ function onCurtainChange(event: Event): void {
     background: var(--stage);
 }
 
-.element-map-card .stage .not-mapped,
-.element-map-card .stage .unavailable {
-    position: absolute;
-    inset-block-end: 0.5rem;
-    inset-inline-start: 0.5rem;
-    z-index: 1000;
-    margin: 0;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    background: var(--surface);
-    color: var(--ink);
-    font-size: 0.8125rem;
-}
-
-.element-map-card .not-mapped {
+.element-map-card .state {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 0.375rem;
+    min-block-size: 10rem;
+    padding: 0.75rem;
+    border-radius: var(--explorer-radius, 0.625rem);
+    background: var(--bg-alt);
     color: var(--ink-muted);
     font-size: 0.8125rem;
+    text-align: center;
 }
 
-.element-map-card .unavailable,
+.element-map-card .stage .state {
+    position: absolute;
+    inset: 0;
+    z-index: 1000;
+    min-block-size: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--bg-alt) 92%, transparent);
+}
+
+.element-map-card .state svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    fill: currentColor;
+}
+
+.element-map-card .state .message {
+    margin: 0;
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.element-map-card .state .held {
+    margin: 0;
+}
+
 .element-map-card .note {
     display: flex;
     flex-wrap: wrap;
@@ -497,16 +616,21 @@ function onCurtainChange(event: Event): void {
     gap: 0.5rem;
 }
 
-.element-map-card .unavailable button,
+.element-map-card .state .retry,
 .element-map-card .note .retry {
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 999rem;
+    border: none;
+    border-radius: 0.375rem;
     background: var(--surface);
     color: var(--ink);
     font: inherit;
+    font-weight: 600;
     cursor: pointer;
+}
+
+.element-map-card .note .retry {
+    background: var(--bg-alt);
 }
 
 .element-map-card button:focus-visible,

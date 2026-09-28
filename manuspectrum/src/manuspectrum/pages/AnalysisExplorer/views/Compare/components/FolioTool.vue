@@ -91,7 +91,10 @@ const SERIES_SLOTS = 8;
  * the linked selection (an unlinked zone and marker fade, a linked frame
  * is drawn solid and heavier) and to the node a mouse previews (dotted).
  * A selection change restyles the layers drawn (`setStyle`, attributes on
- * the markers) and never draws them again. « Fit to related » frames the
+ * the markers) and never draws them again. The whole page is fitted to the
+ * stage again when the window changes size, until the reader moves the view
+ * (a pointer, the wheel or the keyboard on the map, « Fit to related »);
+ * « Whole page » and another folio fit it again. « Fit to related » frames the
  * linked marks of the page; when linked items of the Selection are placed
  * on other folios they are named, each with a button showing it.
  */
@@ -117,6 +120,8 @@ let map: L.Map | null = null;
 let page: PageLayer | null = null;
 let drawn: L.LayerGroup | null = null;
 let fitted: string | null = null;
+/** Whether the view is still the whole page: the reader has not moved it since it was fitted. */
+let pageView = true;
 const drawnMarks = new Map<NodeId, DrawnMark>();
 
 const row = computed(
@@ -200,7 +205,10 @@ watch(
     ],
     restyle,
 );
-watch(resizeTick, () => map?.invalidateSize({ animate: false }));
+watch(resizeTick, () => {
+    map?.invalidateSize({ animate: false });
+    if (map && pageView) fitPage(map, page);
+});
 watch(
     () => payload.value !== null,
     (shown) => {
@@ -264,6 +272,7 @@ function drawPage(): void {
     page?.remove();
     page = null;
     pageFailed.value = false;
+    pageView = true;
     const service = canvas.value?.image.service;
     if (!service) return;
     page = layPage(map, service, () => {
@@ -430,8 +439,13 @@ function fitRelated(): void {
         if (frame.isValid()) bounds.extend(frame);
     }
     if (bounds.isValid()) {
+        pageView = false;
         map.fitBounds(bounds.pad(RELATED_PADDING), { animate: false });
     }
+}
+
+function onReaderMove(): void {
+    pageView = false;
 }
 
 function showFolio(canvasId: string): void {
@@ -447,7 +461,9 @@ function showLabel(label: string): string {
 }
 
 function wholePage(): void {
-    if (map) fitPage(map, page);
+    if (!map) return;
+    pageView = true;
+    fitPage(map, page);
 }
 </script>
 
@@ -504,7 +520,12 @@ function wholePage(): void {
             class="stage"
             :hidden="!payload"
         >
-            <div class="surface" />
+            <div
+                class="surface"
+                @pointerdown="onReaderMove"
+                @wheel.passive="onReaderMove"
+                @keydown="onReaderMove"
+            />
             <p
                 v-if="payload && !hasImage"
                 class="no-image"
@@ -618,9 +639,10 @@ function wholePage(): void {
 <style scoped>
 .folio-tool {
     display: grid;
+    flex: 1 1 auto;
     grid-template-rows: auto minmax(12rem, 1fr) auto;
     gap: 0.5rem;
-    block-size: 100%;
+    min-block-size: 0;
 }
 
 .folio-tool .picker {
@@ -663,10 +685,11 @@ function wholePage(): void {
 
 .folio-tool .stage {
     position: relative;
+    isolation: isolate;
     display: grid;
     min-block-size: 12rem;
     border-radius: var(--explorer-radius, 0.625rem);
-    background: var(--stage);
+    background: var(--bg-alt);
     overflow: hidden;
 }
 
@@ -676,7 +699,7 @@ function wholePage(): void {
 
 .folio-tool .surface {
     min-block-size: 12rem;
-    background: var(--stage);
+    background: var(--bg-alt);
 }
 
 .folio-tool .no-image {

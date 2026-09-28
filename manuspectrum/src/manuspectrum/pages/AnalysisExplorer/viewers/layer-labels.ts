@@ -16,18 +16,3 @@ export function layerKindLabel(
             return $gettext("Layer");
     }
 }
-
-/** What a map that lacks the chosen layer says, by the layer's kind. */
-export function notMappedLabel(
-    $gettext: Gettext,
-    kind: FileLayer["kind"],
-): string {
-    switch (kind) {
-        case "element":
-            return $gettext("Element not mapped");
-        case "band":
-            return $gettext("Band not mapped");
-        default:
-            return $gettext("Layer not mapped");
-    }
-}
