@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    computed,
     inject,
     nextTick,
     onBeforeUnmount,
@@ -21,9 +22,10 @@ import {
 import {
     GRID_COLUMNS,
     WINDOW_SIZES,
-    clearLayout,
+    clearBoxes,
     flowLayout,
     keepWindows,
+    nearestBox,
     readFolded,
     readLayout,
     readingOrder,
@@ -64,10 +66,18 @@ const GAP = "0.5rem";
  * the grid loses its place unless `retained` names it. With nothing saved,
  * gridstack places the windows (`autoPosition`); a window that appears
  * later goes back to its place, else under the others, without the focus,
- * and is announced. Under 768 px the windows are listed on one column,
- * never saved; back on 12 columns, the saved places are put back. « Rearrange »
- * emits `rearrange` first, so the parent can bring hidden windows back,
- * then lays every window out and saves that layout. A folded window keeps
+ * and is announced. A window that leaves the grid leaves no hole: the
+ * windows under it move up (gridstack's `top` packing, run once), none
+ * changes column. When the reader closed it, the focus goes to the window
+ * nearest its place, without scrolling the page unless that window is
+ * entirely off the screen; the grid keeps its height until the windows left
+ * reach the bottom of the screen again (at once, or once the reader scrolls
+ * up), so that the page does not shorten under the reader and move. Under 768 px the windows are listed on one
+ * column, never saved; back on 12 columns, the saved places are put back.
+ * « Rearrange » lays the windows shown out again, forgets every saved place
+ * (the hidden windows', `retained`, included: they come back at the end)
+ * and saves the new ones; the hidden, folded and open windows stay as they
+ * are, and the announcement counts the windows that stay hidden. A folded window keeps
  * its header only (its content, once shown, stays mounted); the reader's
  * fold or unfold is saved with the layout and wins over the window's spec,
  * and a folded window's saved box keeps its unfolded height. gridstack
@@ -86,14 +96,16 @@ const props = withDefaults(
 
 const emit = defineEmits<{
     (event: "close", payload: { id: string }): void;
-    (event: "rearrange"): void;
 }>();
 
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 
+const rootElement = ref<HTMLElement | null>(null);
 const gridElement = ref<HTMLElement | null>(null);
+/** The grid's height before a close, in px, kept until the page may shorten without moving. */
+const heldHeight = ref<number | null>(null);
 /** Window ids in reading order, read from gridstack after each change. */
 const order = ref<string[]>(props.windows.map((window) => window.id));
 /** Each window's preset size, null once resized by hand. */
@@ -123,8 +135,14 @@ let observedWidth: number | null = null;
 /** The column count of the last `change` handled. */
 let shownColumns = GRID_COLUMNS;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
-let closing: { id: string; index: number } | null = null;
-let rearranging = false;
+/** The window the reader is closing, and its box then. */
+let closing: { id: string; box: WindowBox } | null = null;
+
+const heldStyle = computed(() =>
+    heldHeight.value === null
+        ? undefined
+        : { minBlockSize: `${heldHeight.value}px` },
+);
 
 provide(WINDOW_RESIZE_KEY, readonly(resizeTick));
 
@@ -137,13 +155,17 @@ watch(
             if (grid && element) grid.removeWidget(element, false, true);
         }
         if (gone.length > 0) {
+            closeHoles();
             syncFromGrid();
             forgetGone(gone);
         }
         if (closing && gone.includes(closing.id)) {
-            const index = closing.index;
+            const box = closing.box;
             closing = null;
-            void nextTick(() => focusWindowAt(index));
+            void nextTick(() => {
+                focusNearest(box);
+                releaseWhenFilled();
+            });
         }
     },
     { flush: "pre" },
@@ -172,7 +194,6 @@ watch(
         const fresh = added.filter((window) => !saved[window.id]);
         for (const window of added) placeWindow(window, false);
         syncFromGrid();
-        if (rearranging) return;
         if (back.length > 0) {
             announce(
                 interpolate(
@@ -234,6 +255,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    releaseHeight();
     observer?.disconnect();
     clearTimeout(resizeTimer);
     grid?.destroy(false);
@@ -455,12 +477,47 @@ function positionOf(id: string): number {
     return order.value.indexOf(id) + 1;
 }
 
-function focusWindowAt(index: number): void {
-    const id = order.value[Math.min(index, order.value.length - 1)];
-    const target = id
-        ? itemElement(id)?.querySelector<HTMLElement>(".compare-window")
+/** Moves the windows up into the room left free, once (gridstack's `top` mode), then lets them float again. */
+function closeHoles(): void {
+    grid?.mode("top");
+    grid?.mode("float");
+}
+
+/** Keeps the grid as tall as it is while a window closes. */
+function holdHeight(): void {
+    const element = rootElement.value;
+    if (!element) return;
+    heldHeight.value = element.offsetHeight;
+    window.addEventListener("scroll", releaseWhenFilled, { passive: true });
+}
+
+function releaseHeight(): void {
+    heldHeight.value = null;
+    window.removeEventListener("scroll", releaseWhenFilled);
+}
+
+/** Lets the grid shorten once its windows reach the bottom of the screen: the room freed is then below it. */
+function releaseWhenFilled(): void {
+    if (heldHeight.value === null) return;
+    const bottom = gridElement.value?.getBoundingClientRect().bottom;
+    if (bottom === undefined || bottom >= window.innerHeight) releaseHeight();
+}
+
+/** Focuses the window nearest `box`; the page scrolls only when that window is entirely off the screen. */
+function focusNearest(box: WindowBox): void {
+    const nearest = nearestBox(
+        box,
+        gridNodes().map((node) => ({ id: node.id as string, ...boxOf(node) })),
+    );
+    const target = nearest
+        ? itemElement(nearest.id)?.querySelector<HTMLElement>(".compare-window")
         : null;
-    target?.focus();
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    const { top, bottom } = target.getBoundingClientRect();
+    if (bottom <= 0 || top >= window.innerHeight) {
+        target.scrollIntoView?.({ block: "nearest" });
+    }
 }
 
 function move(id: string, step: -1 | 1): void {
@@ -548,29 +605,23 @@ function toggleFold(id: string): void {
 
 /** The parent answers the request: hides the window, or closes the tool, and says so. */
 function close(id: string): void {
-    closing = { id, index: order.value.indexOf(id) };
+    const node = gridNodes().find((entry) => entry.id === id);
+    closing = node ? { id, box: boxOf(node) } : null;
+    holdHeight();
     emit("close", { id });
 }
 
 /**
- * Empties the saved layout, lets the parent bring hidden windows back, then
- * lays every window out again in its order, at its first size, and saves
- * that layout (on 12 columns); the windows are told their new size.
+ * Lays the windows shown out again in their order, at their first size (a
+ * folded window as tall as its header), forgets every saved place and saves
+ * the new ones (on 12 columns); the windows are told their new size.
  */
-async function rearrange(): Promise<void> {
+function rearrange(): void {
     if (!grid) return;
-    rearranging = true;
+    releaseHeight();
     saving = false;
-    clearLayout();
+    clearBoxes();
     saved = {};
-    if (Object.keys(savedFolds).length > 0) writeFolded(savedFolds);
-    emit("rearrange");
-    await nextTick();
-    rearranging = false;
-    if (!grid) {
-        saving = true;
-        return;
-    }
     applyLayout(
         flowLayout(
             props.windows.map((window) => ({
@@ -583,12 +634,29 @@ async function rearrange(): Promise<void> {
     saving = true;
     if (grid.getColumn() === GRID_COLUMNS) saveGrid();
     scheduleResize();
-    announce($gettext("Windows rearranged."));
+    const stayHidden = props.retained.length;
+    announce(
+        stayHidden === 0
+            ? $gettext("Windows rearranged.")
+            : interpolate(
+                  $ngettext(
+                      "Windows rearranged. %{n} window stays hidden.",
+                      "Windows rearranged. %{n} windows stay hidden.",
+                      stayHidden,
+                  ),
+                  { n: stayHidden },
+                  true,
+              ),
+    );
 }
 </script>
 
 <template>
-    <div class="window-grid">
+    <div
+        ref="rootElement"
+        class="window-grid"
+        :style="heldStyle"
+    >
         <div class="toolbar">
             <slot name="toolbar" />
             <button

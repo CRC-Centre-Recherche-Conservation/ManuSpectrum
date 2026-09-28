@@ -23,3 +23,11 @@ export interface WindowBox {
 
 /** Saved places, by window id. */
 export type WindowLayout = Record<string, WindowBox>;
+
+/** A window hidden by the reader, as « Hidden windows » lists it. */
+export interface HiddenWindowEntry {
+    id: string;
+    title: string;
+    /** Spectra it holds that it did not hold when hidden; 0 for none. */
+    added: number;
+}

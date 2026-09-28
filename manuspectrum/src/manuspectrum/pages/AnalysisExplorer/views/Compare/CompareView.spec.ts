@@ -75,11 +75,14 @@ const SYNTHESIS: SynthesisResponse = {
             label: "f. 12r",
             document: uuid(1),
             selected: true,
+            analyses: [],
+            materials: [],
         },
     ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [],
-    elements: [{ symbol: "Cu", level: null, count: 1 }],
+    elements: [{ symbol: "Cu", level: null, count: 1, materials: [] }],
+    materials: [],
     unpublishedCount: 0,
 };
 
@@ -244,6 +247,18 @@ function windowOf(view: VueWrapper, id: string) {
         .find((item) => item.attributes("data-window-id") === id)!;
 }
 
+function hiddenButton(view: VueWrapper) {
+    return view.find(".hidden-windows .hidden-windows-button");
+}
+
+/** The entries of « Hidden windows », its menu opened first. */
+async function hiddenEntries(view: VueWrapper) {
+    if (hiddenButton(view).attributes("aria-expanded") !== "true") {
+        await hiddenButton(view).trigger("click");
+    }
+    return view.findAll('.hidden-windows [role="menuitem"]');
+}
+
 function storedLayout(): {
     boxes: Record<string, object>;
     hidden: string[];
@@ -382,10 +397,9 @@ describe("CompareView", () => {
             "Identified materials hidden. Show it again from « Hidden windows ».",
         );
         expect(storedLayout()?.hidden).toEqual(["auto:characterizations"]);
-        expect(view.find(".hidden-windows h3").text()).toBe(
-            "Hidden windows (1)",
-        );
-        const show = view.find(".hidden-windows button");
+        expect(hiddenButton(view).text()).toBe("Hidden windows (1)");
+        expect(hiddenButton(view).attributes("aria-disabled")).toBeUndefined();
+        const [show] = await hiddenEntries(view);
         expect(show.text()).toBe("Show Identified materials");
         await show.trigger("click");
         await flushPromises();
@@ -393,7 +407,8 @@ describe("CompareView", () => {
             `auto:xy:${XRF}`,
             "auto:characterizations",
         ]);
-        expect(view.find(".hidden-windows").exists()).toBe(false);
+        expect(hiddenButton(view).text()).toBe("Hidden windows (0)");
+        expect(hiddenButton(view).attributes("aria-disabled")).toBe("true");
         expect(storedLayout()?.hidden).toEqual([]);
         expect(document.activeElement).toBe(
             windowOf(view, "auto:characterizations").find(".compare-window")
@@ -413,7 +428,7 @@ describe("CompareView", () => {
         );
         const view = await mountView();
         expect(windowIds(view)).toEqual(["auto:characterizations"]);
-        expect(view.find(".hidden-windows button").text()).toBe(
+        expect((await hiddenEntries(view))[0].text()).toBe(
             "Show XRF — energy / counts",
         );
         select(XRF_OTHER_ITEM);
@@ -433,10 +448,10 @@ describe("CompareView", () => {
         );
         const view = await mountView();
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
-        expect(view.find(".hidden-windows").exists()).toBe(false);
+        expect(hiddenButton(view).attributes("aria-disabled")).toBe("true");
     });
 
-    it("brings every hidden window back when the windows are rearranged", async () => {
+    it("keeps the hidden windows hidden when the windows are rearranged", async () => {
         select(XRF_ITEM, MATERIAL);
         const view = await mountView();
         await windowOf(view, `auto:xy:${XRF}`)
@@ -445,12 +460,26 @@ describe("CompareView", () => {
         await flushPromises();
         await view.find("button.rearrange").trigger("click");
         await flushPromises();
-        expect(windowIds(view)).toEqual([
-            `auto:xy:${XRF}`,
-            "auto:characterizations",
-        ]);
-        expect(view.find(".hidden-windows").exists()).toBe(false);
-        expect(announce).toHaveBeenLastCalledWith("Windows rearranged.");
+        expect(windowIds(view)).toEqual(["auto:characterizations"]);
+        expect(hiddenButton(view).text()).toBe("Hidden windows (1)");
+        expect(storedLayout()?.hidden).toEqual([`auto:xy:${XRF}`]);
+        expect(announce).toHaveBeenLastCalledWith(
+            "Windows rearranged. 1 window stays hidden.",
+        );
+    });
+
+    it("offers « Hidden windows » in the toolbar, disabled while no window is hidden", async () => {
+        select(XRF_ITEM);
+        const view = await mountView();
+        const button = hiddenButton(view);
+        expect(button.text()).toBe("Hidden windows (0)");
+        expect(button.attributes("aria-disabled")).toBe("true");
+        expect(button.attributes("aria-haspopup")).toBe("menu");
+        await button.trigger("click");
+        expect(view.find('.hidden-windows [role="menu"]').exists()).toBe(false);
+        expect(
+            view.find(".window-grid .toolbar .hidden-windows").exists(),
+        ).toBe(true);
     });
 
     it("keeps the rearrange button when every window is hidden", async () => {
@@ -462,9 +491,7 @@ describe("CompareView", () => {
         await flushPromises();
         expect(windowIds(view)).toEqual([]);
         expect(view.find("button.rearrange").exists()).toBe(true);
-        expect(document.activeElement).toBe(
-            view.find(".hidden-windows button").element,
-        );
+        expect(document.activeElement).toBe(hiddenButton(view).element);
     });
 
     it("drops a window whose items leave the Selection, and forgets it", async () => {
@@ -542,6 +569,7 @@ describe("CompareView", () => {
             .find('[data-action="close"]')
             .trigger("click");
         await flushPromises();
+        await hiddenEntries(view);
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
         select(XRF_OTHER_ITEM);
         await flushPromises();
@@ -566,7 +594,7 @@ describe("CompareView", () => {
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
         select(XRF_OTHER_ITEM);
         await flushPromises();
-        const show = view.find(".hidden-windows button");
+        const [show] = await hiddenEntries(view);
         expect(show.find(".badge").text()).toBe("1 spectrum added");
         await show.trigger("click");
         await flushPromises();
@@ -574,6 +602,7 @@ describe("CompareView", () => {
             .find('[data-action="close"]')
             .trigger("click");
         await flushPromises();
+        await hiddenEntries(view);
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
     });
 
@@ -592,7 +621,7 @@ describe("CompareView", () => {
             .find('[data-action="close"]')
             .trigger("click");
         await flushPromises();
-        await view.find(".hidden-windows button").trigger("click");
+        await (await hiddenEntries(view))[0].trigger("click");
         await flushPromises();
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
         expect(seriesCalls()).toBe(9);
@@ -683,7 +712,7 @@ describe("CompareView", () => {
                 .trigger("click");
             await flushPromises();
             expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
-            expect(view.find(".hidden-windows").exists()).toBe(false);
+            expect(hiddenButton(view).attributes("aria-disabled")).toBe("true");
             expect(useExplorerStore().compare.tools).toEqual([]);
             expect(storedLayout()?.tools).toBeUndefined();
             expect(storedLayout()?.boxes).not.toHaveProperty("tool:coverage:-");
@@ -705,9 +734,7 @@ describe("CompareView", () => {
                 .trigger("click");
             await flushPromises();
             expect(windowIds(view)).toEqual([]);
-            expect(document.activeElement).toBe(
-                view.find(".hidden-windows button").element,
-            );
+            expect(document.activeElement).toBe(hiddenButton(view).element);
         });
 
         it("says how many drafts the tools read while a tool is open", async () => {

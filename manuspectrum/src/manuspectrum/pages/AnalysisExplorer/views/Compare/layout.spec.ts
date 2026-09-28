@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
     LAYOUT_STORAGE_KEY,
-    clearLayout,
+    clearBoxes,
     flowLayout,
     forgetWindows,
     keepWindows,
+    nearestBox,
     parseLayout,
     readFolded,
     readHidden,
@@ -35,7 +36,7 @@ describe("Compare window layout", () => {
         expect(readLayout()).toEqual({
             "auto:micro": { x: 0, y: 0, w: 6, h: 5 },
         });
-        clearLayout();
+        clearBoxes();
         expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull();
         expect(readLayout()).toEqual({});
     });
@@ -80,8 +81,19 @@ describe("Compare window layout", () => {
         expect(readLayout()).toEqual({ "auto:micro": box, "auto:xy:-": box });
         writeHidden([]);
         expect(readLayout()).toEqual({ "auto:micro": box, "auto:xy:-": box });
-        clearLayout();
-        expect(readHidden()).toEqual([]);
+    });
+
+    it("forgets the places only: the hidden, folded and open windows stay", () => {
+        const box = { x: 0, y: 0, w: 6, h: 5 };
+        writeLayout({ "auto:micro": box });
+        writeHidden(["auto:xy:-"]);
+        writeFolded({ "auto:maps": true });
+        writeTools([{ kind: "periodic", params: {} }]);
+        clearBoxes();
+        expect(readLayout()).toEqual({});
+        expect(readHidden()).toEqual(["auto:xy:-"]);
+        expect(readFolded()).toEqual({ "auto:maps": true });
+        expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
     });
 
     it("drops what is not a window id from the hidden windows", () => {
@@ -171,11 +183,11 @@ describe("Compare window layout", () => {
         forgetWindows(["tool:periodic:-"]);
         expect(readLayout()).toEqual({ "tool:periodic:-": box });
         expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
-        clearLayout();
+        clearBoxes();
         expect(readLayout()).toEqual({});
         expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
         writeTools([]);
-        clearLayout();
+        clearBoxes();
         expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull();
     });
 
@@ -246,6 +258,31 @@ describe("Compare window layout", () => {
             a: { x: 0, y: 0, w: 1, h: 5 },
             b: { x: 0, y: 5, w: 1, h: 4 },
         });
+    });
+
+    it("finds the box nearest another: edges first, then centres, then reading order", () => {
+        const closed = { x: 0, y: 0, w: 6, h: 5 };
+        const below = { id: "below", x: 0, y: 5, w: 6, h: 5 };
+        const beside = { id: "beside", x: 6, y: 0, w: 4, h: 4 };
+        const far = { id: "far", x: 0, y: 12, w: 12, h: 6 };
+        expect(nearestBox(closed, [far, beside, below])?.id).toBe("below");
+        expect(
+            nearestBox(closed, [far, beside, { ...below, x: 0, y: 0 }])?.id,
+        ).toBe("below");
+        expect(
+            nearestBox({ x: 6, y: 0, w: 6, h: 5 }, [
+                { id: "right", x: 6, y: 5, w: 6, h: 5 },
+                { id: "left", x: 0, y: 5, w: 6, h: 5 },
+            ])?.id,
+        ).toBe("right");
+        expect(
+            nearestBox({ x: 3, y: 0, w: 6, h: 5 }, [
+                { id: "second", x: 6, y: 5, w: 6, h: 5 },
+                { id: "first", x: 0, y: 5, w: 6, h: 5 },
+            ])?.id,
+        ).toBe("first");
+        expect(nearestBox(closed, [far])?.id).toBe("far");
+        expect(nearestBox(closed, [])).toBeNull();
     });
 
     it("names the size a box has, if it is one of S, M, L", () => {

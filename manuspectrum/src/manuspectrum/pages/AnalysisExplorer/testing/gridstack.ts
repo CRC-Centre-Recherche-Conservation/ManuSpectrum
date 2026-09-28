@@ -150,6 +150,28 @@ export class FakeGridStack {
         );
     }
 
+    /**
+     * gridstack.js:1077 and the engine's `set mode` (gridstack-engine.js:405):
+     * a mode other than `float` packs the items at once (`_packNodes`,
+     * gridstack-engine.js:440); `change` fires only when an item moved
+     * (`_triggerChangeEvent`, gridstack.js:1744, reads the dirty nodes).
+     */
+    mode = vi.fn((mode: GridStackOptions["mode"]): FakeGridStack => {
+        if (this.options.mode === mode) return this;
+        this.options.mode = mode;
+        if (mode === "float") return this;
+        const before = this.nodes.map((node) => node.y);
+        this.pack();
+        if (this.nodes.some((node, index) => node.y !== before[index])) {
+            this.trigger("change");
+        }
+        return this;
+    });
+
+    getMode(): GridStackOptions["mode"] {
+        return this.options.mode ?? "top";
+    }
+
     getColumn(): number {
         return this.columns;
     }

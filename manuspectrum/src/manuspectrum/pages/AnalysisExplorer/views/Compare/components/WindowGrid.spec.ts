@@ -399,33 +399,180 @@ describe("WindowGrid", () => {
         );
     });
 
-    it("lets its parent bring hidden windows back before it lays every window out", async () => {
-        const grid: VueWrapper = mount(WindowGrid, {
-            props: {
-                windows: [MICRO],
-                retained: [XRF.id],
-                onRearrange: () => grid.setProps({ windows: [XRF, MICRO] }),
-            },
-            attachTo: document.body,
-            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
-        });
-        wrapper = grid;
-        await wrapper.find("button.rearrange").trigger("click");
+    it("rearranges the windows shown only: hidden windows stay hidden, folds and tools stay saved", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: {
+                    [MICRO.id]: { x: 6, y: 3, w: 4, h: 4 },
+                    [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                    [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+                },
+                hidden: [XRF.id, MATERIALS.id],
+                folded: { [MICRO.id]: false },
+                tools: [{ kind: "periodic", params: {} }],
+            }),
+        );
+        const view = mountGrid([MICRO], [XRF.id, MATERIALS.id]);
+        await view.find("button.rearrange").trigger("click");
         await flushPromises();
-        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 0, y: 0, w: 6, h: 5 });
+        expect(view.emitted("rearrange")).toBeUndefined();
         expect(node(MICRO.id)).toEqual({
             id: MICRO.id,
-            x: 6,
+            x: 0,
             y: 0,
             w: 4,
             h: 4,
         });
-        expect(announce).toHaveBeenCalledTimes(1);
-        expect(announce).toHaveBeenLastCalledWith("Windows rearranged.");
-        expect(stored()).toEqual({
-            [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
-            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+        expect(
+            JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
+        ).toEqual({
+            version: 2,
+            boxes: { [MICRO.id]: { x: 0, y: 0, w: 4, h: 4 } },
+            hidden: [XRF.id, MATERIALS.id],
+            folded: { [MICRO.id]: false },
+            tools: [{ kind: "periodic", params: {} }],
         });
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce).toHaveBeenLastCalledWith(
+            "Windows rearranged. 2 windows stay hidden.",
+        );
+    });
+
+    it("says one window stays hidden when it rearranges", async () => {
+        const view = mountGrid([MICRO], [XRF.id]);
+        await view.find("button.rearrange").trigger("click");
+        await flushPromises();
+        expect(announce).toHaveBeenLastCalledWith(
+            "Windows rearranged. 1 window stays hidden.",
+        );
+    });
+
+    it("closes the hole a window leaves, moving the windows under it up without reordering the others", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+                [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+            }),
+        );
+        const view = mountGrid([XRF, MICRO, MATERIALS]);
+        control(XRF.id, "close").click();
+        await view.setProps({ windows: [MICRO, MATERIALS] });
+        await nextTick();
+        expect(node(MATERIALS.id)).toMatchObject({ x: 0, y: 0 });
+        expect(node(MICRO.id)).toMatchObject({ x: 6, y: 0 });
+        expect(stored()).toEqual({
+            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+            [MATERIALS.id]: { x: 0, y: 0, w: 6, h: 5 },
+        });
+    });
+
+    it("gives the focus to the window nearest the one closed, without scrolling to it", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+                [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+            }),
+        );
+        const scrollIntoView = vi.fn();
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 100, 600, 300));
+        HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        try {
+            const view = mountGrid([XRF, MICRO, MATERIALS]);
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO, MATERIALS] });
+            await nextTick();
+            const target = item(MATERIALS.id).querySelector(".compare-window");
+            expect(document.activeElement).toBe(target);
+            expect(focus.mock.contexts.at(-1)).toBe(target);
+            expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+            expect(scrollIntoView).not.toHaveBeenCalled();
+        } finally {
+            rect.mockRestore();
+            focus.mockRestore();
+            delete (HTMLElement.prototype as Partial<HTMLElement>)
+                .scrollIntoView;
+        }
+    });
+
+    it("keeps the page as tall after a close until the reader scrolls up past the room left", async () => {
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 100, 600, 300));
+        const height = vi
+            .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+            .mockReturnValue(1200);
+        try {
+            const view = mountGrid();
+            const root = view.find<HTMLElement>(".window-grid").element;
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO] });
+            await nextTick();
+            expect(root.style.minBlockSize).toBe("1200px");
+            window.dispatchEvent(new Event("scroll"));
+            await nextTick();
+            expect(root.style.minBlockSize).toBe("1200px");
+            rect.mockReturnValue(new DOMRect(0, 500, 600, 300));
+            window.dispatchEvent(new Event("scroll"));
+            await nextTick();
+            expect(root.style.minBlockSize).toBe("");
+        } finally {
+            rect.mockRestore();
+            height.mockRestore();
+        }
+    });
+
+    it("lets the page shorten at once when the windows left still reach the bottom of the screen", async () => {
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 100, 600, 900));
+        const height = vi
+            .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+            .mockReturnValue(1200);
+        try {
+            const view = mountGrid();
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO] });
+            await flushPromises();
+            expect(
+                view.find<HTMLElement>(".window-grid").element.style
+                    .minBlockSize,
+            ).toBe("");
+        } finally {
+            rect.mockRestore();
+            height.mockRestore();
+        }
+    });
+
+    it("scrolls the window it focuses into view only when it is off the screen", async () => {
+        const scrollIntoView = vi.fn();
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 900, 600, 300));
+        HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        try {
+            const view = mountGrid();
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO] });
+            await nextTick();
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+        } finally {
+            rect.mockRestore();
+            delete (HTMLElement.prototype as Partial<HTMLElement>)
+                .scrollIntoView;
+        }
     });
 
     it("opens a folded window to its header only, and unfolds it on demand", async () => {

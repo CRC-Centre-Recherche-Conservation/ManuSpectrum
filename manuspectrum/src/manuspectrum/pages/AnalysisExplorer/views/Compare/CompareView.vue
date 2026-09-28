@@ -15,6 +15,7 @@ import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftB
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
+import HiddenWindowsMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HiddenWindowsMenu.vue";
 import ToolMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue";
 import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
@@ -50,6 +51,7 @@ import {
 
 import type {
     CompareWindowSpec,
+    HiddenWindowEntry,
     WindowSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 import type {
@@ -78,7 +80,8 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * The Compare view: windows arranged from the Selection (`autoWindows`),
  * shown once every Selection key has been read. « Close » on a window
  * arranged from the Selection hides it and leaves the Selection as it is;
- * a hidden window comes back from « Hidden windows » or with « Rearrange ».
+ * a hidden window comes back from « Hidden windows », a menu of the
+ * toolbar, never with « Rearrange ».
  * The hidden windows are kept next to the layout (`ms-explorer-layout-v1`);
  * a window whose items all leave the Selection is gone, and forgotten there.
  * A hidden XY window that gains spectra stays hidden: they are announced,
@@ -178,9 +181,6 @@ const offered = computed(() =>
         ? offeredTools(synthesis.data.value)
         : null,
 );
-const hiddenSpecs = computed(() =>
-    specs.value.filter((spec) => hidden.value.includes(spec.id)),
-);
 /** The spectra each hidden XY window holds that it did not hold when hidden. */
 const newSpectra = computed(() =>
     xyCurvesGained(
@@ -188,12 +188,14 @@ const newSpectra = computed(() =>
         windows.value.filter((window) => hiddenFrom.value.has(window.id)),
     ),
 );
-const hiddenTitle = computed(() =>
-    interpolate(
-        $gettext("Hidden windows (%{n})"),
-        { n: hiddenSpecs.value.length },
-        true,
-    ),
+const hiddenEntries = computed<HiddenWindowEntry[]>(() =>
+    specs.value
+        .filter((spec) => hidden.value.includes(spec.id))
+        .map((spec) => ({
+            id: spec.id,
+            title: spec.title,
+            added: newSpectra.value.get(spec.id) ?? 0,
+        })),
 );
 
 watch(
@@ -294,18 +296,6 @@ function specTitle(id: string): string {
     return specs.value.find((spec) => spec.id === id)?.title ?? "";
 }
 
-function showLabel(title: string): string {
-    return interpolate($gettext("Show %{title}"), { title }, true);
-}
-
-function newSpectraLabel(count: number): string {
-    return interpolate(
-        $ngettext("%{n} spectrum added", "%{n} spectra added", count),
-        { n: count },
-        true,
-    );
-}
-
 /** Keeps the state of each window still hidden, and takes the current one of a window just hidden. */
 function rememberHidden(): void {
     hiddenFrom.value = new Map(
@@ -338,7 +328,7 @@ async function focusWithoutWindows(): Promise<void> {
     if (gridSpecs.value.length > 0) return;
     await nextTick();
     (
-        root.value?.querySelector<HTMLElement>(".hidden-windows button") ??
+        root.value?.querySelector<HTMLElement>(".hidden-windows-button") ??
         heading.value
     )?.focus();
 }
@@ -368,7 +358,7 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
     await focusWithoutWindows();
 }
 
-async function showWindow(id: string): Promise<void> {
+async function showWindow({ id }: { id: string }): Promise<void> {
     setHidden(hidden.value.filter((entry) => entry !== id));
     await nextTick();
     windowElement(id)?.focus();
@@ -381,10 +371,6 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
     if (!known.includes(id)) return;
     await nextTick();
     windowElement(id)?.focus();
-}
-
-function showAll(): void {
-    if (hidden.value.length > 0) setHidden([]);
 }
 </script>
 
@@ -437,44 +423,17 @@ function showAll(): void {
                 scope="tools"
                 :count="draftCount"
             />
-            <section
-                v-if="hiddenSpecs.length > 0"
-                class="hidden-windows"
-                aria-labelledby="explorer-compare-hidden"
-            >
-                <h3 id="explorer-compare-hidden">
-                    <span>{{ hiddenTitle }}</span>
-                </h3>
-                <ul>
-                    <li
-                        v-for="spec in hiddenSpecs"
-                        :key="spec.id"
-                    >
-                        <button
-                            type="button"
-                            :data-window-id="spec.id"
-                            @click="showWindow(spec.id)"
-                        >
-                            <span>{{ showLabel(spec.title) }}</span>
-                            <span
-                                v-if="newSpectra.has(spec.id)"
-                                class="badge"
-                                >{{
-                                    newSpectraLabel(newSpectra.get(spec.id)!)
-                                }}</span
-                            >
-                        </button>
-                    </li>
-                </ul>
-            </section>
             <WindowGrid
                 v-if="specs.length > 0 || toolSpecs.length > 0"
                 :windows="gridSpecs"
                 :retained="hidden"
                 @close="closeWindow"
-                @rearrange="showAll"
             >
                 <template #toolbar>
+                    <HiddenWindowsMenu
+                        :windows="hiddenEntries"
+                        @show="showWindow"
+                    />
                     <ToolMenu
                         :offered="offered"
                         :status="synthesis.status.value"
@@ -515,53 +474,6 @@ function showAll(): void {
     align-items: center;
     gap: 0.5rem;
     color: var(--ink-muted);
-}
-
-.compare-view .hidden-windows {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.compare-view .hidden-windows h3 {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.compare-view .hidden-windows ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.compare-view .hidden-windows button {
-    min-block-size: var(--explorer-target, 2.75rem);
-    padding-inline: 0.75rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.25rem;
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    cursor: pointer;
-}
-
-.compare-view .hidden-windows .badge {
-    margin-inline-start: 0.5rem;
-    padding-inline: 0.375rem;
-    border-radius: 999rem;
-    background: var(--ink);
-    color: var(--surface);
-    font-size: 0.75rem;
-}
-
-.compare-view .hidden-windows button:focus-visible {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
 }
 
 .compare-view .visually-hidden {
