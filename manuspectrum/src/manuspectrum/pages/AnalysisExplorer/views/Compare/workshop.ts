@@ -34,7 +34,6 @@ const PANEL_GAP_X = 44;
 const PANEL_GAP_Y = 30;
 const LINE_WIDTH = 1.5;
 const CONTEXT_WIDTH = 1.25;
-const CONTEXT_OPACITY = 0.85;
 const EMPHASIS_WIDTH = 2.5;
 /** The room between two offset curves, as a share of the widest curve's span. */
 const OFFSET_GAP = 0.1;
@@ -173,7 +172,7 @@ export function curveState(
 
 /**
  * A1…A8 in their series colour at 1.5 px; later slots in grey context at
- * 1.25 px and 0.85 opacity, drawn in ink when emphasised; every
+ * 1.25 px, drawn in ink when emphasised; every
  * emphasised curve at 2.5 px. A hidden curve keeps its line, at opacity 0,
  * out of the hover.
  */
@@ -201,7 +200,7 @@ export function curvePaint(
         : {
               colour: palette.context,
               width: CONTEXT_WIDTH,
-              opacity: CONTEXT_OPACITY,
+              opacity: 1,
               hover: true,
           };
     return state === "hidden" ? { ...plain, opacity: 0, hover: false } : plain;

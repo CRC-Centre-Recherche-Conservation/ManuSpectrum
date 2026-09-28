@@ -88,8 +88,9 @@ const SERIES_SLOTS = 8;
  *
  * Each mark stands for its record (`an:`, `ch:`): its name in the list is
  * the record's toggle, and the mark is shown by how the record stands to
- * the linked selection (an unlinked zone and marker fade, a linked frame
- * is drawn solid and heavier) and to the node a mouse previews (dotted).
+ * the linked selection (an unlinked zone fades, an unlinked marker's fill
+ * fades under a label turned to ink, a linked frame is drawn solid and
+ * heavier) and to the node a mouse previews (dotted).
  * A selection change restyles the layers drawn (`setStyle`, attributes on
  * the markers) and never draws them again. The whole page is fitted to the
  * stage again when the window changes size, until the reader moves the view
@@ -737,7 +738,8 @@ function wholePage(): void {
 .folio-tool .marks .slot {
     padding-inline: 0.375rem;
     border-radius: 0.25rem;
-    color: var(--surface);
+    background: var(--slot-fill);
+    color: var(--slot-on);
     font: 600 0.75rem var(--font-mono);
 }
 
@@ -763,7 +765,8 @@ function wholePage(): void {
     padding-inline: 0.25rem;
     border: 0.125rem solid var(--surface);
     border-radius: 999rem;
-    color: var(--surface);
+    background: var(--slot-fill);
+    color: var(--slot-on);
     font: 600 0.625rem var(--font-mono);
     white-space: nowrap;
 }
@@ -776,8 +779,13 @@ function wholePage(): void {
     stroke: var(--ink);
 }
 
-.folio-tool :deep(.folio-tool-marker-host[data-rel="none"]) {
-    opacity: var(--linked-fade, 0.35);
+.folio-tool :deep(.folio-tool-marker-host[data-rel="none"] .folio-tool-marker) {
+    background: color-mix(
+        in srgb,
+        var(--slot-fill) calc(var(--linked-fade, 0.35) * 100%),
+        var(--surface)
+    );
+    color: var(--ink);
 }
 
 .folio-tool :deep(.folio-tool-marker-host[data-rel="self"] .folio-tool-marker) {
@@ -879,47 +887,56 @@ function wholePage(): void {
 
 .folio-tool .slot-1,
 .folio-tool :deep(.folio-tool-marker.slot-1) {
-    background: var(--series-1);
+    --slot-fill: var(--series-1);
+    --slot-on: var(--series-1-on);
 }
 
 .folio-tool .slot-2,
 .folio-tool :deep(.folio-tool-marker.slot-2) {
-    background: var(--series-2);
+    --slot-fill: var(--series-2);
+    --slot-on: var(--series-2-on);
 }
 
 .folio-tool .slot-3,
 .folio-tool :deep(.folio-tool-marker.slot-3) {
-    background: var(--series-3);
+    --slot-fill: var(--series-3);
+    --slot-on: var(--series-3-on);
 }
 
 .folio-tool .slot-4,
 .folio-tool :deep(.folio-tool-marker.slot-4) {
-    background: var(--series-4);
+    --slot-fill: var(--series-4);
+    --slot-on: var(--series-4-on);
 }
 
 .folio-tool .slot-5,
 .folio-tool :deep(.folio-tool-marker.slot-5) {
-    background: var(--series-5);
+    --slot-fill: var(--series-5);
+    --slot-on: var(--series-5-on);
 }
 
 .folio-tool .slot-6,
 .folio-tool :deep(.folio-tool-marker.slot-6) {
-    background: var(--series-6);
+    --slot-fill: var(--series-6);
+    --slot-on: var(--series-6-on);
 }
 
 .folio-tool .slot-7,
 .folio-tool :deep(.folio-tool-marker.slot-7) {
-    background: var(--series-7);
+    --slot-fill: var(--series-7);
+    --slot-on: var(--series-7-on);
 }
 
 .folio-tool .slot-8,
 .folio-tool :deep(.folio-tool-marker.slot-8) {
-    background: var(--series-8);
+    --slot-fill: var(--series-8);
+    --slot-on: var(--series-8-on);
 }
 
 .folio-tool .slot-ink,
 .folio-tool :deep(.folio-tool-marker.slot-ink) {
-    background: var(--ink);
+    --slot-fill: var(--ink);
+    --slot-on: var(--surface);
 }
 
 .folio-tool :deep(.folio-tool-frame.slot-1) {

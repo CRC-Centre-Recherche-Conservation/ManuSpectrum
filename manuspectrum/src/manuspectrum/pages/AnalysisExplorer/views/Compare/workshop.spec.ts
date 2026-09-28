@@ -128,7 +128,7 @@ describe("workshop", () => {
         expect(curvePaint(palette, 9, "plain")).toEqual({
             colour: "#999",
             width: 1.25,
-            opacity: 0.85,
+            opacity: 1,
             hover: true,
         });
         expect(curvePaint(palette, 0, "emphasised")).toMatchObject({

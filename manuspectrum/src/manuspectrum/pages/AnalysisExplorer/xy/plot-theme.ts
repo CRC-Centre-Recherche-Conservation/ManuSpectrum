@@ -40,7 +40,7 @@ export function readPlotTheme(
         series: Array.from({ length: SERIES }, (_, index) =>
             token(`--series-${index + 1}`, "#1a1a2e"),
         ),
-        context: token("--series-context", "#9a99a8"),
+        context: token("--series-context", "#8a8999"),
         ink: token("--ink", "#1a1a2e"),
         inkMuted: token("--ink-muted", "#4a4a5e"),
         border: token("--border", "rgba(26,26,46,0.07)"),

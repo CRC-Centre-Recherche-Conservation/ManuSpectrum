@@ -81,7 +81,9 @@
     // are the compared items A1…A8, told apart all pairs at once on --bg,
     // colour vision deficiencies included, each ≥ 3:1 on --bg; text drawn on a
     // series colour takes its --series-N-on. Slots past A8 are grey context
-    // curves (--series-context). Technique colours are drawn on images with a
+    // curves (--series-context: 3.26:1 on --bg, 3.43:1 on --surface; a
+    // neutral grey, lighter than A1, A3, A5 and A7 and about as light as the
+    // others). Technique colours are drawn on images with a
     // white outline and carry their code in --stage (contrast ≥ 6:1 for each hue).
     --series-1: #1d4ed8;
     --series-2: #7c9217;
@@ -99,7 +101,7 @@
     --series-6-on: var(--ink);
     --series-7-on: #ffffff;
     --series-8-on: var(--ink);
-    --series-context: #9a99a8;
+    --series-context: #8a8999;
     --tech-1: #8aa9ff;
     --tech-2: #f0a35c;
     --tech-3: #b69cff;
