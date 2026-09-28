@@ -20,6 +20,7 @@ import {
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
 import type { Pinia } from "pinia";
+import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 vi.mock("gridstack", async () =>
     (
@@ -45,12 +46,13 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 const KEY = "ch:00000000-0000-4000-8000-000000000001:-";
-const EMPTY_SYNTHESIS = {
+const EMPTY_SYNTHESIS: SynthesisResponse = {
     coverage: [],
     canvases: [],
     techniques: [],
     pairs: [],
     elements: [],
+    materials: [],
     unpublishedCount: 0,
 };
 let pinia: Pinia;
