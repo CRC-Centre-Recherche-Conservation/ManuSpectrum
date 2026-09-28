@@ -18,6 +18,7 @@ import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/U
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import {
     shapeBounds,
     shapeCentre,
@@ -29,12 +30,27 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import {
+    analysisNode,
+    materialNode,
+    slotNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { folioMarks } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
 import type { Feature } from "geojson";
 import type { SynthesisCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedMark } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 import type { FolioMark } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
+
+/** The Leaflet layers drawn for one mark, restyled in place. */
+interface DrawnMark {
+    marker: L.Marker | null;
+    halo: L.GeoJSON;
+    frame: L.GeoJSON;
+}
 
 const MAX_ZOOM = 8;
 const INITIAL_ZOOM = 2;
@@ -44,7 +60,17 @@ const MARKER_CHAR_WIDTH = 6.25;
 /** The marker's inline padding and border, in px. */
 const MARKER_INSET = 12;
 const FRAME_WEIGHT = 2;
+const LINKED_FRAME_WEIGHT = 3;
+const SELF_FRAME_WEIGHT = 4;
 const HALO_WEIGHT = 5;
+const HALO_OPACITY = 0.9;
+/** The opacity of what the selection does not link (`--linked-fade`). */
+const FADED_OPACITY = 0.35;
+const FRAME_DASH = "4 4";
+const PREVIEW_DASH = "1 3";
+const RELATED_PADDING = 0.25;
+/** The other folios « Show » buttons are offered for. */
+const SHOWN_ELSEWHERE = 3;
 const NO_IMAGE_PADDING = 0.5;
 /** Slots drawn in a series colour (A1…A8); the others in ink. */
 const SERIES_SLOTS = 8;
@@ -59,6 +85,15 @@ const SERIES_SLOTS = 8;
  * payload (`useDocument`, the tab memo the document screen shares). The
  * markers are labels, not controls: the list is what assistive
  * technologies read.
+ *
+ * Each mark stands for its record (`an:`, `ch:`): its name in the list is
+ * the record's toggle, and the mark is shown by how the record stands to
+ * the linked selection (an unlinked zone and marker fade, a linked frame
+ * is drawn solid and heavier) and to the node a mouse previews (dotted).
+ * A selection change restyles the layers drawn (`setStyle`, attributes on
+ * the markers) and never draws them again. « Fit to related » frames the
+ * linked marks of the page; when linked items of the Selection are placed
+ * on other folios they are named, each with a button showing it.
  */
 const props = defineProps<{
     canvases: readonly SynthesisCanvas[];
@@ -68,8 +103,10 @@ const props = defineProps<{
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, ref(0), false);
 
-const { $gettext } = useGettext();
+const gettext = useGettext();
+const { $gettext, interpolate } = gettext;
 const pickerId = useId();
+const linkedMarks = useLinkedMarks();
 const host = useTemplateRef<HTMLDivElement>("host");
 
 const chosen = ref<string | null>(props.canvases[0]?.canvas ?? null);
@@ -80,6 +117,7 @@ let map: L.Map | null = null;
 let page: PageLayer | null = null;
 let drawn: L.LayerGroup | null = null;
 let fitted: string | null = null;
+const drawnMarks = new Map<NodeId, DrawnMark>();
 
 const row = computed(
     () =>
@@ -99,12 +137,51 @@ const canvas = computed(
             (entry) => entry.id === row.value?.canvas,
         ) ?? null,
 );
-const marks = computed<FolioMark[]>(() =>
+const folioMarksShown = computed<FolioMark[]>(() =>
     payload.value && row.value
         ? folioMarks(payload.value, row.value.canvas, props.slots)
         : [],
 );
 const hasImage = computed(() => Boolean(canvas.value?.image.service));
+/** The marks of the page the selection links. */
+const relatedHere = computed(() =>
+    folioMarksShown.value.filter((mark) =>
+        isLinked(linkedMarks.rel(nodeOf(mark))),
+    ),
+);
+/** The other folios holding a Selection item the selection links. */
+const elsewhere = computed(() =>
+    props.canvases.filter(
+        (entry) =>
+            entry.canvas !== row.value?.canvas &&
+            isLinked(
+                linkedMarks.rel(
+                    [
+                        ...entry.analyses.map(analysisNode),
+                        ...entry.materials.map(materialNode),
+                    ].filter(inSelection),
+                ),
+            ),
+    ),
+);
+const elsewhereText = computed(() => {
+    if (elsewhere.value.length === 0) return "";
+    const selected = linkedMarks.linked?.selection.value ?? [];
+    const name =
+        (selected.length === 1
+            ? linkedMarks.linked?.labelOf(selected[0])?.value
+            : null) ?? $gettext("The selection");
+    const folios = new Intl.ListFormat(gettext.current, {
+        type: "conjunction",
+    }).format(elsewhere.value.map((entry) => entry.label));
+    return interpolate(
+        relatedHere.value.length > 0
+            ? $gettext("%{name} also appears on %{folios}.")
+            : $gettext("%{name} appears on %{folios}."),
+        { name, folios },
+        true,
+    );
+});
 
 watch(
     () => props.canvases.map((entry) => entry.canvas),
@@ -115,7 +192,14 @@ watch(
     },
 );
 watch(() => canvas.value?.id, drawPage);
-watch(marks, drawMarks);
+watch(folioMarksShown, drawMarks);
+watch(
+    () => [
+        linkedMarks.linked?.levels.value,
+        linkedMarks.linked?.previewLevels.value,
+    ],
+    restyle,
+);
 watch(resizeTick, () => map?.invalidateSize({ animate: false }));
 watch(
     () => payload.value !== null,
@@ -147,6 +231,20 @@ onBeforeUnmount(() => {
     map?.remove();
     map = null;
 });
+
+function nodeOf(mark: FolioMark): NodeId {
+    return mark.kind === "analysis"
+        ? analysisNode(mark.id)
+        : materialNode(mark.id);
+}
+
+function isLinked(mark: LinkedMark | undefined): boolean {
+    return mark !== undefined && mark !== "none";
+}
+
+function inSelection(id: NodeId): boolean {
+    return props.slots.has(id.slice(id.indexOf(":") + 1));
+}
 
 function slotClass(mark: FolioMark): string {
     const first = mark.slots[0];
@@ -202,6 +300,8 @@ function frameLayer(
         style: () => ({
             className,
             weight,
+            opacity: className === "folio-tool-halo" ? HALO_OPACITY : 1,
+            dashArray: className === "folio-tool-halo" ? "" : FRAME_DASH,
             fill: false,
             interactive: false,
         }),
@@ -212,16 +312,18 @@ function frameLayer(
 function drawMarks(): void {
     if (!map) return;
     drawn?.remove();
+    drawnMarks.clear();
     drawn = L.layerGroup().addTo(map);
     const markers: L.Marker[] = [];
-    const framed: [FolioMark, Feature[]][] = [];
-    for (const mark of marks.value) {
+    const framed: [FolioMark, Feature[], L.Marker | null][] = [];
+    for (const mark of folioMarksShown.value) {
         const anchor =
             mark.shapes.find((shape) => shapeBounds(shape) !== null) ??
             mark.shapes[0];
         const centre = shapeCentre(anchor);
+        let marker: L.Marker | null = null;
         if (centre) {
-            const marker = L.marker(centre, {
+            marker = L.marker(centre, {
                 icon: markerIcon(mark),
                 interactive: false,
                 keyboard: false,
@@ -236,20 +338,22 @@ function drawMarks(): void {
                     : shapeFeature(shape, { id: mark.id });
             return feature ? [feature] : [];
         });
-        framed.push([mark, frames]);
+        framed.push([mark, frames, marker]);
     }
-    for (const [, frames] of framed) {
-        drawn.addLayer(frameLayer(frames, "folio-tool-halo", HALO_WEIGHT));
-    }
-    for (const [mark, frames] of framed) {
-        drawn.addLayer(
-            frameLayer(
-                frames,
-                `folio-tool-frame ${slotClass(mark)}`,
-                FRAME_WEIGHT,
-            ),
+    const halos = framed.map(([, frames]) =>
+        frameLayer(frames, "folio-tool-halo", HALO_WEIGHT),
+    );
+    for (const halo of halos) drawn.addLayer(halo);
+    framed.forEach(([mark, frames, marker], index) => {
+        const frame = frameLayer(
+            frames,
+            `folio-tool-frame ${slotClass(mark)}`,
+            FRAME_WEIGHT,
         );
-    }
+        drawn!.addLayer(frame);
+        drawnMarks.set(nodeOf(mark), { marker, halo: halos[index], frame });
+    });
+    restyle();
     const key = canvas.value?.id ?? null;
     if (!hasImage.value && markers.length > 0 && fitted !== key) {
         fitted = key;
@@ -258,6 +362,88 @@ function drawMarks(): void {
             { animate: false },
         );
     }
+}
+
+/** The frame of a mark at `level`, dotted while `preview` links it. */
+function frameStyle(
+    level: LinkedMark | undefined,
+    preview: RelationLevel | undefined,
+): L.PathOptions {
+    const style: L.PathOptions = {
+        weight: FRAME_WEIGHT,
+        opacity: 1,
+        dashArray: FRAME_DASH,
+    };
+    if (level === "self") {
+        Object.assign(style, { weight: SELF_FRAME_WEIGHT, dashArray: "" });
+    } else if (level === "direct") {
+        Object.assign(style, { weight: LINKED_FRAME_WEIGHT, dashArray: "" });
+    } else if (level === "evidence") {
+        style.weight = LINKED_FRAME_WEIGHT;
+    } else if (level === "none") {
+        style.opacity = FADED_OPACITY;
+    }
+    if (preview) {
+        Object.assign(style, {
+            weight: Math.max(style.weight ?? FRAME_WEIGHT, LINKED_FRAME_WEIGHT),
+            dashArray: PREVIEW_DASH,
+        });
+    }
+    return style;
+}
+
+/** Shows each mark drawn by how its record stands to the selection and the preview, on the layers already drawn. */
+function restyle(): void {
+    for (const [node, layers] of drawnMarks) {
+        const level = linkedMarks.rel(node);
+        const preview = linkedMarks.previewRel(node);
+        layers.frame.setStyle(frameStyle(level, preview));
+        layers.halo.setStyle({
+            opacity:
+                level === "none" ? FADED_OPACITY * HALO_OPACITY : HALO_OPACITY,
+        });
+        const host = layers.marker?.getElement();
+        if (!host) continue;
+        setData(host, "rel", level);
+        setData(host, "preview", preview);
+    }
+}
+
+function setData(
+    element: HTMLElement,
+    name: string,
+    value: string | undefined,
+): void {
+    if (value === undefined) delete element.dataset[name];
+    else element.dataset[name] = value;
+}
+
+/** Frames the marks of the page the selection links. */
+function fitRelated(): void {
+    if (!map) return;
+    const bounds = L.latLngBounds([]);
+    for (const mark of relatedHere.value) {
+        const layers = drawnMarks.get(nodeOf(mark));
+        if (!layers) continue;
+        if (layers.marker) bounds.extend(layers.marker.getLatLng());
+        const frame = layers.frame.getBounds();
+        if (frame.isValid()) bounds.extend(frame);
+    }
+    if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(RELATED_PADDING), { animate: false });
+    }
+}
+
+function showFolio(canvasId: string): void {
+    chosen.value = canvasId;
+}
+
+function onEnter(mark: FolioMark, event: PointerEvent): void {
+    linkedMarks.enter(nodeOf(mark), event);
+}
+
+function showLabel(label: string): string {
+    return interpolate($gettext("Show %{folio}"), { folio: label }, true);
 }
 
 function wholePage(): void {
@@ -346,18 +532,51 @@ function wholePage(): void {
             </p>
         </div>
         <template v-if="payload">
+            <div
+                v-if="linkedMarks.active.value"
+                class="related"
+            >
+                <button
+                    v-if="relatedHere.length > 0"
+                    type="button"
+                    class="fit"
+                    @click="fitRelated"
+                >
+                    <span>{{ $gettext("Fit to related") }}</span>
+                </button>
+                <p
+                    v-if="elsewhere.length > 0"
+                    class="elsewhere"
+                >
+                    <span>{{ elsewhereText }}</span>
+                    <button
+                        v-for="entry in elsewhere.slice(0, SHOWN_ELSEWHERE)"
+                        :key="entry.canvas"
+                        type="button"
+                        class="show"
+                        @click="showFolio(entry.canvas)"
+                    >
+                        <span>{{ showLabel(entry.label) }}</span>
+                    </button>
+                </p>
+            </div>
             <ul
-                v-if="marks.length > 0"
+                v-if="folioMarksShown.length > 0"
                 class="marks"
                 :aria-label="$gettext('Selection items on this folio')"
             >
                 <li
-                    v-for="mark in marks"
+                    v-for="mark in folioMarksShown"
                     :key="mark.id"
+                    :data-rel="linkedMarks.rel(nodeOf(mark))"
+                    :data-preview="linkedMarks.previewRel(nodeOf(mark))"
+                    @pointerenter="onEnter(mark, $event)"
+                    @pointerleave="linkedMarks.leave($event)"
                 >
                     <span
                         class="slot"
                         :class="slotClass(mark)"
+                        :data-rel="linkedMarks.rel(mark.slots.map(slotNode))"
                         >{{ slotsText(mark) }}</span
                     >
                     <TechniqueCode
@@ -366,11 +585,15 @@ function wholePage(): void {
                         :colour="mark.technique.colour"
                         size="small"
                     />
-                    <span
+                    <button
+                        type="button"
                         class="name"
                         :lang="mark.name.lang"
-                        >{{ mark.name.value }}</span
+                        :aria-pressed="linkedMarks.pressed(nodeOf(mark))"
+                        @click="linkedMarks.toggle(nodeOf(mark))"
                     >
+                        <span>{{ mark.name.value }}</span>
+                    </button>
                     <span
                         v-if="mark.kind === 'characterization'"
                         class="kind"
@@ -524,13 +747,111 @@ function wholePage(): void {
 
 .folio-tool :deep(.folio-tool-halo) {
     stroke: var(--surface);
-    stroke-opacity: 0.9;
 }
 
 .folio-tool :deep(.folio-tool-frame) {
     stroke: var(--ink);
-    stroke-opacity: 1;
-    stroke-dasharray: 4 4;
+}
+
+.folio-tool :deep(.folio-tool-marker-host[data-rel="none"]) {
+    opacity: var(--linked-fade, 0.35);
+}
+
+.folio-tool :deep(.folio-tool-marker-host[data-rel="self"] .folio-tool-marker) {
+    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+    outline-offset: 0.0625rem;
+}
+
+.folio-tool
+    :deep(.folio-tool-marker-host[data-rel="direct"] .folio-tool-marker) {
+    box-shadow: 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
+}
+
+.folio-tool
+    :deep(.folio-tool-marker-host[data-rel="evidence"] .folio-tool-marker) {
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline-offset: 0.0625rem;
+}
+
+.folio-tool :deep(.folio-tool-marker-host[data-preview] .folio-tool-marker) {
+    outline: 0.125rem dotted var(--linked-mark, var(--blue-text));
+    outline-offset: 0.125rem;
+}
+
+.folio-tool .related {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+}
+
+.folio-tool .related .elsewhere {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.folio-tool .related button {
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.5rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.folio-tool .marks .name {
+    min-block-size: 1.5rem;
+    padding: 0 0.25rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.25rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.folio-tool .marks .name:hover {
+    border-color: var(--border-hover);
+}
+
+.folio-tool .marks .name[aria-pressed="true"] {
+    border-color: var(--linked-mark, var(--blue-text));
+    font-weight: 600;
+}
+
+.folio-tool .marks li {
+    padding-inline-start: 0.375rem;
+    border-inline-start: var(--linked-bar, 0.1875rem) solid transparent;
+}
+
+.folio-tool .marks li[data-rel="self"] {
+    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+}
+
+.folio-tool .marks li[data-rel="self"],
+.folio-tool .marks li[data-rel="direct"],
+.folio-tool .marks li[data-rel="evidence"] {
+    border-inline-start-color: var(--linked-mark, var(--blue-text));
+    background: var(--linked-tint, var(--bg-alt));
+}
+
+.folio-tool .marks li[data-rel="evidence"] {
+    border-inline-start-style: dashed;
+}
+
+.folio-tool .marks li[data-rel="none"] {
+    color: var(--ink-muted);
+}
+
+.folio-tool .marks li[data-preview] {
+    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
 }
 
 .folio-tool .slot-1,

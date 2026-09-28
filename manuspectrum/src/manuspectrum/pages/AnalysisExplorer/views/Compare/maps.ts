@@ -19,10 +19,15 @@ const KIND_ORDER: Record<LayerKind, number> = {
     other: 2,
 };
 
+/** The id of the shared layer of an element, by its symbol. */
+export function elementLayerId(symbol: string): string {
+    return `element:${symbol}`;
+}
+
 /** What makes two layers of different maps the same: the element symbol, the band's value and unit, else the label. */
 export function layerIdOf(layer: FileLayer): string {
     if (layer.kind === "element" && layer.element) {
-        return `element:${layer.element}`;
+        return elementLayerId(layer.element);
     }
     if (layer.kind === "band" && layer.band) {
         return `band:${layer.band.value} ${layer.band.unit}`;

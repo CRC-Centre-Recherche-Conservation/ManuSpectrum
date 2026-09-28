@@ -2,11 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import L from "leaflet";
 import { ref } from "vue";
+import { createPinia, setActivePinia } from "pinia";
 
 import FolioTool from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
-import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    LINKED_SELECTION_KEY,
+    WINDOW_RESIZE_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     characterization,
     documentPayload,
@@ -18,10 +23,21 @@ import {
     sizedContainer,
     stubIiifLayer,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import {
+    AN1,
+    AN2,
+    CH1,
+    startLinkedSelection,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+import {
+    analysisNode,
+    elementNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
 import type { DocumentPayload } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 
 vi.hoisted(() => {
     // jsdom's SVG has no createSVGRect: without it Leaflet has no path renderer.
@@ -123,6 +139,7 @@ let iiif: ReturnType<typeof stubIiifLayer>;
 let wrapper: VueWrapper | null = null;
 
 beforeEach(() => {
+    setActivePinia(createPinia());
     forgetPayloads();
     iiif = stubIiifLayer();
     fetchMock = vi.fn(async () => jsonResponse(DOCUMENT));
@@ -287,5 +304,150 @@ describe("FolioTool", () => {
         );
         removeLayer.mockRestore();
         removeMap.mockRestore();
+    });
+
+    describe("with the linked selection", () => {
+        const LINKED_CANVASES = [
+            { ...CANVASES[0], analyses: [AN1], materials: [CH1] },
+            { ...CANVASES[1], analyses: [AN2], materials: [] },
+        ];
+        let stopLinked: (() => void) | null = null;
+
+        async function mountLinked(): Promise<{
+            view: VueWrapper;
+            linked: LinkedSelection;
+        }> {
+            const started = startLinkedSelection();
+            stopLinked = started.stop;
+            wrapper = mount(FolioTool, {
+                attachTo: sizedContainer(),
+                props: { canvases: LINKED_CANVASES, slots: SLOTS },
+                global: {
+                    provide: {
+                        [WINDOW_RESIZE_KEY as symbol]: ref(0),
+                        [LINKED_SELECTION_KEY as symbol]: started.linked,
+                    },
+                },
+            });
+            await flushPromises();
+            return { view: wrapper, linked: started.linked };
+        }
+
+        function hosts(view: VueWrapper, name: string): (string | undefined)[] {
+            return view
+                .findAll(".folio-tool-marker-host")
+                .map((host) => (host.element as HTMLElement).dataset[name]);
+        }
+
+        afterEach(() => {
+            stopLinked?.();
+            stopLinked = null;
+            vi.useRealTimers();
+            vi.restoreAllMocks();
+        });
+
+        it("restyles the layers drawn on a selection change, without drawing or reading anything again", async () => {
+            const { view, linked } = await mountLinked();
+            const geoJSON = vi.spyOn(L, "geoJSON");
+            const marker = vi.spyOn(L, "marker");
+            const layerGroup = vi.spyOn(L, "layerGroup");
+            const setStyle = vi.spyOn(L.GeoJSON.prototype, "setStyle");
+            linked.toggle(analysisNode(AN2));
+            await flushPromises();
+            expect(setStyle).toHaveBeenCalled();
+            expect(geoJSON).not.toHaveBeenCalled();
+            expect(marker).not.toHaveBeenCalled();
+            expect(layerGroup).not.toHaveBeenCalled();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(hosts(view, "rel")).toEqual(["none", "none"]);
+            expect(
+                Number(
+                    view
+                        .find("path.folio-tool-frame")
+                        .attributes("stroke-opacity"),
+                ),
+            ).toBe(0.35);
+        });
+
+        it("draws a linked frame solid and heavier, and marks the markers and the list by level", async () => {
+            const { view, linked } = await mountLinked();
+            const frame = () => view.find("path.folio-tool-frame");
+            expect(frame().attributes("stroke-dasharray")).toBe("4 4");
+            expect(hosts(view, "rel")).toEqual([undefined, undefined]);
+            linked.toggle(elementNode("Fe"));
+            await flushPromises();
+            expect(frame().attributes("stroke-dasharray")).toBeUndefined();
+            expect(Number(frame().attributes("stroke-width"))).toBe(3);
+            expect(hosts(view, "rel")).toEqual(["direct", "evidence"]);
+            expect(
+                view
+                    .findAll(".marks li")
+                    .map((item) => item.attributes("data-rel")),
+            ).toEqual(["direct", "evidence"]);
+        });
+
+        it("selects a record from its name in the list", async () => {
+            const { view } = await mountLinked();
+            const name = view.findAll(".marks button.name")[1];
+            await name.trigger("click");
+            expect(useExplorerStore().compare.selection).toEqual([`ch:${CH1}`]);
+            expect(name.attributes("aria-pressed")).toBe("true");
+            expect(hosts(view, "rel")).toEqual(["evidence", "self"]);
+        });
+
+        it("frames the linked marks of the page on « Fit to related »", async () => {
+            const { view, linked } = await mountLinked();
+            expect(view.find(".related").exists()).toBe(false);
+            linked.toggle(elementNode("Fe"));
+            await flushPromises();
+            const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
+            await view.find(".related .fit").trigger("click");
+            expect(fitBounds).toHaveBeenCalledTimes(1);
+        });
+
+        it("names the other folios the selection links and shows one on demand", async () => {
+            const { view, linked } = await mountLinked();
+            linked.toggle(analysisNode(AN2));
+            await flushPromises();
+            const name = linked.labelOf(analysisNode(AN2))!.value;
+            expect(view.find(".elsewhere > span").text()).toBe(
+                `${name} appears on f. 12v.`,
+            );
+            expect(view.find(".related .fit").exists()).toBe(false);
+            await view.find(".elsewhere .show").trigger("click");
+            await flushPromises();
+            expect(
+                (view.find("select").element as HTMLSelectElement).value,
+            ).toBe(C2);
+            expect(view.find(".elsewhere").exists()).toBe(false);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("says a linked record also appears elsewhere when the page holds linked marks too", async () => {
+            const { view, linked } = await mountLinked();
+            linked.toggle(analysisNode(AN1));
+            linked.toggle(analysisNode(AN2));
+            await flushPromises();
+            expect(view.find(".elsewhere > span").text()).toBe(
+                "The selection also appears on f. 12v.",
+            );
+        });
+
+        it("previews a record under the mouse on its marker and line, fading nothing", async () => {
+            vi.useFakeTimers();
+            const { view } = await mountLinked();
+            await view
+                .findAll(".marks li")[0]
+                .trigger("pointerenter", { pointerType: "mouse" });
+            vi.runAllTimers();
+            await flushPromises();
+            expect(hosts(view, "preview")).toEqual(["self", "evidence"]);
+            expect(hosts(view, "rel")).toEqual([undefined, undefined]);
+            expect(
+                view
+                    .find("path.folio-tool-frame")
+                    .attributes("stroke-dasharray"),
+            ).toBe("1 3");
+        });
     });
 });

@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, useId } from "vue";
+import { computed, inject, ref, useId, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import LayerScroll from "@/manuspectrum/pages/AnalysisExplorer/viewers/LayerScroll.vue";
 import ElementMapCard from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMapCard.vue";
 
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     layerKindLabel,
     notMappedLabel,
 } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
+import { parseNodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
+    elementLayerId,
     layerIn,
     sharedKind,
     sharedLayers,
@@ -33,14 +37,24 @@ interface LayerGroup {
  * the same layer held on every map; a map lacking it says so. It opens on
  * the layer a one-layer key names, else the first. Each map keeps its own
  * contrast and its own curtain.
+ *
+ * Selecting an element in Compare (`el:`, the last one selected that a map
+ * holds) switches the shared layer to it, and that is said; once no
+ * selected element has a layer, the layer shown before comes back unless
+ * the reader picked another meanwhile. A preview never switches it.
  */
 const props = defineProps<{ maps: readonly MapLine[] }>();
 
-const { $gettext } = useGettext();
+const announce = inject(ANNOUNCE_KEY, () => undefined, false);
+
+const { $gettext, interpolate } = useGettext();
 const pickerId = useId();
+const marks = useLinkedMarks();
 
 /** The chosen layer's id; null until the reader picks one. */
 const chosen = ref<string | null>(null);
+/** The layer shown before an element was selected; undefined while none is. */
+let beforePin: string | null | undefined;
 
 const layers = computed(() => sharedLayers(props.maps));
 const kind = computed(() => sharedKind(layers.value));
@@ -65,9 +79,63 @@ const groups = computed<LayerGroup[]>(() => {
 const notMapped = computed(() =>
     notMappedLabel($gettext, current.value?.kind ?? "other"),
 );
+/** The layer of the last element selected that a map holds; null when none. */
+const pinnedLayer = computed<string | null>(() => {
+    const selection = marks.linked?.selection.value ?? [];
+    for (const id of [...selection].reverse()) {
+        const parsed = parseNodeId(id);
+        const symbol = parsed?.kind === "el" ? parsed.parts[0] : null;
+        const layerId = symbol ? elementLayerId(symbol) : null;
+        if (layerId && layers.value.some((layer) => layer.id === layerId)) {
+            return layerId;
+        }
+    }
+    return null;
+});
+
+watch(pinnedLayer, followPin);
 
 function choose(next: number): void {
     chosen.value = layers.value[next]?.id ?? null;
+}
+
+function say(message: string): void {
+    const summary = marks.linked?.summary.value;
+    announce(
+        summary
+            ? interpolate(
+                  $gettext("%{summary}. %{message}"),
+                  { summary, message },
+                  true,
+              )
+            : message,
+    );
+}
+
+function followPin(next: string | null, previous: string | null): void {
+    if (next !== null) {
+        if (beforePin === undefined) beforePin = current.value?.id ?? null;
+        chosen.value = next;
+        say(
+            interpolate(
+                $gettext("The element maps show %{layer}."),
+                { layer: current.value?.label ?? "" },
+                true,
+            ),
+        );
+        return;
+    }
+    const restored = beforePin;
+    beforePin = undefined;
+    if (restored === undefined || current.value?.id !== previous) return;
+    chosen.value = restored;
+    say(
+        interpolate(
+            $gettext("The element maps show %{layer} again."),
+            { layer: current.value?.label ?? "" },
+            true,
+        ),
+    );
 }
 
 function onPick(event: Event): void {

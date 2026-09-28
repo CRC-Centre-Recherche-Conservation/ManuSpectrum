@@ -3,11 +3,17 @@ import { flushPromises, mount } from "@vue/test-utils";
 import L from "leaflet";
 import PrimeVue from "primevue/config";
 import { ref } from "vue";
+import { createPinia, setActivePinia } from "pinia";
 
 import ElementMaps from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
-import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    LINKED_SELECTION_KEY,
+    WINDOW_RESIZE_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     documentPayload,
@@ -19,13 +25,25 @@ import {
     sizedContainer,
     stubIiifLayer,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import {
+    AN1,
+    ITEMS,
+    startLinkedSelection,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+import {
+    analysisNode,
+    elementNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
 import type {
+    AnalysisHit,
     DocumentPayload,
+    FileEntry,
     FileLayer,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 vi.hoisted(() => {
@@ -121,6 +139,7 @@ let resizeTick = ref(0);
 let wrapper: VueWrapper | null = null;
 
 beforeEach(() => {
+    setActivePinia(createPinia());
     forgetPayloads();
     stubIiifLayer();
     fetchMock = vi.fn(async () => jsonResponse(DOCUMENT));
@@ -293,5 +312,139 @@ describe("ElementMaps", () => {
         for (const result of sideBySide.mock.results) {
             expect(result.value.remove).toHaveBeenCalled();
         }
+    });
+
+    describe("with the linked selection", () => {
+        let stopLinked: (() => void) | null = null;
+        let announce: ReturnType<typeof vi.fn>;
+
+        async function mountLinked(): Promise<{
+            view: VueWrapper;
+            linked: LinkedSelection;
+        }> {
+            announce = vi.fn();
+            const started = startLinkedSelection(announce);
+            stopLinked = started.stop;
+            const first = ITEMS[0] as {
+                key: string;
+                analysis: AnalysisHit;
+                files: FileEntry[];
+            };
+            const second = ITEMS[1] as { key: string; analysis: AnalysisHit };
+            const maps: MapLine[] = [
+                {
+                    key: first.key,
+                    slot: 0,
+                    analysis: first.analysis,
+                    file: first.files[1],
+                    named: null,
+                },
+                {
+                    key: second.key,
+                    slot: 1,
+                    analysis: second.analysis,
+                    file: imagingEntry({
+                        name: "map-2",
+                        layers: [layer(0, "Cu")],
+                    }),
+                    named: null,
+                },
+            ];
+            wrapper = mount(ElementMaps, {
+                attachTo: sizedContainer(),
+                props: { maps },
+                global: {
+                    plugins: [PrimeVue],
+                    provide: {
+                        [WINDOW_RESIZE_KEY as symbol]: resizeTick,
+                        [ANNOUNCE_KEY as symbol]: announce,
+                        [LINKED_SELECTION_KEY as symbol]: started.linked,
+                    },
+                },
+            });
+            await flushPromises();
+            return { view: wrapper, linked: started.linked };
+        }
+
+        function shown(view: VueWrapper): string {
+            const picker = view.find(".layer-picker select")
+                .element as HTMLSelectElement;
+            return picker.selectedOptions[0]?.text.trim() ?? "";
+        }
+
+        afterEach(() => {
+            stopLinked?.();
+            stopLinked = null;
+            vi.useRealTimers();
+        });
+
+        it("switches the shared layer to an element selected, says so, and brings the previous one back once it is unselected", async () => {
+            const { view, linked } = await mountLinked();
+            expect(shown(view)).toBe("Fe Ka");
+            linked.toggle(elementNode("Pb"));
+            await flushPromises();
+            expect(shown(view)).toBe("Pb La");
+            expect(announce).toHaveBeenLastCalledWith(
+                "1 selected · 3 related. The element maps show Pb La.",
+            );
+            linked.toggle(elementNode("Pb"));
+            await flushPromises();
+            expect(shown(view)).toBe("Fe Ka");
+            expect(announce).toHaveBeenLastCalledWith(
+                "Nothing selected. The element maps show Fe Ka again.",
+            );
+        });
+
+        it("follows the last element selected that a map holds", async () => {
+            const { view, linked } = await mountLinked();
+            linked.toggle(elementNode("Cu"));
+            linked.toggle(elementNode("Zn"));
+            await flushPromises();
+            expect(shown(view)).toBe("Cu");
+            linked.toggle(elementNode("Pb"));
+            await flushPromises();
+            expect(shown(view)).toBe("Pb La");
+        });
+
+        it("keeps the layer the reader picked once the element is unselected", async () => {
+            const { view, linked } = await mountLinked();
+            linked.toggle(elementNode("Pb"));
+            await flushPromises();
+            await view.find(".layer-picker select").setValue(2);
+            linked.toggle(elementNode("Pb"));
+            await flushPromises();
+            expect(shown(view)).toBe("Cu");
+        });
+
+        it("never switches the layer on a preview", async () => {
+            vi.useFakeTimers();
+            const { view, linked } = await mountLinked();
+            linked.preview(elementNode("Pb"), { pointerType: "mouse" });
+            vi.runAllTimers();
+            await view.vm.$nextTick();
+            expect(shown(view)).toBe("Fe Ka");
+            expect(
+                view.find(".element-map-card").attributes("data-preview"),
+            ).toBe("direct");
+        });
+
+        it("marks each map by its analysis and selects it from its name", async () => {
+            const { view, linked } = await mountLinked();
+            linked.toggle(elementNode("Fe"));
+            await flushPromises();
+            expect(
+                view
+                    .findAll(".element-map-card")
+                    .map((card) => card.attributes("data-rel")),
+            ).toEqual(["direct", "none"]);
+            linked.clear();
+            await view.find(".element-map-card button.record").trigger("click");
+            expect(useExplorerStore().compare.selection).toEqual([
+                analysisNode(AN1),
+            ]);
+            expect(view.find(".element-map-card").attributes("data-rel")).toBe(
+                "self",
+            );
+        });
     });
 });
