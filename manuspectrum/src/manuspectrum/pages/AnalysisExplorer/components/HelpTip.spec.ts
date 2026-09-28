@@ -218,7 +218,7 @@ describe("HelpTip", () => {
         expect(unlisten).toHaveBeenCalledWith("keydown", expect.any(Function));
     });
 
-    it("marks the Escape that hides it as handled, and leaves the others alone", async () => {
+    it("leaves the Escape that hides it to the page, so a dialog around it still closes", async () => {
         const wrapper = mountTip();
         wrapper.element.dispatchEvent(pointer("pointerenter"));
         await wrapper.vm.$nextTick();
@@ -240,7 +240,7 @@ describe("HelpTip", () => {
             cancelable: true,
         });
         document.body.dispatchEvent(dismissing);
-        expect(dismissing.defaultPrevented).toBe(true);
+        expect(dismissing.defaultPrevented).toBe(false);
         await wrapper.vm.$nextTick();
         expect(shown()).toBeNull();
     });
