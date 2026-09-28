@@ -295,6 +295,24 @@ export function spreadLabels(
     return placed;
 }
 
+const RANGE_KEY = /^[xy]axis\d*\.range(\[\d\])?$/;
+const AUTORANGE_KEY = /^[xy]axis\d*\.autorange$/;
+
+/**
+ * Whether the chart is zoomed after a Plotly relayout of `update`: an axis
+ * range set zooms, an axis put back on autorange resets, anything else
+ * (an annotation, a size) leaves `zoomed` as it was.
+ */
+export function zoomedAfter(
+    update: Readonly<Record<string, unknown>> | null | undefined,
+    zoomed: boolean,
+): boolean {
+    const keys = Object.keys(update ?? {});
+    if (keys.some((key) => AUTORANGE_KEY.test(key))) return false;
+    if (keys.some((key) => RANGE_KEY.test(key))) return true;
+    return zoomed;
+}
+
 /** For each curve in order, how many curves of the same slot come before it. */
 export function ranksInSlot(slots: readonly number[]): number[] {
     const seen = new Map<number, number>();

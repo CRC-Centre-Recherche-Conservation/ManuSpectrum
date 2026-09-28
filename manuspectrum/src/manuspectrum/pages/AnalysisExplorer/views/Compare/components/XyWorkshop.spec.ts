@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
-import { computed, ref, shallowRef } from "vue";
+import { computed, h, ref, shallowRef } from "vue";
 
+import CompareWindow from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue";
 import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -154,9 +155,10 @@ async function mountWorkshop(
     curves: FileLine[],
     resize = ref(0),
 ): Promise<VueWrapper> {
-    wrapper = mount(XyWorkshop, {
+    wrapper = mount(CompareWindow, {
         attachTo: document.body,
-        props: { curves },
+        props: { title: "XRF", position: 1, total: 1, size: "M", folded: null },
+        slots: { default: () => h(XyWorkshop, { curves }) },
         global: {
             provide: {
                 [WINDOW_RESIZE_KEY as symbol]: resize,
@@ -514,7 +516,7 @@ describe("XyWorkshop", () => {
         expect(notes(view)).toEqual([
             "A3 · S3.csv: out of the shared X range.",
         ]);
-        await view.find('[data-layout="table"]').trigger("click");
+        await view.find('[data-action="table"]').trigger("click");
         expect(view.findAll(".xy-curve-list .flag")).toHaveLength(1);
     });
 
@@ -532,6 +534,11 @@ describe("XyWorkshop", () => {
         );
         const view = await mountWorkshop([curve(0, 1)]);
         expect(lastDrawing().layout.xaxis.autorange).toBe("reversed");
+        emitPlotly(view.find(".chart").element, "plotly_relayout", {
+            "xaxis.range[0]": 3,
+            "xaxis.range[1]": 2,
+        });
+        await flushPromises();
         await view.find('[data-action="reset"]').trigger("click");
         await flushPromises();
         expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
@@ -577,11 +584,84 @@ describe("XyWorkshop", () => {
         const button = view.find('[data-action="csv"]');
         const note =
             "The CSV holds the values drawn, treatment included and offset left out: two columns per curve.";
-        expect(button.attributes("title")).toBe(note);
+        expect(
+            document.getElementById(button.attributes("aria-labelledby")!)
+                ?.textContent,
+        ).toBe("Download CSV");
         expect(
             document.getElementById(button.attributes("aria-describedby")!)
                 ?.textContent,
         ).toBe(note);
+        expect(
+            button.element
+                .closest(".help-tip")
+                ?.querySelector('[role="tooltip"]')?.textContent,
+        ).toContain(note);
+    });
+
+    it("puts its actions in its window's header: reset only once zoomed, PNG, CSV and the table as a toggle", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const actions = (): string[] =>
+            view
+                .findAll(".head .actions [data-action]")
+                .map((button) => button.attributes("data-action")!);
+        expect(actions()).toEqual(["png", "csv", "table"]);
+        emitPlotly(view.find(".chart").element, "plotly_relayout", {
+            "xaxis.range[0]": 1,
+            "xaxis.range[1]": 2,
+        });
+        await flushPromises();
+        expect(actions()).toEqual(["reset", "png", "csv", "table"]);
+        emitPlotly(view.find(".chart").element, "plotly_relayout", {
+            "annotations[0].opacity": 0.3,
+        });
+        await flushPromises();
+        expect(actions()).toEqual(["reset", "png", "csv", "table"]);
+        await view.find('[data-action="reset"]').trigger("click");
+        await flushPromises();
+        expect(actions()).toEqual(["png", "csv", "table"]);
+
+        const table = view.find('[data-action="table"]');
+        expect(table.attributes("aria-pressed")).toBe("false");
+        await table.trigger("click");
+        await flushPromises();
+        expect(actions()).toEqual(["csv", "table"]);
+        expect(
+            view.find('[data-action="table"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("gives back the chart layout it left for the table", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await view.find('[data-layout="offset"]').trigger("click");
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+        expect(
+            view
+                .findAll(".layouts [aria-pressed='true']")
+                .map((button) => button.attributes("data-layout")),
+        ).toEqual([]);
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+        expect(
+            view.find('[data-layout="offset"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("offers the chart layouts as icon toggles named by their tooltip", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const names = view
+            .findAll(".layouts [data-layout]")
+            .map(
+                (button) =>
+                    document.getElementById(
+                        button.attributes("aria-labelledby")!,
+                    )?.textContent,
+            );
+        expect(names).toEqual(["Overlay", "Offset", "Small multiples"]);
+        expect(view.find('.layouts [data-layout="table"]').exists()).toBe(
+            false,
+        );
     });
 
     it("shows a selection by restyling the drawn chart once, style attributes only, hiding the curves it does not link", async () => {
@@ -747,7 +827,7 @@ describe("XyWorkshop", () => {
         fake.levels.value = new Map([
             [analysisNode(analysisHit(1).id), "self"],
         ]);
-        await view.find('[data-layout="table"]').trigger("click");
+        await view.find('[data-action="table"]').trigger("click");
         expect(
             view
                 .findAll(".xy-curve-list tbody tr")
@@ -789,7 +869,7 @@ describe("XyWorkshop", () => {
     it("lists the curves in the table layout, without a chart", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
         plotly.react.mockClear();
-        await view.find('[data-layout="table"]').trigger("click");
+        await view.find('[data-action="table"]').trigger("click");
         await flushPromises();
         expect(view.find(".chart").exists()).toBe(false);
         expect(
@@ -814,7 +894,7 @@ describe("XyWorkshop", () => {
     it("purges the chart it leaves for the table layout", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
         const element = view.find(".chart").element;
-        await view.find('[data-layout="table"]').trigger("click");
+        await view.find('[data-action="table"]').trigger("click");
         await flushPromises();
         expect(plotly.purge).toHaveBeenCalledWith(element);
     });
@@ -836,6 +916,39 @@ describe("XyWorkshop", () => {
         view.unmount();
         wrapper = null;
         expect(plotly.purge).toHaveBeenCalledWith(element);
+    });
+
+    it("draws small multiples again at their new size once they no longer need a height of their own", async () => {
+        const resize = ref(0);
+        const view = await mountWorkshop(
+            Array.from({ length: 9 }, (_, index) =>
+                curve(index % 2, index + 1),
+            ),
+            resize,
+        );
+        const element = view.find<HTMLElement>(".chart").element;
+        let width = 300;
+        Object.defineProperty(element, "clientWidth", { get: () => width });
+        Object.defineProperty(element, "clientHeight", {
+            get: () =>
+                element.style.minBlockSize
+                    ? parseFloat(element.style.minBlockSize) * 16
+                    : 300,
+        });
+        resize.value += 1;
+        await flushPromises();
+        expect(element.style.minBlockSize).not.toBe("");
+        const drawings = plotly.react.mock.calls.length;
+
+        width = 1200;
+        resize.value += 1;
+        await flushPromises();
+        expect(element.style.minBlockSize).toBe("");
+        expect(plotly.react.mock.calls.length).toBe(drawings + 2);
+        expect(plotly.Plots.resize.mock.calls.at(-1)?.[0]).toBe(element);
+        resize.value += 1;
+        await flushPromises();
+        expect(plotly.react.mock.calls.length).toBe(drawings + 2);
     });
 
     it("aborts the requests of an unmounted window", async () => {

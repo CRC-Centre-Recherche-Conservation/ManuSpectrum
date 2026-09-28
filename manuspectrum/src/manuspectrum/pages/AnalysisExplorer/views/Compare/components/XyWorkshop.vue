@@ -2,9 +2,9 @@
 import {
     computed,
     inject,
+    nextTick,
     onBeforeUnmount,
     ref,
-    useId,
     useTemplateRef,
     watch,
 } from "vue";
@@ -12,11 +12,13 @@ import { useGettext } from "vue3-gettext";
 import { deriveAxisLabel } from "utils/xy-transforms";
 import { BASE_VIEW } from "utils/xy-views";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import XyCurveList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue";
 import XyLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
 
 import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
+import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
@@ -49,6 +51,7 @@ import {
     sharedViews,
     treat,
     workshopCsv,
+    zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
@@ -60,8 +63,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 import type { PlotMouseEvent } from "plotly.js";
+import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type { XyView } from "utils/xy-views";
 import type { SeriesResult } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
+import type { WindowAction } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type {
     LegendPreviewEvent,
     LegendToggleEvent,
@@ -93,8 +98,17 @@ interface Curve extends FigureCurve {
 
 /** A chart Plotly drew: it can bind handlers to its events. */
 interface PlotlyTarget extends HTMLElement {
-    on?: (name: string, handler: (event: PlotMouseEvent) => void) => void;
+    on?: (name: string, handler: (event: never) => void) => void;
 }
+
+/** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
+const CHART_LAYOUTS: Readonly<
+    Record<Exclude<WorkshopLayout, "table">, IconName>
+> = {
+    overlay: "chart-line",
+    offset: "bars",
+    multiples: "th-large",
+};
 
 /** The pixel mapping of an axis Plotly passes with a hovered point. */
 interface HoverAxis {
@@ -122,7 +136,13 @@ const DEFAULT_POINTER = "mouse";
  * curves or when no slot is in colour) or as a table. A treatment of
  * `utils/xy-views.js` runs on every curve and names itself in the Y title.
  * The legend is HTML (`XyLegend`); the exported PNG draws Plotly's, with a
- * title and a source line.
+ * title (the window's `title`) and a source line.
+ *
+ * Its window's header carries its actions (`useWindowActions`): « Reset
+ * the zoom » once the chart is zoomed, the PNG, the CSV (what it holds in
+ * its tooltip) and the table layout as a toggle, which gives back the
+ * chart layout left. The chart layouts are a group of icon toggles above
+ * the chart, next to the treatment menu.
  *
  * The linked selection of Compare (`LINKED_SELECTION_KEY`) reaches the
  * chart through its `an:` and `file:` nodes: while it holds something, the
@@ -136,9 +156,10 @@ const DEFAULT_POINTER = "mouse";
  * A file over the server's ceiling, missing or empty is named and left
  * out. A chart Plotly cannot draw says so in the window. The chart follows
  * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
- * and is then drawn again for the size (labels, panels); the table layout
- * and the unmount purge it, and a drawing that ends after the unmount is
- * purged too.
+ * and is then drawn again for the size (labels, panels); small multiples
+ * that no longer need a height of their own are drawn once more at the
+ * size the chart shrinks to. The table layout and the unmount purge it,
+ * and a drawing that ends after the unmount is purged too.
  */
 const props = defineProps<{ curves: readonly FileLine[]; title?: string }>();
 
@@ -154,7 +175,6 @@ const results = useSeriesSet(
     "full",
 );
 const chart = useTemplateRef<HTMLDivElement>("chart");
-const csvNoteId = useId();
 const lang = document.documentElement.lang || "en";
 
 // The Plotly module, the element it drew in and what it drew live outside Vue reactivity.
@@ -176,6 +196,10 @@ let disposed = false;
 
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
+/** The layout picked before the table, given back when the table is left. */
+const layoutBeforeTable = ref<WorkshopLayout | null>(null);
+/** The chart shows a zoom of the reader's; « Reset the zoom » is offered. */
+const zoomed = ref(false);
 const viewKey = ref<string>(BASE_VIEW);
 /** Plotly could not be loaded or could not draw the last figure. */
 const drawFailed = ref(false);
@@ -242,6 +266,11 @@ const layouts = computed<WorkshopLayout[]>(() =>
     slots.value.length > 1
         ? ["overlay", "offset", "multiples", "table"]
         : ["overlay", "offset", "table"],
+);
+const chartLayouts = computed(() =>
+    layouts.value.flatMap((name) =>
+        name === "table" ? [] : [{ name, icon: CHART_LAYOUTS[name] }],
+    ),
 );
 const layout = computed<WorkshopLayout>(() => {
     const wanted =
@@ -410,6 +439,45 @@ const csvNote = computed(() =>
     ),
 );
 
+useWindowActions(() => {
+    if (drawn.value.length === 0) return [];
+    const charted = layout.value !== "table";
+    const actions: WindowAction[] = [];
+    if (charted && zoomed.value) {
+        actions.push({
+            id: "reset",
+            icon: "refresh",
+            label: $gettext("Reset the zoom"),
+            run: () => void reset(),
+        });
+    }
+    if (charted) {
+        actions.push({
+            id: "png",
+            icon: "image",
+            label: $gettext("Download PNG"),
+            run: () => void downloadPng(),
+        });
+    }
+    actions.push(
+        {
+            id: "csv",
+            icon: "download",
+            label: $gettext("Download CSV"),
+            description: csvNote.value,
+            run: downloadCsv,
+        },
+        {
+            id: "table",
+            icon: "table",
+            label: $gettext("Table"),
+            pressed: !charted,
+            run: toggleTable,
+        },
+    );
+    return actions;
+});
+
 watch([drawn, layout, chart], () => void draw());
 watch(layout, (name) => {
     if (name === "table") purgeChart();
@@ -417,14 +485,7 @@ watch(layout, (name) => {
 watch(states, () => scheduleRestyle());
 watch(
     () => resizeTick?.value,
-    () => {
-        const element = chart.value;
-        if (!plotly || !element || layout.value === "table") return;
-        const size = sizeOf(element);
-        if (size === drawnSize) return;
-        drawnSize = size;
-        void resizeChart(element);
-    },
+    () => followSize(),
 );
 
 onBeforeUnmount(() => {
@@ -435,6 +496,16 @@ onBeforeUnmount(() => {
 
 function sizeOf(element: HTMLElement): string {
     return `${element.clientWidth}×${element.clientHeight}`;
+}
+
+/** Draws the chart again for its size, when that size is not the one it was drawn at. */
+function followSize(): void {
+    const element = chart.value;
+    if (!plotly || !element || layout.value === "table") return;
+    const size = sizeOf(element);
+    if (size === drawnSize) return;
+    drawnSize = size;
+    void resizeChart(element);
 }
 
 /** The strongest of the levels; null when none links. */
@@ -512,6 +583,8 @@ async function draw(): Promise<void> {
         return;
     }
     drawing = true;
+    /** Small multiples that needed a height of their own and no longer do: the chart shrinks once drawn. */
+    let released = false;
     try {
         plotly ??= await loadPlotly();
         if (disposed) return;
@@ -524,6 +597,7 @@ async function draw(): Promise<void> {
             layout.value === "multiples"
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
+        released = chartHeight.value !== null && figure.height === null;
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, states.value);
@@ -542,6 +616,7 @@ async function draw(): Promise<void> {
             figure.layout,
             WORKSHOP_CONFIG,
         );
+        zoomed.value = false;
         if (disposed) {
             plotly.purge(element);
             return;
@@ -555,6 +630,10 @@ async function draw(): Promise<void> {
     } finally {
         drawing = false;
         if (!disposed) scheduleRestyle();
+    }
+    if (released && !disposed) {
+        await nextTick();
+        followSize();
     }
 }
 
@@ -611,14 +690,17 @@ function bindEvents(element: HTMLElement): void {
     const target = element as PlotlyTarget;
     if (boundCharts.has(element) || typeof target.on !== "function") return;
     boundCharts.add(element);
-    target.on("plotly_hover", (event) => {
+    target.on("plotly_relayout", (update: Record<string, unknown>) => {
+        zoomed.value = zoomedAfter(update, zoomed.value);
+    });
+    target.on("plotly_hover", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
         if (curve) linked?.preview(entryNode(curve), pointerOf(event));
     });
-    target.on("plotly_unhover", (event) => {
+    target.on("plotly_unhover", (event: PlotMouseEvent) => {
         linked?.preview(null, pointerOf(event));
     });
-    target.on("plotly_click", (event) => {
+    target.on("plotly_click", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
         if (curve) toggle(entryNode(curve));
     });
@@ -672,6 +754,7 @@ function onLegendPreview({ node, pointerType }: LegendPreviewEvent): void {
 }
 
 async function reset(): Promise<void> {
+    zoomed.value = false;
     if (plotly && chart.value) {
         await resetAxes(
             plotly,
@@ -771,6 +854,16 @@ function chooseLayout(name: WorkshopLayout): void {
     chosenLayout.value = name;
 }
 
+/** Shows the table, or leaves it for the chart layout it replaced. */
+function toggleTable(): void {
+    if (layout.value === "table") {
+        chosenLayout.value = layoutBeforeTable.value;
+        return;
+    }
+    layoutBeforeTable.value = chosenLayout.value;
+    chosenLayout.value = "table";
+}
+
 function chooseView(event: Event): void {
     viewKey.value = (event.target as HTMLSelectElement).value;
 }
@@ -799,16 +892,17 @@ function chooseView(event: Event): void {
                     role="group"
                     :aria-label="$gettext('Layout')"
                 >
-                    <button
-                        v-for="name in layouts"
-                        :key="name"
-                        type="button"
-                        :data-layout="name"
-                        :aria-pressed="layout === name ? 'true' : 'false'"
-                        @click="chooseLayout(name)"
-                    >
-                        <span>{{ layoutName(name) }}</span>
-                    </button>
+                    <IconButton
+                        v-for="entry in chartLayouts"
+                        :key="entry.name"
+                        :data-layout="entry.name"
+                        :icon="entry.icon"
+                        :label="layoutName(entry.name)"
+                        :pressed="layout === entry.name"
+                        tip-placement="below"
+                        tip-align="start"
+                        @click="chooseLayout(entry.name)"
+                    />
                 </div>
                 <label
                     v-if="treatments.views.length > 1"
@@ -828,36 +922,6 @@ function chooseView(event: Event): void {
                         </option>
                     </select>
                 </label>
-                <button
-                    v-if="layout !== 'table'"
-                    type="button"
-                    data-action="reset"
-                    @click="reset"
-                >
-                    <span>{{ $gettext("Reset the zoom") }}</span>
-                </button>
-                <button
-                    v-if="layout !== 'table'"
-                    type="button"
-                    data-action="png"
-                    @click="downloadPng"
-                >
-                    <span>{{ $gettext("Download PNG") }}</span>
-                </button>
-                <button
-                    type="button"
-                    data-action="csv"
-                    :title="csvNote"
-                    :aria-describedby="csvNoteId"
-                    @click="downloadCsv"
-                >
-                    <span>{{ $gettext("Download CSV") }}</span>
-                </button>
-                <span
-                    :id="csvNoteId"
-                    class="visually-hidden"
-                    >{{ csvNote }}</span
-                >
             </div>
             <p
                 v-if="treatments.mixed"
@@ -895,6 +959,7 @@ function chooseView(event: Event): void {
             <div
                 v-if="layout !== 'table'"
                 class="plot-area"
+                :class="{ tall: chartHeight !== null }"
             >
                 <div
                     ref="chart"
@@ -945,8 +1010,10 @@ function chooseView(event: Event): void {
 
 <style scoped>
 .xy-workshop {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
+    block-size: 100%;
     container-type: inline-size;
 }
 
@@ -966,10 +1033,14 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .layouts {
-    gap: 0.25rem;
+    gap: 0.125rem;
+    padding: 0.125rem;
+    border: 0.0625rem solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg);
 }
 
-.xy-workshop button,
+.xy-workshop .retry,
 .xy-workshop select {
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.5rem;
@@ -982,11 +1053,6 @@ function chooseView(event: Event): void {
     cursor: pointer;
 }
 
-.xy-workshop button[aria-pressed="true"] {
-    border-color: var(--ink);
-    font-weight: 600;
-}
-
 .xy-workshop .treatment {
     display: inline-flex;
     align-items: center;
@@ -994,7 +1060,7 @@ function chooseView(event: Event): void {
     font-size: 0.8125rem;
 }
 
-.xy-workshop button:focus-visible,
+.xy-workshop .retry:focus-visible,
 .xy-workshop select:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
@@ -1005,24 +1071,31 @@ function chooseView(event: Event): void {
     gap: 0.5rem;
 }
 
-@container (min-width: 40rem) {
-    .xy-workshop .plot-area {
-        grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem);
-        align-items: start;
-    }
-}
-
 .xy-workshop .chart {
     min-block-size: 18rem;
 }
 
-.xy-workshop .visually-hidden {
-    position: absolute;
-    inline-size: 0.0625rem;
-    block-size: 0.0625rem;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+@container (min-width: 40rem) {
+    .xy-workshop .plot-area {
+        flex: 1 1 0;
+        grid-template-rows: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem);
+        min-block-size: 18rem;
+    }
+
+    .xy-workshop .plot-area.tall {
+        flex: none;
+    }
+
+    .xy-workshop .plot-area .chart {
+        min-block-size: 0;
+    }
+
+    .xy-workshop .plot-area .xy-legend {
+        align-self: start;
+        max-block-size: 100%;
+        overflow: auto;
+    }
 }
 
 .xy-workshop .chart.failed {
@@ -1041,6 +1114,6 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .retry {
-    justify-self: start;
+    align-self: flex-start;
 }
 </style>

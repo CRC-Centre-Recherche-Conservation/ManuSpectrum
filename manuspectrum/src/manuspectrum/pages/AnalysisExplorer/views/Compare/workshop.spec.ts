@@ -26,6 +26,7 @@ import {
     spreadLabels,
     treat,
     workshopCsv,
+    zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
 interface ParityCase {
@@ -73,6 +74,25 @@ function keys(presetKeys: (string | null)[]): string[] {
 }
 
 describe("workshop", () => {
+    it("reads a zoom from a relayout: ranges set zoom, autoranges reset, the rest changes nothing", () => {
+        expect(
+            zoomedAfter({ "xaxis.range[0]": 1, "xaxis.range[1]": 2 }, false),
+        ).toBe(true);
+        expect(zoomedAfter({ "yaxis3.range": [0, 1] }, false)).toBe(true);
+        expect(zoomedAfter({ "xaxis.autorange": true }, true)).toBe(false);
+        expect(
+            zoomedAfter(
+                { "xaxis2.autorange": "reversed", "yaxis2.autorange": true },
+                true,
+            ),
+        ).toBe(false);
+        expect(zoomedAfter({ "annotations[0].opacity": 0.2 }, true)).toBe(true);
+        expect(zoomedAfter({ "annotations[0].opacity": 0.2 }, false)).toBe(
+            false,
+        );
+        expect(zoomedAfter(null, true)).toBe(true);
+    });
+
     it("dashes the 2nd, 3rd… file of a slot with short dashes, the first solid", () => {
         const ranks = ranksInSlot([0, 0, 1, 0, 1, 0, 0, 0]);
         expect(ranks).toEqual([0, 1, 0, 2, 1, 3, 4, 5]);
