@@ -17,12 +17,13 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
     AN2,
+    F1,
     ITEMS,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
     analysisNode,
-    elementNode,
+    fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { Pinia } from "pinia";
@@ -275,7 +276,7 @@ describe("NotInChartList", () => {
                 undefined,
                 undefined,
             ]);
-            linked.toggle(elementNode("Fe"));
+            linked.toggle(fileNode(F1));
             await wrapper.vm.$nextTick();
             expect(rels(wrapper, "data-rel")).toEqual([
                 "direct",

@@ -67,7 +67,6 @@ from manuspectrum.views.explorer.citations import (
 )
 from manuspectrum.views.explorer.conditions import clean_html, conditions_of
 from manuspectrum.views.explorer.values import (
-    ELEMENT_SYMBOL,
     FALLBACK_LANGUAGE,
     StoredConfig,
     acronym,
@@ -1891,43 +1890,9 @@ def document_payload(document_id, user, language, ticket=None):
     }
 
 
-_BAND = re.compile(
-    r"^(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>nm|µm|um|cm-1|cm⁻¹|keV|eV)$"
-)
-
-
 def layer_of(index, text, image):
-    """One image layer of an imaging manifest (D46): an element map (maXRF), a spectral band (hyperspectral) or another image."""
-    text = (text or "").strip()
-    band = _BAND.match(text)
-    if ELEMENT_SYMBOL.match(text):
-        return {
-            "index": index,
-            "label": text,
-            "kind": "element",
-            "element": text,
-            "band": None,
-            "image": image,
-        }
-    if band:
-        value = float(band["value"].replace(",", "."))
-        unit = band["unit"].replace("um", "µm").replace("cm-1", "cm⁻¹")
-        return {
-            "index": index,
-            "label": text,
-            "kind": "band",
-            "element": None,
-            "band": {"value": value, "unit": unit},
-            "image": image,
-        }
-    return {
-        "index": index,
-        "label": text,
-        "kind": "other",
-        "element": None,
-        "band": None,
-        "image": image,
-    }
+    """One image layer of an imaging manifest: its position, its label as stored, its image."""
+    return {"index": index, "label": (text or "").strip(), "image": image}
 
 
 def imaging_entries(analysis_id, manifest_values, language, read=None):
@@ -1948,12 +1913,6 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
         for canvas in canvases_of(manifest):
             layers.append(layer_of(index, canvas["label"], canvas["image"]))
             index += 1
-        layers.sort(
-            key=lambda layer: (
-                layer["kind"] != "band",
-                layer["band"]["value"] if layer["band"] else 0,
-            )
-        )
         entries.append(
             {
                 "id": f"{analysis_id}:imaging:{position}",

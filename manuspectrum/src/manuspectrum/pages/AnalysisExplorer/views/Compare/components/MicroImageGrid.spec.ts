@@ -12,12 +12,13 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
     AN1,
+    F1,
     ITEMS,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
     analysisNode,
-    elementNode,
+    fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
@@ -99,9 +100,9 @@ describe("MicroImageGrid", () => {
         ).toEqual(["direct", "none"]);
     });
 
-    it("highlights the images linked to an element selected and fades the others", async () => {
+    it("highlights the images linked to a node selected and fades the others", async () => {
         const { view, linked } = mountGrid();
-        linked.toggle(elementNode("Fe"));
+        linked.toggle(fileNode(F1));
         await view.vm.$nextTick();
         expect(rels(view, "data-rel")).toEqual(["direct", "none"]);
     });

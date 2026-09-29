@@ -1398,27 +1398,15 @@ class RevalidationTests(CorpusCase):
 
 
 class LayerOfTests(SimpleTestCase):
-    def test_an_element_symbol_gives_an_element_layer(self):
-        layer = layer_of(0, "Pb", {"url": None})
+    def test_a_layer_is_its_position_its_stored_label_and_its_image(self):
+        layer = layer_of(3, "  Pb  ", {"url": None})
 
-        self.assertEqual(layer["kind"], "element")
-        self.assertEqual(layer["element"], "Pb")
-        self.assertIsNone(layer["band"])
+        self.assertEqual(layer, {"index": 3, "label": "Pb", "image": {"url": None}})
 
-    def test_a_value_and_a_unit_gives_a_band_layer(self):
-        nanometres = layer_of(1, "450 nm", {"url": None})
-        wavenumber = layer_of(2, "1650 cm-1", {"url": None})
+    def test_a_missing_label_is_an_empty_string(self):
+        layer = layer_of(0, None, {"url": None})
 
-        self.assertEqual(nanometres["kind"], "band")
-        self.assertEqual(nanometres["band"], {"value": 450.0, "unit": "nm"})
-        self.assertEqual(wavenumber["kind"], "band")
-        self.assertEqual(wavenumber["band"], {"value": 1650.0, "unit": "cm⁻¹"})
-
-    def test_anything_else_gives_another_layer_without_an_element(self):
-        layer = layer_of(3, "deconv_Pb", {"url": None})
-
-        self.assertEqual(layer["kind"], "other")
-        self.assertIsNone(layer["element"])
+        self.assertEqual(layer["label"], "")
 
 
 class ImagingEntriesTests(SimpleTestCase):
@@ -1450,7 +1438,7 @@ class ImagingEntriesTests(SimpleTestCase):
         ],
     }
 
-    def test_layer_indices_continue_across_manifests_and_bands_sort_by_value(self):
+    def test_layer_indices_continue_across_manifests_in_canvas_order(self):
         with mock.patch(
             "manuspectrum.views.explorer.service.manifest_json",
             side_effect=[self.MANIFEST_A, self.MANIFEST_B],
@@ -1465,9 +1453,9 @@ class ImagingEntriesTests(SimpleTestCase):
             )
 
         self.assertEqual([len(entry["layers"]) for entry in entries], [2, 1])
-        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [1, 0])
+        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [0, 1])
         self.assertEqual(
-            [layer["band"]["value"] for layer in entries[0]["layers"]], [450.0, 650.0]
+            [layer["label"] for layer in entries[0]["layers"]], ["650 nm", "450 nm"]
         )
         self.assertEqual(entries[1]["layers"][0]["index"], 2)
-        self.assertEqual(entries[1]["layers"][0]["kind"], "element")
+        self.assertEqual(entries[1]["layers"][0]["label"], "Pb")

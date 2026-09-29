@@ -16,7 +16,6 @@ import {
     IMAGING_OVERLAYS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import { layerKindLabel } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
 
 import type {
     AnalysisPayload,
@@ -32,26 +31,22 @@ const OPACITY_STEP = 5;
 /**
  * A map the image server does not give is said so in place, with Retry.
  *
- * A parent may hold the layer shown (`held`, a position in `file.layers`):
- * the preview then has no layer scroll of its own and carries the laid map
- * to each layer held; `null` says the map lacks the layer held, and the
- * `missing` slot is shown instead. A `stage` slot draws the laid layer (a
- * page of its own) in place of the image while it is laid. The laid layers
- * live where `IMAGING_OVERLAYS_KEY` says, else in `store.overlays` (the
- * document screen's folio).
+ * A classic viewer: a layer scroll steps through the file's own layers, by
+ * their stored label. A `stage` slot draws the laid layer (a page of its
+ * own) in place of the image while it is laid. The laid layers live where
+ * `IMAGING_OVERLAYS_KEY` says, else in `store.overlays` (the document
+ * screen's folio).
  */
 const props = withDefaults(
     defineProps<{
         file: FileEntry;
         analysis: Pick<AnalysisPayload, "id">;
-        held?: number | null;
         contrastNote?: boolean;
     }>(),
-    { held: undefined, contrastNote: true },
+    { contrastNote: true },
 );
 
 defineSlots<{
-    missing?: () => unknown;
     stage?: (stage: {
         layer: FileLayer;
         opacity: number;
@@ -76,19 +71,17 @@ const percentFormat = new Intl.NumberFormat(
     { style: "percent" },
 );
 
-/** Opens on the layer held, else on the layer of this file laid on the page, if any. */
+/** Opens on the layer of this file laid on the page, if any, else the first. */
 const position = ref(
-    typeof props.held === "number"
-        ? props.held
-        : Math.max(
-              0,
-              props.file.layers.findIndex(
-                  (entry) =>
-                      overlays.settings.value[
-                          overlayKey(props.analysis.id, entry.index)
-                      ]?.on,
-              ),
-          ),
+    Math.max(
+        0,
+        props.file.layers.findIndex(
+            (entry) =>
+                overlays.settings.value[
+                    overlayKey(props.analysis.id, entry.index)
+                ]?.on,
+        ),
+    ),
 );
 
 const imageFailed = ref(false);
@@ -105,7 +98,6 @@ const key = computed(() =>
 const setting = computed(() =>
     key.value ? overlays.settings.value[key.value] : undefined,
 );
-const missing = computed(() => props.held === null);
 const laid = computed(() => Boolean(setting.value?.on));
 const opacity = computed(() => setting.value?.opacity ?? DEFAULT_OPACITY);
 const opacityPercent = computed(() => Math.round(opacity.value * PERCENT));
@@ -132,13 +124,6 @@ watch(key, () => {
     imageFailed.value = false;
     maxFallback.value = false;
 });
-
-watch(
-    () => props.held,
-    (next) => {
-        if (typeof next === "number" && next !== position.value) moveTo(next);
-    },
-);
 
 /**
  * A first failure retries once at the image's own IIIF `max` size, silently
@@ -223,24 +208,19 @@ function onCurtainChange(event: Event): void {
 <template>
     <section class="imaging-preview">
         <p
-            v-if="layer && !missing"
+            v-if="layer"
             class="current"
         >
-            <span>{{ layerKindLabel($gettext, layer.kind) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
         <LayerScroll
-            v-if="props.held === undefined && props.file.layers.length > 1"
+            v-if="props.file.layers.length > 1"
             :labels="labels"
             :position="position"
             @update:position="moveTo"
         />
-        <slot
-            v-if="missing"
-            name="missing"
-        />
         <p
-            v-else-if="imageUrl && imageFailed"
+            v-if="imageUrl && imageFailed"
             class="unavailable"
             role="status"
         >
@@ -276,64 +256,58 @@ function onCurtainChange(event: Event): void {
         >
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
         </p>
-        <template v-if="!missing">
+        <label class="toggle">
+            <input
+                class="lay"
+                type="checkbox"
+                :checked="laid"
+                :disabled="!canLay"
+                @change="onLayChange"
+            />
+            <span>{{ $gettext("Lay on the page") }}</span>
+        </label>
+        <p
+            v-if="!canLay"
+            class="note"
+        >
+            <span>{{
+                $gettext(
+                    "This analysis has no zone on this page to lay the map on.",
+                )
+            }}</span>
+        </p>
+        <template v-if="laid">
+            <div class="opacity">
+                <p class="opacity-value">
+                    <span aria-hidden="true">{{ $gettext("Opacity") }}</span>
+                    <span class="value">{{ opacityText }}</span>
+                </p>
+                <Slider
+                    :model-value="opacityPercent"
+                    :min="0"
+                    :max="PERCENT"
+                    :step="OPACITY_STEP"
+                    :aria-label="$gettext('Opacity')"
+                    @update:model-value="setOpacity"
+                />
+            </div>
             <label class="toggle">
                 <input
-                    class="lay"
+                    class="curtain"
                     type="checkbox"
-                    :checked="laid"
-                    :disabled="!canLay"
-                    @change="onLayChange"
+                    :checked="underCurtain"
+                    @change="onCurtainChange"
                 />
-                <span>{{ $gettext("Lay on the page") }}</span>
+                <span>{{ $gettext("Curtain: compare with the page") }}</span>
             </label>
             <p
-                v-if="!canLay"
                 class="note"
+                role="note"
             >
                 <span>{{
-                    $gettext(
-                        "This analysis has no zone on this page to lay the map on.",
-                    )
+                    $gettext("Indicative positioning, not registered.")
                 }}</span>
             </p>
-            <template v-if="laid">
-                <div class="opacity">
-                    <p class="opacity-value">
-                        <span aria-hidden="true">{{
-                            $gettext("Opacity")
-                        }}</span>
-                        <span class="value">{{ opacityText }}</span>
-                    </p>
-                    <Slider
-                        :model-value="opacityPercent"
-                        :min="0"
-                        :max="PERCENT"
-                        :step="OPACITY_STEP"
-                        :aria-label="$gettext('Opacity')"
-                        @update:model-value="setOpacity"
-                    />
-                </div>
-                <label class="toggle">
-                    <input
-                        class="curtain"
-                        type="checkbox"
-                        :checked="underCurtain"
-                        @change="onCurtainChange"
-                    />
-                    <span>{{
-                        $gettext("Curtain: compare with the page")
-                    }}</span>
-                </label>
-                <p
-                    class="note"
-                    role="note"
-                >
-                    <span>{{
-                        $gettext("Indicative positioning, not registered.")
-                    }}</span>
-                </p>
-            </template>
         </template>
     </section>
 </template>

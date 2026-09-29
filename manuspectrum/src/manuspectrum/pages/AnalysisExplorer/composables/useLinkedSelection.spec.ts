@@ -142,7 +142,6 @@ describe("useLinkedSelection", () => {
         );
         expect(linked.slots.value).toBe(slots);
         expect(linked.cue.value).toBe(cue);
-        expect(linked.lastPinned.value).toBe(materialNode(CH2));
         linked.toggle(elementNode("Ca"));
         linked.toggle(analysisNode(AN1));
         expect(linked.slotOf(analysisNode(AN1))).toBe(2);
@@ -259,18 +258,6 @@ describe("useLinkedSelection", () => {
         anchor.remove();
         await vi.advanceTimersByTimeAsync(200);
         expect(linked.previewing.value).toBeNull();
-    });
-
-    it("keeps the node a toggle pinned last, even once unpinned", () => {
-        const linked = start();
-        expect(linked.lastPinned.value).toBeNull();
-        linked.toggle(elementNode("Cu"));
-        linked.toggle(elementNode("Ca"));
-        expect(linked.lastPinned.value).toBe(elementNode("Ca"));
-        linked.toggle(elementNode("Cu"));
-        expect(linked.lastPinned.value).toBe(elementNode("Ca"));
-        linked.toggle(elementNode("Ca"));
-        expect(linked.lastPinned.value).toBe(elementNode("Ca"));
     });
 
     it("names a node and offers its document", () => {

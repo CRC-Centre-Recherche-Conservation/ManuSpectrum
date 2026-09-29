@@ -1,12 +1,13 @@
-import { sharedLayers } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/maps.ts";
-
-import type { AutoWindow } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type {
+    AutoWindow,
+    MapLine,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 /**
  * What a folded window says under its header: how many spectra or maps it
  * holds, the slots they come from (in order, once each) and the names that
- * tell them apart: the technique codes of the spectra, the layers of the
- * maps (as `sharedLayers` orders them).
+ * tell them apart: the technique codes of the spectra, every distinct layer
+ * label met across the maps, in the order met.
  */
 export interface FoldedSummary {
     kind: "xy" | "maps";
@@ -17,6 +18,15 @@ export interface FoldedSummary {
 
 function sortedSlots(slots: readonly number[]): number[] {
     return [...new Set(slots)].sort((a, b) => a - b);
+}
+
+/** Every distinct layer label of `maps`, in the order first met. */
+function layerNames(maps: readonly MapLine[]): string[] {
+    const seen = new Set<string>();
+    for (const line of maps) {
+        for (const layer of line.file.layers) seen.add(layer.label);
+    }
+    return [...seen];
 }
 
 /** The summary of a window that folds; null for the others. */
@@ -37,7 +47,7 @@ export function foldedSummary(window: AutoWindow): FoldedSummary | null {
             kind: "maps",
             count: window.maps.length,
             slots: sortedSlots(window.maps.map((line) => line.slot)),
-            names: sharedLayers(window.maps).map((layer) => layer.label),
+            names: layerNames(window.maps),
         };
     }
     return null;

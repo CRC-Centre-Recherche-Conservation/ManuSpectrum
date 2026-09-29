@@ -466,7 +466,7 @@ describe("CompareView", () => {
         const maps = windowOf(view, "auto:chemical-imaging");
         expect(maps.find("h3 .name").text()).toBe("Chemical imaging");
         expect(maps.find("figcaption").text()).toContain("A1");
-        expect(maps.find(".layer-picker label").text()).toBe("Element");
+        expect(maps.find(".imaging-preview .current .value").text()).toBe("Pb");
         expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
             1,
         );

@@ -48,7 +48,6 @@ describe("related", () => {
         for (const id of [
             fileNode(F1),
             fileNode(F2),
-            elementNode("Fe"),
             techniqueNode("xrf"),
             canvasNode(C1),
             documentNode(D1),
@@ -56,6 +55,7 @@ describe("related", () => {
         ]) {
             expect(levels.get(id)).toBe("direct");
         }
+        expect(levels.has(elementNode("Fe"))).toBe(false);
         expect(levels.get(materialNode(CH1))).toBe("evidence");
         expect(levels.get(materialNode(CH2))).toBe("evidence");
         expect(levels.get(elementNode("Cu"))).toBe("evidence");
@@ -130,7 +130,7 @@ describe("related", () => {
             byKey: BY_KEY,
             synthesis: null,
         });
-        const levels = related(graph, new Set([elementNode("Fe")]));
+        const levels = related(graph, new Set([techniqueNode("xrf")]));
         expect(levels.get(analysisNode(AN1))).toBe("direct");
         expect(levels.get(materialNode(CH1))).toBe("evidence");
         expect(levels.has(materialNode(CH2))).toBe(false);

@@ -239,12 +239,10 @@ export interface DocumentPayload {
     samples: SampleSummary[];
 }
 
+/** One canvas of a chemical-imaging manifest: its position, its label as stored, its image. */
 export interface FileLayer {
     index: number;
     label: string;
-    kind: "element" | "band" | "other";
-    element: string | null;
-    band: { value: number; unit: string } | null;
     image: ImageRef;
 }
 

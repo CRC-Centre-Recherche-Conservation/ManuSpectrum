@@ -10,11 +10,13 @@ import {
     AN1,
     AN2,
     CH1,
+    F1,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
     analysisNode,
     elementNode,
+    fileNode,
     materialNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
@@ -86,16 +88,16 @@ describe("useLinkedMarks", () => {
         const started = startLinkedSelection();
         stop = started.stop;
         const marks = marksWith(started.linked);
-        marks.enter(elementNode("Fe"), { pointerType: "touch" });
+        marks.enter(fileNode(F1), { pointerType: "touch" });
         vi.runAllTimers();
         expect(marks.previewRel(analysisNode(AN1))).toBeUndefined();
-        marks.enter(elementNode("Fe"), { pointerType: "mouse" });
+        marks.enter(fileNode(F1), { pointerType: "mouse" });
         vi.runAllTimers();
-        expect(marks.previewRel(elementNode("Fe"))).toBe("self");
+        expect(marks.previewRel(fileNode(F1))).toBe("self");
         expect(marks.previewRel(analysisNode(AN1))).toBe("direct");
         expect(marks.previewRel(analysisNode(AN2))).toBeUndefined();
         expect(marks.rel(analysisNode(AN1))).toBeUndefined();
-        marks.toggle(elementNode("Fe"));
+        marks.toggle(fileNode(F1));
         expect(marks.previewRel(analysisNode(AN1))).toBeUndefined();
         marks.leave({ pointerType: "mouse" });
         vi.runAllTimers();

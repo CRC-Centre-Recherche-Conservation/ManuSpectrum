@@ -41,7 +41,7 @@ function around(graph: ReturnType<typeof buildGraph>, id: string): string[] {
 }
 
 describe("buildGraph", () => {
-    it("links each analysis of the Selection to its files, layers, elements mapped, technique, document, folio and slot", () => {
+    it("links each analysis of the Selection to its files, layers, technique, document, folio and slot", () => {
         const graph = buildGraph({
             basket: BASKET,
             byKey: BY_KEY,
@@ -53,15 +53,13 @@ describe("buildGraph", () => {
                 fileNode(F2),
                 layerNode(F2, 0),
                 layerNode(F2, 1),
-                elementNode("Fe"),
-                elementNode("Pb"),
                 techniqueNode("xrf"),
                 documentNode(D1),
                 canvasNode(C1),
                 slotNode(0),
             ].sort(),
         );
-        expect(around(graph, elementNode("Fe"))).toEqual([analysisNode(AN1)]);
+        expect(graph.nodes.has(elementNode("Fe"))).toBe(false);
     });
 
     it("links an identified material of the Selection to its values, objects, zone and evidence without the synthesis", () => {

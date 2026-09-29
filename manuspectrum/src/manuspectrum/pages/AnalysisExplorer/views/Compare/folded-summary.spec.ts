@@ -47,9 +47,6 @@ function elementLayer(index: number, symbol: string): FileLayer {
     return {
         index,
         label: symbol,
-        kind: "element",
-        element: symbol,
-        band: null,
         image: {
             service: `https://iiif.example/image/${symbol}`,
             url: null,
@@ -103,7 +100,7 @@ describe("foldedSummary", () => {
         expect(summary?.names).toEqual([]);
     });
 
-    it("counts the maps of the chemical imaging window and lists the layers they share", () => {
+    it("counts the maps of the chemical imaging window and lists every distinct layer label met", () => {
         const summary = foldedSummary(
             mapsWindow([mapLine(3, ["Pb", "Fe"]), mapLine(1, ["Hg", "Pb"])]),
         );

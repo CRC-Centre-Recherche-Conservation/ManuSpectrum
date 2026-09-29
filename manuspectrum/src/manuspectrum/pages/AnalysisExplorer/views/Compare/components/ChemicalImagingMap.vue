@@ -7,10 +7,6 @@ import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/Imagin
 import ChemicalImagingStage from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingStage.vue";
 import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 
-import {
-    ICONS,
-    ICON_VIEW_BOX,
-} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
@@ -37,29 +33,25 @@ import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometr
 type Mode = "reading" | "folio" | "no-zone" | "no-image" | "error";
 
 /**
- * One map of the « Chemical imaging » window, under its slot and name: the
- * document screen's imaging preview (`ImagingPreview`) showing the layer
- * held (`held`; null when the map lacks the layer `wanted`: the map then
- * says so and lists the layers it has; undefined leaves the map its own
- * layer scroll). Laid on the page, the layer goes over the analysis's zone
- * on its page (`ChemicalImagingStage`), under a curtain of this map's own.
- * The page comes from the document payload (`useDocument`, the tab memo);
- * without a zone with an extent, a page image or a readable document, the
- * map is shown alone. The card stands for its analysis (`an:`): the
- * analysis name is its toggle, carrying the focus marks, and the card is
- * tinted by how the analysis stands to the focus (an unlinked map fades)
- * and to the node a mouse previews.
+ * One map of the « Chemical imaging » window, under its slot and name: a
+ * classic document screen's imaging preview (`ImagingPreview`), stepping
+ * through this file's own layers with its own layer scroll. Laid on the
+ * page, the layer goes over the analysis's zone on its page
+ * (`ChemicalImagingStage`), under a curtain of this map's own. The page
+ * comes from the document payload (`useDocument`, the tab memo); without a
+ * zone with an extent, a page image or a readable document, the map is
+ * shown alone. The card stands for its analysis (`an:`): the analysis name
+ * is its toggle, carrying the focus marks, and the card is tinted by how
+ * the analysis stands to the focus (an unlinked map fades) and to the node
+ * a mouse previews.
  */
 const props = defineProps<{
     slotNumber: number;
     analysis: AnalysisHit;
     file: FileEntry;
-    held: number | null | undefined;
-    /** The label of the layer held on every map; null when there is none. */
-    wanted: string | null;
 }>();
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext } = useGettext();
 const marks = useLinkedMarks();
 
 const curtain = ref<string | null>(null);
@@ -108,28 +100,6 @@ const zones = computed<ReadonlySet<string>>(
                 ? [props.analysis.id]
                 : [],
         ),
-);
-const notMappedText = computed(() =>
-    props.wanted === null
-        ? $gettext("No layer for this map")
-        : interpolate(
-              $gettext("No %{layer} layer for this map"),
-              { layer: props.wanted },
-              true,
-          ),
-);
-const heldText = computed(() =>
-    props.file.layers.length === 0
-        ? ""
-        : interpolate(
-              $gettext("Its layers: %{layers}"),
-              {
-                  layers: props.file.layers
-                      .map((layer) => layer.label)
-                      .join(", "),
-              },
-              true,
-          ),
 );
 const aloneNote = computed(() => {
     switch (mode.value) {
@@ -184,33 +154,8 @@ provide(FOLIO_ZONES_KEY, zones);
         <ImagingPreview
             :file="props.file"
             :analysis="props.analysis"
-            :held="props.held"
             :contrast-note="false"
         >
-            <template #missing>
-                <div class="not-mapped">
-                    <svg
-                        :viewBox="ICON_VIEW_BOX"
-                        aria-hidden="true"
-                        focusable="false"
-                    >
-                        <path
-                            v-for="(path, index) in ICONS.image"
-                            :key="index"
-                            :d="path"
-                        />
-                    </svg>
-                    <p class="message">
-                        <span>{{ notMappedText }}</span>
-                    </p>
-                    <p
-                        v-if="heldText"
-                        class="held"
-                    >
-                        <span>{{ heldText }}</span>
-                    </p>
-                </div>
-            </template>
             <template
                 v-if="mode === 'folio' || mode === 'reading'"
                 #stage="stage"
@@ -369,36 +314,6 @@ provide(FOLIO_ZONES_KEY, zones);
     max-block-size: 70vh;
     border-radius: var(--explorer-radius, 0.625rem);
     object-fit: contain;
-}
-
-.chemical-imaging-map .not-mapped {
-    display: grid;
-    justify-items: center;
-    align-content: center;
-    gap: 0.375rem;
-    min-block-size: 10rem;
-    padding: 0.75rem;
-    border-radius: var(--explorer-radius, 0.625rem);
-    background: var(--bg-alt);
-    color: var(--ink-muted);
-    font-size: 0.8125rem;
-    text-align: center;
-}
-
-.chemical-imaging-map .not-mapped svg {
-    inline-size: 1.5rem;
-    block-size: 1.5rem;
-    fill: currentColor;
-}
-
-.chemical-imaging-map .not-mapped .message {
-    margin: 0;
-    color: var(--ink);
-    font-weight: 600;
-}
-
-.chemical-imaging-map .not-mapped .held {
-    margin: 0;
 }
 
 .chemical-imaging-map .loading {

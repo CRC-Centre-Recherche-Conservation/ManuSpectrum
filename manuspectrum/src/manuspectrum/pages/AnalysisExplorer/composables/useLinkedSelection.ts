@@ -83,8 +83,6 @@ export interface LinkedSelection {
     previewSlot: ComputedRef<number | null>;
     /** The nodes that gained a slot at the last pin, unpin or mode change, for `CUE_MS`. */
     cue: Readonly<ShallowRef<FocusCue>>;
-    /** The node the last toggle pinned; it may have been unpinned since. */
-    lastPinned: Readonly<Ref<NodeId | null>>;
     /** What the previewed node links; empty without a preview, and for an unpinned node while the focus is full. */
     previewLevels: ComputedRef<ReadonlyMap<NodeId, RelationLevel>>;
     /** The analyses and identified materials linked, the selected ones left out. */
@@ -116,10 +114,9 @@ const NO_NODES: ReadonlySet<NodeId> = new Set();
  * marks the nodes that gained a slot (`cue`) for `CUE_MS`. The preview follows a
  * mouse or pen resting on a node (80 ms to show, 120 ms to leave, applied
  * on the next frame) and is never announced; it ends at once when the
- * element it started on leaves the page. The last node a toggle pinned is
- * kept (`lastPinned`). While `FOCUS_MAX` nodes are pinned, a toggle on
- * another node only says the focus is full, and a preview of one promises
- * no slot and lights nothing. Escape clears the selection
+ * element it started on leaves the page. While `FOCUS_MAX` nodes are
+ * pinned, a toggle on another node only says the focus is full, and a
+ * preview of one promises no slot and lights nothing. Escape clears the selection
  * unless a menu, popover or dialog is open, a tooltip is shown, the key
  * was already handled, or the focus is in a field. Once the items are read
  * and the synthesis answers for the Selection shown, a selected node the
@@ -136,7 +133,6 @@ export function useLinkedSelection({
     const previewing = ref<NodeId | null>(null);
     const previewAnchor = shallowRef<Element | null>(null);
     const cue = shallowRef<FocusCue>({ generation: 0, nodes: NO_NODES });
-    const lastPinned = ref<NodeId | null>(null);
     let cueTimer: ReturnType<typeof setTimeout> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let frame: number | null = null;
@@ -332,7 +328,6 @@ export function useLinkedSelection({
             return;
         }
         withCue(() => store.toggleSelection(id));
-        if (selection.value.includes(id)) lastPinned.value = id;
         announce(summary.value);
     }
 
@@ -344,7 +339,6 @@ export function useLinkedSelection({
 
     function clear(): void {
         if (selection.value.length === 0) return;
-        lastPinned.value = null;
         withCue(() => store.clearSelection());
         announce(summary.value);
     }
@@ -372,7 +366,6 @@ export function useLinkedSelection({
         previewAnchor,
         previewSlot,
         cue,
-        lastPinned,
         previewLevels,
         relatedCount,
         summary,

@@ -29,6 +29,7 @@ import {
     AN2,
     BY_KEY_WITH_COMPONENT,
     CH1,
+    F1,
     K1,
     SYNTHESIS_WITH_COMPONENT,
     startLinkedSelection,
@@ -37,7 +38,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import {
     analysisNode,
     componentNode,
-    elementNode,
+    fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
@@ -557,7 +558,7 @@ describe("FolioTool", () => {
             const frame = () => view.find("path.folio-tool-frame");
             expect(frame().attributes("stroke-dasharray")).toBe("4 4");
             expect(hosts(view, "rel")).toEqual([undefined, undefined]);
-            linked.toggle(elementNode("Fe"));
+            linked.toggle(fileNode(F1));
             await flushPromises();
             expect(frame().attributes("stroke-dasharray")).toBeUndefined();
             expect(Number(frame().attributes("stroke-width"))).toBe(3);
@@ -581,7 +582,7 @@ describe("FolioTool", () => {
         it("frames the linked marks of the page on « Fit to related »", async () => {
             const { view, linked } = await mountLinked();
             expect(view.find(".related").exists()).toBe(false);
-            linked.toggle(elementNode("Fe"));
+            linked.toggle(fileNode(F1));
             await flushPromises();
             const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
             await view.find(".related .fit").trigger("click");

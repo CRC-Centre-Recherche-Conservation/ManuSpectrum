@@ -70,17 +70,11 @@ const A1: Item = {
                 {
                     index: 0,
                     label: "Fe Ka",
-                    kind: "element",
-                    element: "Fe",
-                    band: null,
                     image: { service: null, url: null, width: 1, height: 1 },
                 },
                 {
                     index: 1,
                     label: "Pb La",
-                    kind: "element",
-                    element: "Pb",
-                    band: null,
                     image: { service: null, url: null, width: 1, height: 1 },
                 },
             ],

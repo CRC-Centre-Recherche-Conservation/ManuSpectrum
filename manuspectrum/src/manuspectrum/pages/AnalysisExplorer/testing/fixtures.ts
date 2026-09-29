@@ -405,20 +405,10 @@ export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
             decimated: false,
         },
         layers: [
-            {
-                index: 0,
-                label: "Pb",
-                kind: "element",
-                element: "Pb",
-                band: null,
-                image,
-            },
+            { index: 0, label: "Pb", image },
             {
                 index: 1,
                 label: "Hg",
-                kind: "element",
-                element: "Hg",
-                band: null,
                 image: { ...image, service: "https://iiif.example/image/hg" },
             },
         ],
