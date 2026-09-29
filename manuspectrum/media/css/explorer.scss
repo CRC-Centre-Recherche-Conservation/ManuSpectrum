@@ -507,6 +507,22 @@ body.ms-page--app .ms-skeleton {
     background: var(--hp, var(--focus-1));
 }
 
+// A heat-4 cell (coverage matrix, periodic table) is dark enough that no
+// focus hue reaches 3:1 against it: the ring takes a 1px --surface halo
+// just inside it, painted on the cell's own box, under the masked ::before
+// ring (self: ring + 2px, direct: ring + 1px, evidence: 1px).
+:is(.coverage-matrix .cell, .periodic-table .found)[data-heat='4'].ms-focus[data-rel='self'] {
+    box-shadow: inset 0 0 0 calc(var(--link-ring) + 0.125rem) var(--surface);
+}
+
+:is(.coverage-matrix .cell, .periodic-table .found)[data-heat='4'].ms-focus[data-rel='direct'] {
+    box-shadow: inset 0 0 0 calc(var(--link-ring) + 0.0625rem) var(--surface);
+}
+
+:is(.coverage-matrix .cell, .periodic-table .found)[data-heat='4'].ms-focus[data-rel='evidence'] {
+    box-shadow: inset 0 0 0 0.125rem var(--surface);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ms-focus,
     .ms-focus::before,

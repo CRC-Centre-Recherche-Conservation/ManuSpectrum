@@ -78,7 +78,8 @@ const MARKER_INSET = 12;
 const FRAME_WEIGHT = 2;
 const LINKED_FRAME_WEIGHT = 3;
 const SELF_FRAME_WEIGHT = 4;
-const HALO_WEIGHT = 5;
+/** 2px wider than the heaviest frame (`SELF_FRAME_WEIGHT`), so its halo margin never runs thinner than the others. */
+const HALO_WEIGHT = 6;
 const HALO_OPACITY = 0.9;
 /** The opacity of what the selection does not link (`--linked-fade`). */
 const FADED_OPACITY = 0.35;

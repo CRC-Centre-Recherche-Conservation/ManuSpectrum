@@ -116,17 +116,14 @@
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;
     --map-coast: #b7c4cf;
-    // Compare's focus. Each pinned node owns a slot and its hue (four slots
-    // at most, each ≥ 5.4:1 on --surface, white digits on them ≥ 5.4:1).
-    // --link-ring: the ring's width, --link-pip: the pip's height,
-    // --focus-room: how far a pip rises above its toggle, the room a list
-    // of toggles keeps between its rows and at the top of its scroller,
-    // --link-fade-surface: how much of its fill an unlinked cell keeps,
-    // --linked-fade: the opacity of an unlinked image or zone.
-    --focus-1: #6d28d9;
-    --focus-2: #047857;
-    --focus-3: #a21caf;
-    --focus-4: #9a3412;
+    // Compare's focus: one hue per pinned slot (1–4), illuminator's inks —
+    // indigo, verdigris, orchil, dragon's blood. White digits on them ≥ 5.7:1;
+    // as a ring ≥ 3.1:1 on --heat-3. On --heat-4 no such hue reaches 3:1: the
+    // ring there takes a 1px --surface halo (explorer.scss).
+    --focus-1: #3d2e8d;
+    --focus-2: #1e6256;
+    --focus-3: #93499e;
+    --focus-4: #760a03;
     --focus-on: #ffffff;
     --link-ring: 0.125rem;
     --link-pip: 0.875rem;
