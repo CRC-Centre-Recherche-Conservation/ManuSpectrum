@@ -179,6 +179,7 @@ export function documentPayload(
         ],
         techniques: {},
         analyses: [],
+        components: [],
         characterizations: [],
         history: [],
         unpublishedCount: 0,

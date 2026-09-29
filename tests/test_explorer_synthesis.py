@@ -5,10 +5,13 @@ Usage:
 """
 
 import copy
+import re
 from unittest import mock
 from uuid import NAMESPACE_URL, uuid5
 
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 
 from arches_controlled_lists.models import List, ListItem
 
@@ -48,6 +51,7 @@ SOURCE_2 = {
     ],
 }
 POINT = {"type": "Point", "coordinates": [10, -20]}
+COMPONENT_NAMES = {"open": "f. 1v — initial", "embargoed": "f. 3r"}
 
 
 def item_id(uri):
@@ -134,6 +138,13 @@ class SynthesisCase(IIIFCase):
     def an(self, key):
         return f"an:{self.analyses[key].pk}:-"
 
+    def component_ref(self, key):
+        return {
+            "id": str(self.components[key].pk),
+            "model": "component",
+            "name": {"value": COMPONENT_NAMES[key], "lang": "en"},
+        }
+
 
 class SynthesisShapeTests(SynthesisCase):
     def test_the_payload_follows_the_contract(self):
@@ -142,6 +153,8 @@ class SynthesisShapeTests(SynthesisCase):
         assert_shape(self, payload, "SynthesisResponse")
         for row in payload["coverage"]:
             assert_shape(self, row, "SynthesisCoverage")
+            for split in row["components"]:
+                assert_shape(self, split, "SynthesisCoverageComponent")
         for technique in payload["techniques"]:
             assert_shape(self, technique, "Technique")
         for canvas in payload["canvases"]:
@@ -154,6 +167,7 @@ class SynthesisShapeTests(SynthesisCase):
             assert_shape(self, element, "SynthesisElement")
         for material in payload["materials"]:
             assert_shape(self, material, "SynthesisMaterial")
+            assert_shape(self, material["summary"], "CharacterizationSummary")
         self.assertTrue(
             payload["coverage"]
             and payload["canvases"]
@@ -176,12 +190,22 @@ class CoverageTests(SynthesisCase):
                     "label": "f. 1v",
                     "document": str(self.documents["open"].pk),
                     "counts": {item_id(XRF): 2, item_id(FORS): 1},
+                    "components": [
+                        {"component": None, "counts": {item_id(FORS): 1}},
+                        {
+                            "component": self.component_ref("open"),
+                            "counts": {item_id(XRF): 2},
+                        },
+                    ],
                 },
                 {
                     "canvas": CANVAS_3,
                     "label": "f. 3r",
                     "document": str(self.documents["open"].pk),
                     "counts": {item_id(FORS): 1},
+                    "components": [
+                        {"component": None, "counts": {item_id(FORS): 1}},
+                    ],
                 },
             ],
         )
@@ -201,7 +225,7 @@ class CoverageTests(SynthesisCase):
         payload = self.payload([f"ch:{self.characterization.pk}:-"])
 
         self.assertEqual((payload["coverage"], payload["techniques"]), ([], []))
-        self.assertEqual(payload["pairs"][0]["canvases"], [CANVAS_3])
+        self.assertEqual(payload["materials"][0]["canvases"], [CANVAS_3])
         self.assertEqual(
             payload["canvases"],
             [
@@ -390,35 +414,38 @@ class LinkedIdsTests(SynthesisCase):
             [("Cu", self.ids(self.characterization, self.second))],
         )
 
-    def test_each_identified_material_lists_its_evidence_in_scope_canvases_cells_and_objects(
+    def test_each_identified_material_lists_its_evidence_in_scope_canvases_and_objects(
         self,
     ):
         payload = self.payload([self.an("open"), f"ch:{self.chalk.pk}:-"])
 
         self.assertEqual(
-            payload["materials"],
+            [
+                {k: v for k, v in m.items() if k != "summary"}
+                for m in payload["materials"]
+            ],
             sorted(
                 [
                     {
                         "id": str(self.characterization.pk),
                         "evidence": self.ids(self.analyses["open"]),
                         "canvases": [CANVAS_3],
-                        "cells": [[CANVAS_3, item_id(XRF)]],
                         "objects": self.ids(self.components["open"]),
+                        "selected": False,
                     },
                     {
                         "id": str(self.chalk.pk),
                         "evidence": [],
                         "canvases": [],
-                        "cells": [],
                         "objects": self.ids(self.documents["open"]),
+                        "selected": True,
                     },
                 ],
                 key=lambda m: m["id"],
             ),
         )
 
-    def test_a_pair_holds_the_union_of_its_materials_cells_and_counts_them(self):
+    def test_a_pair_counts_its_materials_and_every_one_is_listed(self):
         self.tile(
             self.second,
             "location_of_characterization",
@@ -431,14 +458,11 @@ class LinkedIdsTests(SynthesisCase):
         )
         for keys in selections:
             payload = self.payload(keys)
-            cells = {m["id"]: m["cells"] for m in payload["materials"]}
+            listed = [m["id"] for m in payload["materials"]]
             for pair in payload["pairs"]:
-                union = {tuple(cell) for m in pair["materials"] for cell in cells[m]}
-                self.assertEqual({tuple(cell) for cell in pair["cells"]}, union, keys)
-                self.assertEqual(len(pair["cells"]), len(union), keys)
                 self.assertEqual(pair["count"], len(pair["materials"]), keys)
             self.assertEqual(
-                sorted(cells),
+                sorted(listed),
                 sorted({m for p in payload["pairs"] for m in p["materials"]}),
                 keys,
             )
@@ -454,11 +478,6 @@ class PairsAndElementsTests(SynthesisCase):
             (pair["colour"]["uri"], pair["material"]["uri"], pair["count"]),
             (BLUE, AZURITE, 1),
         )
-        self.assertEqual(pair["canvases"], [CANVAS_3])
-        self.assertEqual(
-            (pair["confidenceBest"]["uri"], pair["confidenceBest"]["rank"]),
-            (RELIABLE, 1),
-        )
         self.assertEqual(
             [(e["uri"], e["symbol"]) for e in pair["elements"]], [(COPPER, "Cu")]
         )
@@ -466,16 +485,13 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 1)],
         )
-        self.assertEqual(pair["cells"], [[CANVAS_3, item_id(XRF)]])
 
-    def test_one_pair_gathers_its_materials_with_the_best_confidence_and_level(self):
+    def test_one_pair_gathers_its_materials_with_the_best_level(self):
         payload = self.payload([self.an("open"), self.an("on_document")])
 
         pair = payload["pairs"][0]
         self.assertEqual(len(payload["pairs"]), 1)
         self.assertEqual(pair["count"], 2)
-        self.assertEqual(pair["confidenceBest"]["uri"], HIGHLY)
-        self.assertEqual(pair["canvases"], [CANVAS_3])
         self.assertEqual(
             [(e["uri"], e["symbol"]) for e in pair["elements"]],
             [(COPPER, "Cu"), (LEAD, None)],
@@ -484,41 +500,15 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 2)],
         )
-        self.assertEqual(
-            pair["cells"], [[CANVAS_3, item_id(FORS)], [CANVAS_3, item_id(XRF)]]
-        )
 
-    def test_a_pair_holds_each_material_s_canvases_by_its_own_techniques(self):
-        self.tile(
-            self.second,
-            "location_of_characterization",
-            self.annotation_value(CANVAS, POINT),
-        )
-
-        pair = self.payload([self.an("open"), self.an("on_document")])["pairs"][0]
-
-        self.assertEqual(pair["canvases"], [CANVAS, CANVAS_3])
-        self.assertEqual(
-            pair["cells"],
-            [
-                [CANVAS, item_id(FORS)],
-                [CANVAS_3, item_id(FORS)],
-                [CANVAS_3, item_id(XRF)],
-            ],
-        )
-
-    def test_a_material_without_colour_or_confidence_pairs_with_null(self):
+    def test_a_material_without_colour_pairs_with_null(self):
         payload = self.payload([f"ch:{self.chalk.pk}:-"])
 
         self.assertEqual(
-            [
-                (p["colour"], p["material"]["uri"], p["confidenceBest"], p["count"])
-                for p in payload["pairs"]
-            ],
-            [(None, CHALK, None, 1)],
+            [(p["colour"], p["material"]["uri"], p["count"]) for p in payload["pairs"]],
+            [(None, CHALK, 1)],
         )
         self.assertEqual(payload["elements"], [])
-        self.assertEqual(payload["pairs"][0]["cells"], [])
 
 
 class SynthesisPermissionTests(SynthesisCase):
@@ -562,11 +552,16 @@ class SynthesisPermissionTests(SynthesisCase):
                     "label": "f. 1v",
                     "document": str(self.documents["open"].pk),
                     "counts": {item_id(XRF): 1},
+                    "components": [
+                        {
+                            "component": self.component_ref("open"),
+                            "counts": {item_id(XRF): 1},
+                        }
+                    ],
                 }
             ],
         )
         self.assertEqual(payload["pairs"][0]["count"], 1)
-        self.assertEqual(payload["pairs"][0]["cells"], [[CANVAS_3, item_id(XRF)]])
         self.assertEqual([t["id"] for t in payload["techniques"]], [item_id(XRF)])
         self.assertEqual(
             [(c["canvas"], c["selected"]) for c in payload["canvases"]],
@@ -583,6 +578,193 @@ class SynthesisPermissionTests(SynthesisCase):
 
         self.assertEqual(payload["pairs"], [])
         self.assertEqual(payload["elements"][0]["symbol"], "Cu")
+        self.assertTrue(payload["materials"])
+        self.assertEqual(
+            [m["summary"]["materials"] for m in payload["materials"]],
+            [[] for _ in payload["materials"]],
+        )
+
+
+class CoverageByComponentTests(SynthesisCase):
+    def test_a_row_is_split_by_component_and_the_splits_sum_to_its_counts(self):
+        untyped = self.new_resource("analysis", "XRF_09 — f. 1v")
+        self.tile(untyped, "component_observed", self.refs(self.components["open"]))
+        self.tile(
+            untyped, "analysis_technique_used", self.reference_value(FORS, "T fors")
+        )
+        self.zone(untyped, [("0a0a0a0a-0000-4000-8000-00000000000d", CANVAS, POINT)])
+        selections = (
+            [self.an("open")],
+            [self.an("on_document")],
+            [self.an("open"), self.an("on_document"), self.an("draft")],
+            [self.an("open"), self.an("draft"), f"an:{untyped.pk}:-"],
+        )
+        for keys in selections:
+            for row in self.payload(keys)["coverage"]:
+                total = {}
+                for split in row["components"]:
+                    for technique, n in split["counts"].items():
+                        total[technique] = total.get(technique, 0) + n
+                self.assertEqual(total, row["counts"], keys)
+                ids = [
+                    s["component"] and s["component"]["id"] for s in row["components"]
+                ]
+                self.assertEqual(len(ids), len(set(ids)), keys)
+
+    def test_analyses_of_the_folio_come_first_then_each_component(self):
+        payload = self.payload(
+            [self.an("draft"), self.an("on_document"), self.an("open")]
+        )
+
+        self.assertEqual(
+            payload["coverage"][0]["components"],
+            [
+                {"component": None, "counts": {item_id(FORS): 1}},
+                {
+                    "component": self.component_ref("open"),
+                    "counts": {item_id(XRF): 2},
+                },
+            ],
+        )
+
+    def test_components_are_ordered_by_their_first_row_then_name(self):
+        parts = {}
+        keys = [self.an("open")]
+        for name, feature in (
+            ("Zeta part", "0a0a0a0a-0000-4000-8000-00000000000e"),
+            ("Alpha part", "0a0a0a0a-0000-4000-8000-00000000000f"),
+            ("f. 1v — initial", "0a0a0a0a-0000-4000-8000-000000000010"),
+        ):
+            part = parts.get(name) or self.new_resource("component", name)
+            if name == "f. 1v — initial":
+                part = self.components["open"]
+            else:
+                self.tile(
+                    part,
+                    "item_visual_is_part_of_document",
+                    self.refs(self.documents["open"]),
+                )
+            parts[name] = part
+            analysis = self.new_resource("analysis", f"XRF — {name}")
+            self.tile(analysis, "component_observed", self.refs(part))
+            self.tile(
+                analysis, "analysis_technique_used", self.reference_value(XRF, "T")
+            )
+            self.zone(analysis, [(feature, CANVAS_3, POINT)])
+            keys.append(f"an:{analysis.pk}:-")
+
+        payload = self.payload(keys)
+
+        ids = {name: str(part.pk) for name, part in parts.items()}
+        self.assertEqual(
+            [
+                (row["canvas"], [s["component"]["id"] for s in row["components"]])
+                for row in payload["coverage"]
+            ],
+            [
+                (CANVAS, [ids["f. 1v — initial"]]),
+                (
+                    CANVAS_3,
+                    [ids["f. 1v — initial"], ids["Alpha part"], ids["Zeta part"]],
+                ),
+            ],
+        )
+
+
+class MaterialSummaryTests(SynthesisCase):
+    def test_each_material_carries_the_summary_the_items_payload_gives_its_key(self):
+        keys = [f"ch:{c.pk}:-" for c in (self.characterization, self.second)]
+
+        payload = self.payload([self.an("open"), *keys])
+        items = self.client.get("/en/api/explorer/items", {"ids": ",".join(keys)})
+
+        self.assertEqual(
+            {m["id"]: m["summary"] for m in payload["materials"]},
+            {
+                item["characterization"]["id"]: item["characterization"]
+                for item in items.json()["items"]
+            },
+        )
+
+    def test_a_material_of_the_selection_is_selected_and_one_citing_it_is_not(self):
+        payload = self.payload(
+            [self.an("open"), self.an("on_document"), f"ch:{self.chalk.pk}:-"]
+        )
+
+        self.assertEqual(
+            {m["id"]: m["selected"] for m in payload["materials"]},
+            {
+                str(self.characterization.pk): False,
+                str(self.second.pk): False,
+                str(self.chalk.pk): True,
+            },
+        )
+        citing = next(m for m in payload["materials"] if m["id"] == str(self.second.pk))
+        self.assertEqual(
+            (citing["summary"]["name"]["value"], citing["summary"]["evidence"]),
+            (
+                "Azurite, second",
+                [
+                    {
+                        "id": str(self.analyses["on_document"].pk),
+                        "name": citing["summary"]["evidence"][0]["name"],
+                    }
+                ],
+            ),
+        )
+
+    def test_a_summary_names_no_hidden_analysis(self):
+        self.embargo(self.analyses["on_document"])
+        keys = [self.an("open"), f"ch:{self.characterization.pk}:-"]
+
+        summary = self.payload(keys)["materials"][0]["summary"]
+        body = self.get(keys).content.decode()
+
+        self.assertEqual(
+            [e["id"] for e in summary["evidence"]], [str(self.analyses["open"].pk)]
+        )
+        self.assertNotIn(str(self.analyses["on_document"].pk), body)
+
+    def test_a_hidden_material_citing_the_selection_has_no_summary(self):
+        self.embargo(self.second)
+
+        body = self.get([self.an("on_document")]).content.decode()
+
+        self.assertNotIn(str(self.second.pk), body)
+        self.assertNotIn("Azurite, second", body)
+
+    def test_summaries_are_read_in_a_fixed_number_of_queries(self):
+        def like_second(name):
+            material = self.new_resource("characterization", name)
+            self.tile(
+                material, "evidence_analyses", self.refs(self.analyses["on_document"])
+            )
+            self.tile(material, "object_observed", self.refs(self.documents["open"]))
+            self.describe(
+                material,
+                AZURITE,
+                HIGHLY,
+                BLUE,
+                [(self.reference_value(COPPER, "Copper", alt="Cu"), TRACE)],
+            )
+            return material
+
+        def queries(materials):
+            keys = [f"ch:{c.pk}:-" for c in materials]
+            self.payload(keys)
+            with CaptureQueriesContext(connection) as captured:
+                self.payload(keys)
+            return len(
+                [
+                    q
+                    for q in captured.captured_queries
+                    if not re.search(r"silk_|SAVEPOINT|^EXPLAIN", q["sql"])
+                ]
+            )
+
+        others = [like_second("Azurite, third"), like_second("Azurite, fourth")]
+
+        self.assertEqual(queries([self.second, *others]), queries([self.second]))
 
 
 class SynthesisRouteTests(SynthesisCase):

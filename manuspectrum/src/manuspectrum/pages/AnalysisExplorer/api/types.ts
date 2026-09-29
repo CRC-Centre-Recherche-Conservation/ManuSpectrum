@@ -149,6 +149,13 @@ export interface DocumentAnalysis {
     zones: AnalysisZone[];
 }
 
+/** A visible Component of a document placed on its pages: its own zones, by page then feature id. */
+export interface DocumentComponent {
+    id: string;
+    name: Label;
+    zones: AnalysisZone[];
+}
+
 export interface MatchKept {
     /** The analyses the filters keep; null when no filter is active (every analysis kept). */
     analyses: string[] | null;
@@ -222,6 +229,8 @@ export interface DocumentPayload {
     /** Each technique of the document's analyses, by uri. */
     techniques: Record<string, Technique>;
     analyses: DocumentAnalysis[];
+    /** The Components placed on its pages, by first page then name. */
+    components: DocumentComponent[];
     characterizations: CharacterizationSummary[];
     history: HistoryLine[];
     unpublishedCount: number;
@@ -398,6 +407,12 @@ export interface ItemsResponse {
     missing: string[];
 }
 
+/** The analyses of a coverage row observing one component (null: the folio itself, no component), by technique id. */
+export interface SynthesisCoverageComponent {
+    component: Ref | null;
+    counts: Record<string, number>;
+}
+
 /** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
 export interface SynthesisCoverage {
     canvas: string;
@@ -406,6 +421,12 @@ export interface SynthesisCoverage {
     /** Id of the document whose manifest lists the canvas. */
     document: string;
     counts: Record<string, number>;
+    /**
+     * `counts` split by the component each analysis observes (`AnalysisHit.component`),
+     * summing to `counts`: null first, then the components by the first row of
+     * the response they appear in, then name.
+     */
+    components: SynthesisCoverageComponent[];
 }
 
 /** A canvas an item of the synthesis is placed on. */
@@ -436,13 +457,8 @@ export interface SynthesisPair {
     colour: ValueRef | null;
     material: ValueRef;
     elements: SynthesisElementRef[];
-    /** Canvas ids, in document then page order. */
-    canvases: string[];
-    confidenceBest: RankedValue | null;
     /** Number of identified materials. */
     count: number;
-    /** The union of its identified materials' `cells`; by canvas, then technique label. */
-    cells: [string, string][];
     /** Ids of its identified materials, sorted; `count` is their number. */
     materials: string[];
 }
@@ -463,10 +479,12 @@ export interface SynthesisMaterial {
     evidence: string[];
     /** Ids of the canvases it is placed on, in document then page order. */
     canvases: string[];
-    /** `[canvas, technique id]`: its canvases × the techniques of its `evidence`; by canvas, then technique label. */
-    cells: [string, string][];
     /** Ids of its visible objects observed (documents and components), sorted. */
     objects: string[];
+    /** Its summary, as `ItemsResponse` gives it for its `ch:` key (`zone` null), with the visitor's view. */
+    summary: CharacterizationSummary;
+    /** Whether it is a `ch:` item of the Selection itself rather than only citing one of its analyses. */
+    selected: boolean;
 }
 
 /**
@@ -599,6 +617,7 @@ export const SHAPE_KEYS = {
         canvases: true,
         techniques: true,
         analyses: true,
+        components: true,
         characterizations: true,
         history: true,
         unpublishedCount: true,
@@ -616,6 +635,10 @@ export const SHAPE_KEYS = {
     } satisfies Record<keyof DocumentAnalysis, true>,
     AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
         keyof AnalysisZone,
+        true
+    >,
+    DocumentComponent: { id: true, name: true, zones: true } satisfies Record<
+        keyof DocumentComponent,
         true
     >,
     ContentStateLink: {
@@ -765,7 +788,12 @@ export const SHAPE_KEYS = {
         label: true,
         document: true,
         counts: true,
+        components: true,
     } satisfies Record<keyof SynthesisCoverage, true>,
+    SynthesisCoverageComponent: {
+        component: true,
+        counts: true,
+    } satisfies Record<keyof SynthesisCoverageComponent, true>,
     SynthesisCanvas: {
         canvas: true,
         document: true,
@@ -778,10 +806,7 @@ export const SHAPE_KEYS = {
         colour: true,
         material: true,
         elements: true,
-        canvases: true,
-        confidenceBest: true,
         count: true,
-        cells: true,
         materials: true,
     } satisfies Record<keyof SynthesisPair, true>,
     SynthesisElementRef: {
@@ -800,7 +825,8 @@ export const SHAPE_KEYS = {
         id: true,
         evidence: true,
         canvases: true,
-        cells: true,
         objects: true,
+        summary: true,
+        selected: true,
     } satisfies Record<keyof SynthesisMaterial, true>,
 } as const;
