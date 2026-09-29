@@ -5,7 +5,6 @@ import {
     hoverModeFor,
     UNIFIED_HOVER_MAX_CURVES,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
-import { focusHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 
 import type { XyView } from "utils/xy-views";
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -77,21 +76,13 @@ export function visibleCurveCount(states: readonly CurveState[]): number {
         .length;
 }
 
-/** The pin (1…4) a curve currently takes its colour from, and its dash rank among the curves sharing that pin, in window order. */
-export interface CurveFocus {
-    slot: number;
-    rank: number;
-}
-
 /**
  * A curve's current colour+dash identity: `"series"` is its own window
- * position (`curveHue`/`curveDash`), `"focus"` a pin's hue while it links
- * the curve (`CurveFocus.slot`, its dash then set by `CurveFocus.rank`
- * instead), `"context"` the grey of a dimmed, unrelated curve.
+ * position (`curveHue`/`curveDash`), unchanged by the focus; `"context"` the
+ * grey of a dimmed, unrelated curve.
  */
 export type CurveLook =
     | { kind: "series"; hue: number; dash: Dash }
-    | { kind: "focus"; slot: number; dash: Dash }
     | { kind: "context"; dash: Dash };
 
 /** The style attributes of one curve, all of them Plotly `editType: "style"` (`hoverinfo`: `none`). */
@@ -107,8 +98,6 @@ export interface CurvePaint {
 /** The colours a paint is chosen from (`PlotTheme`). */
 export interface CurvePalette {
     series: readonly string[];
-    /** The four pin hues, `focus[0]` for slot 1. */
-    focus: readonly string[];
     context: string;
 }
 
@@ -201,21 +190,11 @@ export function curveDash(index: number): Dash {
 }
 
 /**
- * A curve's current identity: its base position in the window, or a pin's
- * hue while `focus` links it (dash then set by the curve's rank among
- * others sharing that pin, so they stay told apart), or grey context while
- * dimmed. `focus` is null unless `state` is `"emphasised"` by an actual pin
- * (never set from a bare preview, which has no pin of its own).
+ * A curve's current identity: its base position in the window, unchanged by
+ * the focus, or grey context while dimmed.
  */
-export function curveLook(
-    index: number,
-    state: CurveState,
-    focus: CurveFocus | null,
-): CurveLook {
+export function curveLook(index: number, state: CurveState): CurveLook {
     if (state === "dimmed") return { kind: "context", dash: curveDash(index) };
-    if (state === "emphasised" && focus) {
-        return { kind: "focus", slot: focus.slot, dash: dashOf(focus.rank) };
-    }
     return { kind: "series", hue: curveHue(index), dash: curveDash(index) };
 }
 
@@ -224,8 +203,6 @@ export function curveColourVar(look: CurveLook): string {
     switch (look.kind) {
         case "context":
             return "var(--series-context)";
-        case "focus":
-            return focusHue(look.slot);
         case "series":
             return `var(--series-${look.hue + 1})`;
     }
@@ -236,8 +213,6 @@ export function curveColour(palette: CurvePalette, look: CurveLook): string {
     switch (look.kind) {
         case "context":
             return palette.context;
-        case "focus":
-            return palette.focus[look.slot - 1];
         case "series":
             return palette.series[look.hue];
     }
@@ -268,18 +243,16 @@ export function curveState(
 
 /**
  * Every curve at 1.5 px in its own hue, emphasised (a pin or a preview) at
- * 2.5 px, colour unchanged by a bare preview; a curve a pin links takes
- * that pin's hue instead (`curveLook`) at the same 2.5 px. A hidden curve
- * keeps its line, at opacity 0, out of the hover. A dimmed curve draws in
- * grey context at reduced opacity and width, out of the hover too.
+ * 2.5 px, colour and dash unchanged by the focus (`curveLook`). A hidden
+ * curve keeps its line, at opacity 0, out of the hover. A dimmed curve draws
+ * in grey context at reduced opacity and width, out of the hover too.
  */
 export function curvePaint(
     palette: CurvePalette,
     index: number,
     state: CurveState,
-    focus: CurveFocus | null = null,
 ): CurvePaint {
-    const look = curveLook(index, state, focus);
+    const look = curveLook(index, state);
     const colour = curveColour(palette, look);
     if (state === "dimmed") {
         return {
@@ -300,9 +273,10 @@ export function curvePaint(
  * The paints of every trace, in trace order, as the arrays of one
  * `Plotly.restyle`. `line.dash` is `editType: "style"` in
  * plotly.js-cartesian-dist 4.0.0 (verified against its scatter attribute
- * meta, same as `line.color`/`line.width`): restyling it redraws the line
- * without a recalc, so a curve's dash can follow the focus with the rest of
- * its paint, no full redraw.
+ * meta, same as `line.color`/`line.width`): a curve's dash never actually
+ * changes across a restyle (it is fixed by its window position), but
+ * restyling it alongside the rest of the paint costs no recalc and no full
+ * redraw.
  */
 export function restyleUpdate(paints: readonly CurvePaint[]): {
     opacity: number[];

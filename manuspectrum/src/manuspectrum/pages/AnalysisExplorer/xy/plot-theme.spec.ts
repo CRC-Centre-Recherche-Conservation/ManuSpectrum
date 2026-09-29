@@ -46,16 +46,6 @@ describe("plot theme", () => {
         expect(readPlotTheme().context).toBe("#8a8999");
     });
 
-    it("reads the four pin hues", () => {
-        setTokens({
-            "--focus-1": "#3d2e8d",
-            "--focus-4": "#760a03",
-        });
-        const theme = readPlotTheme();
-        expect(theme.focus[0]).toBe("#3d2e8d");
-        expect(theme.focus[3]).toBe("#760a03");
-    });
-
     it("reads the surface and the elevated border the hover label draws on", () => {
         setTokens({
             "--surface": "#ffffff",

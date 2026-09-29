@@ -2,7 +2,6 @@ import type { Config, Layout } from "plotly.js";
 
 const TRANSPARENT = "rgba(0,0,0,0)";
 const SERIES = 12;
-const FOCUS_SLOTS = 4;
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;
 /** The number format of a hover value: 4 significant digits, no trailing zeros. */
@@ -18,8 +17,6 @@ export const UNIFIED_HOVER_MAX_CURVES = 12;
 
 export interface PlotTheme {
     series: string[];
-    /** The four pin hues (`--focus-1..4`) a curve's colour switches to while a focus links it. */
-    focus: string[];
     /** The grey of a curve dimmed by the focus's « Dim » switch (unrelated to any pin). */
     context: string;
     ink: string;
@@ -56,9 +53,6 @@ export function readPlotTheme(
     return {
         series: Array.from({ length: SERIES }, (_, index) =>
             token(`--series-${index + 1}`, "#1a1a2e"),
-        ),
-        focus: Array.from({ length: FOCUS_SLOTS }, (_, index) =>
-            token(`--focus-${index + 1}`, "#1a1a2e"),
         ),
         context: token("--series-context", "#8a8999"),
         ink: token("--ink", "#1a1a2e"),

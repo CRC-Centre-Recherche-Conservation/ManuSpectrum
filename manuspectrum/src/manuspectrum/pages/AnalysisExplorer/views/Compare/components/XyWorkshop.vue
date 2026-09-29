@@ -31,7 +31,6 @@ import {
     canvasNode,
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
-import { mergeRelations } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import {
     annotationLabels,
     viewLabels,
@@ -94,7 +93,6 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 import type {
     AxisView,
-    CurveFocus,
     CurveRow,
     CurveState,
     Extent,
@@ -184,25 +182,20 @@ const DEFAULT_POINTER = "mouse";
  *
  * The linked selection of Compare (`LINKED_SELECTION_KEY`) reaches the
  * chart through its `an:` and `file:` nodes: while it holds something, the
- * curves it links are emphasised — thicker (2.5 px) and, taking its colour
- * from the pin it links (its first slot when it links several,
- * `mergeRelations`, never a bare preview's), so the reader sees at once
- * which pin it belongs to (`focus`); several curves sharing one pin are
- * then told apart by dash, in window order. A curve the selection does not
- * link is hidden (« Hide », the default) or dimmed to grey at reduced
- * opacity (« Dim », the toolbar's « Unlinked spectra » switch, shown only
- * while a focus is active), its legend entry kept; a preview emphasises
- * what it links (its own per-window colour, never a pin's), hidden or
- * dimmed or not. A curve's colour and dash return to its own per-window
- * look as soon as no pin links it any more — they never change on their
- * own for an eye toggle, a preview or a treatment, only when the window's
- * set of curves does. Independently of the focus, the legend's eye hides
- * or shows a curve (`store.hiddenCurves`, per window, for the tab only):
- * an eye-hidden curve is folded into `"hidden"` before it reaches the
- * paint (`effectiveStates`), so it wins over whatever the focus would
- * otherwise show, hover included. These changes only restyle the drawn
- * chart, once per frame (`Plotly.restyle` of style attributes — colour,
- * dash, width, opacity and hoverinfo are all `editType: "style"` in
+ * curves it links are emphasised — thicker (2.5 px), never recoloured: a
+ * curve always keeps its own per-window hue and dash, whatever links it or
+ * previews it, so the chart stays readable with several pins active. A
+ * curve the selection does not link is hidden (« Hide », the default) or
+ * dimmed to grey at reduced opacity (« Dim », the toolbar's « Unlinked
+ * spectra » switch, shown only while a focus is active), its legend entry
+ * kept; a preview emphasises what it links, hidden or dimmed or not.
+ * Independently of the focus, the legend's eye hides or shows a curve
+ * (`store.hiddenCurves`, per window, for the tab only): an eye-hidden curve
+ * is folded into `"hidden"` before it reaches the paint
+ * (`effectiveStates`), so it wins over whatever the focus would otherwise
+ * show, hover included. These changes only restyle the drawn chart, once
+ * per frame (`Plotly.restyle` of style attributes — colour, dash, width,
+ * opacity and hoverinfo are all `editType: "style"` in
  * plotly.js-cartesian-dist 4.0.0 — `Plotly.relayout` of annotation
  * opacities and of the hovermode); `patchHoverInfo`/`patchHoverTemplate`
  * also patch the chart's stale calc data a style-only restyle leaves
@@ -251,7 +244,7 @@ let plotly: PlotlyModule | null = null;
 let drawnOn: HTMLElement | null = null;
 let lastFigure: Figure | null = null;
 let drawnTheme: PlotTheme | null = null;
-/** The curve states and focus the chart shows, joined (`restyleKey`); a restyle to the same value is skipped. */
+/** The curve states the chart shows, joined; a restyle to the same states is skipped. */
 let shownStates = "";
 /** The annotation opacities the chart shows. */
 let shownOpacities: number[] = [];
@@ -419,39 +412,6 @@ const effectiveStates = computed<CurveState[]>(() =>
         hiddenIds.value.has(curveId(drawn.value[index])) ? "hidden" : state,
     ),
 );
-/**
- * The pin a curve emphasised by an actual link (never a bare preview) takes
- * its colour from: its merged relations' first slot (self first, then slot
- * order — `mergeRelations`), its rank among the drawn curves sharing that
- * same slot (dash then tells them apart, in window order). Null curves keep
- * their own per-window hue (`curveLook`).
- */
-const focus = computed<(CurveFocus | null)[]>(() => {
-    const relations = linked?.relations.value;
-    const slots = drawn.value.map((curve, index) => {
-        if (effectiveStates.value[index] !== "emphasised" || !relations) {
-            return null;
-        }
-        const merged = mergeRelations(relations, [
-            fileNode(curve.line.file.id),
-            analysisNode(curve.line.analysis.id),
-        ]);
-        return merged?.slots[0]?.slot ?? null;
-    });
-    const ranks = ranksInSlot(slots.map((slot) => slot ?? -1));
-    return slots.map((slot, index) =>
-        slot === null ? null : { slot, rank: ranks[index] },
-    );
-});
-/** A cheap fingerprint of `effectiveStates` and `focus` together: a restyle is skipped only when both are unchanged. */
-const restyleKey = computed(() =>
-    effectiveStates.value
-        .map((state, index) => {
-            const pin = focus.value[index];
-            return `${state}:${pin ? `${pin.slot}.${pin.rank}` : ""}`;
-        })
-        .join(","),
-);
 const rows = computed<CurveRow[]>(() =>
     drawn.value.map((curve, index) => ({
         id: curveId(curve),
@@ -488,11 +448,7 @@ const legendGroups = computed<LegendGroup[]>(() =>
                 ),
             ],
             pressed: selected.value.has(node),
-            look: curveLook(
-                indices[0],
-                effectiveStates.value[indices[0]],
-                focus.value[indices[0]],
-            ),
+            look: curveLook(indices[0], effectiveStates.value[indices[0]]),
             entries: indices.map((index) => {
                 const curve = drawn.value[index];
                 const entry = entryNode(curve);
@@ -500,11 +456,7 @@ const legendGroups = computed<LegendGroup[]>(() =>
                     id: curveId(curve),
                     name: curve.line.file.name,
                     slot,
-                    look: curveLook(
-                        index,
-                        effectiveStates.value[index],
-                        focus.value[index],
-                    ),
+                    look: curveLook(index, effectiveStates.value[index]),
                     node: entry,
                     nodes: [fileNode(curve.line.file.id), node],
                     pressed: selected.value.has(entry),
@@ -635,11 +587,7 @@ watch([drawn, layout, chart], () => void draw());
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
-// Watches the arrays themselves, not `restyleKey`: each is a fresh array on
-// every relevant recompute, so a retry after a failed restyle (same content,
-// `shownStates` left stale) still schedules one, unlike a string source Vue
-// would compare by value and see as unchanged.
-watch([effectiveStates, focus], () => scheduleRestyle());
+watch(effectiveStates, () => scheduleRestyle());
 watch(
     () => resizeTick?.value,
     () => followSize(),
@@ -738,7 +686,6 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
     return {
         curves: drawn.value,
         states: effectiveStates.value,
-        focus: focus.value,
         theme,
         lang,
         titles: { ...titles.value, offset: offsetTitle.value },
@@ -779,7 +726,7 @@ async function draw(): Promise<void> {
         drawnOn = element;
         drawnTheme = theme;
         drawnSize = sizeOf(element);
-        shownStates = restyleKey.value;
+        shownStates = effectiveStates.value.join();
         shownOpacities = opacities;
         shownHoverMode = hoverModeFor(visibleCurveCount(effectiveStates.value));
         await plotly.react(
@@ -824,17 +771,16 @@ function scheduleRestyle(): void {
 }
 
 /**
- * Shows the current curve states, focus and hovermode on the drawn chart
- * through style attributes and relayouts only, no redraw; nothing when
- * `restyleKey` is shown already. The hovermode (`hoverModeFor` on the
- * curves currently answering hover) is `layout.hovermode`, a `modebar`
- * `editType` in plotly.js-cartesian-dist 4.0.0 — a relayout, never a
- * recalc — restyled together with the hovertemplates that name it (a
- * unified box's compact line, or closest's two-line one), themselves
- * `editType: "none"` and patched into the stale calc data the same way
- * `patchHoverInfo` fixes `hoverinfo` (`patchHoverTemplate`). Everything
- * here counts as shown once Plotly has taken it: after a failure the next
- * restyle tries it again.
+ * Shows the current curve states and hovermode on the drawn chart through
+ * style attributes and relayouts only, no redraw; nothing when they are
+ * shown already. The hovermode (`hoverModeFor` on the curves currently
+ * answering hover) is `layout.hovermode`, a `modebar` `editType` in
+ * plotly.js-cartesian-dist 4.0.0 — a relayout, never a recalc — restyled
+ * together with the hovertemplates that name it (a unified box's compact
+ * line, or closest's two-line one), themselves `editType: "none"` and
+ * patched into the stale calc data the same way `patchHoverInfo` fixes
+ * `hoverinfo` (`patchHoverTemplate`). Everything here counts as shown once
+ * Plotly has taken it: after a failure the next restyle tries it again.
  */
 async function restyle(): Promise<void> {
     const element = drawnOn;
@@ -842,7 +788,7 @@ async function restyle(): Promise<void> {
     const theme = drawnTheme;
     if (drawing || !plotly || !element || !figure || !theme) return;
     if (figure.order.length !== drawn.value.length) return;
-    const key = restyleKey.value;
+    const key = effectiveStates.value.join();
     if (key === shownStates) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));

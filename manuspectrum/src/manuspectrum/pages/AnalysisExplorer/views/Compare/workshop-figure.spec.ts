@@ -18,7 +18,6 @@ const SERIES = Array.from({ length: 12 }, (_, index) => `#s${index}`);
 
 const THEME: PlotTheme = {
     series: SERIES,
-    focus: ["#f1", "#f2", "#f3", "#f4"],
     context: "#999999",
     ink: "#000000",
     inkMuted: "#444444",
@@ -61,7 +60,6 @@ function input(
     return {
         curves,
         states: curves.map(() => "plain"),
-        focus: curves.map(() => null),
         theme: THEME,
         lang: "en",
         titles: { x: "Energy (keV)", y: "Counts", offset: "Counts (offset)" },
@@ -231,17 +229,16 @@ describe("workshop figure", () => {
         );
     });
 
-    it("draws an emphasised curve in its pin's hue, thicker, its dash by its rank among curves sharing that pin", () => {
+    it("keeps an emphasised curve's own hue and dash, only thicker: the focus never recolours it", () => {
         const figure = stackedFigure(
             input([curve(0, [1, 2]), curve(1, [3, 4]), curve(2, [5, 6])], {
                 states: ["emphasised", "emphasised", "plain"],
-                focus: [{ slot: 2, rank: 0 }, { slot: 2, rank: 1 }, null],
             }),
             false,
         );
         expect(figure.data.map((trace) => trace.line)).toMatchObject([
-            { color: "#f2", dash: "solid", width: 2.5 },
-            { color: "#f2", dash: "6px,2px", width: 2.5 },
+            { color: "#s0", dash: "solid", width: 2.5 },
+            { color: "#s1", dash: "solid", width: 2.5 },
             { color: "#s2", dash: "solid", width: 1.5 },
         ]);
     });

@@ -21,7 +21,6 @@ import {
 
 import type { Layout, PlotData } from "plotly.js";
 import type {
-    CurveFocus,
     CurvePaint,
     CurveState,
     Extent,
@@ -52,8 +51,6 @@ export interface FigureCurve {
 export interface FigureInput {
     curves: readonly FigureCurve[];
     states: readonly CurveState[];
-    /** The pin a curve currently takes its colour from, in the same order as `curves`; null where none applies. */
-    focus: readonly (CurveFocus | null)[];
     theme: PlotTheme;
     lang: string;
     titles: { x: string; y: string; offset: string };
@@ -108,12 +105,7 @@ function swatch(colour: string): string {
 }
 
 export function paintOf(input: FigureInput, index: number): CurvePaint {
-    return curvePaint(
-        input.theme,
-        index,
-        input.states[index],
-        input.focus[index],
-    );
+    return curvePaint(input.theme, index, input.states[index]);
 }
 
 /** The hover mode this figure draws under: unified up to the curves currently answering hover, closest beyond. */

@@ -194,7 +194,6 @@ describe("workshop", () => {
 
     const PALETTE = {
         series: Array.from({ length: 12 }, (_, index) => `#s${index}`),
-        focus: ["#f1", "#f2", "#f3", "#f4"],
         context: "#999",
     };
 
@@ -223,43 +222,21 @@ describe("workshop", () => {
         });
     });
 
-    it("takes a pin's hue when it links the curve, thicker, its dash set by its rank among the curves sharing that pin", () => {
-        expect(
-            curvePaint(PALETTE, 5, "emphasised", { slot: 3, rank: 0 }),
-        ).toEqual({
-            colour: "#f3",
-            dash: "solid",
-            width: 2.5,
-            opacity: 1,
-            hover: true,
-        });
-        expect(
-            curvePaint(PALETTE, 9, "emphasised", { slot: 3, rank: 1 }),
-        ).toEqual({
-            colour: "#f3",
-            dash: "6px,2px",
-            width: 2.5,
-            opacity: 1,
-            hover: true,
-        });
-    });
-
-    it("thickens an emphasised curve without changing its colour when no pin links it (a bare preview)", () => {
-        expect(curvePaint(PALETTE, 5, "emphasised", null)).toEqual({
+    it("thickens an emphasised curve without changing its colour or dash: the focus never recolours a curve", () => {
+        expect(curvePaint(PALETTE, 5, "emphasised")).toEqual({
             colour: "#s5",
             dash: "solid",
             width: 2.5,
             opacity: 1,
             hover: true,
         });
+        expect(curveLook(5, "emphasised")).toEqual(curveLook(5, "plain"));
     });
 
-    it("looks up a pin's own CSS var for the legend's swatch, resolved to the theme's hex for a Plotly trace", () => {
-        const focusLook = curveLook(5, "emphasised", { slot: 2, rank: 0 });
-        expect(curveColourVar(focusLook)).toBe("var(--focus-2)");
-        const seriesLook = curveLook(1, "plain", null);
+    it("looks up a curve's own CSS var for the legend's swatch, resolved to the theme's hex for a Plotly trace", () => {
+        const seriesLook = curveLook(1, "plain");
         expect(curveColourVar(seriesLook)).toBe("var(--series-2)");
-        const dimmedLook = curveLook(1, "dimmed", null);
+        const dimmedLook = curveLook(1, "dimmed");
         expect(curveColourVar(dimmedLook)).toBe("var(--series-context)");
     });
 

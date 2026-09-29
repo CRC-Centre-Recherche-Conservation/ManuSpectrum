@@ -53,7 +53,7 @@ export interface LegendEyeEvent {
  * under the pointer, and a description saying a press adds it. A mouse or
  * pen resting on an entry previews it. A swatch (`strokeOf`, `group.look`/
  * `entry.look`) always matches the chart's current line exactly: its own
- * per-window hue, or a pin's while that pin links it (`CurveLook`).
+ * per-window hue (`CurveLook`), never recoloured by the focus.
  *
  * A row that draws exactly one curve (a slot with a single file, or a file
  * row under a slot with several) carries a sibling eye button before its

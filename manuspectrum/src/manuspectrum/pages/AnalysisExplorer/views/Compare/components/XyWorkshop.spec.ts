@@ -37,7 +37,6 @@ import type {
     Series,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
-import type { NodeRelations } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
@@ -78,8 +77,6 @@ interface FakeLinked {
     linked: LinkedSelection;
     selection: { value: NodeId[] };
     levels: { value: Map<NodeId, RelationLevel> };
-    /** Its pin(s), for the focus colour: empty by default (an emphasised curve then keeps its own per-window colour). */
-    relations: { value: Map<NodeId, NodeRelations> };
     previewLevels: { value: Map<NodeId, RelationLevel> };
     toggle: ReturnType<typeof vi.fn>;
     preview: ReturnType<typeof vi.fn>;
@@ -102,7 +99,6 @@ const COLOURS = [
     "#7e58eb",
     "#d251b9",
 ];
-const FOCUS = ["#3d2e8d", "#1e6256", "#93499e", "#760a03"];
 
 function series(x: number[], y: number[], xReversed = false): Series {
     return {
@@ -146,14 +142,21 @@ const FOLIO_CANVAS = "https://iiif.example/f12r";
 function fakeLinked(): FakeLinked {
     const selection = ref<NodeId[]>([]);
     const levels = shallowRef(new Map<NodeId, RelationLevel>());
-    const relations = shallowRef(new Map<NodeId, NodeRelations>());
     const previewLevels = shallowRef(new Map<NodeId, RelationLevel>());
     const toggle = vi.fn();
     const preview = vi.fn();
     const linked = {
         selection: computed(() => selection.value),
         levels: computed(() => levels.value),
-        relations: computed(() => relations.value),
+        relations: computed(
+            () =>
+                new Map(
+                    [...levels.value].map(([id, level]) => [
+                        id,
+                        { best: level, slots: [{ slot: 1, level }] },
+                    ]),
+                ),
+        ),
         previewing: ref(null),
         previewSlot: computed(() => null),
         nextSlot: computed(() => 1),
@@ -166,20 +169,7 @@ function fakeLinked(): FakeLinked {
         toggle,
         preview,
     } as unknown as LinkedSelection;
-    return {
-        linked,
-        selection,
-        levels,
-        relations,
-        previewLevels,
-        toggle,
-        preview,
-    };
-}
-
-/** A `NodeRelations` linking `id` alone to `slot` at `level` (its own, and every merged node's, first and only slot). */
-function relationOf(slot: number, level: RelationLevel): NodeRelations {
-    return { best: level, slots: [{ slot, level }] };
+    return { linked, selection, levels, previewLevels, toggle, preview };
 }
 
 function nextFrame(): Promise<void> {
@@ -251,12 +241,6 @@ beforeEach(() => {
     COLOURS.forEach((colour, index) =>
         document.documentElement.style.setProperty(
             `--series-${index + 1}`,
-            colour,
-        ),
-    );
-    FOCUS.forEach((colour, index) =>
-        document.documentElement.style.setProperty(
-            `--focus-${index + 1}`,
             colour,
         ),
     );
@@ -795,7 +779,7 @@ describe("XyWorkshop", () => {
         ]);
         // Identity order (no context-first sort any more): the linked curve
         // (index 0) is emphasised, the other two hidden — colour and dash
-        // stay each curve's own (no pin resolved: `fake.relations` is empty).
+        // always stay each curve's own; the focus never changes them.
         expect(update.opacity).toEqual([1, 0, 0]);
         expect(update.hoverinfo).toEqual(["all", "skip", "skip"]);
         expect(update["line.width"]).toEqual([2.5, 1.5, 1.5]);
@@ -860,65 +844,13 @@ describe("XyWorkshop", () => {
                 .findAll(".xy-legend .swatch line")
                 .map((line) => (line.element as SVGLineElement).style.stroke);
         expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
-        // A link with no pin resolved (`fake.relations` empty here) keeps the curve's own colour, only thicker.
+        // A link never recolours a curve, only thickens it: the swatch stays the curve's own hue.
         fake.selection.value = [analysisNode(analysisHit(10).id)];
         fake.levels.value = new Map([
             [analysisNode(analysisHit(10).id), "self"],
         ]);
         await flushPromises();
         expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
-    });
-
-    it("colours a curve for the pin that links it, its dash by rank among curves sharing that pin; the swatch matches", async () => {
-        const view = await mountWorkshop([
-            curve(0, 1),
-            curve(1, 2),
-            curve(2, 3),
-        ]);
-        fake.selection.value = [analysisNode(analysisHit(1).id)];
-        fake.levels.value = new Map([
-            [analysisNode(analysisHit(1).id), "self"],
-            [analysisNode(analysisHit(2).id), "self"],
-        ]);
-        fake.relations.value = new Map([
-            [analysisNode(analysisHit(1).id), relationOf(3, "self")],
-            [analysisNode(analysisHit(2).id), relationOf(3, "self")],
-        ]);
-        await nextFrame();
-        await flushPromises();
-        const { traces } = lastDrawing();
-        const update = plotly.restyle.mock.calls.at(-1)?.[1] as Record<
-            string,
-            unknown[]
-        >;
-        // Restyled, not redrawn: the drawn traces keep their base colour, the restyle carries the pin's.
-        expect(traces.map((trace) => trace.line.color)).toEqual([
-            COLOURS[0],
-            COLOURS[1],
-            COLOURS[2],
-        ]);
-        expect(update["line.color"]).toEqual([FOCUS[2], FOCUS[2], COLOURS[2]]);
-        expect(update["line.dash"]).toEqual(["solid", "6px,2px", "solid"]);
-        const strokes = () =>
-            view
-                .findAll(".xy-legend .swatch line")
-                .map((line) => (line.element as SVGLineElement).style.stroke);
-        expect(strokes()).toEqual([
-            "var(--focus-3)",
-            "var(--focus-3)",
-            "var(--series-3)",
-        ]);
-
-        fake.selection.value = [];
-        fake.levels.value = new Map();
-        fake.relations.value = new Map();
-        await nextFrame();
-        await flushPromises();
-        expect(strokes()).toEqual([
-            "var(--series-1)",
-            "var(--series-2)",
-            "var(--series-3)",
-        ]);
     });
 
     it("says so when the selection links no curve of the window", async () => {
