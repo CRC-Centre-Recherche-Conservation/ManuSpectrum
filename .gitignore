@@ -40,3 +40,4 @@ agents_*.md
 .claude/
 docs/
 docs_claude/
+deploy/rehearsal/rehearsal.env
