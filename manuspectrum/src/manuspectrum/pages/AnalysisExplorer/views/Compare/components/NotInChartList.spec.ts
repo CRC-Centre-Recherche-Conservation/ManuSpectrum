@@ -129,21 +129,19 @@ describe("NotInChartList", () => {
         expect(line(wrapper, 1).find("a.action").exists()).toBe(false);
     });
 
-    it("opens an analysis that holds nothing to show in its document", async () => {
+    it("opens an analysis that holds nothing to show in its document, in a new tab", () => {
         const wrapper = mountList();
-        const store = useExplorerStore();
-        const button = line(wrapper, 2).find("button.action");
-        expect(button.text()).toBe("Open the analysis");
-        expect(button.attributes("aria-label")).toBe(
-            "Open the analysis MS1_f12_XRF_03",
+        const link = line(wrapper, 2).find("a.action");
+        expect(link.text()).toBe("Open the analysis");
+        expect(link.attributes("aria-label")).toBe(
+            "Open the analysis MS1_f12_XRF_03 in a new tab",
         );
-        await button.trigger("click");
-        expect(store.view).toBe("corpus");
-        expect(store.document).toEqual({
-            id: HIT.document.id,
-            canvas: "https://iiif.example/c3",
-        });
-        expect(store.focus).toEqual({ kind: "analysis", id: HIT.id });
+        expect(link.attributes("target")).toBe("_blank");
+        expect(link.attributes("rel")).toBe("noopener");
+        const href = link.attributes("href")!;
+        expect(href.startsWith("?")).toBe(true);
+        expect(href).toContain(HIT.document.id);
+        expect(href).toContain(HIT.id);
     });
 
     it("takes an item no longer available out of the Selection on demand", async () => {

@@ -10,6 +10,10 @@ import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injectio
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
+    documentHref,
+    snapshotOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import {
     analysisNode,
     slotNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
@@ -83,7 +87,7 @@ function downloadLabel(entry: NotInChartEntry): string {
 
 function openLabel(analysis: AnalysisHit): string {
     return interpolate(
-        $gettext("Open the analysis %{name}"),
+        $gettext("Open the analysis %{name} in a new tab"),
         { name: analysis.name.value },
         true,
     );
@@ -108,9 +112,17 @@ async function remove(key: string): Promise<void> {
     }
 }
 
-function openAnalysis(analysis: AnalysisHit): void {
-    store.openDocument(analysis.document.id, analysis.canvas);
-    store.focusOn({ kind: "analysis", id: analysis.id });
+/** The document screen of `analysis`, on its page and focused on it. */
+function analysisHref(analysis: AnalysisHit): string {
+    return documentHref(
+        snapshotOf(store),
+        analysis.document.id,
+        analysis.canvas,
+        {
+            kind: "analysis",
+            id: analysis.id,
+        },
+    );
 }
 </script>
 
@@ -165,15 +177,16 @@ function openAnalysis(analysis: AnalysisHit): void {
             >
                 <span>{{ $gettext("Download") }}</span>
             </a>
-            <button
+            <a
                 v-else-if="opensAnalysis(entry)"
-                type="button"
                 class="action"
+                :href="analysisHref(entry.analysis!)"
+                target="_blank"
+                rel="noopener"
                 :aria-label="openLabel(entry.analysis!)"
-                @click="openAnalysis(entry.analysis!)"
             >
                 <span>{{ $gettext("Open the analysis") }}</span>
-            </button>
+            </a>
             <button
                 v-else-if="entry.reason === 'missing'"
                 type="button"
