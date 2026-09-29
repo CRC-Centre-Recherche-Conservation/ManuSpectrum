@@ -46,8 +46,15 @@ function mountPreview(
 }
 
 describe("ImagingPreview", () => {
-    it("says when the image server does not give the map, and asks again on Retry", async () => {
+    it("silently retries at the image's own max size before saying the map is unavailable, and asks again on Retry", async () => {
         const { wrapper } = mountPreview();
+        const bounded = wrapper.find("img.layer-image").attributes("src");
+        expect(bounded).toContain("!480,480");
+        await wrapper.find("img.layer-image").trigger("error");
+        expect(wrapper.find(".unavailable").exists()).toBe(false);
+        expect(wrapper.find("img.layer-image").attributes("src")).toContain(
+            "/full/max/0/default.jpg",
+        );
         await wrapper.find("img.layer-image").trigger("error");
         const status = wrapper.find(".unavailable");
         expect(status.attributes("role")).toBe("status");
@@ -55,6 +62,7 @@ describe("ImagingPreview", () => {
         expect(wrapper.find("img.layer-image").exists()).toBe(false);
         await status.find("button").trigger("click");
         expect(wrapper.find("img.layer-image").exists()).toBe(true);
+        expect(wrapper.find("img.layer-image").attributes("src")).toBe(bounded);
     });
 
     it("names the current layer by its kind and label", () => {

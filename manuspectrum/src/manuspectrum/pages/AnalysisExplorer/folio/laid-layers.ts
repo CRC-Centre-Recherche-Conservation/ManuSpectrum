@@ -36,15 +36,33 @@ function unclip(event: L.LeafletEvent): void {
  * The laid layers of `map`: each an image overlay in a pane of its own
  * (`overlayPane`, the pane leaflet-side-by-side clips), the curtain being
  * Arches' vendored `leaflet-side-by-side` with its range named
- * `curtainLabel`. `failed` is called with the key of a layer whose image
- * does not load.
+ * `curtainLabel`. A layer whose image does not load is tried once more at
+ * `maxUrl` (never an upscale); `failed` is called with the key only once
+ * that fallback has also failed, or had none to try.
  */
 export function laidLayers(
     map: L.Map,
     options: { curtainLabel: string; failed: (key: string) => void },
 ): LaidLayers {
     const images = new Map<string, L.ImageOverlay>();
+    /** Keys whose layer already fell back to `maxUrl` once. */
+    const fallenBack = new Set<string>();
     let sideBySide: L.SideBySide | null = null;
+
+    function onError(overlay: FolioOverlay): void {
+        const layer = images.get(overlay.key);
+        if (
+            layer &&
+            !fallenBack.has(overlay.key) &&
+            overlay.maxUrl &&
+            overlay.maxUrl !== overlay.url
+        ) {
+            fallenBack.add(overlay.key);
+            layer.setUrl(overlay.maxUrl);
+            return;
+        }
+        options.failed(overlay.key);
+    }
 
     function draw(
         overlays: readonly FolioOverlay[],
@@ -55,6 +73,7 @@ export function laidLayers(
             if (!wanted.has(key)) {
                 layer.remove();
                 images.delete(key);
+                fallenBack.delete(key);
             }
         }
         for (const overlay of overlays) {
@@ -70,7 +89,7 @@ export function laidLayers(
                     alt: overlay.label,
                     pane,
                 });
-                layer.on("error", () => options.failed(overlay.key));
+                layer.on("error", () => onError(overlay));
                 images.set(
                     overlay.key,
                     curtainable(layer.addTo(map), map.getPane(pane)!),
@@ -98,6 +117,7 @@ export function laidLayers(
         for (const key of keys) {
             images.get(key)?.remove();
             images.delete(key);
+            fallenBack.delete(key);
         }
     }
 
@@ -105,6 +125,7 @@ export function laidLayers(
         sideBySide?.remove();
         sideBySide = null;
         images.clear();
+        fallenBack.clear();
     }
 
     return { draw, forget, remove };

@@ -93,6 +93,8 @@ const position = ref(
 
 const imageFailed = ref(false);
 const attempt = ref(0);
+/** Whether the plain-`<img>` path already fell back to the IIIF `max` size once for this layer. */
+const maxFallback = ref(false);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
@@ -113,13 +115,24 @@ const underCurtain = computed(
     () => key.value !== "" && curtain.value === key.value,
 );
 const imageUrl = computed(() =>
-    layer.value ? layerImageUrl(layer.value.image, PREVIEW_SIZE) : null,
+    layer.value
+        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, {
+              max: maxFallback.value,
+          })
+        : null,
+);
+const maxImageUrl = computed(() =>
+    layer.value
+        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, { max: true })
+        : null,
 );
 const labels = computed(() => props.file.layers.map((entry) => entry.label));
 
-watch(imageUrl, () => {
+watch(key, () => {
     imageFailed.value = false;
+    maxFallback.value = false;
 });
+
 watch(
     () => props.held,
     (next) => {
@@ -127,13 +140,33 @@ watch(
     },
 );
 
+/**
+ * A first failure retries once at the image's own IIIF `max` size, silently
+ * (the declared size a bounded request clamps to can itself be stale or
+ * wrong, and still ask for an upscale the image server refuses); only a
+ * second failure shows the "unavailable" state.
+ */
 function onImageError(): void {
-    imageFailed.value = true;
+    if (
+        !maxFallback.value &&
+        maxImageUrl.value &&
+        maxImageUrl.value !== imageUrl.value
+    ) {
+        maxFallback.value = true;
+    } else {
+        imageFailed.value = true;
+    }
 }
 
 function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
+    maxFallback.value = false;
+}
+
+/** The `stage` slot (a laid Leaflet map) already tried its own `max` fallback (`laidLayers`); its failure is final. */
+function onStageFailed(): void {
+    imageFailed.value = true;
 }
 
 function firstValue(value: number | number[]): number {
@@ -226,7 +259,7 @@ function onCurtainChange(event: Event): void {
             :opacity="opacity"
             :under-curtain="underCurtain"
             :attempt="attempt"
-            :failed="onImageError"
+            :failed="onStageFailed"
         />
         <img
             v-else-if="imageUrl && layer"

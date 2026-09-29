@@ -346,6 +346,10 @@ describe("ChemicalImaging", () => {
     it("says when the image server does not give a map, and asks again on Retry", async () => {
         const view = await mountMaps();
         const card = view.findAll(".chemical-imaging-map")[0];
+        // The first failure retries once at the layer's own max size (the
+        // declared size a bounded request clamps to can itself be stale or
+        // wrong); only a second failure is reported.
+        await card.find("img.layer-image").trigger("error");
         await card.find("img.layer-image").trigger("error");
         const status = card.find(".unavailable");
         expect(status.text()).toContain("Map unavailable (image server)");
@@ -357,6 +361,7 @@ describe("ChemicalImaging", () => {
         const view = await mountMaps();
         await lay(view, 0);
         const card = view.findAll(".chemical-imaging-map")[0];
+        await card.find("img.folio-overlay").trigger("error");
         await card.find("img.folio-overlay").trigger("error");
         expect(card.find(".unavailable").text()).toContain(
             "Map unavailable (image server)",
