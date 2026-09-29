@@ -23,8 +23,7 @@ import type {
 import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 type Annotation = Partial<Layout["annotations"][number]>;
-/** A trace with the `meta` its hover template reads (`%{meta[0]}`), which Plotly's types lack. */
-export type Trace = Partial<PlotData> & { meta?: string[] };
+export type Trace = Partial<PlotData>;
 
 /** One curve as the figure draws it. */
 export interface FigureCurve {
@@ -33,6 +32,8 @@ export interface FigureCurve {
     rank: number;
     /** « A1 · file name ». */
     label: string;
+    /** Its file's name alone, for the hover line of a slot with several files. */
+    fileName: string;
     /** The name of its analysis, for a small-multiples panel. */
     analysis: string;
     x: number[];
@@ -128,17 +129,69 @@ function traceOrder(curves: readonly FigureCurve[]): number[] {
         .map(({ index }) => index);
 }
 
-/** A trace's line, its name for the hover and the legend of the PNG, and its current paint. */
+/**
+ * A curve's short hover name: its slot alone (« A1 »), its file name added
+ * (« A1 · file.csv ») only when its slot draws more than one file — the
+ * slot alone cannot tell those apart.
+ */
+function shortLabel(input: FigureInput, index: number): string {
+    const curve = input.curves[index];
+    const filesInSlot = input.curves.filter(
+        (other) => other.slot === curve.slot,
+    ).length;
+    return filesInSlot > 1
+        ? `${slotLabel(curve.slot)} · ${escapeText(curve.fileName)}`
+        : slotLabel(curve.slot);
+}
+
+/**
+ * The hover line under `"x unified"`/`"y unified"`: the shared x already
+ * sits in the box header (`baseLayout`'s `unifiedhovertitle`), so each
+ * curve takes one compact line, its short name and its value alone.
+ * `hoverValue` names the field the value is read from (`y`, or
+ * `customdata` for the real value behind an offset curve).
+ */
+function unifiedHoverLine(
+    input: FigureInput,
+    index: number,
+    hoverValue: string,
+): string {
+    return `${shortLabel(input, index)} · %{${hoverValue}:${HOVER_FORMAT}}`;
+}
+
+/**
+ * The hover line under `"closest"`: no shared header exists there, so the
+ * line carries its own x and y, each with its axis title as stored
+ * (English, not translated).
+ */
+function closestHoverLine(
+    input: FigureInput,
+    index: number,
+    hoverValue: string,
+): string {
+    const xUnit = input.titles.x ? ` ${escapeText(input.titles.x)}` : "";
+    const yUnit = input.titles.y ? ` ${escapeText(input.titles.y)}` : "";
+    return (
+        `${shortLabel(input, index)}<br>` +
+        `x: %{x:${HOVER_FORMAT}}${xUnit} · ` +
+        `y: %{${hoverValue}:${HOVER_FORMAT}}${yUnit}`
+    );
+}
+
+/** A trace's line, its name for the legend of the PNG, and its current paint. */
 function traceOf(input: FigureInput, index: number, hoverValue: string): Trace {
     const curve = input.curves[index];
     const paint = paintOf(input, index);
+    const unified = hoverModeFor(input.curves.length) !== "closest";
+    const hoverLine = unified
+        ? unifiedHoverLine(input, index, hoverValue)
+        : closestHoverLine(input, index, hoverValue);
     return {
         type: "scatter",
         mode: "lines",
         x: curve.x,
         name: escapeText(curve.label),
-        meta: [escapeText(curve.label)],
-        hovertemplate: `%{meta[0]}: %{${hoverValue}:${HOVER_FORMAT}}<extra></extra>`,
+        hovertemplate: `${hoverLine}<extra></extra>`,
         hoverinfo: paint.hover ? "all" : "skip",
         opacity: paint.opacity,
         // Plotly takes a dash length list (« 6px,2px »); its types list only the named dashes.
@@ -147,8 +200,12 @@ function traceOf(input: FigureInput, index: number, hoverValue: string): Trace {
             width: paint.width,
             dash: dashOf(curve.rank),
         } as PlotData["line"],
-        legendgroup: `slot-${curve.slot}`,
-        legendgrouptitle: { text: slotLabel(curve.slot) },
+        // No legendgroup/legendgrouptitle here: plotly.js-cartesian-dist 4.0.0's
+        // "x/y unified" hover box is itself drawn as a mock legend (createHoverText),
+        // and a group title set on the live trace resurfaces there as a second,
+        // redundant name line above this trace's own hovertemplate line. The
+        // grouped PNG legend is rebuilt from `legendrank` in `exportFigure` instead,
+        // where no hover box reads it.
         legendrank: curve.slot,
     };
 }
@@ -161,11 +218,16 @@ function baseLayout(input: FigureInput): Record<string, unknown> {
         xReversed: input.xReversed,
         hovermode: hoverModeFor(input.curves.length),
     });
+    const xTitleSuffix = input.titles.x
+        ? ` · ${escapeText(input.titles.x)}`
+        : "";
     return {
         ...base,
         xaxis: {
             ...base.xaxis,
-            unifiedhovertitle: { text: `%{x:${HOVER_FORMAT}}` },
+            unifiedhovertitle: {
+                text: `%{x:${HOVER_FORMAT}}${xTitleSuffix}`,
+            },
         },
     };
 }
@@ -429,7 +491,14 @@ export function multiplesFigure(input: FigureInput): Figure {
     };
 }
 
-/** The opacity of each annotation of `figure` under `states`: a label goes with its curve, a panel title dims with its panel. */
+/**
+ * The opacity of each annotation of `figure` under `states`: a label goes
+ * with its curve, a panel title dims with its panel. A small-multiples
+ * panel whose only curve is `"hidden"` (the selection, or the legend's eye
+ * folded in by `effectiveStates`) keeps its axes and dims only its title,
+ * empty otherwise: the panel is never dropped, which would reflow the grid
+ * (`panelGrid`) and force a redraw; this needs none.
+ */
 export function annotationOpacities(
     figure: Figure,
     states: readonly CurveState[],
@@ -446,7 +515,10 @@ export function annotationOpacities(
  * The figure as exported: `paints` (in trace order) applied, a hidden
  * curve kept transparent and out of the legend (a panel with no trace
  * drawn would get no axis line), on the page background, Plotly's legend
- * on the right, a title and a source line above.
+ * on the right grouped by slot (`legendgroup`/`legendgrouptitle`, rebuilt
+ * here from `legendrank` — the live chart's traces carry neither, so the
+ * interactive hover box never shows a slot as its own group title), a
+ * title and a source line above.
  */
 export function exportFigure(
     figure: Figure,
@@ -456,10 +528,13 @@ export function exportFigure(
 ): { data: Trace[]; layout: Partial<Layout> } {
     const data = figure.data.map((trace, position) => {
         const paint = paints[position];
+        const slot = trace.legendrank as number;
         return {
             ...trace,
             opacity: paint.opacity,
             showlegend: paint.opacity > 0,
+            legendgroup: `slot-${slot}`,
+            legendgrouptitle: { text: slotLabel(slot) },
             line: { ...trace.line, color: paint.colour, width: paint.width },
         };
     });

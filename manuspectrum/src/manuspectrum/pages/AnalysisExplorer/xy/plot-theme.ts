@@ -12,7 +12,11 @@ export interface PlotTheme {
     ink: string;
     inkMuted: string;
     border: string;
+    /** The elevated-surface border the hover label draws on `surface` (`--border-hover`). */
+    borderHover: string;
     background: string;
+    /** The card/popover surface the hover label draws on (`--surface`). */
+    surface: string;
     fontBody: string;
     fontMono: string;
 }
@@ -44,7 +48,9 @@ export function readPlotTheme(
         ink: token("--ink", "#1a1a2e"),
         inkMuted: token("--ink-muted", "#4a4a5e"),
         border: token("--border", "rgba(26,26,46,0.07)"),
+        borderHover: token("--border-hover", "rgba(26,26,46,0.14)"),
         background: token("--bg", "#faf9f7"),
+        surface: token("--surface", "#ffffff"),
         fontBody: token("--font-body", "Sora, system-ui, sans-serif"),
         fontMono: token("--font-mono", "JetBrains Mono, monospace"),
     };
@@ -113,9 +119,10 @@ export function plotLayout(
         separators: separatorsFor(options.lang),
         hovermode: options.hovermode ?? "x unified",
         hoverlabel: {
-            bgcolor: theme.background,
-            bordercolor: theme.border,
-            font: { family: theme.fontMono, color: theme.ink },
+            bgcolor: theme.surface,
+            bordercolor: theme.borderHover,
+            font: { family: theme.fontMono, size: 12, color: theme.ink },
+            align: "left",
         },
         margin: { l: 8, r: 16, t: 16, b: options.legend ? LEGEND_ROOM : 8 },
         showlegend: options.legend ?? false,

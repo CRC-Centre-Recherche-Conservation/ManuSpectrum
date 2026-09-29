@@ -360,4 +360,36 @@ describe("Compare state", () => {
         store.setOverlay("im:x:1", null);
         expect(store.overlays).toEqual({});
     });
+
+    it("hides and shows an XY window's curve with the eye, one window at a time", () => {
+        const store = useExplorerStore();
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f2");
+        store.toggleCurveVisibility("auto:xy:b", "an:2:-|f3");
+        expect(store.hiddenCurves).toEqual({
+            "auto:xy:a": ["an:1:-|f1", "an:1:-|f2"],
+            "auto:xy:b": ["an:2:-|f3"],
+        });
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        expect(store.hiddenCurves["auto:xy:a"]).toEqual(["an:1:-|f2"]);
+    });
+
+    it("shows every curve of one window the eye hid, leaving the others", () => {
+        const store = useExplorerStore();
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        store.toggleCurveVisibility("auto:xy:b", "an:2:-|f3");
+        store.showAllCurves("auto:xy:a");
+        expect(store.hiddenCurves).toEqual({ "auto:xy:b": ["an:2:-|f3"] });
+        expect(() => store.showAllCurves("auto:xy:a")).not.toThrow();
+    });
+
+    it("drops a window's eye-hidden ids a curve leaving it refuses, removing an empty window", () => {
+        const store = useExplorerStore();
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f2");
+        store.pruneHiddenCurves("auto:xy:a", (id) => id === "an:1:-|f1");
+        expect(store.hiddenCurves).toEqual({ "auto:xy:a": ["an:1:-|f1"] });
+        store.pruneHiddenCurves("auto:xy:a", () => false);
+        expect(store.hiddenCurves).toEqual({});
+    });
 });

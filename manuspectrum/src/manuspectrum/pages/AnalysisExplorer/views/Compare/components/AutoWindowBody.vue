@@ -16,6 +16,7 @@ const props = defineProps<{ window: AutoWindow; title: string }>();
         v-if="props.window.kind === 'xy'"
         :curves="props.window.curves"
         :title="props.title"
+        :window-id="props.window.id"
     />
     <ChemicalImaging
         v-else-if="props.window.kind === 'chemical-imaging'"

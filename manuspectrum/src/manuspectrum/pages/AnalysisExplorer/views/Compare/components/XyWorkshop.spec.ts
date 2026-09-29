@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import { computed, h, ref, shallowRef } from "vue";
 
 import CompareWindow from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue";
@@ -10,6 +11,7 @@ import {
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     fileEntry,
@@ -29,7 +31,7 @@ import {
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
-import type { VueWrapper } from "@vue/test-utils";
+import type { DOMWrapper, VueWrapper } from "@vue/test-utils";
 import type {
     FileViewer,
     Series,
@@ -57,8 +59,7 @@ interface TraceCall {
     showlegend?: boolean;
     hovertemplate: string;
     line: { color: string; dash: string; width: number };
-    legendgroup: string;
-    legendgrouptitle: { text: string };
+    legendrank: number;
 }
 
 interface LayoutCall {
@@ -122,6 +123,15 @@ function curve(
     return { key: `an:${analysis.id}:-`, slot, analysis, file };
 }
 
+/** The eye's curve id (`XyLegend`'s `LegendEntry.id`) of the curve `curve(slot, n)` builds. */
+function curveId(slot: number, n: number): string {
+    return `an:${analysisHit(slot + 1).id}:-|${uuid(700 + n)}`;
+}
+
+function eyeButton(view: VueWrapper, id: string): DOMWrapper<Element> {
+    return view.find(`[data-action="eye"][data-curve="${id}"]`);
+}
+
 const FOLIO_CANVAS = "https://iiif.example/f12r";
 
 /** The part of Compare's linked selection the workshop reads, its state set by each spec. */
@@ -172,14 +182,17 @@ function answer(n: number, response: Response): void {
     answers.set(`/api/spectrum-preview/${uuid(700 + n)}?n=full`, response);
 }
 
+const WINDOW_ID = "auto:xy:test";
+
 async function mountWorkshop(
     curves: FileLine[],
     resize = ref(0),
+    windowId = WINDOW_ID,
 ): Promise<VueWrapper> {
     wrapper = mount(CompareWindow, {
         attachTo: document.body,
         props: { title: "XRF", position: 1, total: 1, size: "M", folded: null },
-        slots: { default: () => h(XyWorkshop, { curves }) },
+        slots: { default: () => h(XyWorkshop, { curves, windowId }) },
         global: {
             provide: {
                 [WINDOW_RESIZE_KEY as symbol]: resize,
@@ -220,6 +233,7 @@ function notes(view: VueWrapper): string[] {
 beforeEach(() => {
     forgetPayloads();
     resetPlotly();
+    setActivePinia(createPinia());
     COLOURS.forEach((colour, index) =>
         document.documentElement.style.setProperty(
             `--series-${index + 1}`,
@@ -306,14 +320,9 @@ describe("XyWorkshop", () => {
         ]);
         expect(traces.map((trace) => trace.opacity)).toEqual([1, 1, 1, 1]);
         expect(traces[1].hovertemplate).toBe(
-            "%{meta[0]}: %{y:.4~g}<extra></extra>",
+            "A1 · S1.csv · %{y:.4~g}<extra></extra>",
         );
-        expect(traces.map((trace) => trace.legendgrouptitle.text)).toEqual([
-            "A10",
-            "A1",
-            "A1",
-            "A2",
-        ]);
+        expect(traces.map((trace) => trace.legendrank)).toEqual([9, 0, 0, 1]);
         expect(layout.annotations.map((note) => note.text)).toEqual([
             `<span style="color:${COLOURS[0]}">━</span> A1`,
             `<span style="color:${COLOURS[1]}">━</span> A2`,
@@ -399,7 +408,7 @@ describe("XyWorkshop", () => {
         expect(traces[1].y).toEqual([32, 52, 42]);
         expect(traces[1].customdata).toEqual([10, 30, 20]);
         expect(traces[1].hovertemplate).toBe(
-            "%{meta[0]}: %{customdata:.4~g}<extra></extra>",
+            "A2 · %{customdata:.4~g}<extra></extra>",
         );
         expect(layout.yaxis.title.text).toBe("Counts (offset)");
         expect(layout.yaxis.showticklabels).toBe(false);
@@ -925,7 +934,9 @@ describe("XyWorkshop", () => {
         const bare = curve(1, 2);
         bare.analysis = { ...bare.analysis, technique: null };
         const view = await mountWorkshop([placed, bare, curve(1, 3)]);
-        const [first, second] = view.findAll(".xy-legend .group > .entry");
+        const [first, second] = view.findAll(
+            ".xy-legend .group > .row > .entry",
+        );
         expect(first.find(".id").text()).toBe("A1MS1_f12_XRF_03XRF");
         expect(first.find(".technique").text()).toBe("XRF");
         expect(first.find(".ctx .glyph").exists()).toBe(true);
@@ -934,6 +945,160 @@ describe("XyWorkshop", () => {
         expect(first.find(".ctx .file").text()).toBe("S1.csv");
         expect(second.find(".technique").exists()).toBe(false);
         expect(second.find(".ctx").exists()).toBe(false);
+    });
+
+    it("hides a curve with the legend's eye by restyling once, no redraw, independent of the focus", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        plotly.react.mockClear();
+        plotly.restyle.mockClear();
+        const id = curveId(0, 1);
+        expect(eyeButton(view, id).attributes("aria-pressed")).toBe("false");
+
+        await eyeButton(view, id).trigger("click");
+        await nextFrame();
+        await flushPromises();
+
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(plotly.restyle).toHaveBeenCalledTimes(1);
+        const [, update] = plotly.restyle.mock.calls[0] as [
+            HTMLElement,
+            Record<string, unknown[]>,
+        ];
+        expect(update.opacity).toEqual([0, 1]);
+        expect(update.hoverinfo).toEqual(["skip", "all"]);
+        expect(eyeButton(view, id).attributes("aria-pressed")).toBe("true");
+        expect(view.findAll(".xy-legend .entry.eye-hidden")).toHaveLength(1);
+
+        await eyeButton(view, id).trigger("click");
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.restyle).toHaveBeenCalledTimes(2);
+        expect(
+            (plotly.restyle.mock.calls[1][1] as Record<string, unknown[]>)
+                .opacity,
+        ).toEqual([1, 1]);
+        expect(eyeButton(view, id).attributes("aria-pressed")).toBe("false");
+    });
+
+    it("patches Plotly's stale calc data after a restyle, so a hidden curve stops answering hover", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const chart = view.find(".chart").element as HTMLElement & {
+            calcdata?: { trace: { hoverinfo: string } }[][];
+        };
+        // plotly.js-cartesian-dist 4.0.0 sets this on a full draw; the mock
+        // does not, so a real drawing's calc data is reproduced by hand.
+        chart.calcdata = [
+            [{ trace: { hoverinfo: "all" } }],
+            [{ trace: { hoverinfo: "all" } }],
+        ];
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        await nextFrame();
+        await flushPromises();
+        expect(chart.calcdata[0][0].trace.hoverinfo).toBe("skip");
+        expect(chart.calcdata[1][0].trace.hoverinfo).toBe("all");
+    });
+
+    it("keeps an eye-hidden curve hidden and out of hover however the focus lights it", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        await flushPromises();
+        plotly.restyle.mockClear();
+
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await nextFrame();
+        await flushPromises();
+
+        const update = plotly.restyle.mock.calls.at(-1)?.[1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity[0]).toBe(0);
+        expect(update.hoverinfo[0]).toBe("skip");
+        expect(
+            view
+                .findAll(".xy-legend .entry")
+                .find(
+                    (entry) =>
+                        entry.attributes("data-node") ===
+                        analysisNode(analysisHit(1).id),
+                )
+                ?.attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("shows a « Show all spectra » action only once a curve is hidden, and shows every one back", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        expect(view.find(".xy-legend .show-all").exists()).toBe(false);
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        await flushPromises();
+        expect(view.find(".xy-legend .show-all").exists()).toBe(true);
+
+        await view.find(".xy-legend .show-all").trigger("click");
+        await flushPromises();
+        expect(view.find(".xy-legend .show-all").exists()).toBe(false);
+        expect(eyeButton(view, curveId(0, 1)).attributes("aria-pressed")).toBe(
+            "false",
+        );
+    });
+
+    it("forgets a curve's eye-hidden state once it leaves the window", async () => {
+        const store = useExplorerStore();
+        const view = mount(XyWorkshop, {
+            attachTo: document.body,
+            props: {
+                curves: [curve(0, 1), curve(1, 2)],
+                windowId: WINDOW_ID,
+            },
+            global: {
+                provide: { [LINKED_SELECTION_KEY as symbol]: fake.linked },
+            },
+        });
+        wrapper = view;
+        await flushPromises();
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        expect(store.hiddenCurves[WINDOW_ID]).toEqual([curveId(0, 1)]);
+
+        await view.setProps({ curves: [curve(1, 2)] });
+        await flushPromises();
+        expect(store.hiddenCurves[WINDOW_ID]).toBeUndefined();
+    });
+
+    it("offers Hide or Dim for unrelated curves only while a focus is active, Hide by default", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        expect(view.find(".unrelated-mode").exists()).toBe(false);
+
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await flushPromises();
+        const mode = view.find(".unrelated-mode");
+        expect(mode.exists()).toBe(true);
+        expect(mode.find('[data-mode="hide"]').attributes("aria-pressed")).toBe(
+            "true",
+        );
+
+        plotly.react.mockClear();
+        plotly.restyle.mockClear();
+        await mode.find('[data-mode="dim"]').trigger("click");
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+        const update = plotly.restyle.mock.calls.at(-1)?.[1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity).toEqual([1, 0.35]);
+        expect(update["line.color"]).toEqual([COLOURS[0], CONTEXT]);
+        expect(update.hoverinfo).toEqual(["all", "skip"]);
+
+        fake.selection.value = [];
+        fake.levels.value = new Map();
+        await flushPromises();
+        expect(view.find(".unrelated-mode").exists()).toBe(false);
     });
 
     it("previews the node of a legend entry or a curve under the mouse, and toggles a clicked curve", async () => {

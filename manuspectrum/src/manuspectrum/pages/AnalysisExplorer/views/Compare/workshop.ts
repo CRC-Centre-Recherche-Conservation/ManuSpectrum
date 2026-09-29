@@ -36,6 +36,8 @@ const PANEL_GAP_Y = 46;
 const LINE_WIDTH = 1.5;
 const CONTEXT_WIDTH = 1.25;
 const EMPHASIS_WIDTH = 2.5;
+/** The opacity of a curve dimmed for being unrelated to the focus (« Dim »): the legend's `.unrelated` swatch opacity. */
+const DIM_OPACITY = 0.35;
 /** The room between two offset curves, as a share of the widest curve's span. */
 const OFFSET_GAP = 0.1;
 /** A spreadsheet opens a CSV starting with the UTF-8 byte order mark as UTF-8. */
@@ -50,9 +52,11 @@ export type Dash = (typeof DASHES)[number];
 /**
  * How a curve shows the linked selection: as drawn when nothing is
  * selected, emphasised when the selection or the preview links it, hidden
- * when a selection links it not.
+ * or dimmed (« Dim ») when a selection links it not. A curve the reader hid
+ * with the legend's eye is folded into `hidden` before it reaches here
+ * (`effectiveStates` in `XyWorkshop.vue`): the eye wins over every state.
  */
-export type CurveState = "plain" | "emphasised" | "hidden";
+export type CurveState = "plain" | "emphasised" | "hidden" | "dimmed";
 
 /** The style attributes of one curve, all of them Plotly `editType: "style"` (`hoverinfo`: `none`). */
 export interface CurvePaint {
@@ -167,22 +171,26 @@ export function hoverModeFor(curves: number): "x unified" | "closest" {
 /**
  * The state of a curve linked at `level` to the selection (null: not
  * linked). A curve the preview links is emphasised even when the
- * selection hides it.
+ * selection hides it. `dim`: an unrelated curve dims instead of hiding
+ * (the workshop's « Unlinked spectra: Hide | Dim » switch).
  */
 export function curveState(
     level: string | null,
     selecting: boolean,
     previewed: boolean,
+    dim = false,
 ): CurveState {
     if (previewed) return "emphasised";
     if (!selecting) return "plain";
-    return level === null ? "hidden" : "emphasised";
+    if (level !== null) return "emphasised";
+    return dim ? "dimmed" : "hidden";
 }
 
 /**
  * A1…A8 in their series colour at 1.5 px; later slots in grey context at
  * 1.25 px, drawn in ink when emphasised; every emphasised curve at 2.5 px.
- * A hidden curve keeps its line, at opacity 0, out of the hover.
+ * A hidden curve keeps its line, at opacity 0, out of the hover. A dimmed
+ * curve draws in grey context at reduced opacity, out of the hover too.
  */
 export function curvePaint(
     palette: CurvePalette,
@@ -196,6 +204,14 @@ export function curvePaint(
             width: EMPHASIS_WIDTH,
             opacity: 1,
             hover: true,
+        };
+    }
+    if (state === "dimmed") {
+        return {
+            colour: palette.context,
+            width: CONTEXT_WIDTH,
+            opacity: DIM_OPACITY,
+            hover: false,
         };
     }
     const plain: CurvePaint = coloured
@@ -227,6 +243,38 @@ export function restyleUpdate(paints: readonly CurvePaint[]): {
         "line.width": paints.map((paint) => paint.width),
         hoverinfo: paints.map((paint) => (paint.hover ? "all" : "skip")),
     };
+}
+
+/** A trace as Plotly's internal `gd.calcdata[i][0].trace` holds it. */
+export interface CalcTrace {
+    hoverinfo?: string;
+}
+
+/**
+ * Patches the `hoverinfo` Plotly's own hover search reads, directly on the
+ * live chart's calc data.
+ *
+ * plotly.js-cartesian-dist 4.0.0: a style-only `Plotly.restyle` (`opacity`,
+ * `line.*`, `hoverinfo`: none of them `editType: "calc"`) rebuilds
+ * `gd._fullData` with fresh trace objects but never relinks
+ * `gd.calcdata[i][0].trace` to them — that relink
+ * (`gd.calcdata[i][0].trace = gd._fullData[i]`) only happens on a full
+ * `newPlot`/`react`. `Fx.hover` reads `cd[0].trace.hoverinfo` from
+ * `calcdata`, so a curve's `hoverinfo` set to `"skip"` through a style-only
+ * restyle is invisible to hover (the curve keeps answering with its old
+ * values) even though its line correctly turns transparent. Mutating the
+ * stale trace object in place fixes what the relink would have fixed,
+ * without forcing a recalc or a redraw.
+ */
+export function patchHoverInfo(
+    calcdata: readonly (readonly { trace?: CalcTrace }[])[] | undefined,
+    paints: readonly CurvePaint[],
+): void {
+    calcdata?.forEach((cd, index) => {
+        const trace = cd[0]?.trace;
+        const paint = paints[index];
+        if (trace && paint) trace.hoverinfo = paint.hover ? "all" : "skip";
+    });
 }
 
 /**

@@ -40,6 +40,37 @@ describe("plot theme", () => {
         expect(readPlotTheme().context).toBe("#8a8999");
     });
 
+    it("reads the surface and the elevated border the hover label draws on", () => {
+        setTokens({
+            "--surface": "#ffffff",
+            "--border-hover": "rgba(26,26,46,0.14)",
+        });
+        const theme = readPlotTheme();
+        expect(theme.surface).toBe("#ffffff");
+        expect(theme.borderHover).toBe("rgba(26,26,46,0.14)");
+    });
+
+    it("styles the hover label like the app's popovers: surface, elevated border, left-aligned", () => {
+        setTokens({
+            "--surface": "#ffffff",
+            "--border-hover": "rgba(26,26,46,0.14)",
+            "--ink": "#1a1a2e",
+            "--font-mono": "JetBrains Mono",
+        });
+        const layout = plotLayout(readPlotTheme(), {
+            lang: "en",
+            xTitle: "Energy (keV)",
+            yTitle: "Counts",
+            xReversed: false,
+        });
+        expect(layout.hoverlabel).toMatchObject({
+            bgcolor: "#ffffff",
+            bordercolor: "rgba(26,26,46,0.14)",
+            align: "left",
+            font: { family: "JetBrains Mono", size: 12, color: "#1a1a2e" },
+        });
+    });
+
     it("draws readable axes: ink titles, outside mono ticks, SI exponents, dotted spikes, margins made to fit", () => {
         setTokens({ "--ink": "#1a1a2e", "--font-mono": "JetBrains Mono" });
         const layout = plotLayout(readPlotTheme(), {

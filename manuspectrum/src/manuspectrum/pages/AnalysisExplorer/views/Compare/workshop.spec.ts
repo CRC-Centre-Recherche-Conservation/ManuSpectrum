@@ -20,6 +20,7 @@ import {
     outOfRange,
     panelGrid,
     panelSpacing,
+    patchHoverInfo,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -218,6 +219,33 @@ describe("workshop", () => {
         expect(curveState(null, false, true)).toBe("emphasised");
     });
 
+    it("dims an unrelated curve instead of hiding it when the workshop's switch asks to, a preview and a link still winning", () => {
+        expect(curveState(null, true, false, true)).toBe("dimmed");
+        expect(curveState("direct", true, false, true)).toBe("emphasised");
+        expect(curveState(null, true, true, true)).toBe("emphasised");
+        expect(curveState(null, false, false, true)).toBe("plain");
+    });
+
+    it("draws a dimmed curve in grey context at reduced opacity, out of the hover", () => {
+        const palette = {
+            series: ["#111", "#222"],
+            context: "#999",
+            ink: "#000",
+        };
+        expect(curvePaint(palette, 0, "dimmed")).toEqual({
+            colour: "#999",
+            width: 1.25,
+            opacity: 0.35,
+            hover: false,
+        });
+        expect(curvePaint(palette, 9, "dimmed")).toEqual({
+            colour: "#999",
+            width: 1.25,
+            opacity: 0.35,
+            hover: false,
+        });
+    });
+
     it("gathers the paints into one restyle of style attributes, in trace order", () => {
         const update = restyleUpdate([
             { colour: "#111", width: 1.5, opacity: 1, hover: true },
@@ -229,6 +257,29 @@ describe("workshop", () => {
             "line.width": [1.5, 1.25],
             hoverinfo: ["all", "skip"],
         });
+    });
+
+    it("patches Plotly's stale calc-data trace with the hoverinfo a style-only restyle set, in trace order", () => {
+        const calcdata = [
+            [{ trace: { hoverinfo: "all" } }],
+            [{ trace: { hoverinfo: "all" } }],
+        ];
+        patchHoverInfo(calcdata, [
+            { colour: "#111", width: 1.5, opacity: 0, hover: false },
+            { colour: "#222", width: 1.5, opacity: 1, hover: true },
+        ]);
+        expect(calcdata[0][0].trace.hoverinfo).toBe("skip");
+        expect(calcdata[1][0].trace.hoverinfo).toBe("all");
+    });
+
+    it("does nothing when the chart holds no calc data yet, or a row lacks a trace", () => {
+        expect(() => patchHoverInfo(undefined, [])).not.toThrow();
+        const calcdata = [[]];
+        expect(() =>
+            patchHoverInfo(calcdata, [
+                { colour: "#111", width: 1.5, opacity: 1, hover: true },
+            ]),
+        ).not.toThrow();
     });
 
     it("finds where a curve ends on screen, the smallest X on a reversed axis", () => {

@@ -184,6 +184,13 @@ export const useExplorerStore = defineStore("explorer", () => {
     const colourLevel = ref<ColourLevel>("colour");
     /** How the Materials window of Compare groups its rows; for the tab only, not in the address. */
     const materialsGrouping = ref<MaterialsGrouping>("record");
+    /**
+     * Curves an XY window's legend eye hid, by window id then curve id
+     * (`XyLegend`'s `LegendEntry.id`); for the tab only, never persisted and
+     * never in the address. Independent of the focus: an eye-hidden curve
+     * stays hidden whatever the focus links.
+     */
+    const hiddenCurves = ref<Record<string, string[]>>({});
     /** Whether the folio legend is unfolded; folded when the explorer opens. */
     const legendOpen = ref(false);
 
@@ -302,6 +309,38 @@ export const useExplorerStore = defineStore("explorer", () => {
 
     function setMaterialsGrouping(grouping: MaterialsGrouping): void {
         materialsGrouping.value = grouping;
+    }
+
+    /** Hides or shows a curve of an XY window's legend, independent of the focus. */
+    function toggleCurveVisibility(windowId: string, curveId: string): void {
+        const current = hiddenCurves.value[windowId] ?? [];
+        const next = current.includes(curveId)
+            ? current.filter((id) => id !== curveId)
+            : [...current, curveId];
+        hiddenCurves.value = { ...hiddenCurves.value, [windowId]: next };
+    }
+
+    /** Shows every curve of an XY window the eye hid. */
+    function showAllCurves(windowId: string): void {
+        if (!hiddenCurves.value[windowId]) return;
+        const next = { ...hiddenCurves.value };
+        delete next[windowId];
+        hiddenCurves.value = next;
+    }
+
+    /** Drops an XY window's eye-hidden curve ids `keep` refuses: a curve leaving the window loses its hidden state. */
+    function pruneHiddenCurves(
+        windowId: string,
+        keep: (id: string) => boolean,
+    ): void {
+        const current = hiddenCurves.value[windowId];
+        if (!current) return;
+        const kept = current.filter(keep);
+        if (kept.length === current.length) return;
+        const next = { ...hiddenCurves.value };
+        if (kept.length === 0) delete next[windowId];
+        else next[windowId] = kept;
+        hiddenCurves.value = next;
     }
 
     function setLegendOpen(open: boolean): void {
@@ -481,6 +520,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         collapsedGroups,
         colourLevel,
         materialsGrouping,
+        hiddenCurves,
         legendOpen,
         basketFree,
         activeFilterCount,
@@ -498,6 +538,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         toggleGroup,
         setColourLevel,
         setMaterialsGrouping,
+        toggleCurveVisibility,
+        showAllCurves,
+        pruneHiddenCurves,
         setLegendOpen,
         addToBasket,
         addManyToBasket,

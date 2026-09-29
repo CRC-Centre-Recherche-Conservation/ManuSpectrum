@@ -5,6 +5,7 @@ import {
     nextTick,
     onBeforeUnmount,
     ref,
+    useId,
     useTemplateRef,
     watch,
 } from "vue";
@@ -24,6 +25,7 @@ import {
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisNode,
     canvasNode,
@@ -47,6 +49,7 @@ import {
     extent,
     openingLayout,
     outOfRange,
+    patchHoverInfo,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -72,6 +75,7 @@ import type { SeriesResult } from "@/manuspectrum/pages/AnalysisExplorer/composa
 import type { PreviewEvent } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { WindowAction } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type {
+    LegendEyeEvent,
     LegendPreviewEvent,
     LegendToggleEvent,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
@@ -101,9 +105,10 @@ interface Curve extends FigureCurve {
     xReversed: boolean;
 }
 
-/** A chart Plotly drew: it can bind handlers to its events. */
+/** A chart Plotly drew: it can bind handlers to its events, and keeps its own calc data (`patchHoverInfo`). */
 interface PlotlyTarget extends HTMLElement {
     on?: (name: string, handler: (event: never) => void) => void;
+    calcdata?: readonly (readonly { trace?: { hoverinfo?: string } }[])[];
 }
 
 /** What Plotly keeps of an axis it drew, as `_fullLayout` holds it. */
@@ -160,14 +165,23 @@ const DEFAULT_POINTER = "mouse";
  *
  * The linked selection of Compare (`LINKED_SELECTION_KEY`) reaches the
  * chart through its `an:` and `file:` nodes: while it holds something, the
- * curves it links are emphasised and the others hidden, their legend
- * entries kept; a preview emphasises what it links, hidden or not. These
- * changes only restyle the drawn chart, once per frame (`Plotly.restyle` of
- * style attributes, `Plotly.relayout` of annotation opacities). A click on
- * a legend entry or a curve toggles its node; a mouse resting on either
- * previews it. A press on the chart that slips into a zoom box narrower
- * than `MIN_ZOOM_PX` is the click it was meant to be: the axes go back to
- * the view the press began on and the curve under it, if any, toggles.
+ * curves it links are emphasised and the others hidden (« Hide », the
+ * default) or dimmed to grey at reduced opacity (« Dim », the toolbar's
+ * « Unlinked spectra » switch, shown only while a focus is active), their
+ * legend entries kept; a preview emphasises what it links, hidden or dimmed
+ * or not. Independently of the focus, the legend's eye hides or shows a
+ * curve (`store.hiddenCurves`, per window, for the tab only): an eye-hidden
+ * curve is folded into `"hidden"` before it reaches the paint
+ * (`effectiveStates`), so it wins over whatever the focus would otherwise
+ * show, hover included. These changes only restyle the drawn chart, once
+ * per frame (`Plotly.restyle` of style attributes, `Plotly.relayout` of
+ * annotation opacities); `patchHoverInfo` also patches the chart's stale
+ * calc data plotly.js-cartesian-dist 4.0.0 leaves behind a style-only
+ * restyle, or a hidden curve keeps answering hover. A click on a legend
+ * entry or a curve toggles its node; a mouse resting on either previews it.
+ * A press on the chart that slips into a zoom box narrower than
+ * `MIN_ZOOM_PX` is the click it was meant to be: the axes go back to the
+ * view the press began on and the curve under it, if any, toggles.
  *
  * A file over the server's ceiling, missing or empty is named and left
  * out. A chart Plotly cannot draw says so in the window. The chart follows
@@ -178,12 +192,20 @@ const DEFAULT_POINTER = "mouse";
  * and end a preview the chart or its legend started; a drawing that ends
  * after the unmount is purged too.
  */
-const props = defineProps<{ curves: readonly FileLine[]; title?: string }>();
+const props = defineProps<{
+    curves: readonly FileLine[];
+    title?: string;
+    /** Keys the eye-hidden curves in the store; a fallback id when the window opens outside Compare. */
+    windowId?: string;
+}>();
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, null);
 const linked = inject(LINKED_SELECTION_KEY, null);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
+const store = useExplorerStore();
+const fallbackWindowId = useId();
+const windowKey = computed(() => props.windowId ?? fallbackWindowId);
 const readable = computed(() =>
     props.curves.filter((curve) => curve.file.previewUrl !== null),
 );
@@ -229,6 +251,8 @@ const viewKey = ref<string>(BASE_VIEW);
 const drawFailed = ref(false);
 /** The height small multiples need beyond the window's, in rem; null when they fit. */
 const chartHeight = ref<string | null>(null);
+/** How an unrelated curve shows while a focus is active; shown only then, defaults to Hide. */
+const unrelatedMode = ref<"hide" | "dim">("hide");
 
 /** Each readable file's answer, by preview URL, once the answer is for the files shown. */
 const answers = computed(() => {
@@ -264,6 +288,7 @@ const drawn = computed<Curve[]>(() => {
             slot: line.slot,
             analysis: line.analysis.name.value,
             label: `${slotLabel(line.slot)} · ${line.file.name}`,
+            fileName: line.file.name,
             rank: ranks[index],
             x: series.x,
             y,
@@ -296,6 +321,10 @@ const chartLayouts = computed(() =>
         name === "table" ? [] : [{ name, icon: CHART_LAYOUTS[name] }],
     ),
 );
+const unrelatedModeOptions = computed(() => [
+    { value: "hide" as const, label: $gettext("Hide") },
+    { value: "dim" as const, label: $gettext("Dim") },
+]);
 const layout = computed<WorkshopLayout>(() => {
     const wanted =
         chosenLayout.value ?? openingLayout(drawn.value.length, slots.value);
@@ -340,12 +369,28 @@ const states = computed<CurveState[]>(() =>
             levels.value[index],
             selecting.value,
             levelIn(linked?.previewLevels.value, curve) !== null,
+            unrelatedMode.value === "dim",
         ),
+    ),
+);
+/** The curves the legend's eye hid in this window, independent of the focus. */
+const hiddenIds = computed(
+    () => new Set(store.hiddenCurves[windowKey.value] ?? []),
+);
+/**
+ * `states` with an eye-hidden curve folded into `"hidden"`: the eye wins
+ * over the focus, whatever it would otherwise show. Drives the paint, the
+ * panel-title opacity and the restyle key alike, so all three agree on what
+ * counts as hidden.
+ */
+const effectiveStates = computed<CurveState[]>(() =>
+    states.value.map((state, index) =>
+        hiddenIds.value.has(curveId(drawn.value[index])) ? "hidden" : state,
     ),
 );
 const rows = computed<CurveRow[]>(() =>
     drawn.value.map((curve, index) => ({
-        id: `${curve.line.key}|${curve.line.file.id}`,
+        id: curveId(curve),
         label: curve.label,
         analysis: curve.line.analysis.name,
         x: curve.xRange,
@@ -383,7 +428,7 @@ const legendGroups = computed<LegendGroup[]>(() =>
                 const curve = drawn.value[index];
                 const entry = entryNode(curve);
                 return {
-                    id: `${curve.line.key}|${curve.line.file.id}`,
+                    id: curveId(curve),
                     name: curve.line.file.name,
                     slot,
                     dash: dashOf(curve.rank),
@@ -517,11 +562,15 @@ watch([drawn, layout, chart], () => void draw());
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
-watch(states, () => scheduleRestyle());
+watch(effectiveStates, () => scheduleRestyle());
 watch(
     () => resizeTick?.value,
     () => followSize(),
 );
+watch(drawn, (curves) => {
+    const ids = new Set(curves.map(curveId));
+    store.pruneHiddenCurves(windowKey.value, (id) => ids.has(id));
+});
 
 onBeforeUnmount(() => {
     disposed = true;
@@ -570,6 +619,11 @@ function entryNode(curve: Curve): NodeId {
         : analysisNode(curve.line.analysis.id);
 }
 
+/** A curve's id in the legend's eye state (`store.hiddenCurves`) and the table's rows. */
+function curveId(curve: Curve): string {
+    return `${curve.line.key}|${curve.line.file.id}`;
+}
+
 /** Frees the chart Plotly drew, and forgets it; a preview started on it or its legend ends. */
 function purgeChart(): void {
     if (plotly && drawnOn) {
@@ -606,7 +660,7 @@ function viewName(entry: XyView): string {
 function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
     return {
         curves: drawn.value,
-        states: states.value,
+        states: effectiveStates.value,
         theme,
         lang,
         titles: { ...titles.value, offset: offsetTitle.value },
@@ -639,7 +693,7 @@ async function draw(): Promise<void> {
         released = chartHeight.value !== null && figure.height === null;
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
-        const opacities = annotationOpacities(figure, states.value);
+        const opacities = annotationOpacities(figure, effectiveStates.value);
         (figure.layout.annotations ?? []).forEach((note, index) => {
             note.opacity = opacities[index];
         });
@@ -647,7 +701,7 @@ async function draw(): Promise<void> {
         drawnOn = element;
         drawnTheme = theme;
         drawnSize = sizeOf(element);
-        shownStates = states.value.join();
+        shownStates = effectiveStates.value.join();
         shownOpacities = opacities;
         await plotly.react(
             element,
@@ -702,7 +756,7 @@ async function restyle(): Promise<void> {
     const theme = drawnTheme;
     if (drawing || !plotly || !element || !figure || !theme) return;
     if (figure.order.length !== drawn.value.length) return;
-    const key = states.value.join();
+    const key = effectiveStates.value.join();
     if (key === shownStates) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
@@ -713,7 +767,8 @@ async function restyle(): Promise<void> {
                 PlotlyModule["restyle"]
             >[1],
         );
-        const opacities = annotationOpacities(figure, states.value);
+        patchHoverInfo((element as PlotlyTarget).calcdata, paints);
+        const opacities = annotationOpacities(figure, effectiveStates.value);
         const update: Record<string, number> = {};
         opacities.forEach((opacity, index) => {
             if (opacity !== shownOpacities[index]) {
@@ -822,6 +877,14 @@ function toggle(node: NodeId): void {
 
 function onLegendToggle({ node }: LegendToggleEvent): void {
     toggle(node);
+}
+
+function onLegendToggleEye({ id }: LegendEyeEvent): void {
+    store.toggleCurveVisibility(windowKey.value, id);
+}
+
+function onLegendShowAll(): void {
+    store.showAllCurves(windowKey.value);
 }
 
 function onLegendPreview({
@@ -1009,6 +1072,32 @@ function chooseView(event: Event): void {
                         </option>
                     </select>
                 </label>
+                <div
+                    v-if="selecting"
+                    class="unrelated-mode"
+                >
+                    <span>{{ $gettext("Unlinked spectra") }}</span>
+                    <span
+                        class="segmented"
+                        role="group"
+                        :aria-label="$gettext('Unlinked spectra')"
+                    >
+                        <button
+                            v-for="option in unrelatedModeOptions"
+                            :key="option.value"
+                            type="button"
+                            :data-mode="option.value"
+                            :aria-pressed="
+                                unrelatedMode === option.value
+                                    ? 'true'
+                                    : 'false'
+                            "
+                            @click="unrelatedMode = option.value"
+                        >
+                            <span>{{ option.label }}</span>
+                        </button>
+                    </span>
+                </div>
             </div>
             <p
                 v-if="treatments.mixed"
@@ -1060,8 +1149,11 @@ function chooseView(event: Event): void {
                 ></div>
                 <XyLegend
                     :groups="legendGroups"
+                    :hidden-ids="hiddenIds"
                     @toggle="onLegendToggle"
                     @preview="onLegendPreview"
+                    @toggle-eye="onLegendToggleEye"
+                    @show-all="onLegendShowAll"
                 />
             </div>
             <p class="note">
@@ -1146,8 +1238,55 @@ function chooseView(event: Event): void {
     font-size: 0.8125rem;
 }
 
+.xy-workshop .unrelated-mode {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+}
+
+.xy-workshop .segmented {
+    display: inline-flex;
+    padding: 0.1875rem;
+    border-radius: 999rem;
+    background: var(--bg-alt);
+    box-shadow: inset 0 0 0 0.0625rem var(--border);
+}
+
+.xy-workshop .segmented button {
+    min-block-size: 1.75rem;
+    padding-inline: 0.75rem;
+    border: none;
+    border-radius: 999rem;
+    background: none;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 0.78125rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color var(--dur-fast, 160ms),
+        color var(--dur-fast, 160ms);
+}
+
+.xy-workshop .segmented button:hover {
+    color: var(--ink);
+}
+
+.xy-workshop .segmented button[aria-pressed="true"] {
+    background: var(--surface);
+    box-shadow:
+        0 0.0625rem 0.125rem rgb(26 26 46 / 0.08),
+        inset 0 0 0 0.0625rem var(--sel-own-rule);
+    color: var(--sel-own-ink);
+    font-weight: 600;
+}
+
 .xy-workshop .retry:focus-visible,
-.xy-workshop select:focus-visible {
+.xy-workshop select:focus-visible,
+.xy-workshop .segmented button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
 }

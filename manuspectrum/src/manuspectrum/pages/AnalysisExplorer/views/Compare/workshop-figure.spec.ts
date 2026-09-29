@@ -20,7 +20,9 @@ const THEME: PlotTheme = {
     ink: "#000000",
     inkMuted: "#444444",
     border: "#eeeeee",
+    borderHover: "#dddddd",
     background: "#ffffff",
+    surface: "#ffffff",
     fontBody: "Sora",
     fontMono: "JetBrains Mono",
 };
@@ -32,11 +34,12 @@ interface AnnotationCall {
     opacity?: number;
 }
 
-function curve(slot: number, y: number[], rank = 0): FigureCurve {
+function curve(slot: number, y: number[], rank = 0, file = slot): FigureCurve {
     return {
         slot,
         rank,
-        label: `A${slot + 1} · S${slot}.csv`,
+        label: `A${slot + 1} · S${file}.csv`,
+        fileName: `S${file}.csv`,
         analysis: `Analysis <${slot}>`,
         x: y.map((_, index) => index),
         y,
@@ -120,6 +123,86 @@ describe("workshop figure", () => {
         ]);
     });
 
+    it("carries the shared x, with its axis title, in the unified box's header once", () => {
+        const figure = stackedFigure(input([curve(0, [1, 2])]), false);
+        const layout = figure.layout as {
+            xaxis?: { unifiedhovertitle?: { text?: string } };
+        };
+        expect(layout.xaxis?.unifiedhovertitle?.text).toBe(
+            "%{x:.4~g} · Energy (keV)",
+        );
+    });
+
+    it("hovers one compact line per curve under x unified: its slot and its value alone, no repeated name or axis title", () => {
+        const figure = stackedFigure(
+            input([curve(0, [1, 2]), curve(1, [3, 4])]),
+            false,
+        );
+        expect(figure.data.map((trace) => trace.hovertemplate)).toEqual([
+            "A1 · %{y:.4~g}<extra></extra>",
+            "A2 · %{y:.4~g}<extra></extra>",
+        ]);
+    });
+
+    it("hovers the real value behind an offset curve, still one compact line", () => {
+        const figure = stackedFigure(
+            input([curve(0, [1, 2]), curve(1, [3, 4])]),
+            true,
+        );
+        expect(figure.data[1].hovertemplate).toBe(
+            "A2 · %{customdata:.4~g}<extra></extra>",
+        );
+    });
+
+    it("adds the file name only to disambiguate two files sharing a slot", () => {
+        const figure = stackedFigure(
+            input([curve(0, [1, 2], 0, 1), curve(0, [3, 4], 1, 2)]),
+            false,
+        );
+        expect(figure.data.map((trace) => trace.hovertemplate)).toEqual([
+            "A1 · S1.csv · %{y:.4~g}<extra></extra>",
+            "A1 · S2.csv · %{y:.4~g}<extra></extra>",
+        ]);
+    });
+
+    it("escapes an axis title holding pseudo-HTML in the unified header", () => {
+        const figure = stackedFigure(
+            input([curve(0, [1, 2])], {
+                titles: { x: "A & B", y: "<Counts>", offset: "" },
+            }),
+            false,
+        );
+        const layout = figure.layout as {
+            xaxis?: { unifiedhovertitle?: { text?: string } };
+        };
+        expect(layout.xaxis?.unifiedhovertitle?.text).toBe(
+            "%{x:.4~g} · A &amp; B",
+        );
+    });
+
+    it("hovers its own x and y, each with its axis title, under closest — no shared header there", () => {
+        const many = Array.from({ length: 7 }, (_, slot) =>
+            curve(slot, [1, 2]),
+        );
+        const figure = stackedFigure(input(many), false);
+        expect(figure.data[0].hovertemplate).toBe(
+            "A1<br>x: %{x:.4~g} Energy (keV) · y: %{y:.4~g} Counts<extra></extra>",
+        );
+    });
+
+    it("escapes an axis title holding pseudo-HTML under closest", () => {
+        const many = Array.from({ length: 7 }, (_, slot) =>
+            curve(slot, [1, 2]),
+        );
+        const figure = stackedFigure(
+            input(many, { titles: { x: "A & B", y: "<Counts>", offset: "" } }),
+            false,
+        );
+        expect(figure.data[0].hovertemplate).toContain(
+            "x: %{x:.4~g} A &amp; B · y: %{y:.4~g} &lt;Counts&gt;",
+        );
+    });
+
     it("exports the curves shown with Plotly's legend, a title and a source line, a hidden curve out of the legend", () => {
         const figure = stackedFigure(
             input([curve(0, [1, 2]), curve(1, [1, 2])]),
@@ -140,6 +223,13 @@ describe("workshop figure", () => {
         ]);
         expect(exported.data.map((trace) => trace.opacity)).toEqual([1, 0]);
         expect(exported.data[0].line).toMatchObject({ width: 2.5 });
+        expect(exported.data.map((trace) => trace.legendgroup)).toEqual([
+            "slot-0",
+            "slot-1",
+        ]);
+        expect(
+            exported.data.map((trace) => trace.legendgrouptitle?.text),
+        ).toEqual(["A1", "A2"]);
         expect(exported.layout).toMatchObject({
             showlegend: true,
             paper_bgcolor: "#ffffff",
