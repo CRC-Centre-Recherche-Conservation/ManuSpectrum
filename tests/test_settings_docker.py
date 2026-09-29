@@ -7,11 +7,14 @@ unimportable in that interpreter, as it is absent from the image.
 
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import textwrap
 from pathlib import Path
+from unittest import skipUnless
 
 from django.test import SimpleTestCase
 
@@ -262,3 +265,65 @@ class SettingsDockerTests(SimpleTestCase):
         for handler in handlers.values():
             self.assertEqual(handler["class"], "logging.StreamHandler")
             self.assertNotIn("filename", handler)
+
+
+COMPOSE_DIR = ROOT / "deploy" / "compose"
+
+
+@skipUnless(shutil.which("docker"), "docker CLI missing")
+class ComposeEnvironmentTests(SimpleTestCase):
+    def test_env_example_and_compose_start_the_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "compose"
+            shutil.copytree(
+                COMPOSE_DIR, project, ignore=shutil.ignore_patterns("tests", ".env")
+            )
+            secrets = Path(tmp) / "secrets"
+            secrets.mkdir()
+            for name in ("pg_password", "elastic_password", "django_secret_key"):
+                (secrets / name).write_text("s" * 64)
+            (Path(tmp) / "media" / "uploadedfiles").mkdir(parents=True)
+            env_text = (COMPOSE_DIR / ".env.example").read_text()
+            env_text = re.sub(
+                r"(?m)^SECRETS_DIR=.*$", f"SECRETS_DIR={secrets}", env_text
+            )
+            env_text = re.sub(
+                r"(?m)^MEDIA_HOST_DIR=.*$", f"MEDIA_HOST_DIR={tmp}/media", env_text
+            )
+            (project / ".env").write_text(env_text)
+            rendered = subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "--project-directory",
+                    str(project),
+                    "--env-file",
+                    str(project / ".env"),
+                    "-f",
+                    str(project / "compose.yaml"),
+                    "-f",
+                    str(project / "compose.prod.yaml"),
+                    "config",
+                    "--format",
+                    "json",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            environment = dict(
+                line.split("=", 1)
+                for line in env_text.splitlines()
+                if line and not line.startswith("#") and "=" in line
+            )
+            environment.update(
+                json.loads(rendered.stdout)["services"]["web"]["environment"]
+            )
+            environment = {
+                key: str(value).replace("/run/secrets", str(secrets))
+                for key, value in environment.items()
+                if value is not None
+            }
+            values = load(environment)
+        self.assertNotIn("error", values, values)
+        self.assertEqual(values["CELERY_BROKER_URL"], "redis://redis-broker:6379/0")

@@ -1,0 +1,45 @@
+# Sizing of the production host (22 GB RAM, 8 vCPU): starting values of spec
+# §17.2 (D-H6), measured again on the rehearsal VM (docker stats during a full
+# reindex) before they are trusted.
+services:
+  postgres:
+    command: ["postgres",
+              "-c", "standard_conforming_strings=off",
+              "-c", "max_connections=60",
+              "-c", "shared_buffers=4GB",
+              "-c", "effective_cache_size=10GB",
+              "-c", "work_mem=32MB",
+              "-c", "maintenance_work_mem=1GB",
+              "-c", "random_page_cost=1.5",
+              "-c", "jit=off"]
+    shm_size: 1g
+    deploy: {resources: {limits: {memory: 6g}}}
+
+  elasticsearch:
+    environment:
+      ES_JAVA_OPTS: "-Xms4g -Xmx4g"
+    deploy: {resources: {limits: {memory: 6g}}}
+
+  redis-broker:
+    deploy: {resources: {limits: {memory: 256m}}}
+
+  redis-cache:
+    deploy: {resources: {limits: {memory: 768m}}}
+
+  cantaloupe:
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx1g"
+    deploy: {resources: {limits: {memory: 1536m}}}
+
+  web:
+    environment:
+      GUNICORN_WORKERS: "5"
+    deploy: {resources: {limits: {memory: 4g}}}
+
+  worker:
+    environment:
+      CELERY_CONCURRENCY: "3"
+    deploy: {resources: {limits: {memory: 2g}}}
+
+  beat:
+    deploy: {resources: {limits: {memory: 512m}}}

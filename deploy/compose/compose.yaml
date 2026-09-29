@@ -1,0 +1,241 @@
+# ManuSpectrum stack: the application (web, worker, beat), PostgreSQL/PostGIS,
+# Elasticsearch, a Redis broker, a Redis cache and Cantaloupe. Security, health
+# and persistence live here and apply everywhere; compose.prod.yaml adds the
+# sizing of the production host. Always run both files together on a host
+# (make -C deploy <target>). No service publishes a port.
+#
+# Data volumes are external: `make -C deploy volumes` creates them once, and
+# no Compose command, `down -v` included, deletes them.
+name: manuspectrum
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-service: &service
+  restart: unless-stopped
+  logging: *logging
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+x-media: &media
+  type: bind
+  source: ${MEDIA_HOST_DIR:?set MEDIA_HOST_DIR in .env}
+  target: /srv/media
+  bind:
+    create_host_path: false
+
+x-app: &app
+  <<: *service
+  image: ${MANUSPECTRUM_IMAGE:?set MANUSPECTRUM_IMAGE in .env}
+  user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
+  env_file:
+    - path: .env
+      required: true
+  environment:
+    PGHOST: postgres
+    PGPORT: "5432"
+    PGPASSWORD_FILE: /run/secrets/pg_password
+    ESHOST: elasticsearch
+    ESPORT: "9200"
+    ELASTIC_PASSWORD_FILE: /run/secrets/elastic_password
+    MANUSPECTRUM_SECRET_KEY_FILE: /run/secrets/django_secret_key
+    REDIS_BROKER_URL: redis://redis-broker:6379
+    REDIS_CACHE_URL: redis://redis-cache:6379
+    CANTALOUPE_HOST: cantaloupe
+    CANTALOUPE_PORT: "8182"
+  secrets: [pg_password, elastic_password, django_secret_key]
+  read_only: true
+
+services:
+  postgres:
+    <<: *service
+    image: postgis/postgis:17-3.5@sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6
+    command: ["postgres", "-c", "standard_conforming_strings=off"]
+    environment:
+      POSTGRES_USER: ${PGUSERNAME:?set PGUSERNAME in .env}
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+    secrets: [pg_password]
+    # The image entrypoint prepares the data directory as root, then drops to postgres.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Replaces the image's own 10_postgis.sh: template_postgis is created the Arches way.
+      - type: bind
+        source: ./postgres/init
+        target: /docker-entrypoint-initdb.d
+        read_only: true
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  elasticsearch:
+    <<: *service
+    image: elasticsearch:8.19.21@sha256:ae1f398ec8734a63eb7f719cecc2ea33e2bb46e23bdf24641dec86fd256bf594
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      bootstrap.memory_lock: "true"
+      ELASTIC_PASSWORD_FILE: /run/secrets/elastic_password
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    secrets: [elastic_password]
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65535, hard: 65535}
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    stop_grace_period: 60s
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -u "elastic:$$(cat /run/secrets/elastic_password)"
+          "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s" >/dev/null
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+
+  redis-broker:
+    <<: *service
+    image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    # Celery broker (DB 0) and IIIF sign-ins (DB 3): never evicts, append-only file.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "",
+              "--maxmemory", "192mb", "--maxmemory-policy", "noeviction"]
+    cap_add: [CHOWN, SETGID, SETUID]
+    volumes:
+      - redis_broker:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis-cache:
+    <<: *service
+    image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    # Django caches: least-recently-used keys are evicted, nothing is persisted.
+    command: ["redis-server", "--save", "", "--appendonly", "no",
+              "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    cap_add: [CHOWN, SETGID, SETUID]
+    read_only: true
+    tmpfs: ["/data:rw,nosuid,nodev,size=16m"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  cantaloupe:
+    <<: *service
+    image: uclalibrary/cantaloupe:5.0.7-2@sha256:76140291a6320626e4ba58ecae0937f39f6e21318ff62adc78215ae44fd094df
+    environment:
+      CANTALOUPE_BASE_URI: ${PUBLIC_SERVER_ADDRESS:?set PUBLIC_SERVER_ADDRESS in .env}iiifserver
+      CANTALOUPE_ENDPOINT_ADMIN_ENABLED: "false"
+      CANTALOUPE_FILESYSTEMSOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: /imageroot/
+      CANTALOUPE_HTTP_ACCESSCONTROLALLOWORIGIN: "*"
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE_ENABLED: "true"
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE: FilesystemCache
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE_TTL_SECONDS: "2592000"
+      CANTALOUPE_CACHE_SERVER_INFO_ENABLED: "true"
+      CANTALOUPE_FILESYSTEMCACHE_PATHNAME: /var/cache/cantaloupe
+      CANTALOUPE_LOG_APPLICATION_CONSOLEAPPENDER_ENABLED: "true"
+      CANTALOUPE_LOG_APPLICATION_ROLLINGFILEAPPENDER_ENABLED: "false"
+      CANTALOUPE_LOG_ERROR_ROLLINGFILEAPPENDER_ENABLED: "false"
+    volumes:
+      - type: bind
+        source: ${MEDIA_HOST_DIR:?set MEDIA_HOST_DIR in .env}/uploadedfiles
+        target: /imageroot
+        read_only: true
+        bind:
+          create_host_path: false
+      - cantaloupe_cache:/var/cache/cantaloupe
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8182/iiif/3"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  web:
+    <<: *app
+    command: ["web"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=1g"]
+    volumes:
+      - *media
+      - static:/srv/static
+    stop_grace_period: 35s
+    depends_on:
+      postgres: {condition: service_healthy}
+      elasticsearch: {condition: service_healthy}
+      redis-broker: {condition: service_healthy}
+      redis-cache: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "-H", "Host: web", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 300s
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=512m"]
+    volumes:
+      - *media
+    stop_grace_period: 60s
+    depends_on:
+      web: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A manuspectrum.celery inspect ping --destination \"celery@$${HOSTNAME}\" --timeout 10 >/dev/null"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+
+  beat:
+    <<: *app
+    command: ["beat"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=64m"]
+    volumes:
+      - beat:/var/lib/celery
+    depends_on:
+      web: {condition: service_healthy}
+    # A singleton nobody waits on; the image's /healthz probe does not apply to it.
+    healthcheck:
+      disable: true
+
+secrets:
+  pg_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/pg_password
+  elastic_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/elastic_password
+  django_secret_key:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/django_secret_key
+
+volumes:
+  pg_data:
+    external: true
+    name: ms_pg_data
+  es_data:
+    external: true
+    name: ms_es_data
+  redis_broker:
+    external: true
+    name: ms_redis_broker
+  cantaloupe_cache:
+    external: true
+    name: ms_cantaloupe_cache
+  # Refilled from the image at every web start (publish-static).
+  static: {}
+  # Celery beat schedule: only the time of the last runs.
+  beat: {}
