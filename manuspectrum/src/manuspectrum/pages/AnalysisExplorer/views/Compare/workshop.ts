@@ -1,20 +1,33 @@
 import { applyTransforms } from "utils/xy-transforms";
 import { viewsFor } from "utils/xy-views";
 
+import {
+    hoverModeFor,
+    UNIFIED_HOVER_MAX_CURVES,
+} from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
+import { focusHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
+
 import type { XyView } from "utils/xy-views";
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
+
+export { hoverModeFor, UNIFIED_HOVER_MAX_CURVES };
 
 /** How the XY workshop shows its curves; `table` is the accessible equivalent of the chart. */
 export type WorkshopLayout = "overlay" | "offset" | "multiples" | "table";
 
 /** Above this many curves, the workshop opens on small multiples. */
 export const OVERLAY_MAX_CURVES = 8;
-/** Slots A1…A8 are drawn in the series colours; the later ones are grey context. */
+/** A global (basket) slot below this takes its own colour in a generic slot badge (`FoldedSummary`); unrelated to a curve's own position-based hue (`CURVE_PALETTE_SIZE`). */
 export const COLOURED_SLOTS = 8;
-/** Up to this many curves, the hover lists every curve at the X under the pointer. */
-export const UNIFIED_HOVER_MAX_CURVES = 6;
+/**
+ * The XY workshop's curve palette: a curve's colour follows its position in
+ * the window (its curves sorted by slot then file — the order they already
+ * arrive in), not its basket slot, so a busy Selection never runs out of
+ * colours into a permanent grey (`curveHue`, `curveDash`).
+ */
+export const CURVE_PALETTE_SIZE = 12;
 /** The least room between two end-of-curve labels, in pixels. */
 export const LABEL_GAP = 12;
 
@@ -58,9 +71,33 @@ export type Dash = (typeof DASHES)[number];
  */
 export type CurveState = "plain" | "emphasised" | "hidden" | "dimmed";
 
+/** How many curves are `"plain"` or `"emphasised"` — the ones a hover box can answer for; `"hidden"` and `"dimmed"` curves take no hover. */
+export function visibleCurveCount(states: readonly CurveState[]): number {
+    return states.filter((state) => state === "plain" || state === "emphasised")
+        .length;
+}
+
+/** The pin (1…4) a curve currently takes its colour from, and its dash rank among the curves sharing that pin, in window order. */
+export interface CurveFocus {
+    slot: number;
+    rank: number;
+}
+
+/**
+ * A curve's current colour+dash identity: `"series"` is its own window
+ * position (`curveHue`/`curveDash`), `"focus"` a pin's hue while it links
+ * the curve (`CurveFocus.slot`, its dash then set by `CurveFocus.rank`
+ * instead), `"context"` the grey of a dimmed, unrelated curve.
+ */
+export type CurveLook =
+    | { kind: "series"; hue: number; dash: Dash }
+    | { kind: "focus"; slot: number; dash: Dash }
+    | { kind: "context"; dash: Dash };
+
 /** The style attributes of one curve, all of them Plotly `editType: "style"` (`hoverinfo`: `none`). */
 export interface CurvePaint {
     colour: string;
+    dash: Dash;
     width: number;
     opacity: number;
     /** False: the hover skips the curve. */
@@ -70,8 +107,9 @@ export interface CurvePaint {
 /** The colours a paint is chosen from (`PlotTheme`). */
 export interface CurvePalette {
     series: readonly string[];
+    /** The four pin hues, `focus[0]` for slot 1. */
+    focus: readonly string[];
     context: string;
-    ink: string;
 }
 
 /** One file of a slot in the workshop's legend. */
@@ -79,7 +117,8 @@ export interface LegendEntry {
     id: string;
     name: string;
     slot: number;
-    dash: Dash;
+    /** Its current colour+dash, as the chart draws it. */
+    look: CurveLook;
     /** The node a press toggles in the linked selection. */
     node: NodeId;
     /** The nodes its curve stands for (its file and its analysis), which the focus marks. */
@@ -103,6 +142,8 @@ export interface LegendGroup {
     /** The nodes its curves stand for (their files and analysis), which the focus marks. */
     nodes: readonly NodeId[];
     pressed: boolean;
+    /** Its first file's current colour, always drawn solid at this aggregate level. */
+    look: CurveLook;
     entries: LegendEntry[];
 }
 
@@ -139,9 +180,9 @@ export interface CsvColumn {
     y: readonly number[];
 }
 
-/** The line style of the file at `rank` among the files of its slot (0: the first). */
-export function dashOf(rank: number): Dash {
-    return DASHES[rank % DASHES.length];
+/** The line style at `tier` (0: solid), cycling through `DASHES`. */
+export function dashOf(tier: number): Dash {
+    return DASHES[tier % DASHES.length];
 }
 
 /** A Plotly dash as an SVG `stroke-dasharray`; empty for a solid line. */
@@ -149,23 +190,62 @@ export function dashArray(dash: Dash): string {
     return dash === "solid" ? "" : dash.replaceAll("px", "").replace(/,/g, " ");
 }
 
-export function isColoured(slot: number): boolean {
-    return slot >= 0 && slot < COLOURED_SLOTS;
+/** A curve's hue index (`palette.series`) from its position in the window: the first `CURVE_PALETTE_SIZE` curves take one each. */
+export function curveHue(index: number): number {
+    return index % CURVE_PALETTE_SIZE;
 }
 
-/** The layout a window opens on: small multiples above eight curves, or when several slots are all grey context. */
-export function openingLayout(
-    curves: number,
-    slots: readonly number[],
-): "overlay" | "multiples" {
-    if (curves > OVERLAY_MAX_CURVES) return "multiples";
-    return slots.length > 1 && !slots.some(isColoured)
-        ? "multiples"
-        : "overlay";
+/** A curve's base dash: solid for the first `CURVE_PALETTE_SIZE` curves, the next `DASHES` variant every `CURVE_PALETTE_SIZE` beyond — so a window's (hue, dash) pairs stay distinct well past its realistic curve count. */
+export function curveDash(index: number): Dash {
+    return dashOf(Math.floor(index / CURVE_PALETTE_SIZE));
 }
 
-export function hoverModeFor(curves: number): "x unified" | "closest" {
-    return curves <= UNIFIED_HOVER_MAX_CURVES ? "x unified" : "closest";
+/**
+ * A curve's current identity: its base position in the window, or a pin's
+ * hue while `focus` links it (dash then set by the curve's rank among
+ * others sharing that pin, so they stay told apart), or grey context while
+ * dimmed. `focus` is null unless `state` is `"emphasised"` by an actual pin
+ * (never set from a bare preview, which has no pin of its own).
+ */
+export function curveLook(
+    index: number,
+    state: CurveState,
+    focus: CurveFocus | null,
+): CurveLook {
+    if (state === "dimmed") return { kind: "context", dash: curveDash(index) };
+    if (state === "emphasised" && focus) {
+        return { kind: "focus", slot: focus.slot, dash: dashOf(focus.rank) };
+    }
+    return { kind: "series", hue: curveHue(index), dash: curveDash(index) };
+}
+
+/** The CSS colour of a curve's current look, for the legend's inline SVG (DOM `var()`, unlike a Plotly trace which needs a resolved colour — see `curveColour`). */
+export function curveColourVar(look: CurveLook): string {
+    switch (look.kind) {
+        case "context":
+            return "var(--series-context)";
+        case "focus":
+            return focusHue(look.slot);
+        case "series":
+            return `var(--series-${look.hue + 1})`;
+    }
+}
+
+/** The resolved colour of a curve's current look, for a Plotly trace (`CurvePalette`, read from the theme). */
+export function curveColour(palette: CurvePalette, look: CurveLook): string {
+    switch (look.kind) {
+        case "context":
+            return palette.context;
+        case "focus":
+            return palette.focus[look.slot - 1];
+        case "series":
+            return palette.series[look.hue];
+    }
+}
+
+/** The layout a window opens on: small multiples above eight curves, overlay otherwise. */
+export function openingLayout(curves: number): "overlay" | "multiples" {
+    return curves > OVERLAY_MAX_CURVES ? "multiples" : "overlay";
 }
 
 /**
@@ -187,60 +267,55 @@ export function curveState(
 }
 
 /**
- * A1…A8 in their series colour at 1.5 px; later slots in grey context at
- * 1.25 px, drawn in ink when emphasised; every emphasised curve at 2.5 px.
- * A hidden curve keeps its line, at opacity 0, out of the hover. A dimmed
- * curve draws in grey context at reduced opacity, out of the hover too.
+ * Every curve at 1.5 px in its own hue, emphasised (a pin or a preview) at
+ * 2.5 px, colour unchanged by a bare preview; a curve a pin links takes
+ * that pin's hue instead (`curveLook`) at the same 2.5 px. A hidden curve
+ * keeps its line, at opacity 0, out of the hover. A dimmed curve draws in
+ * grey context at reduced opacity and width, out of the hover too.
  */
 export function curvePaint(
     palette: CurvePalette,
-    slot: number,
+    index: number,
     state: CurveState,
+    focus: CurveFocus | null = null,
 ): CurvePaint {
-    const coloured = isColoured(slot);
-    if (state === "emphasised") {
-        return {
-            colour: coloured ? palette.series[slot] : palette.ink,
-            width: EMPHASIS_WIDTH,
-            opacity: 1,
-            hover: true,
-        };
-    }
+    const look = curveLook(index, state, focus);
+    const colour = curveColour(palette, look);
     if (state === "dimmed") {
         return {
-            colour: palette.context,
+            colour,
+            dash: look.dash,
             width: CONTEXT_WIDTH,
             opacity: DIM_OPACITY,
             hover: false,
         };
     }
-    const plain: CurvePaint = coloured
-        ? {
-              colour: palette.series[slot],
-              width: LINE_WIDTH,
-              opacity: 1,
-              hover: true,
-          }
-        : {
-              colour: palette.context,
-              width: CONTEXT_WIDTH,
-              opacity: 1,
-              hover: true,
-          };
-    return state === "hidden" ? { ...plain, opacity: 0, hover: false } : plain;
+    const width = state === "emphasised" ? EMPHASIS_WIDTH : LINE_WIDTH;
+    return state === "hidden"
+        ? { colour, dash: look.dash, width, opacity: 0, hover: false }
+        : { colour, dash: look.dash, width, opacity: 1, hover: true };
 }
 
-/** The paints of every trace, in trace order, as the arrays of one `Plotly.restyle`. */
+/**
+ * The paints of every trace, in trace order, as the arrays of one
+ * `Plotly.restyle`. `line.dash` is `editType: "style"` in
+ * plotly.js-cartesian-dist 4.0.0 (verified against its scatter attribute
+ * meta, same as `line.color`/`line.width`): restyling it redraws the line
+ * without a recalc, so a curve's dash can follow the focus with the rest of
+ * its paint, no full redraw.
+ */
 export function restyleUpdate(paints: readonly CurvePaint[]): {
     opacity: number[];
     "line.color": string[];
     "line.width": number[];
+    "line.dash": string[];
     hoverinfo: string[];
 } {
     return {
         opacity: paints.map((paint) => paint.opacity),
         "line.color": paints.map((paint) => paint.colour),
         "line.width": paints.map((paint) => paint.width),
+        "line.dash": paints.map((paint) => paint.dash),
         hoverinfo: paints.map((paint) => (paint.hover ? "all" : "skip")),
     };
 }
@@ -248,6 +323,7 @@ export function restyleUpdate(paints: readonly CurvePaint[]): {
 /** A trace as Plotly's internal `gd.calcdata[i][0].trace` holds it. */
 export interface CalcTrace {
     hoverinfo?: string;
+    hovertemplate?: string;
 }
 
 /**
@@ -274,6 +350,22 @@ export function patchHoverInfo(
         const trace = cd[0]?.trace;
         const paint = paints[index];
         if (trace && paint) trace.hoverinfo = paint.hover ? "all" : "skip";
+    });
+}
+
+/**
+ * The same fix as `patchHoverInfo`, for `hovertemplate`: a hovermode switch
+ * (« x unified » ↔ « closest ») restyles every trace's `hovertemplate`
+ * without a redraw, and `Fx.hover` reads it from `cd[0].trace` the same way.
+ */
+export function patchHoverTemplate(
+    calcdata: readonly (readonly { trace?: CalcTrace }[])[] | undefined,
+    templates: readonly string[],
+): void {
+    calcdata?.forEach((cd, index) => {
+        const trace = cd[0]?.trace;
+        const template = templates[index];
+        if (trace && template !== undefined) trace.hovertemplate = template;
     });
 }
 

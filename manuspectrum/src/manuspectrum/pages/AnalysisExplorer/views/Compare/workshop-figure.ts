@@ -1,21 +1,27 @@
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     LABEL_GAP,
+    curveHue,
     curvePaint,
-    dashOf,
     endPoint,
     extent,
     hoverModeFor,
-    isColoured,
     offsetLifts,
     panelGrid,
     panelSpacing,
     spreadLabels,
+    visibleCurveCount,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
-import { plotLayout } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
+import {
+    closestHoverLine,
+    escapePlotlyText,
+    plotLayout,
+    unifiedHoverLine,
+} from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 import type { Layout, PlotData } from "plotly.js";
 import type {
+    CurveFocus,
     CurvePaint,
     CurveState,
     Extent,
@@ -28,7 +34,7 @@ export type Trace = Partial<PlotData>;
 /** One curve as the figure draws it. */
 export interface FigureCurve {
     slot: number;
-    /** Its rank among the files of its slot (0: the first). */
+    /** Its rank among the files of its slot (0: the first); the first file of a slot gets the chart's end-of-curve label and panel-title swatch. */
     rank: number;
     /** « A1 · file name ». */
     label: string;
@@ -46,6 +52,8 @@ export interface FigureCurve {
 export interface FigureInput {
     curves: readonly FigureCurve[];
     states: readonly CurveState[];
+    /** The pin a curve currently takes its colour from, in the same order as `curves`; null where none applies. */
+    focus: readonly (CurveFocus | null)[];
     theme: PlotTheme;
     lang: string;
     titles: { x: string; y: string; offset: string };
@@ -58,7 +66,7 @@ export interface FigureInput {
 export interface Figure {
     data: Trace[];
     layout: Partial<Layout>;
-    /** The curve each trace shows, in trace order: grey context first, under the coloured curves. */
+    /** The curve each trace shows, in trace order (the window's order: every curve is its own hue, none drawn under another). */
     order: number[];
     /** For each annotation, the curves it names; empty for an axis title. */
     follows: number[][];
@@ -68,7 +76,6 @@ export interface Figure {
     height: number | null;
 }
 
-const HOVER_FORMAT = ".4~g";
 const LABEL_FONT_SIZE = 11;
 const PANEL_FONT_SIZE = 10;
 /** The characters a panel title keeps when the chart's width is unknown. */
@@ -96,14 +103,6 @@ const EXPORT_TITLE_SIZE = 14;
 /** Room above the exported figure for its title and source line. */
 export const EXPORT_TITLE_ROOM = 72;
 
-/** Text Plotly would read as its pseudo-HTML, escaped. */
-export function escapeText(text: string): string {
-    return text
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-}
-
 function swatch(colour: string): string {
     return `<span style="color:${colour}">━</span>`;
 }
@@ -111,22 +110,15 @@ function swatch(colour: string): string {
 export function paintOf(input: FigureInput, index: number): CurvePaint {
     return curvePaint(
         input.theme,
-        input.curves[index].slot,
+        index,
         input.states[index],
+        input.focus[index],
     );
 }
 
-/** Context curves first, drawn under the coloured ones; curve order otherwise. */
-function traceOrder(curves: readonly FigureCurve[]): number[] {
-    return curves
-        .map((curve, index) => ({ curve, index }))
-        .sort(
-            (one, other) =>
-                Number(isColoured(one.curve.slot)) -
-                    Number(isColoured(other.curve.slot)) ||
-                one.index - other.index,
-        )
-        .map(({ index }) => index);
+/** The hover mode this figure draws under: unified up to the curves currently answering hover, closest beyond. */
+function hoverMode(input: FigureInput): "x unified" | "closest" {
+    return hoverModeFor(visibleCurveCount(input.states));
 }
 
 /**
@@ -140,57 +132,34 @@ function shortLabel(input: FigureInput, index: number): string {
         (other) => other.slot === curve.slot,
     ).length;
     return filesInSlot > 1
-        ? `${slotLabel(curve.slot)} · ${escapeText(curve.fileName)}`
+        ? `${slotLabel(curve.slot)} · ${curve.fileName}`
         : slotLabel(curve.slot);
 }
 
-/**
- * The hover line under `"x unified"`/`"y unified"`: the shared x already
- * sits in the box header (`baseLayout`'s `unifiedhovertitle`), so each
- * curve takes one compact line, its short name and its value alone.
- * `hoverValue` names the field the value is read from (`y`, or
- * `customdata` for the real value behind an offset curve).
- */
-function unifiedHoverLine(
-    input: FigureInput,
-    index: number,
-    hoverValue: string,
-): string {
-    return `${shortLabel(input, index)} · %{${hoverValue}:${HOVER_FORMAT}}`;
-}
-
-/**
- * The hover line under `"closest"`: no shared header exists there, so the
- * line carries its own x and y, each with its axis title as stored
- * (English, not translated).
- */
-function closestHoverLine(
-    input: FigureInput,
-    index: number,
-    hoverValue: string,
-): string {
-    const xUnit = input.titles.x ? ` ${escapeText(input.titles.x)}` : "";
-    const yUnit = input.titles.y ? ` ${escapeText(input.titles.y)}` : "";
-    return (
-        `${shortLabel(input, index)}<br>` +
-        `x: %{x:${HOVER_FORMAT}}${xUnit} · ` +
-        `y: %{${hoverValue}:${HOVER_FORMAT}}${yUnit}`
-    );
-}
-
 /** A trace's line, its name for the legend of the PNG, and its current paint. */
-function traceOf(input: FigureInput, index: number, hoverValue: string): Trace {
+function traceOf(
+    input: FigureInput,
+    index: number,
+    hoverValue: string,
+    mode: "x unified" | "closest",
+): Trace {
     const curve = input.curves[index];
     const paint = paintOf(input, index);
-    const unified = hoverModeFor(input.curves.length) !== "closest";
-    const hoverLine = unified
-        ? unifiedHoverLine(input, index, hoverValue)
-        : closestHoverLine(input, index, hoverValue);
+    const label = shortLabel(input, index);
+    const hoverLine =
+        mode === "closest"
+            ? closestHoverLine(
+                  label,
+                  hoverValue,
+                  input.titles.x,
+                  input.titles.y,
+              )
+            : unifiedHoverLine(label, hoverValue);
     return {
         type: "scatter",
         mode: "lines",
         x: curve.x,
-        name: escapeText(curve.label),
+        name: escapePlotlyText(curve.label),
         hovertemplate: `${hoverLine}<extra></extra>`,
         hoverinfo: paint.hover ? "all" : "skip",
         opacity: paint.opacity,
@@ -198,7 +167,7 @@ function traceOf(input: FigureInput, index: number, hoverValue: string): Trace {
         line: {
             color: paint.colour,
             width: paint.width,
-            dash: dashOf(curve.rank),
+            dash: paint.dash,
         } as PlotData["line"],
         // No legendgroup/legendgrouptitle here: plotly.js-cartesian-dist 4.0.0's
         // "x/y unified" hover box is itself drawn as a mock legend (createHoverText),
@@ -210,26 +179,40 @@ function traceOf(input: FigureInput, index: number, hoverValue: string): Trace {
     };
 }
 
+/**
+ * The hovertemplates of every trace, in trace order, for `mode`: what a
+ * hovermode change restyles (`XyWorkshop.vue`'s `restyle`) so the box
+ * content matches the mode it now shows under, without a redraw.
+ */
+export function hoverTemplatesFor(
+    input: FigureInput,
+    order: readonly number[],
+    hoverValue: string,
+    mode: "x unified" | "closest",
+): string[] {
+    return order.map((index) => {
+        const label = shortLabel(input, index);
+        const line =
+            mode === "closest"
+                ? closestHoverLine(
+                      label,
+                      hoverValue,
+                      input.titles.x,
+                      input.titles.y,
+                  )
+                : unifiedHoverLine(label, hoverValue);
+        return `${line}<extra></extra>`;
+    });
+}
+
 function baseLayout(input: FigureInput): Record<string, unknown> {
-    const base = plotLayout(input.theme, {
+    return plotLayout(input.theme, {
         lang: input.lang,
         xTitle: input.titles.x,
         yTitle: input.titles.y,
         xReversed: input.xReversed,
-        hovermode: hoverModeFor(input.curves.length),
+        hovermode: hoverMode(input),
     });
-    const xTitleSuffix = input.titles.x
-        ? ` · ${escapeText(input.titles.x)}`
-        : "";
-    return {
-        ...base,
-        xaxis: {
-            ...base.xaxis,
-            unifiedhovertitle: {
-                text: `%{x:${HOVER_FORMAT}}${xTitleSuffix}`,
-            },
-        },
-    };
 }
 
 /**
@@ -243,7 +226,7 @@ function endLabels(
 ): { annotations: Annotation[]; follows: number[][] } {
     const { theme } = input;
     const ends = input.curves.flatMap((curve, index) => {
-        if (!isColoured(curve.slot) || curve.rank > 0) return [];
+        if (curve.rank > 0) return [];
         const point = endPoint(curve.x, ys[index], input.xReversed);
         return point ? [{ index, point }] : [];
     });
@@ -265,7 +248,7 @@ function endLabels(
         return {
             x: point.x,
             y: point.y,
-            text: `${swatch(theme.series[slot])} ${slotLabel(slot)}`,
+            text: `${swatch(theme.series[curveHue(index)])} ${slotLabel(slot)}`,
             xanchor: "left",
             yanchor: "middle",
             font: {
@@ -298,10 +281,12 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
         const lift = lifts[index] ?? 0;
         return offset ? curve.y.map((value) => value + lift) : curve.y;
     });
-    const order = traceOrder(input.curves);
+    // Every curve is its own hue: trace order is the window's order, none drawn under another.
+    const order = input.curves.map((_, index) => index);
+    const mode = hoverMode(input);
     const data = order.map(
         (index): Trace => ({
-            ...traceOf(input, index, offset ? "customdata" : "y"),
+            ...traceOf(input, index, offset ? "customdata" : "y", mode),
             y: ys[index],
             ...(offset ? { customdata: input.curves[index].y } : {}),
         }),
@@ -336,15 +321,16 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     };
 }
 
-/** « ━ A5 · analysis », the analysis cut to `chars` characters. */
+/** « ━ A5 · analysis », the analysis cut to `chars` characters, in its first curve's hue. */
 function panelTitle(input: FigureInput, slot: number, chars: number): string {
-    const name = input.curves.find((curve) => curve.slot === slot)?.analysis;
-    const text = name ?? "";
+    const index = input.curves.findIndex((curve) => curve.slot === slot);
+    const text = index === -1 ? "" : input.curves[index].analysis;
     const short = text.length > chars ? `${text.slice(0, chars - 1)}…` : text;
-    const colour = isColoured(slot)
-        ? input.theme.series[slot]
-        : input.theme.context;
-    return `${swatch(colour)} ${slotLabel(slot)} · ${escapeText(short)}`;
+    const colour =
+        index === -1
+            ? input.theme.context
+            : input.theme.series[curveHue(index)];
+    return `${swatch(colour)} ${slotLabel(slot)} · ${escapePlotlyText(short)}`;
 }
 
 /**
@@ -393,6 +379,14 @@ export function multiplesFigure(input: FigureInput): Figure {
             xgap: spacing.xgap,
             ygap: spacing.ygap,
         },
+        // No `hoversubplots: "axis"` here: verified against
+        // plotly.js-cartesian-dist 4.0.0's `_hover` (`linkSubplots` in
+        // `plot_api.js`) that its cross-subplot pull reads `_subplotsWith`,
+        // populated only for subplots literally overlaid on one shared axis
+        // object; a `matches: "x"` grid panel keeps its own distinct axis
+        // (tracked instead in `_matchGroup`, which `_hover` never reads), so
+        // the setting would be a no-op here. Each panel answers its own
+        // compact hover box independently, in the same style as the rest.
         margin,
         ...(height === null ? {} : { height }),
     };
@@ -450,7 +444,7 @@ export function multiplesFigure(input: FigureInput): Figure {
             yanchor: "top",
             yshift: PANEL_X_TITLE_SHIFT,
             showarrow: false,
-            text: escapeText(input.titles.x),
+            text: escapePlotlyText(input.titles.x),
             font: titleFont,
         },
         {
@@ -463,19 +457,20 @@ export function multiplesFigure(input: FigureInput): Figure {
             xshift: PANEL_Y_TITLE_SHIFT,
             textangle: "-90",
             showarrow: false,
-            text: escapeText(input.titles.y),
+            text: escapePlotlyText(input.titles.y),
             font: titleFont,
         },
     );
     follows.push([], []);
     shown.push({ on: 1, off: 1 }, { on: 1, off: 1 });
-    const order = traceOrder(input.curves);
+    const order = input.curves.map((_, index) => index);
+    const mode = hoverMode(input);
     const data = order.map((index): Trace => {
         const curve = input.curves[index];
         const panel = slots.indexOf(curve.slot);
         const suffix = panel === 0 ? "" : String(panel + 1);
         return {
-            ...traceOf(input, index, "y"),
+            ...traceOf(input, index, "y", mode),
             y: curve.y,
             xaxis: `x${suffix}`,
             yaxis: `y${suffix}`,
@@ -535,7 +530,13 @@ export function exportFigure(
             showlegend: paint.opacity > 0,
             legendgroup: `slot-${slot}`,
             legendgrouptitle: { text: slotLabel(slot) },
-            line: { ...trace.line, color: paint.colour, width: paint.width },
+            // Plotly takes a dash length list (« 6px,2px »); its types list only the named dashes.
+            line: {
+                ...trace.line,
+                color: paint.colour,
+                width: paint.width,
+                dash: paint.dash,
+            } as PlotData["line"],
         };
     });
     const margin = (figure.layout.margin ?? {}) as Record<string, number>;
@@ -556,13 +557,13 @@ export function exportFigure(
                 font: { ...font, size: TITLE_SIZE },
             },
             title: {
-                text: escapeText(text.title),
+                text: escapePlotlyText(text.title),
                 x: 0,
                 xanchor: "left",
                 xref: "paper",
                 font: { ...font, size: EXPORT_TITLE_SIZE },
                 subtitle: {
-                    text: escapeText(text.source),
+                    text: escapePlotlyText(text.source),
                     font: {
                         family: theme.fontBody,
                         size: LABEL_FONT_SIZE,

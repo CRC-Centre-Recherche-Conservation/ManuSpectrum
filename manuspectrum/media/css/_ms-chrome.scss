@@ -80,11 +80,9 @@
     // Analysis Explorer (spec §10.1). Series colours (palette « Pigments »)
     // are the compared items A1…A8, told apart all pairs at once on --bg,
     // colour vision deficiencies included, each ≥ 3:1 on --bg; text drawn on a
-    // series colour takes its --series-N-on. Slots past A8 are grey context
-    // curves (--series-context: 3.26:1 on --bg, 3.43:1 on --surface; a
-    // neutral grey, lighter than A1, A3, A5 and A7 and about as light as the
-    // others). Technique colours are drawn on images with a
-    // white outline and carry their code in --stage (contrast ≥ 6:1 for each hue).
+    // series colour takes its --series-N-on. Technique colours are drawn on
+    // images with a white outline and carry their code in --stage (contrast
+    // ≥ 6:1 for each hue).
     --series-1: #1d4ed8;
     --series-2: #7c9217;
     --series-3: #9f0c54;
@@ -101,6 +99,23 @@
     --series-6-on: var(--ink);
     --series-7-on: #ffffff;
     --series-8-on: var(--ink);
+    // Extended to 12 for the XY workshop's per-window curve palette (a
+    // curve's colour follows its position in the window, not its basket
+    // slot — see workshop.ts `curveHue`). No --series-N-on: nothing fills a
+    // background with 9-12, only a 1.5 px line and a legend swatch stroke.
+    // Computed with an OKLab script (Björn Ottosson's sRGB<->OKLab, dE = the
+    // Euclidean distance in {L,a,b}*100, comparable in magnitude to CIE76):
+    // each stays clear of the amber/gold hue band (heat-3/-4, ~69-96deg) and
+    // >= 12 dE from every --series-1..8 and --focus-1..4 hue; contrast is
+    // WCAG's (L+.05)/(l+.05) of the swatch against white.
+    --series-9: #d42515; // dE >= 12.0 series, 20.9 focus, 18.1 heat; 5.15:1 on white
+    --series-10: #008016; // dE >= 12.2 series, 13.8 focus, 16.6 heat; 5.12:1 on white
+    --series-11: #7e58eb; // dE >= 12.0 series, 12.6 focus, 31.1 heat; 4.68:1 on white
+    --series-12: #d251b9; // dE >= 12.1 series, 12.7 focus, 28.6 heat; 3.74:1 on white
+    // A curve dimmed by the focus's « Dim » switch (unrelated to every pin)
+    // draws in this grey regardless of its palette position (3.26:1 on --bg,
+    // 3.43:1 on --surface; a neutral grey, lighter than A1, A3, A5 and A7 and
+    // about as light as the others).
     --series-context: #8a8999;
     --tech-1: #8aa9ff;
     --tech-2: #f0a35c;

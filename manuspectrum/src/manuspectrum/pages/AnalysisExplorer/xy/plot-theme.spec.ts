@@ -2,12 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     PLOT_CONFIG,
+    UNIFIED_HOVER_MAX_CURVES,
     WORKSHOP_CONFIG,
+    closestHoverLine,
+    escapePlotlyText,
+    hoverModeFor,
     plotLayout,
     readPlotTheme,
     resetAxes,
     separatorsFor,
     seriesColour,
+    unifiedHoverLine,
+    unifiedHoverTitle,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 function setTokens(tokens: Record<string, string>): void {
@@ -38,6 +44,16 @@ describe("plot theme", () => {
     it("reads the grey of context curves", () => {
         setTokens({ "--series-context": "#8a8999" });
         expect(readPlotTheme().context).toBe("#8a8999");
+    });
+
+    it("reads the four pin hues", () => {
+        setTokens({
+            "--focus-1": "#3d2e8d",
+            "--focus-4": "#760a03",
+        });
+        const theme = readPlotTheme();
+        expect(theme.focus[0]).toBe("#3d2e8d");
+        expect(theme.focus[3]).toBe("#760a03");
     });
 
     it("reads the surface and the elevated border the hover label draws on", () => {
@@ -111,11 +127,11 @@ describe("plot theme", () => {
         expect(PLOT_CONFIG.responsive).toBe(true);
     });
 
-    it("gives A1…A8 their series colour and later slots the ink", () => {
+    it("gives A1…A12 their series colour and further slots the ink", () => {
         setTokens({ "--series-3": "#6d28d9", "--ink": "#1a1a2e" });
         const theme = readPlotTheme();
         expect(seriesColour(theme, 2)).toBe("#6d28d9");
-        expect(seriesColour(theme, 8)).toBe("#1a1a2e");
+        expect(seriesColour(theme, 12)).toBe("#1a1a2e");
         expect(seriesColour(theme, null)).toBe("#1a1a2e");
     });
 
@@ -139,6 +155,44 @@ describe("plot theme", () => {
         expect(layout.hovermode).toBe("x unified");
         expect(layout.separators).toBe(", ");
         expect(PLOT_CONFIG.displayModeBar).toBe(false);
+    });
+
+    it("carries the shared x, with its axis title, in the unified box's header once, built into the axis", () => {
+        const layout = plotLayout(readPlotTheme(), {
+            lang: "en",
+            xTitle: "Energy (keV)",
+            yTitle: "Counts",
+            xReversed: false,
+        });
+        expect(
+            (layout.xaxis as { unifiedhovertitle?: { text?: string } })
+                .unifiedhovertitle?.text,
+        ).toBe("%{x:.4~g} · Energy (keV)");
+        expect(unifiedHoverTitle("")).toEqual({ text: "%{x:.4~g}" });
+    });
+
+    it("hovers along X up to twelve curves, closest beyond", () => {
+        expect(UNIFIED_HOVER_MAX_CURVES).toBe(12);
+        expect(hoverModeFor(12)).toBe("x unified");
+        expect(hoverModeFor(13)).toBe("closest");
+    });
+
+    it("escapes a hover label's pseudo-HTML the same way as an axis title", () => {
+        expect(escapePlotlyText("A & B <raw>")).toBe("A &amp; B &lt;raw&gt;");
+    });
+
+    it("builds one compact line per curve under x unified, its label and value alone", () => {
+        expect(unifiedHoverLine("A1", "y")).toBe("A1 · %{y:.4~g}");
+        expect(unifiedHoverLine("A & B", "y")).toBe("A &amp; B · %{y:.4~g}");
+    });
+
+    it("builds a curve's own x and y line under closest, each with its axis title", () => {
+        expect(closestHoverLine("A1", "y", "Energy (keV)", "Counts")).toBe(
+            "A1<br>x: %{x:.4~g} Energy (keV) · y: %{y:.4~g} Counts",
+        );
+        expect(closestHoverLine("A1", "y", "", "")).toBe(
+            "A1<br>x: %{x:.4~g} · y: %{y:.4~g}",
+        );
     });
 
     it("restores the reversed x axis on reset", async () => {

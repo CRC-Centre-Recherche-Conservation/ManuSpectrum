@@ -1,13 +1,26 @@
 import type { Config, Layout } from "plotly.js";
 
 const TRANSPARENT = "rgba(0,0,0,0)";
-const SERIES = 8;
+const SERIES = 12;
+const FOCUS_SLOTS = 4;
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;
+/** The number format of a hover value: 4 significant digits, no trailing zeros. */
+export const HOVER_VALUE_FORMAT = ".4~g";
+/**
+ * Up to this many curves, "x unified" lists every one of them at the X under
+ * the pointer; more falls back to "closest" (one curve, its own box).
+ * plotly.js-cartesian-dist 4.0.0 has no per-mode cap on how many traces a
+ * unified hover box lists, so this is the fallback once a box would grow
+ * past a comfortable read (about a dozen short lines).
+ */
+export const UNIFIED_HOVER_MAX_CURVES = 12;
 
 export interface PlotTheme {
     series: string[];
-    /** The grey of the curves past A8. */
+    /** The four pin hues (`--focus-1..4`) a curve's colour switches to while a focus links it. */
+    focus: string[];
+    /** The grey of a curve dimmed by the focus's « Dim » switch (unrelated to any pin). */
     context: string;
     ink: string;
     inkMuted: string;
@@ -44,6 +57,9 @@ export function readPlotTheme(
         series: Array.from({ length: SERIES }, (_, index) =>
             token(`--series-${index + 1}`, "#1a1a2e"),
         ),
+        focus: Array.from({ length: FOCUS_SLOTS }, (_, index) =>
+            token(`--focus-${index + 1}`, "#1a1a2e"),
+        ),
         context: token("--series-context", "#8a8999"),
         ink: token("--ink", "#1a1a2e"),
         inkMuted: token("--ink-muted", "#4a4a5e"),
@@ -56,7 +72,7 @@ export function readPlotTheme(
     };
 }
 
-/** A1…A8 take the series colours in order; A9…A30 and unslotted curves are drawn in ink. */
+/** A1…A12 take the series colours in order; further slots and unslotted curves are drawn in ink. */
 export function seriesColour(theme: PlotTheme, slot: number | null): string {
     return slot !== null && slot >= 0 && slot < SERIES
         ? theme.series[slot]
@@ -66,6 +82,57 @@ export function seriesColour(theme: PlotTheme, slot: number | null): string {
 /** Plotly `separators`: decimal mark then thousands mark. */
 export function separatorsFor(lang: string): string {
     return lang.toLowerCase().startsWith("fr") ? ", " : ".,";
+}
+
+/** "x unified" up to `UNIFIED_HOVER_MAX_CURVES` curves, "closest" beyond. */
+export function hoverModeFor(curves: number): "x unified" | "closest" {
+    return curves <= UNIFIED_HOVER_MAX_CURVES ? "x unified" : "closest";
+}
+
+/** Text Plotly would read as its pseudo-HTML (names, hover templates, annotations), escaped. */
+export function escapePlotlyText(text: string): string {
+    return text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+/**
+ * The `unifiedhovertitle` of an "x unified" hover box: the shared x, with
+ * its axis title once (English, not translated); an empty title omits the
+ * « · ».
+ */
+export function unifiedHoverTitle(xTitle: string): { text: string } {
+    const suffix = xTitle ? ` · ${escapePlotlyText(xTitle)}` : "";
+    return { text: `%{x:${HOVER_VALUE_FORMAT}}${suffix}` };
+}
+
+/**
+ * One compact "x unified" hover line: a curve's label and its value alone —
+ * the shared x already sits in the box header. `hoverValue` names the field
+ * the value is read from (`y`, or a custom field behind a transform).
+ */
+export function unifiedHoverLine(label: string, hoverValue: string): string {
+    return `${escapePlotlyText(label)} · %{${hoverValue}:${HOVER_VALUE_FORMAT}}`;
+}
+
+/**
+ * A "closest" hover line: no shared header exists there, so it carries its
+ * own x and y, each with its axis title as stored.
+ */
+export function closestHoverLine(
+    label: string,
+    hoverValue: string,
+    xTitle: string,
+    yTitle: string,
+): string {
+    const xUnit = xTitle ? ` ${escapePlotlyText(xTitle)}` : "";
+    const yUnit = yTitle ? ` ${escapePlotlyText(yTitle)}` : "";
+    return (
+        `${escapePlotlyText(label)}<br>` +
+        `x: %{x:${HOVER_VALUE_FORMAT}}${xUnit} · ` +
+        `y: %{${hoverValue}:${HOVER_VALUE_FORMAT}}${yUnit}`
+    );
 }
 
 /**
@@ -137,7 +204,10 @@ export function plotLayout(
             title: { text: options.xTitle, font: titleFont, standoff: 8 },
             showgrid: false,
             autorange: options.xReversed ? "reversed" : true,
-        },
+            // `unifiedhovertitle` is real Plotly (the "x/y unified" box header)
+            // but missing from @types/plotly.js's LayoutAxis.
+            unifiedhovertitle: unifiedHoverTitle(options.xTitle),
+        } as Layout["xaxis"],
         yaxis: {
             ...axis,
             title: { text: options.yTitle, font: titleFont, standoff: 8 },

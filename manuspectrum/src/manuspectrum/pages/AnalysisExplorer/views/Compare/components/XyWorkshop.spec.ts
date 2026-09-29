@@ -37,6 +37,7 @@ import type {
     Series,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { NodeRelations } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
@@ -77,6 +78,8 @@ interface FakeLinked {
     linked: LinkedSelection;
     selection: { value: NodeId[] };
     levels: { value: Map<NodeId, RelationLevel> };
+    /** Its pin(s), for the focus colour: empty by default (an emphasised curve then keeps its own per-window colour). */
+    relations: { value: Map<NodeId, NodeRelations> };
     previewLevels: { value: Map<NodeId, RelationLevel> };
     toggle: ReturnType<typeof vi.fn>;
     preview: ReturnType<typeof vi.fn>;
@@ -94,7 +97,12 @@ const COLOURS = [
     "#0891b2",
     "#a16207",
     "#be185d",
+    "#d42515",
+    "#008016",
+    "#7e58eb",
+    "#d251b9",
 ];
+const FOCUS = ["#3d2e8d", "#1e6256", "#93499e", "#760a03"];
 
 function series(x: number[], y: number[], xReversed = false): Series {
     return {
@@ -138,21 +146,14 @@ const FOLIO_CANVAS = "https://iiif.example/f12r";
 function fakeLinked(): FakeLinked {
     const selection = ref<NodeId[]>([]);
     const levels = shallowRef(new Map<NodeId, RelationLevel>());
+    const relations = shallowRef(new Map<NodeId, NodeRelations>());
     const previewLevels = shallowRef(new Map<NodeId, RelationLevel>());
     const toggle = vi.fn();
     const preview = vi.fn();
     const linked = {
         selection: computed(() => selection.value),
         levels: computed(() => levels.value),
-        relations: computed(
-            () =>
-                new Map(
-                    [...levels.value].map(([id, level]) => [
-                        id,
-                        { best: level, slots: [{ slot: 1, level }] },
-                    ]),
-                ),
-        ),
+        relations: computed(() => relations.value),
         previewing: ref(null),
         previewSlot: computed(() => null),
         nextSlot: computed(() => 1),
@@ -165,7 +166,20 @@ function fakeLinked(): FakeLinked {
         toggle,
         preview,
     } as unknown as LinkedSelection;
-    return { linked, selection, levels, previewLevels, toggle, preview };
+    return {
+        linked,
+        selection,
+        levels,
+        relations,
+        previewLevels,
+        toggle,
+        preview,
+    };
+}
+
+/** A `NodeRelations` linking `id` alone to `slot` at `level` (its own, and every merged node's, first and only slot). */
+function relationOf(slot: number, level: RelationLevel): NodeRelations {
+    return { best: level, slots: [{ slot, level }] };
 }
 
 function nextFrame(): Promise<void> {
@@ -240,6 +254,12 @@ beforeEach(() => {
             colour,
         ),
     );
+    FOCUS.forEach((colour, index) =>
+        document.documentElement.style.setProperty(
+            `--focus-${index + 1}`,
+            colour,
+        ),
+    );
     document.documentElement.style.setProperty("--ink", INK);
     document.documentElement.style.setProperty("--series-context", CONTEXT);
     fake = fakeLinked();
@@ -268,7 +288,7 @@ describe("XyWorkshop", () => {
         ]);
     });
 
-    it("draws each file in its slot colour, a slot's next files dashed, named « A1 · file »", async () => {
+    it("draws each curve in its own hue by its position in the window, all solid within the first twelve, named « A1 · file »", async () => {
         await mountWorkshop([curve(0, 1), curve(0, 2), curve(1, 3)]);
         const { traces, layout } = lastDrawing();
         expect(traces.map((trace) => trace.name)).toEqual([
@@ -278,12 +298,12 @@ describe("XyWorkshop", () => {
         ]);
         expect(traces.map((trace) => trace.line.color)).toEqual([
             COLOURS[0],
-            COLOURS[0],
             COLOURS[1],
+            COLOURS[2],
         ]);
         expect(traces.map((trace) => trace.line.dash)).toEqual([
             "solid",
-            "6px,2px",
+            "solid",
             "solid",
         ]);
         expect(layout.showlegend).toBe(false);
@@ -291,7 +311,7 @@ describe("XyWorkshop", () => {
         expect(layout.yaxis.title.text).toBe("Counts");
     });
 
-    it("draws lines only, the slots past A8 in grey context under the coloured ones, each coloured slot labelled at the end of its curve", async () => {
+    it("draws lines only, every curve in colour — never grey or a fallback ink — the first file of each slot labelled at its end", async () => {
         await mountWorkshop([
             curve(0, 1),
             curve(0, 2),
@@ -299,33 +319,35 @@ describe("XyWorkshop", () => {
             curve(9, 4),
         ]);
         const { traces, layout } = lastDrawing();
+        // Identity trace order now: no curve is drawn under another any more.
         expect(traces.map((trace) => trace.name)).toEqual([
-            "A10 · S4.csv",
             "A1 · S1.csv",
             "A1 · S2.csv",
             "A2 · S3.csv",
+            "A10 · S4.csv",
         ]);
         expect(traces.map((trace) => trace.mode)).toEqual(
             Array(4).fill("lines"),
         );
         expect(traces.every((trace) => trace.marker === undefined)).toBe(true);
         expect(traces.map((trace) => trace.line.color)).toEqual([
-            CONTEXT,
-            COLOURS[0],
             COLOURS[0],
             COLOURS[1],
+            COLOURS[2],
+            COLOURS[3],
         ]);
         expect(traces.map((trace) => trace.line.width)).toEqual([
-            1.25, 1.5, 1.5, 1.5,
+            1.5, 1.5, 1.5, 1.5,
         ]);
         expect(traces.map((trace) => trace.opacity)).toEqual([1, 1, 1, 1]);
-        expect(traces[1].hovertemplate).toBe(
+        expect(traces[0].hovertemplate).toBe(
             "A1 · S1.csv · %{y:.4~g}<extra></extra>",
         );
-        expect(traces.map((trace) => trace.legendrank)).toEqual([9, 0, 0, 1]);
+        expect(traces.map((trace) => trace.legendrank)).toEqual([0, 0, 1, 9]);
         expect(layout.annotations.map((note) => note.text)).toEqual([
             `<span style="color:${COLOURS[0]}">━</span> A1`,
-            `<span style="color:${COLOURS[1]}">━</span> A2`,
+            `<span style="color:${COLOURS[2]}">━</span> A2`,
+            `<span style="color:${COLOURS[3]}">━</span> A10`,
         ]);
         expect(layout.annotations[0]).toMatchObject({ x: 3, y: 20 });
     });
@@ -339,12 +361,10 @@ describe("XyWorkshop", () => {
         });
     });
 
-    it("opens on small multiples when no slot is in colour", async () => {
+    it("opens on overlay under nine curves regardless of which slots they are, multiples above", async () => {
+        // Every curve takes its own hue now, so no slot special-cases the layout any more.
         await mountWorkshop([curve(8, 1), curve(9, 2)]);
-        expect(lastDrawing().layout.grid).toMatchObject({
-            rows: 1,
-            columns: 2,
-        });
+        expect(lastDrawing().layout.grid).toBeUndefined();
     });
 
     it("titles the axes from the first drawn spectrum that stores a title", async () => {
@@ -443,8 +463,8 @@ describe("XyWorkshop", () => {
         const view = await mountWorkshop(curves);
         const { traces, layout } = lastDrawing();
         expect(layout.grid).toMatchObject({ rows: 3, columns: 3 });
+        // Identity trace/panel order: no curve is drawn under another any more.
         expect(traces.map((trace) => trace.xaxis)).toEqual([
-            "x9",
             "x",
             "x2",
             "x3",
@@ -453,6 +473,7 @@ describe("XyWorkshop", () => {
             "x6",
             "x7",
             "x8",
+            "x9",
         ]);
         expect(layout.xaxis2).toMatchObject({ matches: "x" });
         expect(layout.xaxis).not.toHaveProperty("matches");
@@ -463,16 +484,18 @@ describe("XyWorkshop", () => {
             ),
         );
         expect(texts.slice(9)).toEqual(["Energy (keV)", "Counts"]);
-        expect(traces[0].line.color).toBe(CONTEXT);
+        // Every panel is its own hue, the 9th (window position 8) included.
+        expect(traces[8].line.color).toBe(COLOURS[8]);
 
         await view.find('[data-layout="overlay"]').trigger("click");
         await flushPromises();
         const overlay = lastDrawing();
         expect(overlay.layout.grid).toBeUndefined();
-        expect(overlay.layout.annotations).toHaveLength(8);
+        // Every curve is its own hue now: all nine get an end label, A9 included.
+        expect(overlay.layout.annotations).toHaveLength(9);
         expect(
             overlay.layout.annotations.some((note) => note.text.endsWith("A9")),
-        ).toBe(false);
+        ).toBe(true);
     });
 
     it("overlays eight curves", async () => {
@@ -766,15 +789,26 @@ describe("XyWorkshop", () => {
         expect(Object.keys(update).sort()).toEqual([
             "hoverinfo",
             "line.color",
+            "line.dash",
             "line.width",
             "opacity",
         ]);
-        expect(update.opacity).toEqual([0, 1, 0]);
-        expect(update.hoverinfo).toEqual(["skip", "all", "skip"]);
-        expect(update["line.width"]).toEqual([1.25, 2.5, 1.5]);
+        // Identity order (no context-first sort any more): the linked curve
+        // (index 0) is emphasised, the other two hidden — colour and dash
+        // stay each curve's own (no pin resolved: `fake.relations` is empty).
+        expect(update.opacity).toEqual([1, 0, 0]);
+        expect(update.hoverinfo).toEqual(["all", "skip", "skip"]);
+        expect(update["line.width"]).toEqual([2.5, 1.5, 1.5]);
+        expect(update["line.color"]).toEqual([
+            COLOURS[0],
+            COLOURS[1],
+            COLOURS[2],
+        ]);
+        expect(update["line.dash"]).toEqual(["solid", "solid", "solid"]);
         expect(plotly.relayout).toHaveBeenCalledTimes(1);
         expect(plotly.relayout.mock.calls[0][1]).toEqual({
             "annotations[1].opacity": 0,
+            "annotations[2].opacity": 0,
         });
         expect(view.findAll(".xy-legend .entry")).toHaveLength(3);
         expect(
@@ -819,19 +853,72 @@ describe("XyWorkshop", () => {
         expect(plotly.restyle).toHaveBeenCalledTimes(2);
     });
 
-    it("draws a legend swatch as the chart draws its curve: in slot colour, a grey context slot in ink while linked", async () => {
+    it("draws a legend swatch as the chart draws its curve: its own per-window hue, never grey or a fallback ink", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(9, 2)]);
         const strokes = (): string[] =>
             view
                 .findAll(".xy-legend .swatch line")
                 .map((line) => (line.element as SVGLineElement).style.stroke);
-        expect(strokes()).toEqual(["var(--series-1)", "var(--series-context)"]);
+        expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
+        // A link with no pin resolved (`fake.relations` empty here) keeps the curve's own colour, only thicker.
         fake.selection.value = [analysisNode(analysisHit(10).id)];
         fake.levels.value = new Map([
             [analysisNode(analysisHit(10).id), "self"],
         ]);
         await flushPromises();
-        expect(strokes()).toEqual(["var(--series-1)", "var(--ink)"]);
+        expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
+    });
+
+    it("colours a curve for the pin that links it, its dash by rank among curves sharing that pin; the swatch matches", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1),
+            curve(1, 2),
+            curve(2, 3),
+        ]);
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+            [analysisNode(analysisHit(2).id), "self"],
+        ]);
+        fake.relations.value = new Map([
+            [analysisNode(analysisHit(1).id), relationOf(3, "self")],
+            [analysisNode(analysisHit(2).id), relationOf(3, "self")],
+        ]);
+        await nextFrame();
+        await flushPromises();
+        const { traces } = lastDrawing();
+        const update = plotly.restyle.mock.calls.at(-1)?.[1] as Record<
+            string,
+            unknown[]
+        >;
+        // Restyled, not redrawn: the drawn traces keep their base colour, the restyle carries the pin's.
+        expect(traces.map((trace) => trace.line.color)).toEqual([
+            COLOURS[0],
+            COLOURS[1],
+            COLOURS[2],
+        ]);
+        expect(update["line.color"]).toEqual([FOCUS[2], FOCUS[2], COLOURS[2]]);
+        expect(update["line.dash"]).toEqual(["solid", "6px,2px", "solid"]);
+        const strokes = () =>
+            view
+                .findAll(".xy-legend .swatch line")
+                .map((line) => (line.element as SVGLineElement).style.stroke);
+        expect(strokes()).toEqual([
+            "var(--focus-3)",
+            "var(--focus-3)",
+            "var(--series-3)",
+        ]);
+
+        fake.selection.value = [];
+        fake.levels.value = new Map();
+        fake.relations.value = new Map();
+        await nextFrame();
+        await flushPromises();
+        expect(strokes()).toEqual([
+            "var(--series-1)",
+            "var(--series-2)",
+            "var(--series-3)",
+        ]);
     });
 
     it("says so when the selection links no curve of the window", async () => {
@@ -996,6 +1083,36 @@ describe("XyWorkshop", () => {
         await flushPromises();
         expect(chart.calcdata[0][0].trace.hoverinfo).toBe("skip");
         expect(chart.calcdata[1][0].trace.hoverinfo).toBe("all");
+    });
+
+    it("recomputes the hovermode from the curves currently shown, a relayout with its hovertemplates, never a redraw", async () => {
+        const curves = Array.from({ length: 13 }, (_, index) =>
+            curve(index, index + 1),
+        );
+        const view = await mountWorkshop(curves);
+        // 13 shown: past the cap, closest from the start.
+        expect(lastDrawing().layout.hovermode).toBe("closest");
+        plotly.react.mockClear();
+        plotly.restyle.mockClear();
+        plotly.relayout.mockClear();
+
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        await eyeButton(view, curveId(1, 2)).trigger("click");
+        await nextFrame();
+        await flushPromises();
+
+        // 11 shown now (13 minus 2 eye-hidden): back under the cap.
+        expect(plotly.react).not.toHaveBeenCalled();
+        const hoverCall = plotly.restyle.mock.calls.find(
+            (call) => "hovertemplate" in (call[1] as Record<string, unknown>),
+        );
+        expect(hoverCall).toBeDefined();
+        const templates = (hoverCall?.[1] as { hovertemplate: string[] })
+            .hovertemplate;
+        expect(templates[2]).toBe("A3 · %{y:.4~g}<extra></extra>");
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            hovermode: "x unified",
+        });
     });
 
     it("keeps an eye-hidden curve hidden and out of hover however the focus lights it", async () => {

@@ -14,8 +14,11 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
+const SERIES = Array.from({ length: 12 }, (_, index) => `#s${index}`);
+
 const THEME: PlotTheme = {
-    series: ["#111111", "#222222", "#333333"],
+    series: SERIES,
+    focus: ["#f1", "#f2", "#f3", "#f4"],
     context: "#999999",
     ink: "#000000",
     inkMuted: "#444444",
@@ -58,6 +61,7 @@ function input(
     return {
         curves,
         states: curves.map(() => "plain"),
+        focus: curves.map(() => null),
         theme: THEME,
         lang: "en",
         titles: { x: "Energy (keV)", y: "Counts", offset: "Counts (offset)" },
@@ -95,9 +99,16 @@ describe("workshop figure", () => {
             (note) => note.text,
         );
         expect(texts[0]).toBe(
-            '<span style="color:#111111">━</span> A1 · Analysis &lt;0&gt;',
+            '<span style="color:#s0">━</span> A1 · Analysis &lt;0&gt;',
         );
-        expect(texts[11]).toContain('<span style="color:#999999">━</span>');
+        // Every panel is its own hue, the 12th (window position 11) included — no grey fallback.
+        expect(texts[11]).toContain('<span style="color:#s11">━</span>');
+    });
+
+    it("never sets hoversubplots on the grid: verified a no-op for matches-linked panels in plotly.js-cartesian-dist 4.0.0", () => {
+        const curves = [curve(0, [1, 2]), curve(1, [1, 2])];
+        const figure = multiplesFigure(input(curves));
+        expect(figure.layout).not.toHaveProperty("hoversubplots");
     });
 
     it("cuts a panel title to the width of its panel", () => {
@@ -181,7 +192,7 @@ describe("workshop figure", () => {
     });
 
     it("hovers its own x and y, each with its axis title, under closest — no shared header there", () => {
-        const many = Array.from({ length: 7 }, (_, slot) =>
+        const many = Array.from({ length: 13 }, (_, slot) =>
             curve(slot, [1, 2]),
         );
         const figure = stackedFigure(input(many), false);
@@ -191,7 +202,7 @@ describe("workshop figure", () => {
     });
 
     it("escapes an axis title holding pseudo-HTML under closest", () => {
-        const many = Array.from({ length: 7 }, (_, slot) =>
+        const many = Array.from({ length: 13 }, (_, slot) =>
             curve(slot, [1, 2]),
         );
         const figure = stackedFigure(
@@ -203,6 +214,38 @@ describe("workshop figure", () => {
         );
     });
 
+    it("hovers along X from the curves actually shown, not the total: hidden and dimmed curves don't count against the cap", () => {
+        const many = Array.from({ length: 13 }, (_, slot) =>
+            curve(slot, [1, 2]),
+        );
+        const mostlyHidden = many.map((_, index) =>
+            index < 12 ? "plain" : "hidden",
+        ) as FigureInput["states"];
+        const figure = stackedFigure(
+            input(many, { states: mostlyHidden }),
+            false,
+        );
+        // 12 shown (the 13th hidden): still unified, one compact line, no header repeated per curve.
+        expect(figure.data[0].hovertemplate).toBe(
+            "A1 · %{y:.4~g}<extra></extra>",
+        );
+    });
+
+    it("draws an emphasised curve in its pin's hue, thicker, its dash by its rank among curves sharing that pin", () => {
+        const figure = stackedFigure(
+            input([curve(0, [1, 2]), curve(1, [3, 4]), curve(2, [5, 6])], {
+                states: ["emphasised", "emphasised", "plain"],
+                focus: [{ slot: 2, rank: 0 }, { slot: 2, rank: 1 }, null],
+            }),
+            false,
+        );
+        expect(figure.data.map((trace) => trace.line)).toMatchObject([
+            { color: "#f2", dash: "solid", width: 2.5 },
+            { color: "#f2", dash: "6px,2px", width: 2.5 },
+            { color: "#s2", dash: "solid", width: 1.5 },
+        ]);
+    });
+
     it("exports the curves shown with Plotly's legend, a title and a source line, a hidden curve out of the legend", () => {
         const figure = stackedFigure(
             input([curve(0, [1, 2]), curve(1, [1, 2])]),
@@ -211,8 +254,20 @@ describe("workshop figure", () => {
         const exported = exportFigure(
             figure,
             [
-                { colour: "#111111", width: 2.5, opacity: 1, hover: true },
-                { colour: "#222222", width: 1.5, opacity: 0, hover: false },
+                {
+                    colour: "#111111",
+                    dash: "solid",
+                    width: 2.5,
+                    opacity: 1,
+                    hover: true,
+                },
+                {
+                    colour: "#222222",
+                    dash: "6px,2px",
+                    width: 1.5,
+                    opacity: 0,
+                    hover: false,
+                },
             ],
             THEME,
             { title: "Counts <raw>", source: "Source: ManuSpectrum" },
@@ -222,7 +277,11 @@ describe("workshop figure", () => {
             false,
         ]);
         expect(exported.data.map((trace) => trace.opacity)).toEqual([1, 0]);
-        expect(exported.data[0].line).toMatchObject({ width: 2.5 });
+        expect(exported.data[0].line).toMatchObject({
+            width: 2.5,
+            dash: "solid",
+        });
+        expect(exported.data[1].line).toMatchObject({ dash: "6px,2px" });
         expect(exported.data.map((trace) => trace.legendgroup)).toEqual([
             "slot-0",
             "slot-1",

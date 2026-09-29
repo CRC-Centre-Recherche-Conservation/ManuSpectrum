@@ -7,15 +7,15 @@ import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/compon
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import {
+    curveColourVar,
     dashArray,
-    isColoured,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
 import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type { LinkedMark } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type {
-    Dash,
+    CurveLook,
     LegendGroup,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
@@ -51,7 +51,9 @@ export interface LegendEyeEvent {
  * only while its own node is; an entry the focus does not light stays
  * listed, its swatch faded, its pip a « + »
  * under the pointer, and a description saying a press adds it. A mouse or
- * pen resting on an entry previews it.
+ * pen resting on an entry previews it. A swatch (`strokeOf`, `group.look`/
+ * `entry.look`) always matches the chart's current line exactly: its own
+ * per-window hue, or a pin's while that pin links it (`CurveLook`).
  *
  * A row that draws exactly one curve (a slot with a single file, or a file
  * row under a slot with several) carries a sibling eye button before its
@@ -116,17 +118,12 @@ function unrelated(nodes: readonly NodeId[]): boolean {
     return marks.rel(nodes) === "none";
 }
 
-/** The swatch of a line: its slot colour, a grey context slot in ink while the selection links it, as the chart draws it. */
-function strokeOf(
-    slot: number,
-    dash: Dash,
-    nodes: readonly NodeId[],
-): Record<string, string> {
-    const level = marks.rel(nodes);
-    let stroke = "var(--series-context)";
-    if (isColoured(slot)) stroke = `var(--series-${slot + 1})`;
-    else if (level !== undefined && level !== "none") stroke = "var(--ink)";
-    return { stroke, strokeDasharray: dashArray(dash) };
+/** The swatch of a line: its current colour and dash, exactly as the chart draws it. */
+function strokeOf(look: CurveLook): Record<string, string> {
+    return {
+        stroke: curveColourVar(look),
+        strokeDasharray: dashArray(look.dash),
+    };
 }
 
 /** Whether a slot's entry has a second line: its component, its folio or its one file. */
@@ -230,7 +227,7 @@ function leave(event: PointerEvent): void {
                                 x2="24"
                                 y2="4"
                                 :style="
-                                    strokeOf(group.slot, 'solid', group.nodes)
+                                    strokeOf({ ...group.look, dash: 'solid' })
                                 "
                             />
                         </svg>
@@ -341,13 +338,7 @@ function leave(event: PointerEvent): void {
                                         y1="4"
                                         x2="24"
                                         y2="4"
-                                        :style="
-                                            strokeOf(
-                                                entry.slot,
-                                                entry.dash,
-                                                entry.nodes,
-                                            )
-                                        "
+                                        :style="strokeOf(entry.look)"
                                     />
                                 </svg>
                                 <span

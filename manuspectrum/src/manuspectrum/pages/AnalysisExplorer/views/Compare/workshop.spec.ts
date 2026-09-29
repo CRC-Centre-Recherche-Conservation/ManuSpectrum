@@ -7,6 +7,10 @@ import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 
 import {
+    curveDash,
+    curveHue,
+    curveLook,
+    curveColourVar,
     curvePaint,
     curveState,
     dashArray,
@@ -21,6 +25,7 @@ import {
     panelGrid,
     panelSpacing,
     patchHoverInfo,
+    patchHoverTemplate,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -28,6 +33,7 @@ import {
     treat,
     slipZoom,
     undoZoom,
+    visibleCurveCount,
     workshopCsv,
     zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
@@ -176,39 +182,85 @@ describe("workshop", () => {
         expect(dashArray("10px,2px,2px,2px")).toBe("10 2 2 2");
     });
 
-    it("draws A1…A8 in colour and the later slots as grey context, emphasised in ink", () => {
-        const palette = {
-            series: ["#111", "#222"],
-            context: "#999",
-            ink: "#000",
-        };
-        expect(curvePaint(palette, 1, "plain")).toEqual({
-            colour: "#222",
+    it("cycles a curve's hue every CURVE_PALETTE_SIZE positions, its dash to the next variant each time round", () => {
+        expect(curveHue(0)).toBe(0);
+        expect(curveHue(11)).toBe(11);
+        expect(curveHue(12)).toBe(0);
+        expect(curveDash(0)).toBe("solid");
+        expect(curveDash(11)).toBe("solid");
+        expect(curveDash(12)).toBe("6px,2px");
+        expect(curveDash(24)).toBe("2px,2px");
+    });
+
+    const PALETTE = {
+        series: Array.from({ length: 12 }, (_, index) => `#s${index}`),
+        focus: ["#f1", "#f2", "#f3", "#f4"],
+        context: "#999",
+    };
+
+    it("paints every curve in its own hue at 1.5 px, never grey or a fallback ink, whatever its position", () => {
+        expect(curvePaint(PALETTE, 1, "plain")).toEqual({
+            colour: "#s1",
+            dash: "solid",
             width: 1.5,
             opacity: 1,
             hover: true,
         });
-        expect(curvePaint(palette, 9, "plain")).toEqual({
-            colour: "#999",
-            width: 1.25,
+        // The 13th curve (index 12): hue wraps to the 1st series colour, dash to the 2nd variant.
+        expect(curvePaint(PALETTE, 12, "plain")).toEqual({
+            colour: "#s0",
+            dash: "6px,2px",
+            width: 1.5,
             opacity: 1,
             hover: true,
         });
-        expect(curvePaint(palette, 0, "emphasised")).toMatchObject({
-            colour: "#111",
-            width: 2.5,
-            opacity: 1,
-        });
-        expect(curvePaint(palette, 9, "emphasised")).toMatchObject({
-            colour: "#000",
-            width: 2.5,
-        });
-        expect(curvePaint(palette, 9, "hidden")).toEqual({
-            colour: "#999",
-            width: 1.25,
+        expect(curvePaint(PALETTE, 12, "hidden")).toEqual({
+            colour: "#s0",
+            dash: "6px,2px",
+            width: 1.5,
             opacity: 0,
             hover: false,
         });
+    });
+
+    it("takes a pin's hue when it links the curve, thicker, its dash set by its rank among the curves sharing that pin", () => {
+        expect(
+            curvePaint(PALETTE, 5, "emphasised", { slot: 3, rank: 0 }),
+        ).toEqual({
+            colour: "#f3",
+            dash: "solid",
+            width: 2.5,
+            opacity: 1,
+            hover: true,
+        });
+        expect(
+            curvePaint(PALETTE, 9, "emphasised", { slot: 3, rank: 1 }),
+        ).toEqual({
+            colour: "#f3",
+            dash: "6px,2px",
+            width: 2.5,
+            opacity: 1,
+            hover: true,
+        });
+    });
+
+    it("thickens an emphasised curve without changing its colour when no pin links it (a bare preview)", () => {
+        expect(curvePaint(PALETTE, 5, "emphasised", null)).toEqual({
+            colour: "#s5",
+            dash: "solid",
+            width: 2.5,
+            opacity: 1,
+            hover: true,
+        });
+    });
+
+    it("looks up a pin's own CSS var for the legend's swatch, resolved to the theme's hex for a Plotly trace", () => {
+        const focusLook = curveLook(5, "emphasised", { slot: 2, rank: 0 });
+        expect(curveColourVar(focusLook)).toBe("var(--focus-2)");
+        const seriesLook = curveLook(1, "plain", null);
+        expect(curveColourVar(seriesLook)).toBe("var(--series-2)");
+        const dimmedLook = curveLook(1, "dimmed", null);
+        expect(curveColourVar(dimmedLook)).toBe("var(--series-context)");
     });
 
     it("hides the curves the selection does not link, shows them all without a selection, and a preview wins", () => {
@@ -226,20 +278,17 @@ describe("workshop", () => {
         expect(curveState(null, false, false, true)).toBe("plain");
     });
 
-    it("draws a dimmed curve in grey context at reduced opacity, out of the hover", () => {
-        const palette = {
-            series: ["#111", "#222"],
-            context: "#999",
-            ink: "#000",
-        };
-        expect(curvePaint(palette, 0, "dimmed")).toEqual({
+    it("draws a dimmed curve in grey context at reduced opacity, out of the hover, even one a pin would otherwise light", () => {
+        expect(curvePaint(PALETTE, 0, "dimmed")).toEqual({
             colour: "#999",
+            dash: "solid",
             width: 1.25,
             opacity: 0.35,
             hover: false,
         });
-        expect(curvePaint(palette, 9, "dimmed")).toEqual({
+        expect(curvePaint(PALETTE, 12, "dimmed")).toEqual({
             colour: "#999",
+            dash: "6px,2px",
             width: 1.25,
             opacity: 0.35,
             hover: false,
@@ -248,13 +297,26 @@ describe("workshop", () => {
 
     it("gathers the paints into one restyle of style attributes, in trace order", () => {
         const update = restyleUpdate([
-            { colour: "#111", width: 1.5, opacity: 1, hover: true },
-            { colour: "#999", width: 1.25, opacity: 0, hover: false },
+            {
+                colour: "#111",
+                dash: "solid",
+                width: 1.5,
+                opacity: 1,
+                hover: true,
+            },
+            {
+                colour: "#999",
+                dash: "6px,2px",
+                width: 1.25,
+                opacity: 0,
+                hover: false,
+            },
         ]);
         expect(update).toEqual({
             opacity: [1, 0],
             "line.color": ["#111", "#999"],
             "line.width": [1.5, 1.25],
+            "line.dash": ["solid", "6px,2px"],
             hoverinfo: ["all", "skip"],
         });
     });
@@ -265,11 +327,40 @@ describe("workshop", () => {
             [{ trace: { hoverinfo: "all" } }],
         ];
         patchHoverInfo(calcdata, [
-            { colour: "#111", width: 1.5, opacity: 0, hover: false },
-            { colour: "#222", width: 1.5, opacity: 1, hover: true },
+            {
+                colour: "#111",
+                dash: "solid",
+                width: 1.5,
+                opacity: 0,
+                hover: false,
+            },
+            {
+                colour: "#222",
+                dash: "solid",
+                width: 1.5,
+                opacity: 1,
+                hover: true,
+            },
         ]);
         expect(calcdata[0][0].trace.hoverinfo).toBe("skip");
         expect(calcdata[1][0].trace.hoverinfo).toBe("all");
+    });
+
+    it("patches the same stale trace with the hovertemplate a hovermode switch restyled, in trace order", () => {
+        const calcdata = [
+            [{ trace: { hovertemplate: "A1 · %{y}<extra></extra>" } }],
+            [{ trace: { hovertemplate: "A2 · %{y}<extra></extra>" } }],
+        ];
+        patchHoverTemplate(calcdata, [
+            "A1<br>x: %{x} · y: %{y}<extra></extra>",
+            "A2<br>x: %{x} · y: %{y}<extra></extra>",
+        ]);
+        expect(calcdata[0][0].trace.hovertemplate).toBe(
+            "A1<br>x: %{x} · y: %{y}<extra></extra>",
+        );
+        expect(calcdata[1][0].trace.hovertemplate).toBe(
+            "A2<br>x: %{x} · y: %{y}<extra></extra>",
+        );
     });
 
     it("does nothing when the chart holds no calc data yet, or a row lacks a trace", () => {
@@ -277,7 +368,13 @@ describe("workshop", () => {
         const calcdata = [[]];
         expect(() =>
             patchHoverInfo(calcdata, [
-                { colour: "#111", width: 1.5, opacity: 1, hover: true },
+                {
+                    colour: "#111",
+                    dash: "solid",
+                    width: 1.5,
+                    opacity: 1,
+                    hover: true,
+                },
             ]),
         ).not.toThrow();
     });
@@ -299,16 +396,25 @@ describe("workshop", () => {
         ]);
     });
 
-    it("opens on small multiples above eight curves, or when no slot is in colour", () => {
-        expect(openingLayout(8, [0, 1, 2])).toBe("overlay");
-        expect(openingLayout(9, [0, 1, 2])).toBe("multiples");
-        expect(openingLayout(2, [8, 9])).toBe("multiples");
-        expect(openingLayout(1, [9])).toBe("overlay");
+    it("opens on small multiples above eight curves, overlay at or under", () => {
+        expect(openingLayout(8)).toBe("overlay");
+        expect(openingLayout(9)).toBe("multiples");
+        // No longer special-cased: every curve is its own hue now, so a
+        // window with few curves in high slots stays overlay too.
+        expect(openingLayout(2)).toBe("overlay");
     });
 
-    it("hovers along X up to six curves, the closest curve beyond", () => {
-        expect(hoverModeFor(6)).toBe("x unified");
-        expect(hoverModeFor(7)).toBe("closest");
+    it("hovers along X up to twelve curves currently answering hover, the closest curve beyond", () => {
+        expect(hoverModeFor(12)).toBe("x unified");
+        expect(hoverModeFor(13)).toBe("closest");
+    });
+
+    it("counts only the plain and emphasised curves for the hover cap: hidden and dimmed answer no hover", () => {
+        expect(
+            visibleCurveCount(["plain", "emphasised", "hidden", "dimmed"]),
+        ).toBe(2);
+        expect(visibleCurveCount([])).toBe(0);
+        expect(visibleCurveCount(["plain", "plain"])).toBe(2);
     });
 
     it("measures a range in one pass, past the arguments limit of a spread", () => {
