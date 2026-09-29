@@ -22,12 +22,14 @@ import type { FileEntry } from "@/manuspectrum/pages/AnalysisExplorer/api/types.
 interface TraceCall {
     name: string;
     y: number[];
+    hovertemplate: string;
     line: { color: string };
 }
 
 interface LayoutCall {
     showlegend: boolean;
-    xaxis: { title: { text: string } };
+    hovermode: string;
+    xaxis: { title: { text: string }; unifiedhovertitle?: { text?: string } };
     yaxis: { title: { text: string } };
 }
 
@@ -105,6 +107,23 @@ describe("SpectrumPreview", () => {
         expect(layout.showlegend).toBe(true);
         expect(layout.xaxis.title.text).toBe("Energy (keV)");
         expect(layout.yaxis.title.text).toBe("Counts");
+        wrapper.unmount();
+    });
+
+    it("hovers the workshop's compact box: one line per curve under x unified, the shared x in the header", async () => {
+        const { wrapper } = mountPreview([readable(1), readable(2)], () =>
+            jsonResponse(SERIES),
+        );
+        await flushPromises();
+        const { traces, layout } = lastDrawing();
+        expect(layout.hovermode).toBe("x unified");
+        expect(layout.xaxis.unifiedhovertitle?.text).toBe(
+            "%{x:.4~g} · Energy (keV)",
+        );
+        expect(traces.map((trace) => trace.hovertemplate)).toEqual([
+            "P1.csv · %{y:.4~g}<extra></extra>",
+            "P2.csv · %{y:.4~g}<extra></extra>",
+        ]);
         wrapper.unmount();
     });
 

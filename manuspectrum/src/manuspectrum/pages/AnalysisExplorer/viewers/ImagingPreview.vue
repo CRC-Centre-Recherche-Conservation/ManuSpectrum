@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, ref, toRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
@@ -13,9 +13,9 @@ import {
 import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
+    IMAGING_OVERLAYS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import { layerKindLabel } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
 
 import type {
     AnalysisPayload,
@@ -28,32 +28,66 @@ const PREVIEW_SIZE = 480;
 const PERCENT = 100;
 const OPACITY_STEP = 5;
 
-/** A map the image server does not give is said so in place, with Retry. */
-const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
+/**
+ * A map the image server does not give is said so in place, with Retry.
+ *
+ * A classic viewer: a layer scroll steps through the file's own layers, by
+ * their stored label. A `stage` slot draws the laid layer (a page of its
+ * own) in place of the image while it is laid. The laid layers live where
+ * `IMAGING_OVERLAYS_KEY` says, else in `store.overlays` (the document
+ * screen's folio).
+ */
+const props = withDefaults(
+    defineProps<{
+        file: FileEntry;
+        analysis: Pick<AnalysisPayload, "id">;
+        contrastNote?: boolean;
+    }>(),
+    { contrastNote: true },
+);
+
+defineSlots<{
+    stage?: (stage: {
+        layer: FileLayer;
+        opacity: number;
+        underCurtain: boolean;
+        attempt: number;
+        failed: () => void;
+    }) => unknown;
+}>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
 const zones = inject(FOLIO_ZONES_KEY, ref<ReadonlySet<string>>(new Set()));
+const provided = inject(IMAGING_OVERLAYS_KEY, null);
 
 const store = useExplorerStore();
+const overlays = provided ?? {
+    settings: toRef(store, "overlays"),
+    set: store.setOverlay,
+};
 const { $gettext } = useGettext();
 const percentFormat = new Intl.NumberFormat(
     document.documentElement.lang || "en",
     { style: "percent" },
 );
 
-/** Opens on the layer of this file laid on the page, if any. */
+/** Opens on the layer of this file laid on the page, if any, else the first. */
 const position = ref(
     Math.max(
         0,
         props.file.layers.findIndex(
             (entry) =>
-                store.overlays[overlayKey(props.analysis.id, entry.index)]?.on,
+                overlays.settings.value[
+                    overlayKey(props.analysis.id, entry.index)
+                ]?.on,
         ),
     ),
 );
 
 const imageFailed = ref(false);
 const attempt = ref(0);
+/** Whether the plain-`<img>` path already fell back to the IIIF `max` size once for this layer. */
+const maxFallback = ref(false);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
@@ -62,7 +96,7 @@ const key = computed(() =>
     layer.value ? overlayKey(props.analysis.id, layer.value.index) : "",
 );
 const setting = computed(() =>
-    key.value ? store.overlays[key.value] : undefined,
+    key.value ? overlays.settings.value[key.value] : undefined,
 );
 const laid = computed(() => Boolean(setting.value?.on));
 const opacity = computed(() => setting.value?.opacity ?? DEFAULT_OPACITY);
@@ -73,21 +107,51 @@ const underCurtain = computed(
     () => key.value !== "" && curtain.value === key.value,
 );
 const imageUrl = computed(() =>
-    layer.value ? layerImageUrl(layer.value.image, PREVIEW_SIZE) : null,
+    layer.value
+        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, {
+              max: maxFallback.value,
+          })
+        : null,
+);
+const maxImageUrl = computed(() =>
+    layer.value
+        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, { max: true })
+        : null,
 );
 const labels = computed(() => props.file.layers.map((entry) => entry.label));
 
-watch(imageUrl, () => {
+watch(key, () => {
     imageFailed.value = false;
+    maxFallback.value = false;
 });
 
+/**
+ * A first failure retries once at the image's own IIIF `max` size, silently
+ * (the declared size a bounded request clamps to can itself be stale or
+ * wrong, and still ask for an upscale the image server refuses); only a
+ * second failure shows the "unavailable" state.
+ */
 function onImageError(): void {
-    imageFailed.value = true;
+    if (
+        !maxFallback.value &&
+        maxImageUrl.value &&
+        maxImageUrl.value !== imageUrl.value
+    ) {
+        maxFallback.value = true;
+    } else {
+        imageFailed.value = true;
+    }
 }
 
 function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
+    maxFallback.value = false;
+}
+
+/** The `stage` slot (a laid Leaflet map) already tried its own `max` fallback (`laidLayers`); its failure is final. */
+function onStageFailed(): void {
+    imageFailed.value = true;
 }
 
 function firstValue(value: number | number[]): number {
@@ -96,7 +160,7 @@ function firstValue(value: number | number[]): number {
 
 function lay(on: boolean): void {
     if (!layer.value) return;
-    store.setOverlay(key.value, {
+    overlays.set(key.value, {
         element: layer.value.label,
         opacity: opacity.value,
         on,
@@ -110,7 +174,7 @@ function onLayChange(event: Event): void {
 
 function setOpacity(value: number | number[]): void {
     if (!layer.value) return;
-    store.setOverlay(key.value, {
+    overlays.set(key.value, {
         element: layer.value.label,
         opacity: firstValue(value) / PERCENT,
         on: laid.value,
@@ -125,7 +189,7 @@ function moveTo(value: number): void {
     if (wasLaid) lay(false);
     position.value = value;
     if (wasLaid && layer.value) {
-        store.setOverlay(key.value, {
+        overlays.set(key.value, {
             element: layer.value.label,
             opacity: keptOpacity,
             on: true,
@@ -147,7 +211,6 @@ function onCurtainChange(event: Event): void {
             v-if="layer"
             class="current"
         >
-            <span>{{ layerKindLabel($gettext, layer.kind) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
         <LayerScroll
@@ -169,6 +232,15 @@ function onCurtainChange(event: Event): void {
                 <span>{{ $gettext("Retry") }}</span>
             </button>
         </p>
+        <slot
+            v-else-if="laid && layer && $slots.stage"
+            name="stage"
+            :layer="layer"
+            :opacity="opacity"
+            :under-curtain="underCurtain"
+            :attempt="attempt"
+            :failed="onStageFailed"
+        />
         <img
             v-else-if="imageUrl && layer"
             :key="`${imageUrl}#${attempt}`"
@@ -178,7 +250,10 @@ function onCurtainChange(event: Event): void {
             :alt="layer.label"
             @error="onImageError"
         />
-        <p class="note">
+        <p
+            v-if="props.contrastNote"
+            class="note"
+        >
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
         </p>
         <label class="toggle">

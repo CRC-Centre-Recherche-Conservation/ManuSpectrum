@@ -1,25 +1,95 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 
 import PeriodicTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue";
 
+import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { valueRef } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    CH3,
+    SYNTHESIS,
+    startLinkedSelection,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import {
+    elementNode,
+    materialNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+
+import type { VueWrapper } from "@vue/test-utils";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 
 const ELEMENTS = [
     {
         symbol: "Cu",
         level: { ...valueRef("http://example.org/major", "Major"), rank: 0 },
         count: 5,
+        materials: [],
     },
-    { symbol: "Pb", level: null, count: 2 },
-    { symbol: "Xy", level: null, count: 1 },
+    { symbol: "Pb", level: null, count: 2, materials: [] },
+    { symbol: "Xy", level: null, count: 1, materials: [] },
 ];
 
-function mountTable(pressed: string | null = null) {
-    return mount(PeriodicTable, { props: { elements: ELEMENTS, pressed } });
+let stop: (() => void) | null = null;
+let attached: VueWrapper | null = null;
+
+beforeEach(() => {
+    setActivePinia(createPinia());
+});
+
+afterEach(() => {
+    attached?.unmount();
+    attached = null;
+    stop?.();
+    stop = null;
+    vi.useRealTimers();
+});
+
+function mountTable(disabled = false) {
+    return mount(PeriodicTable, { props: { elements: ELEMENTS, disabled } });
+}
+
+function mountLinked(): { view: VueWrapper; linked: LinkedSelection } {
+    const started = startLinkedSelection();
+    stop = started.stop;
+    const view = mount(PeriodicTable, {
+        attachTo: document.body,
+        props: { elements: SYNTHESIS.elements },
+        global: {
+            provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
+        },
+    });
+    attached = view;
+    return { view, linked: started.linked };
+}
+
+function gridRel(view: VueWrapper, attribute: string): (string | undefined)[] {
+    return view
+        .findAll(".grid button")
+        .map((button) => button.attributes(attribute));
 }
 
 describe("PeriodicTable", () => {
+    it("shades each element found on the blue ramp by its count and says what the number counts", () => {
+        const view = mountTable();
+        const found = view.findAll(".grid .found");
+        expect(
+            found.map((cell) => [cell.text(), cell.attributes("data-heat")]),
+        ).toEqual([
+            ["Cu5", "4"],
+            ["Pb2", "2"],
+        ]);
+        const legend = view.find(".heat-legend");
+        expect(legend.find(".caption").text()).toBe(
+            "Identified materials that name the element",
+        );
+        expect(legend.findAll(".end").map((end) => end.text())).toEqual([
+            "1",
+            "5",
+        ]);
+    });
+
     it("lays the 118 elements on the grid, the ones found as buttons with their count", () => {
         const view = mountTable();
         const grid = view.find(".grid");
@@ -51,14 +121,45 @@ describe("PeriodicTable", () => {
         ).toEqual(["Cu5Major", "Pb2", "Xy1"]);
     });
 
-    it("presses the element of the filter and emits the element clicked", async () => {
-        const view = mountTable("Pb");
+    it("selects the element clicked and presses it everywhere it is shown", async () => {
+        const view = mountTable();
+        await view.find(".list button").trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([
+            elementNode("Cu"),
+        ]);
         expect(
             view
                 .findAll(".grid button")
                 .map((button) => button.attributes("aria-pressed")),
-        ).toEqual(["false", "true"]);
-        await view.find(".list button").trigger("click");
-        expect(view.emitted("toggle")).toEqual([[{ symbol: "Cu" }]]);
+        ).toEqual(["true", "false"]);
+    });
+
+    it("selects nothing while it is disabled", async () => {
+        const view = mountTable(true);
+        await view.find(".grid button").trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([]);
+    });
+
+    it("rings the elements linked to the selection and marks the others unlinked", async () => {
+        const { view, linked } = mountLinked();
+        expect(gridRel(view, "data-rel")).toEqual([undefined, undefined]);
+        linked.toggle(materialNode(CH3));
+        await view.vm.$nextTick();
+        expect(
+            view.findAll(".grid button").map((button) => button.text()),
+        ).toEqual(["Ca1", "Cu2"]);
+        expect(gridRel(view, "data-rel")).toEqual(["direct", "none"]);
+    });
+
+    it("previews what an element under the mouse links", async () => {
+        vi.useFakeTimers();
+        const { view } = mountLinked();
+        await view
+            .findAll(".grid button")[1]
+            .trigger("pointerenter", { pointerType: "mouse" });
+        vi.runAllTimers();
+        await view.vm.$nextTick();
+        expect(gridRel(view, "data-preview")).toEqual([undefined, "self"]);
+        expect(gridRel(view, "data-rel")).toEqual([undefined, undefined]);
     });
 });

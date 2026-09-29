@@ -256,22 +256,86 @@ describe("Selection", () => {
 });
 
 describe("Compare state", () => {
-    it("opens and closes tools and sets tool filters", () => {
+    it("opens and closes tools", () => {
         const store = useExplorerStore();
         const id = store.openTool("periodic", { scope: "basket" });
         expect(store.compare.tools).toEqual([
             { id, kind: "periodic", params: { scope: "basket" } },
         ]);
-        store.setToolFilter("element", "Cu");
-        expect(store.compare.toolFilters.element).toBe("Cu");
-        store.clearToolFilters();
-        expect(store.compare.toolFilters).toEqual({
-            element: null,
-            cell: null,
-            pair: null,
-        });
         store.closeTool(id);
         expect(store.compare.tools).toEqual([]);
+    });
+
+    it("adds a node to the linked selection or removes it, and clears it", () => {
+        const store = useExplorerStore();
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Cu");
+        expect(store.compare.selection).toEqual(["el:Fe", "el:Cu"]);
+        store.toggleSelection("el:Fe");
+        expect(store.compare.selection).toEqual([null, "el:Cu"]);
+        store.clearSelection();
+        expect(store.compare.selection).toEqual([]);
+    });
+
+    it("pins in the lowest free slot and never renumbers the others", () => {
+        const store = useExplorerStore();
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Cu");
+        store.toggleSelection("el:Pb");
+        store.toggleSelection("el:Cu");
+        expect(store.compare.selection).toEqual(["el:Fe", null, "el:Pb"]);
+        store.toggleSelection("el:Hg");
+        expect(store.compare.selection).toEqual(["el:Fe", "el:Hg", "el:Pb"]);
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Pb");
+        expect(store.compare.selection).toEqual([null, "el:Hg"]);
+        store.toggleSelection("el:Hg");
+        expect(store.compare.selection).toEqual([]);
+    });
+
+    it("refuses a fifth pin and refills a hole left by an unpin", () => {
+        const store = useExplorerStore();
+        for (const id of ["el:Fe", "el:Cu", "el:Pb", "el:Hg"]) {
+            store.toggleSelection(id);
+        }
+        const full = store.compare;
+        store.toggleSelection("el:Au");
+        expect(store.compare).toBe(full);
+        expect(store.compare.selection).toEqual([
+            "el:Fe",
+            "el:Cu",
+            "el:Pb",
+            "el:Hg",
+        ]);
+        store.toggleSelection("el:Cu");
+        store.toggleSelection("el:Au");
+        expect(store.compare.selection).toEqual([
+            "el:Fe",
+            "el:Au",
+            "el:Pb",
+            "el:Hg",
+        ]);
+    });
+
+    it("holds the focus mode and resets it with the focus", () => {
+        const store = useExplorerStore();
+        expect(store.compare.mode).toBe("any");
+        store.toggleSelection("el:Fe");
+        store.setFocusMode("all");
+        expect(store.compare.mode).toBe("all");
+        store.clearSelection();
+        expect(store.compare.mode).toBe("any");
+    });
+
+    it("prunes the selected nodes a test refuses and says which", () => {
+        const store = useExplorerStore();
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Cu");
+        expect(store.pruneSelection((id) => id !== "el:Fe")).toEqual(["el:Fe"]);
+        expect(store.compare.selection).toEqual([null, "el:Cu"]);
+        const kept = store.compare.selection;
+        expect(store.pruneSelection(() => true)).toEqual([]);
+        expect(store.compare.selection).toBe(kept);
     });
 
     it("names a tool by its kind and parameters and opens it once", () => {
@@ -295,5 +359,37 @@ describe("Compare state", () => {
         expect(store.overlays["im:x:1"].element).toBe("Pb");
         store.setOverlay("im:x:1", null);
         expect(store.overlays).toEqual({});
+    });
+
+    it("hides and shows an XY window's curve with the eye, one window at a time", () => {
+        const store = useExplorerStore();
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f2");
+        store.toggleCurveVisibility("auto:xy:b", "an:2:-|f3");
+        expect(store.hiddenCurves).toEqual({
+            "auto:xy:a": ["an:1:-|f1", "an:1:-|f2"],
+            "auto:xy:b": ["an:2:-|f3"],
+        });
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        expect(store.hiddenCurves["auto:xy:a"]).toEqual(["an:1:-|f2"]);
+    });
+
+    it("shows every curve of one window the eye hid, leaving the others", () => {
+        const store = useExplorerStore();
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        store.toggleCurveVisibility("auto:xy:b", "an:2:-|f3");
+        store.showAllCurves("auto:xy:a");
+        expect(store.hiddenCurves).toEqual({ "auto:xy:b": ["an:2:-|f3"] });
+        expect(() => store.showAllCurves("auto:xy:a")).not.toThrow();
+    });
+
+    it("drops a window's eye-hidden ids a curve leaving it refuses, removing an empty window", () => {
+        const store = useExplorerStore();
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f1");
+        store.toggleCurveVisibility("auto:xy:a", "an:1:-|f2");
+        store.pruneHiddenCurves("auto:xy:a", (id) => id === "an:1:-|f1");
+        expect(store.hiddenCurves).toEqual({ "auto:xy:a": ["an:1:-|f1"] });
+        store.pruneHiddenCurves("auto:xy:a", () => false);
+        expect(store.hiddenCurves).toEqual({});
     });
 });

@@ -6,6 +6,7 @@ Usage:
 
 import datetime
 import json
+import re
 from pathlib import Path
 from unittest import mock
 
@@ -13,14 +14,26 @@ import bibtexparser
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.db import connection
 from django.http import QueryDict
 from django.test import SimpleTestCase
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import NodeGroup, TileModel
 from arches.app.utils.permission_backend import assign_perm
 
 from tests.explorer_contract import assert_shape
-from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
+from tests.explorer_fixtures import (
+    CANVAS,
+    CANVAS_2,
+    CANVAS_3,
+    MANIFEST,
+    POINT,
+    RECT,
+    TRIANGLE,
+    XY_CONFIG_ID,
+    IIIFCase,
+)
 from tests.test_explorer_service import AZURITE, FORS, XRF, ServiceCase
 
 from manuspectrum.views.explorer import service as explorer_service
@@ -583,6 +596,151 @@ class DocumentRouteTests(CorpusCase):
             self.assertEqual((refused.status_code, refused.content), (404, b""))
             self.assertEqual((unknown.status_code, unknown.content), (404, b""))
             self.assertEqual(refused["Cache-Control"], unknown["Cache-Control"])
+
+
+class DocumentComponentsTests(IIIFCase):
+    COMPONENT_ZONE = "location_in_document"
+
+    def payload(self):
+        return self.client.get(f"/en/api/explorer/document/{self.documents['open'].pk}")
+
+    def component(self, name, zones, document=None):
+        found = self.new_resource("component", name)
+        self.tile(
+            found,
+            "item_visual_is_part_of_document",
+            self.refs(document or self.documents["open"]),
+        )
+        if zones:
+            self.zone(found, zones, alias=self.COMPONENT_ZONE)
+        return found
+
+    def test_components_list_their_own_zones_by_canvas_position(self):
+        initial = "0b0b0b0b-0000-4000-8000-000000000001"
+        initial_3 = "0b0b0b0b-0000-4000-8000-000000000002"
+        self.zone(
+            self.components["open"],
+            [(initial_3, CANVAS_3, RECT), (initial, CANVAS, TRIANGLE)],
+            alias=self.COMPONENT_ZONE,
+        )
+        border = self.component(
+            "f. 2r — border",
+            [("0b0b0b0b-0000-4000-8000-000000000003", CANVAS_2, POINT)],
+        )
+
+        response = self.payload()
+
+        payload = response.json()
+        assert_shape(self, payload, "DocumentPayload")
+        for component in payload["components"]:
+            assert_shape(self, component, "DocumentComponent")
+            for zone in component["zones"]:
+                assert_shape(self, zone, "AnalysisZone")
+        self.assertEqual(
+            [c["id"] for c in payload["components"]],
+            [str(self.components["open"].pk), str(border.pk)],
+        )
+        first = payload["components"][0]
+        self.assertEqual(first["name"]["value"], "f. 1v — initial")
+        self.assertEqual(
+            [(z["canvas"], z["feature"], z["shape"]["type"]) for z in first["zones"]],
+            [(0, initial, "polygon"), (2, initial_3, "rect")],
+        )
+        self.assertEqual([z["canvas"] for z in payload["components"][1]["zones"]], [1])
+
+    def test_components_on_the_same_first_page_are_ordered_by_name(self):
+        later = self.component(
+            "f. 2r — border",
+            [("0b0b0b0b-0000-4000-8000-000000000004", CANVAS_2, POINT)],
+        )
+        sooner = self.component(
+            "Band, f. 2r", [("0b0b0b0b-0000-4000-8000-000000000005", CANVAS_2, POINT)]
+        )
+
+        payload = self.payload().json()
+
+        self.assertEqual(
+            [c["id"] for c in payload["components"]], [str(sooner.pk), str(later.pk)]
+        )
+
+    def test_a_component_without_a_zone_on_the_pages_is_left_out(self):
+        self.component("f. 5r — no zone", [])
+        self.component(
+            "Elsewhere",
+            [
+                (
+                    "0b0b0b0b-0000-4000-8000-000000000006",
+                    "https://example.org/iiif/other/canvas/9",
+                    POINT,
+                )
+            ],
+        )
+
+        self.assertEqual(self.payload().json()["components"], [])
+
+    def test_a_component_of_another_document_is_not_listed(self):
+        self.zone(
+            self.components["embargoed"],
+            [("0b0b0b0b-0000-4000-8000-000000000007", CANVAS, POINT)],
+            alias=self.COMPONENT_ZONE,
+        )
+
+        self.assertEqual(self.payload().json()["components"], [])
+
+    def test_a_restricted_component_is_never_listed(self):
+        self.zone(
+            self.components["open"],
+            [("0b0b0b0b-0000-4000-8000-000000000008", CANVAS, POINT)],
+            alias=self.COMPONENT_ZONE,
+        )
+        self.embargo(self.components["open"])
+
+        payload = self.payload().json()
+
+        self.assertEqual(payload["components"], [])
+        self.assertNotIn(str(self.components["open"].pk), json.dumps(payload))
+
+    def test_a_zone_nodegroup_the_visitor_cannot_read_lists_no_component(self):
+        self.zone(
+            self.components["open"],
+            [("0b0b0b0b-0000-4000-8000-000000000009", CANVAS, POINT)],
+            alias=self.COMPONENT_ZONE,
+        )
+        nodegroup = NodeGroup.objects.get(
+            pk=self.nodes[("component", self.COMPONENT_ZONE)].nodegroup_id
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        self.assertEqual(self.payload().json()["components"], [])
+
+    def test_the_query_count_does_not_grow_with_the_components(self):
+        def queries():
+            self.payload()
+            with CaptureQueriesContext(connection) as captured:
+                response = self.payload()
+            self.assertEqual(response.status_code, 200)
+            return len(
+                [
+                    q
+                    for q in captured.captured_queries
+                    if not re.search(r"silk_|SAVEPOINT|^EXPLAIN", q["sql"])
+                ]
+            )
+
+        self.component(
+            "Part 1", [("0b0b0b0b-0000-4000-8000-00000000000a", CANVAS, POINT)]
+        )
+        one = queries()
+        for n in range(3):
+            self.component(
+                f"Part {n + 2}",
+                [(f"0b0b0b0b-0000-4000-8000-00000000001{n}", CANVAS_2, POINT)],
+            )
+        many = queries()
+
+        self.assertEqual(len(self.payload().json()["components"]), 4)
+        self.assertEqual(many, one)
 
 
 class DocumentMatchRouteTests(CorpusCase):
@@ -1240,27 +1398,15 @@ class RevalidationTests(CorpusCase):
 
 
 class LayerOfTests(SimpleTestCase):
-    def test_an_element_symbol_gives_an_element_layer(self):
-        layer = layer_of(0, "Pb", {"url": None})
+    def test_a_layer_is_its_position_its_stored_label_and_its_image(self):
+        layer = layer_of(3, "  Pb  ", {"url": None})
 
-        self.assertEqual(layer["kind"], "element")
-        self.assertEqual(layer["element"], "Pb")
-        self.assertIsNone(layer["band"])
+        self.assertEqual(layer, {"index": 3, "label": "Pb", "image": {"url": None}})
 
-    def test_a_value_and_a_unit_gives_a_band_layer(self):
-        nanometres = layer_of(1, "450 nm", {"url": None})
-        wavenumber = layer_of(2, "1650 cm-1", {"url": None})
+    def test_a_missing_label_is_an_empty_string(self):
+        layer = layer_of(0, None, {"url": None})
 
-        self.assertEqual(nanometres["kind"], "band")
-        self.assertEqual(nanometres["band"], {"value": 450.0, "unit": "nm"})
-        self.assertEqual(wavenumber["kind"], "band")
-        self.assertEqual(wavenumber["band"], {"value": 1650.0, "unit": "cm⁻¹"})
-
-    def test_anything_else_gives_another_layer_without_an_element(self):
-        layer = layer_of(3, "deconv_Pb", {"url": None})
-
-        self.assertEqual(layer["kind"], "other")
-        self.assertIsNone(layer["element"])
+        self.assertEqual(layer["label"], "")
 
 
 class ImagingEntriesTests(SimpleTestCase):
@@ -1292,7 +1438,7 @@ class ImagingEntriesTests(SimpleTestCase):
         ],
     }
 
-    def test_layer_indices_continue_across_manifests_and_bands_sort_by_value(self):
+    def test_layer_indices_continue_across_manifests_in_canvas_order(self):
         with mock.patch(
             "manuspectrum.views.explorer.service.manifest_json",
             side_effect=[self.MANIFEST_A, self.MANIFEST_B],
@@ -1307,9 +1453,9 @@ class ImagingEntriesTests(SimpleTestCase):
             )
 
         self.assertEqual([len(entry["layers"]) for entry in entries], [2, 1])
-        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [1, 0])
+        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [0, 1])
         self.assertEqual(
-            [layer["band"]["value"] for layer in entries[0]["layers"]], [450.0, 650.0]
+            [layer["label"] for layer in entries[0]["layers"]], ["650 nm", "450 nm"]
         )
         self.assertEqual(entries[1]["layers"][0]["index"], 2)
-        self.assertEqual(entries[1]["layers"][0]["kind"], "element")
+        self.assertEqual(entries[1]["layers"][0]["label"], "Pb")

@@ -7,17 +7,35 @@ import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 
 import {
+    curveDash,
+    curveHue,
+    curveLook,
+    curveColourVar,
+    curvePaint,
+    curveState,
+    dashArray,
     dashOf,
+    endPoint,
     extent,
+    hoverModeFor,
     neutraliseText,
     offsetLifts,
+    openingLayout,
     outOfRange,
     panelGrid,
+    panelSpacing,
+    patchHoverInfo,
+    patchHoverTemplate,
     ranksInSlot,
+    restyleUpdate,
     sharedViews,
-    symbolOf,
+    spreadLabels,
     treat,
+    slipZoom,
+    undoZoom,
+    visibleCurveCount,
     workshopCsv,
+    zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
 interface ParityCase {
@@ -65,23 +83,315 @@ function keys(presetKeys: (string | null)[]): string[] {
 }
 
 describe("workshop", () => {
-    it("dashes the 2nd, 3rd… file of a slot, the first solid", () => {
-        const ranks = ranksInSlot([0, 0, 1, 0, 1]);
-        expect(ranks).toEqual([0, 1, 0, 2, 1]);
+    it("reads a zoom from a relayout: ranges set zoom, autoranges reset, the rest changes nothing", () => {
+        expect(
+            zoomedAfter({ "xaxis.range[0]": 1, "xaxis.range[1]": 2 }, false),
+        ).toBe(true);
+        expect(zoomedAfter({ "yaxis3.range": [0, 1] }, false)).toBe(true);
+        expect(zoomedAfter({ "xaxis.autorange": true }, true)).toBe(false);
+        expect(
+            zoomedAfter(
+                { "xaxis2.autorange": "reversed", "yaxis2.autorange": true },
+                true,
+            ),
+        ).toBe(false);
+        expect(zoomedAfter({ "annotations[0].opacity": 0.2 }, true)).toBe(true);
+        expect(zoomedAfter({ "annotations[0].opacity": 0.2 }, false)).toBe(
+            false,
+        );
+        expect(zoomedAfter(null, true)).toBe(true);
+    });
+
+    it("reads a zoom box narrower than 20 px on an axis it zooms as a press that slipped", () => {
+        const before = {
+            xaxis: {
+                range: [100, 1997] as const,
+                autorange: true,
+                length: 440,
+            },
+            yaxis: {
+                range: [-360, 11227] as const,
+                autorange: true,
+                length: 288,
+            },
+        };
+        const slipped = {
+            "xaxis.range[0]": 240.7,
+            "xaxis.range[1]": 280.1,
+            "yaxis.range[0]": 2635.1,
+            "yaxis.range[1]": 3045.3,
+        };
+        expect(slipZoom(slipped, before)).toBe(true);
+        expect(
+            slipZoom({ "xaxis.range[0]": 668, "xaxis.range[1]": 1231 }, before),
+        ).toBe(false);
+        expect(slipZoom({ "yaxis.range": [4811.2, 4813.2] }, before)).toBe(
+            true,
+        );
+        expect(slipZoom({ "xaxis.autorange": true }, before)).toBe(false);
+        expect(slipZoom({ "annotations[0].opacity": 0 }, before)).toBe(false);
+        expect(
+            slipZoom({ "xaxis2.range[0]": 1, "xaxis2.range[1]": 2 }, before),
+        ).toBe(false);
+        expect(slipZoom(null, before)).toBe(false);
+    });
+
+    it("puts back the axes a slipped zoom moved: on autorange when they followed their data, else on their range", () => {
+        const before = {
+            xaxis: {
+                range: [2000, 100] as const,
+                autorange: true,
+                length: 440,
+            },
+            yaxis: { range: [0, 5] as const, autorange: false, length: 288 },
+            xaxis2: { range: [0, 1] as const, autorange: true, length: 200 },
+        };
+        expect(
+            undoZoom(
+                {
+                    "xaxis.range[0]": 1366,
+                    "xaxis.range[1]": 1367,
+                    "yaxis.range[0]": 1,
+                    "yaxis.range[1]": 1.01,
+                },
+                before,
+            ),
+        ).toEqual({
+            "xaxis.autorange": "reversed",
+            "yaxis.range": [0, 5],
+        });
+    });
+
+    it("dashes the 2nd, 3rd… file of a slot with short dashes, the first solid", () => {
+        const ranks = ranksInSlot([0, 0, 1, 0, 1, 0, 0, 0]);
+        expect(ranks).toEqual([0, 1, 0, 2, 1, 3, 4, 5]);
         expect(ranks.map(dashOf)).toEqual([
             "solid",
-            "dash",
+            "6px,2px",
             "solid",
-            "dot",
-            "dash",
+            "2px,2px",
+            "6px,2px",
+            "10px,2px,2px,2px",
+            "14px,3px",
+            "solid",
         ]);
     });
 
-    it("gives each of the thirty slots its own marker shape, filled then open", () => {
-        const symbols = Array.from({ length: 30 }, (_, slot) => symbolOf(slot));
-        expect(new Set(symbols).size).toBe(30);
-        expect(symbols.slice(0, 3)).toEqual(["circle", "square", "diamond"]);
-        expect(symbols[15]).toBe("circle-open");
+    it("draws a dash as an SVG dash array, none for a solid line", () => {
+        expect(dashArray("solid")).toBe("");
+        expect(dashArray("10px,2px,2px,2px")).toBe("10 2 2 2");
+    });
+
+    it("cycles a curve's hue every CURVE_PALETTE_SIZE positions, its dash to the next variant each time round", () => {
+        expect(curveHue(0)).toBe(0);
+        expect(curveHue(11)).toBe(11);
+        expect(curveHue(12)).toBe(0);
+        expect(curveDash(0)).toBe("solid");
+        expect(curveDash(11)).toBe("solid");
+        expect(curveDash(12)).toBe("6px,2px");
+        expect(curveDash(24)).toBe("2px,2px");
+    });
+
+    const PALETTE = {
+        series: Array.from({ length: 12 }, (_, index) => `#s${index}`),
+        context: "#999",
+    };
+
+    it("paints every curve in its own hue at 1.5 px, never grey or a fallback ink, whatever its position", () => {
+        expect(curvePaint(PALETTE, 1, "plain")).toEqual({
+            colour: "#s1",
+            dash: "solid",
+            width: 1.5,
+            opacity: 1,
+            hover: true,
+        });
+        // The 13th curve (index 12): hue wraps to the 1st series colour, dash to the 2nd variant.
+        expect(curvePaint(PALETTE, 12, "plain")).toEqual({
+            colour: "#s0",
+            dash: "6px,2px",
+            width: 1.5,
+            opacity: 1,
+            hover: true,
+        });
+        expect(curvePaint(PALETTE, 12, "hidden")).toEqual({
+            colour: "#s0",
+            dash: "6px,2px",
+            width: 1.5,
+            opacity: 0,
+            hover: false,
+        });
+    });
+
+    it("thickens an emphasised curve without changing its colour or dash: the focus never recolours a curve", () => {
+        expect(curvePaint(PALETTE, 5, "emphasised")).toEqual({
+            colour: "#s5",
+            dash: "solid",
+            width: 2.5,
+            opacity: 1,
+            hover: true,
+        });
+        expect(curveLook(5, "emphasised")).toEqual(curveLook(5, "plain"));
+    });
+
+    it("looks up a curve's own CSS var for the legend's swatch, resolved to the theme's hex for a Plotly trace", () => {
+        const seriesLook = curveLook(1, "plain");
+        expect(curveColourVar(seriesLook)).toBe("var(--series-2)");
+        const dimmedLook = curveLook(1, "dimmed");
+        expect(curveColourVar(dimmedLook)).toBe("var(--series-context)");
+    });
+
+    it("hides the curves the selection does not link, shows them all without a selection, and a preview wins", () => {
+        expect(curveState(null, false, false)).toBe("plain");
+        expect(curveState(null, true, false)).toBe("hidden");
+        expect(curveState("evidence", true, false)).toBe("emphasised");
+        expect(curveState(null, true, true)).toBe("emphasised");
+        expect(curveState(null, false, true)).toBe("emphasised");
+    });
+
+    it("dims an unrelated curve instead of hiding it when the workshop's switch asks to, a preview and a link still winning", () => {
+        expect(curveState(null, true, false, true)).toBe("dimmed");
+        expect(curveState("direct", true, false, true)).toBe("emphasised");
+        expect(curveState(null, true, true, true)).toBe("emphasised");
+        expect(curveState(null, false, false, true)).toBe("plain");
+    });
+
+    it("draws a dimmed curve in grey context at reduced opacity, out of the hover, even one a pin would otherwise light", () => {
+        expect(curvePaint(PALETTE, 0, "dimmed")).toEqual({
+            colour: "#999",
+            dash: "solid",
+            width: 1.25,
+            opacity: 0.35,
+            hover: false,
+        });
+        expect(curvePaint(PALETTE, 12, "dimmed")).toEqual({
+            colour: "#999",
+            dash: "6px,2px",
+            width: 1.25,
+            opacity: 0.35,
+            hover: false,
+        });
+    });
+
+    it("gathers the paints into one restyle of style attributes, in trace order", () => {
+        const update = restyleUpdate([
+            {
+                colour: "#111",
+                dash: "solid",
+                width: 1.5,
+                opacity: 1,
+                hover: true,
+            },
+            {
+                colour: "#999",
+                dash: "6px,2px",
+                width: 1.25,
+                opacity: 0,
+                hover: false,
+            },
+        ]);
+        expect(update).toEqual({
+            opacity: [1, 0],
+            "line.color": ["#111", "#999"],
+            "line.width": [1.5, 1.25],
+            "line.dash": ["solid", "6px,2px"],
+            hoverinfo: ["all", "skip"],
+        });
+    });
+
+    it("patches Plotly's stale calc-data trace with the hoverinfo a style-only restyle set, in trace order", () => {
+        const calcdata = [
+            [{ trace: { hoverinfo: "all" } }],
+            [{ trace: { hoverinfo: "all" } }],
+        ];
+        patchHoverInfo(calcdata, [
+            {
+                colour: "#111",
+                dash: "solid",
+                width: 1.5,
+                opacity: 0,
+                hover: false,
+            },
+            {
+                colour: "#222",
+                dash: "solid",
+                width: 1.5,
+                opacity: 1,
+                hover: true,
+            },
+        ]);
+        expect(calcdata[0][0].trace.hoverinfo).toBe("skip");
+        expect(calcdata[1][0].trace.hoverinfo).toBe("all");
+    });
+
+    it("patches the same stale trace with the hovertemplate a hovermode switch restyled, in trace order", () => {
+        const calcdata = [
+            [{ trace: { hovertemplate: "A1 · %{y}<extra></extra>" } }],
+            [{ trace: { hovertemplate: "A2 · %{y}<extra></extra>" } }],
+        ];
+        patchHoverTemplate(calcdata, [
+            "A1<br>x: %{x} · y: %{y}<extra></extra>",
+            "A2<br>x: %{x} · y: %{y}<extra></extra>",
+        ]);
+        expect(calcdata[0][0].trace.hovertemplate).toBe(
+            "A1<br>x: %{x} · y: %{y}<extra></extra>",
+        );
+        expect(calcdata[1][0].trace.hovertemplate).toBe(
+            "A2<br>x: %{x} · y: %{y}<extra></extra>",
+        );
+    });
+
+    it("does nothing when the chart holds no calc data yet, or a row lacks a trace", () => {
+        expect(() => patchHoverInfo(undefined, [])).not.toThrow();
+        const calcdata = [[]];
+        expect(() =>
+            patchHoverInfo(calcdata, [
+                {
+                    colour: "#111",
+                    dash: "solid",
+                    width: 1.5,
+                    opacity: 1,
+                    hover: true,
+                },
+            ]),
+        ).not.toThrow();
+    });
+
+    it("finds where a curve ends on screen, the smallest X on a reversed axis", () => {
+        const x = [400, 500, 900, Number.NaN];
+        const y = [1, 2, 3, 4];
+        expect(endPoint(x, y, false)).toEqual({ x: 900, y: 3 });
+        expect(endPoint(x, y, true)).toEqual({ x: 400, y: 1 });
+        expect(endPoint([1], [Number.NaN], false)).toBeNull();
+    });
+
+    it("spreads labels at least 12 px apart around where they want to be, keeping their order", () => {
+        expect(spreadLabels([100, 50], 12)).toEqual([100, 50]);
+        expect(spreadLabels([100, 104], 12)).toEqual([96, 108]);
+        expect(spreadLabels([10, 10, 10], 12)).toEqual([-2, 10, 22]);
+        expect(spreadLabels([0, 4, 200], 12, { min: 0, max: 300 })).toEqual([
+            0, 12, 200,
+        ]);
+    });
+
+    it("opens on small multiples above eight curves, overlay at or under", () => {
+        expect(openingLayout(8)).toBe("overlay");
+        expect(openingLayout(9)).toBe("multiples");
+        // No longer special-cased: every curve is its own hue now, so a
+        // window with few curves in high slots stays overlay too.
+        expect(openingLayout(2)).toBe("overlay");
+    });
+
+    it("hovers along X up to twelve curves currently answering hover, the closest curve beyond", () => {
+        expect(hoverModeFor(12)).toBe("x unified");
+        expect(hoverModeFor(13)).toBe("closest");
+    });
+
+    it("counts only the plain and emphasised curves for the hover cap: hidden and dimmed answer no hover", () => {
+        expect(
+            visibleCurveCount(["plain", "emphasised", "hidden", "dimmed"]),
+        ).toBe(2);
+        expect(visibleCurveCount([])).toBe(0);
+        expect(visibleCurveCount(["plain", "plain"])).toBe(2);
     });
 
     it("measures a range in one pass, past the arguments limit of a spread", () => {
@@ -166,10 +476,25 @@ describe("workshop", () => {
         expect(outOfRange([{ min: 0, max: 1, count: 2 }])).toEqual([false]);
     });
 
-    it("lays small multiples out on at most four columns", () => {
+    it("lays small multiples out on at most four columns, each at least 220 px wide", () => {
         expect(panelGrid(1)).toEqual({ rows: 1, columns: 1 });
         expect(panelGrid(9)).toEqual({ rows: 3, columns: 3 });
         expect(panelGrid(30)).toEqual({ rows: 8, columns: 4 });
+        expect(panelGrid(30, 700)).toEqual({ rows: 10, columns: 3 });
+        expect(panelGrid(4, 200)).toEqual({ rows: 4, columns: 1 });
+    });
+
+    it("spaces the panels in pixels, 46 px down so a panel's X tick labels clear the title of the panel below, each at least 110 px high", () => {
+        expect(panelSpacing({ rows: 2, columns: 2 }, 488, 400)).toEqual({
+            xgap: 44 / 244,
+            ygap: 46 / 200,
+            height: 400,
+        });
+        expect(panelSpacing({ rows: 4, columns: 1 }, 300, 200)).toEqual({
+            xgap: 0,
+            ygap: 46 / 144.5,
+            height: 4 * 110 + 3 * 46,
+        });
     });
 
     it("neutralises curator text as the Explorer's series CSV does", () => {
@@ -187,9 +512,11 @@ describe("workshop", () => {
             ],
             "Energy (keV)",
             "Counts",
+            "The values drawn, = offset left out",
         );
         expect(csv.startsWith("\ufeff")).toBe(true);
         expect(csv.slice(1).split("\r\n")).toEqual([
+            "# The values drawn,' = offset left out",
             "A1 · a;'=cmd.csv · Energy (keV),A1 · a;'=cmd.csv · Counts," +
                 `"A2 · b,'c'.csv · Energy (keV)","A2 · b,'c'.csv · Counts"`,
             "1,0.5,3,-4",

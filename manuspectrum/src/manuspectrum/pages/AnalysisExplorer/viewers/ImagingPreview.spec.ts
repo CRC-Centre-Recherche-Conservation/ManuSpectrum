@@ -2,13 +2,16 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { describe, expect, it } from "vitest";
-import { ref } from "vue";
+import { h, ref } from "vue";
+
+import type { VNode } from "vue";
 
 import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue";
 
 import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
+    IMAGING_OVERLAYS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -16,6 +19,8 @@ import {
     imagingEntry,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+
+import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 function mountPreview(
     zones: string[] = [uuid(101)],
@@ -41,8 +46,15 @@ function mountPreview(
 }
 
 describe("ImagingPreview", () => {
-    it("says when the image server does not give the map, and asks again on Retry", async () => {
+    it("silently retries at the image's own max size before saying the map is unavailable, and asks again on Retry", async () => {
         const { wrapper } = mountPreview();
+        const bounded = wrapper.find("img.layer-image").attributes("src");
+        expect(bounded).toContain("!480,480");
+        await wrapper.find("img.layer-image").trigger("error");
+        expect(wrapper.find(".unavailable").exists()).toBe(false);
+        expect(wrapper.find("img.layer-image").attributes("src")).toContain(
+            "/full/max/0/default.jpg",
+        );
         await wrapper.find("img.layer-image").trigger("error");
         const status = wrapper.find(".unavailable");
         expect(status.attributes("role")).toBe("status");
@@ -50,12 +62,12 @@ describe("ImagingPreview", () => {
         expect(wrapper.find("img.layer-image").exists()).toBe(false);
         await status.find("button").trigger("click");
         expect(wrapper.find("img.layer-image").exists()).toBe(true);
+        expect(wrapper.find("img.layer-image").attributes("src")).toBe(bounded);
     });
 
-    it("names the current layer by its kind and label", () => {
+    it("names the current layer by its stored label", () => {
         const { wrapper } = mountPreview();
-        expect(wrapper.find(".current").text()).toContain("Element");
-        expect(wrapper.find(".current").text()).toContain("Pb");
+        expect(wrapper.find(".current").text()).toBe("Pb");
     });
 
     it("lays the current layer on the page and keeps its opacity", async () => {
@@ -125,5 +137,104 @@ describe("ImagingPreview", () => {
         expect(
             (wrapper.find("input.lay").element as HTMLInputElement).checked,
         ).toBe(true);
+    });
+});
+
+describe("ImagingPreview with its layers held in a provided store (Compare)", () => {
+    interface StageProps {
+        layer: { label: string };
+        opacity: number;
+        underCurtain: boolean;
+        attempt: number;
+        failed: () => void;
+    }
+
+    function mountWithStore(
+        props: { contrastNote?: boolean } = {},
+        withStage = false,
+    ) {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        const settings = ref<Record<string, Overlay>>({});
+        const curtain = ref<string | null>(null);
+        const file = imagingEntry();
+        const slots: Record<string, (stage: StageProps) => VNode> = {};
+        if (withStage) {
+            slots.stage = (stage) =>
+                h(
+                    "div",
+                    {
+                        class: "stage-stub",
+                        "data-attempt": stage.attempt,
+                        onClick: stage.failed,
+                    },
+                    `${stage.layer.label} ${stage.opacity} ${stage.underCurtain}`,
+                );
+        }
+        const wrapper = mount(ImagingPreview, {
+            props: {
+                file,
+                analysis: { id: uuid(101) },
+                ...props,
+            },
+            slots,
+            global: {
+                plugins: [pinia, PrimeVue],
+                provide: {
+                    [CURTAIN_KEY as symbol]: curtain,
+                    [FOLIO_ZONES_KEY as symbol]: ref(new Set([uuid(101)])),
+                    [IMAGING_OVERLAYS_KEY as symbol]: {
+                        settings,
+                        set(key: string, overlay: Overlay | null): void {
+                            const next = { ...settings.value };
+                            if (overlay) next[key] = overlay;
+                            else delete next[key];
+                            settings.value = next;
+                        },
+                    },
+                },
+            },
+        });
+        return { wrapper, settings, curtain, store: useExplorerStore() };
+    }
+
+    it("keeps the laid layers in the settings provided, never in the store", async () => {
+        const { wrapper, settings, store } = mountWithStore();
+        await wrapper.find("input.lay").setValue(true);
+        expect(settings.value[`${uuid(101)}:0`]?.on).toBe(true);
+        expect(store.overlays).toEqual({});
+    });
+
+    it("draws the laid layer in the stage its parent gives, the image alone while it is not laid", async () => {
+        const { wrapper, curtain } = mountWithStore({}, true);
+        expect(wrapper.find(".stage-stub").exists()).toBe(false);
+        expect(wrapper.find("img.layer-image").exists()).toBe(true);
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.find("img.layer-image").exists()).toBe(false);
+        expect(wrapper.find(".stage-stub").text()).toBe("Pb 0.7 false");
+        await wrapper.find("input.curtain").setValue(true);
+        expect(curtain.value).toBe(`${uuid(101)}:0`);
+        expect(wrapper.find(".stage-stub").text()).toBe("Pb 0.7 true");
+    });
+
+    it("says when the stage cannot draw the layer, and gives it a new attempt on Retry", async () => {
+        const { wrapper } = mountWithStore({}, true);
+        await wrapper.find("input.lay").setValue(true);
+        await wrapper.find(".stage-stub").trigger("click");
+        expect(wrapper.find(".unavailable").text()).toContain(
+            "Map unavailable (image server)",
+        );
+        expect(wrapper.find(".stage-stub").exists()).toBe(false);
+        await wrapper.find(".unavailable button").trigger("click");
+        expect(wrapper.find(".stage-stub").attributes("data-attempt")).toBe(
+            "1",
+        );
+    });
+
+    it("leaves the contrast note to its parent when asked", () => {
+        const { wrapper } = mountWithStore({ contrastNote: false });
+        expect(wrapper.text()).not.toContain(
+            "Each map keeps its own contrast.",
+        );
     });
 });

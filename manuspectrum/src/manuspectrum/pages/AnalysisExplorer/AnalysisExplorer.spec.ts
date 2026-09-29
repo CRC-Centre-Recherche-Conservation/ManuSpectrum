@@ -20,6 +20,7 @@ import {
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
 import type { Pinia } from "pinia";
+import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 vi.mock("gridstack", async () =>
     (
@@ -45,12 +46,13 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 const KEY = "ch:00000000-0000-4000-8000-000000000001:-";
-const EMPTY_SYNTHESIS = {
+const EMPTY_SYNTHESIS: SynthesisResponse = {
     coverage: [],
     canvases: [],
     techniques: [],
     pairs: [],
     elements: [],
+    materials: [],
     unpublishedCount: 0,
 };
 let pinia: Pinia;
@@ -228,6 +230,24 @@ describe("AnalysisExplorer", () => {
         await flushPromises();
         expect(wrapper.find(".corpus-results").exists()).toBe(true);
         expect(wrapper.find(".active-filters").exists()).toBe(true);
+    });
+
+    it("leaves the Corpus filters bar to Corpus, the filters kept for its return", async () => {
+        window.history.replaceState(null, "", "/en/discover?q=gold");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        const store = useExplorerStore();
+        store.setView("compare");
+        await flushPromises();
+        expect(wrapper.find(".active-filters").exists()).toBe(false);
+        expect(store.filters.q).toBe("gold");
+        expect(window.location.search).toContain("q=gold");
+        store.setView("corpus");
+        await flushPromises();
+        expect(wrapper.find(".active-filters").exists()).toBe(true);
+        wrapper.unmount();
     });
 
     it("names the screen shown on the page body, for the page intro", async () => {

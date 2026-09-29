@@ -82,18 +82,15 @@ export interface BasketItem {
     slot: number;
 }
 
-export type ToolKind = "coverage" | "colour-material" | "periodic" | "folio";
+export type ToolKind = "coverage" | "periodic" | "folio";
+
+/** How the Materials window of Compare groups its identified materials. */
+export type MaterialsGrouping = "record" | "pair" | "component";
 
 export interface ToolWindow {
     id: string;
     kind: ToolKind;
     params: Record<string, string>;
-}
-
-export interface ToolFilters {
-    element: string | null;
-    cell: [string, string] | null;
-    pair: [string | null, string] | null;
 }
 
 export interface LayerToggles {

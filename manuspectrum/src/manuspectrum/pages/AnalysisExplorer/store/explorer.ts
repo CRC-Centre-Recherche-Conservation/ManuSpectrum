@@ -7,6 +7,11 @@ import {
     kindOf,
     uniqueKeys,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import {
+    nextFreeSlot,
+    pinInSlots,
+    unpinFromSlots,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type {
@@ -29,12 +34,14 @@ import type {
     LayerToggles,
     ColourLevel,
     ListFilterKey,
+    MaterialsGrouping,
     Overlay,
     PageSize,
-    ToolFilters,
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { FocusMode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
+import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
@@ -104,10 +111,6 @@ export function toolWindowId(
     return `tool:${kind}:${query || "-"}`;
 }
 
-function emptyToolFilters(): ToolFilters {
-    return { element: null, cell: null, pair: null };
-}
-
 /** Filters that restrict Corpus results; `eventType` (Map only) and the display options (grain, empty, size) are not among them. */
 export function hasActiveFilters(filters: Filters): boolean {
     return countCorpusFilters(filters) > 0;
@@ -160,14 +163,34 @@ export const useExplorerStore = defineStore("explorer", () => {
     });
     const overlays = ref<Record<string, Overlay>>({});
     const basket = ref<BasketItem[]>([]);
-    const compare = ref<{ toolFilters: ToolFilters; tools: ToolWindow[] }>({
-        toolFilters: emptyToolFilters(),
+    /**
+     * Compare: the tools open, and the focus (never saved): the nodes the
+     * reader pinned to see what is linked to them, each at its slot
+     * (index + 1; null is a hole left by an unpin, never trailing), and
+     * whether it lights what relates to any of them or to all of them.
+     */
+    const compare = ref<{
+        selection: (NodeId | null)[];
+        mode: FocusMode;
+        tools: ToolWindow[];
+    }>({
+        selection: [],
+        mode: "any",
         tools: [],
     });
     /** Rail groups folded to their heading; not in the address. */
     const collapsedGroups = ref<FacetGroup[]>([]);
     /** Which colour facet the rail's Colour toggle shows; not in the address. */
     const colourLevel = ref<ColourLevel>("colour");
+    /** How the Materials window of Compare groups its rows; for the tab only, not in the address. */
+    const materialsGrouping = ref<MaterialsGrouping>("record");
+    /**
+     * Curves an XY window's legend eye hid, by window id then curve id
+     * (`XyLegend`'s `LegendEntry.id`); for the tab only, never persisted and
+     * never in the address. Independent of the focus: an eye-hidden curve
+     * stays hidden whatever the focus links.
+     */
+    const hiddenCurves = ref<Record<string, string[]>>({});
     /** Whether the folio legend is unfolded; folded when the explorer opens. */
     const legendOpen = ref(false);
 
@@ -282,6 +305,42 @@ export const useExplorerStore = defineStore("explorer", () => {
 
     function setColourLevel(level: ColourLevel): void {
         colourLevel.value = level;
+    }
+
+    function setMaterialsGrouping(grouping: MaterialsGrouping): void {
+        materialsGrouping.value = grouping;
+    }
+
+    /** Hides or shows a curve of an XY window's legend, independent of the focus. */
+    function toggleCurveVisibility(windowId: string, curveId: string): void {
+        const current = hiddenCurves.value[windowId] ?? [];
+        const next = current.includes(curveId)
+            ? current.filter((id) => id !== curveId)
+            : [...current, curveId];
+        hiddenCurves.value = { ...hiddenCurves.value, [windowId]: next };
+    }
+
+    /** Shows every curve of an XY window the eye hid. */
+    function showAllCurves(windowId: string): void {
+        if (!hiddenCurves.value[windowId]) return;
+        const next = { ...hiddenCurves.value };
+        delete next[windowId];
+        hiddenCurves.value = next;
+    }
+
+    /** Drops an XY window's eye-hidden curve ids `keep` refuses: a curve leaving the window loses its hidden state. */
+    function pruneHiddenCurves(
+        windowId: string,
+        keep: (id: string) => boolean,
+    ): void {
+        const current = hiddenCurves.value[windowId];
+        if (!current) return;
+        const kept = current.filter(keep);
+        if (kept.length === current.length) return;
+        const next = { ...hiddenCurves.value };
+        if (kept.length === 0) delete next[windowId];
+        else next[windowId] = kept;
+        hiddenCurves.value = next;
     }
 
     function setLegendOpen(open: boolean): void {
@@ -402,18 +461,48 @@ export const useExplorerStore = defineStore("explorer", () => {
         };
     }
 
-    function setToolFilter<K extends keyof ToolFilters>(
-        key: K,
-        value: ToolFilters[K],
-    ): void {
+    /**
+     * Pins a node in the lowest free slot of the focus, or unpins it when
+     * it is there: its slot becomes a hole, trailing holes are trimmed, and
+     * no other slot is renumbered. A pin while `FOCUS_MAX` nodes are pinned
+     * changes nothing.
+     */
+    function toggleSelection(id: NodeId): void {
+        const current = compare.value.selection;
+        if (!current.includes(id) && nextFreeSlot(current) === null) return;
         compare.value = {
             ...compare.value,
-            toolFilters: { ...compare.value.toolFilters, [key]: value },
+            selection: current.includes(id)
+                ? unpinFromSlots(current, (entry) => entry === id)
+                : pinInSlots(current, id),
         };
     }
 
-    function clearToolFilters(): void {
-        compare.value = { ...compare.value, toolFilters: emptyToolFilters() };
+    /** Empties the focus and lights what relates to any pinned node again. */
+    function clearSelection(): void {
+        compare.value = { ...compare.value, selection: [], mode: "any" };
+    }
+
+    function setFocusMode(mode: FocusMode): void {
+        if (compare.value.mode === mode) return;
+        compare.value = { ...compare.value, mode };
+    }
+
+    /** Unpins the nodes `keep` refuses, leaving holes; returns them, in slot order. */
+    function pruneSelection(keep: (id: NodeId) => boolean): NodeId[] {
+        const dropped = compare.value.selection.filter(
+            (id): id is NodeId => id !== null && !keep(id),
+        );
+        if (dropped.length > 0) {
+            compare.value = {
+                ...compare.value,
+                selection: unpinFromSlots(
+                    compare.value.selection,
+                    (id) => !keep(id),
+                ),
+            };
+        }
+        return dropped;
     }
 
     return {
@@ -430,6 +519,8 @@ export const useExplorerStore = defineStore("explorer", () => {
         compare,
         collapsedGroups,
         colourLevel,
+        materialsGrouping,
+        hiddenCurves,
         legendOpen,
         basketFree,
         activeFilterCount,
@@ -446,6 +537,10 @@ export const useExplorerStore = defineStore("explorer", () => {
         setLayer,
         toggleGroup,
         setColourLevel,
+        setMaterialsGrouping,
+        toggleCurveVisibility,
+        showAllCurves,
+        pruneHiddenCurves,
         setLegendOpen,
         addToBasket,
         addManyToBasket,
@@ -456,8 +551,10 @@ export const useExplorerStore = defineStore("explorer", () => {
         setOverlay,
         openTool,
         closeTool,
-        setToolFilter,
-        clearToolFilters,
+        toggleSelection,
+        clearSelection,
+        setFocusMode,
+        pruneSelection,
     };
 });
 

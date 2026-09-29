@@ -19,10 +19,15 @@ interface FakeCurtain {
 let map: L.Map;
 let sideBySide: ReturnType<typeof vi.fn>;
 
-function overlay(key: string, opacity = 1): FolioOverlay {
+function overlay(
+    key: string,
+    opacity = 1,
+    maxUrl: string | null = null,
+): FolioOverlay {
     return {
         key,
         url: `https://iiif.example/${key}.png`,
+        maxUrl,
         bounds: [
             [0, 0],
             [-10, 10],
@@ -77,6 +82,39 @@ describe("laidLayers", () => {
         first.dispatchEvent(new Event("error"));
         expect(failed).toHaveBeenCalledWith("a:0");
         expect(sideBySide).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the layer's max size once before reporting a failure", () => {
+        const failed = vi.fn();
+        const laid = laidLayers(map, { curtainLabel: "Curtain", failed });
+        laid.draw(
+            [overlay("a:0", 1, "https://iiif.example/a:0-max.png")],
+            null,
+        );
+        const image = images()[0];
+        expect(image.src).toBe("https://iiif.example/a:0.png");
+        image.dispatchEvent(new Event("error"));
+        expect(image.src).toBe("https://iiif.example/a:0-max.png");
+        expect(failed).not.toHaveBeenCalled();
+        image.dispatchEvent(new Event("error"));
+        expect(failed).toHaveBeenCalledWith("a:0");
+        expect(failed).toHaveBeenCalledTimes(1);
+    });
+
+    it("tries the max size only once: a redraw at the same URL does not retry it", () => {
+        const failed = vi.fn();
+        const laid = laidLayers(map, { curtainLabel: "Curtain", failed });
+        const withMax = overlay("a:0", 1, "https://iiif.example/a:0-max.png");
+        laid.draw([withMax], null);
+        const image = images()[0];
+        image.dispatchEvent(new Event("error"));
+        expect(image.src).toBe("https://iiif.example/a:0-max.png");
+        laid.draw(
+            [overlay("a:0", 0.5, "https://iiif.example/a:0-max.png")],
+            null,
+        );
+        image.dispatchEvent(new Event("error"));
+        expect(failed).toHaveBeenCalledWith("a:0");
     });
 
     it("creates one curtain over the layer named, moves it, and takes it off", () => {

@@ -221,13 +221,17 @@ export function writeTools(tools: readonly StoredTool[]): void {
     });
 }
 
-/** Forgets the places, the hidden windows and the folded ones; the tools stay open. */
-export function clearLayout(): void {
-    const { tools } = readStored();
-    if (tools.length === 0) {
+/** Forgets the places of the windows; the hidden, folded and open windows stay as stored. */
+export function clearBoxes(): void {
+    const stored = readStored();
+    if (
+        stored.hidden.length === 0 &&
+        Object.keys(stored.folded).length === 0 &&
+        stored.tools.length === 0
+    ) {
         removeStorage(LAYOUT_STORAGE_KEY);
     } else {
-        writeStored({ ...emptyLayout(), tools });
+        writeStored({ ...stored, boxes: {} });
     }
 }
 
@@ -266,6 +270,53 @@ export function readingOrder<T extends { x: number; y: number }>(
     boxes: readonly T[],
 ): T[] {
     return [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/** The gap between two spans on one axis, 0 when they touch or overlap. */
+function gapBetween(
+    start: number,
+    length: number,
+    otherStart: number,
+    otherLength: number,
+): number {
+    return Math.max(
+        0,
+        otherStart - (start + length),
+        start - (otherStart + otherLength),
+    );
+}
+
+/**
+ * The box nearest `target`, in grid cells: the smallest gap between their
+ * edges, then the smallest distance between their centres, then the first
+ * in reading order; null when there is none.
+ */
+export function nearestBox<T extends WindowBox>(
+    target: WindowBox,
+    boxes: readonly T[],
+): T | null {
+    const centreX = target.x + target.w / 2;
+    const centreY = target.y + target.h / 2;
+    let nearest: T | null = null;
+    let nearestGap = Infinity;
+    let nearestCentre = Infinity;
+    for (const box of readingOrder(boxes)) {
+        const gap =
+            gapBetween(target.x, target.w, box.x, box.w) +
+            gapBetween(target.y, target.h, box.y, box.h);
+        const centre =
+            Math.abs(box.x + box.w / 2 - centreX) +
+            Math.abs(box.y + box.h / 2 - centreY);
+        if (
+            gap < nearestGap ||
+            (gap === nearestGap && centre < nearestCentre)
+        ) {
+            nearest = box;
+            nearestGap = gap;
+            nearestCentre = centre;
+        }
+    }
+    return nearest;
 }
 
 /**

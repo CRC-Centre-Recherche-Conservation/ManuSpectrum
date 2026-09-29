@@ -2,10 +2,21 @@
 import { inject, nextTick, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
+
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import {
+    documentHref,
+    snapshotOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import {
+    analysisNode,
+    slotNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { AnalysisHit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
@@ -18,7 +29,11 @@ import type {
  * the reader can do: download a file, open the analysis in its document, or
  * take an item no longer available out of the Selection. Once an item is
  * taken out, the focus goes to the action of the next item, else of the one
- * before; after the last one, to the Compare heading.
+ * before; after the last one, to the Compare heading. An item holding an
+ * analysis stands for it (`an:`): its title is the analysis's toggle,
+ * carrying the focus marks, and the line is tinted by how the analysis
+ * stands to the focus (a bar of its slots' hues) and to the node a mouse
+ * previews.
  */
 const props = defineProps<{ entries: readonly NotInChartEntry[] }>();
 
@@ -26,6 +41,15 @@ const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const list = useTemplateRef<HTMLUListElement>("list");
 const screenFocus = inject(SCREEN_FOCUS_KEY, null);
+const marks = useLinkedMarks();
+
+function recordOf(entry: NotInChartEntry): string[] {
+    return entry.analysis ? [analysisNode(entry.analysis.id)] : [];
+}
+
+function preview(entry: NotInChartEntry, event: PointerEvent): void {
+    if (entry.analysis) marks.enter(analysisNode(entry.analysis.id), event);
+}
 
 function reasonText(reason: NotInChartReason): string {
     switch (reason) {
@@ -63,7 +87,7 @@ function downloadLabel(entry: NotInChartEntry): string {
 
 function openLabel(analysis: AnalysisHit): string {
     return interpolate(
-        $gettext("Open the analysis %{name}"),
+        $gettext("Open the analysis %{name} in a new tab"),
         { name: analysis.name.value },
         true,
     );
@@ -88,9 +112,17 @@ async function remove(key: string): Promise<void> {
     }
 }
 
-function openAnalysis(analysis: AnalysisHit): void {
-    store.openDocument(analysis.document.id, analysis.canvas);
-    store.focusOn({ kind: "analysis", id: analysis.id });
+/** The document screen of `analysis`, on its page and focused on it. */
+function analysisHref(analysis: AnalysisHit): string {
+    return documentHref(
+        snapshotOf(store),
+        analysis.document.id,
+        analysis.canvas,
+        {
+            kind: "analysis",
+            id: analysis.id,
+        },
+    );
 }
 </script>
 
@@ -103,13 +135,35 @@ function openAnalysis(analysis: AnalysisHit): void {
             v-for="entry in props.entries"
             :key="entry.key"
             :data-key="entry.key"
+            :data-rel="marks.rel(recordOf(entry))"
+            :data-preview="marks.previewRel(recordOf(entry))"
+            :style="marks.rowStyle(recordOf(entry))"
+            @pointerenter="preview(entry, $event)"
+            @pointerleave="marks.leave($event)"
         >
-            <span class="slot">{{ slotLabel(entry.slot) }}</span>
+            <span
+                class="slot"
+                :data-rel="marks.rel(slotNode(entry.slot))"
+                >{{ slotLabel(entry.slot) }}</span
+            >
             <span class="info">
+                <button
+                    v-if="entry.analysis"
+                    type="button"
+                    class="title record ms-focus"
+                    v-bind="marks.focus(analysisNode(entry.analysis.id))"
+                    :lang="entry.analysis.name.lang"
+                    :aria-pressed="
+                        marks.pressed(analysisNode(entry.analysis.id))
+                    "
+                    @click="marks.toggle(analysisNode(entry.analysis.id))"
+                >
+                    <FocusPip :node="analysisNode(entry.analysis.id)" />
+                    <span>{{ titleOf(entry) }}</span>
+                </button>
                 <span
-                    v-if="titleOf(entry)"
+                    v-else-if="titleOf(entry)"
                     class="title"
-                    :lang="entry.analysis?.name.lang"
                     >{{ titleOf(entry) }}</span
                 >
                 <span class="reason">{{ reasonText(entry.reason) }}</span>
@@ -123,15 +177,16 @@ function openAnalysis(analysis: AnalysisHit): void {
             >
                 <span>{{ $gettext("Download") }}</span>
             </a>
-            <button
+            <a
                 v-else-if="opensAnalysis(entry)"
-                type="button"
                 class="action"
+                :href="analysisHref(entry.analysis!)"
+                target="_blank"
+                rel="noopener"
                 :aria-label="openLabel(entry.analysis!)"
-                @click="openAnalysis(entry.analysis!)"
             >
                 <span>{{ $gettext("Open the analysis") }}</span>
-            </button>
+            </a>
             <button
                 v-else-if="entry.reason === 'missing'"
                 type="button"
@@ -174,6 +229,86 @@ function openAnalysis(analysis: AnalysisHit): void {
     overflow-wrap: anywhere;
 }
 
+.not-in-chart-list .record {
+    --r: 0.375rem;
+    --link-pip: 0.8125rem;
+    justify-self: start;
+    min-block-size: 1.5rem;
+    padding: 0.25rem 0.375rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.375rem;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.not-in-chart-list .record:hover {
+    border-color: var(--border-hover);
+}
+
+.not-in-chart-list li {
+    position: relative;
+    padding-block: 0.25rem;
+    padding-inline-start: 0.5rem;
+    border-radius: 0.375rem;
+    transition:
+        background-color var(--dur-med, 260ms),
+        color var(--dur-med, 260ms);
+}
+
+.not-in-chart-list li::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 0;
+    background: var(--bar, var(--focus-1));
+    content: "";
+    transition: inline-size var(--dur-med, 260ms) var(--ease-out-expo);
+}
+
+.not-in-chart-list
+    li:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 6%,
+        var(--surface)
+    );
+}
+
+.not-in-chart-list li[data-rel="self"]::before {
+    inline-size: 0.25rem;
+}
+
+.not-in-chart-list li[data-rel="direct"]::before {
+    inline-size: 0.1875rem;
+}
+
+.not-in-chart-list li[data-rel="evidence"]::before {
+    inline-size: 0.0625rem;
+}
+
+.not-in-chart-list li[data-rel="none"] {
+    color: var(--ink-muted);
+}
+
+.not-in-chart-list li[data-preview] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 5%,
+        var(--surface)
+    );
+}
+
+.not-in-chart-list li[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 .not-in-chart-list .reason {
     color: var(--ink-muted);
     font-size: 0.75rem;
@@ -194,8 +329,9 @@ function openAnalysis(analysis: AnalysisHit): void {
     cursor: pointer;
 }
 
-.not-in-chart-list .action:focus-visible {
+.not-in-chart-list .action:focus-visible,
+.not-in-chart-list .record:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 </style>

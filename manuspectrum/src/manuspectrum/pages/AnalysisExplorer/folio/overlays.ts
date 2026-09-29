@@ -22,6 +22,16 @@ const OVERLAY_PANE_Z_INDEX = "400";
 export interface FolioOverlay {
     key: string;
     url: string;
+    /**
+     * The IIIF `max` size of the same image, or null when `url` already is
+     * one (an `image.url`, or no `image.service`): the one-shot fallback a
+     * laid layer tries when `url` fails to load (`laidLayers`). `image.width`
+     * / `image.height` come from a manifest cached at import time and can be
+     * stale or simply wrong relative to what the image service serves today,
+     * so a bounded `!W,H` request built from them can itself ask for an
+     * upscale the image server refuses; `max` never does (IIIF Image API 2.1).
+     */
+    maxUrl: string | null;
     bounds: [LatLng, LatLng];
     opacity: number;
     label: string;
@@ -34,16 +44,24 @@ export function overlayKey(analysisId: string, index: number): string {
 
 /**
  * The layer image: its own URL, else the IIIF image service at most `size` px
- * on a side and never beyond the image's own size (servers refuse to scale
- * up); a size left at 0 is unknown. Only an address `safeHref` accepts is
+ * on a side and never beyond the image's own declared size (servers refuse
+ * to scale up); a declared size left at 0 is unknown. `max` asks the image
+ * service for its own IIIF `max` size instead: never an upscale, whatever
+ * the declared size says (a stale or wrong manifest can declare a size
+ * larger than the image the server actually holds, which a bounded request
+ * would still try to upscale to). Only an address `safeHref` accepts is
  * returned; null otherwise.
  */
 export function layerImageUrl(
     image: ImageRef,
     size = OVERLAY_SIZE,
+    options?: { max?: boolean },
 ): string | null {
     if (image.url) return safeHref(image.url);
     if (image.service) {
+        if (options?.max) {
+            return safeHref(imageUrl(image.service, { size: "max" }));
+        }
         const width = image.width > 0 ? Math.min(size, image.width) : size;
         const height = image.height > 0 ? Math.min(size, image.height) : size;
         return safeHref(
@@ -80,6 +98,9 @@ export function folioOverlays(
                 result.push({
                     key,
                     url,
+                    maxUrl: layerImageUrl(layer.image, undefined, {
+                        max: true,
+                    }),
                     bounds,
                     opacity: setting.opacity,
                     label: layer.label,

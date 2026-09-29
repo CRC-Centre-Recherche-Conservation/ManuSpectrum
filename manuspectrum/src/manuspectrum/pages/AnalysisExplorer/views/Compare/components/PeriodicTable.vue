@@ -2,6 +2,12 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
+import HeatLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HeatLegend.vue";
+
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { heatLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/heat.ts";
+import { elementNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     PERIODIC_TABLE,
     placeOf,
@@ -12,38 +18,46 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
 /**
  * The elements of the Selection's identified materials on the standard
  * 18-column periodic table: an element found is a toggle button showing its
- * count, named « Cu, 5 », pressed when it is the filter; the others are
- * greyed and left to assistive technologies. An element the table does not
+ * count (the identified materials naming it) on the heat ramp
+ * (`heatLevel`; the legend under the table says what the number counts),
+ * named « Cu, 5 », pressed while it is pinned (`el:`), carrying the focus
+ * marks (`useLinkedMarks().focus`: ring, pip, bloom, preview wash; an
+ * unlinked element keeps a part of its shade); a click pins it or unpins
+ * it. The others are greyed on `--bg-alt`
+ * and left to assistive technologies. An element the table does not
  * hold is listed after it. In a window narrower than the table's 18
  * columns (34rem) the table gives way to a list of the elements found,
  * most frequent first, with their best level.
  */
 const props = defineProps<{
     elements: readonly SynthesisElement[];
-    pressed: string | null;
-    /** Marks every toggle `aria-disabled` (a stale table while the next one is read). */
+    /** Marks every toggle `aria-disabled` and inert (a stale table while the next one is read). */
     disabled?: boolean;
 }>();
 
-const emit = defineEmits<{
-    (event: "toggle", payload: { symbol: string }): void;
-}>();
-
 const { $gettext } = useGettext();
+const marks = useLinkedMarks();
 
 const bySymbol = computed(
     () => new Map(props.elements.map((element) => [element.symbol, element])),
+);
+const maxCount = computed(() =>
+    Math.max(0, ...props.elements.map((element) => element.count)),
 );
 const outside = computed(() =>
     props.elements.filter((element) => placeOf(element.symbol) === null),
 );
 
+function heatOf(element: SynthesisElement): number {
+    return heatLevel(element.count, maxCount.value);
+}
+
 function elementLabel(element: SynthesisElement): string {
     return `${element.symbol}, ${element.count}`;
 }
 
-function isPressed(symbol: string): "true" | "false" {
-    return props.pressed === symbol ? "true" : "false";
+function toggle(symbol: string): void {
+    if (!props.disabled) marks.toggle(elementNode(symbol));
 }
 </script>
 
@@ -61,13 +75,20 @@ function isPressed(symbol: string): "true" | "false" {
                 <button
                     v-if="bySymbol.get(place.symbol)"
                     type="button"
-                    class="cell found"
+                    class="cell found ms-focus"
                     :class="[`row-${place.row}`, `column-${place.column}`]"
+                    v-bind="marks.focus(elementNode(place.symbol))"
                     :aria-label="elementLabel(bySymbol.get(place.symbol)!)"
-                    :aria-pressed="isPressed(place.symbol)"
+                    :data-heat="heatOf(bySymbol.get(place.symbol)!)"
+                    :aria-pressed="marks.pressed(elementNode(place.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
-                    @click="emit('toggle', { symbol: place.symbol })"
+                    @click="toggle(place.symbol)"
+                    @pointerenter="
+                        marks.enter(elementNode(place.symbol), $event)
+                    "
+                    @pointerleave="marks.leave($event)"
                 >
+                    <FocusPip :node="elementNode(place.symbol)" />
                     <span class="symbol">{{ place.symbol }}</span>
                     <span class="count">{{
                         bySymbol.get(place.symbol)!.count
@@ -93,12 +114,19 @@ function isPressed(symbol: string): "true" | "false" {
             >
                 <button
                     type="button"
-                    class="found"
+                    class="found ms-focus"
+                    v-bind="marks.focus(elementNode(element.symbol))"
                     :aria-label="elementLabel(element)"
-                    :aria-pressed="isPressed(element.symbol)"
+                    :data-heat="heatOf(element)"
+                    :aria-pressed="marks.pressed(elementNode(element.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
-                    @click="emit('toggle', { symbol: element.symbol })"
+                    @click="toggle(element.symbol)"
+                    @pointerenter="
+                        marks.enter(elementNode(element.symbol), $event)
+                    "
+                    @pointerleave="marks.leave($event)"
                 >
+                    <FocusPip :node="elementNode(element.symbol)" />
                     <span class="symbol">{{ element.symbol }}</span>
                     <span class="count">{{ element.count }}</span>
                 </button>
@@ -114,12 +142,19 @@ function isPressed(symbol: string): "true" | "false" {
             >
                 <button
                     type="button"
-                    class="found"
+                    class="found ms-focus"
+                    v-bind="marks.focus(elementNode(element.symbol))"
                     :aria-label="elementLabel(element)"
-                    :aria-pressed="isPressed(element.symbol)"
+                    :data-heat="heatOf(element)"
+                    :aria-pressed="marks.pressed(elementNode(element.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
-                    @click="emit('toggle', { symbol: element.symbol })"
+                    @click="toggle(element.symbol)"
+                    @pointerenter="
+                        marks.enter(elementNode(element.symbol), $event)
+                    "
+                    @pointerleave="marks.leave($event)"
                 >
+                    <FocusPip :node="elementNode(element.symbol)" />
                     <span class="symbol">{{ element.symbol }}</span>
                     <span class="count">{{ element.count }}</span>
                     <span
@@ -131,6 +166,10 @@ function isPressed(symbol: string): "true" | "false" {
                 </button>
             </li>
         </ul>
+        <HeatLegend
+            :caption="$gettext('Identified materials that name the element')"
+            :max="maxCount"
+        />
     </div>
 </template>
 
@@ -142,40 +181,57 @@ function isPressed(symbol: string): "true" | "false" {
 }
 
 .periodic-table .grid {
+    --focus-room: 0.6875rem;
+
     display: grid;
     grid-template-columns: repeat(18, minmax(1.75rem, 1fr));
     grid-template-rows: repeat(7, auto) 0.5rem repeat(2, auto);
-    gap: 0.125rem;
+    gap: var(--focus-room) 0.1875rem;
+    padding-block-start: var(--focus-room);
 }
 
 .periodic-table .cell {
     display: grid;
     place-items: center;
-    min-block-size: 2rem;
-    border: 0.0625rem solid var(--border);
+    min-block-size: 1.75rem;
     border-radius: 0.1875rem;
+    background: var(--bg-alt);
     color: var(--ink-muted);
     font: 0.6875rem var(--font-mono);
-    opacity: 0.55;
 }
 
 .periodic-table .found {
+    --cell-heat: var(--heat-1);
+    --cell-on: var(--heat-1-on);
+    --r: 0.3125rem;
+    --preview-inset: 0.625rem;
+    --link-pip: 0.8125rem;
+
     display: grid;
     place-items: center;
     padding: 0.125rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.1875rem;
-    background: var(--surface);
-    color: var(--ink);
+    border: none;
+    border-radius: 0.3125rem;
+    background: var(--cell-heat);
+    color: var(--cell-on);
     font: 600 0.75rem var(--font-mono);
-    opacity: 1;
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
 }
 
-.periodic-table .found[aria-pressed="true"] {
-    border-color: var(--ink);
-    background: var(--ink);
-    color: var(--surface);
+.periodic-table .found[data-heat="2"] {
+    --cell-heat: var(--heat-2);
+    --cell-on: var(--heat-2-on);
+}
+
+.periodic-table .found[data-heat="3"] {
+    --cell-heat: var(--heat-3);
+    --cell-on: var(--heat-3-on);
+}
+
+.periodic-table .found[data-heat="4"] {
+    --cell-heat: var(--heat-4);
+    --cell-on: var(--heat-4-on);
 }
 
 .periodic-table .found[aria-disabled="true"] {
@@ -184,7 +240,7 @@ function isPressed(symbol: string): "true" | "false" {
 
 .periodic-table .found:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 
 .periodic-table .found .count {
@@ -196,7 +252,7 @@ function isPressed(symbol: string): "true" | "false" {
 .periodic-table .list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--focus-room) 0.25rem;
     margin: 0;
     padding: 0;
     list-style: none;

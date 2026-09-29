@@ -1,202 +1,64 @@
 import type {
     DocumentPayload,
     Label,
+    Ref,
     Shape,
     SynthesisCanvas,
     SynthesisCoverage,
-    SynthesisElement,
-    SynthesisPair,
     SynthesisResponse,
     Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketItem,
-    ToolFilters,
     ToolKind,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 /** The tools « + Tool » offers, in its order. */
 export const OFFERED_TOOLS: readonly ToolKind[] = [
     "coverage",
-    "colour-material",
     "periodic",
     "folio",
 ];
-
-export type FilterKey = keyof ToolFilters;
-
-/** The filter each cross-filtered tool sets. */
-export const OWN_FILTER: Partial<Record<ToolKind, FilterKey>> = {
-    coverage: "cell",
-    "colour-material": "pair",
-    periodic: "element",
-};
-
-const FILTER_ORDER: readonly FilterKey[] = ["element", "cell", "pair"];
-
-/** What a tool shows of the synthesis. */
-export interface ToolView {
-    coverage: SynthesisCoverage[];
-    pairs: SynthesisPair[];
-    elements: SynthesisElement[];
-}
 
 /** The canvases the folio image offers: those an item of the Selection itself is placed on. */
 export function folioCanvases(synthesis: SynthesisResponse): SynthesisCanvas[] {
     return synthesis.canvases.filter((entry) => entry.selected);
 }
 
-/** The tools the synthesis has something for: the coverage matrix a counted canvas, the folio image a canvas holding a Selection item, the others a pair or an element. */
+/** The tools the synthesis has something for: the coverage matrix a counted canvas, the periodic table an element, the folio image a canvas holding a Selection item. */
 export function offeredTools(synthesis: SynthesisResponse): ToolKind[] {
     const holds: Record<ToolKind, boolean> = {
         coverage: synthesis.coverage.length > 0,
-        "colour-material": synthesis.pairs.length > 0,
         periodic: synthesis.elements.length > 0,
         folio: folioCanvases(synthesis).length > 0,
     };
     return OFFERED_TOOLS.filter((kind) => holds[kind]);
 }
 
-/** The filters set by the other cross-filtered tools, which restrict `kind`; none for a tool outside the three. */
-export function restrictingFilters(
-    kind: ToolKind,
-    filters: ToolFilters,
-): FilterKey[] {
-    const own = OWN_FILTER[kind];
-    if (!own) return [];
-    return FILTER_ORDER.filter((key) => key !== own && filters[key] !== null);
+/** A row of the coverage matrix: one folio, one component observed on it (null: none), its analyses by technique id. */
+export interface CoverageRow {
+    canvas: string;
+    label: string;
+    component: Ref | null;
+    counts: Record<string, number>;
 }
 
-function isPair(
-    pair: SynthesisPair,
-    [colour, material]: [string | null, string],
-): boolean {
-    return (
-        (pair.colour?.id ?? null) === colour && pair.material.id === material
-    );
-}
-
-/** The pairs the filters `keys` of `filters` keep: naming the element, holding the cell, the pair itself. */
-function pairsKept(
-    pairs: readonly SynthesisPair[],
-    filters: ToolFilters,
-    keys: readonly FilterKey[],
-): SynthesisPair[] {
-    const { element, cell, pair: chosen } = filters;
-    return pairs.filter(
-        (pair) =>
-            (!keys.includes("element") ||
-                element === null ||
-                pair.elements.some((entry) => entry.symbol === element)) &&
-            (!keys.includes("cell") ||
-                cell === null ||
-                pair.cells.some(
-                    ([canvas, technique]) =>
-                        canvas === cell[0] && technique === cell[1],
-                )) &&
-            (!keys.includes("pair") || chosen === null || isPair(pair, chosen)),
-    );
-}
-
-/**
- * What `kind` shows under the filters of the other two tools, never its
- * own. The filters restrict through the identified materials: an element
- * keeps the pairs naming it, a cell the pairs one of whose materials is
- * placed on its canvas and cites an analysis of its technique, a pair
- * itself. The coverage
- * matrix keeps the canvases of the pairs kept, the periodic table their
- * elements.
- */
-export function toolView(
-    synthesis: SynthesisResponse,
-    filters: ToolFilters,
-    kind: ToolKind,
-): ToolView {
-    const keys = restrictingFilters(kind, filters);
-    const all: ToolView = {
-        coverage: synthesis.coverage,
-        pairs: synthesis.pairs,
-        elements: synthesis.elements,
-    };
-    if (keys.length === 0) return all;
-    const kept = pairsKept(synthesis.pairs, filters, keys);
-    if (kind === "coverage") {
-        const canvases = new Set(kept.flatMap((pair) => pair.canvases));
-        return {
-            ...all,
-            coverage: synthesis.coverage.filter((row) =>
-                canvases.has(row.canvas),
-            ),
-        };
-    }
-    if (kind === "periodic") {
-        const symbols = new Set(
-            kept.flatMap((pair) => pair.elements.map((entry) => entry.symbol)),
-        );
-        return {
-            ...all,
-            elements: synthesis.elements.filter((entry) =>
-                symbols.has(entry.symbol),
-            ),
-        };
-    }
-    return { ...all, pairs: kept };
-}
-
-/** The filters naming what the synthesis no longer holds (the Selection changed). */
-export function staleToolFilters(
-    synthesis: SynthesisResponse,
-    filters: ToolFilters,
-): FilterKey[] {
-    const { element, cell, pair } = filters;
-    const stale: FilterKey[] = [];
-    if (
-        element !== null &&
-        !synthesis.elements.some((entry) => entry.symbol === element)
-    ) {
-        stale.push("element");
-    }
-    if (
-        cell !== null &&
-        !synthesis.coverage.some(
-            (row) => row.canvas === cell[0] && (row.counts[cell[1]] ?? 0) > 0,
-        )
-    ) {
-        stale.push("cell");
-    }
-    if (
-        pair !== null &&
-        !synthesis.pairs.some((entry) => isPair(entry, pair))
-    ) {
-        stale.push("pair");
-    }
-    return stale;
-}
-
-/** The labels a filter is named by: an element's symbol; a cell's canvas and technique; a pair's colour (when stated) and material. */
-export function filterParts(
-    synthesis: SynthesisResponse,
-    filters: ToolFilters,
-    key: FilterKey,
-): string[] {
-    if (key === "element") return filters.element ? [filters.element] : [];
-    if (key === "cell") {
-        if (!filters.cell) return [];
-        const [canvas, technique] = filters.cell;
-        return [
-            synthesis.coverage.find((row) => row.canvas === canvas)?.label ??
-                canvas,
-            synthesis.techniques.find((entry) => entry.id === technique)?.label
-                .value ?? technique,
-        ];
-    }
-    const chosen = filters.pair;
-    if (!chosen) return [];
-    const found = synthesis.pairs.find((entry) => isPair(entry, chosen));
-    if (!found) return [];
-    return found.colour
-        ? [found.colour.label.value, found.material.label.value]
-        : [found.material.label.value];
+/** The rows of the coverage matrix: each folio split by component, in the synthesis order; a folio the synthesis does not split keeps one row without component. */
+export function coverageRows(
+    coverage: readonly SynthesisCoverage[],
+): CoverageRow[] {
+    return coverage.flatMap((row) => {
+        const parts =
+            row.components.length > 0
+                ? row.components
+                : [{ component: null, counts: row.counts }];
+        return parts.map(({ component, counts }) => ({
+            canvas: row.canvas,
+            label: row.label,
+            component,
+            counts,
+        }));
+    });
 }
 
 /** The slots (0-based, in order) of each analysis and identified material of the Selection, by resource id. */

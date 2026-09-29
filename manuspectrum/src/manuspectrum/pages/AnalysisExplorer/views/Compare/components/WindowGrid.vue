@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    computed,
     inject,
     nextTick,
     onBeforeUnmount,
@@ -7,6 +8,7 @@ import {
     provide,
     readonly,
     ref,
+    useId,
     watch,
 } from "vue";
 import { GridStack } from "gridstack";
@@ -21,9 +23,10 @@ import {
 import {
     GRID_COLUMNS,
     WINDOW_SIZES,
-    clearLayout,
+    clearBoxes,
     flowLayout,
     keepWindows,
+    nearestBox,
     readFolded,
     readLayout,
     readingOrder,
@@ -45,11 +48,13 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
 const RESIZE_DEBOUNCE_MS = 150;
-/** Rows of a window folded to its header (its controls may wrap on two lines). */
+/** Rows of a folded window: its one-line header and its summary. */
 const FOLDED_ROWS = 2;
 const ONE_COLUMN_MAX_WIDTH = 768;
 const CELL_HEIGHT = "4rem";
-const GAP = "0.5rem";
+/** The row height on one column, where a window's header takes two lines. */
+const ONE_COLUMN_CELL_HEIGHT = "5.5rem";
+const GAP = "0.375rem";
 
 /**
  * The Compare windows on a gridstack grid. gridstack adopts none of the
@@ -64,17 +69,39 @@ const GAP = "0.5rem";
  * the grid loses its place unless `retained` names it. With nothing saved,
  * gridstack places the windows (`autoPosition`); a window that appears
  * later goes back to its place, else under the others, without the focus,
- * and is announced. Under 768 px the windows are listed on one column,
- * never saved; back on 12 columns, the saved places are put back. « Rearrange »
- * emits `rearrange` first, so the parent can bring hidden windows back,
- * then lays every window out and saves that layout. A folded window keeps
+ * and is announced. A window that leaves the grid leaves no hole: the grid
+ * is packed to the top once (gridstack's `top` mode), so every window with
+ * room above it moves up, the windows under it and any other; none changes
+ * column. When the reader closed it, the focus goes to the window
+ * nearest its place, without scrolling the page unless that window is
+ * entirely off the screen; the grid keeps its height until the windows left
+ * reach the bottom of the screen again (at once, or once the reader scrolls
+ * up), so that the page does not shorten under the reader and move. Under
+ * 768 px the windows are listed on one column, with taller rows (a header
+ * takes two lines there), never saved; back on 12 columns, the saved places
+ * are put back. The grid lies on the workspace surface.
+ * « Rearrange » lays the windows shown out again, forgets every saved place
+ * (the hidden windows', `retained`, included: they come back at the end)
+ * and saves the new ones; the hidden, folded and open windows stay as they
+ * are, and the announcement counts the windows that stay hidden. A folded window keeps
  * its header only (its content, once shown, stays mounted); the reader's
  * fold or unfold is saved with the layout and wins over the window's spec,
  * and a folded window's saved box keeps its unfolded height. gridstack
  * keeps the DOM in reading order, which the keyboard follows. Windows are
  * told to draw again (`WINDOW_RESIZE_KEY`) when the grid's width or a
  * window's size changes, not when a drag makes the grid taller. The
- * `toolbar` slot is laid before « Rearrange ».
+ * `toolbar` slot is laid before « Rearrange », the `below-toolbar` slot
+ * between the toolbar and the workspace.
+ *
+ * « Enlarge » shows one window at a time in a modal `<dialog>` held here
+ * (`showModal`): the window moves its header and body into it (the same
+ * instance, `CompareWindow`) and its cell keeps its place. The title takes
+ * the focus on opening; the page does not scroll while the dialog is open.
+ * « Restore », Escape, or the window leaving the grid close it: the focus
+ * goes back to the window's « Enlarge » without scrolling the page, or, the
+ * window gone, to the window nearest its place (as after a close). The
+ * windows are told to draw again when the dialog opens, closes or changes
+ * size.
  */
 const props = withDefaults(
     defineProps<{
@@ -86,14 +113,21 @@ const props = withDefaults(
 
 const emit = defineEmits<{
     (event: "close", payload: { id: string }): void;
-    (event: "rearrange"): void;
 }>();
 
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 
+const dialogBodyId = `compare-enlarged-${useId()}`;
+
+const rootElement = ref<HTMLElement | null>(null);
+const dialogElement = ref<HTMLDialogElement | null>(null);
+/** The window shown enlarged, if any. */
+const enlargedId = ref<string | null>(null);
 const gridElement = ref<HTMLElement | null>(null);
+/** The grid's height before a close, in px, kept until the page may shorten without moving. */
+const heldHeight = ref<number | null>(null);
 /** Window ids in reading order, read from gridstack after each change. */
 const order = ref<string[]>(props.windows.map((window) => window.id));
 /** Each window's preset size, null once resized by hand. */
@@ -123,8 +157,24 @@ let observedWidth: number | null = null;
 /** The column count of the last `change` handled. */
 let shownColumns = GRID_COLUMNS;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
-let closing: { id: string; index: number } | null = null;
-let rearranging = false;
+/** The window the reader is closing, and its box then. */
+let closing: { id: string; box: WindowBox } | null = null;
+let dialogObserver: ResizeObserver | null = null;
+/** The page's `overflow` before the dialog locked its scroll. */
+let pageOverflow: string | null = null;
+/** The box of the enlarged window that left the grid, until the dialog has closed. */
+let enlargedGoneBox: WindowBox | null = null;
+/** Set on unmount: the dialog's late `close` event then does nothing. */
+let unmounted = false;
+
+const enlargedTitle = computed(() =>
+    enlargedId.value === null ? undefined : titleOf(enlargedId.value),
+);
+const heldStyle = computed(() =>
+    heldHeight.value === null
+        ? undefined
+        : { minBlockSize: `${heldHeight.value}px` },
+);
 
 provide(WINDOW_RESIZE_KEY, readonly(resizeTick));
 
@@ -132,18 +182,30 @@ watch(
     () => props.windows.map((window) => window.id),
     (ids, previous) => {
         const gone = previous.filter((id) => !ids.includes(id));
+        const enlargedNode =
+            enlargedId.value !== null && gone.includes(enlargedId.value)
+                ? gridNodes().find((node) => node.id === enlargedId.value)
+                : undefined;
         for (const id of gone) {
             const element = itemElement(id);
             if (grid && element) grid.removeWidget(element, false, true);
         }
+        if (enlargedId.value !== null && gone.includes(enlargedId.value)) {
+            enlargedGoneBox = enlargedNode ? boxOf(enlargedNode) : null;
+            dialogElement.value?.close();
+        }
         if (gone.length > 0) {
+            closeHoles();
             syncFromGrid();
             forgetGone(gone);
         }
         if (closing && gone.includes(closing.id)) {
-            const index = closing.index;
+            const box = closing.box;
             closing = null;
-            void nextTick(() => focusWindowAt(index));
+            void nextTick(() => {
+                focusNearest(box);
+                releaseWhenFilled();
+            });
         }
     },
     { flush: "pre" },
@@ -172,7 +234,6 @@ watch(
         const fresh = added.filter((window) => !saved[window.id]);
         for (const window of added) placeWindow(window, false);
         syncFromGrid();
-        if (rearranging) return;
         if (back.length > 0) {
             announce(
                 interpolate(
@@ -228,12 +289,22 @@ onMounted(() => {
     created.on("change", onGridChange);
     created.on("resizestop", scheduleResize);
     shownColumns = created.getColumn();
+    fitRows();
     syncFromGrid();
     observer = new ResizeObserver(onGridResized);
     observer.observe(element);
+    if (dialogElement.value) {
+        dialogObserver = new ResizeObserver(scheduleResize);
+        dialogObserver.observe(dialogElement.value);
+    }
 });
 
 onBeforeUnmount(() => {
+    unmounted = true;
+    releaseHeight();
+    unlockPage();
+    if (dialogElement.value?.open) dialogElement.value.close();
+    dialogObserver?.disconnect();
     observer?.disconnect();
     clearTimeout(resizeTimer);
     grid?.destroy(false);
@@ -395,11 +466,21 @@ function onGridChange(): void {
     const columns = grid?.getColumn() ?? GRID_COLUMNS;
     if (columns !== shownColumns) {
         shownColumns = columns;
+        fitRows();
         scheduleResize();
         if (columns === GRID_COLUMNS) queueMicrotask(restoreSaved);
         return;
     }
     if (saving && columns === GRID_COLUMNS) saveGrid();
+}
+
+/** Gives the rows the height of the column count shown. */
+function fitRows(): void {
+    grid?.cellHeight(
+        grid.getColumn() === GRID_COLUMNS
+            ? CELL_HEIGHT
+            : ONE_COLUMN_CELL_HEIGHT,
+    );
 }
 
 function saveGrid(): void {
@@ -455,12 +536,52 @@ function positionOf(id: string): number {
     return order.value.indexOf(id) + 1;
 }
 
-function focusWindowAt(index: number): void {
-    const id = order.value[Math.min(index, order.value.length - 1)];
-    const target = id
-        ? itemElement(id)?.querySelector<HTMLElement>(".compare-window")
+/**
+ * Packs the grid to the top once (gridstack's `top` mode), then lets it
+ * float again: every window with room above it moves up as far as it can,
+ * not only the windows under the one gone, a hole the reader left
+ * elsewhere included; none changes column.
+ */
+function closeHoles(): void {
+    grid?.mode("top");
+    grid?.mode("float");
+}
+
+/** Keeps the grid as tall as it is while a window closes. */
+function holdHeight(): void {
+    const element = rootElement.value;
+    if (!element) return;
+    heldHeight.value = element.offsetHeight;
+    window.addEventListener("scroll", releaseWhenFilled, { passive: true });
+}
+
+function releaseHeight(): void {
+    heldHeight.value = null;
+    window.removeEventListener("scroll", releaseWhenFilled);
+}
+
+/** Lets the grid shorten once its windows reach the bottom of the screen: the room freed is then below it. */
+function releaseWhenFilled(): void {
+    if (heldHeight.value === null) return;
+    const bottom = gridElement.value?.getBoundingClientRect().bottom;
+    if (bottom === undefined || bottom >= window.innerHeight) releaseHeight();
+}
+
+/** Focuses the window nearest `box`; the page scrolls only when that window is entirely off the screen. */
+function focusNearest(box: WindowBox): void {
+    const nearest = nearestBox(
+        box,
+        gridNodes().map((node) => ({ id: node.id as string, ...boxOf(node) })),
+    );
+    const target = nearest
+        ? itemElement(nearest.id)?.querySelector<HTMLElement>(".compare-window")
         : null;
-    target?.focus();
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    const { top, bottom } = target.getBoundingClientRect();
+    if (bottom <= 0 || top >= window.innerHeight) {
+        target.scrollIntoView?.({ block: "nearest" });
+    }
 }
 
 function move(id: string, step: -1 | 1): void {
@@ -495,9 +616,7 @@ function move(id: string, step: -1 | 1): void {
         ),
     );
     itemElement(id)
-        ?.querySelector<HTMLElement>(
-            `[data-action="${step < 0 ? "move-before" : "move-after"}"]`,
-        )
+        ?.querySelector<HTMLElement>('[data-action="more"]')
         ?.focus();
 }
 
@@ -548,29 +667,76 @@ function toggleFold(id: string): void {
 
 /** The parent answers the request: hides the window, or closes the tool, and says so. */
 function close(id: string): void {
-    closing = { id, index: order.value.indexOf(id) };
+    const node = gridNodes().find((entry) => entry.id === id);
+    closing = node ? { id, box: boxOf(node) } : null;
+    holdHeight();
     emit("close", { id });
 }
 
-/**
- * Empties the saved layout, lets the parent bring hidden windows back, then
- * lays every window out again in its order, at its first size, and saves
- * that layout (on 12 columns); the windows are told their new size.
- */
-async function rearrange(): Promise<void> {
-    if (!grid) return;
-    rearranging = true;
-    saving = false;
-    clearLayout();
-    saved = {};
-    if (Object.keys(savedFolds).length > 0) writeFolded(savedFolds);
-    emit("rearrange");
+function lockPage(): void {
+    if (pageOverflow !== null) return;
+    pageOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+}
+
+function unlockPage(): void {
+    if (pageOverflow === null) return;
+    document.documentElement.style.overflow = pageOverflow;
+    pageOverflow = null;
+}
+
+/** Shows a window enlarged, or restores the one shown. */
+function toggleEnlarge(id: string): void {
+    if (enlargedId.value === id) dialogElement.value?.close();
+    else void enlarge(id);
+}
+
+async function enlarge(id: string): Promise<void> {
+    const dialog = dialogElement.value;
+    if (!dialog || dialog.open) return;
+    enlargedId.value = id;
     await nextTick();
-    rearranging = false;
-    if (!grid) {
-        saving = true;
-        return;
-    }
+    dialog.showModal();
+    lockPage();
+    dialog
+        .querySelector<HTMLElement>(".compare-window-frame .title")
+        ?.focus({ preventScroll: true });
+    scheduleResize();
+}
+
+/**
+ * The dialog closed (Restore, Escape, or its window gone): the window goes
+ * back to its cell and its « Enlarge » takes the focus; a window gone
+ * gives the focus to the window nearest its place. Nothing once unmounted.
+ */
+async function onDialogClosed(): Promise<void> {
+    if (unmounted) return;
+    const id = enlargedId.value;
+    const goneBox = enlargedGoneBox;
+    enlargedId.value = null;
+    enlargedGoneBox = null;
+    unlockPage();
+    scheduleResize();
+    if (id === null) return;
+    await nextTick();
+    const enlargeButton = itemElement(id)?.querySelector<HTMLElement>(
+        '[data-action="enlarge"]',
+    );
+    if (enlargeButton) enlargeButton.focus({ preventScroll: true });
+    else if (goneBox) focusNearest(goneBox);
+}
+
+/**
+ * Lays the windows shown out again in their order, at their first size (a
+ * folded window as tall as its header), forgets every saved place and saves
+ * the new ones (on 12 columns); the windows are told their new size.
+ */
+function rearrange(): void {
+    if (!grid) return;
+    releaseHeight();
+    saving = false;
+    clearBoxes();
+    saved = {};
     applyLayout(
         flowLayout(
             props.windows.map((window) => ({
@@ -583,12 +749,29 @@ async function rearrange(): Promise<void> {
     saving = true;
     if (grid.getColumn() === GRID_COLUMNS) saveGrid();
     scheduleResize();
-    announce($gettext("Windows rearranged."));
+    const stayHidden = props.retained.length;
+    announce(
+        stayHidden === 0
+            ? $gettext("Windows rearranged.")
+            : interpolate(
+                  $ngettext(
+                      "Windows rearranged. %{n} window stays hidden.",
+                      "Windows rearranged. %{n} windows stay hidden.",
+                      stayHidden,
+                  ),
+                  { n: stayHidden },
+                  true,
+              ),
+    );
 }
 </script>
 
 <template>
-    <div class="window-grid">
+    <div
+        ref="rootElement"
+        class="window-grid"
+        :style="heldStyle"
+    >
         <div class="toolbar">
             <slot name="toolbar" />
             <button
@@ -599,45 +782,73 @@ async function rearrange(): Promise<void> {
                 <span>{{ $gettext("Rearrange") }}</span>
             </button>
         </div>
-        <div
-            ref="gridElement"
-            class="grid-stack"
-        >
+        <slot name="below-toolbar" />
+        <div class="workspace">
             <div
-                v-for="window in windows"
-                :key="window.id"
-                class="grid-stack-item"
-                :data-window-id="window.id"
+                ref="gridElement"
+                class="grid-stack"
             >
-                <div class="grid-stack-item-content">
-                    <CompareWindow
-                        :title="window.title"
-                        :position="positionOf(window.id)"
-                        :total="windows.length"
-                        :size="sizes[window.id] ?? null"
-                        :folded="foldedOf(window)"
-                        @move="move(window.id, $event.step)"
-                        @size-chosen="resize(window.id, $event.size)"
-                        @fold-toggled="toggleFold(window.id)"
-                        @close="close(window.id)"
-                    >
-                        <slot :window="window" />
-                    </CompareWindow>
+                <div
+                    v-for="window in windows"
+                    :key="window.id"
+                    class="grid-stack-item"
+                    :data-window-id="window.id"
+                >
+                    <div class="grid-stack-item-content">
+                        <CompareWindow
+                            :title="window.title"
+                            :kind="window.kind"
+                            :subtitle="window.subtitle"
+                            :hides="window.hides ?? true"
+                            :position="positionOf(window.id)"
+                            :total="windows.length"
+                            :size="sizes[window.id] ?? null"
+                            :folded="foldedOf(window)"
+                            :enlarged="enlargedId === window.id"
+                            :enlarge-target="`#${dialogBodyId}`"
+                            @move="move(window.id, $event.step)"
+                            @size-chosen="resize(window.id, $event.size)"
+                            @fold-toggled="toggleFold(window.id)"
+                            @enlarge-toggled="toggleEnlarge(window.id)"
+                            @close="close(window.id)"
+                        >
+                            <slot :window="window" />
+                            <template #summary="{ unfold }">
+                                <slot
+                                    name="summary"
+                                    :window="window"
+                                    :unfold="unfold"
+                                />
+                            </template>
+                        </CompareWindow>
+                    </div>
                 </div>
             </div>
         </div>
+        <dialog
+            ref="dialogElement"
+            class="enlarged-dialog"
+            :aria-label="enlargedTitle"
+            @close="onDialogClosed"
+        >
+            <div
+                :id="dialogBodyId"
+                class="enlarged-body"
+            ></div>
+        </dialog>
     </div>
 </template>
 
 <style scoped>
 .window-grid {
     display: grid;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .window-grid .toolbar {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 0.5rem;
 }
 
@@ -657,7 +868,36 @@ async function rearrange(): Promise<void> {
     outline-offset: 0.125rem;
 }
 
+.window-grid .workspace {
+    padding: 0.375rem;
+    border-radius: 0.875rem;
+    background: var(--bg-alt);
+}
+
 .window-grid .grid-stack-item-content {
     overflow: visible;
+}
+
+.window-grid .enlarged-dialog {
+    inline-size: min(92vw, 80rem);
+    max-inline-size: none;
+    block-size: min(88vh, 56rem);
+    max-block-size: none;
+    margin: auto;
+    padding: 0;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: var(--explorer-radius, 0.625rem);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    color: var(--ink);
+    overflow: hidden;
+}
+
+.window-grid .enlarged-dialog::backdrop {
+    background: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.window-grid .enlarged-body {
+    block-size: 100%;
 }
 </style>

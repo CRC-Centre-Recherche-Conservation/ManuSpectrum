@@ -4,6 +4,7 @@ import {
     inject,
     nextTick,
     onBeforeUnmount,
+    provide,
     ref,
     shallowRef,
     useTemplateRef,
@@ -15,15 +16,26 @@ import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftB
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
+import ComponentStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ComponentStrip.vue";
+import FocusTrail from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue";
+import FoldedSummary from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue";
+import HiddenWindowsMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HiddenWindowsMenu.vue";
+import SelectionIndicator from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue";
 import ToolMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue";
 import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
 
+import { useLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
-import { useSynthesis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
+import {
+    synthesisFor,
+    useSynthesis,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import {
     ANNOUNCE_KEY,
+    FOLIO_REQUEST_KEY,
+    LINKED_SELECTION_KEY,
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { setFullSeriesRoom } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -35,11 +47,15 @@ import {
     writeHidden,
     writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
-import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
+import { foldedSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/folded-summary.ts";
 import {
-    offeredTools,
-    staleToolFilters,
-} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
+    materialCounts,
+    materialsSubtitle,
+    materialsTitle,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
+import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
+import { selectionComponents } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/selection-components.ts";
+import { offeredTools } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
     autoWindows,
     keepUnchangedCurves,
@@ -50,35 +66,25 @@ import {
 
 import type {
     CompareWindowSpec,
+    HiddenWindowEntry,
     WindowSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 import type {
     AutoWindow,
-    AutoWindowKind,
     XyWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type { FolioRequest } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-const FIRST_SIZE: Record<AutoWindowKind, WindowSize> = {
-    xy: "M",
-    maps: "L",
-    micro: "M",
-    characterizations: "L",
-    "not-in-chart": "S",
-};
-
-const TOOL_SIZE: Record<ToolKind, WindowSize> = {
-    coverage: "L",
-    "colour-material": "L",
-    periodic: "L",
-    folio: "M",
-};
+/** The size every window and tool opens at. */
+const FIRST_SIZE: WindowSize = "M";
 
 /**
  * The Compare view: windows arranged from the Selection (`autoWindows`),
  * shown once every Selection key has been read. « Close » on a window
  * arranged from the Selection hides it and leaves the Selection as it is;
- * a hidden window comes back from « Hidden windows » or with « Rearrange ».
+ * a hidden window comes back from « Hidden windows », a menu of the
+ * toolbar, never with « Rearrange ».
  * The hidden windows are kept next to the layout (`ms-explorer-layout-v1`);
  * a window whose items all leave the Selection is gone, and forgotten there.
  * A hidden XY window that gains spectra stays hidden: they are announced,
@@ -92,16 +98,33 @@ const TOOL_SIZE: Record<ToolKind, WindowSize> = {
  * the windows are arranged.
  * Its heading takes the focus when the shell asks (`SCREEN_FOCUS_KEY`).
  *
+ * The Materials window and the components under the toolbar read the
+ * synthesis only once it answers for the Selection shown (`synthesisFor`);
+ * while the next one is read, the Materials window keeps from the previous
+ * one only the identified materials the Selection still holds or that cite
+ * one of its analyses, so it is neither dropped nor shows what left.
+ *
  * The tools (D60) are opened from « + Tool », which offers those the
  * synthesis of the Selection (`useSynthesis`, read while the view is shown)
  * has something for. A tool window follows the grid like the others,
  * after them; « Close » closes the tool. The tools open are kept with the
- * layout and opened again with the view; a tool filter naming a value the
- * Selection no longer holds is dropped. While a tool is open, the drafts
+ * layout and opened again with the view. While a tool is open, the drafts
  * the synthesis reads are counted above the windows (the last count while
  * the next synthesis is read). When the last window
  * shown is hidden or closed, the focus goes to « Hidden windows », else to
  * the heading.
+ *
+ * Under the toolbar, the components of the Selection (`ComponentStrip`)
+ * can be pinned like anything a window shows.
+ * The view provides the focus of its windows (`useLinkedSelection`,
+ * `LINKED_SELECTION_KEY`), shown in the toolbar by `SelectionIndicator`
+ * before « Hidden windows » and « + Tool », and under the pointer by
+ * `FocusTrail`. Its windows mark what it lights with the `--focus-*` hues
+ * and the `ms-focus` recipes of the page (`css/explorer`). A
+ * folded window sums up what it holds (`FoldedSummary`), with the button
+ * that unfolds it. A folio asked of the folio image tools
+ * (`FOLIO_REQUEST_KEY`, a folio of the coverage matrix clicked) is shown
+ * by every one open, and said once after the selection's count.
  */
 const announce = inject(ANNOUNCE_KEY, () => undefined, false);
 const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
@@ -109,7 +132,15 @@ const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
 const store = useExplorerStore();
 const selection = selectionItems();
 const synthesis = useSynthesis(() => store.basket.map((item) => item.key));
-const { $gettext, $ngettext, interpolate } = useGettext();
+const linked = useLinkedSelection({
+    items: selection,
+    synthesis,
+    announce: (message) => announce(message),
+});
+provide(LINKED_SELECTION_KEY, linked);
+const folioAsked = ref<FolioRequest | null>(null);
+provide(FOLIO_REQUEST_KEY, { asked: folioAsked, show: showFolio });
+const { $gettext, $ngettext, current, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
@@ -127,6 +158,20 @@ const hiddenFrom = shallowRef(new Map<string, AutoWindow>());
 // The windows last compared for new spectra, once the view is open.
 let known: AutoWindow[] = [];
 
+/** The synthesis of the Selection shown; null while the next one is read or after a failure. */
+const answered = computed(() =>
+    synthesisFor(
+        synthesis,
+        store.basket.map((item) => item.key),
+    ),
+);
+/** Whether the synthesis held answers a previous Selection while the next one is read. */
+const pending = computed(
+    () =>
+        answered.value === null &&
+        synthesis.status.value === "loading" &&
+        synthesis.data.value !== null,
+);
 const windows = computed<AutoWindow[]>((previous) =>
     keepUnchangedCurves(
         previous ?? [],
@@ -134,19 +179,32 @@ const windows = computed<AutoWindow[]>((previous) =>
             store.basket,
             selection.byKey.value,
             selection.missing.value,
+            answered.value ?? (pending.value ? synthesis.data.value : null),
+            pending.value,
         ),
     ),
 );
 const windowById = computed(
     () => new Map(windows.value.map((window) => [window.id, window])),
 );
+const summaries = computed(
+    () =>
+        new Map(
+            windows.value.flatMap((window) => {
+                const summary = foldedSummary(window);
+                return summary ? [[window.id, summary] as const] : [];
+            }),
+        ),
+);
 const specs = computed<CompareWindowSpec[]>(() =>
     windows.value.map((window) => ({
         id: window.id,
         title: titleOf(window),
-        size: FIRST_SIZE[window.kind],
+        kind: window.kind === "xy" ? $gettext("Spectra") : undefined,
+        subtitle: subtitleOf(window),
+        size: FIRST_SIZE,
         folded:
-            window.kind === "xy" || window.kind === "maps"
+            window.kind === "xy" || window.kind === "chemical-imaging"
                 ? window.folded
                 : undefined,
     })),
@@ -160,13 +218,27 @@ const toolSpecs = computed<CompareWindowSpec[]>(() => {
     return tools.value.map((tool) => ({
         id: tool.id,
         title: titles[tool.kind],
-        size: TOOL_SIZE[tool.kind],
+        kind: $gettext("Tool"),
+        subtitle:
+            tool.kind === "coverage"
+                ? $gettext("folio › component × technique")
+                : undefined,
+        size: FIRST_SIZE,
+        hides: false,
     }));
 });
 const gridSpecs = computed(() => [
     ...specs.value.filter((spec) => !hidden.value.includes(spec.id)),
     ...toolSpecs.value,
 ]);
+const components = computed(() =>
+    selectionComponents(
+        store.basket,
+        selection.byKey.value,
+        answered.value,
+        current,
+    ),
+);
 const draftCount = computed(() =>
     tools.value.length > 0 &&
     (synthesis.status.value === "ready" || synthesis.status.value === "loading")
@@ -178,9 +250,6 @@ const offered = computed(() =>
         ? offeredTools(synthesis.data.value)
         : null,
 );
-const hiddenSpecs = computed(() =>
-    specs.value.filter((spec) => hidden.value.includes(spec.id)),
-);
 /** The spectra each hidden XY window holds that it did not hold when hidden. */
 const newSpectra = computed(() =>
     xyCurvesGained(
@@ -188,12 +257,14 @@ const newSpectra = computed(() =>
         windows.value.filter((window) => hiddenFrom.value.has(window.id)),
     ),
 );
-const hiddenTitle = computed(() =>
-    interpolate(
-        $gettext("Hidden windows (%{n})"),
-        { n: hiddenSpecs.value.length },
-        true,
-    ),
+const hiddenEntries = computed<HiddenWindowEntry[]>(() =>
+    specs.value
+        .filter((spec) => hidden.value.includes(spec.id))
+        .map((spec) => ({
+            id: spec.id,
+            title: spec.title,
+            added: newSpectra.value.get(spec.id) ?? 0,
+        })),
 );
 
 watch(
@@ -219,17 +290,6 @@ watch(() => xySpectraCount(windows.value), setFullSeriesRoom, {
 watch(
     () => store.compare.tools,
     (open) => writeTools(open),
-);
-
-watch(
-    () => (synthesis.status.value === "ready" ? synthesis.data.value : null),
-    (answer) => {
-        if (!answer) return;
-        for (const key of staleToolFilters(answer, store.compare.toolFilters)) {
-            store.setToolFilter(key, null);
-        }
-    },
-    { immediate: true },
 );
 
 watch(windows, (next) => {
@@ -279,31 +339,51 @@ function titleOf(window: AutoWindow): string {
     switch (window.kind) {
         case "xy":
             return xyTitle(window);
-        case "maps":
-            return $gettext("Element maps");
+        case "chemical-imaging":
+            return $gettext("Chemical imaging");
         case "micro":
             return $gettext("Micro-images");
         case "characterizations":
-            return $gettext("Identified materials");
+            return materialsTitle($gettext);
         case "not-in-chart":
             return $gettext("Without visualisation");
     }
 }
 
+/** What the window holds, counted. */
+function subtitleOf(window: AutoWindow): string {
+    if (window.kind === "characterizations") {
+        return materialsSubtitle(
+            materialCounts(window.records),
+            $gettext,
+            $ngettext,
+            interpolate,
+        );
+    }
+    let count: number;
+    let message: string;
+    switch (window.kind) {
+        case "xy":
+            count = window.curves.length;
+            message = $ngettext("%{n} spectrum", "%{n} spectra", count);
+            break;
+        case "chemical-imaging":
+            count = window.maps.length;
+            message = $ngettext("%{n} map", "%{n} maps", count);
+            break;
+        case "micro":
+            count = window.images.length;
+            message = $ngettext("%{n} image", "%{n} images", count);
+            break;
+        default:
+            count = window.entries.length;
+            message = $ngettext("%{n} item", "%{n} items", count);
+    }
+    return interpolate(message, { n: count }, true);
+}
+
 function specTitle(id: string): string {
     return specs.value.find((spec) => spec.id === id)?.title ?? "";
-}
-
-function showLabel(title: string): string {
-    return interpolate($gettext("Show %{title}"), { title }, true);
-}
-
-function newSpectraLabel(count: number): string {
-    return interpolate(
-        $ngettext("%{n} spectrum added", "%{n} spectra added", count),
-        { n: count },
-        true,
-    );
 }
 
 /** Keeps the state of each window still hidden, and takes the current one of a window just hidden. */
@@ -338,7 +418,7 @@ async function focusWithoutWindows(): Promise<void> {
     if (gridSpecs.value.length > 0) return;
     await nextTick();
     (
-        root.value?.querySelector<HTMLElement>(".hidden-windows button") ??
+        root.value?.querySelector<HTMLElement>(".hidden-windows-button") ??
         heading.value
     )?.focus();
 }
@@ -368,23 +448,39 @@ async function closeWindow({ id }: { id: string }): Promise<void> {
     await focusWithoutWindows();
 }
 
-async function showWindow(id: string): Promise<void> {
+async function showWindow({ id }: { id: string }): Promise<void> {
     setHidden(hidden.value.filter((entry) => entry !== id));
     await nextTick();
     windowElement(id)?.focus();
 }
 
 /** Opens a tool once; a tool already open takes the focus. */
+/** Asks the folio image tools to show `canvas` and, when one is open, says so after the selection's count. */
+function showFolio(canvas: string, label: string): void {
+    folioAsked.value = { canvas, count: (folioAsked.value?.count ?? 0) + 1 };
+    if (!store.compare.tools.some((tool) => tool.kind === "folio")) return;
+    announce(
+        interpolate(
+            $gettext("%{summary}. %{message}"),
+            {
+                summary: linked.summary.value,
+                message: interpolate(
+                    $gettext("The folio image shows %{folio}."),
+                    { folio: label },
+                    true,
+                ),
+            },
+            true,
+        ),
+    );
+}
+
 async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
     const known = store.compare.tools.map((tool) => tool.id);
     const id = store.openTool(kind);
     if (!known.includes(id)) return;
     await nextTick();
     windowElement(id)?.focus();
-}
-
-function showAll(): void {
-    if (hidden.value.length > 0) setHidden([]);
 }
 </script>
 
@@ -437,44 +533,18 @@ function showAll(): void {
                 scope="tools"
                 :count="draftCount"
             />
-            <section
-                v-if="hiddenSpecs.length > 0"
-                class="hidden-windows"
-                aria-labelledby="explorer-compare-hidden"
-            >
-                <h3 id="explorer-compare-hidden">
-                    <span>{{ hiddenTitle }}</span>
-                </h3>
-                <ul>
-                    <li
-                        v-for="spec in hiddenSpecs"
-                        :key="spec.id"
-                    >
-                        <button
-                            type="button"
-                            :data-window-id="spec.id"
-                            @click="showWindow(spec.id)"
-                        >
-                            <span>{{ showLabel(spec.title) }}</span>
-                            <span
-                                v-if="newSpectra.has(spec.id)"
-                                class="badge"
-                                >{{
-                                    newSpectraLabel(newSpectra.get(spec.id)!)
-                                }}</span
-                            >
-                        </button>
-                    </li>
-                </ul>
-            </section>
             <WindowGrid
                 v-if="specs.length > 0 || toolSpecs.length > 0"
                 :windows="gridSpecs"
                 :retained="hidden"
                 @close="closeWindow"
-                @rearrange="showAll"
             >
                 <template #toolbar>
+                    <SelectionIndicator />
+                    <HiddenWindowsMenu
+                        :windows="hiddenEntries"
+                        @show="showWindow"
+                    />
                     <ToolMenu
                         :offered="offered"
                         :status="synthesis.status.value"
@@ -482,10 +552,22 @@ function showAll(): void {
                         @retry="synthesis.retry"
                     />
                 </template>
+                <template #below-toolbar>
+                    <ComponentStrip :components="components" />
+                </template>
+                <template #summary="{ window: spec, unfold }">
+                    <FoldedSummary
+                        v-if="summaries.get(spec.id)"
+                        :summary="summaries.get(spec.id)!"
+                        :title="spec.title"
+                        @unfold="unfold"
+                    />
+                </template>
                 <template #default="{ window: spec }">
                     <AutoWindowBody
                         v-if="windowById.get(spec.id)"
                         :window="windowById.get(spec.id)!"
+                        :title="spec.title"
                     />
                     <ToolWindowBody
                         v-else-if="toolById.get(spec.id)"
@@ -496,6 +578,7 @@ function showAll(): void {
                     />
                 </template>
             </WindowGrid>
+            <FocusTrail />
         </template>
     </section>
 </template>
@@ -515,53 +598,6 @@ function showAll(): void {
     align-items: center;
     gap: 0.5rem;
     color: var(--ink-muted);
-}
-
-.compare-view .hidden-windows {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.compare-view .hidden-windows h3 {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.compare-view .hidden-windows ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.compare-view .hidden-windows button {
-    min-block-size: var(--explorer-target, 2.75rem);
-    padding-inline: 0.75rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.25rem;
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    cursor: pointer;
-}
-
-.compare-view .hidden-windows .badge {
-    margin-inline-start: 0.5rem;
-    padding-inline: 0.375rem;
-    border-radius: 999rem;
-    background: var(--ink);
-    color: var(--surface);
-    font-size: 0.75rem;
-}
-
-.compare-view .hidden-windows button:focus-visible {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
 }
 
 .compare-view .visually-hidden {

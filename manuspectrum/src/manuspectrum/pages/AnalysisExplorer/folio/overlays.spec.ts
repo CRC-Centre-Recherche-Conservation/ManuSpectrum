@@ -56,6 +56,42 @@ describe("folio overlays", () => {
         );
     });
 
+    it("asks the service's own max size regardless of the declared width and height", () => {
+        // The declared size (from a manifest cached once at import time) can be
+        // stale or simply wrong relative to what the image service serves
+        // today; a bounded request built from it can still ask for an upscale
+        // the server refuses (see laid-layers.ts and ImagingPreview.vue, which
+        // retry here once such a request fails to load).
+        const large = {
+            service: "https://iiif.example/pb",
+            url: null,
+            width: 4000,
+            height: 3000,
+        };
+        expect(layerImageUrl(large, 480, { max: true })).toBe(
+            "https://iiif.example/pb/full/max/0/default.jpg",
+        );
+        expect(
+            layerImageUrl({ ...large, width: 0, height: 0 }, 480, {
+                max: true,
+            }),
+        ).toBe("https://iiif.example/pb/full/max/0/default.jpg");
+        expect(
+            layerImageUrl(
+                { service: null, url: "https://x/pb.png", width: 1, height: 1 },
+                480,
+                { max: true },
+            ),
+        ).toBe("https://x/pb.png");
+        expect(
+            layerImageUrl(
+                { service: null, url: null, width: 1, height: 1 },
+                480,
+                { max: true },
+            ),
+        ).toBeNull();
+    });
+
     it("lays the layers switched on in the bounding box of the analysis zone", () => {
         const analysis = analysisPayload({ files: [imagingEntry()] });
         const zone = annotation(1, {
@@ -82,6 +118,7 @@ describe("folio overlays", () => {
             {
                 key: `${uuid(101)}:1`,
                 url: "https://iiif.example/image/hg/full/!2000,2048/0/default.jpg",
+                maxUrl: "https://iiif.example/image/hg/full/max/0/default.jpg",
                 bounds: [
                     [-1, 0],
                     [0, 2],
