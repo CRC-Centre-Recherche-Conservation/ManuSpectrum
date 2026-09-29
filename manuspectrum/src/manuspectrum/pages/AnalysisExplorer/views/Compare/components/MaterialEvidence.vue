@@ -136,7 +136,7 @@ function toggleOpen(): void {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--focus-room) 0.25rem;
 }
 
 .material-evidence .expander {
@@ -188,9 +188,9 @@ function toggleOpen(): void {
 .material-evidence .analyses {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--focus-room) 0.25rem;
     margin: 0;
-    margin-block-start: 0.375rem;
+    margin-block-start: var(--focus-room);
     padding: 0;
     list-style: none;
 }

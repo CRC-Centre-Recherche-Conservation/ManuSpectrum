@@ -1040,7 +1040,7 @@ function wholePage(): void {
 
 .folio-tool .marks {
     display: grid;
-    gap: 0.25rem;
+    gap: var(--focus-room);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -1051,7 +1051,7 @@ function wholePage(): void {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.375rem;
+    gap: var(--focus-room) 0.375rem;
 }
 
 .folio-tool .marks .slot {
@@ -1218,7 +1218,7 @@ function wholePage(): void {
     --r: 0.375rem;
     --link-pip: 0.8125rem;
     min-block-size: 1.5rem;
-    padding: 0 0.25rem;
+    padding: 0.25rem 0.375rem;
     border: 0.0625rem solid transparent;
     border-radius: 0.375rem;
     background: none;

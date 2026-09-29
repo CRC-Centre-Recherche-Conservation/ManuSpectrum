@@ -181,11 +181,13 @@ function toggle(symbol: string): void {
 }
 
 .periodic-table .grid {
+    --focus-room: 0.6875rem;
+
     display: grid;
     grid-template-columns: repeat(18, minmax(1.75rem, 1fr));
     grid-template-rows: repeat(7, auto) 0.5rem repeat(2, auto);
-    gap: 0.1875rem;
-    padding-block-start: 0.375rem;
+    gap: var(--focus-room) 0.1875rem;
+    padding-block-start: var(--focus-room);
 }
 
 .periodic-table .cell {
@@ -250,7 +252,7 @@ function toggle(symbol: string): void {
 .periodic-table .list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--focus-room) 0.25rem;
     margin: 0;
     padding: 0;
     list-style: none;

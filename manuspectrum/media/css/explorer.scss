@@ -248,6 +248,14 @@ body.ms-page--app .ms-skeleton {
 // segmenting several), `--h1` (the first slot's hue) and `--hp` (the hue of
 // the slot the node previewed would take). Its `FocusPip` is a direct child.
 // `--r` is the toggle's corner radius, which the ring follows.
+// Every mark is drawn inside the toggle's own box (ring, orbit, bloom,
+// wash), so no scroller clips it and two toggles never share a mark. Only
+// the pip rises above the box, by `--focus-room`, at its inline end: a
+// scroller of toggles keeps that room at its top (`padding-block-start`) and
+// a list of stacked toggles keeps it between its rows (`row-gap`). A list
+// of toggles too small to hold the pip beside their text (element tiles and
+// chips) sets `--focus-room` to the pip's height less the ring, so the pip
+// stands on the ring above the text.
 :where(.ms-focus) {
     position: relative;
     isolation: isolate;
@@ -263,11 +271,12 @@ body.ms-page--app .ms-skeleton {
     pointer-events: none;
 }
 
-// The ring: a masked block, so a conic gradient segments it.
+// The ring: a masked block along the inside of the edge, so a conic
+// gradient segments it.
 .ms-focus::before {
-    inset: calc(-1 * var(--link-ring) - 0.125rem);
+    inset: 0;
     padding: var(--link-ring);
-    border-radius: calc(var(--r, 0.375rem) + var(--link-ring) + 0.125rem);
+    border-radius: var(--r, 0.375rem);
     background: var(--ring, var(--focus-1));
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
@@ -277,13 +286,13 @@ body.ms-page--app .ms-skeleton {
     transition: opacity var(--dur-med) var(--ease-out-expo);
 }
 
-// The bloom: a soft halo that appears once and fades as it settles
-// (opacity and transform only). The parity restarts it on a second change.
+// The bloom: a soft glow inside the edge that appears once and fades as it
+// settles (opacity only). The parity restarts it on a second change.
 .ms-focus::after {
     z-index: -1;
-    inset: -0.125rem;
-    border-radius: calc(var(--r, 0.375rem) + 0.125rem);
-    box-shadow: 0 0 0 0.375rem color-mix(in srgb, var(--h1, var(--focus-1)) 22%, transparent);
+    inset: 0;
+    border-radius: var(--r, 0.375rem);
+    box-shadow: inset 0 0 0 0.375rem color-mix(in srgb, var(--h1, var(--focus-1)) 22%, transparent);
     transition: opacity var(--dur-fast) linear;
 }
 
@@ -296,23 +305,24 @@ body.ms-page--app .ms-skeleton {
 }
 
 @keyframes ms-focus-bloom-odd {
-    0% { opacity: 1; transform: scale(1.05); }
-    100% { opacity: 0; transform: none; }
+    0% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 @keyframes ms-focus-bloom-even {
-    0% { opacity: 1; transform: scale(1.05); }
-    100% { opacity: 0; transform: none; }
+    0% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 // The pip: one digit per slot, each on its hue (solid = direct, hollow =
 // evidence, underlined = the pinned node itself); « + » on an unpinned
-// toggle under the pointer.
+// toggle under the pointer. It sits on the top edge at the inline end,
+// rising `--focus-room` above it and never past the end.
 .ms-focus > .ms-focus-pip {
     position: absolute;
     z-index: 2;
-    inset-block-start: calc(var(--link-pip) / -2.2);
-    inset-inline-end: calc(var(--link-pip) / -2.6);
+    inset-block-start: calc(-1 * var(--focus-room));
+    inset-inline-end: 0.125rem;
     display: inline-flex;
     block-size: var(--link-pip);
     min-inline-size: var(--link-pip);
@@ -377,7 +387,6 @@ body.ms-page--app .ms-skeleton {
 }
 
 .ms-focus[data-rel='self'] > .ms-focus-pip {
-    --link-pip: 1rem;
     font-size: 0.625rem;
     opacity: 1;
 }
@@ -410,8 +419,9 @@ body.ms-page--app .ms-skeleton {
 // for self and direct, 1px at 4 % for evidence; the wash sits on `::after`,
 // faded by opacity only. The source under the pointer also gets its ring
 // drawn once by a light (`--ms-orbit` from 0 to 380deg), then kept, lit
-// softly; over a pinned ring the light draws on top of it. Pills and small
-// tiles set `--preview-inset` so the underline clears their rounded ends.
+// softly from inside; over a pinned ring the light draws on top of it.
+// Pills and small tiles set `--preview-inset` so the underline clears their
+// rounded ends.
 @property --ms-orbit {
     syntax: '<angle>';
     inherits: false;
@@ -465,7 +475,6 @@ body.ms-page--app .ms-skeleton {
         color-mix(in srgb, var(--hp, var(--focus-1)) 40%, #fff) var(--ms-orbit),
         color-mix(in srgb, var(--hp, var(--focus-1)) 22%, transparent) var(--ms-orbit)
     );
-    filter: drop-shadow(0 0 0.1875rem color-mix(in srgb, var(--hp, var(--focus-1)) 45%, transparent));
     opacity: 1;
     animation: ms-focus-orbit 1.4s cubic-bezier(0.45, 0, 0.25, 1) 1 both;
 }
@@ -479,6 +488,11 @@ body.ms-page--app .ms-skeleton {
             transparent var(--ms-orbit)
         ),
         var(--ring);
+}
+
+// The soft light of the source, inside its ring.
+.ms-focus[data-preview='self']:hover::after {
+    box-shadow: inset 0 0 0.3125rem 0.0625rem color-mix(in srgb, var(--hp, var(--focus-1)) 35%, transparent);
 }
 
 @keyframes ms-focus-orbit {
@@ -506,19 +520,22 @@ body.ms-page--app .ms-skeleton {
 @media (forced-colors: active) {
     .ms-focus[data-rel='self'] {
         outline: 0.1875rem solid Highlight;
+        outline-offset: -0.1875rem;
     }
 
     .ms-focus[data-rel='direct'] {
         outline: 0.125rem solid Highlight;
+        outline-offset: -0.125rem;
     }
 
     .ms-focus[data-rel='evidence'] {
         outline: 0.0625rem dotted Highlight;
+        outline-offset: -0.0625rem;
     }
 
     .ms-focus[data-preview='self']:hover {
         outline: 0.125rem solid Highlight;
-        outline-offset: 0.3125rem;
+        outline-offset: -0.125rem;
     }
 
     .ms-focus:is([data-preview='direct'], [data-preview='evidence'], [data-preview='self']:not(:hover)) {

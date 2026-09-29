@@ -346,7 +346,7 @@ function cellLabel(row: CoverageRow, technique: Technique): string {
 .coverage-matrix table {
     inline-size: 100%;
     border-collapse: separate;
-    border-spacing: 0.3125rem;
+    border-spacing: 0.3125rem var(--focus-room);
     font-size: 0.8125rem;
 }
 

@@ -275,13 +275,15 @@ function leave(event: PointerEvent): void {
 <style scoped>
 .xy-legend {
     min-inline-size: 0;
+    padding-block-start: var(--focus-room);
     font-size: 0.8125rem;
 }
 
 .xy-legend .groups,
+.xy-legend .group,
 .xy-legend .files {
     display: grid;
-    gap: 0.125rem;
+    gap: var(--focus-room);
     list-style: none;
 }
 

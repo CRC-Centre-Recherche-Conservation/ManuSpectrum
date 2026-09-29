@@ -120,6 +120,8 @@
     // each ≥ 5.4:1 on --surface, white digits on them ≥ 5.4:1); from slot 5
     // on every slot shares --focus-more and only its digit tells it apart.
     // --link-ring: the ring's width, --link-pip: the pip's height,
+    // --focus-room: how far a pip rises above its toggle, the room a list
+    // of toggles keeps between its rows and at the top of its scroller,
     // --link-fade-surface: how much of its fill an unlinked cell keeps,
     // --linked-fade: the opacity of an unlinked image or zone.
     --focus-1: #6d28d9;
@@ -130,6 +132,7 @@
     --focus-on: #ffffff;
     --link-ring: 0.125rem;
     --link-pip: 0.875rem;
+    --focus-room: 0.4375rem;
     --link-fade-surface: 30%;
     --linked-fade: 0.35;
     // Compare's counted tables (coverage matrix, periodic table): the

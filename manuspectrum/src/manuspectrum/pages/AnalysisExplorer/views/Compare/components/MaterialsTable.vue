@@ -872,7 +872,7 @@ function groupToggleLabel(row: Row): string {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: 0.375rem;
+    gap: var(--focus-room) 0.375rem;
 }
 
 .materials-table .caret {
@@ -964,7 +964,7 @@ function groupToggleLabel(row: Row): string {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--focus-room) 0.25rem;
     margin: 0;
     padding: 0;
     list-style: none;

@@ -344,7 +344,7 @@ provide(FOLIO_ZONES_KEY, zones);
     --r: 0.375rem;
     --link-pip: 0.8125rem;
     min-block-size: 1.5rem;
-    padding: 0 0.25rem;
+    padding: 0.25rem 0.375rem;
     border: 0.0625rem solid transparent;
     border-radius: 0.375rem;
     background: none;

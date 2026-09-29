@@ -71,8 +71,10 @@ function symbolOf(value: ValueRef): string | null {
 
 <style scoped>
 .element-levels {
+    --focus-room: 0.6875rem;
+
     display: grid;
-    gap: 0.25rem;
+    gap: var(--focus-room);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -82,7 +84,7 @@ function symbolOf(value: ValueRef): string | null {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 0.625rem;
+    gap: var(--focus-room) 0.625rem;
 }
 
 .element-levels .level {
