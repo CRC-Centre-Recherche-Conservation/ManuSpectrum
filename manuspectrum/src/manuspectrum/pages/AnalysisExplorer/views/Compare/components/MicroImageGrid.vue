@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import MicroImagePreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/MicroImagePreview.vue";
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
@@ -13,9 +14,9 @@ import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compa
 /**
  * The micro-images of the Selection side by side, each in a light well
  * that the window's height stretches, captioned « A1 · analysis · file ». Each image stands for its analysis (`an:`): the
- * analysis name is its toggle, and the figure is marked by how the
- * analysis stands to the linked selection (an unlinked image fades, its
- * caption stays readable) and to the node a mouse previews.
+ * analysis name is its toggle, carrying the focus marks, and the figure is
+ * tinted by how the analysis stands to the focus (an unlinked image fades,
+ * its caption stays readable) and to the node a mouse previews.
  */
 const props = defineProps<{ images: readonly FileLine[] }>();
 
@@ -30,6 +31,7 @@ const marks = useLinkedMarks();
             :data-key="image.key"
             :data-rel="marks.rel(analysisNode(image.analysis.id))"
             :data-preview="marks.previewRel(analysisNode(image.analysis.id))"
+            :style="marks.rowStyle(analysisNode(image.analysis.id))"
             @pointerenter="marks.enter(analysisNode(image.analysis.id), $event)"
             @pointerleave="marks.leave($event)"
         >
@@ -42,13 +44,15 @@ const marks = useLinkedMarks();
                 >
                 <button
                     type="button"
-                    class="record"
+                    class="record ms-focus"
+                    v-bind="marks.focus(analysisNode(image.analysis.id))"
                     :lang="image.analysis.name.lang"
                     :aria-pressed="
                         marks.pressed(analysisNode(image.analysis.id))
                     "
                     @click="marks.toggle(analysisNode(image.analysis.id))"
                 >
+                    <FocusPip :node="analysisNode(image.analysis.id)" />
                     <span>{{ image.analysis.name.value }}</span>
                 </button>
                 <span class="file">{{ image.file.name }}</span>
@@ -95,19 +99,13 @@ const marks = useLinkedMarks();
     font-size: 0.8125rem;
 }
 
-.micro-image-grid figure[data-rel="self"] {
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
-}
-
-.micro-image-grid figure[data-rel="direct"],
-.micro-image-grid figure[data-rel="evidence"] {
-    box-shadow: inset 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
-}
-
-.micro-image-grid figure[data-rel="evidence"] {
-    box-shadow: none;
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: -0.125rem;
+.micro-image-grid
+    figure:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 6%,
+        var(--surface)
+    );
 }
 
 .micro-image-grid figure[data-rel="none"] :deep(.surface) {
@@ -119,8 +117,11 @@ const marks = useLinkedMarks();
 }
 
 .micro-image-grid figure[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 5%,
+        var(--surface)
+    );
 }
 
 .micro-image-grid figcaption {
@@ -137,10 +138,12 @@ const marks = useLinkedMarks();
 }
 
 .micro-image-grid .record {
+    --r: 0.375rem;
+    --link-pip: 0.8125rem;
     min-block-size: 1.5rem;
     padding: 0 0.25rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.25rem;
+    border-radius: 0.375rem;
     background: none;
     color: inherit;
     font: inherit;
@@ -152,14 +155,9 @@ const marks = useLinkedMarks();
     border-color: var(--border-hover);
 }
 
-.micro-image-grid .record[aria-pressed="true"] {
-    border-color: var(--linked-mark, var(--blue-text));
-    font-weight: 600;
-}
-
 .micro-image-grid .record:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 
 .micro-image-grid .file {

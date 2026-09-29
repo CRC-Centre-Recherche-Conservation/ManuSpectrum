@@ -26,6 +26,7 @@ import {
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     analysisNode,
+    canvasNode,
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
@@ -68,6 +69,7 @@ import type { PlotMouseEvent } from "plotly.js";
 import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type { XyView } from "utils/xy-views";
 import type { SeriesResult } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
+import type { PreviewEvent } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { WindowAction } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type {
     LegendPreviewEvent,
@@ -359,13 +361,24 @@ const legendGroups = computed<LegendGroup[]>(() =>
         );
         const first = drawn.value[indices[0]];
         const node = analysisNode(first.line.analysis.id);
+        const analysis = first.line.analysis;
         return {
             slot,
             label: slotLabel(slot),
-            analysis: first.line.analysis.name,
+            analysis: analysis.name,
+            technique: analysis.technique?.code ?? null,
+            component: analysis.component?.name ?? null,
+            folio: analysis.canvas
+                ? linked?.labelOf(canvasNode(analysis.canvas))?.value ?? null
+                : null,
             node,
+            nodes: [
+                node,
+                ...indices.map((index) =>
+                    fileNode(drawn.value[index].line.file.id),
+                ),
+            ],
             pressed: selected.value.has(node),
-            relation: strongest(indices.map((index) => levels.value[index])),
             entries: indices.map((index) => {
                 const curve = drawn.value[index];
                 const entry = entryNode(curve);
@@ -375,8 +388,8 @@ const legendGroups = computed<LegendGroup[]>(() =>
                     slot,
                     dash: dashOf(curve.rank),
                     node: entry,
+                    nodes: [fileNode(curve.line.file.id), node],
                     pressed: selected.value.has(entry),
-                    relation: levels.value[index],
                 };
             }),
         };
@@ -811,14 +824,18 @@ function onLegendToggle({ node }: LegendToggleEvent): void {
     toggle(node);
 }
 
-function onLegendPreview({ node, pointerType }: LegendPreviewEvent): void {
-    preview(node, { pointerType });
+function onLegendPreview({
+    node,
+    pointerType,
+    anchor,
+}: LegendPreviewEvent): void {
+    preview(
+        node,
+        anchor ? { pointerType, currentTarget: anchor } : { pointerType },
+    );
 }
 
-function preview(
-    node: NodeId | null,
-    event: Pick<PointerEvent, "pointerType">,
-): void {
+function preview(node: NodeId | null, event: PreviewEvent): void {
     linked?.preview(node, event);
     previewing = node !== null;
 }
@@ -1043,7 +1060,6 @@ function chooseView(event: Event): void {
                 ></div>
                 <XyLegend
                     :groups="legendGroups"
-                    :selecting="selecting"
                     @toggle="onLegendToggle"
                     @preview="onLegendPreview"
                 />

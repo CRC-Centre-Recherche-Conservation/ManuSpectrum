@@ -4,13 +4,16 @@ import {
     AN1,
     BASKET,
     BY_KEY,
+    BY_KEY_WITH_COMPONENT,
     C1,
     CH1,
     CH2,
     D1,
     F1,
     F2,
+    K1,
     SYNTHESIS,
+    SYNTHESIS_WITH_COMPONENT,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { buildGraph } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/graph.ts";
 import {
@@ -68,12 +71,23 @@ describe("nodeLabel", () => {
             ),
         ).toBe("Blue · Azurite");
         expect(text(pairNode(null, "http://example.org/chalk"))).toBe("Chalk");
-        expect(text(cellNode(C1, "xrf"))).toBe("f. 12r · XRF");
+        expect(text(cellNode(C1, null, "xrf"))).toBe("f. 12r · XRF");
+    });
+
+    it("names a cell of a component by its folio, component and technique", () => {
+        const graph = buildGraph({
+            basket: BASKET,
+            byKey: BY_KEY_WITH_COMPONENT,
+            synthesis: SYNTHESIS_WITH_COMPONENT,
+        });
+        expect(nodeLabel(graph, cellNode(C1, K1, "xrf"))?.value).toBe(
+            "f. 12r › Initial T · XRF",
+        );
     });
 
     it("has no name for a node it does not know", () => {
         expect(nodeLabel(GRAPH, analysisNode("unknown"))).toBeNull();
         expect(nodeLabel(GRAPH, "garbage")).toBeNull();
-        expect(nodeLabel(GRAPH, cellNode("nowhere", "xrf"))).toBeNull();
+        expect(nodeLabel(GRAPH, cellNode("nowhere", null, "xrf"))).toBeNull();
     });
 });

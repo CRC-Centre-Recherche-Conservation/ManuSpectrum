@@ -99,7 +99,7 @@ const A2: Item = {
     files: [fileEntry({ id: F3, name: "F3.csv" })],
 };
 
-const A3: Item = {
+const A3: Extract<Item, { kind: "characterization" }> = {
     key: `ch:${CH1}:-`,
     kind: "characterization",
     characterization: characterization(1, {
@@ -130,8 +130,20 @@ export const BY_KEY: ReadonlyMap<string, Item> = new Map(
 
 export const SYNTHESIS: SynthesisResponse = {
     coverage: [
-        { canvas: C1, label: "f. 12r", document: D1, counts: { xrf: 1 } },
-        { canvas: C2, label: "f. 12v", document: D1, counts: { raman: 1 } },
+        {
+            canvas: C1,
+            label: "f. 12r",
+            document: D1,
+            counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
+        },
+        {
+            canvas: C2,
+            label: "f. 12v",
+            document: D1,
+            counts: { raman: 1 },
+            components: [{ component: null, counts: { raman: 1 } }],
+        },
     ],
     canvases: [
         {
@@ -162,10 +174,7 @@ export const SYNTHESIS: SynthesisResponse = {
                     symbol: "Cu",
                 },
             ],
-            canvases: [C1],
-            confidenceBest: null,
             count: 2,
-            cells: [[C1, "xrf"]],
             materials: [CH1, CH2],
         },
         {
@@ -177,10 +186,7 @@ export const SYNTHESIS: SynthesisResponse = {
                     symbol: "Ca",
                 },
             ],
-            canvases: [C2],
-            confidenceBest: null,
             count: 1,
-            cells: [[C2, "raman"]],
             materials: [CH3],
         },
     ],
@@ -193,25 +199,85 @@ export const SYNTHESIS: SynthesisResponse = {
             id: CH1,
             evidence: [AN1],
             canvases: [C1],
-            cells: [[C1, "xrf"]],
             objects: [D1],
+            summary: A3.characterization,
+            selected: true,
         },
         {
             id: CH2,
             evidence: [AN1],
             canvases: [C1],
-            cells: [[C1, "xrf"]],
             objects: [D1],
+            summary: characterization(2, {
+                colours: [BLUE],
+                materials: [
+                    { value: AZURITE, confidence: null, proportion: null },
+                ],
+                objects: [DOCUMENT],
+                evidence: [{ id: AN1, name: label("MS1_f12_XRF_01") }],
+            }),
+            selected: false,
         },
         {
             id: CH3,
             evidence: [AN2],
             canvases: [C2],
-            cells: [[C2, "raman"]],
             objects: [D1],
+            summary: characterization(3, {
+                colours: [],
+                materials: [
+                    { value: CHALK, confidence: null, proportion: null },
+                ],
+                objects: [DOCUMENT],
+                evidence: [{ id: AN2, name: label("MS1_f12_XRF_02") }],
+            }),
+            selected: false,
         },
     ],
     unpublishedCount: 0,
+};
+
+/** A component of D1, « Initial T », on C1. */
+export const K1 = uuid(951);
+export const COMPONENT = {
+    id: K1,
+    model: "component",
+    name: label("Initial T"),
+};
+
+/** The Selection with A1 observing `COMPONENT`. */
+export const BY_KEY_WITH_COMPONENT: ReadonlyMap<string, Item> = new Map(
+    ITEMS.map((item) => [
+        item.key,
+        item.kind === "analysis" && item.analysis.id === AN1
+            ? { ...item, analysis: { ...item.analysis, component: COMPONENT } }
+            : item,
+    ]),
+);
+
+/** The synthesis of `BY_KEY_WITH_COMPONENT`: C1's XRF counted on `COMPONENT`, `ch3` observing it too. */
+export const SYNTHESIS_WITH_COMPONENT: SynthesisResponse = {
+    ...SYNTHESIS,
+    coverage: SYNTHESIS.coverage.map((row) =>
+        row.canvas === C1
+            ? {
+                  ...row,
+                  components: [{ component: COMPONENT, counts: row.counts }],
+              }
+            : row,
+    ),
+    materials: SYNTHESIS.materials.map((material) =>
+        material.id === CH3
+            ? {
+                  ...material,
+                  objects: [D1, K1],
+                  summary: {
+                      ...material.summary,
+                      objects: [DOCUMENT, COMPONENT],
+                  },
+              }
+            : material,
+    ),
 };
 
 /**
@@ -222,6 +288,7 @@ export const SYNTHESIS: SynthesisResponse = {
 export function startLinkedSelection(
     announce: (message: string) => void = () => undefined,
     synthesis: SynthesisResponse = SYNTHESIS,
+    byKey: ReadonlyMap<string, Item> = BY_KEY,
 ): { linked: LinkedSelection; stop: () => void } {
     const store = useExplorerStore();
     store.addManyToBasket(BASKET.map((item) => item.key));
@@ -230,7 +297,7 @@ export function startLinkedSelection(
     const linked = scope.run(() =>
         useLinkedSelection({
             items: {
-                byKey: ref(new Map(BY_KEY)),
+                byKey: ref(new Map(byKey)),
                 missing: ref(new Set<string>()),
                 settled: computed(() => true),
                 status: ref<RequestStatus>("ready"),

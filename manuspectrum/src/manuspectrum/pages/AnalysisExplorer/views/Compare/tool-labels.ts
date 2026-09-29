@@ -6,7 +6,6 @@ type Gettext = (msgid: string) => string;
 export function toolTitles($gettext: Gettext): Record<ToolKind, string> {
     return {
         coverage: $gettext("Coverage matrix"),
-        "colour-material": $gettext("Colours × materials"),
         periodic: $gettext("Periodic table"),
         folio: $gettext("Folio image"),
     };

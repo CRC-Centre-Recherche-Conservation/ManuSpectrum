@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    coverageRows,
     folioMarks,
     offeredTools,
     selectionSlots,
@@ -37,11 +38,8 @@ function pair(overrides: Partial<SynthesisPair>): SynthesisPair {
         colour: null,
         material: CHALK,
         elements: [],
-        canvases: [],
         materials: [],
-        confidenceBest: null,
         count: 1,
-        cells: [],
         ...overrides,
     };
 }
@@ -50,21 +48,35 @@ const AZURITE_PAIR = pair({
     colour: BLUE,
     material: AZURITE,
     elements: [COPPER],
-    canvases: [C1],
-    cells: [[C1, "xrf"]],
     count: 2,
 });
 const CHALK_PAIR = pair({
     elements: [CALCIUM],
-    canvases: [C2],
-    cells: [[C2, "xrf"]],
 });
 
 const SYNTHESIS: SynthesisResponse = {
     coverage: [
-        { canvas: C1, label: "f. 1r", document: "d", counts: { xrf: 2 } },
-        { canvas: C2, label: "f. 1v", document: "d", counts: { xrf: 1 } },
-        { canvas: C3, label: "f. 2r", document: "d", counts: { xrf: 1 } },
+        {
+            canvas: C1,
+            label: "f. 1r",
+            document: "d",
+            counts: { xrf: 2 },
+            components: [{ component: null, counts: { xrf: 2 } }],
+        },
+        {
+            canvas: C2,
+            label: "f. 1v",
+            document: "d",
+            counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
+        },
+        {
+            canvas: C3,
+            label: "f. 2r",
+            document: "d",
+            counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
+        },
     ],
     canvases: [
         {
@@ -106,7 +118,6 @@ describe("offeredTools", () => {
     it("offers every tool whose payload holds something", () => {
         expect(offeredTools(SYNTHESIS)).toEqual([
             "coverage",
-            "colour-material",
             "periodic",
             "folio",
         ]);
@@ -120,7 +131,7 @@ describe("offeredTools", () => {
                 canvases: [],
                 elements: [],
             }),
-        ).toEqual(["colour-material"]);
+        ).toEqual([]);
         expect(offeredTools({ ...SYNTHESIS, pairs: [] })).toEqual([
             "coverage",
             "periodic",
@@ -130,13 +141,12 @@ describe("offeredTools", () => {
 
     it("offers the folio image on a canvas holding no analysis with a technique", () => {
         expect(offeredTools({ ...SYNTHESIS, coverage: [] })).toEqual([
-            "colour-material",
             "periodic",
             "folio",
         ]);
         expect(
             offeredTools({ ...SYNTHESIS, coverage: [], canvases: [] }),
-        ).toEqual(["colour-material", "periodic"]);
+        ).toEqual(["periodic"]);
     });
 
     it("offers the folio image only on a canvas holding an item of the Selection", () => {
@@ -148,8 +158,56 @@ describe("offeredTools", () => {
         }));
         expect(offeredTools({ ...SYNTHESIS, canvases: citing })).toEqual([
             "coverage",
-            "colour-material",
             "periodic",
+        ]);
+    });
+});
+
+describe("coverageRows", () => {
+    const INITIAL = {
+        id: uuid(951),
+        model: "component",
+        name: label("Initial T"),
+    };
+
+    it("splits each folio by the components observed on it, the folio alone first", () => {
+        expect(
+            coverageRows([
+                {
+                    canvas: C1,
+                    label: "f. 5",
+                    document: uuid(1),
+                    counts: { xrf: 3 },
+                    components: [
+                        { component: null, counts: { xrf: 1 } },
+                        { component: INITIAL, counts: { xrf: 2 } },
+                    ],
+                },
+            ]),
+        ).toEqual([
+            { canvas: C1, label: "f. 5", component: null, counts: { xrf: 1 } },
+            {
+                canvas: C1,
+                label: "f. 5",
+                component: INITIAL,
+                counts: { xrf: 2 },
+            },
+        ]);
+    });
+
+    it("keeps one row for a folio the synthesis does not split", () => {
+        expect(
+            coverageRows([
+                {
+                    canvas: C2,
+                    label: "f. 6",
+                    document: uuid(1),
+                    counts: { xrf: 1 },
+                    components: [],
+                },
+            ]),
+        ).toEqual([
+            { canvas: C2, label: "f. 6", component: null, counts: { xrf: 1 } },
         ]);
     });
 });

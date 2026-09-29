@@ -1,8 +1,10 @@
 import type {
     DocumentPayload,
     Label,
+    Ref,
     Shape,
     SynthesisCanvas,
+    SynthesisCoverage,
     SynthesisResponse,
     Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -14,7 +16,6 @@ import type {
 /** The tools « + Tool » offers, in its order. */
 export const OFFERED_TOOLS: readonly ToolKind[] = [
     "coverage",
-    "colour-material",
     "periodic",
     "folio",
 ];
@@ -24,15 +25,40 @@ export function folioCanvases(synthesis: SynthesisResponse): SynthesisCanvas[] {
     return synthesis.canvases.filter((entry) => entry.selected);
 }
 
-/** The tools the synthesis has something for: the coverage matrix a counted canvas, the folio image a canvas holding a Selection item, the others a pair or an element. */
+/** The tools the synthesis has something for: the coverage matrix a counted canvas, the periodic table an element, the folio image a canvas holding a Selection item. */
 export function offeredTools(synthesis: SynthesisResponse): ToolKind[] {
     const holds: Record<ToolKind, boolean> = {
         coverage: synthesis.coverage.length > 0,
-        "colour-material": synthesis.pairs.length > 0,
         periodic: synthesis.elements.length > 0,
         folio: folioCanvases(synthesis).length > 0,
     };
     return OFFERED_TOOLS.filter((kind) => holds[kind]);
+}
+
+/** A row of the coverage matrix: one folio, one component observed on it (null: none), its analyses by technique id. */
+export interface CoverageRow {
+    canvas: string;
+    label: string;
+    component: Ref | null;
+    counts: Record<string, number>;
+}
+
+/** The rows of the coverage matrix: each folio split by component, in the synthesis order; a folio the synthesis does not split keeps one row without component. */
+export function coverageRows(
+    coverage: readonly SynthesisCoverage[],
+): CoverageRow[] {
+    return coverage.flatMap((row) => {
+        const parts =
+            row.components.length > 0
+                ? row.components
+                : [{ component: null, counts: row.counts }];
+        return parts.map(({ component, counts }) => ({
+            canvas: row.canvas,
+            label: row.label,
+            component,
+            counts,
+        }));
+    });
 }
 
 /** The slots (0-based, in order) of each analysis and identified material of the Selection, by resource id. */

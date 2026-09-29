@@ -2,6 +2,8 @@
 import { inject, nextTick, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
+
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -24,9 +26,10 @@ import type {
  * take an item no longer available out of the Selection. Once an item is
  * taken out, the focus goes to the action of the next item, else of the one
  * before; after the last one, to the Compare heading. An item holding an
- * analysis stands for it (`an:`): its title is the analysis's toggle, and
- * the line is marked by how the analysis stands to the linked selection
- * and to the node a mouse previews.
+ * analysis stands for it (`an:`): its title is the analysis's toggle,
+ * carrying the focus marks, and the line is tinted by how the analysis
+ * stands to the focus (a bar of its slots' hues) and to the node a mouse
+ * previews.
  */
 const props = defineProps<{ entries: readonly NotInChartEntry[] }>();
 
@@ -122,6 +125,7 @@ function openAnalysis(analysis: AnalysisHit): void {
             :data-key="entry.key"
             :data-rel="marks.rel(recordOf(entry))"
             :data-preview="marks.previewRel(recordOf(entry))"
+            :style="marks.rowStyle(recordOf(entry))"
             @pointerenter="preview(entry, $event)"
             @pointerleave="marks.leave($event)"
         >
@@ -134,13 +138,15 @@ function openAnalysis(analysis: AnalysisHit): void {
                 <button
                     v-if="entry.analysis"
                     type="button"
-                    class="title record"
+                    class="title record ms-focus"
+                    v-bind="marks.focus(analysisNode(entry.analysis.id))"
                     :lang="entry.analysis.name.lang"
                     :aria-pressed="
                         marks.pressed(analysisNode(entry.analysis.id))
                     "
                     @click="marks.toggle(analysisNode(entry.analysis.id))"
                 >
+                    <FocusPip :node="analysisNode(entry.analysis.id)" />
                     <span>{{ titleOf(entry) }}</span>
                 </button>
                 <span
@@ -211,11 +217,13 @@ function openAnalysis(analysis: AnalysisHit): void {
 }
 
 .not-in-chart-list .record {
+    --r: 0.375rem;
+    --link-pip: 0.8125rem;
     justify-self: start;
     min-block-size: 1.5rem;
     padding: 0 0.25rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.25rem;
+    border-radius: 0.375rem;
     background: none;
     color: inherit;
     font: inherit;
@@ -227,29 +235,45 @@ function openAnalysis(analysis: AnalysisHit): void {
     border-color: var(--border-hover);
 }
 
-.not-in-chart-list .record[aria-pressed="true"] {
-    border-color: var(--linked-mark, var(--blue-text));
-    font-weight: 600;
-}
-
 .not-in-chart-list li {
-    padding-inline-start: 0.375rem;
-    border-inline-start: var(--linked-bar, 0.1875rem) solid transparent;
+    position: relative;
+    padding-block: 0.25rem;
+    padding-inline-start: 0.5rem;
+    border-radius: 0.375rem;
+    transition:
+        background-color var(--dur-med, 260ms),
+        color var(--dur-med, 260ms);
 }
 
-.not-in-chart-list li[data-rel="self"] {
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+.not-in-chart-list li::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 0;
+    background: var(--bar, var(--focus-1));
+    content: "";
+    transition: inline-size var(--dur-med, 260ms) var(--ease-out-expo);
 }
 
-.not-in-chart-list li[data-rel="self"],
-.not-in-chart-list li[data-rel="direct"],
-.not-in-chart-list li[data-rel="evidence"] {
-    border-inline-start-color: var(--linked-mark, var(--blue-text));
-    background: var(--linked-tint, var(--bg-alt));
+.not-in-chart-list
+    li:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 6%,
+        var(--surface)
+    );
 }
 
-.not-in-chart-list li[data-rel="evidence"] {
-    border-inline-start-style: dashed;
+.not-in-chart-list li[data-rel="self"]::before {
+    inline-size: 0.25rem;
+}
+
+.not-in-chart-list li[data-rel="direct"]::before {
+    inline-size: 0.1875rem;
+}
+
+.not-in-chart-list li[data-rel="evidence"]::before {
+    inline-size: 0.0625rem;
 }
 
 .not-in-chart-list li[data-rel="none"] {
@@ -257,7 +281,11 @@ function openAnalysis(analysis: AnalysisHit): void {
 }
 
 .not-in-chart-list li[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 5%,
+        var(--surface)
+    );
 }
 
 .not-in-chart-list .reason {
@@ -283,6 +311,6 @@ function openAnalysis(analysis: AnalysisHit): void {
 .not-in-chart-list .action:focus-visible,
 .not-in-chart-list .record:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 </style>

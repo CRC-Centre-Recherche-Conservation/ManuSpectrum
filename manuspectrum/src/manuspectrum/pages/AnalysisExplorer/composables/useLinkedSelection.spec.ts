@@ -89,10 +89,138 @@ describe("useLinkedSelection", () => {
         expect(linked.relatedCount.value).toBe(3);
         expect(linked.summary.value).toBe("1 in focus · 3 related");
         expect(announce).toHaveBeenLastCalledWith("1 in focus · 3 related");
-        expect(linked.counts.value).toMatchObject({ an: 1, ch: 2 });
         linked.toggle(elementNode("Cu"));
         expect(linked.summary.value).toBe("No focus");
         expect(announce).toHaveBeenLastCalledWith("No focus");
+    });
+
+    it("keeps each pinned node at its slot, fills the lowest hole and says what the next pin takes", () => {
+        const linked = start();
+        linked.toggle(elementNode("Cu"));
+        linked.toggle(elementNode("Ca"));
+        linked.toggle(materialNode(CH1));
+        linked.toggle(elementNode("Ca"));
+        expect(linked.slots.value).toEqual([
+            elementNode("Cu"),
+            null,
+            materialNode(CH1),
+        ]);
+        expect(linked.pinned.value).toEqual([
+            { id: elementNode("Cu"), slot: 1 },
+            { id: materialNode(CH1), slot: 3 },
+        ]);
+        expect(linked.selection.value).toEqual([
+            elementNode("Cu"),
+            materialNode(CH1),
+        ]);
+        expect(linked.slotOf(materialNode(CH1))).toBe(3);
+        expect(linked.slotOf(elementNode("Ca"))).toBeNull();
+        expect(linked.nextSlot.value).toBe(2);
+        expect(linked.relations.value.get(materialNode(CH1))?.slots).toEqual([
+            { slot: 3, level: "self" },
+            { slot: 1, level: "direct" },
+        ]);
+    });
+
+    it("lights under « all » only what relates to every pinned node, says so, and resets it on clear", () => {
+        const linked = start();
+        linked.toggle(elementNode("Cu"));
+        linked.toggle(elementNode("Ca"));
+        expect(linked.levelOf(materialNode(CH1))).toBe("direct");
+        linked.setMode("all");
+        expect(linked.mode.value).toBe("all");
+        expect(announce).toHaveBeenLastCalledWith(linked.summary.value);
+        expect(linked.levelOf(elementNode("Cu"))).toBe("self");
+        expect(linked.relations.value.get(elementNode("Ca"))?.slots).toEqual([
+            { slot: 2, level: "self" },
+        ]);
+        expect(linked.levelOf(materialNode(CH1))).toBeNull();
+        linked.clear();
+        expect(linked.mode.value).toBe("any");
+    });
+
+    it("marks the nodes that gained a slot, once per change, for the time of the cue", () => {
+        vi.useFakeTimers();
+        const linked = start();
+        linked.toggle(elementNode("Cu"));
+        const first = linked.cue.value;
+        expect(first.nodes.has(elementNode("Cu"))).toBe(true);
+        expect(first.nodes.has(materialNode(CH1))).toBe(true);
+        linked.toggle(elementNode("Ca"));
+        const second = linked.cue.value;
+        expect(second.generation).toBe(first.generation + 1);
+        expect(second.nodes.has(elementNode("Ca"))).toBe(true);
+        expect(second.nodes.has(elementNode("Cu"))).toBe(false);
+        linked.toggle(elementNode("Ca"));
+        expect(linked.cue.value.nodes.size).toBe(0);
+        linked.toggle(elementNode("Ca"));
+        expect(linked.cue.value.nodes.size).toBeGreaterThan(0);
+        vi.advanceTimersByTime(900);
+        expect(linked.cue.value.nodes.size).toBe(0);
+    });
+
+    it("names the slot a previewed node would take and the element it rests on", async () => {
+        vi.useFakeTimers();
+        const linked = start();
+        linked.toggle(elementNode("Cu"));
+        const anchor = document.createElement("button");
+        document.body.append(anchor);
+        linked.preview(analysisNode(AN1), {
+            pointerType: "mouse",
+            currentTarget: anchor,
+        });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(linked.previewing.value).toBe(analysisNode(AN1));
+        expect(linked.previewAnchor.value).toBe(anchor);
+        expect(linked.previewSlot.value).toBe(2);
+        linked.preview(elementNode("Cu"), { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(linked.previewSlot.value).toBeNull();
+        expect(linked.previewAnchor.value).toBeNull();
+        anchor.remove();
+    });
+
+    it("ends a preview at once when the element it started on leaves the page", async () => {
+        vi.useFakeTimers();
+        const linked = start();
+        const anchor = document.createElement("button");
+        document.body.append(anchor);
+        linked.preview(analysisNode(AN1), {
+            pointerType: "mouse",
+            currentTarget: anchor,
+        });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(linked.previewing.value).toBe(analysisNode(AN1));
+        anchor.remove();
+        await nextTick();
+        expect(linked.previewing.value).toBeNull();
+        expect(linked.previewAnchor.value).toBeNull();
+    });
+
+    it("starts no preview on an element that left the page before its delay", async () => {
+        vi.useFakeTimers();
+        const linked = start();
+        const anchor = document.createElement("button");
+        document.body.append(anchor);
+        linked.preview(analysisNode(AN1), {
+            pointerType: "mouse",
+            currentTarget: anchor,
+        });
+        anchor.remove();
+        await vi.advanceTimersByTimeAsync(200);
+        expect(linked.previewing.value).toBeNull();
+    });
+
+    it("keeps the node a toggle pinned last, even once unpinned", () => {
+        const linked = start();
+        expect(linked.lastPinned.value).toBeNull();
+        linked.toggle(elementNode("Cu"));
+        linked.toggle(elementNode("Ca"));
+        expect(linked.lastPinned.value).toBe(elementNode("Ca"));
+        linked.toggle(elementNode("Cu"));
+        expect(linked.lastPinned.value).toBe(elementNode("Ca"));
+        linked.toggle(elementNode("Ca"));
+        expect(linked.lastPinned.value).toBe(elementNode("Ca"));
     });
 
     it("names a node and offers its document", () => {

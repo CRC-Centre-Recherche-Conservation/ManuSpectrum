@@ -4,7 +4,6 @@ import { useGettext } from "vue3-gettext";
 
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
-import ColourMaterialTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ColourMaterialTable.vue";
 import CoverageMatrix from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue";
 import FolioTool from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue";
 import PeriodicTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeriodicTable.vue";
@@ -21,9 +20,9 @@ import type { ToolKind } from "@/manuspectrum/pages/AnalysisExplorer/store/types
 
 /**
  * The content of a tool window, on the synthesis of the Selection. The
- * coverage matrix, the colours × materials table and the periodic table
- * show the whole synthesis and select through the linked selection of
- * Compare themselves (`useLinkedMarks`). The folio image shows the Selection's items
+ * coverage matrix and the periodic table show the whole synthesis and
+ * select through the linked selection of Compare themselves
+ * (`useLinkedMarks`). The folio image shows the Selection's items
  * on one of the canvases they are placed on. When the synthesis failed the
  * window shows only that, with Retry; when nothing in the Selection is
  * visible it says so. While the synthesis is read the window says so above
@@ -42,15 +41,6 @@ const store = useExplorerStore();
 const { $gettext } = useGettext();
 
 const loading = computed(() => props.status === "loading");
-const canvasLabels = computed(
-    () =>
-        new Map(
-            (props.synthesis?.canvases ?? []).map((entry) => [
-                entry.canvas,
-                entry.label,
-            ]),
-        ),
-);
 const slots = computed(() => selectionSlots(store.basket));
 const folio = computed(() =>
     props.synthesis ? folioCanvases(props.synthesis) : [],
@@ -60,8 +50,6 @@ const emptyPayload = computed(() => {
     const synthesis = props.synthesis;
     if (!synthesis) return false;
     switch (props.kind) {
-        case "colour-material":
-            return synthesis.pairs.length === 0;
         case "periodic":
             return synthesis.elements.length === 0;
         case "folio":
@@ -117,12 +105,6 @@ const emptyPayload = computed(() => {
                 v-else-if="props.kind === 'coverage'"
                 :rows="props.synthesis.coverage"
                 :techniques="props.synthesis.techniques"
-                :disabled="loading"
-            />
-            <ColourMaterialTable
-                v-else-if="props.kind === 'colour-material'"
-                :pairs="props.synthesis.pairs"
-                :canvas-labels="canvasLabels"
                 :disabled="loading"
             />
             <PeriodicTable

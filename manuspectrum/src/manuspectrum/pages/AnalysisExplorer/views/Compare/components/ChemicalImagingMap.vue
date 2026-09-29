@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue";
 import ChemicalImagingStage from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingStage.vue";
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 
 import {
     ICONS,
@@ -45,8 +46,9 @@ type Mode = "reading" | "folio" | "no-zone" | "no-image" | "error";
  * The page comes from the document payload (`useDocument`, the tab memo);
  * without a zone with an extent, a page image or a readable document, the
  * map is shown alone. The card stands for its analysis (`an:`): the
- * analysis name is its toggle, and the card is marked by how the analysis
- * stands to the linked selection and to the node a mouse previews.
+ * analysis name is its toggle, carrying the focus marks, and the card is
+ * tinted by how the analysis stands to the focus (an unlinked map fades)
+ * and to the node a mouse previews.
  */
 const props = defineProps<{
     slotNumber: number;
@@ -151,6 +153,7 @@ provide(FOLIO_ZONES_KEY, zones);
         class="chemical-imaging-map"
         :data-rel="marks.rel(record)"
         :data-preview="marks.previewRel(record)"
+        :style="marks.rowStyle(record)"
         @pointerenter="marks.enter(record, $event)"
         @pointerleave="marks.leave($event)"
     >
@@ -162,12 +165,14 @@ provide(FOLIO_ZONES_KEY, zones);
             >
             <button
                 type="button"
-                class="record"
+                class="record ms-focus"
+                v-bind="marks.focus(record)"
                 :title="props.analysis.name.value"
                 :lang="props.analysis.name.lang"
                 :aria-pressed="marks.pressed(record)"
                 @click="marks.toggle(record)"
             >
+                <FocusPip :node="record" />
                 <span>{{ props.analysis.name.value }}</span>
             </button>
             <span
@@ -259,17 +264,21 @@ provide(FOLIO_ZONES_KEY, zones);
     background: var(--surface);
 }
 
-.chemical-imaging-map[data-rel="self"] {
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
-}
-
-.chemical-imaging-map[data-rel="direct"] {
-    box-shadow: inset 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
-}
-
-.chemical-imaging-map[data-rel="evidence"] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: -0.125rem;
+.chemical-imaging-map:is(
+        [data-rel="self"],
+        [data-rel="direct"],
+        [data-rel="evidence"]
+    ) {
+    border-color: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 22%,
+        var(--border)
+    );
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 6%,
+        var(--surface)
+    );
 }
 
 .chemical-imaging-map[data-rel="none"] :deep(.layer-image),
@@ -282,8 +291,11 @@ provide(FOLIO_ZONES_KEY, zones);
 }
 
 .chemical-imaging-map[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 5%,
+        var(--surface)
+    );
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -301,11 +313,18 @@ provide(FOLIO_ZONES_KEY, zones);
     font-size: 0.8125rem;
 }
 
-.chemical-imaging-map figcaption .record,
+.chemical-imaging-map figcaption .record > span:last-child,
 .chemical-imaging-map figcaption .file {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.chemical-imaging-map figcaption .record {
+    display: flex;
+    justify-self: start;
+    max-inline-size: 100%;
+    min-inline-size: 0;
 }
 
 .chemical-imaging-map .slot {
@@ -314,10 +333,12 @@ provide(FOLIO_ZONES_KEY, zones);
 }
 
 .chemical-imaging-map .record {
+    --r: 0.375rem;
+    --link-pip: 0.8125rem;
     min-block-size: 1.5rem;
     padding: 0 0.25rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.25rem;
+    border-radius: 0.375rem;
     background: none;
     color: inherit;
     font: inherit;
@@ -327,11 +348,6 @@ provide(FOLIO_ZONES_KEY, zones);
 
 .chemical-imaging-map .record:hover {
     border-color: var(--border-hover);
-}
-
-.chemical-imaging-map .record[aria-pressed="true"] {
-    border-color: var(--linked-mark, var(--blue-text));
-    font-weight: 600;
 }
 
 .chemical-imaging-map .file {

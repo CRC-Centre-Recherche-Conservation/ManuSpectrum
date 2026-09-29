@@ -33,6 +33,7 @@ import type { NotInChartEntry } from "@/manuspectrum/pages/AnalysisExplorer/view
 
 let pinia: Pinia;
 let stopLinked: (() => void) | null = null;
+let attached: VueWrapper | null = null;
 
 beforeEach(() => {
     pinia = createPinia();
@@ -221,6 +222,7 @@ describe("NotInChartList", () => {
                 };
             });
             const wrapper = mount(NotInChartList, {
+                attachTo: document.body,
                 props: {
                     entries: [
                         ...entries,
@@ -240,6 +242,7 @@ describe("NotInChartList", () => {
                     },
                 },
             });
+            attached = wrapper;
             return { wrapper, linked: started.linked };
         }
 
@@ -248,6 +251,8 @@ describe("NotInChartList", () => {
         }
 
         afterEach(() => {
+            attached?.unmount();
+            attached = null;
             stopLinked?.();
             stopLinked = null;
             vi.useRealTimers();

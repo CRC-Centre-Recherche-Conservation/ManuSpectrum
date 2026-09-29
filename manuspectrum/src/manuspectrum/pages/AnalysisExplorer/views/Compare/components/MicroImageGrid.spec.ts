@@ -26,6 +26,7 @@ import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/comp
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 let stop: (() => void) | null = null;
+let attached: VueWrapper | null = null;
 
 function imageOf(index: number): FileLine {
     const item = ITEMS[index] as { key: string; analysis: AnalysisHit };
@@ -45,12 +46,14 @@ function mountGrid(): { view: VueWrapper; linked: LinkedSelection } {
     const started = startLinkedSelection();
     stop = started.stop;
     const view = mount(MicroImageGrid, {
+        attachTo: document.body,
         props: { images: [imageOf(0), imageOf(1)] },
         global: {
             provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
             stubs: { MicroImagePreview: true },
         },
     });
+    attached = view;
     return { view, linked: started.linked };
 }
 
@@ -63,6 +66,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    attached?.unmount();
+    attached = null;
     stop?.();
     stop = null;
     vi.useRealTimers();

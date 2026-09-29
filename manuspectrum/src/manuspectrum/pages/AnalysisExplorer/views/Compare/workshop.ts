@@ -78,8 +78,9 @@ export interface LegendEntry {
     dash: Dash;
     /** The node a press toggles in the linked selection. */
     node: NodeId;
+    /** The nodes its curve stands for (its file and its analysis), which the focus marks. */
+    nodes: readonly NodeId[];
     pressed: boolean;
-    relation: RelationLevel | null;
 }
 
 /** One slot in the workshop's legend, its files under it. */
@@ -88,9 +89,16 @@ export interface LegendGroup {
     /** « A3 ». */
     label: string;
     analysis: Label;
+    /** The code of its analysis' technique; null without one. */
+    technique: string | null;
+    /** The component its analysis observes; null when it names none. */
+    component: Label | null;
+    /** The label of the folio its analysis is placed on; null when unknown. */
+    folio: string | null;
     node: NodeId;
+    /** The nodes its curves stand for (their files and analysis), which the focus marks. */
+    nodes: readonly NodeId[];
     pressed: boolean;
-    relation: RelationLevel | null;
     entries: LegendEntry[];
 }
 

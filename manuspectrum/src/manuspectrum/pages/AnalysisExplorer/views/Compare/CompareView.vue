@@ -16,6 +16,8 @@ import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftB
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AutoWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/AutoWindowBody.vue";
+import ComponentStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ComponentStrip.vue";
+import FocusTrail from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue";
 import FoldedSummary from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue";
 import HiddenWindowsMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HiddenWindowsMenu.vue";
 import SelectionIndicator from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue";
@@ -26,7 +28,10 @@ import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 import { useLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
-import { useSynthesis } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
+import {
+    synthesisFor,
+    useSynthesis,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import {
     ANNOUNCE_KEY,
     FOLIO_REQUEST_KEY,
@@ -43,7 +48,13 @@ import {
     writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 import { foldedSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/folded-summary.ts";
+import {
+    materialCounts,
+    materialsSubtitle,
+    materialsTitle,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
 import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
+import { selectionComponents } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/selection-components.ts";
 import { offeredTools } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 import {
     autoWindows,
@@ -87,6 +98,12 @@ const FIRST_SIZE: WindowSize = "M";
  * the windows are arranged.
  * Its heading takes the focus when the shell asks (`SCREEN_FOCUS_KEY`).
  *
+ * The Materials window and the components under the toolbar read the
+ * synthesis only once it answers for the Selection shown (`synthesisFor`);
+ * while the next one is read, the Materials window keeps from the previous
+ * one only the identified materials the Selection still holds or that cite
+ * one of its analyses, so it is neither dropped nor shows what left.
+ *
  * The tools (D60) are opened from « + Tool », which offers those the
  * synthesis of the Selection (`useSynthesis`, read while the view is shown)
  * has something for. A tool window follows the grid like the others,
@@ -97,10 +114,13 @@ const FIRST_SIZE: WindowSize = "M";
  * shown is hidden or closed, the focus goes to « Hidden windows », else to
  * the heading.
  *
- * The view provides the linked selection of its windows
- * (`useLinkedSelection`, `LINKED_SELECTION_KEY`), shown in the toolbar by
- * `SelectionIndicator` before « Hidden windows » and « + Tool ». Its
- * windows mark the linked with the `--linked-*` tokens of the page. A
+ * Under the toolbar, the components of the Selection (`ComponentStrip`)
+ * can be pinned like anything a window shows.
+ * The view provides the focus of its windows (`useLinkedSelection`,
+ * `LINKED_SELECTION_KEY`), shown in the toolbar by `SelectionIndicator`
+ * before « Hidden windows » and « + Tool », and under the pointer by
+ * `FocusTrail`. Its windows mark what it lights with the `--focus-*` hues
+ * and the `ms-focus` recipes of the page (`css/explorer`). A
  * folded window sums up what it holds (`FoldedSummary`), with the button
  * that unfolds it. A folio asked of the folio image tools
  * (`FOLIO_REQUEST_KEY`, a folio of the coverage matrix clicked) is shown
@@ -120,7 +140,7 @@ const linked = useLinkedSelection({
 provide(LINKED_SELECTION_KEY, linked);
 const folioAsked = ref<FolioRequest | null>(null);
 provide(FOLIO_REQUEST_KEY, { asked: folioAsked, show: showFolio });
-const { $gettext, $ngettext, interpolate } = useGettext();
+const { $gettext, $ngettext, current, interpolate } = useGettext();
 const root = useTemplateRef<HTMLElement>("root");
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
@@ -138,6 +158,20 @@ const hiddenFrom = shallowRef(new Map<string, AutoWindow>());
 // The windows last compared for new spectra, once the view is open.
 let known: AutoWindow[] = [];
 
+/** The synthesis of the Selection shown; null while the next one is read or after a failure. */
+const answered = computed(() =>
+    synthesisFor(
+        synthesis,
+        store.basket.map((item) => item.key),
+    ),
+);
+/** Whether the synthesis held answers a previous Selection while the next one is read. */
+const pending = computed(
+    () =>
+        answered.value === null &&
+        synthesis.status.value === "loading" &&
+        synthesis.data.value !== null,
+);
 const windows = computed<AutoWindow[]>((previous) =>
     keepUnchangedCurves(
         previous ?? [],
@@ -145,6 +179,8 @@ const windows = computed<AutoWindow[]>((previous) =>
             store.basket,
             selection.byKey.value,
             selection.missing.value,
+            answered.value ?? (pending.value ? synthesis.data.value : null),
+            pending.value,
         ),
     ),
 );
@@ -183,6 +219,10 @@ const toolSpecs = computed<CompareWindowSpec[]>(() => {
         id: tool.id,
         title: titles[tool.kind],
         kind: $gettext("Tool"),
+        subtitle:
+            tool.kind === "coverage"
+                ? $gettext("folio › component × technique")
+                : undefined,
         size: FIRST_SIZE,
         hides: false,
     }));
@@ -191,6 +231,14 @@ const gridSpecs = computed(() => [
     ...specs.value.filter((spec) => !hidden.value.includes(spec.id)),
     ...toolSpecs.value,
 ]);
+const components = computed(() =>
+    selectionComponents(
+        store.basket,
+        selection.byKey.value,
+        answered.value,
+        current,
+    ),
+);
 const draftCount = computed(() =>
     tools.value.length > 0 &&
     (synthesis.status.value === "ready" || synthesis.status.value === "loading")
@@ -296,7 +344,7 @@ function titleOf(window: AutoWindow): string {
         case "micro":
             return $gettext("Micro-images");
         case "characterizations":
-            return $gettext("Identified materials");
+            return materialsTitle($gettext);
         case "not-in-chart":
             return $gettext("Without visualisation");
     }
@@ -304,6 +352,14 @@ function titleOf(window: AutoWindow): string {
 
 /** What the window holds, counted. */
 function subtitleOf(window: AutoWindow): string {
+    if (window.kind === "characterizations") {
+        return materialsSubtitle(
+            materialCounts(window.records),
+            $gettext,
+            $ngettext,
+            interpolate,
+        );
+    }
     let count: number;
     let message: string;
     switch (window.kind) {
@@ -318,10 +374,6 @@ function subtitleOf(window: AutoWindow): string {
         case "micro":
             count = window.images.length;
             message = $ngettext("%{n} image", "%{n} images", count);
-            break;
-        case "characterizations":
-            count = window.rows.length;
-            message = $ngettext("%{n} material", "%{n} materials", count);
             break;
         default:
             count = window.entries.length;
@@ -500,6 +552,9 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
                         @retry="synthesis.retry"
                     />
                 </template>
+                <template #below-toolbar>
+                    <ComponentStrip :components="components" />
+                </template>
                 <template #summary="{ window: spec, unfold }">
                     <FoldedSummary
                         v-if="summaries.get(spec.id)"
@@ -523,6 +578,7 @@ async function chooseTool({ kind }: { kind: ToolKind }): Promise<void> {
                     />
                 </template>
             </WindowGrid>
+            <FocusTrail />
         </template>
     </section>
 </template>

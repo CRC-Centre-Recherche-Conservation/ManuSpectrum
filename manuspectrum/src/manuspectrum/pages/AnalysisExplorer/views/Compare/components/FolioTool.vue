@@ -17,12 +17,15 @@ import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconBut
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 
 import { useDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocument.ts";
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import {
+    componentOutlines,
     shapeBounds,
     shapeCentre,
+    shapeCorner,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
@@ -36,6 +39,7 @@ import {
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     analysisNode,
+    componentNode,
     materialNode,
     slotNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
@@ -44,6 +48,8 @@ import { folioMarks } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/
 import type { Feature } from "geojson";
 import type { SynthesisCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedMark } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import type { PreviewEvent } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { ComponentOutline } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
@@ -54,6 +60,12 @@ interface DrawnMark {
     marker: L.Marker | null;
     halo: L.GeoJSON;
     frame: L.GeoJSON;
+}
+
+/** The Leaflet layers drawn for one Component outline, restyled in place. */
+interface DrawnOutline {
+    outline: L.GeoJSON;
+    label: L.Marker | null;
 }
 
 const MAX_ZOOM = 8;
@@ -71,6 +83,11 @@ const HALO_OPACITY = 0.9;
 /** The opacity of what the selection does not link (`--linked-fade`). */
 const FADED_OPACITY = 0.35;
 const FRAME_DASH = "4 4";
+const OUTLINE_WEIGHT = 1.5;
+/** The fill of a Component outline the focus links (`self`, `direct`). */
+const OUTLINE_TINT = 0.08;
+/** Keeps the Components' labels under the analyses' markers. */
+const OUTLINE_LABEL_Z = -1000;
 const PREVIEW_DASH = "1 3";
 const RELATED_PADDING = 0.25;
 /** The other folios « Show » buttons are offered for. */
@@ -91,12 +108,16 @@ const SERIES_SLOTS = 8;
  * technologies read.
  *
  * Each mark stands for its record (`an:`, `ch:`): its name in the list is
- * the record's toggle, and the mark is shown by how the record stands to
- * the linked selection (an unlinked zone fades, an unlinked marker's fill
- * fades under a label turned to ink, a linked frame is drawn solid and
- * heavier) and to the node a mouse previews (dotted).
- * A selection change restyles the layers drawn (`setStyle`, attributes on
- * the markers) and never draws them again. The whole page is fitted to the
+ * the record's toggle, carrying the focus marks, and the mark is shown by
+ * how the record stands to the focus (an unlinked zone fades, an unlinked
+ * marker's fill fades under a label turned to ink, a linked frame is drawn
+ * solid and heavier in the hue of its first slot, its marker ringed in
+ * that hue) and to the node a mouse previews (dotted, in the hue of the
+ * slot the pin would take). A focus change restyles the layers drawn
+ * (`setStyle` for the weights; the hue as the `--frame-hue` property of
+ * each frame path, which the stylesheet strokes with, and `--h1`, `--hp`,
+ * `data-*` on the markers) and never draws them again. A marker carries
+ * the `data-node` and `data-slots` of its record, which its window counts. The whole page is fitted to the
  * stage again when the window changes size, until the reader moves the view
  * (a pointer, the wheel or the keyboard on the map, « Fit to related »);
  * « Whole page » and another folio fit it again. « Fit to related » frames the
@@ -107,6 +128,13 @@ const SERIES_SLOTS = 8;
  * folio » (each unavailable at its end of `canvases`), or asked by Compare
  * (`FOLIO_REQUEST_KEY`: a folio of the coverage matrix clicked), which the
  * tool follows when the folio is one of its `canvases`.
+ *
+ * Under the zones, each Component of the document placed on the folio
+ * (`DocumentPayload.components`) is outlined thinly with its name; the
+ * outline and its line in the list below toggle the Component (`comp:`)
+ * and preview it under a mouse. A linked outline (`self`, `direct`) is
+ * stroked and tinted in its first slot's hue, an unlinked one fades; a
+ * focus change restyles it like the zones.
  */
 const props = defineProps<{
     canvases: readonly SynthesisCanvas[];
@@ -133,7 +161,10 @@ let drawn: L.LayerGroup | null = null;
 let fitted: string | null = null;
 /** Whether the view is still the whole page: the reader has not moved it since it was fitted. */
 let pageView = true;
+/** The kind of the last pointer over the map; Leaflet hands the outlines only mouse events, touch taps' included. */
+let lastPointerType = "mouse";
 const drawnMarks = new Map<NodeId, DrawnMark>();
+const drawnOutlines = new Map<NodeId, DrawnOutline>();
 
 const row = computed(
     () =>
@@ -162,6 +193,14 @@ const folioMarksShown = computed<FolioMark[]>(() =>
         ? folioMarks(payload.value, row.value.canvas, props.slots)
         : [],
 );
+/** The outlines of the components the Selection reaches (all of them outside a Compare view). */
+const outlinesShown = computed<ComponentOutline[]>(() => {
+    if (!payload.value || !row.value) return [];
+    const nodes = linkedMarks.linked?.graph.value.nodes;
+    return componentOutlines(payload.value, row.value.canvas).filter(
+        (outline) => !nodes || nodes.has(componentNode(outline.id)),
+    );
+});
 const hasImage = computed(() => Boolean(canvas.value?.image.service));
 /** The marks of the page the selection links. */
 const relatedHere = computed(() =>
@@ -223,11 +262,12 @@ watch(
     },
 );
 watch(() => canvas.value?.id, drawPage);
-watch(folioMarksShown, drawMarks);
+watch([folioMarksShown, outlinesShown], drawMarks);
 watch(
     () => [
-        linkedMarks.linked?.levels.value,
+        linkedMarks.linked?.relations.value,
         linkedMarks.linked?.previewLevels.value,
+        linkedMarks.linked?.previewSlot.value,
     ],
     restyle,
 );
@@ -254,6 +294,8 @@ onMounted(() => {
         zoomSnap: 0.25,
     });
     map.setView([0, 0], INITIAL_ZOOM);
+    surface.addEventListener("pointerover", notePointer, true);
+    surface.addEventListener("pointerdown", notePointer, true);
     stackSmallestOnTop(map);
     drawPage();
     drawMarks();
@@ -349,12 +391,92 @@ function frameLayer(
     });
 }
 
-/** A marker on each item's first zone with an extent, else its first point; every extent framed in the slot colour, every halo drawn under every frame. */
+/** The name of a Component, set inside the north-west corner of its outline. */
+function outlineLabel(outline: ComponentOutline): L.DivIcon {
+    const element = document.createElement("span");
+    element.className = "folio-tool-outline-label";
+    element.textContent = outline.name.value;
+    element.lang = outline.name.lang;
+    element.setAttribute("aria-hidden", "true");
+    return L.divIcon({
+        html: element,
+        className: "folio-tool-outline-label-host",
+        iconSize: undefined,
+        iconAnchor: [-2, -2],
+    });
+}
+
+function notePointer(event: PointerEvent): void {
+    lastPointerType = event.pointerType;
+}
+
+/** The kind of pointer behind a Leaflet mouse event: a touch tap's compatibility mouse events are `touch`. */
+function pointerTypeOf(original: MouseEvent | undefined): string {
+    if (!original) return lastPointerType;
+    if ("pointerType" in original)
+        return (original as PointerEvent).pointerType;
+    const capabilities = (
+        original as MouseEvent & {
+            sourceCapabilities?: { firesTouchEvents?: boolean } | null;
+        }
+    ).sourceCapabilities;
+    return capabilities?.firesTouchEvents ? "touch" : lastPointerType;
+}
+
+function previewEvent(event: L.LeafletEvent): PreviewEvent {
+    const original = (event as L.LeafletMouseEvent).originalEvent;
+    const path = (event.propagatedFrom as L.Path | undefined)?.getElement?.();
+    return {
+        pointerType: pointerTypeOf(original),
+        currentTarget: path ?? null,
+    };
+}
+
+/** Each Component outline, its name at its first zone's corner; the outline toggles and previews the Component. */
+function drawOutlines(group: L.LayerGroup): void {
+    for (const outline of outlinesShown.value) {
+        const node = componentNode(outline.id);
+        const features = outline.shapes.flatMap((shape) => {
+            const feature = shapeFeature(shape, { id: outline.id });
+            return feature ? [feature] : [];
+        });
+        const layer = L.geoJSON(features, {
+            style: () => ({
+                className: "folio-tool-outline",
+                weight: OUTLINE_WEIGHT,
+                opacity: 1,
+                fill: true,
+                fillOpacity: 0,
+            }),
+        });
+        layer.on("click", () => linkedMarks.toggle(node));
+        layer.on("mouseover", (event) =>
+            linkedMarks.enter(node, previewEvent(event)),
+        );
+        layer.on("mouseout", (event) => linkedMarks.leave(previewEvent(event)));
+        group.addLayer(layer);
+        const corner = shapeCorner(outline.shapes[0]);
+        const label = corner
+            ? L.marker(corner, {
+                  icon: outlineLabel(outline),
+                  interactive: false,
+                  keyboard: false,
+                  zIndexOffset: OUTLINE_LABEL_Z,
+              })
+            : null;
+        if (label) group.addLayer(label);
+        drawnOutlines.set(node, { outline: layer, label });
+    }
+}
+
+/** The Component outlines under a marker on each item's first zone with an extent, else its first point; every extent framed in the slot colour, every halo drawn under every frame. */
 function drawMarks(): void {
     if (!map) return;
     drawn?.remove();
     drawnMarks.clear();
+    drawnOutlines.clear();
     drawn = L.layerGroup().addTo(map);
+    drawOutlines(drawn);
     const markers: L.Marker[] = [];
     const framed: [FolioMark, Feature[], L.Marker | null][] = [];
     for (const mark of folioMarksShown.value) {
@@ -433,30 +555,88 @@ function frameStyle(
     return style;
 }
 
-/** Shows each mark drawn by how its record stands to the selection and the preview, on the layers already drawn. */
+/** Shows each Component outline by how it stands to the focus and the preview, on the layers already drawn. */
+function restyleOutlines(): void {
+    for (const [node, layers] of drawnOutlines) {
+        const level = linkedMarks.rel(node);
+        const preview = linkedMarks.previewRel(node);
+        const attributes = linkedMarks.focus(node);
+        const lit = level === "self" || level === "direct";
+        const hue = preview
+            ? attributes.style?.["--hp"]
+            : lit
+              ? attributes.style?.["--h1"]
+              : undefined;
+        layers.outline.setStyle({
+            opacity: level === "none" ? FADED_OPACITY : 1,
+            fillOpacity: lit ? OUTLINE_TINT : 0,
+            dashArray: preview ? PREVIEW_DASH : "",
+        });
+        layers.outline.eachLayer((layer) => {
+            const path = (layer as L.Path).getElement?.();
+            if (!(path instanceof SVGElement)) return;
+            path.dataset.node = node;
+            setProperty(path, "--frame-hue", hue);
+        });
+        const host = layers.label?.getElement();
+        if (!host) continue;
+        host.dataset.node = node;
+        setData(host, "rel", level);
+        setData(host, "preview", preview);
+        setData(host, "slots", attributes["data-slots"]);
+        setProperty(host, "--h1", lit ? attributes.style?.["--h1"] : undefined);
+        setProperty(host, "--hp", attributes.style?.["--hp"]);
+    }
+}
+
+/** Shows each mark and outline drawn by how its record stands to the focus and the preview, on the layers already drawn. */
 function restyle(): void {
+    restyleOutlines();
     for (const [node, layers] of drawnMarks) {
         const level = linkedMarks.rel(node);
         const preview = linkedMarks.previewRel(node);
+        const attributes = linkedMarks.focus(node);
+        const hue =
+            (preview ? attributes.style?.["--hp"] : undefined) ??
+            linkedMarks.hue(node) ??
+            undefined;
         layers.frame.setStyle(frameStyle(level, preview));
+        layers.frame.eachLayer((layer) => {
+            const path = (layer as L.Path).getElement?.();
+            if (path instanceof SVGElement)
+                setProperty(path, "--frame-hue", hue);
+        });
         layers.halo.setStyle({
             opacity:
                 level === "none" ? FADED_OPACITY * HALO_OPACITY : HALO_OPACITY,
         });
         const host = layers.marker?.getElement();
         if (!host) continue;
+        host.dataset.node = node;
         setData(host, "rel", level);
         setData(host, "preview", preview);
+        setData(host, "slots", attributes["data-slots"]);
+        setProperty(host, "--h1", attributes.style?.["--h1"]);
+        setProperty(host, "--hp", attributes.style?.["--hp"]);
     }
 }
 
 function setData(
-    element: HTMLElement,
+    element: HTMLElement | SVGElement,
     name: string,
     value: string | undefined,
 ): void {
     if (value === undefined) delete element.dataset[name];
     else element.dataset[name] = value;
+}
+
+function setProperty(
+    element: HTMLElement | SVGElement,
+    name: string,
+    value: string | undefined,
+): void {
+    if (value === undefined) element.style.removeProperty(name);
+    else element.style.setProperty(name, value);
 }
 
 /** Frames the marks of the page the selection links. */
@@ -646,6 +826,7 @@ function wholePage(): void {
                     :key="mark.id"
                     :data-rel="linkedMarks.rel(nodeOf(mark))"
                     :data-preview="linkedMarks.previewRel(nodeOf(mark))"
+                    :style="linkedMarks.rowStyle(nodeOf(mark))"
                     @pointerenter="onEnter(mark, $event)"
                     @pointerleave="linkedMarks.leave($event)"
                 >
@@ -663,11 +844,13 @@ function wholePage(): void {
                     />
                     <button
                         type="button"
-                        class="name"
+                        class="name ms-focus"
+                        v-bind="linkedMarks.focus(nodeOf(mark))"
                         :lang="mark.name.lang"
                         :aria-pressed="linkedMarks.pressed(nodeOf(mark))"
                         @click="linkedMarks.toggle(nodeOf(mark))"
                     >
+                        <FocusPip :node="nodeOf(mark)" />
                         <span>{{ mark.name.value }}</span>
                     </button>
                     <span
@@ -687,6 +870,44 @@ function wholePage(): void {
                     )
                 }}</span>
             </p>
+            <ul
+                v-if="outlinesShown.length > 0"
+                class="marks outlines"
+                :aria-label="$gettext('Components outlined on this folio')"
+            >
+                <li
+                    v-for="outline in outlinesShown"
+                    :key="outline.id"
+                    :data-rel="linkedMarks.rel(componentNode(outline.id))"
+                    :data-preview="
+                        linkedMarks.previewRel(componentNode(outline.id))
+                    "
+                    :style="linkedMarks.rowStyle(componentNode(outline.id))"
+                    @pointerenter="
+                        linkedMarks.enter(componentNode(outline.id), $event)
+                    "
+                    @pointerleave="linkedMarks.leave($event)"
+                >
+                    <span
+                        class="outline-swatch"
+                        aria-hidden="true"
+                    />
+                    <button
+                        type="button"
+                        class="name ms-focus"
+                        v-bind="linkedMarks.focus(componentNode(outline.id))"
+                        :lang="outline.name.lang"
+                        :aria-pressed="
+                            linkedMarks.pressed(componentNode(outline.id))
+                        "
+                        @click="linkedMarks.toggle(componentNode(outline.id))"
+                    >
+                        <FocusPip :node="componentNode(outline.id)" />
+                        <span>{{ outline.name.value }}</span>
+                    </button>
+                    <span class="kind">{{ $gettext("Component") }}</span>
+                </li>
+            </ul>
         </template>
     </div>
 </template>
@@ -836,7 +1057,61 @@ function wholePage(): void {
 }
 
 .folio-tool :deep(.folio-tool-frame) {
-    stroke: var(--ink);
+    stroke: var(--frame-hue, var(--ink));
+}
+
+.folio-tool :deep(.folio-tool-outline) {
+    fill: var(--frame-hue, transparent);
+    stroke: var(--frame-hue, var(--ink-dim));
+}
+
+.folio-tool :deep(.folio-tool-outline-label-host) {
+    background: none;
+    border: none;
+}
+
+.folio-tool :deep(.folio-tool-outline-label) {
+    display: inline-block;
+    padding: 0 0.25rem;
+    border-radius: 0.125rem;
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    color: var(--ink-muted);
+    font-size: 0.5625rem;
+    white-space: nowrap;
+}
+
+.folio-tool
+    :deep(
+        .folio-tool-outline-label-host[data-rel="none"]
+            .folio-tool-outline-label
+    ) {
+    opacity: var(--linked-fade, 0.35);
+}
+
+.folio-tool
+    :deep(
+        .folio-tool-outline-label-host:is(
+                [data-rel="self"],
+                [data-rel="direct"]
+            )
+            .folio-tool-outline-label
+    ) {
+    color: var(--h1, var(--ink));
+}
+
+.folio-tool .outlines .outline-swatch {
+    inline-size: 0.75rem;
+    block-size: 0.5rem;
+    border: 0.09375rem solid var(--ink-dim);
+    border-radius: 0.125rem;
+}
+
+.folio-tool
+    .outlines
+    li:is([data-rel="self"], [data-rel="direct"])
+    .outline-swatch {
+    border-color: var(--h1, var(--ink-dim));
+    background: color-mix(in srgb, var(--h1, var(--focus-1)) 8%, transparent);
 }
 
 .folio-tool :deep(.folio-tool-marker-host[data-rel="none"] .folio-tool-marker) {
@@ -849,23 +1124,23 @@ function wholePage(): void {
 }
 
 .folio-tool :deep(.folio-tool-marker-host[data-rel="self"] .folio-tool-marker) {
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+    outline: 0.1875rem solid var(--h1, var(--focus-1));
     outline-offset: 0.0625rem;
 }
 
 .folio-tool
     :deep(.folio-tool-marker-host[data-rel="direct"] .folio-tool-marker) {
-    box-shadow: 0 0 0 0.125rem var(--linked-mark, var(--blue-text));
+    box-shadow: 0 0 0 0.125rem var(--h1, var(--focus-1));
 }
 
 .folio-tool
     :deep(.folio-tool-marker-host[data-rel="evidence"] .folio-tool-marker) {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    outline: 0.0625rem solid var(--h1, var(--focus-1));
     outline-offset: 0.0625rem;
 }
 
 .folio-tool :deep(.folio-tool-marker-host[data-preview] .folio-tool-marker) {
-    outline: 0.125rem dotted var(--linked-mark, var(--blue-text));
+    outline: 0.125rem dotted var(--hp, var(--focus-1));
     outline-offset: 0.125rem;
 }
 
@@ -897,10 +1172,12 @@ function wholePage(): void {
 }
 
 .folio-tool .marks .name {
+    --r: 0.375rem;
+    --link-pip: 0.8125rem;
     min-block-size: 1.5rem;
     padding: 0 0.25rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.25rem;
+    border-radius: 0.375rem;
     background: none;
     color: inherit;
     font: inherit;
@@ -912,29 +1189,45 @@ function wholePage(): void {
     border-color: var(--border-hover);
 }
 
-.folio-tool .marks .name[aria-pressed="true"] {
-    border-color: var(--linked-mark, var(--blue-text));
-    font-weight: 600;
-}
-
 .folio-tool .marks li {
-    padding-inline-start: 0.375rem;
-    border-inline-start: var(--linked-bar, 0.1875rem) solid transparent;
+    position: relative;
+    padding-inline-start: 0.5rem;
+    border-radius: 0.375rem;
+    transition:
+        background-color var(--dur-med, 260ms),
+        color var(--dur-med, 260ms);
 }
 
-.folio-tool .marks li[data-rel="self"] {
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
+.folio-tool .marks li::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 0;
+    background: var(--bar, var(--focus-1));
+    content: "";
+    transition: inline-size var(--dur-med, 260ms) var(--ease-out-expo);
 }
 
-.folio-tool .marks li[data-rel="self"],
-.folio-tool .marks li[data-rel="direct"],
-.folio-tool .marks li[data-rel="evidence"] {
-    border-inline-start-color: var(--linked-mark, var(--blue-text));
-    background: var(--linked-tint, var(--bg-alt));
+.folio-tool
+    .marks
+    li:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 6%,
+        var(--surface)
+    );
 }
 
-.folio-tool .marks li[data-rel="evidence"] {
-    border-inline-start-style: dashed;
+.folio-tool .marks li[data-rel="self"]::before {
+    inline-size: 0.25rem;
+}
+
+.folio-tool .marks li[data-rel="direct"]::before {
+    inline-size: 0.1875rem;
+}
+
+.folio-tool .marks li[data-rel="evidence"]::before {
+    inline-size: 0.0625rem;
 }
 
 .folio-tool .marks li[data-rel="none"] {
@@ -942,7 +1235,11 @@ function wholePage(): void {
 }
 
 .folio-tool .marks li[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 5%,
+        var(--surface)
+    );
 }
 
 .folio-tool .slot-1,

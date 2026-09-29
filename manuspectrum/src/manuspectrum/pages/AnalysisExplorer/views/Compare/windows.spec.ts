@@ -8,6 +8,15 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
+    BASKET,
+    BY_KEY,
+    CH1,
+    CH2,
+    CH3,
+    ITEMS,
+    SYNTHESIS,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import {
     autoWindows,
     keepUnchangedCurves,
     windowIdsOf,
@@ -207,6 +216,53 @@ describe("autoWindows", () => {
                 characterization: material.characterization,
             },
         ]);
+    });
+
+    it("lists in the materials window the synthesis' materials citing the Selection, with its analyses", () => {
+        const materials = autoWindows(
+            BASKET,
+            BY_KEY,
+            new Set(),
+            SYNTHESIS,
+        ).find((window) => window.kind === "characterizations");
+        expect(
+            materials?.kind === "characterizations" &&
+                materials.records.map((record) => [record.id, record.selected]),
+        ).toEqual([
+            [CH1, true],
+            [CH2, false],
+            [CH3, false],
+        ]);
+        expect(
+            materials?.kind === "characterizations" &&
+                materials.analyses.map((analysis) => analysis.id),
+        ).toEqual(
+            ITEMS.flatMap((item) =>
+                item.kind === "characterization" ? [] : [item.analysis.id],
+            ),
+        );
+        expect(materials?.keys).toEqual([`ch:${CH1}:-`]);
+    });
+
+    it("opens the materials window for materials citing a Selection of analyses only", () => {
+        const analyses = BASKET.filter(
+            (item) => item.kind !== "characterization",
+        );
+        const windows = autoWindows(analyses, BY_KEY, new Set(), SYNTHESIS);
+        const materials = windows.find(
+            (window) => window.kind === "characterizations",
+        );
+        expect(materials?.keys).toEqual([]);
+        expect(
+            materials?.kind === "characterizations" &&
+                materials.records.map((record) => record.id),
+        ).toEqual([CH1, CH2, CH3]);
+        expect(
+            autoWindows(analyses, BY_KEY, new Set(), {
+                ...SYNTHESIS,
+                materials: [],
+            }).some((window) => window.kind === "characterizations"),
+        ).toBe(false);
     });
 
     it("lists what no window draws, with the reason, once per item", () => {

@@ -12,12 +12,18 @@ import {
 describe("node ids", () => {
     it("reads back the kind and parts it was made of, URLs and separators included", () => {
         const canvas = "https://iiif.example/m|1/canvas:2";
-        const id = cellNode(canvas, "http://example.org/xrf");
+        const id = cellNode(canvas, "comp|1", "http://example.org/xrf");
         expect(id.startsWith("cell:")).toBe(true);
         expect(parseNodeId(id)).toEqual({
             kind: "cell",
-            parts: [canvas, "http://example.org/xrf"],
+            parts: [canvas, "comp|1", "http://example.org/xrf"],
         });
+    });
+
+    it("keeps a cell without component apart from one with a component", () => {
+        const bare = cellNode("c1", null, "xrf");
+        expect(parseNodeId(bare)?.parts).toEqual(["c1", null, "xrf"]);
+        expect(bare).not.toBe(cellNode("c1", "comp", "xrf"));
     });
 
     it("writes a missing part empty and reads it back as null", () => {

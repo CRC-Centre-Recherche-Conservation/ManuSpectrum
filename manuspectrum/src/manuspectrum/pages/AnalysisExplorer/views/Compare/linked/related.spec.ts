@@ -5,6 +5,7 @@ import {
     AN2,
     BASKET,
     BY_KEY,
+    BY_KEY_WITH_COMPONENT,
     C1,
     C2,
     CH1,
@@ -14,13 +15,16 @@ import {
     F1,
     F2,
     F3,
+    K1,
     SYNTHESIS,
+    SYNTHESIS_WITH_COMPONENT,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { buildGraph } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/graph.ts";
 import {
     analysisNode,
     canvasNode,
     cellNode,
+    componentNode,
     documentNode,
     elementNode,
     fileNode,
@@ -91,10 +95,24 @@ describe("related", () => {
     });
 
     it("links a coverage cell to its analyses and the materials placed there citing its technique", () => {
-        const levels = related(GRAPH, new Set([cellNode(C1, "xrf")]));
+        const levels = related(GRAPH, new Set([cellNode(C1, null, "xrf")]));
         expect(levels.get(analysisNode(AN1))).toBe("direct");
         expect(levels.get(materialNode(CH1))).toBe("direct");
         expect(levels.has(analysisNode(AN2))).toBe(false);
+    });
+
+    it("lights a component's cells through its records, and a component cell lights its component", () => {
+        const graph = buildGraph({
+            basket: BASKET,
+            byKey: BY_KEY_WITH_COMPONENT,
+            synthesis: SYNTHESIS_WITH_COMPONENT,
+        });
+        const component = related(graph, new Set([componentNode(K1)]));
+        expect(component.get(cellNode(C1, K1, "xrf"))).toBe("direct");
+        expect(component.get(analysisNode(AN1))).toBe("direct");
+        const cell = related(graph, new Set([cellNode(C1, K1, "xrf")]));
+        expect(cell.get(componentNode(K1))).toBe("direct");
+        expect(cell.has(cellNode(C2, null, "raman"))).toBe(false);
     });
 
     it("links nothing for a node the graph does not hold", () => {

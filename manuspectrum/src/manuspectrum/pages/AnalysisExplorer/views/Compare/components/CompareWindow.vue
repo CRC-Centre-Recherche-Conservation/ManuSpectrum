@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, useId, useTemplateRef, watch } from "vue";
+import { computed, inject, ref, useId, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
+import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 import SizePicker from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SizePicker.vue";
 
 import {
@@ -11,6 +12,15 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
 import { provideWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
+import {
+    useWindowFocus,
+    windowHue,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowFocus.ts";
+import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    focusHue,
+    focusStripe,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 
 import type { WindowSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
@@ -36,6 +46,13 @@ import type { WindowSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Com
  * keeps its state. Folded, it shows its `summary` slot under the header,
  * which receives `unfold`. `position` is 1-based in reading order; `size` is null
  * for a size set by hand.
+ *
+ * While the focus holds pinned nodes (`LINKED_SELECTION_KEY`), the window
+ * reads what its body lights (`useWindowFocus`): lit, its top rim shows
+ * one band per slot reaching into it (as wide as the things of that slot)
+ * and its header counts them (slot discs, « N linked »); otherwise it is
+ * quiet. A preview lighting something in it half-shows the rim, and the
+ * rim breathes once when something in it just gained a slot.
  */
 const props = withDefaults(
     defineProps<{
@@ -70,13 +87,17 @@ const emit = defineEmits<{
     (event: "close"): void;
 }>();
 
-const { $gettext, interpolate } = useGettext();
+const linked = inject(LINKED_SELECTION_KEY, null);
+
+const { $gettext, $ngettext, interpolate } = useGettext();
 
 const headingId = useId();
 const bodyId = useId();
 const menuId = useId();
 const actions = provideWindowActions();
 const moreRoot = useTemplateRef<HTMLElement>("moreRoot");
+const bodyElement = useTemplateRef<HTMLElement>("bodyElement");
+const lit = useWindowFocus(bodyElement);
 const moreControl = useTemplateRef<InstanceType<typeof IconButton>>("more");
 const moreElement = computed(() => moreControl.value?.element ?? null);
 const { expanded, closeMenu, toggle, onButtonKeydown, onMenuKeydown } =
@@ -85,6 +106,32 @@ const { expanded, closeMenu, toggle, onButtonKeydown, onMenuKeydown } =
 /** Set once the content was shown: it stays mounted while folded. */
 const everShown = ref(props.folded !== true || props.enlarged);
 
+const focusActive = computed(() => (linked?.selection.value.length ?? 0) > 0);
+const isLinked = computed(() => focusActive.value && lit.linkedCount.value > 0);
+const frameClass = computed(() => ({
+    enlarged: props.enlarged,
+    "is-linked": isLinked.value,
+    "is-quiet": focusActive.value && lit.linkedCount.value === 0,
+    "is-previewed": lit.previewed.value,
+}));
+const frameStyle = computed<Record<string, string> | undefined>(() => {
+    const previewSlot = linked?.previewSlot.value ?? null;
+    const previewHue = previewSlot === null ? null : focusHue(previewSlot);
+    const rim = lit.rim.value || (previewHue ? focusStripe([previewHue]) : "");
+    const hue = windowHue(lit.slots.value) ?? previewHue;
+    if (!rim && !hue) return undefined;
+    return {
+        ...(rim ? { "--rim": rim } : {}),
+        ...(hue ? { "--h1": hue } : {}),
+    };
+});
+const linkedText = computed(() =>
+    interpolate(
+        $ngettext("%{n} linked", "%{n} linked", lit.linkedCount.value),
+        { n: lit.linkedCount.value },
+        true,
+    ),
+);
 const isFirst = computed(() => props.position <= 1);
 const isLast = computed(() => props.position >= props.total);
 const bodyHidden = computed(() => props.folded === true && !props.enlarged);
@@ -154,7 +201,9 @@ function onMenuClose(): void {
         >
             <div
                 class="compare-window-frame"
-                :class="{ enlarged: props.enlarged }"
+                :class="frameClass"
+                :data-breath="lit.breath.value ?? undefined"
+                :style="frameStyle"
             >
                 <header class="head">
                     <span
@@ -191,6 +240,20 @@ function onMenuClose(): void {
                             >{{ props.subtitle }}</span
                         >
                     </h3>
+                    <span
+                        v-if="isLinked"
+                        class="linked-count"
+                    >
+                        <span class="dots">
+                            <FocusSlotDot
+                                v-for="slot in lit.slots.value"
+                                :key="slot"
+                                size="small"
+                                :number="slot"
+                            />
+                        </span>
+                        <span class="text">{{ linkedText }}</span>
+                    </span>
                     <div
                         v-if="actions.length > 0 && !bodyHidden"
                         class="actions"
@@ -383,6 +446,7 @@ function onMenuClose(): void {
                 </div>
                 <div
                     :id="bodyId"
+                    ref="bodyElement"
                     class="body"
                     :hidden="bodyHidden"
                 >
@@ -443,12 +507,120 @@ function onMenuClose(): void {
 }
 
 .compare-window-frame {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     min-block-size: 0;
     block-size: 100%;
+    border-radius: var(--explorer-radius, 0.625rem);
     font-size: 0.8125rem;
+    transition: box-shadow var(--dur-slow, 420ms) var(--ease-out-expo);
+}
+
+/* The rim: one band per focus slot reaching into the window, widths by count. */
+.compare-window-frame::before {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 0;
+    inset-inline: 0;
+    block-size: 0.125rem;
+    border-start-start-radius: var(--explorer-radius, 0.625rem);
+    border-start-end-radius: var(--explorer-radius, 0.625rem);
+    background: var(--rim, var(--focus-1));
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity var(--dur-slow, 420ms),
+        background var(--dur-med, 260ms);
+}
+
+.compare-window-frame.is-linked {
+    box-shadow: var(--shadow-md);
+}
+
+.compare-window-frame.is-linked::before {
+    opacity: 1;
+}
+
+.compare-window-frame.is-previewed::before {
+    opacity: 0.45;
+    transition-duration: var(--dur-fast, 160ms);
+}
+
+.compare-window-frame.is-quiet .title .name {
+    color: var(--ink-muted);
+}
+
+/* The breath: the rim of a window that just gained a slot rises, dips once and settles. */
+.compare-window-frame[data-breath="odd"]::before {
+    animation: compare-window-breathe-odd var(--breathe-dur, 900ms) ease-in-out
+        1;
+}
+
+.compare-window-frame[data-breath="even"]::before {
+    animation: compare-window-breathe-even var(--breathe-dur, 900ms) ease-in-out
+        1;
+}
+
+@keyframes compare-window-breathe-odd {
+    0% {
+        opacity: 0;
+    }
+    35% {
+        opacity: 1;
+    }
+    65% {
+        opacity: 0.45;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes compare-window-breathe-even {
+    0% {
+        opacity: 0;
+    }
+    35% {
+        opacity: 1;
+    }
+    65% {
+        opacity: 0.45;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.compare-window-frame .linked-count {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.375rem;
+    padding-block: 0.125rem;
+    padding-inline: 0.25rem 0.5rem;
+    border-radius: 999rem;
+    background: var(--bg-alt);
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.compare-window-frame .linked-count .dots {
+    display: inline-flex;
+    gap: 0.1875rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .compare-window-frame,
+    .compare-window-frame::before {
+        animation: none !important;
+        transition-duration: 1ms !important;
+    }
 }
 
 .compare-window-frame .head {

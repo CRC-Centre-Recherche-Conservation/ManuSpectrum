@@ -32,12 +32,15 @@ const ELEMENTS = [
 ];
 
 let stop: (() => void) | null = null;
+let attached: VueWrapper | null = null;
 
 beforeEach(() => {
     setActivePinia(createPinia());
 });
 
 afterEach(() => {
+    attached?.unmount();
+    attached = null;
     stop?.();
     stop = null;
     vi.useRealTimers();
@@ -51,11 +54,13 @@ function mountLinked(): { view: VueWrapper; linked: LinkedSelection } {
     const started = startLinkedSelection();
     stop = started.stop;
     const view = mount(PeriodicTable, {
+        attachTo: document.body,
         props: { elements: SYNTHESIS.elements },
         global: {
             provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
         },
     });
+    attached = view;
     return { view, linked: started.linked };
 }
 

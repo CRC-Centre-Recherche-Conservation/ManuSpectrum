@@ -126,6 +126,49 @@ describe("useLinkedMarks", () => {
         expect(started.linked.previewing.value).toBe(elementNode("Cu"));
     });
 
+    it("gathers the focus attributes of a toggle: slots, ring, first hue, bloom and preview hue", async () => {
+        vi.useFakeTimers();
+        const started = startLinkedSelection();
+        stop = started.stop;
+        const marks = marksWith(started.linked);
+        expect(marks.focus(analysisNode(AN1))).toEqual({
+            "data-node": analysisNode(AN1),
+            "data-rel": undefined,
+            "data-slots": undefined,
+            "data-preview": undefined,
+            "data-bloom": undefined,
+            style: undefined,
+        });
+        marks.toggle(elementNode("Cu"));
+        marks.toggle(materialNode(CH1));
+        const both = marks.focus([materialNode(CH1), analysisNode(AN2)]);
+        expect(both["data-node"]).toBe(
+            `${materialNode(CH1)} ${analysisNode(AN2)}`,
+        );
+        expect(both["data-rel"]).toBe("self");
+        expect(both["data-slots"]).toBe("2 1");
+        expect(both["data-bloom"]).toBe("even");
+        expect(both.style).toEqual({
+            "--ring":
+                "conic-gradient(from -90deg, var(--focus-2) 0.0% 50.0%, var(--focus-1) 50.0% 100.0%)",
+            "--h1": "var(--focus-2)",
+        });
+        expect(marks.slots(analysisNode(AN1))).toEqual([
+            { slot: 1, level: "evidence" },
+            { slot: 2, level: "evidence" },
+        ]);
+        expect(marks.hue(analysisNode(AN1))).toBe("var(--focus-1)");
+        expect(marks.focus(analysisNode(AN2))["data-rel"]).toBe("none");
+        expect(marks.hue(analysisNode(AN2))).toBeNull();
+        vi.advanceTimersByTime(900);
+        expect(marks.blooms(materialNode(CH1))).toBe(false);
+        marks.enter(analysisNode(AN2), { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(200);
+        const previewed = marks.focus(analysisNode(AN2));
+        expect(previewed["data-preview"]).toBe("self");
+        expect(previewed.style).toEqual({ "--hp": "var(--focus-3)" });
+    });
+
     it("toggles in the store outside a Compare view", () => {
         const marks = marksWith(null);
         marks.toggle(elementNode("Fe"));

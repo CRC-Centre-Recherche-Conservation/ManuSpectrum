@@ -12,12 +12,15 @@ import {
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { technique } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
+    COMPONENT,
+    K1,
     SYNTHESIS,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
     canvasNode,
     cellNode,
+    componentNode,
     elementNode,
     techniqueNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
@@ -34,17 +37,27 @@ const ROWS: SynthesisCoverage[] = [
         label: "f. 1r",
         document: "d",
         counts: { xrf: 2, fors: 1 },
+        components: [{ component: null, counts: { xrf: 2, fors: 1 } }],
     },
-    { canvas: "c2", label: "f. 1v", document: "d", counts: { fors: 1 } },
+    {
+        canvas: "c2",
+        label: "f. 1v",
+        document: "d",
+        counts: { fors: 1 },
+        components: [{ component: null, counts: { fors: 1 } }],
+    },
 ];
 
 let stop: (() => void) | null = null;
+let attached: VueWrapper | null = null;
 
 beforeEach(() => {
     setActivePinia(createPinia());
 });
 
 afterEach(() => {
+    attached?.unmount();
+    attached = null;
     stop?.();
     stop = null;
     vi.useRealTimers();
@@ -60,11 +73,13 @@ function mountLinked(): { view: VueWrapper; linked: LinkedSelection } {
     const started = startLinkedSelection();
     stop = started.stop;
     const view = mount(CoverageMatrix, {
+        attachTo: document.body,
         props: { rows: SYNTHESIS.coverage, techniques: SYNTHESIS.techniques },
         global: {
             provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
         },
     });
+    attached = view;
     return { view, linked: started.linked };
 }
 
@@ -73,7 +88,7 @@ describe("CoverageMatrix", () => {
         const view = mountMatrix();
         expect(
             view.findAll('thead th[scope="col"]').map((th) => th.text()),
-        ).toEqual(["Folio", "FORSFORS", "XRFXRF"]);
+        ).toEqual(["Folio › component", "FORSFORS", "XRFXRF"]);
         expect(
             view.findAll('tbody th[scope="row"]').map((th) => th.text()),
         ).toEqual(["f. 1r", "f. 1v"]);
@@ -95,7 +110,7 @@ describe("CoverageMatrix", () => {
         ).toEqual(["2", "4", "2"]);
         const legend = view.find(".heat-legend");
         expect(legend.find(".caption").text()).toBe(
-            "Analyses of the Selection on the folio with the technique",
+            "Analyses of the Selection on the folio and component with the technique",
         );
         expect(legend.findAll(".end").map((end) => end.text())).toEqual([
             "1",
@@ -120,7 +135,7 @@ describe("CoverageMatrix", () => {
         await view.find("tbody .folio").trigger("click");
         await view.find("thead .technique").trigger("click");
         expect(useExplorerStore().compare.selection).toEqual([
-            cellNode("c1", "fors"),
+            cellNode("c1", null, "fors"),
             canvasNode("c1"),
             techniqueNode("fors"),
         ]);
@@ -157,7 +172,7 @@ describe("CoverageMatrix", () => {
         ]);
         expect(useExplorerStore().compare.selection).toEqual([
             canvasNode("c2"),
-            cellNode("c1", "fors"),
+            cellNode("c1", null, "fors"),
         ]);
         const stale = mountWith(true);
         await stale.find("tbody .folio").trigger("click");
@@ -213,13 +228,49 @@ describe("CoverageMatrix", () => {
         ).toEqual([undefined, "direct"]);
     });
 
+    it("splits a folio into one row per component, headed « folio › component », each cell its own node", async () => {
+        const view = mount(CoverageMatrix, {
+            props: {
+                rows: [
+                    {
+                        ...ROWS[0],
+                        components: [
+                            { component: null, counts: { xrf: 2 } },
+                            { component: COMPONENT, counts: { fors: 1 } },
+                        ],
+                    },
+                ],
+                techniques: [FORS, XRF],
+            },
+        });
+        const heads = view.findAll('tbody th[scope="row"]');
+        expect(heads.map((th) => th.text())).toEqual([
+            "f. 1r",
+            "f. 1r›Initial T",
+        ]);
+        const cells = view.findAll("tbody .cell");
+        expect(cells.map((cell) => cell.attributes("aria-label"))).toEqual([
+            "f. 1r, XRF: 2 analyses",
+            "f. 1r, Initial T, FORS: 1 analysis",
+        ]);
+        await cells[1].trigger("click");
+        await heads[1].find(".component").trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([
+            cellNode("c1", K1, "fors"),
+            componentNode(K1),
+        ]);
+        expect(heads[1].find(".component").attributes("aria-pressed")).toBe(
+            "true",
+        );
+    });
+
     it("leaves out a technique no row shown counts", () => {
         const view = mount(CoverageMatrix, {
             props: { rows: [ROWS[1]], techniques: [FORS, XRF] },
         });
         expect(
             view.findAll('thead th[scope="col"]').map((th) => th.text()),
-        ).toEqual(["Folio", "FORSFORS"]);
+        ).toEqual(["Folio › component", "FORSFORS"]);
         expect(view.findAll("tbody td")).toHaveLength(1);
     });
 });

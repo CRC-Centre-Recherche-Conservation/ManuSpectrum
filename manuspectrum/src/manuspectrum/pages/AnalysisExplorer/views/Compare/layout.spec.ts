@@ -176,6 +176,24 @@ describe("Compare window layout", () => {
         expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
     });
 
+    it("drops a stored colours × materials tool, now part of the Materials window", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: { "tool:colour-material:-": { x: 0, y: 0, w: 6, h: 5 } },
+                tools: [
+                    { kind: "colour-material", params: {} },
+                    { kind: "periodic", params: {} },
+                ],
+            }),
+        );
+        expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
+        forgetWindows(["tool:periodic:-"]);
+        expect(readLayout()).toEqual({});
+        expect(readTools()).toEqual([{ kind: "periodic", params: {} }]);
+    });
+
     it("keeps the open tools when windows are forgotten or the layout is emptied", () => {
         const box = { x: 0, y: 0, w: 6, h: 5 };
         writeTools([{ kind: "periodic", params: {} }]);

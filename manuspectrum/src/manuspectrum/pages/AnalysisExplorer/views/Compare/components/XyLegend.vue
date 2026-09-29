@@ -2,13 +2,16 @@
 import { useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
+
+import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import {
     dashArray,
     isColoured,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
+import type { LinkedMark } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
-import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 import type {
     Dash,
     LegendGroup,
@@ -24,20 +27,25 @@ export interface LegendToggleEvent {
 export interface LegendPreviewEvent {
     node: NodeId | null;
     pointerType: string;
+    /** The entry under the pointer, which the trail of the focus follows. */
+    anchor: Element | null;
 }
 
 /**
- * The legend of an XY window, the only one on screen: one entry per slot,
+ * The legend of an XY window, the only one on screen: one entry per slot
+ * on two lines (its label, analysis and technique code, then the
+ * component and folio of its analysis and its file when it holds one),
  * its files under it when it holds several, each a toggle of its node in
- * the linked selection (`aria-pressed` while selected). While something is
- * selected, an entry it links carries its level in `data-rel` and a bar;
- * an entry it does not link stays listed, its swatch faded, with a « + »
- * and a description saying a press adds it. A mouse or pen resting on an
- * entry previews it.
+ * the focus (`aria-pressed` while pinned). While something is pinned, an
+ * entry carries the focus marks of the nodes its curves stand for
+ * (`useLinkedMarks().focus`: ring, pip, bloom, `data-rel`), shown pinned
+ * only while its own node is; an entry the focus does not light stays
+ * listed, its swatch faded, its pip a « + »
+ * under the pointer, and a description saying a press adds it. A mouse or
+ * pen resting on an entry previews it.
  */
 const props = defineProps<{
     groups: readonly LegendGroup[];
-    selecting: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -46,27 +54,44 @@ const emit = defineEmits<{
 }>();
 
 const { $gettext } = useGettext();
+const marks = useLinkedMarks();
 const hintId = useId();
 
-function unrelated(relation: RelationLevel | null): boolean {
-    return props.selecting && relation === null;
+/** The `data-rel` of an entry: `self` only while its own node is pinned, else the strongest level of the other nodes its curves stand for. */
+function entryRel(
+    own: NodeId,
+    nodes: readonly NodeId[],
+): LinkedMark | undefined {
+    const level = marks.rel(nodes);
+    if (level !== "self" || marks.pressed(own) === "true") return level;
+    return marks.rel(nodes.filter((id) => marks.pressed(id) === "false"));
 }
 
-function relationOf(relation: RelationLevel | null): string | undefined {
-    if (!props.selecting) return undefined;
-    return relation ?? "none";
+/** Whether something is pinned and links none of the curves `nodes` stand for. */
+function unrelated(nodes: readonly NodeId[]): boolean {
+    return marks.rel(nodes) === "none";
 }
 
 /** The swatch of a line: its slot colour, a grey context slot in ink while the selection links it, as the chart draws it. */
 function strokeOf(
     slot: number,
     dash: Dash,
-    relation: RelationLevel | null,
+    nodes: readonly NodeId[],
 ): Record<string, string> {
+    const level = marks.rel(nodes);
     let stroke = "var(--series-context)";
     if (isColoured(slot)) stroke = `var(--series-${slot + 1})`;
-    else if (props.selecting && relation !== null) stroke = "var(--ink)";
+    else if (level !== undefined && level !== "none") stroke = "var(--ink)";
     return { stroke, strokeDasharray: dashArray(dash) };
+}
+
+/** Whether a slot's entry has a second line: its component, its folio or its one file. */
+function hasContext(group: LegendGroup): boolean {
+    return (
+        group.component !== null ||
+        group.folio !== null ||
+        group.entries.length === 1
+    );
 }
 
 function toggle(node: NodeId): void {
@@ -74,11 +99,17 @@ function toggle(node: NodeId): void {
 }
 
 function enter(node: NodeId, event: PointerEvent): void {
-    emit(PREVIEW_EVENT, { node, pointerType: event.pointerType });
+    const anchor =
+        event.currentTarget instanceof Element ? event.currentTarget : null;
+    emit(PREVIEW_EVENT, { node, pointerType: event.pointerType, anchor });
 }
 
 function leave(event: PointerEvent): void {
-    emit(PREVIEW_EVENT, { node: null, pointerType: event.pointerType });
+    emit(PREVIEW_EVENT, {
+        node: null,
+        pointerType: event.pointerType,
+        anchor: null,
+    });
 }
 </script>
 
@@ -95,18 +126,20 @@ function leave(event: PointerEvent): void {
             >
                 <button
                     type="button"
-                    class="entry"
-                    :class="{ unrelated: unrelated(group.relation) }"
+                    class="entry ms-focus"
+                    :class="{ unrelated: unrelated(group.nodes) }"
+                    v-bind="marks.focus(group.nodes)"
                     :data-node="group.node"
-                    :data-rel="relationOf(group.relation)"
+                    :data-rel="entryRel(group.node, group.nodes)"
                     :aria-pressed="group.pressed ? 'true' : 'false'"
                     :aria-describedby="
-                        unrelated(group.relation) ? hintId : undefined
+                        unrelated(group.nodes) ? hintId : undefined
                     "
                     @click="toggle(group.node)"
                     @pointerenter="enter(group.node, $event)"
                     @pointerleave="leave"
                 >
+                    <FocusPip :node="group.nodes" />
                     <svg
                         class="swatch"
                         viewBox="0 0 24 8"
@@ -117,30 +150,64 @@ function leave(event: PointerEvent): void {
                             y1="4"
                             x2="24"
                             y2="4"
-                            :style="
-                                strokeOf(group.slot, 'solid', group.relation)
-                            "
+                            :style="strokeOf(group.slot, 'solid', group.nodes)"
                         />
                     </svg>
-                    <span class="slot">{{ group.label }}</span>
+                    <span class="id">
+                        <span class="slot">{{ group.label }}</span>
+                        <span
+                            class="name"
+                            :lang="group.analysis.lang"
+                            :title="group.analysis.value"
+                            >{{ group.analysis.value }}</span
+                        >
+                        <small
+                            v-if="group.technique"
+                            class="technique"
+                            >{{ group.technique }}</small
+                        >
+                    </span>
                     <span
-                        class="name"
-                        :lang="group.analysis.lang"
-                        :title="group.analysis.value"
-                        >{{ group.analysis.value }}</span
+                        v-if="hasContext(group)"
+                        class="ctx"
                     >
-                    <span
-                        v-if="group.entries.length === 1"
-                        class="file"
-                        :title="group.entries[0].name"
-                        >{{ group.entries[0].name }}</span
-                    >
-                    <span
-                        v-if="unrelated(group.relation)"
-                        class="add"
-                        aria-hidden="true"
-                        >+</span
-                    >
+                        <template v-if="group.component">
+                            <span
+                                class="glyph"
+                                aria-hidden="true"
+                            ></span>
+                            <span
+                                class="component"
+                                :lang="group.component.lang"
+                                :title="group.component.value"
+                                >{{ group.component.value }}</span
+                            >
+                        </template>
+                        <span
+                            v-if="group.component && group.folio"
+                            aria-hidden="true"
+                            >·</span
+                        >
+                        <span
+                            v-if="group.folio"
+                            class="folio"
+                            >{{ group.folio }}</span
+                        >
+                        <span
+                            v-if="
+                                (group.component || group.folio) &&
+                                group.entries.length === 1
+                            "
+                            aria-hidden="true"
+                            >·</span
+                        >
+                        <span
+                            v-if="group.entries.length === 1"
+                            class="file"
+                            :title="group.entries[0].name"
+                            >{{ group.entries[0].name }}</span
+                        >
+                    </span>
                 </button>
                 <ul
                     v-if="group.entries.length > 1"
@@ -152,18 +219,20 @@ function leave(event: PointerEvent): void {
                     >
                         <button
                             type="button"
-                            class="entry"
-                            :class="{ unrelated: unrelated(entry.relation) }"
+                            class="entry ms-focus"
+                            :class="{ unrelated: unrelated(entry.nodes) }"
+                            v-bind="marks.focus(entry.nodes)"
                             :data-node="entry.node"
-                            :data-rel="relationOf(entry.relation)"
+                            :data-rel="entryRel(entry.node, entry.nodes)"
                             :aria-pressed="entry.pressed ? 'true' : 'false'"
                             :aria-describedby="
-                                unrelated(entry.relation) ? hintId : undefined
+                                unrelated(entry.nodes) ? hintId : undefined
                             "
                             @click="toggle(entry.node)"
                             @pointerenter="enter(entry.node, $event)"
                             @pointerleave="leave"
                         >
+                            <FocusPip :node="entry.nodes" />
                             <svg
                                 class="swatch"
                                 viewBox="0 0 24 8"
@@ -178,7 +247,7 @@ function leave(event: PointerEvent): void {
                                         strokeOf(
                                             entry.slot,
                                             entry.dash,
-                                            entry.relation,
+                                            entry.nodes,
                                         )
                                     "
                                 />
@@ -187,12 +256,6 @@ function leave(event: PointerEvent): void {
                                 class="file"
                                 :title="entry.name"
                                 >{{ entry.name }}</span
-                            >
-                            <span
-                                v-if="unrelated(entry.relation)"
-                                class="add"
-                                aria-hidden="true"
-                                >+</span
                             >
                         </button>
                     </li>
@@ -227,17 +290,18 @@ function leave(event: PointerEvent): void {
 }
 
 .xy-legend .entry {
+    --r: 0.5rem;
+    --link-pip: 0.8125rem;
     display: grid;
-    grid-template-columns: 1.5rem auto minmax(0, 1fr) auto;
-    align-items: baseline;
-    gap: 0 0.375rem;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0 0.5rem;
     inline-size: 100%;
     min-block-size: var(--explorer-target, 2.75rem);
     padding-block: 0.25rem;
     padding-inline: 0.375rem;
     border: 0.0625rem solid transparent;
-    border-inline-start: 0.1875rem solid transparent;
-    border-radius: 0.25rem;
+    border-radius: 0.5rem;
     background: transparent;
     color: var(--ink);
     font: inherit;
@@ -245,8 +309,8 @@ function leave(event: PointerEvent): void {
     cursor: pointer;
 }
 
-.xy-legend .files .entry {
-    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+.xy-legend .group > .entry .swatch {
+    grid-row: 1 / 3;
 }
 
 .xy-legend .entry:hover {
@@ -258,15 +322,21 @@ function leave(event: PointerEvent): void {
     outline-offset: 0.0625rem;
 }
 
-.xy-legend .entry[aria-pressed="true"] {
-    border-color: var(--ink);
-    font-weight: 600;
+.xy-legend
+    .entry:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 7%,
+        var(--surface)
+    );
 }
 
-.xy-legend .entry[data-rel="self"],
-.xy-legend .entry[data-rel="direct"],
-.xy-legend .entry[data-rel="evidence"] {
-    border-inline-start-color: var(--blue-text);
+.xy-legend .entry[data-preview] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 5%,
+        var(--surface)
+    );
 }
 
 .xy-legend .entry.unrelated {
@@ -285,11 +355,47 @@ function leave(event: PointerEvent): void {
     stroke-width: 0.1875rem;
 }
 
+.xy-legend .id,
+.xy-legend .ctx {
+    display: flex;
+    grid-column: 2;
+    align-items: baseline;
+    gap: 0.375rem;
+    min-inline-size: 0;
+    white-space: nowrap;
+}
+
+.xy-legend .ctx {
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+}
+
 .xy-legend .slot {
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.xy-legend .technique {
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+}
+
+.xy-legend .glyph {
+    flex: none;
+    inline-size: 0.5625rem;
+    block-size: 0.5625rem;
+    border: 0.09375rem dashed var(--ink-dim);
+    border-radius: 0.125rem;
+}
+
+.xy-legend .folio {
     font-family: var(--font-mono);
 }
 
 .xy-legend .name,
+.xy-legend .component,
 .xy-legend .file {
     min-inline-size: 0;
     overflow: hidden;
@@ -298,21 +404,11 @@ function leave(event: PointerEvent): void {
 }
 
 .xy-legend .group > .entry .file {
-    grid-column: 3;
-    color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 0.75rem;
 }
 
 .xy-legend .files .file {
     font-family: var(--font-mono);
-}
-
-.xy-legend .add {
-    grid-row: 1;
-    grid-column: -2;
-    font-family: var(--font-mono);
-    font-weight: 600;
 }
 
 .xy-legend .visually-hidden {

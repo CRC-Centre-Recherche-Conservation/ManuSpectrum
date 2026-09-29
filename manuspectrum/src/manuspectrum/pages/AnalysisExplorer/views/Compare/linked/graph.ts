@@ -69,6 +69,10 @@ class GraphBuilder {
     readonly places = new Map<NodeId, NodePlace[]>();
     readonly itemPlaces = new Map<NodeId, NodePlace[]>();
     readonly techniqueOf = new Map<string, string>();
+    /** The component each analysis of the Selection observes, null for none. */
+    readonly componentOf = new Map<string, string | null>();
+    /** The canvases of the synthesis each analysis is placed on. */
+    readonly canvasesOf = new Map<string, string[]>();
     readonly components = new Set<string>();
     readonly symbols = new Map<string, string>();
 
@@ -149,6 +153,7 @@ function addAnalysis(builder: GraphBuilder, hit: AnalysisHit): NodeId {
         );
     }
     builder.link(record, documentNode(hit.document.id), hit.document.name);
+    builder.componentOf.set(hit.id, hit.component?.id ?? null);
     if (hit.component) {
         builder.components.add(hit.component.id);
         builder.link(
@@ -245,10 +250,12 @@ function addSynthesis(
             const record = analysisNode(id);
             builder.link(record, canvas);
             builder.place(builder.places, record, where);
-            const technique = builder.techniqueOf.get(id);
-            if (technique) {
-                builder.link(record, cellNode(entry.canvas, technique));
-            }
+            builder.canvasesOf.set(id, [
+                ...(builder.canvasesOf.get(id) ?? []),
+                entry.canvas,
+            ]);
+            const cell = analysisCell(builder, id, entry.canvas);
+            if (cell) builder.link(record, cell);
         }
         for (const id of entry.materials) {
             builder.link(materialNode(id), canvas);
@@ -287,11 +294,17 @@ function addSynthesis(
     }
     for (const material of synthesis.materials) {
         const record = builder.add(materialNode(material.id));
+        for (const object of material.summary.objects) {
+            if (object.model !== "component") continue;
+            builder.components.add(object.id);
+            builder.add(componentNode(object.id), object.name);
+        }
         for (const id of material.evidence) {
             builder.cite(analysisNode(id), record);
-        }
-        for (const [canvas, technique] of material.cells) {
-            builder.link(record, cellNode(canvas, technique));
+            for (const canvas of builder.canvasesOf.get(id) ?? []) {
+                const cell = analysisCell(builder, id, canvas);
+                if (cell) builder.link(record, cell);
+            }
         }
         for (const id of material.objects) {
             builder.link(
@@ -304,11 +317,30 @@ function addSynthesis(
     }
 }
 
+/** The coverage cell of an analysis on `canvas`: its component and technique; null when its technique is unknown. */
+function analysisCell(
+    builder: GraphBuilder,
+    analysis: string,
+    canvas: string,
+): NodeId | null {
+    const technique = builder.techniqueOf.get(analysis);
+    if (!technique) return null;
+    return cellNode(
+        canvas,
+        builder.componentOf.get(analysis) ?? null,
+        technique,
+    );
+}
+
 /**
  * The links of the Selection's items (read items only, in slot order),
  * then those the synthesis adds when there is one: every canvas of an
  * analysis, the identified materials citing the Selection with their
- * evidence, folios, cells, objects, pairs and elements. A record is placed
+ * evidence, folios, cells, objects, pairs and elements. A cell of the
+ * coverage matrix is a canvas × component × technique: an analysis is
+ * linked to the cell of each canvas it is placed on, an identified
+ * material to the cells of its evidence analyses; a component reaches its
+ * cells through those records. A record is placed
  * on the synthesis canvases when it names any, else where its item says.
  */
 export function buildGraph({

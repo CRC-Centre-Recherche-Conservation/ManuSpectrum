@@ -500,6 +500,19 @@ describe("ChemicalImaging", () => {
             expect(picked(view)).toBe("Pb La");
         });
 
+        it("follows the element pinned last even when it takes a lower slot", async () => {
+            const { view, linked } = await mountLinked();
+            linked.toggle(elementNode("Fe"));
+            linked.toggle(elementNode("Pb"));
+            linked.toggle(elementNode("Fe"));
+            await flushPromises();
+            expect(picked(view)).toBe("Pb La");
+            linked.toggle(elementNode("Cu"));
+            await flushPromises();
+            expect(linked.slotOf(elementNode("Cu"))).toBe(1);
+            expect(picked(view)).toBe("Cu");
+        });
+
         it("keeps the layer the reader picked once the element is unselected", async () => {
             const { view, linked } = await mountLinked();
             linked.toggle(elementNode("Pb"));

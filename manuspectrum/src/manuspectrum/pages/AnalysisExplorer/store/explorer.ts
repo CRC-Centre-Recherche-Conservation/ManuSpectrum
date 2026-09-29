@@ -7,6 +7,10 @@ import {
     kindOf,
     uniqueKeys,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import {
+    pinInSlots,
+    unpinFromSlots,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type {
@@ -29,11 +33,13 @@ import type {
     LayerToggles,
     ColourLevel,
     ListFilterKey,
+    MaterialsGrouping,
     Overlay,
     PageSize,
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { FocusMode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
@@ -156,15 +162,27 @@ export const useExplorerStore = defineStore("explorer", () => {
     });
     const overlays = ref<Record<string, Overlay>>({});
     const basket = ref<BasketItem[]>([]);
-    /** Compare: the tools open, and the nodes the reader selected to see what is linked to them (never saved). */
-    const compare = ref<{ selection: NodeId[]; tools: ToolWindow[] }>({
+    /**
+     * Compare: the tools open, and the focus (never saved): the nodes the
+     * reader pinned to see what is linked to them, each at its slot
+     * (index + 1; null is a hole left by an unpin, never trailing), and
+     * whether it lights what relates to any of them or to all of them.
+     */
+    const compare = ref<{
+        selection: (NodeId | null)[];
+        mode: FocusMode;
+        tools: ToolWindow[];
+    }>({
         selection: [],
+        mode: "any",
         tools: [],
     });
     /** Rail groups folded to their heading; not in the address. */
     const collapsedGroups = ref<FacetGroup[]>([]);
     /** Which colour facet the rail's Colour toggle shows; not in the address. */
     const colourLevel = ref<ColourLevel>("colour");
+    /** How the Materials window of Compare groups its rows; for the tab only, not in the address. */
+    const materialsGrouping = ref<MaterialsGrouping>("record");
     /** Whether the folio legend is unfolded; folded when the explorer opens. */
     const legendOpen = ref(false);
 
@@ -279,6 +297,10 @@ export const useExplorerStore = defineStore("explorer", () => {
 
     function setColourLevel(level: ColourLevel): void {
         colourLevel.value = level;
+    }
+
+    function setMaterialsGrouping(grouping: MaterialsGrouping): void {
+        materialsGrouping.value = grouping;
     }
 
     function setLegendOpen(open: boolean): void {
@@ -399,28 +421,43 @@ export const useExplorerStore = defineStore("explorer", () => {
         };
     }
 
-    /** Adds a node to the linked selection, or removes it when it is there. */
+    /**
+     * Pins a node in the lowest free slot of the focus, or unpins it when
+     * it is there: its slot becomes a hole, trailing holes are trimmed, and
+     * no other slot is renumbered.
+     */
     function toggleSelection(id: NodeId): void {
         const current = compare.value.selection;
         compare.value = {
             ...compare.value,
             selection: current.includes(id)
-                ? current.filter((entry) => entry !== id)
-                : [...current, id],
+                ? unpinFromSlots(current, (entry) => entry === id)
+                : pinInSlots(current, id),
         };
     }
 
+    /** Empties the focus and lights what relates to any pinned node again. */
     function clearSelection(): void {
-        compare.value = { ...compare.value, selection: [] };
+        compare.value = { ...compare.value, selection: [], mode: "any" };
     }
 
-    /** Drops the selected nodes `keep` refuses; returns them, in selection order. */
+    function setFocusMode(mode: FocusMode): void {
+        if (compare.value.mode === mode) return;
+        compare.value = { ...compare.value, mode };
+    }
+
+    /** Unpins the nodes `keep` refuses, leaving holes; returns them, in slot order. */
     function pruneSelection(keep: (id: NodeId) => boolean): NodeId[] {
-        const dropped = compare.value.selection.filter((id) => !keep(id));
+        const dropped = compare.value.selection.filter(
+            (id): id is NodeId => id !== null && !keep(id),
+        );
         if (dropped.length > 0) {
             compare.value = {
                 ...compare.value,
-                selection: compare.value.selection.filter(keep),
+                selection: unpinFromSlots(
+                    compare.value.selection,
+                    (id) => !keep(id),
+                ),
             };
         }
         return dropped;
@@ -440,6 +477,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         compare,
         collapsedGroups,
         colourLevel,
+        materialsGrouping,
         legendOpen,
         basketFree,
         activeFilterCount,
@@ -456,6 +494,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         setLayer,
         toggleGroup,
         setColourLevel,
+        setMaterialsGrouping,
         setLegendOpen,
         addToBasket,
         addManyToBasket,
@@ -468,6 +507,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         closeTool,
         toggleSelection,
         clearSelection,
+        setFocusMode,
         pruneSelection,
     };
 });

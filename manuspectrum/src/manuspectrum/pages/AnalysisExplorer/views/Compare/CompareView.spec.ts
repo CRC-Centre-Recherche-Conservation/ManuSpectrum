@@ -74,6 +74,7 @@ const SYNTHESIS: SynthesisResponse = {
             label: "f. 12r",
             document: uuid(1),
             counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
         },
     ],
     canvases: [
@@ -143,6 +144,19 @@ const XRF_EIGHT_ITEM = whole(
     Array.from({ length: 8 }, (_, index) => spectrum(10 + index, XRF)),
 );
 const MAPS_ITEM = whole(8, [imagingEntry()]);
+const COMPONENT_ITEM: Item = {
+    key: `an:${analysisHit(11).id}:-`,
+    kind: "analysis",
+    analysis: {
+        ...analysisHit(11),
+        component: {
+            id: uuid(951),
+            model: "component",
+            name: { value: "Initial T", lang: "en" },
+        },
+    },
+    files: [spectrum(11, XRF)],
+};
 
 const ITEMS = new Map(
     [
@@ -157,6 +171,7 @@ const ITEMS = new Map(
         MAPS_ITEM,
         XRF_THIRD_ITEM,
         XRF_EIGHT_ITEM,
+        COMPONENT_ITEM,
     ].map((item) => [item.key, item]),
 );
 
@@ -164,6 +179,8 @@ let pinia: Pinia;
 let announce: ReturnType<typeof vi.fn>;
 let fetchMock: ReturnType<typeof vi.fn>;
 let synthesis: SynthesisResponse;
+/** Answers the next synthesis requests instead of `synthesis`, while set. */
+let synthesisReply: (() => Promise<Response>) | null = null;
 let wrapper: VueWrapper | null = null;
 let uninstallDialog: () => void;
 
@@ -175,8 +192,11 @@ beforeEach(() => {
     announce = vi.fn();
     resetPlotly();
     synthesis = SYNTHESIS;
+    synthesisReply = null;
     fetchMock = vi.fn(async (url: string) => {
-        if (url.startsWith(SYNTHESIS_PATH)) return jsonResponse(synthesis);
+        if (url.startsWith(SYNTHESIS_PATH)) {
+            return synthesisReply ? synthesisReply() : jsonResponse(synthesis);
+        }
         if (url.startsWith(SERIES_PATH)) {
             return jsonResponse({
                 x: [1, 2],
@@ -269,6 +289,30 @@ async function hiddenEntries(view: VueWrapper) {
     return view.findAll('.hidden-windows [role="menuitem"]');
 }
 
+/** The synthesis with the identified material of `MATERIAL`, citing the analysis of `XRF_ITEM`. */
+function citingSynthesis(selected: boolean): SynthesisResponse {
+    return {
+        ...SYNTHESIS,
+        materials: [
+            {
+                id: characterization(1).id,
+                evidence: [analysisHit(1).id],
+                canvases: [],
+                objects: [],
+                summary: characterization(1),
+                selected,
+            },
+        ],
+    };
+}
+
+/** The Selection column of each line of the Materials window. */
+function materialSelection(view: VueWrapper): string[] {
+    return windowOf(view, "auto:characterizations")
+        .findAll("tbody td .selection")
+        .map((cell) => cell.text());
+}
+
 function storedLayout(): {
     boxes: Record<string, object>;
     hidden: string[];
@@ -332,7 +376,7 @@ describe("CompareView", () => {
             "Intensity against Raman shift (cm-1)",
             "XRF — energy / counts",
             "Micro-images",
-            "Identified materials",
+            "Materials",
             "Without visualisation",
         ]);
         expect(
@@ -348,7 +392,7 @@ describe("CompareView", () => {
             "1 spectrum",
             "1 spectrum",
             "1 image",
-            "1 material",
+            "1 identified material",
             "1 item",
         ]);
         expect(
@@ -366,11 +410,29 @@ describe("CompareView", () => {
             windowOf(view, "auto:micro").find("figcaption").text(),
         ).toContain("A4");
         expect(
-            windowOf(view, "auto:characterizations").find("tbody th").text(),
+            windowOf(view, "auto:characterizations")
+                .find("tbody th button")
+                .attributes("title"),
         ).toBe("Characterization 1");
         expect(windowOf(view, "auto:not-in-chart").find(".reason").text()).toBe(
             "No data to display.",
         );
+    });
+
+    it("lists the components of the Selection under the toolbar, none when it has none", async () => {
+        select(XRF_ITEM);
+        const view = await mountView();
+        expect(view.find(".component-strip").exists()).toBe(false);
+        select(COMPONENT_ITEM);
+        await flushPromises();
+        const strip = view.find(".window-grid > .component-strip");
+        expect(strip.exists()).toBe(true);
+        expect(strip.findAll(".chip").map((chip) => chip.text())).toEqual([
+            "Initial T1 · 0",
+        ]);
+        expect(
+            strip.element.previousElementSibling?.classList.contains("toolbar"),
+        ).toBe(true);
     });
 
     it("opens every window and every tool at size M", async () => {
@@ -471,13 +533,13 @@ describe("CompareView", () => {
         ]);
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
         expect(announce).toHaveBeenLastCalledWith(
-            "Identified materials hidden. Show it again from « Hidden windows ».",
+            "Materials hidden. Show it again from « Hidden windows ».",
         );
         expect(storedLayout()?.hidden).toEqual(["auto:characterizations"]);
         expect(hiddenButton(view).text()).toBe("Hidden windows (1)");
         expect(hiddenButton(view).attributes("aria-disabled")).toBeUndefined();
         const [show] = await hiddenEntries(view);
-        expect(show.text()).toBe("Show Identified materials");
+        expect(show.text()).toBe("Show Materials");
         await show.trigger("click");
         await flushPromises();
         expect(windowIds(view)).toEqual([
@@ -594,6 +656,34 @@ describe("CompareView", () => {
             hidden: [],
             folded: {},
         });
+    });
+
+    it("stops counting an identified material removed from the Selection as its own, and keeps its window while the next synthesis is read", async () => {
+        synthesis = citingSynthesis(true);
+        select(XRF_ITEM, MATERIAL);
+        const view = await mountView();
+        expect(materialSelection(view)).toEqual(["A2"]);
+        let answer: (response: Response) => void = () => undefined;
+        synthesisReply = () =>
+            new Promise<Response>((resolve) => (answer = resolve));
+        useExplorerStore().removeFromBasket(MATERIAL.key);
+        await flushPromises();
+        expect(windowIds(view)).toContain("auto:characterizations");
+        expect(materialSelection(view)).toEqual(["cites A1"]);
+        answer(jsonResponse(citingSynthesis(false)));
+        await flushPromises();
+        expect(materialSelection(view)).toEqual(["cites A1"]);
+    });
+
+    it("lists no identified material of a previous synthesis once the next one fails", async () => {
+        synthesis = citingSynthesis(false);
+        select(XRF_ITEM);
+        const view = await mountView();
+        expect(windowIds(view)).toContain("auto:characterizations");
+        synthesisReply = async () => jsonResponse({ error: "down" }, 500);
+        select(RAMAN_ITEM);
+        await flushPromises();
+        expect(windowIds(view)).not.toContain("auto:characterizations");
     });
 
     it("adds the windows of an item added later, reading only that item", async () => {

@@ -4,7 +4,7 @@ import { HEAT_STEPS } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/
 const STEPS = Array.from({ length: HEAT_STEPS }, (_, index) => index + 1);
 
 /**
- * The legend of a table shaded on the blue heat ramp: the smallest count,
+ * The legend of a table shaded on the heat ramp: the smallest count,
  * the steps of the ramp, the largest count, then what the number counts
  * (`caption`).
  */

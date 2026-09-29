@@ -17,7 +17,6 @@ import { startLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/test
 import {
     cellNode,
     elementNode,
-    pairNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { Pinia } from "pinia";
@@ -28,8 +27,20 @@ const AZURITE = valueRef("http://example.org/azurite", "Azurite");
 const CHALK = valueRef("http://example.org/chalk", "Chalk");
 const SYNTHESIS: SynthesisResponse = {
     coverage: [
-        { canvas: "c1", label: "f. 1r", document: "d", counts: { xrf: 2 } },
-        { canvas: "c2", label: "f. 1v", document: "d", counts: { xrf: 1 } },
+        {
+            canvas: "c1",
+            label: "f. 1r",
+            document: "d",
+            counts: { xrf: 2 },
+            components: [{ component: null, counts: { xrf: 2 } }],
+        },
+        {
+            canvas: "c2",
+            label: "f. 1v",
+            document: "d",
+            counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
+        },
     ],
     canvases: [
         {
@@ -68,14 +79,8 @@ const SYNTHESIS: SynthesisResponse = {
                     symbol: "Cu",
                 },
             ],
-            canvases: ["c1", "c3"],
             materials: [],
-            confidenceBest: null,
             count: 2,
-            cells: [
-                ["c1", "xrf"],
-                ["c3", "xrf"],
-            ],
         },
         {
             colour: null,
@@ -86,11 +91,8 @@ const SYNTHESIS: SynthesisResponse = {
                     symbol: "Ca",
                 },
             ],
-            canvases: ["c2"],
             materials: [],
-            confidenceBest: null,
             count: 1,
-            cells: [["c2", "xrf"]],
         },
     ],
     elements: [
@@ -126,36 +128,29 @@ function mountBody(props: Partial<BodyProps> & Pick<BodyProps, "kind">) {
 describe("ToolWindowBody", () => {
     it("selects the element clicked, pressed, without filtering the other tools", async () => {
         const periodic = mountBody({ kind: "periodic" });
-        const table = mountBody({ kind: "colour-material" });
         const matrix = mountBody({ kind: "coverage" });
         const cu = () => periodic.find('.grid button[aria-label="Cu, 2"]');
         await cu().trigger("click");
         expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
         expect(cu().attributes("aria-pressed")).toBe("true");
         expect(periodic.find(".chip").exists()).toBe(false);
-        expect(table.findAll("tbody tr")).toHaveLength(2);
         expect(matrix.findAll("tbody tr")).toHaveLength(2);
         await cu().trigger("click");
         expect(useExplorerStore().compare.selection).toEqual([]);
         expect(cu().attributes("aria-pressed")).toBe("false");
     });
 
-    it("adds each pair and cell clicked to the selection, several at once", async () => {
-        const table = mountBody({ kind: "colour-material" });
+    it("adds each element and cell clicked to the selection, several at once", async () => {
+        const periodic = mountBody({ kind: "periodic" });
         const matrix = mountBody({ kind: "coverage" });
-        await table.findAll("tbody tr")[1].trigger("click");
-        await table.findAll("tbody tr")[0].trigger("click");
+        await periodic
+            .find('.grid button[aria-label="Ca, 1"]')
+            .trigger("click");
         await matrix.findAll("tbody .cell")[1].trigger("click");
         expect(useExplorerStore().compare.selection).toEqual([
-            pairNode(null, CHALK.id),
-            pairNode(BLUE.id, AZURITE.id),
-            cellNode("c2", "xrf"),
+            elementNode("Ca"),
+            cellNode("c2", null, "xrf"),
         ]);
-        expect(
-            table
-                .findAll("tbody button")
-                .map((button) => button.attributes("aria-pressed")),
-        ).toEqual(["true", "true"]);
         expect(
             matrix
                 .findAll("tbody .cell")
@@ -214,13 +209,6 @@ describe("ToolWindowBody", () => {
         );
     });
 
-    it("names the folios of a pair from every canvas the Selection is placed on", () => {
-        const table = mountBody({ kind: "colour-material" });
-        expect(table.findAll("tbody tr")[0].findAll("td")[2].text()).toBe(
-            "f. 1r, f. 2r",
-        );
-    });
-
     it("gives the folio image the canvases holding a Selection item, with or without coverage", () => {
         const folio = mountBody({
             kind: "folio",
@@ -274,17 +262,15 @@ describe("ToolWindowBody", () => {
         expect(announce).not.toHaveBeenCalled();
     });
 
-    it("marks the stale matrix and table toggles disabled while the synthesis is read", () => {
-        for (const kind of ["coverage", "colour-material"] as const) {
-            const body = mountBody({ kind, status: "loading" });
-            const toggles = body.findAll(".view tbody button");
-            expect(toggles.length).toBeGreaterThan(0);
-            expect(
-                toggles.every(
-                    (button) => button.attributes("aria-disabled") === "true",
-                ),
-            ).toBe(true);
-        }
+    it("marks the stale matrix toggles disabled while the synthesis is read", () => {
+        const body = mountBody({ kind: "coverage", status: "loading" });
+        const toggles = body.findAll(".view tbody button");
+        expect(toggles.length).toBeGreaterThan(0);
+        expect(
+            toggles.every(
+                (button) => button.attributes("aria-disabled") === "true",
+            ),
+        ).toBe(true);
         const ready = mountBody({ kind: "coverage" });
         expect(
             ready.find(".view tbody button").attributes("aria-disabled"),

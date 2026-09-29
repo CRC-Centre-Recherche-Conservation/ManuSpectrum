@@ -114,7 +114,7 @@ describe("SelectionIndicator", () => {
         expect(panel.find(".clear").exists()).toBe(false);
     });
 
-    it("counts the selection and lists removable chips, what is linked and Clear all", async () => {
+    it("shows the slots in focus and lists one legend row per pinned node, which unpins it, and Clear the focus", async () => {
         const { view, linked } = mountIndicator();
         linked.toggle(elementNode("Cu"));
         linked.toggle(materialNode(CH1));
@@ -122,32 +122,85 @@ describe("SelectionIndicator", () => {
         expect(button(view).find(".summary").text()).toBe(
             "2 in focus · 2 related",
         );
+        expect(
+            button(view)
+                .findAll(".dots .focus-slot-dot")
+                .map((dot) => dot.text()),
+        ).toEqual(["1", "2"]);
+        expect(button(view).classes()).toContain("is-active");
         await button(view).trigger("click");
         expect(view.find(".chips").attributes("aria-label")).toBe("In focus");
-        const chips = view.findAll(".chips button");
-        expect(chips.map((chip) => chip.find(".chip-label").text())).toEqual([
+        const rows = view.findAll(".chips .chip-row");
+        expect(rows.map((row) => row.find(".chip-label").text())).toEqual([
             "Cu",
             "Blue of the mantle",
         ]);
-        expect(chips[0].attributes("aria-label")).toBe(
+        expect(rows.map((row) => row.find(".chip-kind").text())).toEqual([
+            "Element",
+            "Identified material",
+        ]);
+        expect(rows.map((row) => row.find(".chip-counts").text())).toEqual([
+            "2 direct · 1 evidence",
+            "0 direct · 1 evidence",
+        ]);
+        const unpins = view.findAll(".chips button.unpin");
+        expect(unpins[0].attributes("aria-label")).toBe(
             "Take Cu out of the focus",
         );
-        expect(view.findAll(".counts li").map((entry) => entry.text())).toEqual(
-            [
-                "1 analysis",
-                "1 identified material",
-                "2 files",
-                "1 folio",
-                "2 elements",
-            ],
-        );
-        await chips[0].trigger("click");
+        await unpins[0].trigger("click");
         expect(linked.selection.value).toEqual([materialNode(CH1)]);
-        expect(document.activeElement).toBe(view.find(".chips button").element);
+        expect(linked.slots.value).toEqual([null, materialNode(CH1)]);
+        expect(document.activeElement).toBe(
+            view.find(".chips button.unpin").element,
+        );
+        expect(view.find(".chip-row .focus-slot-dot").text()).toBe("2");
         await view.find("button.clear").trigger("click");
+        expect(view.find("button.clear").exists()).toBe(false);
         expect(linked.selection.value).toEqual([]);
         expect(view.find(".panel").exists()).toBe(false);
         expect(document.activeElement).toBe(button(view).element);
+    });
+
+    it("offers « any » or « all » once two nodes are pinned, as pressed buttons", async () => {
+        const { view, linked } = mountIndicator();
+        linked.toggle(elementNode("Cu"));
+        await button(view).trigger("click");
+        expect(view.find(".mode").exists()).toBe(false);
+        expect(view.find(".heading-mode").text()).toBe(
+            "what relates to any of them",
+        );
+        linked.toggle(elementNode("Ca"));
+        await view.vm.$nextTick();
+        const modes = view.findAll(".mode button");
+        expect(modes.map((mode) => mode.text())).toEqual([
+            "any of them",
+            "all of them",
+        ]);
+        expect(modes.map((mode) => mode.attributes("aria-pressed"))).toEqual([
+            "true",
+            "false",
+        ]);
+        await modes[1].trigger("click");
+        expect(linked.mode.value).toBe("all");
+        expect(view.find(".heading-mode").text()).toBe(
+            "what relates to all of them",
+        );
+        expect(
+            view
+                .findAll(".mode button")
+                .map((mode) => mode.attributes("aria-pressed")),
+        ).toEqual(["false", "true"]);
+    });
+
+    it("says which slot a previewed node would take while nothing is pinned", async () => {
+        vi.useFakeTimers();
+        const { view, linked } = mountIndicator();
+        linked.preview(elementNode("Cu"), { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(button(view).find(".summary").text()).toBe(
+            "Cu would be ① · 3 linked",
+        );
+        expect(button(view).classes()).toContain("is-preview");
     });
 
     it("opens the one document of the linked records on its folio and record", async () => {

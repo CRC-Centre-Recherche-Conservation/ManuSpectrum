@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
+
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 /**
- * A value of a Compare window that can be selected: a toggle button named
- * by its text, pressed while `node` is selected, marked by how it stands
- * to the linked selection (`data-rel`) and to the node previewed
- * (`data-preview`). A click adds `node` to the selection or removes it; a
- * mouse resting on it previews what it links.
+ * A value of a Compare window that can be pinned: a toggle button named
+ * by its text, pressed while `node` is pinned, marked by how it stands to
+ * the focus and to the node previewed (`useLinkedMarks().focus`, the
+ * `ms-focus` recipes: ring, pip, bloom, ghost ring). A click pins `node`
+ * or unpins it; a mouse resting on it previews what it links. The slot
+ * `lead` goes before the text (a glyph).
  */
 const props = defineProps<{
     node: NodeId;
@@ -22,24 +25,31 @@ const marks = useLinkedMarks();
 <template>
     <button
         type="button"
-        class="linked-chip"
+        class="linked-chip ms-focus"
+        v-bind="marks.focus(props.node)"
         :lang="props.lang"
-        :data-rel="marks.rel(props.node)"
-        :data-preview="marks.previewRel(props.node)"
         :aria-pressed="marks.pressed(props.node)"
         @click="marks.toggle(props.node)"
         @pointerenter="marks.enter(props.node, $event)"
         @pointerleave="marks.leave($event)"
     >
-        <span>{{ props.text }}</span>
+        <FocusPip :node="props.node" />
+        <slot name="lead" />
+        <span
+            class="text"
+            :title="props.text"
+            >{{ props.text }}</span
+        >
     </button>
 </template>
 
 <style scoped>
 .linked-chip {
-    position: relative;
+    --r: 999rem;
+    --link-pip: 0.8125rem;
     display: inline-flex;
     align-items: center;
+    gap: 0.3125rem;
     min-block-size: 1.5rem;
     padding-inline: 0.5rem;
     border: 0.0625rem solid var(--border-hover);
@@ -48,52 +58,35 @@ const marks = useLinkedMarks();
     color: var(--ink);
     font: inherit;
     font-size: 0.75rem;
+    max-inline-size: 16rem;
     text-align: start;
+    white-space: nowrap;
     cursor: pointer;
 }
 
+.linked-chip .text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .linked-chip:hover {
-    border-color: var(--linked-mark, var(--blue-text));
+    border-color: var(--ink-dim);
 }
 
 .linked-chip:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 
-.linked-chip[data-rel="direct"],
-.linked-chip[data-rel="evidence"] {
-    background: var(--linked-tint, var(--bg-alt));
-}
-
-.linked-chip[data-rel="direct"]::after,
-.linked-chip[data-rel="evidence"]::after {
-    position: absolute;
-    inset-inline: 0.5rem;
-    inset-block-end: 0.125rem;
-    border-block-end: 0.125rem solid var(--linked-mark, var(--blue-text));
-    content: "";
-}
-
-.linked-chip[data-rel="evidence"]::after {
-    border-block-end-style: dashed;
+.linked-chip:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
+    background: color-mix(
+        in srgb,
+        var(--h1, var(--focus-1)) 7%,
+        var(--surface)
+    );
 }
 
 .linked-chip[data-rel="none"] {
     border-color: var(--border);
-    color: var(--ink-muted);
-}
-
-.linked-chip[aria-pressed="true"] {
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
-    border-color: var(--linked-mark, var(--blue-text));
-    background: var(--linked-tint, var(--bg-alt));
-    font-weight: 600;
-}
-
-.linked-chip[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
 }
 </style>

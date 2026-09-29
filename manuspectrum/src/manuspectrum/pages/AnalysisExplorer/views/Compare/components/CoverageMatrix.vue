@@ -2,6 +2,7 @@
 import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 import HeatLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HeatLegend.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
@@ -11,29 +12,37 @@ import { heatLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/h
 import {
     canvasNode,
     cellNode,
+    componentNode,
     techniqueNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import { coverageRows } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
 import type {
     SynthesisCoverage,
     Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import type { CoverageRow } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
 /**
- * The coverage matrix of the Selection: its canvases in rows, techniques in
+ * The coverage matrix of the Selection: « folio › component » in rows
+ * (`coverageRows`: each canvas split by the component its analyses
+ * observe, the folio alone for those observing none), techniques in
  * columns (those the rows shown count, headed by their code, the full name
  * read and shown on hover), the number of analyses in each cell, shaded on
- * the blue heat ramp (`heatLevel`, the legend under the table says what the
- * number counts). A cell with analyses is a
- * toggle button naming its canvas, technique and count (`cell:`); a row's
- * folio (`cv:`) and a column's technique (`tech:`) are toggles too. A
- * click adds the node to the linked selection of Compare or removes it; a
- * toggle is pressed while its node is selected. A row's folio or a cell
- * clicked also asks the folio image tools to show that folio
- * (`FOLIO_REQUEST_KEY`). Rows, headers and cells
- * are marked by how they stand to the selection and to the node a mouse
- * previews; an unlinked cell keeps a quarter of its shade. An empty cell
- * says it holds no published analysis.
+ * the heat ramp (`heatLevel`, the legend under the table says what the
+ * number counts). A cell with analyses is a toggle button naming its
+ * folio, component, technique and count (`cell:`); a row's folio (`cv:`),
+ * its component (`comp:`) and a column's technique (`tech:`) are toggles
+ * too. A click adds the node to the linked selection of Compare or
+ * removes it; a toggle is pressed while its node is selected. A row's
+ * folio or a cell clicked also asks the folio image tools to show that
+ * folio (`FOLIO_REQUEST_KEY`). Every toggle carries the focus marks
+ * (`useLinkedMarks().focus`, the `ms-focus` ring, pip and bloom); rows and
+ * column headers are marked by how their folio, component and technique
+ * stand to the focus and to the node a mouse previews; an unlinked cell
+ * keeps a part of its shade. An empty cell says it holds no published
+ * analysis.
  */
 const props = defineProps<{
     rows: readonly SynthesisCoverage[];
@@ -46,45 +55,78 @@ const { $gettext, $ngettext, interpolate } = useGettext();
 const marks = useLinkedMarks();
 const folios = inject(FOLIO_REQUEST_KEY, null);
 
+const matrixRows = computed(() => coverageRows(props.rows));
+
 const shownTechniques = computed(() =>
     props.techniques.filter((technique) =>
-        props.rows.some((row) => countOf(row, technique) > 0),
+        matrixRows.value.some((row) => countOf(row, technique) > 0),
     ),
 );
 
 const maxCount = computed(() =>
     Math.max(
         0,
-        ...props.rows.flatMap((row) =>
+        ...matrixRows.value.flatMap((row) =>
             shownTechniques.value.map((technique) => countOf(row, technique)),
         ),
     ),
 );
 
-function countOf(row: SynthesisCoverage, technique: Technique): number {
+function countOf(row: CoverageRow, technique: Technique): number {
     return row.counts[technique.id] ?? 0;
 }
 
-function toggle(node: string): void {
+function rowKey(row: CoverageRow): string {
+    return `${row.canvas}|${row.component?.id ?? ""}`;
+}
+
+/** The nodes a row stands for: its folio, and its component when it has one. */
+function rowNodes(row: CoverageRow): NodeId[] {
+    return row.component
+        ? [canvasNode(row.canvas), componentNode(row.component.id)]
+        : [canvasNode(row.canvas)];
+}
+
+function cellOf(row: CoverageRow, technique: Technique): NodeId {
+    return cellNode(row.canvas, row.component?.id ?? null, technique.id);
+}
+
+function toggle(node: NodeId): void {
     if (!props.disabled) marks.toggle(node);
 }
 
 /** Toggles `node` and shows the folio of `row` in the folio image tools. */
-function toggleOnFolio(node: string, row: SynthesisCoverage): void {
+function toggleOnFolio(node: NodeId, row: CoverageRow): void {
     if (props.disabled) return;
     marks.toggle(node);
     folios?.show(row.canvas, row.label);
 }
 
-function cellLabel(row: SynthesisCoverage, technique: Technique): string {
+function cellLabel(row: CoverageRow, technique: Technique): string {
     const count = countOf(row, technique);
+    if (!row.component) {
+        return interpolate(
+            $ngettext(
+                "%{canvas}, %{technique}: %{n} analysis",
+                "%{canvas}, %{technique}: %{n} analyses",
+                count,
+            ),
+            { canvas: row.label, technique: technique.label.value, n: count },
+            true,
+        );
+    }
     return interpolate(
         $ngettext(
-            "%{canvas}, %{technique}: %{n} analysis",
-            "%{canvas}, %{technique}: %{n} analyses",
+            "%{canvas}, %{component}, %{technique}: %{n} analysis",
+            "%{canvas}, %{component}, %{technique}: %{n} analyses",
             count,
         ),
-        { canvas: row.label, technique: technique.label.value, n: count },
+        {
+            canvas: row.label,
+            component: row.component.name.value,
+            technique: technique.label.value,
+            n: count,
+        },
         true,
     );
 }
@@ -97,7 +139,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                 <thead>
                     <tr>
                         <th scope="col">
-                            <span>{{ $gettext("Folio") }}</span>
+                            <span>{{ $gettext("Folio › component") }}</span>
                         </th>
                         <th
                             v-for="technique in shownTechniques"
@@ -110,7 +152,10 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                         >
                             <button
                                 type="button"
-                                class="technique"
+                                class="technique ms-focus"
+                                v-bind="
+                                    marks.focus(techniqueNode(technique.id))
+                                "
                                 :title="technique.label.value"
                                 :aria-pressed="
                                     marks.pressed(techniqueNode(technique.id))
@@ -127,6 +172,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                                 "
                                 @pointerleave="marks.leave($event)"
                             >
+                                <FocusPip :node="techniqueNode(technique.id)" />
                                 <TechniqueCode
                                     :code="technique.code"
                                     :colour="technique.colour"
@@ -142,31 +188,91 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                 </thead>
                 <tbody>
                     <tr
-                        v-for="row in props.rows"
-                        :key="row.canvas"
-                        :data-rel="marks.rel(canvasNode(row.canvas))"
-                        :data-preview="marks.previewRel(canvasNode(row.canvas))"
+                        v-for="row in matrixRows"
+                        :key="rowKey(row)"
+                        :data-rel="marks.rel(rowNodes(row))"
+                        :data-preview="marks.previewRel(rowNodes(row))"
                     >
                         <th scope="row">
-                            <button
-                                type="button"
-                                class="folio"
-                                :aria-pressed="
-                                    marks.pressed(canvasNode(row.canvas))
-                                "
-                                :aria-disabled="
-                                    props.disabled ? 'true' : undefined
-                                "
-                                @click="
-                                    toggleOnFolio(canvasNode(row.canvas), row)
-                                "
-                                @pointerenter="
-                                    marks.enter(canvasNode(row.canvas), $event)
-                                "
-                                @pointerleave="marks.leave($event)"
-                            >
-                                <span>{{ row.label }}</span>
-                            </button>
+                            <span class="row-head">
+                                <button
+                                    type="button"
+                                    class="folio ms-focus"
+                                    v-bind="marks.focus(canvasNode(row.canvas))"
+                                    :aria-pressed="
+                                        marks.pressed(canvasNode(row.canvas))
+                                    "
+                                    :aria-disabled="
+                                        props.disabled ? 'true' : undefined
+                                    "
+                                    @click="
+                                        toggleOnFolio(
+                                            canvasNode(row.canvas),
+                                            row,
+                                        )
+                                    "
+                                    @pointerenter="
+                                        marks.enter(
+                                            canvasNode(row.canvas),
+                                            $event,
+                                        )
+                                    "
+                                    @pointerleave="marks.leave($event)"
+                                >
+                                    <FocusPip :node="canvasNode(row.canvas)" />
+                                    <span>{{ row.label }}</span>
+                                </button>
+                                <template v-if="row.component">
+                                    <span
+                                        class="separator"
+                                        aria-hidden="true"
+                                        >›</span
+                                    >
+                                    <button
+                                        type="button"
+                                        class="component ms-focus"
+                                        v-bind="
+                                            marks.focus(
+                                                componentNode(row.component.id),
+                                            )
+                                        "
+                                        :lang="row.component.name.lang"
+                                        :aria-pressed="
+                                            marks.pressed(
+                                                componentNode(row.component.id),
+                                            )
+                                        "
+                                        :aria-disabled="
+                                            props.disabled ? 'true' : undefined
+                                        "
+                                        @click="
+                                            toggle(
+                                                componentNode(row.component.id),
+                                            )
+                                        "
+                                        @pointerenter="
+                                            marks.enter(
+                                                componentNode(row.component.id),
+                                                $event,
+                                            )
+                                        "
+                                        @pointerleave="marks.leave($event)"
+                                    >
+                                        <FocusPip
+                                            :node="
+                                                componentNode(row.component.id)
+                                            "
+                                        />
+                                        <span
+                                            class="glyph"
+                                            aria-hidden="true"
+                                        ></span>
+                                        <span>{{
+                                            row.component.name.value
+                                        }}</span>
+                                    </button>
+                                </template>
+                            </span>
                         </th>
                         <td
                             v-for="technique in shownTechniques"
@@ -175,43 +281,27 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
                             <button
                                 v-if="countOf(row, technique) > 0"
                                 type="button"
-                                class="cell"
+                                class="cell ms-focus"
+                                v-bind="marks.focus(cellOf(row, technique))"
                                 :data-heat="
                                     heatLevel(countOf(row, technique), maxCount)
                                 "
-                                :data-rel="
-                                    marks.rel(
-                                        cellNode(row.canvas, technique.id),
-                                    )
-                                "
-                                :data-preview="
-                                    marks.previewRel(
-                                        cellNode(row.canvas, technique.id),
-                                    )
-                                "
                                 :aria-label="cellLabel(row, technique)"
                                 :aria-pressed="
-                                    marks.pressed(
-                                        cellNode(row.canvas, technique.id),
-                                    )
+                                    marks.pressed(cellOf(row, technique))
                                 "
                                 :aria-disabled="
                                     props.disabled ? 'true' : undefined
                                 "
                                 @click="
-                                    toggleOnFolio(
-                                        cellNode(row.canvas, technique.id),
-                                        row,
-                                    )
+                                    toggleOnFolio(cellOf(row, technique), row)
                                 "
                                 @pointerenter="
-                                    marks.enter(
-                                        cellNode(row.canvas, technique.id),
-                                        $event,
-                                    )
+                                    marks.enter(cellOf(row, technique), $event)
                                 "
                                 @pointerleave="marks.leave($event)"
                             >
+                                <FocusPip :node="cellOf(row, technique)" />
                                 <span>{{ countOf(row, technique) }}</span>
                             </button>
                             <template v-else>
@@ -232,7 +322,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
         <HeatLegend
             :caption="
                 $gettext(
-                    'Analyses of the Selection on the folio with the technique',
+                    'Analyses of the Selection on the folio and component with the technique',
                 )
             "
             :max="maxCount"
@@ -248,13 +338,15 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
 
 .coverage-matrix .scroll {
     position: relative;
+    padding-block-start: 0.5rem;
+    padding-inline-end: 0.5rem;
     overflow-x: auto;
 }
 
 .coverage-matrix table {
     inline-size: 100%;
     border-collapse: separate;
-    border-spacing: 0.25rem;
+    border-spacing: 0.3125rem;
     font-size: 0.8125rem;
 }
 
@@ -268,6 +360,7 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
     color: var(--ink-muted);
     font-weight: 600;
     white-space: nowrap;
+    transition: color var(--dur-med, 260ms);
 }
 
 .coverage-matrix thead th:first-child,
@@ -288,15 +381,28 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
     white-space: nowrap;
 }
 
+.coverage-matrix .row-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+}
+
+.coverage-matrix .separator {
+    color: var(--ink-dim);
+}
+
 .coverage-matrix .technique,
-.coverage-matrix .folio {
+.coverage-matrix .folio,
+.coverage-matrix .component {
+    --r: 0.375rem;
+    --link-pip: 0.8125rem;
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.375rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.25rem;
+    border-radius: 0.375rem;
     background: none;
     color: inherit;
     font: inherit;
@@ -305,19 +411,35 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
 }
 
 .coverage-matrix .technique:hover,
-.coverage-matrix .folio:hover {
+.coverage-matrix .folio:hover,
+.coverage-matrix .component:hover {
     border-color: var(--border-hover);
+}
+
+.coverage-matrix .component {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+
+.coverage-matrix .component .glyph {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border: 0.09375rem dashed var(--ink-dim);
+    border-radius: 0.1875rem;
 }
 
 .coverage-matrix .cell {
     --cell-heat: var(--heat-1);
     --cell-on: var(--heat-1-on);
+    --r: 0.375rem;
 
     inline-size: 100%;
     min-inline-size: var(--explorer-target, 2.75rem);
     min-block-size: var(--explorer-target, 2.75rem);
     border: none;
-    border-radius: 0.25rem;
+    border-radius: 0.375rem;
     background: var(--cell-heat);
     color: var(--cell-on);
     font: 600 0.8125rem var(--font-mono);
@@ -340,75 +462,28 @@ function cellLabel(row: SynthesisCoverage, technique: Technique): string {
     --cell-on: var(--heat-4-on);
 }
 
-.coverage-matrix button[aria-pressed="true"] {
-    border-color: var(--ink);
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
-}
-
-.coverage-matrix .cell[aria-pressed="true"] {
-    background: var(--ink);
-    color: var(--surface);
-}
-
 .coverage-matrix button[aria-disabled="true"] {
     cursor: default;
 }
 
 .coverage-matrix button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 
-.coverage-matrix .cell[data-rel="direct"] {
-    box-shadow:
-        0 0 0 0.125rem var(--surface),
-        0 0 0 0.25rem var(--linked-mark, var(--blue-text));
-}
-
-.coverage-matrix .cell[data-rel="evidence"] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.125rem;
-}
-
-.coverage-matrix .cell[data-rel="none"] {
-    background: color-mix(in srgb, var(--cell-heat) 25%, var(--surface));
-    color: var(--ink-muted);
-}
-
-.coverage-matrix tbody tr[data-rel="self"] th,
-.coverage-matrix tbody tr[data-rel="direct"] th,
-.coverage-matrix tbody tr[data-rel="evidence"] th,
-.coverage-matrix thead th[data-rel="self"],
-.coverage-matrix thead th[data-rel="direct"],
-.coverage-matrix thead th[data-rel="evidence"] {
-    background: var(--linked-tint, var(--bg-alt));
+.coverage-matrix
+    tbody
+    tr:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"])
+    th,
+.coverage-matrix
+    thead
+    th:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
     color: var(--ink);
-}
-
-.coverage-matrix tbody tr[data-rel="direct"] th .folio span,
-.coverage-matrix thead th[data-rel="direct"] .technique,
-.coverage-matrix tbody tr[data-rel="evidence"] th .folio span,
-.coverage-matrix thead th[data-rel="evidence"] .technique {
-    text-decoration: underline 0.125rem var(--linked-mark, var(--blue-text));
-    text-underline-offset: 0.25rem;
-}
-
-.coverage-matrix tbody tr[data-rel="evidence"] th .folio span,
-.coverage-matrix thead th[data-rel="evidence"] .technique {
-    text-decoration-style: dashed;
 }
 
 .coverage-matrix tbody tr[data-rel="none"] th,
 .coverage-matrix thead th[data-rel="none"] {
     color: var(--ink-muted);
-}
-
-.coverage-matrix tbody tr[data-preview] th .folio,
-.coverage-matrix thead th[data-preview] .technique,
-.coverage-matrix .cell[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
 }
 
 .coverage-matrix .none {

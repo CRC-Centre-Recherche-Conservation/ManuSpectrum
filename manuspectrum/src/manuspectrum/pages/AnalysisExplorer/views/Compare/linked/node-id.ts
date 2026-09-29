@@ -118,9 +118,13 @@ export function pairNode(colour: string | null, material: string): NodeId {
     return nodeId("pair", colour, material);
 }
 
-/** A cell of the coverage matrix: a canvas and a technique id. */
-export function cellNode(canvas: string, technique: string): NodeId {
-    return nodeId("cell", canvas, technique);
+/** A cell of the coverage matrix: a canvas, the component observed (null: none) and a technique id. */
+export function cellNode(
+    canvas: string,
+    component: string | null,
+    technique: string,
+): NodeId {
+    return nodeId("cell", canvas, component, technique);
 }
 
 /** A slot of the Selection, 0-based (A1 is 0). */

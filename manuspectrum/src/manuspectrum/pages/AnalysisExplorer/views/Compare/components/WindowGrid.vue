@@ -90,7 +90,8 @@ const GAP = "0.375rem";
  * keeps the DOM in reading order, which the keyboard follows. Windows are
  * told to draw again (`WINDOW_RESIZE_KEY`) when the grid's width or a
  * window's size changes, not when a drag makes the grid taller. The
- * `toolbar` slot is laid before « Rearrange ».
+ * `toolbar` slot is laid before « Rearrange », the `below-toolbar` slot
+ * between the toolbar and the workspace.
  *
  * « Enlarge » shows one window at a time in a modal `<dialog>` held here
  * (`showModal`): the window moves its header and body into it (the same
@@ -781,6 +782,7 @@ function rearrange(): void {
                 <span>{{ $gettext("Rearrange") }}</span>
             </button>
         </div>
+        <slot name="below-toolbar" />
         <div class="workspace">
             <div
                 ref="gridElement"

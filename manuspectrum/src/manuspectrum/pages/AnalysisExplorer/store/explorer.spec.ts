@@ -272,9 +272,35 @@ describe("Compare state", () => {
         store.toggleSelection("el:Cu");
         expect(store.compare.selection).toEqual(["el:Fe", "el:Cu"]);
         store.toggleSelection("el:Fe");
-        expect(store.compare.selection).toEqual(["el:Cu"]);
+        expect(store.compare.selection).toEqual([null, "el:Cu"]);
         store.clearSelection();
         expect(store.compare.selection).toEqual([]);
+    });
+
+    it("pins in the lowest free slot and never renumbers the others", () => {
+        const store = useExplorerStore();
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Cu");
+        store.toggleSelection("el:Pb");
+        store.toggleSelection("el:Cu");
+        expect(store.compare.selection).toEqual(["el:Fe", null, "el:Pb"]);
+        store.toggleSelection("el:Hg");
+        expect(store.compare.selection).toEqual(["el:Fe", "el:Hg", "el:Pb"]);
+        store.toggleSelection("el:Fe");
+        store.toggleSelection("el:Pb");
+        expect(store.compare.selection).toEqual([null, "el:Hg"]);
+        store.toggleSelection("el:Hg");
+        expect(store.compare.selection).toEqual([]);
+    });
+
+    it("holds the focus mode and resets it with the focus", () => {
+        const store = useExplorerStore();
+        expect(store.compare.mode).toBe("any");
+        store.toggleSelection("el:Fe");
+        store.setFocusMode("all");
+        expect(store.compare.mode).toBe("all");
+        store.clearSelection();
+        expect(store.compare.mode).toBe("any");
     });
 
     it("prunes the selected nodes a test refuses and says which", () => {
@@ -282,7 +308,7 @@ describe("Compare state", () => {
         store.toggleSelection("el:Fe");
         store.toggleSelection("el:Cu");
         expect(store.pruneSelection((id) => id !== "el:Fe")).toEqual(["el:Fe"]);
-        expect(store.compare.selection).toEqual(["el:Cu"]);
+        expect(store.compare.selection).toEqual([null, "el:Cu"]);
         const kept = store.compare.selection;
         expect(store.pruneSelection(() => true)).toEqual([]);
         expect(store.compare.selection).toBe(kept);

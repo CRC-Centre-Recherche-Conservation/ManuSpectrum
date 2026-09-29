@@ -26,6 +26,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/maps.ts";
 import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 interface LayerGroup {
     kind: LayerKind;
@@ -103,13 +104,18 @@ const groups = computed<LayerGroup[]>(() => {
     });
     return [...byKind.values()];
 });
-/** The layer of the last element selected that a map holds; null when none. */
+/**
+ * The layer a map holds of the element pinned last, while it is pinned
+ * and a map holds it; else of the element pinned in the highest slot
+ * among those a map holds; null when none.
+ */
 const pinnedLayer = computed<string | null>(() => {
     const selection = marks.linked?.selection.value ?? [];
-    for (const id of [...selection].reverse()) {
-        const parsed = parseNodeId(id);
-        const symbol = parsed?.kind === "el" ? parsed.parts[0] : null;
-        const layerId = symbol ? elementLayerId(symbol) : null;
+    const last = marks.linked?.lastPinned.value ?? null;
+    const candidates = [...selection].reverse();
+    if (last !== null && selection.includes(last)) candidates.unshift(last);
+    for (const id of candidates) {
+        const layerId = elementLayerOf(id);
         if (layerId && layers.value.some((layer) => layer.id === layerId)) {
             return layerId;
         }
@@ -128,10 +134,17 @@ function setOverlay(key: string, overlay: Overlay | null): void {
     overlays.value = next;
 }
 
-/** The layer `line` shows: the shared one while held together, else the element selected when it holds it; undefined leaves it free. */
+/** The layer `line` shows: the shared one while held together, else the element pinned when it holds it; undefined leaves it free. */
 function heldOf(line: MapLine): number | null | undefined {
     if (sync.value) return layerPosition(line.file, current.value?.id ?? null);
     return layerPosition(line.file, pinnedLayer.value) ?? undefined;
+}
+
+/** The layer id of the element `id` stands for; null for another node. */
+function elementLayerOf(id: NodeId): string | null {
+    const parsed = parseNodeId(id);
+    const symbol = parsed?.kind === "el" ? parsed.parts[0] : null;
+    return symbol ? elementLayerId(symbol) : null;
 }
 
 function choose(next: number): void {

@@ -27,12 +27,16 @@ import {
 import {
     AN1,
     AN2,
+    BY_KEY_WITH_COMPONENT,
     CH1,
+    K1,
+    SYNTHESIS_WITH_COMPONENT,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 import {
     analysisNode,
+    componentNode,
     elementNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
@@ -111,6 +115,40 @@ const DOCUMENT: DocumentPayload = documentPayload({
         }),
     ],
 });
+const INITIAL = {
+    id: K1,
+    name: label("Initial T"),
+    zones: [
+        {
+            canvas: 0,
+            shape: { type: "rect", x: 0, y: 0, w: 400, h: 400 },
+            feature: "k1",
+        },
+        {
+            canvas: 1,
+            shape: { type: "rect", x: 0, y: 0, w: 64, h: 64 },
+            feature: "k2",
+        },
+    ],
+} as const;
+const BORDER = {
+    id: uuid(952),
+    name: label("Border"),
+    zones: [
+        {
+            canvas: 0,
+            shape: { type: "rect", x: 500, y: 0, w: 64, h: 900 },
+            feature: "k3",
+        },
+    ],
+} as const;
+const WITH_COMPONENTS: DocumentPayload = {
+    ...DOCUMENT,
+    components: [
+        { ...INITIAL, zones: [...INITIAL.zones] },
+        { ...BORDER, zones: [...BORDER.zones] },
+    ],
+};
 const CANVASES = [
     {
         canvas: C1,
@@ -400,6 +438,57 @@ describe("FolioTool", () => {
         removeMap.mockRestore();
     });
 
+    it("outlines the document's components on the folio beneath the zones, each named, and lists them", async () => {
+        fetchMock.mockImplementation(async () => jsonResponse(WITH_COMPONENTS));
+        const view = await mountTool();
+        expect(
+            view
+                .findAll(".surface path")
+                .map((path) =>
+                    path.classes("folio-tool-outline")
+                        ? "outline"
+                        : path.classes("folio-tool-halo")
+                          ? "halo"
+                          : "frame",
+                ),
+        ).toEqual(["outline", "outline", "halo", "frame"]);
+        const outline = view.find("path.folio-tool-outline");
+        expect(Number(outline.attributes("stroke-width"))).toBe(1.5);
+        expect(Number(outline.attributes("fill-opacity"))).toBe(0);
+        expect(
+            view
+                .findAll(".folio-tool-outline-label")
+                .map((name) => name.text()),
+        ).toEqual(["Initial T", "Border"]);
+        expect(
+            view.find(".folio-tool-outline-label").attributes("aria-hidden"),
+        ).toBe("true");
+        expect(
+            view
+                .findAll(".outlines li")
+                .map((item) => [
+                    item.find(".name").text(),
+                    item.find(".kind").text(),
+                ]),
+        ).toEqual([
+            ["Initial T", "Component"],
+            ["Border", "Component"],
+        ]);
+        await view.find("select").setValue(C2);
+        await flushPromises();
+        expect(
+            view
+                .findAll(".folio-tool-outline-label")
+                .map((name) => name.text()),
+        ).toEqual(["Initial T"]);
+    });
+
+    it("draws no outline for a document without components", async () => {
+        const view = await mountTool();
+        expect(view.find("path.folio-tool-outline").exists()).toBe(false);
+        expect(view.find(".outlines").exists()).toBe(false);
+    });
+
     describe("with the linked selection", () => {
         const LINKED_CANVASES = [
             { ...CANVASES[0], analyses: [AN1], materials: [CH1] },
@@ -542,6 +631,132 @@ describe("FolioTool", () => {
                     .find("path.folio-tool-frame")
                     .attributes("stroke-dasharray"),
             ).toBe("1 3");
+        });
+
+        describe("and component outlines", () => {
+            async function mountOutlined(): Promise<{
+                view: VueWrapper;
+                linked: LinkedSelection;
+            }> {
+                fetchMock.mockImplementation(async () =>
+                    jsonResponse(WITH_COMPONENTS),
+                );
+                const started = startLinkedSelection(
+                    () => undefined,
+                    SYNTHESIS_WITH_COMPONENT,
+                    BY_KEY_WITH_COMPONENT,
+                );
+                stopLinked = started.stop;
+                wrapper = mount(FolioTool, {
+                    attachTo: sizedContainer(),
+                    props: { canvases: LINKED_CANVASES, slots: SLOTS },
+                    global: {
+                        provide: {
+                            [WINDOW_RESIZE_KEY as symbol]: ref(0),
+                            [LINKED_SELECTION_KEY as symbol]: started.linked,
+                        },
+                    },
+                });
+                await flushPromises();
+                return { view: wrapper, linked: started.linked };
+            }
+
+            function outline(view: VueWrapper) {
+                return view.find(
+                    `path.folio-tool-outline[data-node="${componentNode(K1)}"]`,
+                );
+            }
+
+            it("toggles a component from its outline and strokes and tints it in its slot hue, without drawing anything again", async () => {
+                const { view } = await mountOutlined();
+                const geoJSON = vi.spyOn(L, "geoJSON");
+                const marker = vi.spyOn(L, "marker");
+                const layerGroup = vi.spyOn(L, "layerGroup");
+                await outline(view).trigger("click");
+                await flushPromises();
+                expect(useExplorerStore().compare.selection).toEqual([
+                    componentNode(K1),
+                ]);
+                expect(geoJSON).not.toHaveBeenCalled();
+                expect(marker).not.toHaveBeenCalled();
+                expect(layerGroup).not.toHaveBeenCalled();
+                const path = outline(view).element as SVGElement;
+                expect(path.style.getPropertyValue("--frame-hue")).toMatch(
+                    /--focus-1/,
+                );
+                expect(Number(outline(view).attributes("fill-opacity"))).toBe(
+                    0.08,
+                );
+                const label = view.findAll(".folio-tool-outline-label-host")[0]
+                    .element as HTMLElement;
+                expect(label.dataset.node).toBe(componentNode(K1));
+                expect(label.dataset.rel).toBe("self");
+                expect(label.dataset.slots).toBe("1");
+                const line = view.findAll(".outlines li")[0];
+                expect(line.attributes("data-rel")).toBe("self");
+                expect(line.find(".name").attributes("aria-pressed")).toBe(
+                    "true",
+                );
+            });
+
+            it("outlines only the components the Selection reaches, tinted when a pinned analysis observes one", async () => {
+                const { view, linked } = await mountOutlined();
+                linked.toggle(analysisNode(AN1));
+                await flushPromises();
+                const outlines = view.findAll("path.folio-tool-outline");
+                expect(outlines).toHaveLength(1);
+                expect(Number(outlines[0].attributes("fill-opacity"))).toBe(
+                    0.08,
+                );
+                expect(
+                    (outlines[0].element as SVGElement).style.getPropertyValue(
+                        "--frame-hue",
+                    ),
+                ).not.toBe("");
+            });
+
+            it("toggles a component from its line in the list", async () => {
+                const { view } = await mountOutlined();
+                await view.find(".outlines li .name").trigger("click");
+                expect(useExplorerStore().compare.selection).toEqual([
+                    componentNode(K1),
+                ]);
+                await view.find(".outlines li .name").trigger("click");
+                expect(useExplorerStore().compare.selection).toEqual([]);
+            });
+
+            it("previews a component under the mouse on its outline", async () => {
+                vi.useFakeTimers();
+                const { view } = await mountOutlined();
+                await outline(view).trigger("mouseover");
+                vi.runAllTimers();
+                await flushPromises();
+                expect(outline(view).attributes("stroke-dasharray")).toBe(
+                    "1 3",
+                );
+                expect(hosts(view, "preview")).toEqual(["direct", "evidence"]);
+                await outline(view).trigger("mouseout");
+                vi.runAllTimers();
+                await flushPromises();
+                expect(
+                    outline(view).attributes("stroke-dasharray"),
+                ).toBeUndefined();
+            });
+
+            it("previews nothing when a touch tap on an outline sends its mouse events", async () => {
+                vi.useFakeTimers();
+                const { view, linked } = await mountOutlined();
+                await outline(view).trigger("pointerover", {
+                    pointerType: "touch",
+                });
+                await outline(view).trigger("mouseover");
+                vi.runAllTimers();
+                await flushPromises();
+                expect(linked.previewing.value).toBeNull();
+                expect(
+                    outline(view).attributes("stroke-dasharray"),
+                ).toBeUndefined();
+            });
         });
     });
 });

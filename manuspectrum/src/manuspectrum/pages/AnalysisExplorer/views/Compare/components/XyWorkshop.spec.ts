@@ -13,6 +13,7 @@ import {
 import {
     analysisHit,
     fileEntry,
+    label,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
@@ -24,6 +25,7 @@ import {
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 import {
     analysisNode,
+    canvasNode,
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
@@ -120,6 +122,8 @@ function curve(
     return { key: `an:${analysis.id}:-`, slot, analysis, file };
 }
 
+const FOLIO_CANVAS = "https://iiif.example/f12r";
+
 /** The part of Compare's linked selection the workshop reads, its state set by each spec. */
 function fakeLinked(): FakeLinked {
     const selection = ref<NodeId[]>([]);
@@ -130,7 +134,23 @@ function fakeLinked(): FakeLinked {
     const linked = {
         selection: computed(() => selection.value),
         levels: computed(() => levels.value),
+        relations: computed(
+            () =>
+                new Map(
+                    [...levels.value].map(([id, level]) => [
+                        id,
+                        { best: level, slots: [{ slot: 1, level }] },
+                    ]),
+                ),
+        ),
+        previewing: ref(null),
+        previewSlot: computed(() => null),
+        cue: shallowRef({ generation: 0, nodes: new Set() }),
         previewLevels: computed(() => previewLevels.value),
+        labelOf: (id: NodeId) =>
+            id === canvasNode(FOLIO_CANVAS)
+                ? { value: "f. 12r", lang: "" }
+                : null,
         toggle,
         preview,
     } as unknown as LinkedSelection;
@@ -867,6 +887,54 @@ describe("XyWorkshop", () => {
         ).toBe("Not linked to the selection: press to add it.");
     });
 
+    it("shows a slot's entry pinned only when its own node is, not when one of its files is", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(0, 2)]);
+        fake.selection.value = [fileNode(uuid(701))];
+        fake.levels.value = new Map([
+            [fileNode(uuid(701)), "self"],
+            [analysisNode(analysisHit(1).id), "direct"],
+        ]);
+        await flushPromises();
+        expect(
+            view
+                .findAll(".xy-legend .entry")
+                .map((entry) => [
+                    entry.attributes("data-rel"),
+                    entry.attributes("aria-pressed"),
+                ]),
+        ).toEqual([
+            ["direct", "false"],
+            ["self", "true"],
+            ["direct", "false"],
+        ]);
+        expect(view.findAll(".xy-legend .entry.unrelated")).toHaveLength(0);
+    });
+
+    it("gives each slot's legend entry two lines: label, analysis and technique, then component, folio and its one file", async () => {
+        const placed = curve(0, 1);
+        placed.analysis = {
+            ...placed.analysis,
+            canvas: FOLIO_CANVAS,
+            component: {
+                id: uuid(951),
+                model: "component",
+                name: label("Border"),
+            },
+        };
+        const bare = curve(1, 2);
+        bare.analysis = { ...bare.analysis, technique: null };
+        const view = await mountWorkshop([placed, bare, curve(1, 3)]);
+        const [first, second] = view.findAll(".xy-legend .group > .entry");
+        expect(first.find(".id").text()).toBe("A1MS1_f12_XRF_03XRF");
+        expect(first.find(".technique").text()).toBe("XRF");
+        expect(first.find(".ctx .glyph").exists()).toBe(true);
+        expect(first.find(".ctx .component").text()).toBe("Border");
+        expect(first.find(".ctx .folio").text()).toBe("f. 12r");
+        expect(first.find(".ctx .file").text()).toBe("S1.csv");
+        expect(second.find(".technique").exists()).toBe(false);
+        expect(second.find(".ctx").exists()).toBe(false);
+    });
+
     it("previews the node of a legend entry or a curve under the mouse, and toggles a clicked curve", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
         const entry = view.findAll(".xy-legend .entry")[0];
@@ -883,7 +951,10 @@ describe("XyWorkshop", () => {
             event: {},
         });
         expect(fake.preview.mock.calls).toEqual([
-            [analysisNode(analysisHit(1).id), { pointerType: "mouse" }],
+            [
+                analysisNode(analysisHit(1).id),
+                { pointerType: "mouse", currentTarget: entry.element },
+            ],
             [null, { pointerType: "mouse" }],
             [analysisNode(analysisHit(2).id), { pointerType: "mouse" }],
             [null, { pointerType: "mouse" }],

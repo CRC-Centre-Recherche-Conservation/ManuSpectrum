@@ -5,6 +5,7 @@ import {
     AN2,
     BASKET,
     BY_KEY,
+    BY_KEY_WITH_COMPONENT,
     C1,
     C2,
     CH1,
@@ -13,7 +14,9 @@ import {
     D1,
     F1,
     F2,
+    K1,
     SYNTHESIS,
+    SYNTHESIS_WITH_COMPONENT,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { buildGraph } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/graph.ts";
 import {
@@ -21,6 +24,7 @@ import {
     canvasNode,
     cellNode,
     colourNode,
+    componentNode,
     documentNode,
     elementNode,
     fileNode,
@@ -98,16 +102,46 @@ describe("buildGraph", () => {
         expect(around(graph, pairNode(BLUE_ID, AZURITE_ID))).toEqual(
             [materialNode(CH1), materialNode(CH2)].sort(),
         );
-        expect(around(graph, cellNode(C1, "xrf"))).toEqual(
+        expect(around(graph, cellNode(C1, null, "xrf"))).toEqual(
             [analysisNode(AN1), materialNode(CH1), materialNode(CH2)].sort(),
         );
-        expect(around(graph, cellNode(C2, "raman"))).toEqual(
+        expect(around(graph, cellNode(C2, null, "raman"))).toEqual(
             [analysisNode(AN2), materialNode(CH3)].sort(),
         );
         expect(
             [...(graph.evidence.get(analysisNode(AN1)) ?? [])].sort(),
         ).toEqual([materialNode(CH1), materialNode(CH2)].sort());
         expect(around(graph, materialNode(CH3))).toContain(documentNode(D1));
+    });
+
+    it("splits a cell by component: an analysis goes to the cell of its component, a material to the cells of its evidence analyses", () => {
+        const graph = buildGraph({
+            basket: BASKET,
+            byKey: BY_KEY_WITH_COMPONENT,
+            synthesis: SYNTHESIS_WITH_COMPONENT,
+        });
+        expect(around(graph, cellNode(C1, K1, "xrf"))).toEqual(
+            [analysisNode(AN1), materialNode(CH1), materialNode(CH2)].sort(),
+        );
+        expect(graph.nodes.has(cellNode(C1, null, "xrf"))).toBe(false);
+        expect(around(graph, cellNode(C2, null, "raman"))).toEqual(
+            [analysisNode(AN2), materialNode(CH3)].sort(),
+        );
+    });
+
+    it("links a component to the analyses observing it and to the materials whose summary names it, never to its cells", () => {
+        const graph = buildGraph({
+            basket: BASKET,
+            byKey: BY_KEY_WITH_COMPONENT,
+            synthesis: SYNTHESIS_WITH_COMPONENT,
+        });
+        expect(around(graph, componentNode(K1))).toEqual(
+            [analysisNode(AN1), materialNode(CH3)].sort(),
+        );
+        expect(graph.labels.get(componentNode(K1))?.value).toBe("Initial T");
+        expect(around(graph, materialNode(CH3))).not.toContain(
+            documentNode(K1),
+        );
     });
 
     it("places a record on the synthesis canvases first, else where its item says", () => {

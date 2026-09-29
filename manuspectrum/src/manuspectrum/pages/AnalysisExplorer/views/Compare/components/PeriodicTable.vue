@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 import HeatLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/HeatLegend.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
@@ -17,12 +18,12 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
 /**
  * The elements of the Selection's identified materials on the standard
  * 18-column periodic table: an element found is a toggle button showing its
- * count (the identified materials naming it) on the blue heat ramp
+ * count (the identified materials naming it) on the heat ramp
  * (`heatLevel`; the legend under the table says what the number counts),
- * named « Cu, 5 », pressed while it is selected (`el:`), marked
- * by how it stands to the linked selection and to the node a mouse
- * previews (an unlinked element keeps a quarter of its shade); a click adds
- * it to the selection or removes it. The others are greyed on `--bg-alt`
+ * named « Cu, 5 », pressed while it is pinned (`el:`), carrying the focus
+ * marks (`useLinkedMarks().focus`: ring, pip, bloom, ghost ring; an
+ * unlinked element keeps a part of its shade); a click pins it or unpins
+ * it. The others are greyed on `--bg-alt`
  * and left to assistive technologies. An element the table does not
  * hold is listed after it. In a window narrower than the table's 18
  * columns (34rem) the table gives way to a list of the elements found,
@@ -74,12 +75,11 @@ function toggle(symbol: string): void {
                 <button
                     v-if="bySymbol.get(place.symbol)"
                     type="button"
-                    class="cell found"
+                    class="cell found ms-focus"
                     :class="[`row-${place.row}`, `column-${place.column}`]"
+                    v-bind="marks.focus(elementNode(place.symbol))"
                     :aria-label="elementLabel(bySymbol.get(place.symbol)!)"
                     :data-heat="heatOf(bySymbol.get(place.symbol)!)"
-                    :data-rel="marks.rel(elementNode(place.symbol))"
-                    :data-preview="marks.previewRel(elementNode(place.symbol))"
                     :aria-pressed="marks.pressed(elementNode(place.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
                     @click="toggle(place.symbol)"
@@ -88,6 +88,7 @@ function toggle(symbol: string): void {
                     "
                     @pointerleave="marks.leave($event)"
                 >
+                    <FocusPip :node="elementNode(place.symbol)" />
                     <span class="symbol">{{ place.symbol }}</span>
                     <span class="count">{{
                         bySymbol.get(place.symbol)!.count
@@ -113,13 +114,10 @@ function toggle(symbol: string): void {
             >
                 <button
                     type="button"
-                    class="found"
+                    class="found ms-focus"
+                    v-bind="marks.focus(elementNode(element.symbol))"
                     :aria-label="elementLabel(element)"
                     :data-heat="heatOf(element)"
-                    :data-rel="marks.rel(elementNode(element.symbol))"
-                    :data-preview="
-                        marks.previewRel(elementNode(element.symbol))
-                    "
                     :aria-pressed="marks.pressed(elementNode(element.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
                     @click="toggle(element.symbol)"
@@ -128,6 +126,7 @@ function toggle(symbol: string): void {
                     "
                     @pointerleave="marks.leave($event)"
                 >
+                    <FocusPip :node="elementNode(element.symbol)" />
                     <span class="symbol">{{ element.symbol }}</span>
                     <span class="count">{{ element.count }}</span>
                 </button>
@@ -143,13 +142,10 @@ function toggle(symbol: string): void {
             >
                 <button
                     type="button"
-                    class="found"
+                    class="found ms-focus"
+                    v-bind="marks.focus(elementNode(element.symbol))"
                     :aria-label="elementLabel(element)"
                     :data-heat="heatOf(element)"
-                    :data-rel="marks.rel(elementNode(element.symbol))"
-                    :data-preview="
-                        marks.previewRel(elementNode(element.symbol))
-                    "
                     :aria-pressed="marks.pressed(elementNode(element.symbol))"
                     :aria-disabled="props.disabled ? 'true' : undefined"
                     @click="toggle(element.symbol)"
@@ -158,6 +154,7 @@ function toggle(symbol: string): void {
                     "
                     @pointerleave="marks.leave($event)"
                 >
+                    <FocusPip :node="elementNode(element.symbol)" />
                     <span class="symbol">{{ element.symbol }}</span>
                     <span class="count">{{ element.count }}</span>
                     <span
@@ -187,7 +184,8 @@ function toggle(symbol: string): void {
     display: grid;
     grid-template-columns: repeat(18, minmax(1.75rem, 1fr));
     grid-template-rows: repeat(7, auto) 0.5rem repeat(2, auto);
-    gap: 0.125rem;
+    gap: 0.1875rem;
+    padding-block-start: 0.375rem;
 }
 
 .periodic-table .cell {
@@ -203,12 +201,14 @@ function toggle(symbol: string): void {
 .periodic-table .found {
     --cell-heat: var(--heat-1);
     --cell-on: var(--heat-1-on);
+    --r: 0.3125rem;
+    --link-pip: 0.8125rem;
 
     display: grid;
     place-items: center;
     padding: 0.125rem;
     border: none;
-    border-radius: 0.1875rem;
+    border-radius: 0.3125rem;
     background: var(--cell-heat);
     color: var(--cell-on);
     font: 600 0.75rem var(--font-mono);
@@ -231,42 +231,13 @@ function toggle(symbol: string): void {
     --cell-on: var(--heat-4-on);
 }
 
-.periodic-table .found[aria-pressed="true"] {
-    border-color: var(--ink);
-    outline: 0.125rem solid var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
-    background: var(--ink);
-    color: var(--surface);
-}
-
-.periodic-table .found[data-rel="direct"] {
-    box-shadow:
-        0 0 0 0.125rem var(--surface),
-        0 0 0 0.25rem var(--linked-mark, var(--blue-text));
-}
-
-.periodic-table .found[data-rel="evidence"] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.125rem;
-}
-
-.periodic-table .found[data-rel="none"] {
-    background: color-mix(in srgb, var(--cell-heat) 25%, var(--surface));
-    color: var(--ink-muted);
-}
-
-.periodic-table .found[data-preview] {
-    outline: 0.125rem dashed var(--linked-mark, var(--blue-text));
-    outline-offset: 0.0625rem;
-}
-
 .periodic-table .found[aria-disabled="true"] {
     cursor: default;
 }
 
 .periodic-table .found:focus-visible {
     outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
+    outline-offset: 0.1875rem;
 }
 
 .periodic-table .found .count {

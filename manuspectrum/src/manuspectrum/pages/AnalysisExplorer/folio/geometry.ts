@@ -1,6 +1,10 @@
 import type { Feature, Point, Polygon } from "geojson";
 
-import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    DocumentPayload,
+    Label,
+    Shape,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 
 /**
@@ -52,6 +56,42 @@ export function shapeBounds(shape: Shape): [LatLng, LatLng] | null {
         toLatLng(Math.min(...xs), Math.max(...ys)),
         toLatLng(Math.max(...xs), Math.min(...ys)),
     ];
+}
+
+/** North-west corner of a rectangle or polygon, where a label sits inside it; null for a point or an empty polygon. */
+export function shapeCorner(shape: Shape): LatLng | null {
+    const bounds = shapeBounds(shape);
+    return bounds ? [bounds[1][0], bounds[0][1]] : null;
+}
+
+/** A Component outlined on one folio: its zones there with an extent. */
+export interface ComponentOutline {
+    id: string;
+    name: Label;
+    shapes: Shape[];
+}
+
+/** The Components of `payload` outlined on the canvas `canvasId`, in the payload's order; a Component with no extent there is left out. */
+export function componentOutlines(
+    payload: DocumentPayload,
+    canvasId: string,
+): ComponentOutline[] {
+    const position = payload.canvases.findIndex(
+        (canvas) => canvas.id === canvasId,
+    );
+    if (position < 0) return [];
+    return payload.components.flatMap((component) => {
+        const shapes = component.zones
+            .filter(
+                (zone) =>
+                    zone.canvas === position &&
+                    shapeBounds(zone.shape) !== null,
+            )
+            .map((zone) => zone.shape);
+        return shapes.length > 0
+            ? [{ id: component.id, name: component.name, shapes }]
+            : [];
+    });
 }
 
 export function shapeFeature<P extends Record<string, unknown>>(

@@ -27,7 +27,10 @@ const props = defineProps<{ window: AutoWindow; title: string }>();
     />
     <MaterialsTable
         v-else-if="props.window.kind === 'characterizations'"
-        :rows="props.window.rows"
+        :records="props.window.records"
+        :pairs="props.window.synthesis?.pairs ?? []"
+        :canvases="props.window.synthesis?.canvases ?? []"
+        :analyses="props.window.analyses"
     />
     <NotInChartList
         v-else
