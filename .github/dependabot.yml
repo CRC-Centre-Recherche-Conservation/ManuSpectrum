@@ -8,3 +8,21 @@ updates:
       - dependencies
       - javascript
     versioning-strategy: "increase"
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - python
+    target-branch: "dev"
+    ignore:
+      # Arches minor upgrades are manual (updateproject rebuilds webpack/).
+      - dependency-name: "arches*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "django"
+        update-types: ["version-update:semver-major"]
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

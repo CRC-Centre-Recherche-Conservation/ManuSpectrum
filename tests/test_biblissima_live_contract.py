@@ -12,7 +12,9 @@ Run:
 """
 
 import os
+import time
 import unittest
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase
@@ -49,3 +51,78 @@ class WikibasePlaceContractTests(LiveContractTestCase):
 
         self.assertEqual(result["locationQid"], "Q27392")
         self.assertEqual(result["geonamesId"], "2988507")
+
+
+@live
+class SuggestPrefixContractTests(LiveContractTestCase):
+    def _search(self, text):
+        payload = bp._suggest_call(
+            {
+                "action": "wbsearchentities",
+                "search": text,
+                "language": "fr",
+                "format": "json",
+                "limit": 50,
+            },
+            time.monotonic() + 10,
+        )
+        return [hit["id"] for hit in payload["search"]]
+
+    def test_case_and_accents_do_not_change_the_upstream_hits(self):
+        self.assertEqual(self._search("jero"), self._search("Jéro"))
+
+    def test_an_entity_id_is_matched_exactly_not_by_prefix(self):
+        self.assertIn("Q8844", self._search("q8844"))
+        self.assertNotIn("Q8844", self._search("q884"))
+
+    def test_a_dotless_i_is_folded_upstream(self):
+        self.assertIn("Q24517", self._search("kilic"))
+        self.assertIn("Q24517", self._search("kılıç"))
+
+    def test_punctuation_is_kept_as_our_strict_form_keeps_it(self):
+        for query, qid, label, found in (
+            ("draguignan (v", "Q31632", "Draguignan (Var, France)", True),
+            ("draguignan v", "Q31632", "Draguignan (Var, France)", False),
+            ("draguignan (var, fr", "Q31632", "Draguignan (Var, France)", True),
+            ("draguignan (var fr", "Q31632", "Draguignan (Var, France)", False),
+            ("psautier : r", "Q284136", "Psautier : rite byzantin", True),
+            ("psautier r", "Q284136", "Psautier : rite byzantin", False),
+            ("psautier  : r", "Q284136", "Psautier : rite byzantin", False),
+            ("a/n 3", "Q219061", "A/N 308", True),
+            ("a n 3", "Q219061", "A/N 308", False),
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(qid in self._search(query), found)
+                self.assertEqual(bp._strict(label).startswith(bp._strict(query)), found)
+
+    def test_a_hyphen_and_an_apostrophe_read_as_a_space(self):
+        for spaced, punctuated in (
+            ("saint jacques", "saint-jacques"),
+            ("jeanne d arc", "jeanne d'arc"),
+        ):
+            with self.subTest(query=punctuated):
+                hits = self._search(spaced)
+                self.assertTrue(hits, f"no hit for {spaced!r}: pick another label")
+                self.assertEqual(self._search(punctuated), hits)
+                self.assertEqual(bp._strict(punctuated), bp._strict(spaced))
+
+    def test_a_derived_answer_holds_every_upstream_hit(self):
+        entry = bp._suggest_prefix_entry("drag", "fr", time.monotonic() + 10)
+        self.assertTrue(
+            entry["complete"], "'drag' now has more than 50 hits: use a rarer prefix"
+        )
+        cache.set(bp._suggest_prefix_key("drag", "fr"), entry, 60)
+        with patch.object(bp, "_suggest_call", wraps=bp._suggest_call) as calls:
+            derived = bp._suggest_prefix_results(
+                "dragon", "fr", "Q304387", 15, time.monotonic() + 10
+            )
+        self.assertNotIn(
+            "wbsearchentities", [c.args[0]["action"] for c in calls.call_args_list]
+        )
+        cache.clear()
+
+        fresh = bp._suggest_prefix_results(
+            "dragon", "fr", "Q304387", 15, time.monotonic() + 10
+        )
+
+        self.assertLessEqual({r["id"] for r in fresh}, {r["id"] for r in derived})

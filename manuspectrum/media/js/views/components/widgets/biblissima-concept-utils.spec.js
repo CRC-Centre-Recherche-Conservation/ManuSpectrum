@@ -1,11 +1,40 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import ko from 'knockout';
 import {
     mapSuggestItemToValue,
     renderSuggestItem,
     isReferentialUrl,
     isPortalArk,
+    SUGGEST_DELAY_MS,
+    SUGGEST_MAX_INPUT_LENGTH,
+    normalizeSuggestTerm,
+    suggestAjaxOptions,
+    suggestInputTooLong,
 } from './biblissima-concept-utils.js';
+
+vi.mock('arches', () => ({
+    default: {
+        translations: { biblissimaConceptInputTooLong: 'Query too long ({n} characters max)' },
+        activeLanguage: 'en',
+    },
+}));
+vi.mock('viewmodels/widget', () => ({
+    default: function (params) {
+        this.disposables = [];
+        this.value = ko.observable(null);
+        this.url = ko.observable(null);
+        this.url_label = ko.observable(null);
+        this.placeholder = ko.observable('');
+        this.entityType = ko.observable(params.config.entityType);
+        this.disabled = ko.observable(false);
+    },
+}));
+vi.mock('bindings/select2-query', () => ({ default: {} }));
+vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL: () => '/s' }));
+vi.mock('templates/views/components/widgets/biblissima-concept-widget.htm', () => ({
+    default: '<div></div>',
+}));
 
 // Test fixtures only — the production module carries no real Biblissima
 // URL literal; these bases are injected explicitly into every call below,
@@ -144,5 +173,60 @@ describe('isPortalArk', () => {
         expect(isPortalArk(base + '/mdata' + 'a'.repeat(40), base)).toBe(true);
         expect(isPortalArk(base, base)).toBe(true); // exact match
         expect(isPortalArk(base + 'attacker/foo', base)).toBe(false);
+    });
+});
+
+describe('normalizeSuggestTerm', () => {
+    it('trims and collapses inner whitespace', () => {
+        expect(normalizeSuggestTerm('  saint   jero ')).toBe('saint jero');
+    });
+    it('reads a missing term as empty', () => {
+        expect(normalizeSuggestTerm(undefined)).toBe('');
+    });
+});
+
+describe('suggestAjaxOptions', () => {
+    const options = suggestAjaxOptions({ url: '/s', type: 'descriptor', lang: 'fr' });
+
+    it('sends the normalised term, the type and the language in a fixed order', () => {
+        const params = options.data({ term: '  saint   jero ' });
+        expect(params).toEqual({ q: 'saint jero', type: 'descriptor', lang: 'fr' });
+        expect(Object.keys(params)).toEqual(['q', 'type', 'lang']);
+    });
+
+    it('adds the limit only when one is given', () => {
+        const limited = suggestAjaxOptions({ url: '/s', type: 'manuscript', lang: 'fr', limit: 15 });
+        expect(limited.data({ term: 'latin' })).toEqual({ q: 'latin', type: 'manuscript', lang: 'fr', limit: 15 });
+    });
+
+    it('debounces every select with the shared delay', () => {
+        expect(options.delay).toBe(SUGGEST_DELAY_MS);
+        expect(options.url).toBe('/s');
+        expect(options.dataType).toBe('json');
+    });
+});
+
+describe('suggestInputTooLong', () => {
+    it('puts the maximum selectWoo reports into the translated message', () => {
+        expect(suggestInputTooLong('Query too long ({n} characters max)')({ maximum: 100 }))
+            .toBe('Query too long (100 characters max)');
+    });
+});
+
+describe('biblissima-concept-widget select', () => {
+    it('stops at the suggest endpoint length limit and says why', async () => {
+        let ViewModel;
+        const spy = vi.spyOn(ko.components, 'register').mockImplementation((name, config) => {
+            ViewModel = config.viewModel;
+        });
+        await import('./biblissima-concept-widget.js');
+        spy.mockRestore();
+
+        const vm = new ViewModel({ config: { entityType: 'descriptor' } });
+
+        expect(SUGGEST_MAX_INPUT_LENGTH).toBe(100);
+        expect(vm.conceptSelectConfig.maximumInputLength).toBe(SUGGEST_MAX_INPUT_LENGTH);
+        expect(vm.conceptSelectConfig.language.inputTooLong({ maximum: SUGGEST_MAX_INPUT_LENGTH }))
+            .toBe('Query too long (100 characters max)');
     });
 });
