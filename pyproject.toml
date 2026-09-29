@@ -55,6 +55,9 @@ dev = [
     "jsonschema>=4.26,<5",
     "PyLD>=1.0.5,<2",
 ]
+prod = [
+    "gunicorn>=26.2,<27",
+]
 
 [tool.setuptools]
 packages = ["manuspectrum"]
