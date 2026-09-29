@@ -21,7 +21,7 @@ import type { SynthesisElement } from "@/manuspectrum/pages/AnalysisExplorer/api
  * count (the identified materials naming it) on the heat ramp
  * (`heatLevel`; the legend under the table says what the number counts),
  * named « Cu, 5 », pressed while it is pinned (`el:`), carrying the focus
- * marks (`useLinkedMarks().focus`: ring, pip, bloom, ghost ring; an
+ * marks (`useLinkedMarks().focus`: ring, pip, bloom, preview wash; an
  * unlinked element keeps a part of its shade); a click pins it or unpins
  * it. The others are greyed on `--bg-alt`
  * and left to assistive technologies. An element the table does not
@@ -202,6 +202,7 @@ function toggle(symbol: string): void {
     --cell-heat: var(--heat-1);
     --cell-on: var(--heat-1-on);
     --r: 0.3125rem;
+    --preview-inset: 0.625rem;
     --link-pip: 0.8125rem;
 
     display: grid;

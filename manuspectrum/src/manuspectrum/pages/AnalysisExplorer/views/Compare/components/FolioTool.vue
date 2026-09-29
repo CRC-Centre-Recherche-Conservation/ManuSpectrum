@@ -88,7 +88,18 @@ const OUTLINE_WEIGHT = 1.5;
 const OUTLINE_TINT = 0.08;
 /** Keeps the Components' labels under the analyses' markers. */
 const OUTLINE_LABEL_Z = -1000;
-const PREVIEW_DASH = "1 3";
+/** The stroke of a zone or outline the preview links, by level. */
+const PREVIEW_WEIGHT: Record<RelationLevel, number> = {
+    self: 2.5,
+    direct: 1.5,
+    evidence: 1,
+};
+/** The fill of a zone or outline the preview links, by level. */
+const PREVIEW_FILL: Record<RelationLevel, number> = {
+    self: 0.16,
+    direct: 0.07,
+    evidence: 0.04,
+};
 const RELATED_PADDING = 0.25;
 /** The other folios « Show » buttons are offered for. */
 const SHOWN_ELSEWHERE = 3;
@@ -112,11 +123,15 @@ const SERIES_SLOTS = 8;
  * how the record stands to the focus (an unlinked zone fades, an unlinked
  * marker's fill fades under a label turned to ink, a linked frame is drawn
  * solid and heavier in the hue of its first slot, its marker ringed in
- * that hue) and to the node a mouse previews (dotted, in the hue of the
- * slot the pin would take). A focus change restyles the layers drawn
- * (`setStyle` for the weights; the hue as the `--frame-hue` property of
- * each frame path, which the stylesheet strokes with, and `--h1`, `--hp`,
- * `data-*` on the markers) and never draws them again. A marker carries
+ * that hue) and to the node a mouse previews, in the hue of the slot the
+ * pin would take: every zone the preview links is stroked solid and
+ * tinted (1.5 at 7 %, 1 at 4 % for evidence), its marker ringed; the
+ * previewed record's own zones are stroked at 2.5 with a glow, and a light
+ * runs once around each of them on its halo (`pathLength` 100; none under
+ * reduced motion). A focus change restyles the layers drawn (`setStyle`
+ * for the weights and fills; the hue as the `--frame-hue` property and
+ * `data-preview` of each path, which the stylesheet strokes with, and
+ * `--h1`, `--hp`, `data-*` on the markers) and never draws them again. A marker carries
  * the `data-node` and `data-slots` of its record, which its window counts. The whole page is fitted to the
  * stage again when the window changes size, until the reader moves the view
  * (a pointer, the wheel or the keyboard on the map, « Fit to related »);
@@ -133,8 +148,9 @@ const SERIES_SLOTS = 8;
  * (`DocumentPayload.components`) is outlined thinly with its name; the
  * outline and its line in the list below toggle the Component (`comp:`)
  * and preview it under a mouse. A linked outline (`self`, `direct`) is
- * stroked and tinted in its first slot's hue, an unlinked one fades; a
- * focus change restyles it like the zones.
+ * stroked and tinted in its first slot's hue, an unlinked one fades, and
+ * a previewed one is stroked and tinted like the zones; a focus change
+ * restyles it like the zones.
  */
 const props = defineProps<{
     canvases: readonly SynthesisCanvas[];
@@ -527,7 +543,7 @@ function drawMarks(): void {
     }
 }
 
-/** The frame of a mark at `level`, dotted while `preview` links it. */
+/** The frame of a mark at `level`, solid and tinted at the preview's weight while `preview` links it. */
 function frameStyle(
     level: LinkedMark | undefined,
     preview: RelationLevel | undefined,
@@ -536,6 +552,8 @@ function frameStyle(
         weight: FRAME_WEIGHT,
         opacity: 1,
         dashArray: FRAME_DASH,
+        fill: preview !== undefined,
+        fillOpacity: preview ? PREVIEW_FILL[preview] : 0,
     };
     if (level === "self") {
         Object.assign(style, { weight: SELF_FRAME_WEIGHT, dashArray: "" });
@@ -548,8 +566,9 @@ function frameStyle(
     }
     if (preview) {
         Object.assign(style, {
-            weight: Math.max(style.weight ?? FRAME_WEIGHT, LINKED_FRAME_WEIGHT),
-            dashArray: PREVIEW_DASH,
+            weight: PREVIEW_WEIGHT[preview],
+            opacity: 1,
+            dashArray: "",
         });
     }
     return style;
@@ -567,15 +586,24 @@ function restyleOutlines(): void {
             : lit
               ? attributes.style?.["--h1"]
               : undefined;
-        layers.outline.setStyle({
-            opacity: level === "none" ? FADED_OPACITY : 1,
-            fillOpacity: lit ? OUTLINE_TINT : 0,
-            dashArray: preview ? PREVIEW_DASH : "",
-        });
+        layers.outline.setStyle(
+            preview
+                ? {
+                      opacity: 1,
+                      weight: PREVIEW_WEIGHT[preview],
+                      fillOpacity: PREVIEW_FILL[preview],
+                  }
+                : {
+                      opacity: level === "none" ? FADED_OPACITY : 1,
+                      weight: OUTLINE_WEIGHT,
+                      fillOpacity: lit ? OUTLINE_TINT : 0,
+                  },
+        );
         layers.outline.eachLayer((layer) => {
             const path = (layer as L.Path).getElement?.();
             if (!(path instanceof SVGElement)) return;
             path.dataset.node = node;
+            setData(path, "preview", preview);
             setProperty(path, "--frame-hue", hue);
         });
         const host = layers.label?.getElement();
@@ -603,12 +631,22 @@ function restyle(): void {
         layers.frame.setStyle(frameStyle(level, preview));
         layers.frame.eachLayer((layer) => {
             const path = (layer as L.Path).getElement?.();
-            if (path instanceof SVGElement)
-                setProperty(path, "--frame-hue", hue);
+            if (!(path instanceof SVGElement)) return;
+            setData(path, "preview", preview);
+            setProperty(path, "--frame-hue", hue);
         });
         layers.halo.setStyle({
             opacity:
-                level === "none" ? FADED_OPACITY * HALO_OPACITY : HALO_OPACITY,
+                level === "none" && !preview
+                    ? FADED_OPACITY * HALO_OPACITY
+                    : HALO_OPACITY,
+        });
+        layers.halo.eachLayer((layer) => {
+            const path = (layer as L.Path).getElement?.();
+            if (!(path instanceof SVGElement)) return;
+            path.setAttribute("pathLength", "100");
+            setData(path, "preview", preview);
+            setProperty(path, "--frame-hue", hue);
         });
         const host = layers.marker?.getElement();
         if (!host) continue;
@@ -1140,8 +1178,13 @@ function wholePage(): void {
 }
 
 .folio-tool :deep(.folio-tool-marker-host[data-preview] .folio-tool-marker) {
-    outline: 0.125rem dotted var(--hp, var(--focus-1));
+    outline: 0.0625rem solid var(--hp, var(--focus-1));
     outline-offset: 0.125rem;
+}
+
+.folio-tool
+    :deep(.folio-tool-marker-host[data-preview="self"] .folio-tool-marker) {
+    outline-width: 0.125rem;
 }
 
 .folio-tool .related {
@@ -1242,6 +1285,14 @@ function wholePage(): void {
     );
 }
 
+.folio-tool .marks li[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 .folio-tool .slot-1,
 .folio-tool :deep(.folio-tool-marker.slot-1) {
     --slot-fill: var(--series-1);
@@ -1326,5 +1377,55 @@ function wholePage(): void {
 
 .folio-tool :deep(.folio-tool-frame.slot-8) {
     stroke: var(--series-8);
+}
+
+.folio-tool :deep(.folio-tool-frame[data-preview]),
+.folio-tool :deep(.folio-tool-outline[data-preview]) {
+    fill: var(--frame-hue, var(--focus-1));
+    stroke: color-mix(
+        in srgb,
+        var(--frame-hue, var(--focus-1)) 80%,
+        transparent
+    );
+}
+
+.folio-tool :deep(.folio-tool-frame[data-preview="self"]),
+.folio-tool :deep(.folio-tool-outline[data-preview="self"]) {
+    filter: drop-shadow(
+        0 0 0.1875rem
+            color-mix(
+                in srgb,
+                var(--frame-hue, var(--focus-1)) 45%,
+                transparent
+            )
+    );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .folio-tool :deep(.folio-tool-halo[data-preview="self"]) {
+        animation: folio-tool-orbit 1.4s cubic-bezier(0.45, 0, 0.25, 1) 1;
+    }
+}
+
+@keyframes folio-tool-orbit {
+    from {
+        stroke: color-mix(in srgb, var(--frame-hue, var(--focus-1)) 40%, #fff);
+        stroke-dasharray: 14 86;
+        stroke-dashoffset: 100;
+        opacity: 1;
+    }
+
+    90% {
+        stroke: color-mix(in srgb, var(--frame-hue, var(--focus-1)) 40%, #fff);
+        stroke-dasharray: 14 86;
+        opacity: 1;
+    }
+
+    to {
+        stroke: color-mix(in srgb, var(--frame-hue, var(--focus-1)) 40%, #fff);
+        stroke-dasharray: 14 86;
+        stroke-dashoffset: 0;
+        opacity: 0;
+    }
 }
 </style>

@@ -124,6 +124,14 @@ const marks = useLinkedMarks();
     );
 }
 
+.micro-image-grid figure[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 .micro-image-grid figcaption {
     display: flex;
     flex-wrap: wrap;

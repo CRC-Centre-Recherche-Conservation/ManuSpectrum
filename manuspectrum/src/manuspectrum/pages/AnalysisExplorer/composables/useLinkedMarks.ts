@@ -33,8 +33,9 @@ const RANK: Record<RelationLevel, number> = {
 
 /**
  * The attributes of a focus toggle (`v-bind` them on an element carrying
- * the class `ms-focus`, which draws the ring, the bloom, the preview ghost
- * ring and the pip of `FocusPip`):
+ * the class `ms-focus`, which draws the ring, the bloom, the preview (a
+ * wash and an underline on every node it links, the ring drawn once around
+ * the node under the pointer) and the pip of `FocusPip`):
  * - `data-node`: the ids the element stands for, space-separated (a
  *   window counts each once);
  * - `data-rel`: its strongest level while something is pinned, `none`

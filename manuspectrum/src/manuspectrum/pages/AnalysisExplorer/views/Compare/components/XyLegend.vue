@@ -339,6 +339,14 @@ function leave(event: PointerEvent): void {
     );
 }
 
+.xy-legend .entry[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 .xy-legend .entry.unrelated {
     color: var(--ink-muted);
 }

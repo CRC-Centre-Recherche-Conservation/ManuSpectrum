@@ -9,7 +9,7 @@ import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare
  * A value of a Compare window that can be pinned: a toggle button named
  * by its text, pressed while `node` is pinned, marked by how it stands to
  * the focus and to the node previewed (`useLinkedMarks().focus`, the
- * `ms-focus` recipes: ring, pip, bloom, ghost ring). A click pins `node`
+ * `ms-focus` recipes: ring, pip, bloom, preview wash). A click pins `node`
  * or unpins it; a mouse resting on it previews what it links. The slot
  * `lead` goes before the text (a glyph).
  */
@@ -46,6 +46,7 @@ const marks = useLinkedMarks();
 <style scoped>
 .linked-chip {
     --r: 999rem;
+    --preview-inset: 0.625rem;
     --link-pip: 0.8125rem;
     display: inline-flex;
     align-items: center;

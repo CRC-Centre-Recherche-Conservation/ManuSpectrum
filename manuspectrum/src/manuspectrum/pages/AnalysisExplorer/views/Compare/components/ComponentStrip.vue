@@ -130,6 +130,7 @@ function chipLabel(component: SelectionComponent): string {
 
 .component-strip .chip {
     --r: 999rem;
+    --preview-inset: 0.625rem;
     --link-pip: 0.8125rem;
     display: inline-flex;
     align-items: center;

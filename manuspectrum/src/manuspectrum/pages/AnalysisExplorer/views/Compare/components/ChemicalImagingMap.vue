@@ -298,6 +298,14 @@ provide(FOLIO_ZONES_KEY, zones);
     );
 }
 
+.chemical-imaging-map[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 @media (prefers-reduced-motion: no-preference) {
     .chemical-imaging-map :deep(.layer-image),
     .chemical-imaging-map :deep(.chemical-imaging-stage) {

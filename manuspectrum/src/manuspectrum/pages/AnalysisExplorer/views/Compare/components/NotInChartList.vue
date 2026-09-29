@@ -301,6 +301,14 @@ function analysisHref(analysis: AnalysisHit): string {
     );
 }
 
+.not-in-chart-list li[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 .not-in-chart-list .reason {
     color: var(--ink-muted);
     font-size: 0.75rem;

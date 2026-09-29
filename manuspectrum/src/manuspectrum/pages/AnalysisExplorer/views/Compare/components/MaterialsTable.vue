@@ -835,6 +835,14 @@ function groupToggleLabel(row: Row): string {
     );
 }
 
+.materials-table tbody tr[data-preview="evidence"] {
+    background: color-mix(
+        in srgb,
+        var(--hp, var(--focus-1)) 3%,
+        var(--surface)
+    );
+}
+
 .materials-table tbody tr.group > * {
     padding-block: 0.4375rem;
     border-block-end-color: var(--border-hover);

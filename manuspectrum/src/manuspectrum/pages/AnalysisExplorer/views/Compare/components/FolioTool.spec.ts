@@ -626,11 +626,42 @@ describe("FolioTool", () => {
             await flushPromises();
             expect(hosts(view, "preview")).toEqual(["self", "evidence"]);
             expect(hosts(view, "rel")).toEqual([undefined, undefined]);
+        });
+
+        it("strokes the previewed record's zone solid, heavier and tinted, and runs its halo light, without drawing anything again", async () => {
+            vi.useFakeTimers();
+            const { view } = await mountLinked();
+            const geoJSON = vi.spyOn(L, "geoJSON");
+            const marker = vi.spyOn(L, "marker");
+            const layerGroup = vi.spyOn(L, "layerGroup");
+            const frame = () => view.find("path.folio-tool-frame");
+            const halo = () => view.find("path.folio-tool-halo");
+            const line = view.findAll(".marks li")[0];
+            await line.trigger("pointerenter", { pointerType: "mouse" });
+            vi.runAllTimers();
+            await flushPromises();
+            expect(frame().attributes("stroke-dasharray")).toBeUndefined();
+            expect(Number(frame().attributes("stroke-width"))).toBe(2.5);
+            expect(Number(frame().attributes("fill-opacity"))).toBe(0.16);
+            expect(frame().attributes("data-preview")).toBe("self");
+            expect(halo().attributes("data-preview")).toBe("self");
+            expect(halo().attributes("pathLength")).toBe("100");
             expect(
-                view
-                    .find("path.folio-tool-frame")
-                    .attributes("stroke-dasharray"),
-            ).toBe("1 3");
+                (frame().element as SVGElement).style.getPropertyValue(
+                    "--frame-hue",
+                ),
+            ).toMatch(/--focus-/);
+            await line.trigger("pointerleave", { pointerType: "mouse" });
+            vi.runAllTimers();
+            await flushPromises();
+            expect(frame().attributes("stroke-dasharray")).toBe("4 4");
+            expect(Number(frame().attributes("stroke-width"))).toBe(2);
+            expect(frame().attributes("fill")).toBe("none");
+            expect(frame().attributes("data-preview")).toBeUndefined();
+            expect(halo().attributes("data-preview")).toBeUndefined();
+            expect(geoJSON).not.toHaveBeenCalled();
+            expect(marker).not.toHaveBeenCalled();
+            expect(layerGroup).not.toHaveBeenCalled();
         });
 
         describe("and component outlines", () => {
@@ -728,19 +759,34 @@ describe("FolioTool", () => {
             it("previews a component under the mouse on its outline", async () => {
                 vi.useFakeTimers();
                 const { view } = await mountOutlined();
+                const geoJSON = vi.spyOn(L, "geoJSON");
                 await outline(view).trigger("mouseover");
                 vi.runAllTimers();
                 await flushPromises();
-                expect(outline(view).attributes("stroke-dasharray")).toBe(
-                    "1 3",
+                expect(
+                    outline(view).attributes("stroke-dasharray"),
+                ).toBeUndefined();
+                expect(outline(view).attributes("data-preview")).toBe("self");
+                expect(Number(outline(view).attributes("stroke-width"))).toBe(
+                    2.5,
+                );
+                expect(Number(outline(view).attributes("fill-opacity"))).toBe(
+                    0.16,
                 );
                 expect(hosts(view, "preview")).toEqual(["direct", "evidence"]);
                 await outline(view).trigger("mouseout");
                 vi.runAllTimers();
                 await flushPromises();
                 expect(
-                    outline(view).attributes("stroke-dasharray"),
+                    outline(view).attributes("data-preview"),
                 ).toBeUndefined();
+                expect(Number(outline(view).attributes("stroke-width"))).toBe(
+                    1.5,
+                );
+                expect(Number(outline(view).attributes("fill-opacity"))).toBe(
+                    0,
+                );
+                expect(geoJSON).not.toHaveBeenCalled();
             });
 
             it("previews nothing when a touch tap on an outline sends its mouse events", async () => {
@@ -754,7 +800,7 @@ describe("FolioTool", () => {
                 await flushPromises();
                 expect(linked.previewing.value).toBeNull();
                 expect(
-                    outline(view).attributes("stroke-dasharray"),
+                    outline(view).attributes("data-preview"),
                 ).toBeUndefined();
             });
         });
