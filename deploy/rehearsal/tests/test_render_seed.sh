@@ -7,7 +7,7 @@ RENDER="$HERE/../render-seed.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExample0123 test@laptop'
+KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExample0123 test@host'
 # shellcheck disable=SC2016
 HASH='$6$salt/ab.c$x&y/z.$Q1w2e3r4t5y6u7i8o9p0/AbCdEf.GhIjKl&MnOpQrStUvWxYz0123456789'
 printf '%s\n' "$KEY" >"$TMP/key.pub"

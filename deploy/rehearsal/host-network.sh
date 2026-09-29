@@ -11,22 +11,22 @@ VIRSH=(virsh -c qemu:///system)
 
 usage() {
   cat <<USAGE
-Usage : $(basename "$0") [-h]
+Usage: $(basename "$0") [-h]
 
-Crée (si besoin) et démarre le réseau libvirt « ${NET_NAME} » (192.168.123.0/24,
-NAT, VM en 192.168.123.10) sur qemu:///system, avec démarrage automatique.
-Le réseau « default » n'est jamais modifié. Relançable sans effet de bord.
+Creates (if needed) and starts the libvirt network "${NET_NAME}" (192.168.123.0/24,
+NAT, VM at 192.168.123.10) on qemu:///system, with autostart.
+The "default" network is never modified. Safe to re-run.
 USAGE
 }
 
 case "${1:-}" in
   -h | --help) usage; exit 0 ;;
   "") ;;
-  *) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+  *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
 esac
 
 if ! command -v virsh >/dev/null 2>&1; then
-  echo "virsh est introuvable : installez libvirt (libvirt-clients / libvirt-daemon-system)." >&2
+  echo "virsh not found: install libvirt (libvirt-clients / libvirt-daemon-system)." >&2
   exit 1
 fi
 
@@ -34,22 +34,22 @@ changed=0
 
 if ! "${VIRSH[@]}" net-info "$NET_NAME" >/dev/null 2>&1; then
   "${VIRSH[@]}" net-define "$HERE/network.xml"
-  echo "Réseau ${NET_NAME} défini."
+  echo "Network ${NET_NAME} defined."
   changed=1
 fi
 
 if [ "$("${VIRSH[@]}" net-info "$NET_NAME" | awk '/^Active:/ {print $2}')" != "yes" ]; then
   "${VIRSH[@]}" net-start "$NET_NAME"
-  echo "Réseau ${NET_NAME} démarré."
+  echo "Network ${NET_NAME} started."
   changed=1
 fi
 
 if [ "$("${VIRSH[@]}" net-info "$NET_NAME" | awk '/^Autostart:/ {print $2}')" != "yes" ]; then
   "${VIRSH[@]}" net-autostart "$NET_NAME"
-  echo "Démarrage automatique du réseau ${NET_NAME} activé."
+  echo "Autostart of network ${NET_NAME} enabled."
   changed=1
 fi
 
 if [ "$changed" -eq 0 ]; then
-  echo "Réseau ${NET_NAME} : déjà fait."
+  echo "Network ${NET_NAME}: already done."
 fi

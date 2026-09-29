@@ -14,15 +14,15 @@ EXPORT_CLIENT="192.168.123.10/32"
 
 usage() {
   cat <<USAGE
-Usage : sudo $(basename "$0") [--remove] [--env FICHIER] [-h]
+Usage: sudo $(basename "$0") [--remove] [--env FILE] [-h]
 
-Exporte ${EXPORT_DIR} en NFS vers ${EXPORT_CLIENT} (fichier dédié
-${EXPORT_FILE}), avec NFS_EXPORT_OPTIONS de rehearsal.env, active le serveur NFS et, si firewalld tourne, ouvre
-les services nfs, rpc-bind et mountd dans la zone « libvirt ».
+Exports ${EXPORT_DIR} over NFS to ${EXPORT_CLIENT} (dedicated file
+${EXPORT_FILE}), with NFS_EXPORT_OPTIONS from rehearsal.env, enables the NFS server and, if firewalld runs, opens
+the nfs, rpc-bind and mountd services in the "libvirt" zone.
 
-  --remove         retire l'export (les données ne sont pas supprimées).
-  --env FICHIER    fichier de variables (défaut : rehearsal.env à côté du script).
-  -h         cette aide.
+  --remove         removes the export (data is not deleted).
+  --env FILE       variables file (default: rehearsal.env next to the script).
+  -h               this help.
 USAGE
 }
 
@@ -32,8 +32,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) usage; exit 0 ;;
     --remove) remove=1; shift ;;
-    --env) env_file="${2:?--env attend une valeur}"; shift 2 ;;
-    *) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+    --env) env_file="${2:?--env needs a value}"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
@@ -46,18 +46,18 @@ fi
 [ -z "$caller_options_set" ] || NFS_EXPORT_OPTIONS="$caller_options"
 NFS_EXPORT_OPTIONS="${NFS_EXPORT_OPTIONS:-rw,sync,root_squash,no_subtree_check}"
 if ! [[ "$NFS_EXPORT_OPTIONS" =~ ^[a-z_,=0-9]+$ ]]; then
-  echo "NFS_EXPORT_OPTIONS invalide : « ${NFS_EXPORT_OPTIONS} »." >&2
+  echo "Invalid NFS_EXPORT_OPTIONS: \"${NFS_EXPORT_OPTIONS}\"." >&2
   exit 1
 fi
 EXPORT_LINE="${EXPORT_DIR} ${EXPORT_CLIENT}(${NFS_EXPORT_OPTIONS})"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Ce script doit être lancé en root (sudo)." >&2
+  echo "This script must be run as root (sudo)." >&2
   exit 1
 fi
 
 if ! command -v exportfs >/dev/null 2>&1; then
-  echo "exportfs est introuvable : installez nfs-kernel-server (Debian/Ubuntu) ou nfs-utils (Fedora/openSUSE)." >&2
+  echo "exportfs not found: install nfs-kernel-server (Debian/Ubuntu) or nfs-utils (Fedora/openSUSE)." >&2
   exit 1
 fi
 
@@ -65,12 +65,12 @@ if [ "$remove" -eq 1 ]; then
   if [ -f "$EXPORT_FILE" ]; then
     rm -f "$EXPORT_FILE"
     exportfs -ra
-    echo "Export retiré."
+    echo "Export removed."
   else
-    echo "Export : déjà fait (rien à retirer)."
+    echo "Export: already done (nothing to remove)."
   fi
-  echo "Les services firewalld nfs, rpc-bind et mountd ouverts dans la zone « libvirt » restent ouverts."
-  echo "Les données de ${EXPORT_DIR} sont conservées ; pour les supprimer, tapez vous-même : rm -rf ${EXPORT_DIR}"
+  echo "The firewalld services nfs, rpc-bind and mountd opened in the \"libvirt\" zone stay open."
+  echo "The data in ${EXPORT_DIR} is kept; to delete it, type it yourself: rm -rf ${EXPORT_DIR}"
   exit 0
 fi
 
@@ -78,14 +78,14 @@ changed=0
 
 if [ ! -d "$EXPORT_DIR" ]; then
   install -d -m 0755 -o root -g root "$EXPORT_DIR"
-  echo "Répertoire ${EXPORT_DIR} créé."
+  echo "Directory ${EXPORT_DIR} created."
   changed=1
 fi
 
 mkdir -p "$(dirname "$EXPORT_FILE")"
 if [ ! -f "$EXPORT_FILE" ] || [ "$(cat "$EXPORT_FILE")" != "$EXPORT_LINE" ]; then
   printf '%s\n' "$EXPORT_LINE" >"$EXPORT_FILE"
-  echo "Export écrit dans ${EXPORT_FILE}."
+  echo "Export written to ${EXPORT_FILE}."
   changed=1
 fi
 exportfs -ra
@@ -98,12 +98,12 @@ for candidate in nfs-server nfs-kernel-server; do
   fi
 done
 if [ -z "$service" ]; then
-  echo "Aucun service nfs-server / nfs-kernel-server trouvé : installez le serveur NFS." >&2
+  echo "No nfs-server / nfs-kernel-server service found: install the NFS server." >&2
   exit 1
 fi
 if ! systemctl is-active --quiet "$service" || ! systemctl is-enabled --quiet "$service"; then
   systemctl enable --now "$service"
-  echo "Service ${service} activé et démarré."
+  echo "Service ${service} enabled and started."
   changed=1
 fi
 
@@ -117,15 +117,15 @@ if command -v firewall-cmd >/dev/null 2>&1 && [ "$(firewall-cmd --state 2>/dev/n
   done
   if [ "$fw_changed" -eq 1 ]; then
     firewall-cmd --reload >/dev/null
-    echo "firewalld détecté : services nfs, rpc-bind et mountd ouverts dans la zone « libvirt » (sinon /data ne se monte pas depuis la VM)."
+    echo "firewalld detected: nfs, rpc-bind and mountd services opened in the \"libvirt\" zone (otherwise /data does not mount from the VM)."
     changed=1
   fi
 fi
 
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
-  echo "ufw est actif sur ce portable : autorisez NFS depuis le réseau de la VM, par exemple « sudo ufw allow from 192.168.123.0/24 to any port nfs »." >&2
+  echo "ufw is active on this host: allow NFS from the VM network, for example \"sudo ufw allow from 192.168.123.0/24 to any port nfs\"." >&2
 fi
 
 if [ "$changed" -eq 0 ]; then
-  echo "Export NFS de ${EXPORT_DIR} : déjà fait."
+  echo "NFS export of ${EXPORT_DIR}: already done."
 fi

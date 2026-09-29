@@ -16,32 +16,32 @@ MARGIN_GB=1
 
 usage() {
   cat <<USAGE
-Usage : ISO=/chemin/ubuntu-26.04.1-live-server-amd64.iso $(basename "$0") [-h]
+Usage: ISO=/path/ubuntu-26.04.1-live-server-amd64.iso $(basename "$0") [-h]
 
-Installe la VM de répétition sans intervention (≈ 10-15 min).
+Installs the rehearsal VM unattended (about 10-15 min).
 
-Variables (valeur par défaut) :
-  ISO         image d'installation, obligatoire ; SHA256SUMS à côté = vérifié
+Variables (default value):
+  ISO         installation image, required; SHA256SUMS next to it = verified
   VM_NAME     ms-rehearsal
-  VCPUS       rehearsal.env, sinon 4
-  RAM_MB      rehearsal.env, sinon 8192
-  DISK_GB     rehearsal.env, sinon 60
+  VCPUS       rehearsal.env, else 4
+  RAM_MB      rehearsal.env, else 8192
+  DISK_GB     rehearsal.env, else 60
   SSH_PUBKEY  ~/.ssh/id_ed25519.pub
   NETWORK     ms-rehearsal
   MAC         52:54:00:4d:53:10
   VM_IP       192.168.123.10
-  DRY_RUN     1 = affiche les commandes et contrôle le XML, ne crée rien
+  DRY_RUN     1 = prints the commands and checks the XML, creates nothing
 
-VCPUS, RAM_MB, DISK_GB, ADMIN_USER, ROOT_LV_SIZE (50G), LOCALE (en_US.UTF-8) et
-KEYBOARD (us) viennent de rehearsal.env ; une variable d'environnement passée
-à la commande l'emporte. ROOT_LV_SIZE + ${BOOT_PART_GB}G de /boot + ${MARGIN_GB}G de marge doivent tenir dans DISK_GB.
+VCPUS, RAM_MB, DISK_GB, ADMIN_USER, ROOT_LV_SIZE (50G), LOCALE (en_US.UTF-8) and
+KEYBOARD (us) come from rehearsal.env; an environment variable passed to the
+command wins. ROOT_LV_SIZE + ${BOOT_PART_GB}G of /boot + ${MARGIN_GB}G of margin must fit in DISK_GB.
 USAGE
 }
 
 case "${1:-}" in
   -h | --help) usage; exit 0 ;;
   "") ;;
-  *) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+  *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
 esac
 
 # Values given in the environment win over the variables file.
@@ -57,7 +57,7 @@ for v in "${!caller_env[@]}"; do
   printf -v "$v" '%s' "${caller_env[$v]}"
 done
 if [ -z "${VCPUS:-}" ] || [ -z "${RAM_MB:-}" ] || [ -z "${DISK_GB:-}" ]; then
-  echo "Attention : VCPUS, RAM_MB ou DISK_GB absents : valeurs génériques, la VM ne sera pas conforme à la production tant que rehearsal.env n'est pas rempli." >&2
+  echo "Warning: VCPUS, RAM_MB or DISK_GB missing: generic values, the VM will not match production until rehearsal.env is filled in." >&2
 fi
 ADMIN_USER="${ADMIN_USER:-admin1}"
 ISO="${ISO:-}"
@@ -88,21 +88,21 @@ run() {
 }
 
 if [ -z "$ISO" ]; then
-  echo "La variable ISO est obligatoire (chemin de l'image ubuntu-26.04.1-live-server-amd64.iso)." >&2
+  echo "The ISO variable is required (path of the ubuntu-26.04.1-live-server-amd64.iso image)." >&2
   usage >&2
   exit 2
 fi
 
 if ! [[ "$ROOT_LV_SIZE" =~ ^[0-9]+G$ ]]; then
-  echo "ROOT_LV_SIZE invalide : « ${ROOT_LV_SIZE} » (attendu : 50G)." >&2
+  echo "Invalid ROOT_LV_SIZE: \"${ROOT_LV_SIZE}\" (expected: 50G)." >&2
   exit 1
 fi
 if ! [[ "$DISK_GB" =~ ^[0-9]+$ ]]; then
-  echo "DISK_GB invalide : « ${DISK_GB} »." >&2
+  echo "Invalid DISK_GB: \"${DISK_GB}\"." >&2
   exit 1
 fi
 if [ $((${ROOT_LV_SIZE%G} + BOOT_PART_GB + MARGIN_GB)) -gt "$DISK_GB" ]; then
-  echo "ROOT_LV_SIZE (${ROOT_LV_SIZE}) + ${BOOT_PART_GB}G de /boot + ${MARGIN_GB}G de marge dépassent DISK_GB (${DISK_GB} Gio) : agrandissez DISK_GB ou réduisez ROOT_LV_SIZE." >&2
+  echo "ROOT_LV_SIZE (${ROOT_LV_SIZE}) + ${BOOT_PART_GB}G of /boot + ${MARGIN_GB}G of margin exceed DISK_GB (${DISK_GB} GiB): increase DISK_GB or reduce ROOT_LV_SIZE." >&2
   exit 1
 fi
 
@@ -117,22 +117,22 @@ if [ "${#missing[@]}" -gt 0 ]; then
     echo "  Fedora        : sudo dnf install virt-install libvirt-client qemu-img cloud-utils mkpasswd"
   } >&2
   if [ "$DRY_RUN" != 1 ]; then exit 1; fi
-  echo "(dry-run : on continue sans ces outils)" >&2
+  echo "(dry-run: continuing without these tools)" >&2
 fi
 have() { ! printf '%s\n' "${missing[@]}" | grep -qx "$1"; }
 
 if [ "$DRY_RUN" != 1 ] || have virsh; then
   if ! virsh_c uri >/dev/null 2>&1; then
-    echo "Connexion à ${CONNECT} impossible : ajoutez-vous au groupe libvirt (sudo usermod -aG libvirt \$USER), reconnectez-vous, et vérifiez que libvirt tourne." >&2
+    echo "Cannot connect to ${CONNECT}: add yourself to the libvirt group (sudo usermod -aG libvirt \$USER), log in again, and check that libvirt is running." >&2
     [ "$DRY_RUN" = 1 ] || exit 1
   else
     if virsh_c dominfo "$VM_NAME" >/dev/null 2>&1; then
-      echo "La VM « ${VM_NAME} » existe déjà : aucune modification." >&2
-      echo "Pour repartir de zéro : virsh -c ${CONNECT} undefine --remove-all-storage --snapshots-metadata ${VM_NAME}" >&2
+      echo "The VM \"${VM_NAME}\" already exists: nothing changed." >&2
+      echo "To start over: virsh -c ${CONNECT} undefine --remove-all-storage --snapshots-metadata ${VM_NAME}" >&2
       exit 1
     fi
     if ! virsh_c net-list --name | grep -qx "$NETWORK"; then
-      echo "Le réseau libvirt « ${NETWORK} » est absent ou inactif : lancez « sudo ./host-network.sh »." >&2
+      echo "The libvirt network \"${NETWORK}\" is missing or inactive: run \"sudo ./host-network.sh\"." >&2
       [ "$DRY_RUN" = 1 ] || exit 1
     fi
   fi
@@ -147,20 +147,20 @@ iso_name="$(basename "$ISO")"
 if [ -f "$iso_dir/SHA256SUMS" ]; then
   iso_sum="$(grep -E " [* ]?${iso_name//./\\.}\$" "$iso_dir/SHA256SUMS" || true)"
   if [ -z "$iso_sum" ]; then
-    echo "${iso_name} n'apparaît pas dans SHA256SUMS : somme non vérifiable." >&2
+    echo "${iso_name} does not appear in SHA256SUMS: checksum cannot be verified." >&2
     exit 1
   fi
   if (cd "$iso_dir" && sha256sum -c - <<<"$iso_sum" >/dev/null 2>&1); then
-    echo "Somme SHA256 de l'ISO vérifiée."
+    echo "ISO SHA256 checksum verified."
   else
-    echo "La somme SHA256 de ${iso_name} ne correspond pas à SHA256SUMS." >&2
+    echo "The SHA256 checksum of ${iso_name} does not match SHA256SUMS." >&2
     exit 1
   fi
 else
-  echo "Pas de SHA256SUMS à côté de l'ISO : somme non vérifiée."
+  echo "No SHA256SUMS next to the ISO: checksum not verified."
 fi
 if [ ! -f "$SSH_PUBKEY" ]; then
-  echo "Clé publique SSH introuvable : ${SSH_PUBKEY} (variable SSH_PUBKEY)." >&2
+  echo "SSH public key not found: ${SSH_PUBKEY} (variable SSH_PUBKEY)." >&2
   exit 1
 fi
 
@@ -169,7 +169,7 @@ fi
 for qemu_user in libvirt-qemu qemu; do
   if id "$qemu_user" >/dev/null 2>&1; then
     if ! sudo -u "$qemu_user" test -r "$ISO"; then
-      echo "L'utilisateur ${qemu_user} ne peut pas lire ${ISO} : copiez l'ISO dans ${IMAGES_DIR}/ (sudo cp) et relancez avec ISO=${IMAGES_DIR}/${iso_name}." >&2
+      echo "User ${qemu_user} cannot read ${ISO}: copy the ISO into ${IMAGES_DIR}/ (sudo cp) and re-run with ISO=${IMAGES_DIR}/${iso_name}." >&2
       [ "$DRY_RUN" = 1 ] || exit 1
     fi
     break
@@ -178,11 +178,11 @@ done
 
 mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
 if [ $((RAM_MB * 1024 * 10)) -gt $((mem_kb * 9)) ]; then
-  echo "Attention : ${RAM_MB} Mio dépassent 90 % de la RAM du portable ($((mem_kb / 1024)) Mio)." >&2
-  echo "La VM de dev doit être arrêtée (virsh shutdown …)." >&2
+  echo "Warning: ${RAM_MB} MiB exceeds 90 % of the host's RAM ($((mem_kb / 1024)) MiB)." >&2
+  echo "Free enough memory on the host first: RAM_MB + 4 GB." >&2
   if [ "$DRY_RUN" != 1 ]; then
-    read -r -p "Continuer quand même ? [o/N] " answer
-    case "$answer" in o | O | oui | OUI) ;; *) echo "Abandon."; exit 1 ;; esac
+    read -r -p "Continue anyway? [y/N] " answer
+    case "$answer" in y | Y | yes | YES) ;; *) echo "Aborted."; exit 1 ;; esac
   fi
 fi
 
@@ -198,10 +198,10 @@ if [ "$DRY_RUN" = 1 ]; then
   # shellcheck disable=SC2016
   printf '%s\n' '$6$dryrun$0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000' >"$work/hash"
 else
-  read -r -s -p "Mot de passe du compte ${ADMIN_USER} : " pw1; echo
-  read -r -s -p "Confirmez le mot de passe : " pw2; echo
+  read -r -s -p "Password of account ${ADMIN_USER}: " pw1; echo
+  read -r -s -p "Confirm the password: " pw2; echo
   if [ -z "$pw1" ] || [ "$pw1" != "$pw2" ]; then
-    echo "Mots de passe vides ou différents." >&2
+    echo "Passwords empty or different." >&2
     exit 1
   fi
   printf '%s' "$pw1" | mkpasswd -m sha-512 -s >"$work/hash"
@@ -234,13 +234,13 @@ if command -v osinfo-query >/dev/null 2>&1; then
   done
 fi
 if [ -z "$osinfo" ]; then
-  echo "libosinfo ne connaît aucun des systèmes ubuntu26.04, ubuntu24.04, linux2024 (osinfo-query absent ou base trop ancienne)." >&2
-  echo "Dernier recours : mettez à jour osinfo-db (osinfo-db-import --local), ou éditez --osinfo dans make-vm.sh pour « generic »." >&2
+  echo "libosinfo knows none of the systems ubuntu26.04, ubuntu24.04, linux2024 (osinfo-query missing or database too old)." >&2
+  echo "Last resort: update osinfo-db (osinfo-db-import --local), or edit --osinfo in make-vm.sh to \"generic\"." >&2
   [ "$DRY_RUN" = 1 ] || exit 1
   osinfo="linux2024"
 fi
 if [ "$osinfo" != "ubuntu26.04" ]; then
-  echo "libosinfo ne connaît pas encore ubuntu26.04 : repli sur « ${osinfo} »."
+  echo "libosinfo does not know ubuntu26.04 yet: falling back to \"${osinfo}\"."
 fi
 
 # The autoinstall layout has no ESP: the guest must boot with BIOS. From
@@ -269,14 +269,14 @@ vi_args=(
 
 if have virt-install; then
   xml="$(virt-install "${vi_args[@]}" --print-xml --dry-run)" || {
-    echo "virt-install --print-xml a échoué." >&2
+    echo "virt-install --print-xml failed." >&2
     exit 1
   }
   if grep -Eq "firmware=['\"]efi['\"]|<loader[^>]*pflash" <<<"$xml"; then
-    echo "Le XML produit demande l'UEFI (firmware=efi ou loader pflash) : la VM ne démarrerait pas." >&2
+    echo "The produced XML asks for UEFI (firmware=efi or loader pflash): the VM would not boot." >&2
     exit 1
   fi
-  echo "XML contrôlé : aucun démarrage UEFI."
+  echo "XML checked: no UEFI boot."
 fi
 
 if [ "$DRY_RUN" = 1 ]; then
@@ -286,12 +286,12 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
-echo "Installation en cours. Suivre : virsh -c ${CONNECT} console ${VM_NAME} (sortie : Ctrl+]). Si l'installeur échoue, virt-install attend sans fin : Ctrl+C, puis « virsh -c ${CONNECT} destroy ${VM_NAME} »."
+echo "Installation in progress. Follow it: virsh -c ${CONNECT} console ${VM_NAME} (exit: Ctrl+]). If the installer fails, virt-install waits forever: Ctrl+C, then \"virsh -c ${CONNECT} destroy ${VM_NAME}\"."
 virt-install "${vi_args[@]}" --noautoconsole --noreboot --wait -1
 
 virsh_c detach-disk "$VM_NAME" "$seed_disk" --config >/dev/null 2>&1 \
   || virsh_c change-media "$VM_NAME" sda --eject --config >/dev/null 2>&1 \
-  || echo "Le lecteur du seed n'a pas pu être retiré automatiquement : virsh -c ${CONNECT} domblklist ${VM_NAME}." >&2
+  || echo "The seed drive could not be removed automatically : virsh -c ${CONNECT} domblklist ${VM_NAME}." >&2
 virsh_c start "$VM_NAME" >/dev/null
 
 # Private key matching SSH_PUBKEY, offered to every probe when it exists.
@@ -313,7 +313,7 @@ wait_first_boot() {
   return 1
 }
 if ! wait_first_boot; then
-  echo "Connexion SSH impossible sur ${ADMIN_USER}@${VM_IP} après 5 minutes : la VM n'a pas démarré, ou la clé privée correspondant à ${SSH_PUBKEY} est refusée (ssh-agent, ou fichier ${SSH_PUBKEY%.pub} absent)." >&2
+  echo "SSH connection to ${ADMIN_USER}@${VM_IP} impossible after 5 minutes: the VM did not start, or the private key matching ${SSH_PUBKEY} is refused (ssh-agent, or file ${SSH_PUBKEY%.pub} missing)." >&2
   exit 1
 fi
 
@@ -323,18 +323,18 @@ for _ in $(seq 1 60); do
   sleep 3
 done
 if [ "$(virsh_c domstate "$VM_NAME")" != "shut off" ]; then
-  echo "La VM ne s'est pas éteinte : pas de snapshot pris." >&2
+  echo "The VM did not shut down: no snapshot taken." >&2
   exit 1
 fi
-virsh_c snapshot-create-as "$VM_NAME" installed "Ubuntu installé, avant baseline"
+virsh_c snapshot-create-as "$VM_NAME" installed "Ubuntu installed, before baseline"
 virsh_c start "$VM_NAME" >/dev/null
 sudo rm -f "$seed_copy"
 seed_copy=""
 
 cat <<NEXT
 
-VM installée, snapshot « installed » pris. Suite :
-  ssh-keygen -R ${VM_IP}   # si une ancienne VM avait cette adresse
+VM installed, snapshot "installed" taken. Next:
+  ssh-keygen -R ${VM_IP}   # if an earlier VM had this address
   scp host-baseline.sh verify-baseline.sh rehearsal.env ${ADMIN_USER}@${VM_IP}:
   ssh -t ${ADMIN_USER}@${VM_IP} 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'
 NEXT

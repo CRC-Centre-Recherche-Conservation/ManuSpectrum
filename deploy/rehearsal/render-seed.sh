@@ -9,21 +9,21 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<USAGE
-Usage : $(basename "$0") --out DIR --pubkey FILE
+Usage: $(basename "$0") --out DIR --pubkey FILE
           (--password-hash-file FILE | --password-hash HASH)
           [--admin-user admin1] [--hostname manuspectrum]
           [--locale en_US.UTF-8] [--keyboard us] [--root-size 50G]
 
-Écrit DIR/user-data et DIR/meta-data pour l'installation automatique.
-  --out DIR             répertoire de sortie (créé si besoin)
-  --pubkey FILE         clé publique SSH (une ligne ssh-ed25519, ssh-rsa, ecdsa-…)
-  --password-hash-file FILE  fichier contenant le hash SHA-512 (\$6\$…)
-  --password-hash HASH  hash SHA-512 (\$6\$…) sur la ligne de commande (tests)
-  --admin-user NOM      compte administrateur (défaut : admin1)
-  --hostname NOM        nom d'hôte (défaut : manuspectrum)
-  --locale LOCALE       locale du système (défaut : en_US.UTF-8 ; C.UTF-8 accepté)
-  --keyboard LAYOUT     disposition du clavier (défaut : us)
-  --root-size TAILLE    volume logique racine, ex. 50G (défaut : 50G)
+Writes DIR/user-data and DIR/meta-data for the automatic installation.
+  --out DIR             output directory (created if needed)
+  --pubkey FILE         SSH public key (one line: ssh-ed25519, ssh-rsa, ecdsa-...)
+  --password-hash-file FILE  file containing the SHA-512 hash (\$6\$...)
+  --password-hash HASH  SHA-512 hash (\$6\$...) on the command line (tests)
+  --admin-user NAME     administrator account (default: admin1)
+  --hostname NAME       hostname (default: manuspectrum)
+  --locale LOCALE       system locale (default: en_US.UTF-8; C.UTF-8 accepted)
+  --keyboard LAYOUT     keyboard layout (default: us)
+  --root-size SIZE      root logical volume, e.g. 50G (default: 50G)
 USAGE
 }
 
@@ -32,67 +32,67 @@ locale="en_US.UTF-8" keyboard="us" root_size="50G"
 while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) usage; exit 0 ;;
-    --out) out="${2:?--out attend une valeur}"; shift 2 ;;
-    --pubkey) pubkey_file="${2:?--pubkey attend une valeur}"; shift 2 ;;
-    --password-hash) hash="${2:?--password-hash attend une valeur}"; shift 2 ;;
-    --password-hash-file) hash_file="${2:?--password-hash-file attend une valeur}"; shift 2 ;;
-    --locale) locale="${2:?--locale attend une valeur}"; shift 2 ;;
-    --keyboard) keyboard="${2:?--keyboard attend une valeur}"; shift 2 ;;
-    --root-size) root_size="${2:?--root-size attend une valeur}"; shift 2 ;;
-    --admin-user) admin_user="${2:?--admin-user attend une valeur}"; shift 2 ;;
-    --hostname) hostname="${2:?--hostname attend une valeur}"; shift 2 ;;
-    *) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+    --out) out="${2:?--out needs a value}"; shift 2 ;;
+    --pubkey) pubkey_file="${2:?--pubkey needs a value}"; shift 2 ;;
+    --password-hash) hash="${2:?--password-hash needs a value}"; shift 2 ;;
+    --password-hash-file) hash_file="${2:?--password-hash-file needs a value}"; shift 2 ;;
+    --locale) locale="${2:?--locale needs a value}"; shift 2 ;;
+    --keyboard) keyboard="${2:?--keyboard needs a value}"; shift 2 ;;
+    --root-size) root_size="${2:?--root-size needs a value}"; shift 2 ;;
+    --admin-user) admin_user="${2:?--admin-user needs a value}"; shift 2 ;;
+    --hostname) hostname="${2:?--hostname needs a value}"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 if [ -n "$hash_file" ]; then
   if [ ! -f "$hash_file" ]; then
-    echo "Fichier de hash introuvable : ${hash_file}" >&2
+    echo "Hash file not found: ${hash_file}" >&2
     exit 1
   fi
   hash="$(head -n1 "$hash_file")"
 fi
 if [ -z "$out" ] || [ -z "$pubkey_file" ] || [ -z "$hash" ]; then
-  echo "Les options --out, --pubkey et --password-hash-file (ou --password-hash) sont obligatoires." >&2
+  echo "Options --out, --pubkey and --password-hash-file (or --password-hash) are required." >&2
   usage >&2
   exit 2
 fi
 
 if ! [[ "$admin_user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
-  echo "Nom de compte invalide : « ${admin_user} »." >&2
+  echo "Invalid account name: \"${admin_user}\"." >&2
   exit 1
 fi
 if ! [[ "$hostname" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
-  echo "Nom d'hôte invalide : « ${hostname} »." >&2
+  echo "Invalid hostname: \"${hostname}\"." >&2
   exit 1
 fi
 if ! [[ "$locale" =~ ^([a-z]{2,3}_[A-Z]{2}|C)\.UTF-8(@[a-z]+)?$ ]]; then
-  echo "Locale invalide : « ${locale} » (attendu : C.UTF-8 ou xx_YY.UTF-8[@modificateur])." >&2
+  echo "Invalid locale: \"${locale}\" (expected: C.UTF-8 or xx_YY.UTF-8[@modifier])." >&2
   exit 1
 fi
 if ! [[ "$keyboard" =~ ^[a-z]{2,3}$ ]]; then
-  echo "Disposition de clavier invalide : « ${keyboard} »." >&2
+  echo "Invalid keyboard layout: \"${keyboard}\"." >&2
   exit 1
 fi
 if ! [[ "$root_size" =~ ^[0-9]+G$ ]]; then
-  echo "Taille de volume racine invalide : « ${root_size} » (attendu : 50G)." >&2
+  echo "Invalid root volume size: \"${root_size}\" (expected: 50G)." >&2
   exit 1
 fi
 if [ ! -f "$pubkey_file" ]; then
-  echo "Clé publique introuvable : ${pubkey_file}" >&2
+  echo "Public key not found: ${pubkey_file}" >&2
   exit 1
 fi
 if [ "$(grep -c . "$pubkey_file")" -ne 1 ]; then
-  echo "Le fichier de clé doit contenir exactement une ligne." >&2
+  echo "The key file must contain exactly one line." >&2
   exit 1
 fi
 pubkey="$(grep . "$pubkey_file")"
 if ! [[ "$pubkey" =~ ^(ssh-(ed25519|rsa|dss)|ecdsa-sha2-nistp[0-9]+|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)\ [A-Za-z0-9+/=]+(\ [^\"\\]*)?$ ]]; then
-  echo "La clé publique n'est pas une ligne SSH valide." >&2
+  echo "The public key is not a valid SSH line." >&2
   exit 1
 fi
 if ! [[ "$hash" =~ ^\$6\$[^\"\\[:space:]]+$ ]]; then
-  echo "Le hash doit être un hash SHA-512 (\$6\$…) sans guillemet ni espace." >&2
+  echo "The hash must be a SHA-512 hash (\$6\$...) with no quote or space." >&2
   exit 1
 fi
 
@@ -132,11 +132,11 @@ leftover="$(replace_all "$leftover" "@@LOCALE@@" "")"
 leftover="$(replace_all "$leftover" "@@KEYBOARD@@" "")"
 leftover="$(replace_all "$leftover" "@@ROOT_SIZE@@" "")"
 if [[ "$leftover" == *"@@"* ]]; then
-  echo "Un marqueur @@…@@ du modèle n'est pas substitué." >&2
+  echo "A @@...@@ marker of the template was not substituted." >&2
   exit 1
 fi
 
 mkdir -p "$out"
 printf '%s' "$rendered" >"$out/user-data"
 sed "s/^local-hostname: .*/local-hostname: ${hostname}/" "$HERE/autoinstall/meta-data" >"$out/meta-data"
-echo "Seed écrit dans ${out} (utilisateur ${admin_user}, hôte ${hostname})."
+echo "Seed written to ${out} (user ${admin_user}, host ${hostname})."

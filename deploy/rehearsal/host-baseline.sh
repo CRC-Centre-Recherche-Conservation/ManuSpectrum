@@ -3,7 +3,7 @@
 # accounts, /data over NFS, unattended-upgrades, postfix. vm.max_map_count
 # and /etc/docker/daemon.json are left untouched (Ansible's job). Runs as
 # root inside the VM; reads rehearsal.env (next to the script, or --env FILE).
-# Idempotent: each step reports "déjà fait" when nothing changes.
+# Idempotent: each step reports "already done" when nothing changes.
 set -euo pipefail
 export LC_ALL=C
 
@@ -11,11 +11,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<USAGE
-Usage : sudo $(basename "$0") [--env FICHIER] [-h]
+Usage: sudo $(basename "$0") [--env FILE] [-h]
 
-Applique la baseline système. Relançable : ce qui est déjà en
-place est signalé « déjà fait ».
-  --env FICHIER  fichier de variables (défaut : rehearsal.env à côté du script)
+Applies the system baseline. Safe to re-run: whatever is already in
+place is reported as "already done".
+  --env FILE     variables file (default: rehearsal.env next to the script)
 Variables : ADMIN_USER, ADMIN2_USER, ADMIN2_PUBKEY, SSH_PASSWORD_AUTH,
 UNATTENDED_REBOOT, UNATTENDED_REBOOT_TIME, ROOT_ALIAS, SMTP_RELAY,
 NFS_SERVER, NFS_EXPORT, DOCKER_APT_CODENAME (voir rehearsal.env.example).
@@ -26,8 +26,8 @@ env_file="$HERE/rehearsal.env"
 while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) usage; exit 0 ;;
-    --env) env_file="${2:?--env attend une valeur}"; shift 2 ;;
-    *) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+    --env) env_file="${2:?--env needs a value}"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
@@ -40,7 +40,7 @@ if [ -f "$env_file" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$env_file"
 else
-  echo "Pas de rehearsal.env (${env_file}) : valeurs sûres par défaut."
+  echo "No rehearsal.env (${env_file}): safe defaults."
 fi
 for v in "${!caller_env[@]}"; do
   printf -v "$v" '%s' "${caller_env[$v]}"
@@ -58,17 +58,17 @@ NFS_EXPORT="${NFS_EXPORT:-/srv/ms-rehearsal-data}"
 DOCKER_APT_CODENAME="${DOCKER_APT_CODENAME:-}"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Ce script doit être lancé en root (sudo)." >&2
+  echo "This script must be run as root (sudo)." >&2
   exit 1
 fi
-case "$SSH_PASSWORD_AUTH" in yes | no) ;; *) echo "SSH_PASSWORD_AUTH doit valoir yes ou no." >&2; exit 1 ;; esac
-case "$UNATTENDED_REBOOT" in true | false) ;; *) echo "UNATTENDED_REBOOT doit valoir true ou false." >&2; exit 1 ;; esac
+case "$SSH_PASSWORD_AUTH" in yes | no) ;; *) echo "SSH_PASSWORD_AUTH must be yes or no." >&2; exit 1 ;; esac
+case "$UNATTENDED_REBOOT" in true | false) ;; *) echo "UNATTENDED_REBOOT must be true or false." >&2; exit 1 ;; esac
 if [ -n "$ROOT_ALIAS" ] && ! [[ "$ROOT_ALIAS" =~ ^[A-Za-z0-9._@+-]+$ ]]; then
-  echo "ROOT_ALIAS doit être une adresse e-mail ou un compte local (sans | ni &)." >&2
+  echo "ROOT_ALIAS must be an e-mail address or a local account (no | or &)." >&2
   exit 1
 fi
 if ! id "$ADMIN_USER" >/dev/null 2>&1; then
-  echo "Le compte ${ADMIN_USER} n'existe pas (ADMIN_USER)." >&2
+  echo "Account ${ADMIN_USER} does not exist (ADMIN_USER)." >&2
   exit 1
 fi
 
@@ -81,15 +81,15 @@ write_file() {
   cat >"$tmp"
   if [ -f "$target" ] && cmp -s "$tmp" "$target"; then
     rm -f "$tmp"
-    echo "déjà fait : ${target}"
+    echo "already done: ${target}"
     return 1
   fi
   install -D -m 0644 "$tmp" "$target"
   rm -f "$tmp"
-  echo "écrit : ${target}"
+  echo "written: ${target}"
 }
 
-echo "== Paquets"
+echo "== Packages"
 apt-get update -qq
 apt-get install -y -qq ufw fail2ban nfs-common ca-certificates curl gnupg unattended-upgrades >/dev/null
 
@@ -103,7 +103,7 @@ PasswordAuthentication ${SSH_PASSWORD_AUTH}
 SSHD
   if ! sshd -t; then
     if [ -n "$sshd_previous" ]; then printf '%s\n' "$sshd_previous" >"$sshd_dropin"; else rm -f "$sshd_dropin"; fi
-    echo "sshd -t refuse la configuration : drop-in ${sshd_dropin} annulé." >&2
+    echo "sshd -t rejects the configuration: drop-in ${sshd_dropin} rolled back." >&2
     exit 1
   fi
   systemctl reload ssh
@@ -116,7 +116,7 @@ ufw limit 22/tcp >/dev/null
 ufw allow 80/tcp >/dev/null
 ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
-echo "UFW actif (règles idempotentes)."
+echo "UFW active (idempotent rules)."
 
 echo "== fail2ban"
 jail_changed=0
@@ -125,9 +125,9 @@ write_file /etc/fail2ban/jail.local <<'JAIL' && jail_changed=1
 enabled = true
 backend = systemd
 JAIL
-systemctl enable --now fail2ban >/dev/null || { echo "fail2ban ne démarre pas : journalctl -u fail2ban" >&2; exit 1; }
+systemctl enable --now fail2ban >/dev/null || { echo "fail2ban does not start: journalctl -u fail2ban" >&2; exit 1; }
 if [ "$jail_changed" -eq 1 ]; then
-  systemctl restart fail2ban || { echo "fail2ban ne redémarre pas : journalctl -u fail2ban" >&2; exit 1; }
+  systemctl restart fail2ban || { echo "fail2ban does not restart: journalctl -u fail2ban" >&2; exit 1; }
 fi
 
 echo "== Docker CE"
@@ -140,18 +140,18 @@ http_code="$(curl -sSI -o /dev/null -w '%{http_code}' "https://download.docker.c
 case "$http_code" in
   200) ;;
   404)
-    echo "Le dépôt Docker n'a pas de suite « ${codename} »." >&2
-    echo "Relancez avec DOCKER_APT_CODENAME=noble dans rehearsal.env, puis notez la suite réellement utilisée en prod." >&2
+    echo "The Docker repository has no \"${codename}\" suite." >&2
+    echo "Re-run with DOCKER_APT_CODENAME=noble in rehearsal.env, then note the suite actually used in production." >&2
     exit 1
     ;;
   *)
-    echo "download.docker.com injoignable (réponse « ${http_code:-aucune} ») : vérifiez le DNS, le proxy et l'accès Internet de la VM." >&2
+    echo "download.docker.com unreachable (response \"${http_code:-none}\"): check the VM's DNS, proxy and Internet access." >&2
     exit 1
     ;;
 esac
 install -m 0755 -d /etc/apt/keyrings
 if [ -s /etc/apt/keyrings/docker.asc ]; then
-  echo "déjà fait : /etc/apt/keyrings/docker.asc"
+  echo "already done: /etc/apt/keyrings/docker.asc"
 else
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
   chmod a+r /etc/apt/keyrings/docker.asc
@@ -168,12 +168,12 @@ apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
 usermod -aG docker "$ADMIN_USER"
 
-echo "== Comptes"
+echo "== Accounts"
 if id "$ADMIN2_USER" >/dev/null 2>&1; then
-  echo "déjà fait : compte ${ADMIN2_USER}"
+  echo "already done: account ${ADMIN2_USER}"
 else
   adduser --disabled-password --gecos "" "$ADMIN2_USER" >/dev/null
-  echo "créé : ${ADMIN2_USER}"
+  echo "created: ${ADMIN2_USER}"
 fi
 usermod -aG sudo "$ADMIN2_USER"
 if [ -n "$ADMIN2_PUBKEY" ]; then
@@ -186,17 +186,23 @@ if [ -n "$ADMIN2_PUBKEY" ]; then
   chmod 0600 "/home/${ADMIN2_USER}/.ssh/authorized_keys"
 fi
 if id manuspectrum >/dev/null 2>&1; then
-  echo "déjà fait : compte manuspectrum"
+  echo "already done: account manuspectrum"
 else
   adduser --disabled-password --gecos "" manuspectrum >/dev/null
-  echo "créé : manuspectrum"
+  echo "created: manuspectrum"
+fi
+if id -nG manuspectrum | grep -qw docker; then
+  echo "already done: manuspectrum in docker"
+else
+  usermod -aG docker manuspectrum
+  echo "added: manuspectrum to docker"
 fi
 
 echo "== /data (NFS)"
 mkdir -p /data
 fstab_line="${NFS_SERVER}:${NFS_EXPORT} /data nfs4 defaults,_netdev 0 0"
 if grep -qxF "$fstab_line" /etc/fstab; then
-  echo "déjà fait : ligne fstab de /data"
+  echo "already done: /data fstab line"
 else
   # Replaces any other /data entry so a changed NFS_SERVER or NFS_EXPORT never leaves two.
   fstab_tmp="$(mktemp)"
@@ -208,13 +214,13 @@ else
   if findmnt -t nfs4 /data >/dev/null 2>&1; then umount /data; fi
 fi
 if findmnt -t nfs4 /data >/dev/null 2>&1; then
-  echo "déjà fait : /data monté"
+  echo "already done: /data mounted"
 elif ! mount /data; then
-  echo "Le montage de /data a échoué : vérifiez sur le portable « sudo ./host-nfs.sh » (export) et, avec firewalld, la zone « libvirt » (service nfs)." >&2
+  echo "Mounting /data failed: on the host, check \"sudo ./host-nfs.sh\" (export) and, with firewalld, the \"libvirt\" zone (nfs service)." >&2
   exit 1
 fi
 
-echo "== Mises à jour automatiques"
+echo "== Automatic updates"
 write_file /etc/apt/apt.conf.d/50unattended-upgrades <<UU || true
 Unattended-Upgrade::Allowed-Origins {
         "\${distro_id}:\${distro_codename}";
@@ -249,7 +255,7 @@ apt-get install -y -qq postfix >/dev/null
 if [ "$(postconf -h relayhost)" != "$SMTP_RELAY" ]; then
   postconf -e "relayhost = ${SMTP_RELAY}"
   systemctl reload postfix 2>/dev/null || true
-  echo "postfix : relayhost mis à jour."
+  echo "postfix: relayhost updated."
 fi
 if [ -n "$ROOT_ALIAS" ]; then
   if grep -q '^root:' /etc/aliases; then
@@ -259,12 +265,12 @@ if [ -n "$ROOT_ALIAS" ]; then
   fi
   newaliases
 fi
-systemctl enable --now postfix >/dev/null || { echo "postfix ne démarre pas : journalctl -u postfix" >&2; exit 1; }
+systemctl enable --now postfix >/dev/null || { echo "postfix does not start: journalctl -u postfix" >&2; exit 1; }
 
 cat <<DONE
 
 Baseline en place.
-- vm.max_map_count et /etc/docker/daemon.json : laissés à Ansible, comme en prod.
-- Mot de passe de ${ADMIN2_USER} : à poser à la main (sudo passwd ${ADMIN2_USER}).
-- Déconnectez-vous puis reconnectez-vous pour que ${ADMIN_USER} prenne le groupe docker.
+- vm.max_map_count and /etc/docker/daemon.json: left to Ansible, as in production.
+- Password of ${ADMIN2_USER}: set it by hand (sudo passwd ${ADMIN2_USER}).
+- Log out and back in so that ${ADMIN_USER} picks up the docker group.
 DONE

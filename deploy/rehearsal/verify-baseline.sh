@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks the host baseline applied by host-baseline.sh. Prints one
-# `OK <point>` or `ÉCART <point>` line per check; exits 0 only when every
+# `OK <point>` or `MISMATCH <point>` line per check; exits 0 only when every
 # check is OK. Before Ansible, /etc/docker/daemon.json must be absent and
 # vm.max_map_count is only printed; `--after-ansible` requires
 # vm.max_map_count >= 262144 and /etc/docker/daemon.json present. Runs as
@@ -12,11 +12,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<USAGE
-Usage : sudo $(basename "$0") [--after-ansible] [--env FICHIER] [-h]
+Usage: sudo $(basename "$0") [--after-ansible] [--env FILE] [-h]
 
-Contrôle la baseline ; une ligne « OK » ou « ÉCART » par point, code 0 si tout est OK.
-  --after-ansible  exige vm.max_map_count ≥ 262144 et /etc/docker/daemon.json présent
-  --env FICHIER    fichier de variables (défaut : rehearsal.env à côté du script)
+Checks the baseline; one "OK" or "MISMATCH" line per point, exit code 0 when everything is OK.
+  --after-ansible  requires vm.max_map_count >= 262144 and /etc/docker/daemon.json present
+  --env FILE       variables file (default: rehearsal.env next to the script)
 USAGE
 }
 
@@ -26,8 +26,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -h | --help) usage; exit 0 ;;
     --after-ansible) after=1; shift ;;
-    --env) env_file="${2:?--env attend une valeur}"; shift 2 ;;
-    *) echo "Option inconnue : $1" >&2; usage >&2; exit 2 ;;
+    --env) env_file="${2:?--env needs a value}"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
@@ -55,13 +55,13 @@ SMTP_RELAY="${SMTP_RELAY:-}"
 ADMIN2_PUBKEY="${ADMIN2_PUBKEY:-}"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Ce script doit être lancé en root (sudo)." >&2
+  echo "This script must be run as root (sudo)." >&2
   exit 1
 fi
 
 failed=0
 check() { # check POINT EXIT-CODE
-  if [ "$2" -eq 0 ]; then echo "OK $1"; else echo "ÉCART $1"; failed=1; fi
+  if [ "$2" -eq 0 ]; then echo "OK $1"; else echo "MISMATCH $1"; failed=1; fi
 }
 
 sshd_t="$(sshd -T 2>/dev/null)"
@@ -80,78 +80,80 @@ check "ufw : allow 80/tcp" "$?"
 grep -Eq '^443/tcp +ALLOW IN' <<<"$ufw_out"
 check "ufw : allow 443/tcp" "$?"
 rc=0; [ "$(grep -v '(v6)' <<<"$ufw_out" | grep -Ec ' (ALLOW|LIMIT|DENY|REJECT) IN')" -eq 3 ] || rc=1
-check "ufw : aucune autre règle en entrée" "$rc"
+check "ufw: no other inbound rule" "$rc"
 
 fail2ban-client status sshd >/dev/null 2>&1
 check "fail2ban : jail sshd" "$?"
 
 docker version --format '{{.Server.Version}}' >/dev/null 2>&1
-check "docker : serveur présent" "$?"
+check "docker: server present" "$?"
 dpkg-query -W docker-ce containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null 2>&1
-check "docker : paquets docker-ce, containerd.io, buildx et compose" "$?"
+check "docker: packages docker-ce, containerd.io, buildx and compose" "$?"
 [ -f /etc/apt/sources.list.d/docker.sources ] && grep -q 'download.docker.com' /etc/apt/sources.list.d/docker.sources
-check "docker : dépôt apt download.docker.com" "$?"
+check "docker: apt repository download.docker.com" "$?"
 docker compose version >/dev/null 2>&1
-check "docker : plugin compose" "$?"
+check "docker: compose plugin" "$?"
 docker buildx version >/dev/null 2>&1
-check "docker : plugin buildx" "$?"
+check "docker: buildx plugin" "$?"
 id -nG "$ADMIN_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker
-check "${ADMIN_USER} dans le groupe docker" "$?"
+check "${ADMIN_USER} in the docker group" "$?"
 
 id -nG "$ADMIN_USER" 2>/dev/null | tr ' ' '\n' | grep -qx sudo
-check "${ADMIN_USER} dans le groupe sudo" "$?"
+check "${ADMIN_USER} in the sudo group" "$?"
 getent passwd "$ADMIN2_USER" >/dev/null
-check "compte ${ADMIN2_USER}" "$?"
+check "account ${ADMIN2_USER}" "$?"
 id -nG "$ADMIN2_USER" 2>/dev/null | tr ' ' '\n' | grep -qx sudo
-check "${ADMIN2_USER} dans le groupe sudo" "$?"
+check "${ADMIN2_USER} in the sudo group" "$?"
 getent passwd manuspectrum >/dev/null
-check "compte manuspectrum" "$?"
+check "account manuspectrum" "$?"
+id -nG manuspectrum 2>/dev/null | tr ' ' '\n' | grep -qx docker
+check "manuspectrum in the docker group" "$?"
 ! sudo -n -l -U manuspectrum true >/dev/null 2>&1
-check "manuspectrum sans droit sudo" "$?"
+check "manuspectrum without sudo rights" "$?"
 rc=0; [ "$(passwd -S manuspectrum 2>/dev/null | awk '{print $2}')" = "L" ] || rc=1
-check "manuspectrum sans mot de passe (verrouillé)" "$rc"
+check "manuspectrum without password (locked)" "$rc"
 if [ -n "$ADMIN2_PUBKEY" ]; then
   grep -qxF "$ADMIN2_PUBKEY" "/home/${ADMIN2_USER}/.ssh/authorized_keys" 2>/dev/null
-  check "clé SSH de ${ADMIN2_USER}" "$?"
+  check "SSH key of ${ADMIN2_USER}" "$?"
 fi
 rc=0; [ -e /home/manuspectrum/.ssh/authorized_keys ] && rc=1
-check "manuspectrum sans authorized_keys" "$rc"
+check "manuspectrum without authorized_keys" "$rc"
 
 mount_opts="$(findmnt -n -t nfs4 -o OPTIONS /data 2>/dev/null)"
 [ -n "$mount_opts" ] && grep -Eq "(^|,)vers=${NFS_VERS//./\\.}(\\.[0-9]+)?(,|$)" <<<"$mount_opts"
-check "/data monté en NFS ${NFS_VERS}" "$?"
+check "/data mounted over NFS ${NFS_VERS}" "$?"
 findmnt --fstab -n -o SOURCE,FSTYPE /data 2>/dev/null | grep -q "^${NFS_SERVER}:${NFS_EXPORT} nfs4$"
-check "/data dans /etc/fstab" "$?"
+check "/data in /etc/fstab" "$?"
 
 uu="$(cat /etc/apt/apt.conf.d/50unattended-upgrades 2>/dev/null)"
 grep -q "Automatic-Reboot \"${UNATTENDED_REBOOT}\"" <<<"$uu"
 check "unattended-upgrades : Automatic-Reboot ${UNATTENDED_REBOOT}" "$?"
 grep -q "Automatic-Reboot-Time \"${UNATTENDED_REBOOT_TIME}\"" <<<"$uu"
-check "unattended-upgrades : heure ${UNATTENDED_REBOOT_TIME}" "$?"
+check "unattended-upgrades: time ${UNATTENDED_REBOOT_TIME}" "$?"
 grep -q "Automatic-Reboot-WithUsers \"${UNATTENDED_REBOOT}\"" <<<"$uu"
 check "unattended-upgrades : Automatic-Reboot-WithUsers ${UNATTENDED_REBOOT}" "$?"
 grep -q 'Remove-Unused-Kernel-Packages "true"' <<<"$uu" && grep -q 'Remove-Unused-Dependencies "true"' <<<"$uu"
 check "unattended-upgrades : options Remove-*" "$?"
 rc=0; [ "$(grep -c 'distro_codename}' <<<"$uu")" -ge 4 ] || rc=1
-check "unattended-upgrades : quatre origines" "$rc"
+check "unattended-upgrades: four origins" "$rc"
 rc=0; [ "$(grep -c '^APT::Periodic' /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null)" -eq 4 ] || rc=1
-check "20auto-upgrades : quatre lignes APT::Periodic" "$rc"
+check "20auto-upgrades: four APT::Periodic lines" "$rc"
 
 systemctl is-active --quiet postfix
-check "postfix actif" "$?"
+check "postfix active" "$?"
 rc=0; [ "$(postconf -h relayhost 2>/dev/null)" = "$SMTP_RELAY" ] || rc=1
-check "postfix : relayhost" "$rc"
+check "postfix: relayhost" "$rc"
 
 max_map="$(sysctl -n vm.max_map_count 2>/dev/null)"
 if [ "$after" -eq 0 ]; then
-  echo "INFO vm.max_map_count = ${max_map} (non contrôlé avant Ansible)"
+  echo "INFO vm.max_map_count = ${max_map} (not checked before Ansible)"
   [ ! -e /etc/docker/daemon.json ]
-  check "/etc/docker/daemon.json absent (avant Ansible)" "$?"
+  check "/etc/docker/daemon.json absent (before Ansible)" "$?"
 else
   [ "${max_map:-0}" -ge 262144 ]
-  check "vm.max_map_count ≥ 262144 (après Ansible, valeur ${max_map})" "$?"
+  check "vm.max_map_count >= 262144 (after Ansible, value ${max_map})" "$?"
   [ -e /etc/docker/daemon.json ]
-  check "/etc/docker/daemon.json présent (après Ansible)" "$?"
+  check "/etc/docker/daemon.json present (after Ansible)" "$?"
 fi
 
 exit "$failed"
