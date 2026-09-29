@@ -1,0 +1,5 @@
+# Accepted findings of `trivy image` (HIGH and CRITICAL with a fix upstream).
+# One finding per line with its reason above it and an expiry that forces a
+# new decision. Only findings this project cannot fix belong here: a version
+# pinned by Arches or served by Arches' npm dependencies. A finding the
+# project can fix (a floor in pyproject.toml, a bump in package.json) is fixed.
