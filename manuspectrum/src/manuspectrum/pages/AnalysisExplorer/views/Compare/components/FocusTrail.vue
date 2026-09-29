@@ -26,7 +26,8 @@ const ROOT_FONT_PX = 16;
  * its delay), a small dark note under it lists each of its slots (the
  * slot disc, the pinned node's label, « in the focus », « linked
  * directly » or « cited as evidence ») and what a click does (« Click to
- * unpin », « Click to pin as ③ »). It answers the pointer only and
+ * unpin », « Click to pin as ③ », or « Focus full: unpin one to add
+ * this » once the focus holds `FOCUS_MAX` nodes). It answers the pointer only and
  * repeats what the pips, the toggle's pressed state and the legend of the
  * focus already say, so it is hidden from assistive technologies and is
  * not a tooltip that owns Escape: Escape still clears the focus, which
@@ -68,15 +69,16 @@ const shown = computed(
         anchor.value.isConnected &&
         rows.value.length > 0,
 );
-const hint = computed(() =>
-    relations.value?.best === "self"
-        ? $gettext("Click to unpin")
-        : interpolate(
-              $gettext("Click to pin as %{slot}"),
-              { slot: circled(linked.nextSlot.value) },
-              true,
-          ),
-);
+const hint = computed(() => {
+    if (relations.value?.best === "self") return $gettext("Click to unpin");
+    const slot = linked.nextSlot.value;
+    if (slot === null) return $gettext("Focus full: unpin one to add this");
+    return interpolate(
+        $gettext("Click to pin as %{slot}"),
+        { slot: circled(slot) },
+        true,
+    );
+});
 const target = computed<HTMLElement | string>(
     () => anchor.value?.closest<HTMLElement>("dialog[open]") ?? "body",
 );

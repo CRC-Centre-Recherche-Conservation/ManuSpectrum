@@ -17,8 +17,9 @@ interface Digit {
  * The pip of a focus toggle: one digit per slot the thing standing for
  * `node` relates to, each on its slot's hue (solid: linked directly,
  * hollow: cited as evidence, underlined: the pinned node itself), or a
- * « + » when it relates to none (drawn from `data-n`, so the digits stay
- * out of the toggle's text). Place it as a direct child of the
+ * « + » when it relates to none and the focus has room (drawn from
+ * `data-n`, so the digits stay out of the toggle's text); nothing when it
+ * relates to none and the focus is full. Place it as a direct child of the
  * element carrying `ms-focus`, which shows it (`css/explorer`). Hidden
  * from assistive technologies: the toggle's `aria-pressed` and name carry
  * the state, the digits repeat the colour.
@@ -37,10 +38,12 @@ const digits = computed<Digit[]>(() =>
         own: level === "self",
     })),
 );
+const full = computed(() => marks.linked?.nextSlot.value === null);
 </script>
 
 <template>
     <span
+        v-if="digits.length > 0 || !full"
         class="ms-focus-pip"
         aria-hidden="true"
     >

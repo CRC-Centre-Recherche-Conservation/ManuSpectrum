@@ -12,6 +12,7 @@ import {
     BASKET,
     BY_KEY,
     CH1,
+    CH2,
     SYNTHESIS,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
@@ -120,6 +121,55 @@ describe("useLinkedSelection", () => {
             { slot: 3, level: "self" },
             { slot: 1, level: "direct" },
         ]);
+    });
+
+    it("refuses a fifth pin with a notice, no cue and no change, and refills a hole", () => {
+        const linked = start();
+        for (const id of [
+            elementNode("Cu"),
+            elementNode("Ca"),
+            materialNode(CH1),
+            materialNode(CH2),
+        ]) {
+            linked.toggle(id);
+        }
+        const cue = linked.cue.value;
+        const slots = linked.slots.value;
+        expect(linked.nextSlot.value).toBeNull();
+        linked.toggle(analysisNode(AN1));
+        expect(announce).toHaveBeenLastCalledWith(
+            "The focus holds 4 items at most. Unpin one to add another.",
+        );
+        expect(linked.slots.value).toBe(slots);
+        expect(linked.cue.value).toBe(cue);
+        expect(linked.lastPinned.value).toBe(materialNode(CH2));
+        linked.toggle(elementNode("Ca"));
+        linked.toggle(analysisNode(AN1));
+        expect(linked.slotOf(analysisNode(AN1))).toBe(2);
+        expect(announce).toHaveBeenLastCalledWith(linked.summary.value);
+    });
+
+    it("promises no slot and lights nothing for an unpinned node previewed while the focus is full", async () => {
+        vi.useFakeTimers();
+        const linked = start();
+        for (const id of [
+            elementNode("Cu"),
+            elementNode("Ca"),
+            materialNode(CH1),
+            materialNode(CH2),
+        ]) {
+            linked.toggle(id);
+        }
+        linked.preview(analysisNode(AN1), { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(linked.previewing.value).toBe(analysisNode(AN1));
+        expect(linked.previewSlot.value).toBeNull();
+        expect(linked.previewLevels.value.size).toBe(0);
+        linked.preview(elementNode("Cu"), { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(linked.previewLevels.value.get(materialNode(CH1))).toBe(
+            "direct",
+        );
     });
 
     it("lights under « all » only what relates to every pinned node, says so, and resets it on clear", () => {

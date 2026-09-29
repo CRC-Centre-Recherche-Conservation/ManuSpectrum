@@ -9,6 +9,7 @@ import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/inje
 import {
     AN1,
     CH1,
+    CH2,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
@@ -87,6 +88,24 @@ describe("FocusTrail", () => {
         ]);
         expect(shown.querySelector(".hint")?.textContent).toBe(
             "Click to pin as ③",
+        );
+    });
+
+    it("says the focus is full instead of promising a slot", async () => {
+        const started = startLinkedSelection();
+        stop = started.stop;
+        mountTrail(started.linked);
+        for (const id of [
+            elementNode("Cu"),
+            elementNode("Ca"),
+            materialNode(CH1),
+            materialNode(CH2),
+        ]) {
+            started.linked.toggle(id);
+        }
+        await rest(started.linked, analysisNode(AN1));
+        expect(trail()?.querySelector(".hint")?.textContent).toBe(
+            "Focus full: unpin one to add this",
         );
     });
 

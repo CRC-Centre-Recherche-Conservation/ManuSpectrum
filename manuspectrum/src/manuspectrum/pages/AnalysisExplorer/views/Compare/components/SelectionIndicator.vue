@@ -390,7 +390,6 @@ function openTarget(target: DocumentTarget): void {
                     >
                         <span
                             class="chip"
-                            :class="{ more: chip.slot > 4 }"
                             :style="{ '--h': focusHue(chip.slot) }"
                         >
                             <FocusSlotDot
@@ -658,10 +657,6 @@ function openTarget(target: DocumentTarget): void {
     background: color-mix(in srgb, var(--h) 8%, var(--surface));
     font-weight: 600;
     white-space: nowrap;
-}
-
-.selection-indicator .chip.more {
-    border-style: dashed;
 }
 
 .selection-indicator .chip-label {

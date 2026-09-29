@@ -5,6 +5,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import { synthesisFor } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSynthesis.ts";
 import { documentTargets } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/document-targets.ts";
 import {
+    FOCUS_MAX,
     focusRelations,
     gainedSlots,
     nextFreeSlot,
@@ -72,8 +73,8 @@ export interface LinkedSelection {
     relations: ComputedRef<ReadonlyMap<NodeId, NodeRelations>>;
     /** What the focus lights, at each node's strongest level. */
     levels: ComputedRef<ReadonlyMap<NodeId, RelationLevel>>;
-    /** The slot the next pin takes. */
-    nextSlot: ComputedRef<number>;
+    /** The slot the next pin takes; null while the focus is full (`FOCUS_MAX`). */
+    nextSlot: ComputedRef<number | null>;
     /** The node the pointer rests on, once the preview delay has passed. */
     previewing: Readonly<Ref<NodeId | null>>;
     /** The element the preview started on, when the caller gave it. */
@@ -84,7 +85,7 @@ export interface LinkedSelection {
     cue: Readonly<ShallowRef<FocusCue>>;
     /** The node the last toggle pinned; it may have been unpinned since. */
     lastPinned: Readonly<Ref<NodeId | null>>;
-    /** What the previewed node links; empty without a preview. */
+    /** What the previewed node links; empty without a preview, and for an unpinned node while the focus is full. */
     previewLevels: ComputedRef<ReadonlyMap<NodeId, RelationLevel>>;
     /** The analyses and identified materials linked, the selected ones left out. */
     relatedCount: ComputedRef<number>;
@@ -116,7 +117,9 @@ const NO_NODES: ReadonlySet<NodeId> = new Set();
  * mouse or pen resting on a node (80 ms to show, 120 ms to leave, applied
  * on the next frame) and is never announced; it ends at once when the
  * element it started on leaves the page. The last node a toggle pinned is
- * kept (`lastPinned`). Escape clears the selection
+ * kept (`lastPinned`). While `FOCUS_MAX` nodes are pinned, a toggle on
+ * another node only says the focus is full, and a preview of one promises
+ * no slot and lights nothing. Escape clears the selection
  * unless a menu, popover or dialog is open, a tooltip is shown, the key
  * was already handled, or the focus is in a field. Once the items are read
  * and the synthesis answers for the Selection shown, a selected node the
@@ -163,7 +166,8 @@ export function useLinkedSelection({
     );
     const nextSlot = computed(() => nextFreeSlot(slots.value));
     const previewLevels = computed<ReadonlyMap<NodeId, RelationLevel>>(() =>
-        previewing.value === null
+        previewing.value === null ||
+        (nextSlot.value === null && !selection.value.includes(previewing.value))
             ? NO_LEVELS
             : related(graph.value, [previewing.value]),
     );
@@ -315,6 +319,18 @@ export function useLinkedSelection({
     }
 
     function toggle(id: NodeId): void {
+        if (!selection.value.includes(id) && nextSlot.value === null) {
+            announce(
+                interpolate(
+                    $gettext(
+                        "The focus holds %{n} items at most. Unpin one to add another.",
+                    ),
+                    { n: FOCUS_MAX },
+                    true,
+                ),
+            );
+            return;
+        }
         withCue(() => store.toggleSelection(id));
         if (selection.value.includes(id)) lastPinned.value = id;
         announce(summary.value);

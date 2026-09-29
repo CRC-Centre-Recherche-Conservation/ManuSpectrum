@@ -137,7 +137,7 @@ msgid_plural "%{n} images"
 msgstr[0] "%{n} image"
 msgstr[1] "%{n} images"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:186
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:190
 msgid "%{n} in focus"
 msgid_plural "%{n} in focus"
 msgstr[0] "%{n} en focus"
@@ -206,7 +206,7 @@ msgid_plural "%{n} more folios"
 msgstr[0] "%{n} autre folio"
 msgstr[1] "%{n} autres folios"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:213
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:217
 msgid ""
 "%{n} node in focus is no longer linked to the Selection and left the focus."
 msgid_plural ""
@@ -234,7 +234,7 @@ msgid_plural "%{n} other folios"
 msgstr[0] "%{n} autre folio"
 msgstr[1] "%{n} autres folios"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:191
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:195
 msgid "%{n} related"
 msgid_plural "%{n} related"
 msgstr[0] "%{n} lié"
@@ -452,9 +452,9 @@ msgid ""
 "Adds the identified materials that are not in your Selection but cite one of "
 "its analyses as evidence. The Selection column then reads “cites A3”."
 msgstr ""
-"Ajoute les matériaux identifiés qui ne sont pas dans votre Sélection mais qui "
-"citent comme preuve l'une de ses analyses. La colonne Sélection indique alors "
-"« cite A3 »."
+"Ajoute les matériaux identifiés qui ne sont pas dans votre Sélection mais "
+"qui citent comme preuve l'une de ses analyses. La colonne Sélection indique "
+"alors « cite A3 »."
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:211
 msgid "Alias of the node carrying the relation"
@@ -601,7 +601,7 @@ msgstr "Puces"
 msgid "Cite"
 msgstr "Citer"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:136
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:138
 msgid "cited as evidence"
 msgstr "cité en preuve"
 
@@ -617,7 +617,7 @@ msgstr "Effacer"
 msgid "Clear all"
 msgstr "Tout effacer"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:502
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:501
 msgid "Clear the focus"
 msgstr "Vider le focus"
 
@@ -631,7 +631,7 @@ msgstr ""
 "de couverture ou un spectre pour voir ce qui lui est lié dans chaque "
 "fenêtre. Chaque clic l'ajoute au focus ou l'en retire."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:75
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:77
 msgid "Click to pin as %{slot}"
 msgstr "Cliquer pour l'épingler en %{slot}"
 
@@ -833,7 +833,7 @@ msgstr "Document"
 msgid "Document of the day"
 msgstr "Document du jour"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:479
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:478
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:324
 msgid "Documents"
 msgstr "Documents"
@@ -1010,7 +1010,11 @@ msgstr "Cadrer sur les liés"
 msgid "Focus"
 msgstr "Focus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:426
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:75
+msgid "Focus full: unpin one to add this"
+msgstr "Focus complet : retirez-en un pour ajouter celui-ci"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:425
 msgid "Focus mode"
 msgstr "Mode du focus"
 
@@ -1104,8 +1108,8 @@ msgid ""
 "How reliable the identification is. A group row shows the highest certainty "
 "among its materials."
 msgstr ""
-"Fiabilité de l'identification. Une ligne de groupe montre la certitude la plus "
-"haute de ses matériaux."
+"Fiabilité de l'identification. Une ligne de groupe montre la certitude la "
+"plus haute de ses matériaux."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:83
 msgid "Identified by analysis"
@@ -1159,7 +1163,7 @@ msgstr ""
 msgid "In focus"
 msgstr "En focus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:132
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:134
 msgid "in the focus"
 msgstr "dans le focus"
 
@@ -1268,7 +1272,7 @@ msgstr "Disposition"
 msgid "Licence"
 msgstr "Licence"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:422
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:421
 msgid "Light what relates to"
 msgstr "Éclairer ce qui est lié à"
 
@@ -1276,7 +1280,7 @@ msgstr "Éclairer ce qui est lié à"
 msgid "Link to the report"
 msgstr "Lien vers le rapport"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:134
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:136
 msgid "linked directly"
 msgstr "lié directement"
 
@@ -1452,7 +1456,7 @@ msgstr "Aucune donnée à visualiser."
 msgid "no data to show"
 msgstr "aucune donnée à afficher"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:183
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:187
 msgid "No focus"
 msgstr "Aucun focus"
 
@@ -1592,7 +1596,7 @@ msgstr "Opacité"
 msgid "Open a document to see where each analysis was made."
 msgstr "Ouvrez un document pour voir où chaque analyse a été faite."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:472
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:471
 msgid "Open in a document"
 msgstr "Ouvrir dans un document"
 
@@ -1601,7 +1605,7 @@ msgstr "Ouvrir dans un document"
 msgid "Open in Mirador"
 msgstr "Ouvrir dans Mirador"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:449
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:448
 msgid "Open in the document"
 msgstr "Ouvrir dans le document"
 
@@ -2125,6 +2129,10 @@ msgstr "Les courbes tracées, une ligne par courbe"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingMap.vue:139
 msgid "The document could not be read: the map is shown alone."
 msgstr "Le document n'a pas pu être lu : la carte est montrée seule."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:325
+msgid "The focus holds %{n} items at most. Unpin one to add another."
+msgstr "Le focus tient %{n} éléments au plus. Retirez-en un pour en ajouter un autre."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:468
 msgid "The folio image shows %{folio}."

@@ -7,6 +7,7 @@ import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/compon
 import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     AN1,
+    AN2,
     CH1,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
@@ -42,6 +43,25 @@ describe("FocusPip", () => {
             view.findAll("b").map((digit) => digit.attributes("data-n")),
         ).toEqual(["+"]);
         expect(view.text()).toBe("");
+    });
+
+    it("draws no « + » on a thing related to no slot while the focus is full", async () => {
+        const started = startLinkedSelection();
+        stop = started.stop;
+        const view = mount(FocusPip, {
+            props: { node: elementNode("Zz") },
+            global: {
+                provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
+            },
+        });
+        started.linked.toggle(elementNode("Cu"));
+        started.linked.toggle(analysisNode(AN1));
+        started.linked.toggle(analysisNode(AN2));
+        await view.vm.$nextTick();
+        expect(view.find(".ms-focus-pip b.add").exists()).toBe(true);
+        started.linked.toggle(materialNode(CH1));
+        await view.vm.$nextTick();
+        expect(view.find(".ms-focus-pip").exists()).toBe(false);
     });
 
     it("draws one digit per slot on its hue, its own underlined first, evidence hollow", async () => {

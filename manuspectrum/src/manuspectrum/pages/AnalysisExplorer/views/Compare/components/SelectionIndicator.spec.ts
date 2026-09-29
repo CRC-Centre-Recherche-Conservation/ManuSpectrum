@@ -203,6 +203,27 @@ describe("SelectionIndicator", () => {
         expect(button(view).classes()).toContain("is-preview");
     });
 
+    it("promises no slot to a node previewed while the focus is full", async () => {
+        vi.useFakeTimers();
+        const { view, linked } = mountIndicator();
+        for (const id of [
+            elementNode("Cu"),
+            elementNode("Ca"),
+            materialNode(CH1),
+            analysisNode(AN2),
+        ]) {
+            linked.toggle(id);
+        }
+        await view.vm.$nextTick();
+        const summary = button(view).find(".summary").text();
+        expect(summary).toBe(linked.summary.value);
+        linked.preview(analysisNode(AN1), { pointerType: "mouse" });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(button(view).find(".summary").text()).toBe(summary);
+        expect(button(view).classes()).not.toContain("is-preview");
+        expect(button(view).attributes("style")).not.toContain("--hp");
+    });
+
     it("opens the one document of the linked records on its folio and record", async () => {
         const { view, linked } = mountIndicator();
         linked.toggle(analysisNode(AN2));

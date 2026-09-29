@@ -116,9 +116,8 @@
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;
     --map-coast: #b7c4cf;
-    // Compare's focus. Each pinned node owns a slot and its hue (slots 1–4,
-    // each ≥ 5.4:1 on --surface, white digits on them ≥ 5.4:1); from slot 5
-    // on every slot shares --focus-more and only its digit tells it apart.
+    // Compare's focus. Each pinned node owns a slot and its hue (four slots
+    // at most, each ≥ 5.4:1 on --surface, white digits on them ≥ 5.4:1).
     // --link-ring: the ring's width, --link-pip: the pip's height,
     // --focus-room: how far a pip rises above its toggle, the room a list
     // of toggles keeps between its rows and at the top of its scroller,
@@ -128,7 +127,6 @@
     --focus-2: #047857;
     --focus-3: #a21caf;
     --focus-4: #9a3412;
-    --focus-more: #4a4a5e;
     --focus-on: #ffffff;
     --link-ring: 0.125rem;
     --link-pip: 0.875rem;

@@ -25,8 +25,8 @@ export interface NodeRelations {
     slots: readonly SlotRelation[];
 }
 
-/** The slots numbered with their own hue; past them every slot shares `--focus-more` and its digit tells it apart. */
-export const FOCUS_HUES = 4;
+/** The most nodes the focus holds, each slot with its own hue (`--focus-1` … `--focus-4`). */
+export const FOCUS_MAX = 4;
 
 const RANK: Record<RelationLevel, number> = {
     self: 3,
@@ -41,21 +41,21 @@ export function pinnedOf(slots: readonly (NodeId | null)[]): PinnedNode[] {
     );
 }
 
-/** The slot a new pin takes: the lowest hole, else the one after the last. */
-export function nextFreeSlot(slots: readonly (NodeId | null)[]): number {
+/** The slot a new pin takes: the lowest hole, else the one after the last; null once `FOCUS_MAX` nodes are pinned. */
+export function nextFreeSlot(slots: readonly (NodeId | null)[]): number | null {
     const hole = slots.indexOf(null);
-    return (hole < 0 ? slots.length : hole) + 1;
+    const slot = (hole < 0 ? slots.length : hole) + 1;
+    return slot > FOCUS_MAX ? null : slot;
 }
 
-/** `slots` with `id` pinned in the lowest free slot. */
+/** `slots` with `id` pinned in the lowest free slot; unchanged when the focus is full. */
 export function pinInSlots(
     slots: readonly (NodeId | null)[],
     id: NodeId,
 ): (NodeId | null)[] {
     const next = [...slots];
-    const hole = next.indexOf(null);
-    if (hole < 0) next.push(id);
-    else next[hole] = id;
+    const slot = nextFreeSlot(next);
+    if (slot !== null) next[slot - 1] = id;
     return next;
 }
 
@@ -152,22 +152,19 @@ export function gainedSlots(
     return gained;
 }
 
-/** The circled digits ① … ⑳ naming a slot; past them the plain number. */
+/** The circled digit ① naming the first slot. */
 const CIRCLED_FIRST = 0x2460;
-const CIRCLED_LAST = 20;
 
-/** A slot as a circled digit (③), or its plain number past ⑳. */
+/** A slot as a circled digit (③); a number outside 1 … `FOCUS_MAX` stays plain. */
 export function circled(slot: number): string {
-    return slot >= 1 && slot <= CIRCLED_LAST
+    return slot >= 1 && slot <= FOCUS_MAX
         ? String.fromCodePoint(CIRCLED_FIRST + slot - 1)
         : String(slot);
 }
 
-/** The CSS colour of a slot. */
+/** The CSS colour of a slot (1 … `FOCUS_MAX`). */
 export function focusHue(slot: number): string {
-    return slot >= 1 && slot <= FOCUS_HUES
-        ? `var(--focus-${slot})`
-        : "var(--focus-more)";
+    return `var(--focus-${slot})`;
 }
 
 /** Equal bands of `hues` along a CSS gradient. */

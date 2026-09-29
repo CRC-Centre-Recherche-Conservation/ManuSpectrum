@@ -293,6 +293,30 @@ describe("Compare state", () => {
         expect(store.compare.selection).toEqual([]);
     });
 
+    it("refuses a fifth pin and refills a hole left by an unpin", () => {
+        const store = useExplorerStore();
+        for (const id of ["el:Fe", "el:Cu", "el:Pb", "el:Hg"]) {
+            store.toggleSelection(id);
+        }
+        const full = store.compare;
+        store.toggleSelection("el:Au");
+        expect(store.compare).toBe(full);
+        expect(store.compare.selection).toEqual([
+            "el:Fe",
+            "el:Cu",
+            "el:Pb",
+            "el:Hg",
+        ]);
+        store.toggleSelection("el:Cu");
+        store.toggleSelection("el:Au");
+        expect(store.compare.selection).toEqual([
+            "el:Fe",
+            "el:Au",
+            "el:Pb",
+            "el:Hg",
+        ]);
+    });
+
     it("holds the focus mode and resets it with the focus", () => {
         const store = useExplorerStore();
         expect(store.compare.mode).toBe("any");

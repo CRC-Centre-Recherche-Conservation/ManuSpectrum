@@ -8,6 +8,7 @@ import {
     uniqueKeys,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
+    nextFreeSlot,
     pinInSlots,
     unpinFromSlots,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
@@ -424,10 +425,12 @@ export const useExplorerStore = defineStore("explorer", () => {
     /**
      * Pins a node in the lowest free slot of the focus, or unpins it when
      * it is there: its slot becomes a hole, trailing holes are trimmed, and
-     * no other slot is renumbered.
+     * no other slot is renumbered. A pin while `FOCUS_MAX` nodes are pinned
+     * changes nothing.
      */
     function toggleSelection(id: NodeId): void {
         const current = compare.value.selection;
+        if (!current.includes(id) && nextFreeSlot(current) === null) return;
         compare.value = {
             ...compare.value,
             selection: current.includes(id)

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildGraph } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/graph.ts";
 import {
     circled,
+    FOCUS_MAX,
     focusHue,
     focusRelations,
     focusRim,
@@ -55,6 +56,16 @@ describe("focus slots", () => {
         expect(unpinFromSlots(["a", null, "c"], (id) => id === "c")).toEqual([
             "a",
         ]);
+    });
+
+    it("holds FOCUS_MAX nodes at most and refills a hole once one is unpinned", () => {
+        expect(FOCUS_MAX).toBe(4);
+        const full = ["a", "b", "c", "d"];
+        expect(nextFreeSlot(full)).toBeNull();
+        expect(pinInSlots(full, "e")).toEqual(full);
+        const holed = unpinFromSlots(full, (id) => id === "b");
+        expect(nextFreeSlot(holed)).toBe(2);
+        expect(pinInSlots(holed, "e")).toEqual(["a", "e", "c", "d"]);
     });
 });
 
@@ -159,20 +170,19 @@ describe("focusRelations", () => {
 });
 
 describe("circled", () => {
-    it("names slots 1 to 20 by a circled digit, the others by their number", () => {
+    it("names slots 1 to 4 by a circled digit, the others by their number", () => {
         expect(circled(1)).toBe("①");
         expect(circled(3)).toBe("③");
-        expect(circled(20)).toBe("⑳");
-        expect(circled(21)).toBe("21");
+        expect(circled(4)).toBe("④");
+        expect(circled(5)).toBe("5");
         expect(circled(0)).toBe("0");
     });
 });
 
 describe("focus colours", () => {
-    it("gives slots 1 to 4 their hue and the others the shared one", () => {
+    it("gives each slot its own hue", () => {
         expect(focusHue(1)).toBe("var(--focus-1)");
         expect(focusHue(4)).toBe("var(--focus-4)");
-        expect(focusHue(5)).toBe("var(--focus-more)");
     });
 
     it("segments a ring, a stripe and a rim by slot", () => {

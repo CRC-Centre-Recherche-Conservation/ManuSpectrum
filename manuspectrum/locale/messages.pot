@@ -128,7 +128,7 @@ msgid_plural "%{n} images"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:186
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:190
 msgid "%{n} in focus"
 msgid_plural "%{n} in focus"
 msgstr[0] ""
@@ -195,7 +195,7 @@ msgid_plural "%{n} more folios"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:213
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:217
 msgid "%{n} node in focus is no longer linked to the Selection and left the focus."
 msgid_plural "%{n} nodes in focus are no longer linked to the Selection and left the focus."
 msgstr[0] ""
@@ -218,7 +218,7 @@ msgid_plural "%{n} other folios"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:191
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:195
 msgid "%{n} related"
 msgid_plural "%{n} related"
 msgstr[0] ""
@@ -568,7 +568,7 @@ msgstr ""
 msgid "Cite"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:136
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:138
 msgid "cited as evidence"
 msgstr ""
 
@@ -584,7 +584,7 @@ msgstr ""
 msgid "Clear all"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:502
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:501
 msgid "Clear the focus"
 msgstr ""
 
@@ -592,7 +592,7 @@ msgstr ""
 msgid "Click an element, a colour × material pair, a coverage cell or a spectrum to see what is linked to it in every window. Each click adds it to the focus or takes it out."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:75
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:77
 msgid "Click to pin as %{slot}"
 msgstr ""
 
@@ -793,7 +793,7 @@ msgstr ""
 msgid "Document of the day"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:479
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:478
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:324
 msgid "Documents"
 msgstr ""
@@ -970,7 +970,11 @@ msgstr ""
 msgid "Focus"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:426
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:75
+msgid "Focus full: unpin one to add this"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:425
 msgid "Focus mode"
 msgstr ""
 
@@ -1111,7 +1115,7 @@ msgstr ""
 msgid "In focus"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:132
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:134
 msgid "in the focus"
 msgstr ""
 
@@ -1218,7 +1222,7 @@ msgstr ""
 msgid "Licence"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:422
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:421
 msgid "Light what relates to"
 msgstr ""
 
@@ -1226,7 +1230,7 @@ msgstr ""
 msgid "Link to the report"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:134
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:136
 msgid "linked directly"
 msgstr ""
 
@@ -1399,7 +1403,7 @@ msgstr ""
 msgid "no data to show"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:183
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:187
 msgid "No focus"
 msgstr ""
 
@@ -1533,7 +1537,7 @@ msgstr ""
 msgid "Open a document to see where each analysis was made."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:472
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:471
 msgid "Open in a document"
 msgstr ""
 
@@ -1542,7 +1546,7 @@ msgstr ""
 msgid "Open in Mirador"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:449
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:448
 msgid "Open in the document"
 msgstr ""
 
@@ -2045,6 +2049,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingMap.vue:139
 msgid "The document could not be read: the map is shown alone."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:325
+msgid "The focus holds %{n} items at most. Unpin one to add another."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:468

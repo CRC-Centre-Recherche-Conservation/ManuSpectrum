@@ -145,6 +145,7 @@ function fakeLinked(): FakeLinked {
         ),
         previewing: ref(null),
         previewSlot: computed(() => null),
+        nextSlot: computed(() => 1),
         cue: shallowRef({ generation: 0, nodes: new Set() }),
         previewLevels: computed(() => previewLevels.value),
         labelOf: (id: NodeId) =>
