@@ -74,6 +74,14 @@ grep -q 'locale: en_US.UTF-8' "$TMP/o1/user-data" && grep -q 'layout: us}' "$TMP
   && grep -q 'name: root, size: 50G' "$TMP/o1/user-data"
 assert "defaults are en_US.UTF-8, us and 50G" "$?"
 
+# 9b. C.UTF-8 and a modifier are accepted
+"$RENDER" --out "$TMP/o9b" --pubkey "$TMP/key.pub" --password-hash "$HASH" --locale C.UTF-8 >/dev/null 2>&1
+grep -q 'locale: C.UTF-8' "$TMP/o9b/user-data"
+assert "--locale C.UTF-8 is applied" "$?"
+"$RENDER" --out "$TMP/o9c" --pubkey "$TMP/key.pub" --password-hash "$HASH" --locale ca_ES.UTF-8@valencia >/dev/null 2>&1
+grep -q 'locale: ca_ES.UTF-8@valencia' "$TMP/o9c/user-data"
+assert "--locale with @modifier is applied" "$?"
+
 # 10. invalid values
 for bad in "--locale xx" "--keyboard FR" "--root-size 50" "--root-size 5G;x"; do
   # shellcheck disable=SC2086

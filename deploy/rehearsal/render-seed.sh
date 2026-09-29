@@ -21,7 +21,7 @@ Usage : $(basename "$0") --out DIR --pubkey FILE
   --password-hash HASH  hash SHA-512 (\$6\$…) sur la ligne de commande (tests)
   --admin-user NOM      compte administrateur (défaut : admin1)
   --hostname NOM        nom d'hôte (défaut : manuspectrum)
-  --locale LOCALE       locale du système (défaut : en_US.UTF-8)
+  --locale LOCALE       locale du système (défaut : en_US.UTF-8 ; C.UTF-8 accepté)
   --keyboard LAYOUT     disposition du clavier (défaut : us)
   --root-size TAILLE    volume logique racine, ex. 50G (défaut : 50G)
 USAGE
@@ -66,8 +66,8 @@ if ! [[ "$hostname" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
   echo "Nom d'hôte invalide : « ${hostname} »." >&2
   exit 1
 fi
-if ! [[ "$locale" =~ ^[a-z]{2,3}_[A-Z]{2}\.UTF-8$ ]]; then
-  echo "Locale invalide : « ${locale} » (attendu : xx_YY.UTF-8)." >&2
+if ! [[ "$locale" =~ ^([a-z]{2,3}_[A-Z]{2}|C)\.UTF-8(@[a-z]+)?$ ]]; then
+  echo "Locale invalide : « ${locale} » (attendu : C.UTF-8 ou xx_YY.UTF-8[@modificateur])." >&2
   exit 1
 fi
 if ! [[ "$keyboard" =~ ^[a-z]{2,3}$ ]]; then
