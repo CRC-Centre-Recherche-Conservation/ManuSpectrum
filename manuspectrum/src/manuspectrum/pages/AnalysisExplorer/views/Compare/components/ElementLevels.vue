@@ -9,11 +9,17 @@ import { elementNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare
 import type { ValueRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ElementLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
 
+/** The look of a level, by its rank in the list (0 the strongest). */
+const LEVEL_LOOKS = ["major", "minor", "trace"] as const;
+
 /**
- * Elements by level, one line per level, its name first. An element the
- * synthesis gives a symbol is a toggle of its node (`LinkedChip`, the
- * symbol shown, the element's label its title); the others are plain
- * text. Without an element, a dash.
+ * Elements by level on one wrapping line, each level kept whole: its name
+ * as stored, then its elements. An element the synthesis gives a symbol
+ * is a toggle of its node (`LinkedChip`, the symbol shown, the element's
+ * label its title); the others are plain text. A level's look
+ * (`data-level`: major, minor, trace) follows its rank, never its label;
+ * a rank past the third, or no level, has none. Without an element, a
+ * dash.
  */
 const props = defineProps<{ levels: readonly ElementLevel[] }>();
 
@@ -23,16 +29,21 @@ const marks = useLinkedMarks();
 function symbolOf(value: ValueRef): string | null {
     return marks.linked?.graph.value.symbols.get(value.id) ?? null;
 }
+
+function lookOf(entry: ElementLevel): string | undefined {
+    return entry.level ? LEVEL_LOOKS[entry.level.rank] : undefined;
+}
 </script>
 
 <template>
-    <ul
+    <div
         v-if="props.levels.length > 0"
         class="element-levels"
     >
-        <li
+        <span
             v-for="(entry, index) in props.levels"
             :key="entry.level?.id ?? `none-${index}`"
+            class="level-group"
         >
             <span
                 v-if="entry.level"
@@ -47,6 +58,7 @@ function symbolOf(value: ValueRef): string | null {
                 <LinkedChip
                     v-if="symbolOf(value)"
                     class="element"
+                    :data-level="lookOf(entry)"
                     :node="elementNode(symbolOf(value)!)"
                     :text="symbolOf(value)!"
                     :title="value.label.value"
@@ -58,8 +70,8 @@ function symbolOf(value: ValueRef): string | null {
                     >{{ value.label.value }}</span
                 >
             </template>
-        </li>
-    </ul>
+        </span>
+    </div>
     <span
         v-else
         class="element-levels none"
@@ -71,31 +83,58 @@ function symbolOf(value: ValueRef): string | null {
 
 <style scoped>
 .element-levels {
-    --focus-room: 0.6875rem;
+    --focus-room: 0.625rem;
 
-    display: grid;
-    gap: var(--focus-room);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.element-levels li {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--focus-room) 0.625rem;
+    gap: 0.6875rem 0.625rem;
+    padding-block-start: 0.125rem;
+}
+
+.element-levels .level-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1875rem;
 }
 
 .element-levels .level {
-    min-inline-size: 2.75rem;
+    margin-inline-end: 0.125rem;
     color: var(--ink-muted);
     font-size: 0.6875rem;
+    font-variant: all-small-caps;
+    letter-spacing: 0.04em;
 }
 
 .element-levels .element {
+    --r: 0.3125rem;
+    --preview-inset: 0.1875rem;
+    --link-pip: 0.75rem;
+    justify-content: center;
+    min-inline-size: 1.625rem;
+    min-block-size: 1.5rem;
+    padding-inline: 0.25rem;
+    border-radius: 0.3125rem;
     font-family: var(--font-mono);
     font-weight: 600;
+    line-height: 1;
+}
+
+.element-levels .element[data-level="major"] {
+    --cell-heat: var(--heat-1);
+    border-color: var(--mt-rule);
+    background: var(--heat-1);
+}
+
+.element-levels .element[data-level="trace"] {
+    background: repeating-linear-gradient(
+            135deg,
+            transparent 0 0.1875rem,
+            rgb(26 26 46 / 0.035) 0.1875rem 0.25rem
+        ),
+        var(--surface);
+    color: var(--ink-muted);
+    font-weight: 500;
 }
 
 .element-levels .plain {
@@ -103,7 +142,7 @@ function symbolOf(value: ValueRef): string | null {
 }
 
 .element-levels.none {
-    color: var(--ink-muted);
+    color: var(--ink-dim);
 }
 
 .element-levels .visually-hidden {
@@ -113,5 +152,11 @@ function symbolOf(value: ValueRef): string | null {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+    .element-levels .element[data-level="major"] {
+        border-width: 0.125rem;
+    }
 }
 </style>

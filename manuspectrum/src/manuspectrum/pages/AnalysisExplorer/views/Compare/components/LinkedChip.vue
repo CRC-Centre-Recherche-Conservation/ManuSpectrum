@@ -11,7 +11,9 @@ import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare
  * the focus and to the node previewed (`useLinkedMarks().focus`, the
  * `ms-focus` recipes: ring, pip, bloom, preview wash). A click pins `node`
  * or unpins it; a mouse resting on it previews what it links. The slot
- * `lead` goes before the text (a glyph).
+ * `lead` goes before the text (a glyph, a swatch). Its width stops at
+ * `--chip-max` (16rem unless the caller sets it), the text cut with an
+ * ellipsis.
  */
 const props = defineProps<{
     node: NodeId;
@@ -59,7 +61,7 @@ const marks = useLinkedMarks();
     color: var(--ink);
     font: inherit;
     font-size: 0.75rem;
-    max-inline-size: 16rem;
+    max-inline-size: var(--chip-max, 16rem);
     text-align: start;
     white-space: nowrap;
     cursor: pointer;

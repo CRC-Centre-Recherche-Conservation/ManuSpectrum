@@ -10,21 +10,16 @@ import {
 import type { RankedValue } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /**
- * A certainty on an ordered scale of four steps filled from the start
- * (`certaintySteps`), its label beside; `best` marks the most certain of
- * several identified materials. Without a confidence, a dash.
+ * A certainty on four rising bars, filled up to its step
+ * (`certaintySteps`, `data-step`, 4 the most certain) in that step's hue
+ * (`--cert-1…4`), its label beside: the bars are graphic only, the label
+ * says it. Without a confidence, a dash.
  */
-const props = withDefaults(
-    defineProps<{
-        confidence: RankedValue | null;
-        best?: boolean;
-    }>(),
-    { best: false },
-);
+const props = defineProps<{ confidence: RankedValue | null }>();
 
 const { $gettext, interpolate } = useGettext();
 
-const steps = computed(() =>
+const step = computed(() =>
     props.confidence ? certaintySteps(props.confidence) : 0,
 );
 const title = computed(() =>
@@ -33,7 +28,7 @@ const title = computed(() =>
               $gettext("%{label} (%{n} of %{total})"),
               {
                   label: props.confidence.label.value,
-                  n: steps.value,
+                  n: step.value,
                   total: CERTAINTY_STEPS,
               },
               true,
@@ -46,25 +41,23 @@ const title = computed(() =>
     <span
         v-if="props.confidence"
         class="certainty-scale"
+        :data-step="step"
         :title="title"
     >
         <span
-            class="steps"
+            class="bars"
             aria-hidden="true"
         >
             <i
-                v-for="step in CERTAINTY_STEPS"
-                :key="step"
-                :class="{ on: step <= steps }"
+                v-for="bar in CERTAINTY_STEPS"
+                :key="bar"
+                :class="{ on: bar <= step }"
             ></i>
         </span>
-        <span :lang="props.confidence.label.lang">{{
-            props.confidence.label.value
-        }}</span>
         <span
-            v-if="props.best"
-            class="best"
-            >{{ $gettext("best") }}</span
+            class="label"
+            :lang="props.confidence.label.lang"
+            >{{ props.confidence.label.value }}</span
         >
     </span>
     <span
@@ -80,33 +73,70 @@ const title = computed(() =>
 .certainty-scale {
     display: inline-flex;
     align-items: center;
-    gap: 0.375rem;
-    color: var(--ink-muted);
+    gap: 0.5rem;
+    color: var(--ink);
     font-size: 0.75rem;
     white-space: nowrap;
 }
 
-.certainty-scale .steps {
+.certainty-scale .bars {
     display: inline-flex;
+    align-items: flex-end;
     gap: 0.125rem;
+    block-size: 0.875rem;
 }
 
-.certainty-scale .steps i {
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 0.0625rem var(--ink-muted);
+.certainty-scale .bars i {
+    inline-size: 0.3125rem;
+    border-radius: 0.0625rem;
+    background: var(--cert-track);
 }
 
-.certainty-scale .steps i.on {
-    background: var(--ink-muted);
+.certainty-scale .bars i:nth-child(1) {
+    block-size: 35%;
 }
 
-.certainty-scale .best {
+.certainty-scale .bars i:nth-child(2) {
+    block-size: 55%;
+}
+
+.certainty-scale .bars i:nth-child(3) {
+    block-size: 78%;
+}
+
+.certainty-scale .bars i:nth-child(4) {
+    block-size: 100%;
+}
+
+.certainty-scale[data-step="4"] .bars i.on {
+    background: var(--cert-4);
+}
+
+.certainty-scale[data-step="3"] .bars i.on {
+    background: var(--cert-3);
+}
+
+.certainty-scale[data-step="2"] .bars i.on {
+    background: var(--cert-2);
+}
+
+.certainty-scale[data-step="1"] .bars i.on {
+    background: transparent;
+    box-shadow: inset 0 0 0 0.0625rem var(--cert-3);
+}
+
+.certainty-scale[data-step="4"] .label {
+    color: var(--cert-4);
+    font-weight: 600;
+}
+
+.certainty-scale[data-step="1"] .label {
     color: var(--ink-muted);
-    font-size: 0.625rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-style: italic;
+}
+
+.certainty-scale.none {
+    color: var(--ink-dim);
 }
 
 .certainty-scale .visually-hidden {
@@ -119,8 +149,16 @@ const title = computed(() =>
 }
 
 @media (forced-colors: active) {
-    .certainty-scale .steps i.on {
+    .certainty-scale .bars i {
+        forced-color-adjust: none;
+        background: Canvas;
+        box-shadow: inset 0 0 0 0.0625rem GrayText;
+    }
+
+    .certainty-scale .bars i.on,
+    .certainty-scale[data-step="1"] .bars i.on {
         background: CanvasText;
+        box-shadow: none;
     }
 }
 </style>

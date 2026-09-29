@@ -29,7 +29,7 @@ msgid_plural "%{canvas}, %{technique}: %{n} analyses"
 msgstr[0] "%{canvas}, %{technique} : %{n} analyse"
 msgstr[1] "%{canvas}, %{technique} : %{n} analyses"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:243
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:255
 msgid "%{colour} × %{material}"
 msgstr "%{colour} × %{material}"
 
@@ -55,7 +55,7 @@ msgstr "de %{from} à %{to}"
 msgid "%{label} (%{count})"
 msgstr "%{label} (%{count})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CertaintyScale.vue:33
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CertaintyScale.vue:28
 msgid "%{label} (%{n} of %{total})"
 msgstr "%{label} (%{n} sur %{total})"
 
@@ -97,7 +97,7 @@ msgid_plural "%{n} analyses"
 msgstr[0] "%{n} analyse"
 msgstr[1] "%{n} analyses"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:362
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:417
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts:355
 msgid "%{n} citing it"
 msgstr "%{n} la citant"
@@ -115,14 +115,14 @@ msgid_plural "%{n} drafts in this document; they are marked “Draft”."
 msgstr[0] "%{n} brouillon dans ce document ; il est signalé « Brouillon »."
 msgstr[1] "%{n} brouillons dans ce document ; ils sont signalés « Brouillon »."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:339
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:375
 msgid "%{n} folio"
 msgid_plural "%{n} folios"
 msgstr[0] "%{n} folio"
 msgstr[1] "%{n} folios"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ComponentStrip.vue:40
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:254
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:269
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts:339
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:400
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:154
@@ -200,6 +200,12 @@ msgid_plural "%{n} micro-images"
 msgstr[0] "%{n} micro-image"
 msgstr[1] "%{n} micro-images"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:398
+msgid "%{n} more folio"
+msgid_plural "%{n} more folios"
+msgstr[0] "%{n} autre folio"
+msgstr[1] "%{n} autres folios"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts:213
 msgid ""
 "%{n} node in focus is no longer linked to the Selection and left the focus."
@@ -217,12 +223,12 @@ msgid_plural "%{n} of %{total} analyses in the filters"
 msgstr[0] "%{n} sur %{total} analyse dans les filtres"
 msgstr[1] "%{n} sur %{total} analyses dans les filtres"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:356
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:413
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts:351
 msgid "%{n} of the Selection"
 msgstr "%{n} de la Sélection"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:338
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:374
 msgid "%{n} other folio"
 msgid_plural "%{n} other folios"
 msgstr[0] "%{n} autre folio"
@@ -276,11 +282,11 @@ msgstr[1] "%{n} spectres, non tracés"
 msgid "%{n} ticked"
 msgstr "%{n} coché(s)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:238
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:254
 msgid "%{name} also appears on %{folios}."
 msgstr "%{name} apparaît aussi sur %{folios}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:239
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:255
 msgid "%{name} appears on %{folios}."
 msgstr "%{name} apparaît sur %{folios}."
 
@@ -409,6 +415,14 @@ msgid_plural "A shared Selection of %{n} items"
 msgstr[0] "Une Sélection partagée de %{n} élément"
 msgstr[1] "Une Sélection partagée de %{n} éléments"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:523
+msgid "About the certainty"
+msgstr "À propos de la certitude"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:477
+msgid "About the materials citing the Selection"
+msgstr "À propos des matériaux citant la Sélection"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue:18
 msgid "Active filters"
 msgstr "Filtres actifs"
@@ -433,6 +447,15 @@ msgstr "Ajouter l'analyse %{name} à la Sélection"
 msgid "Added to the Selection (%{n}/%{limit})."
 msgstr "Ajouté à la Sélection (%{n}/%{limit})."
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:480
+msgid ""
+"Adds the identified materials that are not in your Selection but cite one of "
+"its analyses as evidence. The Selection column then reads “cites A3”."
+msgstr ""
+"Ajoute les matériaux identifiés qui ne sont pas dans votre Sélection mais qui "
+"citent comme preuve l'une de ses analyses. La colonne Sélection indique alors "
+"« cite A3 »."
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:211
 msgid "Alias of the node carrying the relation"
 msgstr "Alias du nœud qui porte la relation"
@@ -452,10 +475,6 @@ msgstr "Toutes"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:198
 msgid "all of them"
 msgstr "tous"
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:168
-msgid "Also the materials citing an analysis of the Selection (%{n})"
-msgstr "Aussi les matériaux citant une analyse de la Sélection (%{n})"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:97
 msgid "Analysed pages"
@@ -529,10 +548,6 @@ msgstr "Retour à l'accueil de l'explorateur"
 msgid "Band"
 msgstr "Bande"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CertaintyScale.vue:67
-msgid "best"
-msgstr "meilleur"
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:536
 msgid "Bibliography"
 msgstr "Bibliographie"
@@ -557,7 +572,7 @@ msgstr "Par technique"
 msgid "Cancel"
 msgstr "Annuler"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:432
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:518
 msgid "Certainty"
 msgstr "Certitude"
 
@@ -590,7 +605,7 @@ msgstr "Citer"
 msgid "cited as evidence"
 msgstr "cité en preuve"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:301
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:322
 msgid "cites %{slots}"
 msgstr "cite %{slots}"
 
@@ -637,7 +652,7 @@ msgid "Close the tool"
 msgstr "Fermer l'outil"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:33
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:435
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:534
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:162
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:229
 msgid "Colour"
@@ -651,8 +666,8 @@ msgstr "Couleur (identifiée)"
 msgid "Colour (part)"
 msgstr "Couleur (partie)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:145
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:153
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:156
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:164
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:166
 msgid "Colour × material"
 msgstr "Couleur × matériau"
@@ -680,10 +695,10 @@ msgstr "Comparer"
 msgid "Compare (%{count})"
 msgstr "Comparer (%{count})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:908
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:146
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:155
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:164
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:946
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:157
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:166
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:175
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:158
 msgid "Component"
 msgstr "Composant"
@@ -696,7 +711,7 @@ msgstr "Composants"
 msgid "Components of the Selection"
 msgstr "Composants de la Sélection"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:876
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:914
 msgid "Components outlined on this folio"
 msgstr "Composants délimités sur ce folio"
 
@@ -856,7 +871,7 @@ msgstr "Télécharger l'image"
 msgid "Download the raw file"
 msgstr "Télécharger le fichier brut"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:522
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:660
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:67
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue:130
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:295
@@ -890,7 +905,7 @@ msgstr "Contraste propre à chaque carte."
 msgid "Element"
 msgstr "Élément"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:444
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:543
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:124
 msgid "Elements"
 msgstr "Éléments"
@@ -931,7 +946,7 @@ msgstr "Agrandir"
 msgid "Event"
 msgstr "Événement"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:447
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:546
 msgid "Evidence"
 msgstr "Preuves"
 
@@ -942,6 +957,10 @@ msgstr "Explorez ce que les analyses du patrimoine écrit ont révélé."
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue:39
 msgid "Explorer views"
 msgstr "Vues de l'explorateur"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:805
+msgid "Fewer folios"
+msgstr "Moins de folios"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:102
 msgid "Field"
@@ -983,7 +1002,7 @@ msgstr "Filtres de ce document"
 msgid "First derivative"
 msgstr "Dérivée première"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:801
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:839
 msgid "Fit to related"
 msgstr "Cadrer sur les liés"
 
@@ -999,9 +1018,9 @@ msgstr "Mode du focus"
 msgid "Fold"
 msgstr "Replier"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:686
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:691
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:441
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:724
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:729
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:540
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:154
 msgid "Folio"
 msgstr "Folio"
@@ -1054,11 +1073,11 @@ msgstr "Aller à la page"
 msgid "Grid"
 msgstr "Mosaïque"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:382
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:439
 msgid "Group by"
 msgstr "Regrouper par"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:386
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:443
 msgid "Group the identified materials"
 msgstr "Regrouper les matériaux identifiés"
 
@@ -1080,6 +1099,14 @@ msgstr "Masquer la fenêtre"
 msgid "How many distinct values to show"
 msgstr "Nombre de valeurs distinctes à afficher"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:525
+msgid ""
+"How reliable the identification is. A group row shows the highest certainty "
+"among its materials."
+msgstr ""
+"Fiabilité de l'identification. Une ligne de groupe montre la certitude la plus "
+"haute de ses matériaux."
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:83
 msgid "Identified by analysis"
 msgstr "Identifiée par analyse"
@@ -1091,8 +1118,8 @@ msgstr "matériau identifié"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:63
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:76
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:859
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:157
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:897
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:168
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:146
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:177
 msgid "Identified material"
@@ -1104,7 +1131,7 @@ msgstr "Matériau identifié"
 msgid "Identified materials"
 msgstr "Matériaux identifiés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:371
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:428
 msgid "Identified materials of %{name}"
 msgstr "Matériaux identifiés de %{name}"
 
@@ -1135,6 +1162,10 @@ msgstr "En focus"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusTrail.vue:132
 msgid "in the focus"
 msgstr "dans le focus"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:304
+msgid "In the Selection (%{slot})"
+msgstr "Dans la Sélection (%{slot})"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:194
 msgid "in the Selection as %{slots}"
@@ -1305,10 +1336,14 @@ msgstr "Matériau"
 msgid "Material, technique, document…"
 msgstr "Matériau, technique, document…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:163
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:174
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts:328
 msgid "Materials"
 msgstr "Matériaux"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:469
+msgid "Materials citing the Selection"
+msgstr "Matériaux citant la Sélection"
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:265
 msgid "Maximum number of intermediate resources"
@@ -1381,7 +1416,7 @@ msgid_plural "New windows at the end: %{titles}"
 msgstr[0] "Nouvelle fenêtre à la fin : %{titles}"
 msgstr[1] "Nouvelles fenêtres à la fin : %{titles}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:717
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:755
 msgid "Next folio"
 msgstr "Folio suivant"
 
@@ -1421,7 +1456,7 @@ msgstr "aucune donnée à afficher"
 msgid "No focus"
 msgstr "Aucun focus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:418
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:493
 msgid "No identified material of the Selection itself."
 msgstr "Aucun matériau identifié de la Sélection elle-même."
 
@@ -1433,12 +1468,12 @@ msgstr "Aucun matériau identifié sur cette page."
 msgid "No image for this page: the map is shown alone."
 msgstr "Pas d'image pour cette page : la carte est montrée seule."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:769
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:807
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:822
 msgid "No image for this page."
 msgstr "Pas d'image pour cette page."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:868
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:906
 msgid "No item of the Selection is placed on this folio."
 msgstr "Aucun élément de la Sélection n'est placé sur ce folio."
 
@@ -1492,7 +1527,7 @@ msgstr "Normalisé au maximum"
 msgid "Normalised to total (TIC)"
 msgstr "Normalisé au total (TIC)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:348
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:406
 msgid "Not in the Selection: %{cites}"
 msgstr "Hors de la Sélection : %{cites}"
 
@@ -1504,11 +1539,12 @@ msgstr "Non lié à la sélection : activez pour l'ajouter."
 msgid "Not provided"
 msgstr "Non renseigné"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CertaintyScale.vue:75
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementLevels.vue:68
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialEvidence.vue:130
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:574
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:629
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CertaintyScale.vue:68
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementLevels.vue:80
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialEvidence.vue:133
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:721
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:777
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:818
 msgid "Not stated"
 msgstr "Non indiqué"
 
@@ -1623,7 +1659,7 @@ msgid "Page and its analyses"
 msgstr "Page et ses analyses"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingStage.vue:150
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:777
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:815
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:830
 msgid "Page image unavailable (the institution's IIIF server)."
 msgstr "Image de la page indisponible (serveur IIIF de l'institution)."
@@ -1670,7 +1706,7 @@ msgstr "Points"
 msgid "Preview"
 msgstr "Aperçu"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:696
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:734
 msgid "Previous folio"
 msgstr "Folio précédent"
 
@@ -1712,7 +1748,7 @@ msgstr ""
 "les graphiques lisent leurs exports texte, convertis en amont."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingMap.vue:234
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:751
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:789
 msgid "Reading the document…"
 msgstr "Lecture du document…"
 
@@ -1831,7 +1867,7 @@ msgstr "Résultats par page"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:272
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingMap.vue:249
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ChemicalImagingStage.vue:158
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:786
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:824
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1092
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:839
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:853
@@ -1899,7 +1935,7 @@ msgstr "Vue sur la partie"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue:69
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:142
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:450
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:549
 msgid "Selection"
 msgstr "Sélection"
 
@@ -1907,7 +1943,7 @@ msgstr "Sélection"
 msgid "Selection %{n}/%{limit}"
 msgstr "Sélection %{n}/%{limit}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:822
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:860
 msgid "Selection items on this folio"
 msgstr "Éléments de la Sélection sur ce folio"
 
@@ -1931,7 +1967,7 @@ msgstr "Afficher"
 msgid "Show « %{title} »"
 msgstr "Afficher « %{title} »"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:672
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:710
 msgid "Show %{folio}"
 msgstr "Afficher %{folio}"
 
@@ -2094,7 +2130,7 @@ msgstr "Le document n'a pas pu être lu : la carte est montrée seule."
 msgid "The folio image shows %{folio}."
 msgstr "L'image du folio montre %{folio}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:232
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:248
 msgid "The selection"
 msgstr "La sélection"
 
@@ -2232,7 +2268,7 @@ msgstr "ce qui est lié à l'un d'eux"
 msgid "What to share"
 msgstr "Que partager"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:729
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:767
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:805
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:806
 msgid "Whole page"
@@ -2314,10 +2350,13 @@ msgctxt "explorer"
 msgid "Corpus"
 msgstr "Corpus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:144
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:155
 msgctxt "Group the identified materials by"
 msgid "Record"
 msgstr "Matériau identifié"
+
+#~ msgid "best"
+#~ msgstr "meilleur"
 
 #~ msgid "%{n} material"
 #~ msgid_plural "%{n} materials"
@@ -2332,9 +2371,6 @@ msgstr "Matériau identifié"
 
 #~ msgid "Colours"
 #~ msgstr "Couleurs"
-
-#~ msgid "Folios"
-#~ msgstr "Folios"
 
 #~ msgid "Layers"
 #~ msgstr "Couches"

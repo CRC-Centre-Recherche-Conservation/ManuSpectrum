@@ -164,6 +164,14 @@ function column(view: VueWrapper, index: number): string[] {
         .map((row) => row.findAll("th, td")[index].text());
 }
 
+/** The column headings, without the text of their help tips. */
+function headings(view: VueWrapper): string[] {
+    return view.findAll("thead th").map((cell) => {
+        const text = cell.find(".heading > span");
+        return text.exists() ? text.text() : cell.text();
+    });
+}
+
 function chip(view: VueWrapper, text: string) {
     return view
         .findAll("button.linked-chip")
@@ -173,7 +181,7 @@ function chip(view: VueWrapper, text: string) {
 describe("MaterialsTable", () => {
     it("heads its columns, the first one by the grouping", async () => {
         const { view } = mountLinked();
-        expect(view.findAll("thead th").map((cell) => cell.text())).toEqual([
+        expect(headings(view)).toEqual([
             "Identified material",
             "Certainty",
             "Colour",
@@ -202,28 +210,32 @@ describe("MaterialsTable", () => {
         );
         expect(view.find("tbody th").attributes("scope")).toBe("row");
         expect(column(view, 7)).toEqual(["A3", "cites A1", "cites A2"]);
-        expect(view.findAll("tbody .tag")[1].attributes("title")).toBe(
+        expect(view.find("tbody .badge.cite").attributes("title")).toBe(
             "Not in the Selection: cites A1",
         );
-        expect(view.find(".tag.sel").text()).toBe("A3");
+        const own = view.find("tbody .badge.own");
+        expect(own.text()).toBe("A3");
+        expect(own.attributes("title")).toBe("In the Selection (A3)");
         expect(column(view, 4)).toEqual(["f. 12r", "f. 12r", "f. 12v"]);
     });
 
-    it("draws the certainty on four ordered steps with its label", () => {
+    it("draws the certainty on four rising bars with its label", () => {
         const { view } = mountLinked();
         const scale = view.find("tbody .certainty-scale");
         expect(scale.text()).toBe("Reliable");
         expect(scale.attributes("title")).toBe("Reliable (3 of 4)");
+        expect(scale.attributes("data-step")).toBe("3");
         expect(
-            scale.findAll(".steps i").map((step) => step.classes("on")),
+            scale.findAll(".bars i").map((step) => step.classes("on")),
         ).toEqual([true, true, true, false]);
         expect(column(view, 1)[2]).toBe("—Not stated");
     });
 
-    it("shows the colours with a neutral swatch, as toggles of their node", async () => {
+    it("shows a colour outside the colour list with a hatched swatch, as a toggle of its node", async () => {
         const { view } = mountLinked();
         const blue = chip(view, "Blue");
-        expect(blue.find(".swatch").exists()).toBe(true);
+        expect(blue.find(".swatch").classes()).toContain("unknown");
+        expect(blue.find(".swatch").attributes("style")).toBeUndefined();
         await blue.trigger("click");
         expect(useExplorerStore().compare.selection).toEqual([
             colourNode(BLUE.id),
@@ -231,12 +243,35 @@ describe("MaterialsTable", () => {
         expect(column(view, 2)[2]).toBe("—Not stated");
     });
 
+    it("shows a colour of the colour list with its swatch, a pair group's before its name", async () => {
+        const inha =
+            "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/d549884f-ed29-4a28-87c8-07311d9a14ad";
+        const blue = { ...valueRef(inha, "Blue"), id: BLUE.id };
+        const records = linkedRecords().map((record) => ({
+            ...record,
+            summary: {
+                ...record.summary,
+                colours: record.summary.colours.map(() => blue),
+            },
+        }));
+        const { view } = mountLinked(records);
+        expect(
+            chip(view, "Blue").find(".swatch").attributes("style"),
+        ).toContain("--swatch: #2f55a4");
+        useExplorerStore().setMaterialsGrouping("pair");
+        await view.vm.$nextTick();
+        const group = view.find("tbody tr.group");
+        expect(group.find("th .swatch.large").exists()).toBe(true);
+        expect(group.find("th .main .times").text()).toBe("×");
+    });
+
     it("leaves out the materials citing the Selection when the box is unticked", async () => {
         const { view } = mountLinked();
         const box = view.find(".citing input");
-        expect(view.find(".citing").text()).toBe(
-            "Also the materials citing an analysis of the Selection (2)",
+        expect(view.find(".citing label").text()).toBe(
+            "Materials citing the Selection2",
         );
+        expect(view.find(".citing .count").text()).toBe("2");
         expect((box.element as HTMLInputElement).checked).toBe(true);
         await box.setValue(false);
         expect(names(view)).toEqual(["Azurite"]);
@@ -250,6 +285,32 @@ describe("MaterialsTable", () => {
             "No identified material of the Selection itself.",
         );
         expect(view.find("table").exists()).toBe(false);
+    });
+
+    it("explains the box in a help tip named for it", () => {
+        const { view } = mountLinked();
+        const help = view.find(".citing .help button");
+        const name = view.find(`[id="${help.attributes("aria-labelledby")}"]`);
+        const description = view.find(
+            `[id="${help.attributes("aria-describedby")}"]`,
+        );
+        expect(name.text()).toBe("About the materials citing the Selection");
+        expect(description.text()).toBe(
+            "Adds the identified materials that are not in your Selection but cite one of its analyses as evidence. The Selection column then reads “cites A3”.",
+        );
+    });
+
+    it("explains the certainty in a help tip of its heading", () => {
+        const { view } = mountLinked();
+        const help = view.findAll("thead th")[1].find(".help button");
+        expect(
+            view.find(`[id="${help.attributes("aria-labelledby")}"]`).text(),
+        ).toBe("About the certainty");
+        expect(
+            view.find(`[id="${help.attributes("aria-describedby")}"]`).text(),
+        ).toBe(
+            "How reliable the identification is. A group row shows the highest certainty among its materials.",
+        );
     });
 
     it("has no box when no material only cites the Selection", () => {
@@ -282,11 +343,11 @@ describe("MaterialsTable", () => {
         expect(names(view)).toEqual(["Blue × Azurite", "Chalk"]);
         const group = view.find("tbody tr.group");
         expect(group.find(".rest").text()).toBe("2 identified materials");
-        expect(group.find(".certainty-scale").text()).toContain("Reliable");
-        expect(group.find(".certainty-scale .best").text()).toBe("best");
-        expect(group.find(".selection").text()).toBe(
-            "1+11 of the Selection · 1 citing it",
-        );
+        expect(group.find(".toggle .rest").exists()).toBe(false);
+        expect(group.find(".certainty-scale").text()).toBe("Reliable");
+        expect(
+            group.findAll(".selection .tally").map((tally) => tally.text()),
+        ).toEqual(["1 of the Selection", "1 citing it"]);
         const caret = group.find(".caret");
         expect(caret.attributes("aria-expanded")).toBe("false");
         expect(caret.attributes("aria-label")).toBe(
@@ -352,9 +413,7 @@ describe("MaterialsTable", () => {
             },
         ]);
         expect(names(view)).toEqual(["Border", "Vermilion"]);
-        expect(
-            view.findAll("thead th").map((heading) => heading.text()),
-        ).toEqual([
+        expect(headings(view)).toEqual([
             "Component",
             "Certainty",
             "Colour",
@@ -436,6 +495,34 @@ describe("MaterialsTable", () => {
         expect(column(view, 5)[1]).toBe("—Not stated");
     });
 
+    it("draws an element by the rank of its level, whatever the level's label", () => {
+        const summary: CharacterizationSummary = {
+            ...MANTLE_FULL,
+            elements: [
+                {
+                    level: { ...MAJOR, id: "http://example.org/weak", rank: 2 },
+                    values: [valueRef("http://example.org/cu", "Copper")],
+                },
+            ],
+        };
+        const { view } = mountLinked([
+            ...linkedRecords(),
+            {
+                id: uuid(960),
+                summary: { ...summary, id: uuid(960) },
+                selected: false,
+                cites: [],
+                canvases: [],
+            },
+        ]);
+        const copper = view
+            .findAll("button.linked-chip")
+            .filter((button) => button.text() === "Cu");
+        expect(copper.map((button) => button.attributes("data-level"))).toEqual(
+            ["major", "trace"],
+        );
+    });
+
     it("counts the evidence with its techniques and unfolds the analyses as toggles", async () => {
         const { view } = mountLinked();
         const evidence = view.find("tbody .material-evidence");
@@ -496,7 +583,7 @@ describe("MaterialsTable", () => {
         expect(evidence.findAll(".technique").map((tag) => tag.text())).toEqual(
             ["XRF", "Raman"],
         );
-        expect(column(view, 7)[1]).toBe("0+10 of the Selection · 1 citing it");
+        expect(column(view, 7)[1]).toBe("1 citing it");
     });
 
     it("marks a draft", () => {
@@ -510,7 +597,7 @@ describe("MaterialsTable", () => {
                 canvases: ["c9"],
             },
         ]);
-        expect(view.find("tbody .badge").text()).toBe("Draft");
+        expect(view.find("tbody .rest .draft").text()).toBe("Draft");
         expect(column(view, 4)).toEqual(["1 folio"]);
         expect(column(view, 7)).toEqual([""]);
         expect(view.find("tbody th .main").text()).toBe("Azurite");
@@ -535,7 +622,52 @@ describe("MaterialsTable", () => {
             },
         });
         expect(view.find("tbody th .main").text()).toBe("Characterization 4");
-        expect(column(view, 4)).toEqual(["f. 12r, 1 other folio"]);
+        expect(view.findAll(".folios li").map((li) => li.text())).toEqual([
+            "f. 12r",
+            "1 other folio",
+        ]);
+    });
+
+    it("lists three folios and unfolds the others with a button", async () => {
+        const canvases = ["c1", "c2", "c3", "c4", "c5"];
+        const view = mount(MaterialsTable, {
+            props: {
+                records: [
+                    {
+                        id: MANTLE.id,
+                        summary: MANTLE,
+                        selected: true,
+                        cites: [],
+                        canvases,
+                    },
+                ],
+                pairs: [],
+                canvases: canvases.map((canvas, index) => ({
+                    ...SYNTHESIS.canvases[0],
+                    canvas,
+                    label: `f. ${index + 1}r`,
+                })),
+                analyses: [],
+            },
+        });
+        const folios = () => view.findAll(".folios li").map((li) => li.text());
+        expect(folios()).toEqual(["f. 1r", "f. 2r", "f. 3r", "2 more folios"]);
+        const more = view.find(".folios .more");
+        expect(more.attributes("aria-expanded")).toBe("false");
+        await more.trigger("click");
+        expect(folios()).toEqual([
+            "f. 1r",
+            "f. 2r",
+            "f. 3r",
+            "f. 4r",
+            "f. 5r",
+            "Fewer folios",
+        ]);
+        expect(view.find(".folios .more").attributes("aria-expanded")).toBe(
+            "true",
+        );
+        await view.find(".folios .more").trigger("click");
+        expect(folios()).toHaveLength(4);
     });
 
     it("highlights the rows linked to the focus and marks the others unlinked", async () => {

@@ -146,6 +146,29 @@
     --heat-2-on: var(--ink);
     --heat-3-on: var(--ink);
     --heat-4-on: #ffffff;
+    // Compare's Materials window. Certainty, same gold, step 4 the most
+    // certain: --cert-4 ≥ 8:1 on --surface (it also colours the step 4
+    // label), --cert-3 ≥ 3.8:1 (a graphic, ≥ 3:1), --cert-2 and --cert-1 are
+    // graphic only, always beside the written label (--cert-1 is drawn
+    // hollow); --cert-track the unfilled bars. The Selection column: an item
+    // of the Selection is sealed (--sel-own-ink ≥ 7.9:1 on --sel-own-bg), an
+    // item citing it is hollow and dashed (--sel-cite-ink ≥ 8:1 on
+    // --surface). --mt-rule is the gold hairline under the heading and above
+    // a group, --mt-band a group's parchment band, --mt-zebra every other
+    // record.
+    --cert-1: #e6d3a3;
+    --cert-2: #d2a84a;
+    --cert-3: #a07d1c;
+    --cert-4: #6b4a0e;
+    --cert-track: rgba(122, 84, 16, 0.14);
+    --sel-own-bg: #f6ead0;
+    --sel-own-ink: #5c410a;
+    --sel-own-rule: #c9a44e;
+    --sel-cite-ink: #6b4a0e;
+    --sel-cite-rule: rgba(160, 125, 28, 0.55);
+    --mt-rule: rgba(160, 125, 28, 0.28);
+    --mt-band: #f7f2e7;
+    --mt-zebra: #fbfaf7;
     // Compare's motion: one bloom per toggle that gains a slot, one breath
     // per window; nothing sweeps.
     --dur-fast: 160ms;
