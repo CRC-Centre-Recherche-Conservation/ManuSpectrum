@@ -222,7 +222,13 @@ jobs:
           compose ps -aq | xargs -r docker inspect \
             -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} exit={{.State.ExitCode}}' \
             | tee "$RUNNER_TEMP/compose-logs/state.txt" || true
-          tail -n 60 "$RUNNER_TEMP/compose-logs/services.log"
+          # The last lines of each service, not of the interleaved log: the
+          # failing service is rarely the one that logged last.
+          for service in $(compose ps -a --format '{{.Service}}' | sort -u); do
+            echo "::group::$service (last 80 lines)"
+            compose logs --no-color --tail 80 "$service" || true
+            echo "::endgroup::"
+          done
 
       - name: Upload the service logs
         if: failure()
