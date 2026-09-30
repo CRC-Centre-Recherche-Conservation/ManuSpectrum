@@ -17,11 +17,11 @@ WAIT_SECONDS="${WAIT_SECONDS:-300}"
 log() { echo "entrypoint: $*" >&2; }
 
 wait_for() { # wait_for NAME COMMAND...
-  local name="$1" deadline=$((SECONDS + WAIT_SECONDS))
+  local name="$1" deadline=$((SECONDS + WAIT_SECONDS)) output
   shift
-  until "$@" >/dev/null 2>&1; do
+  until output="$("$@" 2>&1)"; do
     if [ "$SECONDS" -ge "$deadline" ]; then
-      log "$name not reachable after ${WAIT_SECONDS}s"
+      log "$name not reachable after ${WAIT_SECONDS}s: ${output:-no output}"
       exit 1
     fi
     sleep 2
@@ -29,7 +29,9 @@ wait_for() { # wait_for NAME COMMAND...
   log "$name is up"
 }
 
-postgres_ready() { pg_isready -q -h "$PGHOST" -p "$PGPORT"; }
+# -U: the containers run under a uid with no passwd entry, and pg_isready
+# without a user name gives up before connecting ("no attempt").
+postgres_ready() { pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSERNAME"; }
 
 elasticsearch_ready() {
   local password="${ELASTIC_PASSWORD:-}"
