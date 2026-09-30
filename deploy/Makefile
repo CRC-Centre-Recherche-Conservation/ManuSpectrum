@@ -30,8 +30,12 @@ init: ## First installation only: Arches setup_db, refused when the database exi
 	$(COMPOSE) up -d --wait postgres elasticsearch redis-broker redis-cache
 	$(COMPOSE) run --rm -T web init
 
+# `up --wait` refuses a service whose healthcheck is disabled, and beat has
+# none on purpose: wait for every other service, then start beat (it depends
+# on a healthy web).
 up: ## Start or update the stack and wait until it is healthy
-	$(COMPOSE) up -d --wait --wait-timeout 900
+	$(COMPOSE) up -d --wait --wait-timeout 900 $$($(COMPOSE) config --services | grep -vx beat)
+	$(COMPOSE) up -d beat
 
 down: ## Stop and remove the containers; volumes are kept
 	$(COMPOSE) down
