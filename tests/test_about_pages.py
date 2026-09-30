@@ -39,6 +39,10 @@ class SiteOriginTagTests(SimpleTestCase):
         # The 400 page of a disallowed Host must render, not raise again.
         self.assertEqual(self.render("evil.example"), "")
 
+    def test_empty_without_a_request(self):
+        tpl = Template("{% load manuspectrum_settings %}{% site_origin %}")
+        self.assertEqual(tpl.render(Context({})), "")
+
 
 class AboutRoutingTests(TestCase):
     def test_pages_reachable_anonymously(self):
