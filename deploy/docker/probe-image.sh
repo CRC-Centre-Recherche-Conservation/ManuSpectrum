@@ -29,6 +29,12 @@ if grep -Eq 'arches\.(W|E)001' <<<"$out"; then
 fi
 ok "check --deploy: no arches.W001/E001"
 
+# Arches' compatibility check reads /app/pyproject.toml; when it raises, every
+# manage.py command of the running stack stops.
+out="$(run python manage.py check --tag compatibility 2>&1)" \
+  || { echo "$out" >&2; fail "manage.py check --tag compatibility"; }
+ok "check --tag compatibility (Arches version against pyproject.toml)"
+
 run sh -c 'test ! -e /app/manuspectrum/settings_local.py' || fail "settings_local.py in the image"
 run sh -c '! command -v uv && ! command -v node && ! command -v npm && ! command -v gcc' >/dev/null \
   || fail "a build tool is in the runtime image"

@@ -96,6 +96,9 @@ RUN apt-get update \
     && install -d -m 0755 /srv/media
 COPY --from=collect /opt/venv /opt/venv
 COPY --from=collect /app/manage.py /app/manage.py
+# Arches' compatibility check reads the project's requirements from it: the
+# project is not installed as a package (uv sync --no-install-project).
+COPY --from=collect /app/pyproject.toml /app/pyproject.toml
 COPY --from=collect /app/manuspectrum /app/manuspectrum
 COPY --from=collect /app/webpack/webpack-stats.json /app/webpack/webpack-stats.json
 COPY --from=collect /app/static /app/static
