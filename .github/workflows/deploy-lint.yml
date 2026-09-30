@@ -211,6 +211,7 @@ jobs:
       - name: Collect the service logs
         if: failure()
         run: |
+          [ -f "$ENV_FILE" ] || { echo "The stack was never started: no service log."; exit 0; }
           mkdir -p "$RUNNER_TEMP/compose-logs"
           compose() {
             docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \

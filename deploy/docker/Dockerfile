@@ -1,6 +1,7 @@
 # ManuSpectrum image. Build context: the repository root.
 #   docker build -f deploy/docker/Dockerfile .
-# python-deps: the virtualenv from uv.lock, frontend configuration generated
+# python-deps: the virtualenv from uv.lock (without uv's world-writable .lock),
+#              frontend configuration generated
 # frontend:    npm ci and the production webpack build (Node 24)
 # collect:     collectstatic into /app/static and its .build-id
 # runtime:     no compiler, no Node, no uv, no pip; runs under any uid on a read-only root
@@ -28,7 +29,8 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --group prod --no-install-project
+    uv sync --frozen --no-dev --group prod --no-install-project \
+    && rm -f /opt/venv/.lock
 COPY manage.py ./
 COPY manuspectrum ./manuspectrum
 COPY deploy/docker/placeholder.env /tmp/placeholder.env
