@@ -85,9 +85,23 @@ services:
       xpack.security.http.ssl.enabled: "false"
       xpack.security.transport.ssl.enabled: "false"
       bootstrap.memory_lock: "true"
-      ELASTIC_PASSWORD_FILE: /run/secrets/elastic_password
       ES_JAVA_OPTS: "-Xms1g -Xmx1g"
     secrets: [elastic_password]
+    # The image refuses an ELASTIC_PASSWORD_FILE whose mode is not 400 or 600,
+    # and the secret file is 0444 (read by several uids): the entrypoint gets
+    # a 0600 copy. The image writes the password to its keystore in the same
+    # container layer anyway. tini stays pid 1, as in the image.
+    entrypoint:
+      - /bin/tini
+      - --
+      - /bin/bash
+      - -c
+      - >-
+        umask 077 && cat /run/secrets/elastic_password > /tmp/elastic_password
+        && export ELASTIC_PASSWORD_FILE=/tmp/elastic_password
+        && exec /usr/local/bin/docker-entrypoint.sh "$$@"
+      - bash
+    command: ["eswrapper"]
     ulimits:
       memlock: {soft: -1, hard: -1}
       nofile: {soft: 65535, hard: 65535}

@@ -16,7 +16,9 @@ python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > django_s
 
 Modes: the directory `0700`, owned by the service account; the files `0444`
 (the Elasticsearch container reads its file under its own uid, the directory
-mode is the barrier on the host).
+mode is the barrier on the host). The Elasticsearch image wants a `0400` or
+`0600` password file: its Compose entrypoint hands it a `0600` copy made
+inside the container, so the host file stays `0444`.
 
 The files are never committed (`.gitignore` here ignores everything but this
 README), never put in an image, a log or a clear-text backup. PP-2 replaces
