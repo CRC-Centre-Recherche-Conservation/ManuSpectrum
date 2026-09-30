@@ -64,6 +64,7 @@ from manuspectrum.views.explorer.api import (
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
+from manuspectrum.views.health import HealthzView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
@@ -615,3 +616,4 @@ urlpatterns.append(
         name="django.contrib.sitemaps.views.sitemap",
     )
 )
+urlpatterns.append(path("healthz", HealthzView.as_view(), name="healthz"))

@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.template import Context, Template
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 
@@ -22,6 +22,26 @@ class ContactEmailTagTests(SimpleTestCase):
     @override_settings(CONTACT_EMAIL="", DEFAULT_FROM_EMAIL="")
     def test_empty_when_unset(self):
         self.assertEqual(self.render(), "")
+
+
+class SiteOriginTagTests(SimpleTestCase):
+    def render(self, host):
+        request = RequestFactory().get("/", HTTP_HOST=host)
+        tpl = Template("{% load manuspectrum_settings %}{% site_origin %}")
+        return tpl.render(Context({"request": request}))
+
+    @override_settings(ALLOWED_HOSTS=["manuspectrum.test"])
+    def test_scheme_and_allowed_host(self):
+        self.assertEqual(self.render("manuspectrum.test"), "http://manuspectrum.test")
+
+    @override_settings(ALLOWED_HOSTS=["manuspectrum.test"])
+    def test_empty_for_a_disallowed_host(self):
+        # The 400 page of a disallowed Host must render, not raise again.
+        self.assertEqual(self.render("evil.example"), "")
+
+    def test_empty_without_a_request(self):
+        tpl = Template("{% load manuspectrum_settings %}{% site_origin %}")
+        self.assertEqual(tpl.render(Context({})), "")
 
 
 class AboutRoutingTests(TestCase):

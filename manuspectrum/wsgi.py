@@ -25,10 +25,8 @@ path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 if path not in sys.path:
     sys.path.append(path)
 
-# reverting back to the old style of setting the DJANGO_SETTINGS_MODULE env variable
-# refer to the following blog post under the heading "Leaking of process environment variables."
-# http://blog.dscpl.com.au/2012/10/requests-running-in-wrong-django.html
-os.environ["DJANGO_SETTINGS_MODULE"] = "manuspectrum.settings"
+# setdefault: the container image selects manuspectrum.settings_docker through the environment.
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "manuspectrum.settings")
 
 from django.core.wsgi import get_wsgi_application
 

@@ -96,7 +96,7 @@ fi
 
 step "gitleaks"
 if command -v docker >/dev/null 2>&1; then
-  docker run --rm -v "$ROOT:/repo:ro" "$GITLEAKS_IMAGE" dir /repo/deploy --no-banner
+  docker run --rm -v "$ROOT:/repo:ro" "$GITLEAKS_IMAGE" dir /repo/deploy --config /repo/.gitleaks.toml --no-banner
 else
   skip "docker missing"
 fi

@@ -55,6 +55,12 @@ dev = [
     "jsonschema>=4.26,<5",
     "PyLD>=1.0.5,<2",
 ]
+prod = [
+    "gunicorn>=26.2,<27",
+    # redis-py: the Celery broker (kombu) and Django's RedisCache, both on the
+    # Redis containers of the Compose stack. kombu's extra bounds its version.
+    "kombu[redis]",
+]
 
 [tool.setuptools]
 packages = ["manuspectrum"]
