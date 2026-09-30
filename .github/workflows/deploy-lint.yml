@@ -2,8 +2,8 @@ name: deploy-lint
 
 # Checks the deployment kit on every pull request: the rehearsal VM kit, the
 # image and Compose files offline, then the image itself (build, probe, the
-# whole stack on the runner, Trivy). No `paths:` filter: the `changes` job
-# decides which jobs have work to do, the others are skipped, and the
+# whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
+# job decides which jobs have work to do, the others are skipped, and the
 # `conclusion` job always concludes so it can be a required check.
 on:
   pull_request:
@@ -231,7 +231,11 @@ jobs:
           path: ${{ runner.temp }}/compose-logs
           retention-days: 5
 
+      # Reported, never fatal: a pull request is judged on what it changes, and
+      # an advisory published overnight is not a change. The blocking scan runs
+      # weekly on the default branch (trivy-weekly.yml).
       - name: Trivy
+        id: trivy
         if: always() && steps.build.outcome == 'success'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -241,7 +245,13 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore
-          exit-code: "1"
+          format: json
+          output: ${{ runner.temp }}/trivy.json
+          exit-code: "0"
+
+      - name: Trivy report
+        if: always() && steps.trivy.outcome == 'success'
+        run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json"
 
   conclusion:
     needs: [changes, rehearsal-kit, stack, image]

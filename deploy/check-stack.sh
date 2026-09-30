@@ -33,7 +33,8 @@ step "Compose rules"
 python3 -m unittest discover -s deploy/compose/tests -p 'test_*.py'
 
 step "actionlint"
-docker run --rm -v "$ROOT:/repo:ro" -w /repo "$ACTIONLINT_IMAGE" .github/workflows/deploy-lint.yml
+docker run --rm -v "$ROOT:/repo:ro" -w /repo "$ACTIONLINT_IMAGE" \
+  .github/workflows/deploy-lint.yml .github/workflows/trivy-weekly.yml .github/workflows/pip-audit.yml
 echo "actionlint: no warning"
 
 step "uv.lock"
