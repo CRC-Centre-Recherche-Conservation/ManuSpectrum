@@ -57,6 +57,7 @@
     },
     "overrides": {
         "arches": "archesproject/arches#stable/8.1.5",
+        "js-yaml": "^4.3.2",
         "moment-timezone": "^0.5.45",
         "nomnom": "npm:@gerhobbelt/nomnom",
         "rimraf": "^5.0.7",

@@ -3,7 +3,7 @@
 # python-deps: the virtualenv from uv.lock, frontend configuration generated
 # frontend:    npm ci and the production webpack build (Node 24)
 # collect:     collectstatic into /app/static and its .build-id
-# runtime:     no compiler, no Node, no uv; runs under any uid on a read-only root
+# runtime:     no compiler, no Node, no uv, no pip; runs under any uid on a read-only root
 
 ARG PYTHON_IMAGE=python:3.13-slim-trixie@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
 ARG NODE_IMAGE=node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
@@ -81,6 +81,9 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgdal36 libpq5 postgresql-client curl \
     && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/python3.13/site-packages/pip \
+              /usr/local/lib/python3.13/site-packages/pip-*.dist-info \
+              /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.13 \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent \
        --shell /usr/sbin/nologin app \
