@@ -57,6 +57,9 @@ dev = [
 ]
 prod = [
     "gunicorn>=26.2,<27",
+    # redis-py: the Celery broker (kombu) and Django's RedisCache, both on the
+    # Redis containers of the Compose stack. kombu's extra bounds its version.
+    "kombu[redis]",
 ]
 
 [tool.setuptools]

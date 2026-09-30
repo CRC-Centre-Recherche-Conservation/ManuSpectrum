@@ -46,11 +46,12 @@ ok "no development file, build tool, pip or silk"
 
 run python -c 'import gunicorn; assert gunicorn.__version__.split(".")[0] == "26", gunicorn.__version__' \
   || fail "gunicorn 26 missing"
+run python -c 'import redis' || fail "redis-py missing (Celery broker, Django RedisCache)"
 run sh -c 'grep -Eq "^[0-9a-f]{16}$" /app/static/.build-id' || fail "static .build-id"
 run python -c 'import json; assert json.load(open("/app/webpack/webpack-stats.json"))["status"] == "done"' \
   || fail "webpack-stats.json"
 run sh -c 'test -L /app/frontend_configuration' || fail "frontend_configuration is not the /tmp symlink"
-ok "gunicorn 26, static build id, webpack stats, frontend_configuration symlink"
+ok "gunicorn 26, redis-py, static build id, webpack stats, frontend_configuration symlink"
 
 writable="$(run sh -c 'find /app /opt/venv -xdev -perm -o+w ! -type l -print -quit')"
 [ -z "$writable" ] || fail "world-writable path in the image: $writable"
