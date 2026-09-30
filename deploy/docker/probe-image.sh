@@ -32,9 +32,11 @@ ok "check --deploy: no arches.W001/E001"
 run sh -c 'test ! -e /app/manuspectrum/settings_local.py' || fail "settings_local.py in the image"
 run sh -c '! command -v uv && ! command -v node && ! command -v npm && ! command -v gcc' >/dev/null \
   || fail "a build tool is in the runtime image"
+run python -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("pip") is not None)' \
+  || fail "pip is in the runtime image"
 run python -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("silk") is not None)' \
   || fail "django-silk is installed"
-ok "no development file, build tool or silk"
+ok "no development file, build tool, pip or silk"
 
 run python -c 'import gunicorn; assert gunicorn.__version__.split(".")[0] == "26", gunicorn.__version__' \
   || fail "gunicorn 26 missing"

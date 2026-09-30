@@ -77,8 +77,11 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     HOME=/tmp \
     DJANGO_SETTINGS_MODULE=manuspectrum.settings_docker
+# Debian security fixes land before the official image is rebuilt: upgrade the
+# runtime packages at build time (the digest above only fixes the starting point).
 # hadolint ignore=DL3008
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends libgdal36 libpq5 postgresql-client curl \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/local/lib/python3.13/site-packages/pip \

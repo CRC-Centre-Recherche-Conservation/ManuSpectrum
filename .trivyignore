@@ -10,6 +10,8 @@ CVE-2025-66418 exp:2026-12-31
 CVE-2025-66471 exp:2026-12-31
 CVE-2026-21441 exp:2026-12-31
 CVE-2026-44431 exp:2026-12-31
+CVE-2026-97687 exp:2026-12-31
+CVE-2026-97689 exp:2026-12-31
 
 # maplibre-gl 4.7.1: arches-vue-components 2.0.x requires maplibre-gl ^4.7.1;
 # the fix is only in 6.4.1. Collected into /app/static, not run server side.
