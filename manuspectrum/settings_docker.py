@@ -117,26 +117,36 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 SECURE_SSL_REDIRECT = False
 
 
-def statement_timeout_ms():
-    """Return PG_STATEMENT_TIMEOUT_MS as an int: 60000 when unset, 0 for no timeout."""
-    value = get_optional_env_variable("PG_STATEMENT_TIMEOUT_MS", "60000").strip()
+def timeout_ms(name, default):
+    """Return the environment variable `name` as milliseconds: `default` when unset, 0 for no timeout."""
+    value = get_optional_env_variable(name, default).strip()
     try:
         timeout = int(value)
     except ValueError:
         timeout = -1
     if timeout < 0:
         raise ImproperlyConfigured(
-            f"PG_STATEMENT_TIMEOUT_MS must be a number of milliseconds, not {value!r}"
+            f"{name} must be a number of milliseconds, not {value!r}"
         )
     return timeout
 
 
-# Compose sets it for `web` alone: gthread request threads are not bounded by
-# gunicorn's timeout, so PostgreSQL bounds each statement. Worker, beat and
-# management commands run without one.
+# Compose sets both for `web` alone: gthread request threads are not bounded by
+# gunicorn's timeout, so PostgreSQL bounds each statement and each idle
+# transaction of the connection. Worker, beat and management commands run
+# without either.
 DATABASE_OPTIONS = dict(DATABASES["default"]["OPTIONS"])
-if statement_timeout_ms():
-    DATABASE_OPTIONS["options"] += f" -c statement_timeout={statement_timeout_ms()}"
+for _setting, _variable, _default in (
+    ("statement_timeout", "PG_STATEMENT_TIMEOUT_MS", "60000"),
+    (
+        "idle_in_transaction_session_timeout",
+        "PG_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+        "60000",
+    ),
+):
+    _value = timeout_ms(_variable, _default)
+    if _value:
+        DATABASE_OPTIONS["options"] += f" -c {_setting}={_value}"
 
 DATABASES = {
     "default": {

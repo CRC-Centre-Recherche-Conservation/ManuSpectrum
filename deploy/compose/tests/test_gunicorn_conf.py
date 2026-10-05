@@ -36,6 +36,21 @@ class GunicornConfTests(unittest.TestCase):
         self.assertEqual(conf["max_requests"], 1000)
         self.assertEqual(conf["max_requests_jitter"], 100)
 
+    def test_timeout_defaults_above_graceful_timeout(self):
+        conf = load()
+        self.assertEqual(conf["timeout"], 330)
+        self.assertGreaterEqual(conf["timeout"], conf["graceful_timeout"])
+
+    def test_timeout_comes_from_the_environment(self):
+        conf = load(GUNICORN_TIMEOUT="400", GUNICORN_GRACEFUL_TIMEOUT="60")
+        self.assertEqual(conf["timeout"], 400)
+
+    def test_timeout_below_graceful_timeout_is_refused(self):
+        with self.assertRaises(ValueError):
+            load(GUNICORN_TIMEOUT="100")
+        with self.assertRaises(ValueError):
+            load(GUNICORN_TIMEOUT="60", GUNICORN_GRACEFUL_TIMEOUT="61")
+
     def test_graceful_timeout_comes_from_the_environment(self):
         self.assertEqual(load(GUNICORN_GRACEFUL_TIMEOUT="60")["graceful_timeout"], 60)
 

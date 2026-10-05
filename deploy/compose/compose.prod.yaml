@@ -16,8 +16,7 @@ services:
               "-c", "maintenance_work_mem=256MB",
               "-c", "autovacuum_work_mem=128MB",
               "-c", "random_page_cost=1.5",
-              "-c", "jit=off",
-              "-c", "idle_in_transaction_session_timeout=60s"]
+              "-c", "jit=off"]
     shm_size: 1g
     deploy: {resources: {limits: {memory: 3g}}}
     memswap_limit: 3g

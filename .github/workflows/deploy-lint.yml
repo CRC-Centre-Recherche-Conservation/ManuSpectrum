@@ -160,13 +160,8 @@ jobs:
         run: |
           secrets="$RUNNER_TEMP/secrets"
           media="$RUNNER_TEMP/media"
-          install -d -m 0700 "$secrets"
           install -d "$media/uploadedfiles"
-          openssl rand -base64 48 | tr -d '\n' > "$secrets/pg_password"
-          openssl rand -base64 48 | tr -d '\n' > "$secrets/elastic_password"
-          python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > "$secrets/django_secret_key"
-          : > "$secrets/email_password"  # empty: a relay without authentication
-          chmod 0444 "$secrets"/*
+          make -C deploy secrets SECRETS_DIR="$secrets"
           sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
               -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
               -e "s#^APP_GID=.*#APP_GID=$(id -g)#" \

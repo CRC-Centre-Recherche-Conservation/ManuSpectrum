@@ -24,16 +24,25 @@ volumes: ## Create the external data volumes (once per host, idempotent)
 		else docker volume create $$v; fi; \
 	done
 
+# Each file is written to a temporary name and moved into place, so a failed
+# generator leaves no empty secret; an existing file is never replaced.
+SECRET_FILES := pg_password elastic_password django_secret_key email_password
+
 secrets: ## Create the secrets directory (0700) and the secret files that are missing
+	@command -v openssl >/dev/null || { echo "openssl is required to generate the secrets" >&2; exit 1; }
+	@command -v python3 >/dev/null || { echo "python3 is required to generate the secrets" >&2; exit 1; }
 	@install -d -m 0700 $(SECRETS_DIR)
-	@cd $(SECRETS_DIR) && umask 077 && \
-	for f in pg_password elastic_password; do \
-		[ -e $$f ] || openssl rand -base64 48 | tr -d '\n' > $$f; \
-	done && \
-	[ -e django_secret_key ] || python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > django_secret_key && \
-	[ -e email_password ] || : > email_password && \
-	chmod 0444 pg_password elastic_password django_secret_key email_password && \
-	ls -l $(SECRETS_DIR)
+	@cd $(SECRETS_DIR) && umask 077 && set -e && \
+	for f in $(SECRET_FILES); do \
+		[ -e $$f ] && continue; \
+		case $$f in \
+			pg_password|elastic_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
+			django_secret_key) python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > $$f.tmp ;; \
+			email_password) : > $$f.tmp ;; \
+		esac; \
+		if [ "$$f" != email_password ] && [ ! -s $$f.tmp ]; then rm -f $$f.tmp; echo "could not generate $$f" >&2; exit 1; fi; \
+		chmod 0444 $$f.tmp && mv -n $$f.tmp $$f; \
+	done && ls -l $(SECRETS_DIR)
 
 build: ## Build the image (CI or rehearsal VM, 10 GB free RAM; never the development VM)
 	docker build -f $(COMPOSE_DIR)/../docker/Dockerfile -t $(IMAGE) $(COMPOSE_DIR)/../..

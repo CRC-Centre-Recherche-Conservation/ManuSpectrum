@@ -270,7 +270,8 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   each worker runs 4 threads: 20 concurrent requests, `GUNICORN_WORKERS`/`GUNICORN_THREADS`).
 - [ ] `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
 - [ ] `docker inspect -f '{{.Config.StopTimeout}}' manuspectrum-web-1` → `310` (above gunicorn's
-  `graceful_timeout` of 300 s: a download in progress survives a worker recycle and a stop).
+  `graceful_timeout` of 300 s, which bounds a stop and a `max_requests` recycle because
+  `timeout` is 330 s, at least `graceful_timeout`: a download in progress survives both).
 - [ ] `dc exec -T web python manage.py shell -c "from django.db import connection as c; k=c.cursor(); k.execute('SHOW statement_timeout'); print(k.fetchone()[0])"`
   → `1min`; the same command with `worker` instead of `web` → `0`.
 - [ ] `dc exec -T cantaloupe id` → the groups list contains `APP_GID`.

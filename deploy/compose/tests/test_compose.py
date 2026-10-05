@@ -255,10 +255,10 @@ class ComposeStackTests(unittest.TestCase):
             "maintenance_work_mem": "256MB",
             "autovacuum_work_mem": "128MB",
             "max_connections": "60",
-            "idle_in_transaction_session_timeout": "60s",
         }.items():
             with self.subTest(setting=key):
                 self.assertEqual(settings.get(key), value)
+        self.assertNotIn("idle_in_transaction_session_timeout", " ".join(command))
         self.assertEqual(
             self.prod["services"]["postgres"]["environment"]["POSTGRES_INITDB_ARGS"],
             "--encoding=UTF8 --locale=en_US.utf8",
@@ -279,17 +279,24 @@ class ComposeStackTests(unittest.TestCase):
                 self.assertEqual(grace, "5m10s")
                 self.assertGreater(310, conf["graceful_timeout"])
 
-    def test_only_web_sets_a_statement_timeout(self):
+    def test_only_web_sets_statement_and_idle_timeouts(self):
         for label, stack in self.stacks.items():
             with self.subTest(stack=label):
                 services = stack["services"]
-                self.assertEqual(
-                    services["web"]["environment"]["PG_STATEMENT_TIMEOUT_MS"], "60000"
-                )
-                for name in ("worker", "beat"):
-                    self.assertEqual(
-                        services[name]["environment"]["PG_STATEMENT_TIMEOUT_MS"], "0"
-                    )
+                for key in (
+                    "PG_STATEMENT_TIMEOUT_MS",
+                    "PG_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+                ):
+                    self.assertEqual(services["web"]["environment"][key], "60000")
+                    for name in ("worker", "beat"):
+                        self.assertEqual(services[name]["environment"][key], "0")
+
+    def test_every_declared_secret_is_made_by_make_secrets(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        made = set(re.search(r"^SECRET_FILES := (.+)$", makefile, re.M)[1].split())
+        for label, stack in self.stacks.items():
+            with self.subTest(stack=label):
+                self.assertEqual(set(stack["secrets"]), made)
 
     def test_smtp_password_is_an_optional_secret_file(self):
         for label, stack in self.stacks.items():

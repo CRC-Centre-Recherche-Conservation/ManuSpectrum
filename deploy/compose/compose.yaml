@@ -46,8 +46,9 @@ x-app: &app
     REDIS_CACHE_URL: redis://redis-cache:6379
     CANTALOUPE_HOST: cantaloupe
     CANTALOUPE_PORT: "8182"
-    # 0: no statement timeout; web alone sets one (settings_docker).
+    # 0: no statement or idle-in-transaction timeout; web alone sets them (settings_docker).
     PG_STATEMENT_TIMEOUT_MS: "0"
+    PG_IDLE_IN_TRANSACTION_TIMEOUT_MS: "0"
     EMAIL_HOST_PASSWORD_FILE: /run/secrets/email_password
   secrets: [pg_password, elastic_password, django_secret_key, email_password]
   read_only: true
@@ -191,6 +192,7 @@ services:
     environment:
       <<: *app_environment
       PG_STATEMENT_TIMEOUT_MS: ${PG_STATEMENT_TIMEOUT_MS:-60000}
+      PG_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${PG_IDLE_IN_TRANSACTION_TIMEOUT_MS:-60000}
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=1g"]
     volumes:
       - *media

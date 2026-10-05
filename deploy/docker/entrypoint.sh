@@ -101,9 +101,9 @@ system_settings_exist() { pg_probe settings; }
 
 # manage_refusal ARGS...: prints the command that drops the database when ARGS
 # would run it, through Arches' setup_db or through `packages` (`-db`,
-# `--setup_db`, `-o setup`), and returns 0; returns 1 otherwise.
+# `--setup_db` or any abbreviation argparse expands to it, `-o setup`), and returns 0; returns 1 otherwise.
 manage_refusal() {
-  local arg previous="" packages=0
+  local arg option previous="" packages=0 SETUP_DB_OPTION=--setup_db
   for arg in "$@"; do
     if [ "$arg" = setup_db ]; then
       echo "setup_db"
@@ -111,11 +111,14 @@ manage_refusal() {
     fi
     [ "$arg" = packages ] && packages=1
     if [ "$packages" = 1 ]; then
+      # argparse accepts any unambiguous prefix of --setup_db, with or without =value.
+      option="${arg%%=*}"
+      if [ "$arg" = -db ] || { [ "${#option}" -ge 5 ] && [[ "$option" == --* ]] \
+        && [ "${option}" = "${SETUP_DB_OPTION:0:${#option}}" ]; }; then
+        echo "packages $arg"
+        return 0
+      fi
       case "$arg" in
-        -db | --setup*)
-          echo "packages $arg"
-          return 0
-          ;;
         -osetup | -o=setup | --op*=setup)
           echo "packages -o setup"
           return 0
@@ -145,13 +148,17 @@ case "$command" in
       log "database ${PGDBNAME} is missing or unreachable: run the init command once (make -C deploy init)"
       exit 1
     fi
-    system_settings_exist && status=0 || status=$?
+    probe_error="$(system_settings_exist 2>&1)" && status=0 || status=$?
     if [ "$status" -ne 0 ]; then
-      log "database ${PGDBNAME} has no Arches system settings: the first installation did not finish; drop the database and run make -C deploy init again (deploy/README.md, \"A failed first installation\")"
+      if [ "$status" -eq 2 ]; then
+        log "cannot tell whether the Arches system settings exist: ${probe_error:-see above}; not starting"
+      else
+        log "database ${PGDBNAME} has no Arches system settings: the first installation did not finish; drop the database and run make -C deploy init again (deploy/README.md, \"A failed first installation\")"
+      fi
       exit 1
     fi
-    # Migrations run without the statement timeout web's requests carry.
-    PG_STATEMENT_TIMEOUT_MS=0 python manage.py migrate --noinput
+    # Migrations run without the timeouts web's requests carry.
+    PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 python manage.py migrate --noinput
     publish-static /app/static /srv/static
     exec gunicorn --config /app/gunicorn.conf.py
     ;;
@@ -186,7 +193,7 @@ case "$command" in
       1) ;;
       *) log "refusing: cannot tell whether database ${PGDBNAME} exists"; exit 1 ;;
     esac
-    export PG_STATEMENT_TIMEOUT_MS=0
+    export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
     exec python manage.py setup_db --force
     ;;
   manage)
@@ -195,8 +202,8 @@ case "$command" in
       log "refusing: ${refused} drops and recreates the database; the first installation goes through make -C deploy init"
       exit 1
     fi
-    # Management commands (reindex, imports) run without a statement timeout.
-    export PG_STATEMENT_TIMEOUT_MS=0
+    # Management commands (reindex, imports) run without those timeouts.
+    export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
     exec python manage.py "$@"
     ;;
   *)

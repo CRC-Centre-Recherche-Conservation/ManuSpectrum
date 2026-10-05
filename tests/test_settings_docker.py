@@ -282,6 +282,30 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertNotIn("statement_timeout", options)
         self.assertIn("cursor_tuple_fraction=1", options)
 
+    def test_idle_in_transaction_timeout_applies_to_the_connection_options(self):
+        default = load(BASE_ENV)["DATABASES"]["default"]["OPTIONS"]["options"]
+        self.assertIn("-c idle_in_transaction_session_timeout=60000", default)
+        custom = load(dict(BASE_ENV, PG_IDLE_IN_TRANSACTION_TIMEOUT_MS="5000"))
+        self.assertIn(
+            "-c idle_in_transaction_session_timeout=5000",
+            custom["DATABASES"]["default"]["OPTIONS"]["options"],
+        )
+
+    def test_idle_in_transaction_timeout_zero_sets_none(self):
+        options = load(dict(BASE_ENV, PG_IDLE_IN_TRANSACTION_TIMEOUT_MS="0"))[
+            "DATABASES"
+        ]["default"]["OPTIONS"]["options"]
+        self.assertNotIn("idle_in_transaction", options)
+        self.assertIn("cursor_tuple_fraction=1", options)
+
+    def test_invalid_idle_in_transaction_timeout_is_refused(self):
+        for value in ("soon", "-1"):
+            with self.subTest(value=value):
+                self.assertRefused(
+                    dict(BASE_ENV, PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=value),
+                    "PG_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+                )
+
     def test_invalid_statement_timeout_is_refused(self):
         for value in ("soon", "-1"):
             with self.subTest(value=value):
