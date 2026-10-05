@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     fitPage,
     layPage,
+    nativeZoomOf,
+    servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
 
@@ -137,5 +139,33 @@ describe("fitPage", () => {
         await Promise.resolve();
         expect(fitPage(map, page)).toBe(true);
         expect(fake._fitBounds).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("servedSize", () => {
+    it("reads the largest size the info.json gave, never the declared one", async () => {
+        fake = pendingPage([
+            { x: 300, y: 500 },
+            { x: 600, y: 1000 },
+            { x: 1529, y: 2405 },
+        ]);
+        const page = layPage(map, "https://iiif.example/image/p1", vi.fn());
+        expect(servedSize(page)).toBeNull();
+        answer.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(servedSize(page)).toEqual({ w: 1529, h: 2405 });
+        expect(nativeZoomOf(page)).toBe(2);
+    });
+
+    it("reads no size from a missing page or a size that is not a number", async () => {
+        expect(servedSize(null)).toBeNull();
+        expect(nativeZoomOf(null)).toBe(0);
+        fake = pendingPage([{}]);
+        const page = layPage(map, "https://iiif.example/image/p1", vi.fn());
+        answer.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(servedSize(page)).toBeNull();
     });
 });

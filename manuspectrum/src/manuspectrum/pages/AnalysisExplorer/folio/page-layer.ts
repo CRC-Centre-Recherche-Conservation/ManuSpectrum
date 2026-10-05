@@ -67,3 +67,29 @@ export function fitPage(map: L.Map, page: PageLayer | null): boolean {
     (layer as unknown as { _fitBounds: () => void })._fitBounds();
     return true;
 }
+
+/** The size of a page as its image service serves it (the largest of the info.json's), in pixels; null until the info.json is read. */
+export function servedSize(
+    page: PageLayer | null,
+): { w: number; h: number } | null {
+    const sizes = (page?.layer as IiifLayer | undefined)?._imageSizes as
+        | { x?: number; y?: number }[]
+        | undefined;
+    const largest = sizes?.[sizes.length - 1];
+    if (
+        !largest ||
+        !Number.isFinite(largest.x) ||
+        !Number.isFinite(largest.y)
+    ) {
+        return null;
+    }
+    return { w: largest.x as number, h: largest.y as number };
+}
+
+/** The map zoom at which the page shows at its served size, one pixel per unit. */
+export function nativeZoomOf(page: PageLayer | null): number {
+    const layer = page?.layer as IiifLayer | undefined;
+    const declared = layer?.options?.maxNativeZoom;
+    if (typeof declared === "number") return declared;
+    return Math.max(0, (layer?._imageSizes?.length ?? 1) - 1);
+}

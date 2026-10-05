@@ -140,6 +140,11 @@
     --focus-3: #93499e;
     --focus-4: #760a03;
     --focus-on: #ffffff;
+    // Light table: the letter and rim of panes A to D, apart from the focus hues.
+    --pane-a: var(--series-1);
+    --pane-b: var(--series-5);
+    --pane-c: var(--series-6);
+    --pane-d: var(--series-3);
     --link-ring: 0.125rem;
     --link-pip: 0.875rem;
     --focus-room: 0.4375rem;
