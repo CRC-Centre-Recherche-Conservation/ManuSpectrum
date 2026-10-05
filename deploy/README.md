@@ -56,6 +56,9 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   filesystem; the image works under any uid.
 - The first installation goes through `make init` only. It refuses to run when
   the database exists, because `setup_db` drops and recreates it.
+- `web` runs gunicorn `gthread`: `GUNICORN_WORKERS` processes of
+  `GUNICORN_THREADS` threads each; production sets 5 x 4, a ceiling of 20
+  concurrent requests.
 - The development VM never builds the image nor starts the stack.
 - No service publishes a port; the reverse proxy comes later.
 

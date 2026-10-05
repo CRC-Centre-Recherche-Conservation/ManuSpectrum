@@ -34,6 +34,7 @@ services:
   web:
     environment:
       GUNICORN_WORKERS: "5"
+      GUNICORN_THREADS: "4"
     deploy: {resources: {limits: {memory: 4g}}}
 
   worker:

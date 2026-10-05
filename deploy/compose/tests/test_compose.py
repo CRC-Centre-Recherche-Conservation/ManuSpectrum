@@ -224,6 +224,7 @@ class ComposeStackTests(unittest.TestCase):
                 memory = services[name]["deploy"]["resources"]["limits"]["memory"]
                 self.assertEqual(to_bytes(memory), limit)
         self.assertEqual(services["web"]["environment"]["GUNICORN_WORKERS"], "5")
+        self.assertEqual(services["web"]["environment"]["GUNICORN_THREADS"], "4")
         self.assertEqual(services["worker"]["environment"]["CELERY_CONCURRENCY"], "3")
         self.assertEqual(
             services["elasticsearch"]["environment"]["ES_JAVA_OPTS"], "-Xms4g -Xmx4g"
