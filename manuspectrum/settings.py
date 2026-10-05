@@ -723,9 +723,16 @@ BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
 # call made under a request budget (BIBLISSIMA_VIEW_DEADLINE).
 BIBLISSIMA_IIIF_CONNECT_TIMEOUT = 5
 
-# Maximum concurrent outbound HTTP calls to Biblissima per worker process
-# (each gunicorn worker holds its own limit).
-BIBLISSIMA_CONCURRENCY_LIMIT = 12
+# Maximum concurrent outbound HTTP calls to Biblissima per worker PROCESS: the
+# semaphore is shared by every thread of the process (request threads and the
+# parent-resolver pool alike), so Biblissima sees at most this many calls per
+# process, times the number of gunicorn workers. Under the sync worker a process
+# never carried more than one request, hence at most the pool's 6 calls, and the
+# limit never bound. Under gthread (several request threads per process) it
+# does: 8 lets one request's pool run in full while two other requests each
+# make a call, and keeps 5 workers at 40 calls at most, where the old 12 would
+# have allowed 60.
+BIBLISSIMA_CONCURRENCY_LIMIT = 8
 
 # Whole seconds a request waits for a Biblissima concurrency slot before
 # answering 503; also sent as Retry-After.
@@ -742,8 +749,14 @@ BIBLISSIMA_SUGGEST_DEADLINE = 4
 # BIBLISSIMA_IIIF_CONNECT_TIMEOUT and read within their own timeout, both capped
 # by what is left; no call starts once it is spent, and a host found down is not
 # called again in the same request. Kept under the 60 s abort of the create
-# step's client. Requires gunicorn --timeout >= 60 s: the raw-memo waits (10 s)
-# and each read's overshoot come on top of it (prod checklist).
+# step's client; the raw-memo waits (10 s) and each read's overshoot come on
+# top of it, so gunicorn --timeout must stay >= 60 s under the sync worker.
+#
+# Under the gthread worker that flag no longer bounds a request at all: the
+# worker heartbeats from its main thread, so a request thread stuck in a
+# network call is never killed. This deadline, the SSRF_* budgets and
+# SUMMARY_ES_TIMEOUT are then the only guards, which is why every outbound
+# call in the project carries a timeout (prod checklist).
 BIBLISSIMA_VIEW_DEADLINE = 30
 
 # 24h Django-cache TTL for resolved Wikibase entities, manuscript enrichment
