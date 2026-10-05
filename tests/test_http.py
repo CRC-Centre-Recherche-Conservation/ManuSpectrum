@@ -513,3 +513,38 @@ class RateBucketTests(SimpleTestCase):
             http_mod._host_rate_locks["e-codices.unifr.ch"],
             http_mod._host_rate_locks["digi.vatlib.it"],
         )
+
+
+class CappedRetryTests(SimpleTestCase):
+    """A remote ``Retry-After`` never parks a request thread past the cap."""
+
+    @staticmethod
+    def _retry():
+        from manuspectrum.utils.http import _build_iiif_session
+
+        return _build_iiif_session().get_adapter("https://x.example/").max_retries
+
+    @staticmethod
+    def _response(retry_after):
+        response = MagicMock()
+        response.headers = {"Retry-After": retry_after}
+        return response
+
+    @override_settings(IIIF_RETRY_AFTER_MAX=10)
+    def test_huge_retry_after_sleeps_at_most_the_cap(self):
+        with patch("urllib3.util.retry.time.sleep") as sleep:
+            self._retry().sleep(self._response("3600"))
+        sleep.assert_called_once_with(10)
+
+    @override_settings(IIIF_RETRY_AFTER_MAX=10)
+    def test_small_retry_after_is_honoured(self):
+        with patch("urllib3.util.retry.time.sleep") as sleep:
+            self._retry().sleep(self._response("2"))
+        sleep.assert_called_once_with(2)
+
+    @override_settings(IIIF_RETRY_AFTER_MAX=10)
+    def test_cap_survives_increment_and_new(self):
+        retry = self._retry().new().new(total=2)
+        with patch("urllib3.util.retry.time.sleep") as sleep:
+            retry.sleep(self._response("3600"))
+        sleep.assert_called_once_with(10)
