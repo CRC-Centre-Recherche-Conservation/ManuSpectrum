@@ -33,7 +33,7 @@ done
 
 # Values given in the environment win over the variables file.
 declare -A caller_env=()
-for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT NFS_EXPORT_DIR DOCKER_APT_CODENAME NFS_VERS; do
+for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT NFS_EXPORT_DIR DOCKER_APT_CODENAME NFS_VERS REHEARSAL_HOST; do
   [ -z "${!v+x}" ] || caller_env[$v]="${!v}"
 done
 if [ -f "$env_file" ]; then
@@ -144,8 +144,12 @@ check "unattended-upgrades: four origins" "$rc"
 rc=0; [ "$(grep -c '^APT::Periodic' /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null)" -eq 4 ] || rc=1
 check "20auto-upgrades: four APT::Periodic lines" "$rc"
 
-rc=0; [ "$(stat -c '%U:%a' /etc/manuspectrum/rehearsal-host 2>/dev/null)" = "root:644" ] || rc=1
-check "rehearsal host marker /etc/manuspectrum/rehearsal-host (root, 0644)" "$rc"
+if [ "${REHEARSAL_HOST:-no}" = yes ]; then
+  rc=0; [ "$(stat -c '%U:%a' /etc/manuspectrum/rehearsal-host 2>/dev/null)" = "root:644" ] || rc=1
+  check "rehearsal host marker /etc/manuspectrum/rehearsal-host (root, 0644)" "$rc"
+else
+  echo "INFO rehearsal host marker not checked (REHEARSAL_HOST is not 'yes')"
+fi
 
 systemctl is-active --quiet postfix
 check "postfix active" "$?"

@@ -45,6 +45,8 @@ make_snap "$TMP/snap" "$TMP/src"
 
 cat >"$TMP/facts" <<'FACTS'
 ARCHES 8.1.4
+APP arches
+APP manuspectrum
 MIG arches 0001_initial
 MIG manuspectrum 0004_resource_summary
 MIG manuspectrum 0005_sample
@@ -93,14 +95,18 @@ cat >"$TMP/bin/make" <<'STUB'
 #!/bin/sh
 echo "make $*" >>"$CALLS"
 STUB
-# STUB_SUDO_FAIL: sudo needs a password. Otherwise the command after the user
-# and group options runs as is.
-cat >"$TMP/bin/sudo" <<'STUB'
+# setpriv: records the call, then runs the command after its options as is.
+cat >"$TMP/bin/setpriv" <<'STUB'
 #!/bin/sh
-[ -z "$STUB_SUDO_FAIL" ] || exit 1
-[ "$1" != -n ] || shift
-shift 4
+echo "setpriv $*" >>"$CALLS"
+shift 5
 exec "$@"
+STUB
+# id: STUB_ID_ROOT makes `id -u` answer 0.
+cat >"$TMP/bin/id" <<'STUB'
+#!/bin/sh
+if [ -n "$STUB_ID_ROOT" ] && [ "$1" = -u ]; then echo 0; exit 0; fi
+exec /usr/bin/id "$@"
 STUB
 # STUB_DF_KB: free kilobytes reported for every path.
 cat >"$TMP/bin/df" <<'STUB'
@@ -108,7 +114,7 @@ cat >"$TMP/bin/df" <<'STUB'
 echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
 echo "stub 99999999 1 ${STUB_DF_KB:-99999999} 1% /"
 STUB
-chmod +x "$TMP/bin/docker" "$TMP/bin/make" "$TMP/bin/sudo" "$TMP/bin/df"
+chmod +x "$TMP/bin/docker" "$TMP/bin/make" "$TMP/bin/setpriv" "$TMP/bin/id" "$TMP/bin/df"
 
 write_env() { # write_env DEPLOY_ENVIRONMENT-LINE [APP_UID] [APP_GID]
   local uid="${2:-$(id -u)}" gid="${3:-$(id -g)}"
@@ -147,7 +153,7 @@ SNAP_DIR="$TMP/snap"
 run_load() { # run_load [VAR=value ...]: runs with a fresh calls file; output in $TMP/out
   : >"$TMP/calls"
   env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
-    MAKE_CMD="make" MS_REHEARSAL_MARKER="$TMP/marker" "$@" bash "$LOAD" "$SNAP_DIR" >"$TMP/out" 2>&1
+    MAKE_CMD="make" MS_TEST_MODE=1 MS_REHEARSAL_MARKER="$TMP/marker" "$@" bash "$LOAD" "$SNAP_DIR" >"$TMP/out" 2>&1
 }
 # Nothing that changes a store or a container ran: only reads of the stack.
 only_reads() { ! grep -vE 'config --format json|^docker info|python -c' "$TMP/calls" | grep -q .; }
@@ -242,7 +248,7 @@ assert "APP_GID=0 is refused, nothing run" $?
 write_env "DEPLOY_ENVIRONMENT=rehearsal"
 
 # Preflight: refused before anything is stopped, dumped or dropped.
-printf 'MIG arches 0001_initial\nLEAF arches 0001_initial\nARCHES 8.1.4\n' >"$TMP/facts-unknown"
+printf 'APP arches\nAPP manuspectrum\nMIG arches 0001_initial\nLEAF arches 0001_initial\nARCHES 8.1.4\n' >"$TMP/facts-unknown"
 run_load CONFIRM=yes STUB_FACTS="$TMP/facts-unknown" && status=0 || status=$?
 [ "$status" -ne 0 ] && grep -q "manuspectrum.0005_sample" "$TMP/out" && grep -q "unknown to the image" "$TMP/out" && only_reads
 assert "preflight refuses a snapshot migration the image does not know" $?
@@ -260,9 +266,15 @@ run_load CONFIRM=yes STUB_FACTS="$TMP/facts-arches" && status=0 || status=$?
 assert "preflight warns on an Arches version mismatch and continues" $?
 
 write_env "DEPLOY_ENVIRONMENT=rehearsal" "$(($(id -u) + 1))"
-run_load CONFIRM=yes STUB_SUDO_FAIL=1 && status=0 || status=$?
-[ "$status" -ne 0 ] && grep -q "sudo -n" "$TMP/out" && only_reads
-assert "preflight refuses when sudo to APP_UID needs a password, nothing run" $?
+run_load CONFIRM=yes && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "run as the service account" "$TMP/out" && only_reads && ! grep -q '^sudo' "$TMP/calls"
+assert "preflight refuses another identity than APP_UID or root (no sudo path), nothing run" $?
+
+reset_media
+run_load CONFIRM=yes STUB_ID_ROOT=1 && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q "^setpriv --reuid $(($(id -u) + 1)) --regid $(id -g) --clear-groups" "$TMP/calls"
+assert "as root, the uploads are handled through setpriv as APP_UID:APP_GID" $?
+
 write_env "DEPLOY_ENVIRONMENT=rehearsal"
 
 run_load CONFIRM=yes STUB_DF_KB=1 && status=0 || status=$?
@@ -354,16 +366,155 @@ assert "no database dump when there is no database yet" $?
 reset_media
 for stamp in 20200101T000000Z 20200102T000000Z 20200103T000000Z; do
   mkdir -p "$TMP/media/previous-$stamp-aaaaaa"
+  touch "$TMP/media/previous-$stamp-aaaaaa/.complete"
   touch -d "${stamp:0:4}-${stamp:4:2}-${stamp:6:2}" "$TMP/media/previous-$stamp-aaaaaa"
 done
 run_load CONFIRM=yes && status=0 || status=$?
 [ "$status" -eq 0 ] && [ "$(find "$TMP/media" -maxdepth 1 -name 'previous-*' | wc -l)" -eq 2 ] \
   && [ ! -e "$TMP/media/previous-20200101T000000Z-aaaaaa" ] && grep -q "removed previous-20200101T000000Z-aaaaaa" "$TMP/out"
-assert "only the last two aside directories are kept and the removed ones are printed" $?
+assert "only the two newest complete aside directories are kept and the removed ones are printed" $?
+grep -q "kept previous-20200103T000000Z-aaaaaa (complete)" "$TMP/out"
+assert "the kept aside directories are printed" $?
+
+reset_media
+mkdir -p "$TMP/media/previous-20200101T000000Z-bbbbbb" "$TMP/media/previous-20200102T000000Z-aaaaaa" "$TMP/media/previous-20200103T000000Z-aaaaaa" "$TMP/media/previous-20200104T000000Z-aaaaaa"
+touch "$TMP/media/previous-20200102T000000Z-aaaaaa/.complete" "$TMP/media/previous-20200103T000000Z-aaaaaa/.complete" "$TMP/media/previous-20200104T000000Z-aaaaaa/.complete"
+run_load CONFIRM=yes && status=0 || status=$?
+[ "$status" -eq 0 ] && [ -d "$TMP/media/previous-20200101T000000Z-bbbbbb" ] && [ ! -e "$TMP/media/previous-20200102T000000Z-aaaaaa" ] \
+  && grep -q "kept previous-20200101T000000Z-bbbbbb (incomplete" "$TMP/out"
+assert "an incomplete aside directory is never pruned and is reported" $?
+
+reset_media
+run_load CONFIRM=yes && status=0 || status=$?
+aside_dir="$(find "$TMP/media" -maxdepth 1 -name 'previous-*' -newer "$TMP/marker" | head -n 1)"
+[ "$status" -eq 0 ] && [ -f "$aside_dir/.complete" ] && grep -q "aside directory created: $aside_dir" "$TMP/out" \
+  && [ "$(grep -n 'aside directory created' "$TMP/out" | head -n 1 | cut -d: -f1)" -lt "$(grep -n 'previous database kept' "$TMP/out" | head -n 1 | cut -d: -f1)" ]
+assert "the aside path is logged when it is created and .complete is written at the end" $?
+
+reset_media
+run_load CONFIRM=yes STUB_RESTORE_FATAL=1 && status=0 || status=$?
+aside_dir="$(find "$TMP/media" -maxdepth 1 -name 'previous-*' | head -n 1)"
+[ "$status" -ne 0 ] && [ -n "$aside_dir" ] && [ ! -e "$aside_dir/.complete" ]
+assert "a failed run leaves its aside directory without .complete" $?
 
 reset_media
 run_load CONFIRM=yes STUB_RESOURCES=8 && status=0 || status=$?
 [ "$status" -eq 0 ] && grep -q "WARNING: resource_instances: 8" "$TMP/out"
 assert "a count difference is reported, not fatal" $?
+
+
+# N1: a snapshot migration of an app the image does not install.
+printf 'APP arches\nAPP manuspectrum\nMIG arches 0001_initial\nMIG manuspectrum 0005_sample\nLEAF arches 0001_initial\nLEAF manuspectrum 0005_sample\nARCHES 8.1.4\n' >"$TMP/facts-lean"
+SILK_MIGRATIONS='{"arches": "0001_initial", "manuspectrum": "0005_sample", "silk": "0008_x", "arches_templating": "0001_initial"}'
+make_snap "$TMP/snap-silk" "$TMP/src" "$SILK_MIGRATIONS"
+SNAP_DIR="$TMP/snap-silk"
+reset_media
+run_load CONFIRM=yes STUB_FACTS="$TMP/facts-lean" && status=0 || status=$?
+[ "$status" -eq 0 ] && [ "$(grep -c 'WARNING: .*do not\|WARNING: .*does not install' "$TMP/out")" -eq 1 ] \
+  && grep -q "does not install (arches_templating, silk)" "$TMP/out" && grep -q "manage migrate" "$TMP/calls"
+assert "a migration of an app the image does not install is one warning and the load continues" $?
+make_snap "$TMP/snap-silk" "$TMP/src" '{"arches": "0001_initial", "manuspectrum": "0006_gone", "silk": "0008_x"}'
+run_load CONFIRM=yes STUB_FACTS="$TMP/facts-lean" && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "manuspectrum.0006_gone" "$TMP/out" && grep -q "unknown to the image" "$TMP/out" && only_reads
+assert "an unknown migration of an installed app is still refused (with a non-installed app next to it)" $?
+SNAP_DIR="$TMP/snap"
+
+# N5: MS_REHEARSAL_MARKER is honoured in test mode only.
+rm -f "$TMP/marker"
+: >"$TMP/elsewhere"
+: >"$TMP/calls"
+env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" MAKE_CMD="make" \
+  MS_REHEARSAL_MARKER="$TMP/elsewhere" CONFIRM=yes bash "$LOAD" "$SNAP_DIR" >"$TMP/out" 2>&1 && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "rehearsal-host" "$TMP/out" && [ ! -s "$TMP/calls" ]
+assert "MS_REHEARSAL_MARKER is ignored without MS_TEST_MODE=1, no call at all" $?
+: >"$TMP/marker"
+
+# N2: RESTORE_BEFORE mode.
+ASIDE="$TMP/media/previous-20200105T000000Z-restor"
+make_aside() { # make_aside: an aside directory with a dump and previous uploads
+  rm -rf "$ASIDE"
+  mkdir -p "$ASIDE/uploadedfiles/sub"
+  printf PREVIOUS >"$ASIDE/rehearsal-before.dump"
+  echo before >"$ASIDE/uploadedfiles/before.txt"
+  echo deep >"$ASIDE/uploadedfiles/sub/deep.txt"
+}
+run_restore() { # run_restore ASIDE [VAR=value ...]
+  local dir="$1"; shift
+  : >"$TMP/calls"
+  env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+    MAKE_CMD="make" MS_TEST_MODE=1 MS_REHEARSAL_MARKER="$TMP/marker" RESTORE_BEFORE="$dir" "$@" bash "$LOAD" >"$TMP/out" 2>&1
+}
+reset_media
+make_aside
+run_restore "$ASIDE" CONFIRM=no && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "CONFIRM=yes" "$TMP/out" && only_reads
+assert "restore: refused without CONFIRM=yes, nothing run" $?
+
+rm -f "$TMP/marker"
+run_restore "$ASIDE" CONFIRM=yes && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "rehearsal-host" "$TMP/out" && [ ! -s "$TMP/calls" ]
+assert "restore: refused without the host marker, no call at all" $?
+: >"$TMP/marker"
+
+write_env "DEPLOY_ENVIRONMENT=production"
+run_restore "$ASIDE" CONFIRM=yes && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "DEPLOY_ENVIRONMENT" "$TMP/out" && only_reads
+assert "restore: refused when DEPLOY_ENVIRONMENT is not rehearsal" $?
+write_env "DEPLOY_ENVIRONMENT=rehearsal"
+
+rm -f "$ASIDE/rehearsal-before.dump"
+run_restore "$ASIDE" CONFIRM=yes && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "rehearsal-before.dump is missing" "$TMP/out" && only_reads
+assert "restore: refused when the dump is missing, nothing run" $?
+make_aside
+
+run_restore "$TMP/src" CONFIRM=yes && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "not an aside directory" "$TMP/out" && only_reads
+assert "restore: refused for a directory that is not an aside directory of this stack" $?
+
+run_restore "$ASIDE" CONFIRM=yes SNAPSHOT="$SNAP_DIR" && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q "not both" "$TMP/out" && only_reads
+assert "restore: refused when a snapshot is also given" $?
+
+reset_media
+make_aside
+run_restore "$ASIDE" CONFIRM=yes && status=0 || status=$?
+assert "restore: exits 0" "$status"
+expected_restore=(
+  "up -d --wait postgres elasticsearch redis-broker redis-cache"
+  "stop web worker beat cantaloupe"
+  "pg_dump -Fc"
+  "DROP DATABASE IF EXISTS"
+  "CREATE DATABASE \"manuspectrum\" TEMPLATE template_postgis"
+  "pg_restore --no-owner --no-privileges"
+  "exec -T redis-cache redis-cli FLUSHALL"
+  "exec -T redis-broker redis-cli -n 0 FLUSHDB"
+  "--entrypoint sh cantaloupe"
+  "up -d --force-recreate cantaloupe"
+  "manage migrate"
+  "make admin-password"
+  "refresh_geojson_geometries"
+  "manage es reindex_database"
+  "make up"
+  "exec -T cantaloupe test -e /imageroot/.ms-load-check-"
+  "make smoke"
+)
+last=0 ordered=0
+for pattern in "${expected_restore[@]}"; do
+  line="$(grep -n -F -- "$pattern" "$TMP/calls" | head -n 1 | cut -d: -f1)"
+  if [ -z "$line" ] || [ "$line" -lt "$last" ]; then ordered=1; echo "  out of order or missing: $pattern" >&2; fi
+  last="${line:-$last}"
+done
+assert "restore: the same steps run in the same order as a load" "$ordered"
+! grep -q "python -c" "$TMP/calls" && ! grep -q "FROM resource_instances" "$TMP/calls"
+assert "restore: no migration preflight and no manifest count" $?
+[ "$(cat "$TMP/media/uploadedfiles/before.txt")" = before ] && [ "$(cat "$TMP/media/uploadedfiles/sub/deep.txt")" = deep ] && [ ! -e "$TMP/media/uploadedfiles/old.txt" ]
+assert "restore: the uploads of the aside directory are back, the current ones are not left in place" $?
+find "$TMP/media" -path '*/previous-*/uploadedfiles/old.txt' | grep -q . && [ -f "$ASIDE/uploadedfiles/before.txt" ]
+assert "restore: the replaced uploads are kept aside and the source aside stays intact" $?
+[ "$(stat -c %a "$TMP/media/uploadedfiles")" = 750 ] && [ "$(stat -c %a "$TMP/media/uploadedfiles/before.txt")" = 640 ]
+assert "restore: directories 0750 and files 0640" $?
+grep -q "RESTORE_BEFORE=" "$TMP/out" && grep -q "done: $ASIDE is restored" "$TMP/out"
+assert "restore: reports how to undo it in turn and its end" $?
 
 exit "$failed"

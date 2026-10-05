@@ -65,7 +65,7 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 ## 4. Baseline
 
 - [ ] `scp host-baseline.sh verify-baseline.sh rehearsal.env <admin>@192.168.123.10:` (`<admin>` = `ADMIN_USER` of your `rehearsal.env`). After rebuilding the VM: `ssh-keygen -R 192.168.123.10`.
-- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`: every line of `verify-baseline.sh` starts with `OK`, exit code 0. The baseline also writes `/etc/manuspectrum/rehearsal-host` (the marker `make load-snapshot` requires; never create it on production). The script can be re-run; what is already in place is reported as "already done".
+- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`: every line of `verify-baseline.sh` starts with `OK`, exit code 0. When `rehearsal.env` sets `REHEARSAL_HOST=yes` (the example does; never set it on a production host) the baseline also writes `/etc/manuspectrum/rehearsal-host`, the marker `make load-snapshot` requires, and `verify-baseline.sh` checks it; without it no marker is written. The script can be re-run; what is already in place is reported as "already done".
 - [ ] If the Docker repository does not have the Ubuntu 26.04 suite yet, the script stops and suggests `DOCKER_APT_CODENAME=noble` in `rehearsal.env`; it never falls back silently. Note the suite actually used in production.
 - [ ] Shut the VM down (`virsh -c qemu:///system shutdown ms-rehearsal`) then `virsh -c qemu:///system snapshot-create-as ms-rehearsal baseline`: the starting point of every rehearsal, equivalent to the VM as delivered. Restart: `virsh -c qemu:///system start ms-rehearsal`.
 
@@ -147,10 +147,11 @@ and again, from one snapshot directory.
   also requires the host marker `/etc/manuspectrum/rehearsal-host`, written by `host-baseline.sh`
   in the VM and checked by `verify-baseline.sh`; without it (a production host) the command is
   refused whatever `.env` says.
-- [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes`. Before anything is changed, a
-  preflight refuses a snapshot holding a migration the image does not know, warns when the image
-  has newer migrations or another Arches major.minor, and checks `sudo -n` to the service account
-  and the free space (`MEDIA_HOST_DIR` and the Docker data root). Then it dumps the current
+- [ ] `sudo -u <service-account> make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` (or as root; the
+  uploads are then handled as the service account through `setpriv`; any other account is refused). Before anything is changed, a
+  preflight refuses a snapshot holding a migration of an installed app that the image does not know
+  (migrations of apps the image does not install, silk for instance, give one warning), warns when
+  the image has newer migrations or another Arches major.minor, and checks the free space (`MEDIA_HOST_DIR` and the Docker data root). Then it dumps the current
   database, replaces the database and the uploads, flushes the Redis caches and the Celery queues
   (redis-cache `FLUSHALL`; redis-broker databases 0, the Celery queue, and 3, the IIIF sign-ins,
   which a rehearsal does not keep), clears the Cantaloupe derivative cache and recreates
@@ -159,10 +160,13 @@ and again, from one snapshot directory.
   Cantaloupe sees the new uploads.
 - [ ] What is replaced is kept in `previous-<timestamp>/` under `MEDIA_HOST_DIR`: the previous
   uploads (the `uploadedfiles/` directory itself stays in place, it is Cantaloupe's mount) and
-  `rehearsal-before.dump`, the previous database. Only the last two such directories are kept; the
-  command prints what it removes. To undo a load, restore the database
-  (`docker compose --project-directory deploy/compose -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml exec -T postgres pg_restore --clean --if-exists --no-owner -U <PGUSERNAME> -d <PGDBNAME> < previous-<timestamp>/rehearsal-before.dump`)
-  and move the contents of `previous-<timestamp>/uploadedfiles/` back, then run `make -C deploy up`.
+  `rehearsal-before.dump`, the previous database. The aside path is logged when it is created. A run that finishes writes `previous-<timestamp>/.complete`;
+  only the two newest complete directories are kept and the command prints what it keeps and removes. A
+  directory without `.complete` (a failed run) is never removed.
+- [ ] To undo a load: `sudo -u <service-account> make -C deploy load-snapshot RESTORE_BEFORE=<MEDIA_HOST_DIR>/previous-<timestamp>-<id> CONFIRM=yes`.
+  It restores `rehearsal-before.dump` and a copy of `uploadedfiles/` through the same steps and guards
+  as a load (drop and recreate the database, Redis flush, Cantaloupe cache, migrate, reindex, smoke);
+  the state it replaces is kept in a new aside directory. It refuses when the dump is missing.
 - [ ] Reload any time with the same command; to start again from a snapshot of an older
   development state, make a new snapshot.
 

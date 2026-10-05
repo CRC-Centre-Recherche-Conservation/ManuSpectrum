@@ -57,8 +57,8 @@ admin-password: ## Set the admin password from the admin_password secret (first 
 manage: ## Run a management command, interactive: make -C deploy manage ARGS="changepassword admin"
 	$(COMPOSE) run --rm --no-deps web manage $(ARGS)
 
-load-snapshot: ## Rehearsal only: replace the data with a dev snapshot: make -C deploy load-snapshot SNAPSHOT=/path CONFIRM=yes
-	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' \
+load-snapshot: ## Rehearsal only: replace the data with a dev snapshot (SNAPSHOT=/path) or an aside directory (RESTORE_BEFORE=/path), CONFIRM=yes
+	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' RESTORE_BEFORE='$(RESTORE_BEFORE)' \
 		$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/load-snapshot.sh '$(SNAPSHOT)'
 
 # `up --wait` refuses a service whose healthcheck is disabled, and beat has

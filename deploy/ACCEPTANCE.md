@@ -396,22 +396,28 @@ research data: never in Git, never in a public place.
 
 - [ ] *(service account)* `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`
   (step 2.2), and `ls -l /etc/manuspectrum/rehearsal-host` → a root-owned file (written by
-  `host-baseline.sh`, checked by `verify-baseline.sh`).
+  `host-baseline.sh` when `rehearsal.env` sets `REHEARSAL_HOST=yes`, checked by `verify-baseline.sh` then).
   - On failure: the command needs both guards. A production host has `production` and no marker
     file, and the command is refused there whatever `.env` says.
 - [ ] `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
 - [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → fourteen `load-snapshot: step n/14`
   lines, `checksums match`, `preflight: ok`, counts `equal to the manifest` (or a `WARNING` naming
   the difference a migration explains), `done: the snapshot is loaded`.
-  - A snapshot holding a migration the image does not know is refused before anything is changed.
+  - A snapshot holding a migration of an installed app that the image does not know is refused before
+    anything is changed; migrations of apps the image does not install (silk, for instance) give one warning.
+  - The command runs as the service account (`sudo -u <service-account> make -C deploy load-snapshot ...`)
+    or as root (uploads handled as the service account through `setpriv`); another account is refused.
   - On failure: a `sha256 mismatch` means the copy is damaged, copy it again; a `pg_restore failed`
     names the first errors, the database is incomplete, run the command again (it recreates it);
     a failing step stops the run, fix it and run the command again.
 - [ ] `make -C deploy smoke` → only `ok:` lines; `ls -d /data/manuspectrum/media/previous-*` →
   the previous uploads and `rehearsal-before.dump` (the database as it was), kept; only the last
-  two such directories are kept. To undo a load:
-  `docker compose ... exec -T postgres pg_restore --clean --if-exists --no-owner -U <PGUSERNAME> -d <PGDBNAME> < previous-<stamp>/rehearsal-before.dump`
-  (see `deploy/rehearsal/README.md`).
+  two complete such directories are kept (a directory without `.complete`, left by a failed run, is
+  never removed). The command logs the aside path when it creates it.
+- [ ] Undo a load: `sudo -u <service-account> make -C deploy load-snapshot RESTORE_BEFORE=<MEDIA_HOST_DIR>/previous-<stamp>-<id> CONFIRM=yes`
+  → the same fourteen steps, restoring `rehearsal-before.dump` and a copy of `uploadedfiles/`
+  from that directory (the migration check and the counts are skipped, there is no manifest);
+  refused when `rehearsal-before.dump` is missing; `smoke` is `ok:` afterwards.
 - [ ] The dev admin password does not survive: `deploy/compose/smoke.sh check` is `ok:` and logging in as
   `admin` with the development password fails; with the `admin_password` secret it succeeds.
 

@@ -33,7 +33,7 @@ done
 
 # Values given in the environment win over the variables file.
 declare -A caller_env=()
-for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT NFS_EXPORT_DIR DOCKER_APT_CODENAME NFS_VERS; do
+for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT NFS_EXPORT_DIR DOCKER_APT_CODENAME NFS_VERS REHEARSAL_HOST; do
   [ -z "${!v+x}" ] || caller_env[$v]="${!v}"
 done
 if [ -f "$env_file" ]; then
@@ -61,6 +61,7 @@ if [ "$NFS_EXPORT" != "$NFS_EXPORT_DIR" ]; then
   exit 1
 fi
 DOCKER_APT_CODENAME="${DOCKER_APT_CODENAME:-}"
+REHEARSAL_HOST="${REHEARSAL_HOST:-no}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "This script must be run as root (sudo)." >&2
@@ -227,12 +228,16 @@ fi
 
 echo "== Rehearsal host marker"
 # load-snapshot.sh refuses to replace a database on a host without this file,
-# whatever DEPLOY_ENVIRONMENT says. Only this script, run in the rehearsal VM,
-# creates it.
-write_file /etc/manuspectrum/rehearsal-host <<'MARKER' || true
+# whatever DEPLOY_ENVIRONMENT says. Written only when rehearsal.env sets
+# REHEARSAL_HOST=yes, so replaying this script on another host never marks it.
+if [ "$REHEARSAL_HOST" = yes ]; then
+  write_file /etc/manuspectrum/rehearsal-host <<'MARKER' || true
 This host is the ManuSpectrum rehearsal VM: `make load-snapshot` may replace its database.
 Created by deploy/rehearsal/host-baseline.sh. Never create this file on a production host.
 MARKER
+else
+  echo "No marker written: REHEARSAL_HOST is not 'yes' in rehearsal.env (make load-snapshot stays refused on this host)."
+fi
 
 echo "== Automatic updates"
 write_file /etc/apt/apt.conf.d/50unattended-upgrades <<UU || true
