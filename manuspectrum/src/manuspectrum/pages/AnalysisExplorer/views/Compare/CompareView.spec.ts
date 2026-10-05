@@ -651,7 +651,7 @@ describe("CompareView", () => {
         expect(view.find(".grid-stack").exists()).toBe(false);
         expect(view.find(".hidden-windows").exists()).toBe(false);
         expect(storedLayout()).toEqual({
-            version: 2,
+            version: 3,
             boxes: {},
             hidden: [],
             folded: {},
