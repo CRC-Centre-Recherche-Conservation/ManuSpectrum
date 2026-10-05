@@ -85,6 +85,9 @@ DB_USER="$(field user)"
 DB_PASSWORD="$(field password)"
 MEDIA_ROOT="$(field media_root)"
 UPLOADS="$(field uploads)"
+# The password leaves the JSON here: later child processes (the manifest
+# writer) inherit INFO_LINE and must not see it.
+info_line="$(printf '%s' "$info_line" | "$PY" -c 'import json,sys; v=json.load(sys.stdin); v.pop("password", None); print(json.dumps(v))')"
 
 [ -d "$MEDIA_ROOT/$UPLOADS" ] || die "no uploaded files directory: $MEDIA_ROOT/$UPLOADS"
 
@@ -95,6 +98,7 @@ pg_args=(--username "$DB_USER" --dbname "$DB_NAME")
 log "dumping database $DB_NAME to db.dump"
 PGPASSWORD="$DB_PASSWORD" pg_dump -Fc --no-owner --no-privileges --exclude-table='silk_*' \
   "${pg_args[@]}" --file "$OUT/db.dump"
+unset DB_PASSWORD
 
 log "archiving $MEDIA_ROOT/$UPLOADS to media.tar"
 tar -C "$MEDIA_ROOT" -cf "$OUT/media.tar" "$UPLOADS"

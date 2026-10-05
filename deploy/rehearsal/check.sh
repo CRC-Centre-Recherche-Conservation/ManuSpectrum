@@ -52,6 +52,9 @@ bash "$HERE/tests/test_make_dev_snapshot.sh"
 step "storage directory tests"
 bash "$HERE/tests/test_storage.sh"
 
+step "rehearsal marker tests"
+bash "$HERE/tests/test_rehearsal_marker.sh"
+
 step "autoinstall schema"
 validator=()
 if command -v uvx >/dev/null 2>&1; then

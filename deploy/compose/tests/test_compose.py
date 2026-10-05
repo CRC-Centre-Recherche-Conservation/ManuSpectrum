@@ -338,6 +338,11 @@ class RepositoryRulesTests(unittest.TestCase):
         for forbidden in ("down -v", "--volumes", "volume rm", "prune"):
             self.assertNotIn(forbidden, makefile)
 
+    def test_env_example_ships_production_as_the_environment(self):
+        text = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(text, r"(?m)^DEPLOY_ENVIRONMENT=production$")
+        self.assertNotRegex(text, r"(?m)^DEPLOY_ENVIRONMENT=rehearsal")
+
     def test_env_example_has_no_host_specific_value(self):
         text = (COMPOSE_DIR / ".env.example").read_text()
         addresses = set(re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", text)) - {

@@ -17,6 +17,8 @@ echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeFakeFakeFakeFakeFakeFakeFakeFake0
 # STUB_DENY_X: space-separated paths the qemu user cannot traverse.
 cat >"$TMP/bin/sudo" <<'STUB'
 #!/bin/sh
+[ "$1" != -n ] || shift
+[ -z "$STUB_SUDO_FAIL" ] || exit 1
 if [ "$1" = -u ] && [ "$3" = test ]; then
   for denied in $STUB_DENY_X; do
     [ "$4" = -x ] && [ "$5" = "$denied" ] && exit 1
@@ -25,7 +27,8 @@ if [ "$1" = -u ] && [ "$3" = test ]; then
 fi
 exit 0
 STUB
-# STUB_FS: filesystem type; STUB_MOUNT: mount point; STUB_IN_FSTAB: 1 or 0.
+# STUB_FS: what stat reports; STUB_FS_MNT: what findmnt reports (the kernel's
+# name); STUB_LSBLK_FS: the type of the device behind a fuseblk mount; STUB_MOUNT: mount point; STUB_IN_FSTAB: 1 or 0.
 cat >"$TMP/bin/stat" <<'STUB'
 #!/bin/sh
 echo "${STUB_FS:-ext2/ext3}"
@@ -36,9 +39,14 @@ case "$*" in
   *--fstab*) [ "${STUB_IN_FSTAB:-1}" = 1 ] && echo "${STUB_MOUNT:-/}" ;;
   *"-no TARGET"*) echo "${STUB_MOUNT:-/}" ;;
   *"-no UUID"*) echo 1111-2222 ;;
-  *"-no FSTYPE"*) echo ext4 ;;
+  *"-no FSTYPE"*) echo "${STUB_FS_MNT:-ext4}" ;;
+  *"-no SOURCE"*) echo /dev/stub1 ;;
 esac
 exit 0
+STUB
+cat >"$TMP/bin/lsblk" <<'STUB'
+#!/bin/sh
+echo "${STUB_LSBLK_FS:-}"
 STUB
 cat >"$TMP/bin/id" <<'STUB'
 #!/bin/sh
@@ -91,19 +99,31 @@ vm "$TMP/images.env" IMAGES_DIR="$TMP/other"
 grep -q "$TMP/other/ms-rehearsal.qcow2" "$TMP/out" && ! grep -q "$TMP/images/ms-rehearsal.qcow2" "$TMP/out"
 assert "an IMAGES_DIR given in the environment wins over rehearsal.env" $?
 
-vm "$TMP/images.env" STUB_FS=msdos && status=0 || status=$?
-[ "$status" -ne 0 ] && grep -q 'msdos filesystem' "$TMP/out"
+vm "$TMP/images.env" STUB_FS_MNT=vfat && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q 'vfat filesystem' "$TMP/out"
 assert "make-vm refuses a vfat IMAGES_DIR" $?
 
-vm "$TMP/images.env" STUB_FS=fuseblk && status=0 || status=$?
-[ "$status" -eq 0 ] && grep -q 'fuseblk' "$TMP/out"
-assert "make-vm warns on fuseblk and continues" $?
+vm "$TMP/images.env" STUB_FS_MNT=exfat STUB_FS="UNKNOWN (0x2011bab0)" && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q 'exfat filesystem' "$TMP/out"
+assert "make-vm refuses exfat that an old stat reports as UNKNOWN" $?
+
+vm "$TMP/images.env" STUB_FS_MNT=fuseblk STUB_LSBLK_FS=ntfs && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q 'ntfs filesystem' "$TMP/out"
+assert "make-vm refuses fuseblk whose device is ntfs" $?
+
+vm "$TMP/images.env" STUB_FS_MNT=fuseblk STUB_LSBLK_FS=ext4 STUB_MOUNT=/media/someone/disk STUB_IN_FSTAB=0 && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'fuseblk' "$TMP/out" && ! grep -q ' fuseblk  defaults' "$TMP/out"
+assert "make-vm warns on fuseblk, continues, and never suggests fuseblk as the fstab type" $?
 
 vm "$TMP/images.env" STUB_DENY_X="$TMP" && status=0 || status=$?
 grep -q "sudo setfacl -m u:libvirt-qemu:x $TMP\$" "$TMP/out" \
   && grep -q "sudo setfacl -m u:libvirt-qemu:rwx $TMP/images\$" "$TMP/out" \
   && ! grep -q 'setfacl -m u:libvirt-qemu:x /$' "$TMP/out"
 assert "a parent without traverse permission prints the exact setfacl commands" $?
+
+vm "$TMP/images.env" STUB_SUDO_FAIL=1 && status=0 || status=$?
+[ "$status" -eq 0 ] && [ "$(grep -c 'sudo needs a password' "$TMP/out")" -eq 1 ] && ! grep -q 'setfacl' "$TMP/out"
+assert "without sudo the ACL probe says so once and reports no failing parent" $?
 
 echo "IMAGES_DIR=$TMP/absent" >"$TMP/absent.env"
 vm "$TMP/absent.env" || true
@@ -121,7 +141,7 @@ vm "$TMP/images.env" STUB_MOUNT=/media/someone/disk STUB_IN_FSTAB=1
 assert "a mount listed in fstab raises no warning" $?
 
 echo "NFS_EXPORT_DIR=$TMP/export" >"$TMP/export.env"
-nfs "$TMP/export.env" STUB_FS=exfat && status=0 || status=$?
+nfs "$TMP/export.env" STUB_FS_MNT=exfat && status=0 || status=$?
 [ "$status" -ne 0 ] && grep -q 'exfat filesystem' "$TMP/out"
 assert "host-nfs refuses an exfat NFS_EXPORT_DIR" $?
 
@@ -132,5 +152,15 @@ assert "host-nfs warns on an export under an unlisted mount" $?
 nfs "$TMP/empty.env" NFS_EXPORT_DIR=/tmp/with" "space && status=0 || status=$?
 [ "$status" -ne 0 ] && grep -q 'Invalid NFS_EXPORT_DIR' "$TMP/out"
 assert "host-nfs rejects an unsafe NFS_EXPORT_DIR" $?
+
+for bad in / /etc /usr /var /home /root /boot /srv /srv/ ; do
+  nfs "$TMP/empty.env" NFS_EXPORT_DIR="$bad" && status=0 || status=$?
+  [ "$status" -ne 0 ] && grep -q 'Invalid NFS_EXPORT_DIR' "$TMP/out"
+  assert "host-nfs refuses the system directory $bad itself" $?
+done
+
+nfs "$TMP/empty.env" NFS_EXPORT_DIR=/srv/ms-rehearsal-data && status=0 || status=$?
+! grep -q 'Invalid NFS_EXPORT_DIR' "$TMP/out"
+assert "host-nfs accepts a sub-directory of /srv" $?
 
 exit "$failed"

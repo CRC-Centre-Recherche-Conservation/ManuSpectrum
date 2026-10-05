@@ -109,6 +109,8 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   - Expected: every line starts with `OK`, exit code `0` (`echo $?`).
   - If a `MISMATCH` line appears: note the line and the output of the matching command.
 - [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then `sudo ./verify-baseline.sh` → everything `OK`.
+- [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
+  `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
 - [ ] `findmnt /data` → type `nfs4`, version `NFS_VERS` in the options.
 - [ ] `sudo touch /data/.t && sudo chown 1000 /data/.t; ls -ln /data/.t; sudo rm /data/.t`
   → the result (owner changed or not) matches the NFS options of `rehearsal.env`
@@ -198,6 +200,10 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   `APP_UID`, `APP_GID` (`id -u`, `id -g`), `MEDIA_HOST_DIR`, `DOMAIN_NAMES` and
   `PUBLIC_SERVER_ADDRESS` to the rehearsal values; leave `MANUSPECTRUM_IMAGE=manuspectrum:local`.
   Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`.
+- [ ] *(service account, rehearsal VM only)* the template ships `DEPLOY_ENVIRONMENT=production`;
+  the rehearsal VM sets it explicitly: `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`.
+  Check: `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
+  A production host leaves `production`.
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
   files; the commands by hand are in `deploy/compose/secrets/README.md`);
   `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`,
@@ -388,17 +394,24 @@ A snapshot made on the development machine with `deploy/rehearsal/make-dev-snaps
 (see `deploy/rehearsal/README.md`) is copied to the VM. It holds user accounts and
 research data: never in Git, never in a public place.
 
-- [ ] *(service account)* `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
-  - On failure: add the line; a production host sets `production` and the command is refused there.
+- [ ] *(service account)* `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`
+  (step 2.2), and `ls -l /etc/manuspectrum/rehearsal-host` → a root-owned file (written by
+  `host-baseline.sh`, checked by `verify-baseline.sh`).
+  - On failure: the command needs both guards. A production host has `production` and no marker
+    file, and the command is refused there whatever `.env` says.
 - [ ] `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
-- [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → twelve `load-snapshot: step n/12`
-  lines, `checksums match`, counts `equal to the manifest` (or a `WARNING` naming the difference
-  a migration explains), `done: the snapshot is loaded`.
+- [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → fourteen `load-snapshot: step n/14`
+  lines, `checksums match`, `preflight: ok`, counts `equal to the manifest` (or a `WARNING` naming
+  the difference a migration explains), `done: the snapshot is loaded`.
+  - A snapshot holding a migration the image does not know is refused before anything is changed.
   - On failure: a `sha256 mismatch` means the copy is damaged, copy it again; a `pg_restore failed`
     names the first errors, the database is incomplete, run the command again (it recreates it);
     a failing step stops the run, fix it and run the command again.
 - [ ] `make -C deploy smoke` → only `ok:` lines; `ls -d /data/manuspectrum/media/previous-*` →
-  the previous uploads, kept.
+  the previous uploads and `rehearsal-before.dump` (the database as it was), kept; only the last
+  two such directories are kept. To undo a load:
+  `docker compose ... exec -T postgres pg_restore --clean --if-exists --no-owner -U <PGUSERNAME> -d <PGDBNAME> < previous-<stamp>/rehearsal-before.dump`
+  (see `deploy/rehearsal/README.md`).
 - [ ] The dev admin password does not survive: `deploy/compose/smoke.sh check` is `ok:` and logging in as
   `admin` with the development password fails; with the `admin_password` secret it succeeds.
 

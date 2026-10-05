@@ -65,7 +65,7 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 ## 4. Baseline
 
 - [ ] `scp host-baseline.sh verify-baseline.sh rehearsal.env <admin>@192.168.123.10:` (`<admin>` = `ADMIN_USER` of your `rehearsal.env`). After rebuilding the VM: `ssh-keygen -R 192.168.123.10`.
-- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`: every line of `verify-baseline.sh` starts with `OK`, exit code 0. The script can be re-run; what is already in place is reported as "already done".
+- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`: every line of `verify-baseline.sh` starts with `OK`, exit code 0. The baseline also writes `/etc/manuspectrum/rehearsal-host` (the marker `make load-snapshot` requires; never create it on production). The script can be re-run; what is already in place is reported as "already done".
 - [ ] If the Docker repository does not have the Ubuntu 26.04 suite yet, the script stops and suggests `DOCKER_APT_CODENAME=noble` in `rehearsal.env`; it never falls back silently. Note the suite actually used in production.
 - [ ] Shut the VM down (`virsh -c qemu:///system shutdown ms-rehearsal`) then `virsh -c qemu:///system snapshot-create-as ms-rehearsal baseline`: the starting point of every rehearsal, equivalent to the VM as delivered. Restart: `virsh -c qemu:///system start ms-rehearsal`.
 
@@ -141,17 +141,34 @@ and again, from one snapshot directory.
   database password.
 - [ ] Copy it: `scp -r ~/ms-snapshots/ms-snapshot-<date> <admin>@192.168.123.10:`, then
   move it where the service account reads it.
-- [ ] On the VM, as the service account, with `DEPLOY_ENVIRONMENT=rehearsal` in `deploy/compose/.env`:
-  `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes`. It replaces the database and the
-  uploads (the previous uploads are kept in `previous-<timestamp>/` under `MEDIA_HOST_DIR`),
-  migrates, replaces the admin password with the `admin_password` secret, reindexes
-  Elasticsearch, compares the counts with the manifest and runs `make smoke`.
+- [ ] On the VM, as the service account, set the environment explicitly: the template
+  `deploy/compose/.env.example` ships `DEPLOY_ENVIRONMENT=production`, so run
+  `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`. The command
+  also requires the host marker `/etc/manuspectrum/rehearsal-host`, written by `host-baseline.sh`
+  in the VM and checked by `verify-baseline.sh`; without it (a production host) the command is
+  refused whatever `.env` says.
+- [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes`. Before anything is changed, a
+  preflight refuses a snapshot holding a migration the image does not know, warns when the image
+  has newer migrations or another Arches major.minor, and checks `sudo -n` to the service account
+  and the free space (`MEDIA_HOST_DIR` and the Docker data root). Then it dumps the current
+  database, replaces the database and the uploads, flushes the Redis caches and the Celery queues
+  (redis-cache `FLUSHALL`; redis-broker databases 0, the Celery queue, and 3, the IIIF sign-ins,
+  which a rehearsal does not keep), clears the Cantaloupe derivative cache and recreates
+  Cantaloupe, migrates, replaces the admin password with the `admin_password` secret, reindexes
+  Elasticsearch, compares the counts with the manifest, runs `make smoke` and checks that
+  Cantaloupe sees the new uploads.
+- [ ] What is replaced is kept in `previous-<timestamp>/` under `MEDIA_HOST_DIR`: the previous
+  uploads (the `uploadedfiles/` directory itself stays in place, it is Cantaloupe's mount) and
+  `rehearsal-before.dump`, the previous database. Only the last two such directories are kept; the
+  command prints what it removes. To undo a load, restore the database
+  (`docker compose --project-directory deploy/compose -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml exec -T postgres pg_restore --clean --if-exists --no-owner -U <PGUSERNAME> -d <PGDBNAME> < previous-<timestamp>/rehearsal-before.dump`)
+  and move the contents of `previous-<timestamp>/uploadedfiles/` back, then run `make -C deploy up`.
 - [ ] Reload any time with the same command; to start again from a snapshot of an older
   development state, make a new snapshot.
 
 **Data protection.** The snapshot contains user accounts and research data. Never put it in
 Git, never in a public place; delete it from the VM and from the host when the rehearsal
-is over. The command refuses to run unless the stack declares itself a rehearsal.
+is over. The command refuses to run unless the stack declares itself a rehearsal twice: `DEPLOY_ENVIRONMENT=rehearsal` in `.env` and the host marker file.
 
 ## Checks
 

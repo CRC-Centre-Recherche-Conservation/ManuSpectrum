@@ -144,6 +144,9 @@ check "unattended-upgrades: four origins" "$rc"
 rc=0; [ "$(grep -c '^APT::Periodic' /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null)" -eq 4 ] || rc=1
 check "20auto-upgrades: four APT::Periodic lines" "$rc"
 
+rc=0; [ "$(stat -c '%U:%a' /etc/manuspectrum/rehearsal-host 2>/dev/null)" = "root:644" ] || rc=1
+check "rehearsal host marker /etc/manuspectrum/rehearsal-host (root, 0644)" "$rc"
+
 systemctl is-active --quiet postfix
 check "postfix active" "$?"
 rc=0; [ "$(postconf -h relayhost 2>/dev/null)" = "$SMTP_RELAY" ] || rc=1

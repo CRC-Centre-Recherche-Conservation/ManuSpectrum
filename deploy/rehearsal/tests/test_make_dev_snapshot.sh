@@ -16,6 +16,7 @@ echo data >"$TMP/media/uploadedfiles/a.txt"
 
 cat >"$TMP/bin/python" <<STUB
 #!/bin/sh
+if [ "\$1" = - ] && [ -n "\$ENVDUMP" ]; then env >"\$ENVDUMP"; fi
 if [ "\$1" = manage.py ]; then
   echo "noise from django"
   echo 'MSSNAP {"host": "localhost", "port": "5432", "name": "ms", "user": "u", "password": "$SECRET", "media_root": "$TMP/media", "uploads": "uploadedfiles", "arches": "8.1.4", "resources": 5, "tiles": 12, "migrations": {"arches": "0001", "manuspectrum": "0005"}}'
@@ -41,7 +42,7 @@ assert() { # assert DESCRIPTION CONDITION-EXIT-CODE
   if [ "$2" -eq 0 ]; then echo "ok $n - $1"; else echo "not ok $n - $1"; failed=1; fi
 }
 
-run_snap() { env PATH="$TMP/bin:$PATH" CALLS="$TMP/calls" bash "$SNAP" --python "$TMP/bin/python" --repo "$TMP/repo" "$@" >"$TMP/out" 2>&1; }
+run_snap() { env PATH="$TMP/bin:$PATH" CALLS="$TMP/calls" ENVDUMP="$TMP/pyenv" bash "$SNAP" --python "$TMP/bin/python" --repo "$TMP/repo" "$@" >"$TMP/out" 2>&1; }
 
 mkdir -p "$TMP/busy"
 echo x >"$TMP/busy/file"
@@ -55,6 +56,9 @@ assert "nominal run exits 0" "$status"
 
 ! grep -qF "$SECRET" "$TMP/out" && ! grep -rqF "$SECRET" "$TMP/snap" "$TMP/calls"
 assert "the password is never printed, written or put on a command line" $?
+
+[ -s "$TMP/pyenv" ] && ! grep -qF "$SECRET" "$TMP/pyenv" && ! grep -q '^PGPASSWORD=' "$TMP/pyenv"
+assert "the password is in no later child's environment (the manifest writer sees none)" $?
 
 grep -q 'PGPASSWORD=set' "$TMP/calls" && grep -q -- "--exclude-table=silk_\*" "$TMP/calls" \
   && grep -q -- "-Fc --no-owner --no-privileges" "$TMP/calls"

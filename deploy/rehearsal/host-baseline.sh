@@ -225,6 +225,15 @@ elif ! mount /data; then
   exit 1
 fi
 
+echo "== Rehearsal host marker"
+# load-snapshot.sh refuses to replace a database on a host without this file,
+# whatever DEPLOY_ENVIRONMENT says. Only this script, run in the rehearsal VM,
+# creates it.
+write_file /etc/manuspectrum/rehearsal-host <<'MARKER' || true
+This host is the ManuSpectrum rehearsal VM: `make load-snapshot` may replace its database.
+Created by deploy/rehearsal/host-baseline.sh. Never create this file on a production host.
+MARKER
+
 echo "== Automatic updates"
 write_file /etc/apt/apt.conf.d/50unattended-upgrades <<UU || true
 Unattended-Upgrade::Allowed-Origins {
