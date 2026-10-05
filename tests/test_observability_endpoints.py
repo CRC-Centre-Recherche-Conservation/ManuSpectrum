@@ -1,3 +1,7 @@
+import os
+import tempfile
+from unittest import mock
+
 from django.core.signals import request_finished, request_started
 from django.test import TestCase, modify_settings, override_settings
 from prometheus_client.parser import text_string_to_metric_families
@@ -34,6 +38,14 @@ class MetricsViewTests(TestCase):
             self.client.get("/metrics", HTTP_X_FORWARDED_FOR="203.0.113.9").status_code,
             404,
         )
+
+    @override_settings(METRICS_ENABLED=True)
+    def test_multiprocess_exposition_goes_through_the_archive_safe_collector(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(os.environ, {"PROMETHEUS_MULTIPROC_DIR": directory}):
+                response = self.client.get("/metrics")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("manuspectrum_metrics_dir_bytes", response.content.decode())
 
     @override_settings(METRICS_ENABLED=True)
     @PROMETHEUS

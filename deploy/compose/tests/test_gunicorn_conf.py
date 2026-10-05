@@ -79,6 +79,23 @@ class GunicornConfTests(unittest.TestCase):
             conf["child_exit"](None, mock.Mock(pid=4242))
         archive.assert_called_once_with(4242)
 
+    def test_a_failing_archive_never_reaches_the_arbiter(self):
+        conf = load(PROMETHEUS_MULTIPROC_DIR="/run/prometheus")
+        fake = mock.Mock(archive_dead_process=mock.Mock(side_effect=RuntimeError("x")))
+        server = mock.Mock()
+        with (
+            mock.patch.dict(
+                conf["child_exit"].__globals__, {"_multiproc": lambda: fake}
+            ),
+            mock.patch.dict(
+                os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/run/prometheus"}
+            ),
+        ):
+            conf["child_exit"](server, mock.Mock(pid=4242))
+        message = server.log.error.call_args.args
+        self.assertIn("4242", message[0] % message[1:])
+        self.assertIn("RuntimeError", message[0] % message[1:])
+
     def test_the_archive_module_is_where_the_hook_loads_it_from(self):
         conf = load()
         path = Path(conf["chdir"]) / "manuspectrum" / "observability" / "multiproc.py"

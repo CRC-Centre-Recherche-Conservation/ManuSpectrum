@@ -26,6 +26,10 @@ UP = lambda *args: None  # noqa: E731
 @ON
 class ReadyzTests(TestCase):
     def setUp(self):
+        for target, value in (("_gate", threading.Lock()), ("_last", None)):
+            patcher = patch.object(health, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         for name in (
             "probe_elasticsearch",
             "probe_broker",
@@ -157,6 +161,48 @@ class ReadyzTests(TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(reports), 5)
         self.assertTrue(all(report["status"] == "ready" for report in reports))
+
+    def test_a_waiter_that_reuses_the_report_releases_the_gate(self):
+        calls = []
+
+        def slow(timeout):
+            calls.append(1)
+            time.sleep(0.3)
+
+        reports = []
+        with patch.object(health, "probe_cantaloupe", slow):
+            threads = [
+                threading.Thread(target=lambda: reports.append(health.readiness()))
+                for _ in range(2)
+            ]
+            for thread in threads:
+                thread.start()
+                time.sleep(0.05)
+            for thread in threads:
+                thread.join()
+            self.assertEqual(len(calls), 1)
+            self.assertFalse(health._gate.locked())
+            health._last = (time.monotonic() - 3, health._last[1])
+            report = health.readiness()
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(report["status"], "ready")
+        self.assertFalse(health._gate.locked())
+
+    def test_the_gate_is_free_after_every_path(self):
+        health.readiness()
+        self.assertFalse(health._gate.locked())
+        with patch.object(health, "_evaluate", side_effect=RuntimeError("x")):
+            with self.assertRaises(RuntimeError):
+                health.readiness()
+        self.assertFalse(health._gate.locked())
+        health._gate.acquire()
+        try:
+            health._last = None
+            report = health.readiness()
+            self.assertEqual(report["status"], "not ready")
+        finally:
+            health._gate.release()
+        self.assertFalse(health._gate.locked())
 
     def test_sequential_calls_each_evaluate(self):
         calls = []

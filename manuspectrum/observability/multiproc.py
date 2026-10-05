@@ -21,10 +21,15 @@ file format, then deletes them:
 - any other gauge mode (``all``, ``min``, ``max``, ``sum``; the project's
   ``metrics.gauge()`` allows neither) is left as the library leaves it.
 
-An ``flock`` on ``.archive.lock`` serialises concurrent archivers. The archive's
-pid label for a gauge reads ``archive``. The gauge
-``manuspectrum_metrics_dir_bytes`` (mostrecent), written into the gauge archive
-on each call, reports the bytes the directory occupies.
+An ``flock`` on ``.archive.lock`` serialises concurrent archivers (``LOCK_EX``) and
+keeps a scrape from reading half of a merge: ``ArchiveSafeCollector`` takes ``LOCK_SH``
+around ``collect()``. The archive's pid label for a gauge reads ``archive``. The collector
+also reports ``manuspectrum_metrics_dir_bytes``, the bytes the directory occupies at
+scrape time.
+
+A crash between the merge of a file and its removal leaves both, and the file is counted
+twice from then on; the web container restarts empty, a Celery child killed at shutdown
+leaves a one-off jump.
 
 This module imports only the standard library and prometheus_client: gunicorn's
 arbiter loads it without Django.
@@ -34,10 +39,10 @@ import fcntl
 import glob
 import json
 import os
-import time
 
 from prometheus_client import multiprocess
-from prometheus_client.mmap_dict import MmapedDict, mmap_key
+from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.mmap_dict import MmapedDict
 
 SUMMED_TYPES = ("counter", "histogram", "summary")
 DIR_BYTES_NAME = "manuspectrum_metrics_dir_bytes"
@@ -84,13 +89,28 @@ def _newest_into(archive, rows):
         store.close()
 
 
-def _write_dir_bytes(path):
-    key = mmap_key(DIR_BYTES_NAME, DIR_BYTES_NAME, [], [], DIR_BYTES_HELP)
-    store = MmapedDict(os.path.join(path, "gauge_mostrecent_archive.db"))
-    try:
-        store.write_value(key, float(directory_bytes(path)), time.time())
-    finally:
-        store.close()
+class ArchiveSafeCollector(multiprocess.MultiProcessCollector):
+    """``MultiProcessCollector`` that reads under a shared lock on ``.archive.lock``,
+    so an archive never runs between two of its file reads, and that adds the
+    ``manuspectrum_metrics_dir_bytes`` gauge. Without the lock file (unwritable
+    directory) it reads as the library does."""
+
+    def collect(self):
+        try:
+            lock = open(os.path.join(self._path, _LOCK), "a")
+        except OSError:
+            lock = None
+        try:
+            if lock is not None:
+                fcntl.flock(lock, fcntl.LOCK_SH)
+            families = list(super().collect())
+            size = GaugeMetricFamily(DIR_BYTES_NAME, DIR_BYTES_HELP)
+            size.add_metric([], float(directory_bytes(self._path)))
+            families.append(size)
+            return families
+        finally:
+            if lock is not None:
+                lock.close()
 
 
 def archive_dead_process(pid, path=None):
@@ -113,6 +133,5 @@ def archive_dead_process(pid, path=None):
                     os.path.join(path, "gauge_mostrecent_archive.db"), _read(source)
                 )
                 os.remove(source)
-            _write_dir_bytes(path)
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)

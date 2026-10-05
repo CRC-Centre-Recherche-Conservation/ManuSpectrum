@@ -426,14 +426,14 @@ def _rebuild_in_background(held, user, build):
         finally:
             try:
                 if not kept:
-                    metrics.EXPLORER_REBUILD_FAILURES.labels(
-                        language=metrics.language_label(held.language)
-                    ).inc()
                     cache.set(
                         failed,
                         1,
                         getattr(settings, "EXPLORER_REBUILD_RETRY_AFTER", 60),
                     )
+                    metrics.EXPLORER_REBUILD_FAILURES.labels(
+                        language=metrics.language_label(held.language)
+                    ).inc()
                 elif getattr(settings, "EXPLORER_REBUILD_MIN_INTERVAL", 0) > 0:
                     cache.set(
                         _rebuild_ended(held.language),

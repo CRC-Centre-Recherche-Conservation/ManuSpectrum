@@ -88,6 +88,26 @@ class BundleMetricsTests(TestCase):
     @override_settings(
         EXPLORER_BACKGROUND_REBUILD=False, EXPLORER_REBUILD_MIN_INTERVAL=0
     )
+    def test_a_failing_metric_still_sets_the_retry_back_off(self):
+        held = SimpleNamespace(
+            current="explorer-bundle:k5", language="en", reason="data"
+        )
+        with (
+            patch.object(memo, "_build_and_keep", side_effect=RuntimeError("boom")),
+            patch.object(
+                memo.metrics.EXPLORER_REBUILD_FAILURES,
+                "labels",
+                side_effect=RuntimeError("metric"),
+            ),
+            patch.object(memo.cache, "set") as cache_set,
+        ):
+            memo._rebuild_in_background(held, None, lambda *a: None)
+        self.assertEqual(cache_set.call_count, 1)
+        self.assertNotIn("en", memo._rebuilding)
+
+    @override_settings(
+        EXPLORER_BACKGROUND_REBUILD=False, EXPLORER_REBUILD_MIN_INTERVAL=0
+    )
     def test_a_failing_metric_still_releases_the_rebuild_slot(self):
         held = SimpleNamespace(
             current="explorer-bundle:k4", language="en", reason="data"

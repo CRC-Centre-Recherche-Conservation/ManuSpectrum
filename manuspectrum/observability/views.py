@@ -6,12 +6,17 @@ directly, so a request relayed by nginx (``X-Forwarded-For``) is refused; nginx
 also denies the path (PP-3). Both answer a bodyless 404.
 """
 
+import os
+
+import prometheus_client
 from django.conf import settings
-from django.http import HttpResponseNotFound
+from django.http import HttpResponse, HttpResponseNotFound
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 from django_prometheus.exports import ExportToDjangoView
+
+from manuspectrum.observability.multiproc import ArchiveSafeCollector
 
 
 def relayed(request):
@@ -26,4 +31,11 @@ class MetricsView(View):
     def get(self, request):
         if not getattr(settings, "METRICS_ENABLED", False) or relayed(request):
             return HttpResponseNotFound()
-        return ExportToDjangoView(request)
+        if not os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+            return ExportToDjangoView(request)
+        registry = prometheus_client.CollectorRegistry()
+        ArchiveSafeCollector(registry)
+        return HttpResponse(
+            prometheus_client.generate_latest(registry),
+            content_type=prometheus_client.CONTENT_TYPE_LATEST,
+        )

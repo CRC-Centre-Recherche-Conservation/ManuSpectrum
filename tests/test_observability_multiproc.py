@@ -1,6 +1,7 @@
 import glob
 import os
 import tempfile
+import threading
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -40,7 +41,7 @@ def histogram_rows(pid):
 
 def collect(directory):
     registry = CollectorRegistry()
-    multiprocess.MultiProcessCollector(registry, path=directory)
+    multiproc.ArchiveSafeCollector(registry, path=directory)
     return registry
 
 
@@ -74,7 +75,6 @@ class ArchiveDeadProcessTests(SimpleTestCase):
                         ".archive.lock",
                         "counter_archive.db",
                         "histogram_archive.db",
-                        "gauge_mostrecent_archive.db",
                     ]
                     + [
                         f"{typ}_{pid}.db"
@@ -137,13 +137,26 @@ class ArchiveDeadProcessTests(SimpleTestCase):
             multiproc.archive_dead_process(1, directory)
             self.assertEqual(collect(directory).get_sample_value("snap"), 9.0)
 
-    def test_the_directory_size_gauge_is_updated_on_each_archive(self):
+    def test_the_directory_size_gauge_is_computed_at_each_scrape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                collect(directory).get_sample_value(multiproc.DIR_BYTES_NAME), 0
+            )
+            self.fill(directory, [7])
+            first = collect(directory).get_sample_value(multiproc.DIR_BYTES_NAME)
+            self.assertGreater(first, 0)
+            self.assertEqual(first, multiproc.directory_bytes(directory))
+            self.fill(directory, [8, 9])
+            second = collect(directory).get_sample_value(multiproc.DIR_BYTES_NAME)
+            self.assertGreater(second, first)
+
+    def test_archiving_writes_no_size_series_of_its_own(self):
         with tempfile.TemporaryDirectory() as directory:
             self.fill(directory, [7])
             multiproc.archive_dead_process(7, directory)
-            value = collect(directory).get_sample_value(multiproc.DIR_BYTES_NAME)
-            self.assertGreater(value, 0)
-            self.assertEqual(value, multiproc.directory_bytes(directory))
+            plain = CollectorRegistry()
+            multiprocess.MultiProcessCollector(plain, path=directory)
+            self.assertIsNone(plain.get_sample_value(multiproc.DIR_BYTES_NAME))
 
     def test_an_unknown_pid_is_a_no_op(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -166,3 +179,51 @@ class ArchiveDeadProcessTests(SimpleTestCase):
                 [os.path.join(directory, "summary_archive.db")],
             )
             self.assertEqual(collect(directory).get_sample_value("dur_count"), 5.0)
+
+
+class ScrapeDuringArchiveTests(SimpleTestCase):
+    def test_a_scrape_that_overlaps_an_archive_sees_the_true_sum(self):
+        original = multiprocess.MultiProcessCollector._read_metrics
+        reading = threading.Event()
+        errors = []
+
+        def slow(files):
+            reading.set()
+            threading.Event().wait(0.3)
+            return original(files)
+
+        with tempfile.TemporaryDirectory() as directory:
+            for pid, value in ((1, 10.0), (2, 5.0)):
+                write(
+                    directory, f"counter_{pid}.db", [(counter_key(a="x"), value, 0.0)]
+                )
+
+            def archive():
+                reading.wait()
+                try:
+                    multiproc.archive_dead_process(1, directory)
+                except Exception as error:  # noqa: BLE001
+                    errors.append(error)
+
+            archiver = threading.Thread(target=archive)
+            archiver.start()
+            with mock.patch.object(
+                multiprocess.MultiProcessCollector,
+                "_read_metrics",
+                staticmethod(slow),
+            ):
+                registry = collect(directory)
+                during = registry.get_sample_value("hits_total", {"a": "x"})
+            archiver.join()
+            self.assertEqual(errors, [])
+            self.assertEqual(during, 15.0)
+            self.assertEqual(
+                collect(directory).get_sample_value("hits_total", {"a": "x"}), 15.0
+            )
+
+    def test_a_missing_directory_lock_does_not_stop_the_scrape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            write(directory, "counter_1.db", [(counter_key(a="x"), 4.0, 0.0)])
+            os.mkdir(os.path.join(directory, ".archive.lock"))
+            registry = collect(directory)
+            self.assertEqual(registry.get_sample_value("hits_total", {"a": "x"}), 4.0)

@@ -71,5 +71,14 @@ def _multiproc():
 
 
 def child_exit(server, worker):
+    """Archive the metric files of the dead worker. Never raises: gunicorn calls this
+    from the arbiter's reaper, where an exception halts every worker."""
     if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
-        _multiproc().archive_dead_process(worker.pid)
+        try:
+            _multiproc().archive_dead_process(worker.pid)
+        except Exception as error:
+            server.log.error(
+                "manuspectrum.observability.multiproc: metrics archive failed for pid %s: %s",
+                worker.pid,
+                type(error).__name__,
+            )

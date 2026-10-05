@@ -177,6 +177,7 @@ def readiness():
     finds one running reuses its result when it ends within ``REUSE_WINDOW`` seconds, or
     after waiting at most ``READYZ_TIMEOUT`` reports every component ``timeout``."""
     global _last
+    waited = False
     if not _gate.acquire(blocking=False):
         report = _fresh()
         if report is not None:
@@ -188,16 +189,12 @@ def readiness():
                     name: {"status": "timeout"} for name, _probe in components()
                 },
             }
-        try:
-            report = _fresh()
-            if report is not None:
-                return report
-        except BaseException:
-            _gate.release()
-            raise
+        waited = True
     try:
-        report = _evaluate()
-        _last = (time.monotonic(), report)
+        report = _fresh() if waited else None
+        if report is None:
+            report = _evaluate()
+            _last = (time.monotonic(), report)
         return report
     finally:
         _gate.release()

@@ -62,7 +62,9 @@ class WorkerEndpointTests(SimpleTestCase):
                 {"MS_CELERY_METRICS_PORT": "9808", "PROMETHEUS_MULTIPROC_DIR": "/tmp"},
             ),
             patch("prometheus_client.start_http_server") as start,
-            patch("prometheus_client.multiprocess.MultiProcessCollector") as collector,
+            patch(
+                "manuspectrum.observability.multiproc.ArchiveSafeCollector"
+            ) as collector,
         ):
             celery_signals.serve_worker_metrics()
         self.assertEqual(start.call_args.args[0], 9808)
@@ -79,6 +81,19 @@ class WorkerEndpointTests(SimpleTestCase):
         ):
             celery_signals.forget_child(pid=4242)
         archive.assert_called_once_with(4242)
+
+    def test_a_failing_archive_is_logged_and_never_raised(self):
+        with (
+            patch.dict(os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/tmp"}),
+            patch(
+                "manuspectrum.observability.multiproc.archive_dead_process",
+                side_effect=RuntimeError("corrupt"),
+            ),
+            self.assertLogs(celery_signals.logger, "ERROR") as logged,
+        ):
+            celery_signals.forget_child(pid=4242)
+        self.assertIn("4242", logged.output[0])
+        self.assertIn("RuntimeError", logged.output[0])
 
 
 class IndexTaskTests(TestCase):
@@ -160,6 +175,11 @@ class PruneTaskTests(TestCase):
 
 
 class LedgerGaugesAtStartTests(TestCase):
+    def setUp(self):
+        patcher = patch("django.db.connections.close_all")
+        self.close = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_worker_ready_sets_the_ledger_gauges(self):
         with (
             patch.object(metrics.DATA_CHANGE_ROWS, "set") as rows,
@@ -169,6 +189,15 @@ class LedgerGaugesAtStartTests(TestCase):
         rows.assert_called_once()
         self.assertGreaterEqual(rows.call_args.args[0], 0)
         self.assertGreater(pruned.call_args.args[0], 0)
+
+    def test_the_connection_is_closed_after_use(self):
+        worker_ready.send(sender=None)
+        self.close.assert_called()
+
+    def test_the_connection_is_closed_after_a_database_error(self):
+        with patch("django.db.connection.cursor", side_effect=RuntimeError("db")):
+            worker_ready.send(sender=None)
+        self.close.assert_called()
 
     def test_a_database_error_does_not_break_worker_ready(self):
         with patch("django.db.connection.cursor", side_effect=RuntimeError("db")):
