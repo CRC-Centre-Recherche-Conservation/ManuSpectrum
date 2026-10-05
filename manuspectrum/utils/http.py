@@ -304,11 +304,26 @@ _iiif_session = None
 _iiif_session_guard = threading.Lock()
 
 
+class CappedRetry(Retry):
+    """``Retry`` whose ``Retry-After`` sleep never exceeds ``IIIF_RETRY_AFTER_MAX``.
+
+    The cap is read from settings at each sleep, not stored on the instance, so
+    the copies urllib3 makes with ``new()`` on every attempt keep it.
+    Written against urllib3 1.26 (``get_retry_after``).
+    """
+
+    def get_retry_after(self, response):
+        retry_after = super().get_retry_after(response)
+        if retry_after is None:
+            return None
+        return min(retry_after, django_settings.IIIF_RETRY_AFTER_MAX)
+
+
 def _build_iiif_session():
     session = requests.Session()
     # Carries our User-Agent (get_user_agent) + JSON-LD Accept on every request.
     session.headers.update(get_json_request_headers())
-    retry = Retry(
+    retry = CappedRetry(
         total=3,
         connect=2,
         read=2,
