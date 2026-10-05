@@ -331,7 +331,7 @@ class CanvasIIIF:
     def get_image_service_dimensions(image_service_url):
         try:
             info_url = f"{image_service_url}/info.json"
-            response = safe_fetch(info_url)
+            response = safe_fetch(info_url, purpose="image_info")
 
             if response.status_code == 200:
                 info_data = response.json()

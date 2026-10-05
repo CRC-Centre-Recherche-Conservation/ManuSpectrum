@@ -19,6 +19,7 @@ from django.conf import settings as django_settings
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import BudgetSpent, capped_timeout, current_budget
 from manuspectrum.utils.contact import publishable_contact_email
 
@@ -119,8 +120,13 @@ class UnsafeURLError(Exception):
     Either the scheme/host/port is malformed or disallowed, DNS resolution
     fails, or the host resolves to a non-public address (loopback / private /
     link-local / reserved — including the cloud-metadata endpoint
-    169.254.169.254).
+    169.254.169.254). ``reason`` names the rule that refused it
+    (``metrics.SSRF_REASONS``).
     """
+
+    def __init__(self, message, reason="other"):
+        super().__init__(message)
+        self.reason = reason
 
 
 class ResponseTooLargeError(Exception):
@@ -172,11 +178,11 @@ def _canonical_url(url):
     try:
         prepared.prepare_url(url, None)
     except Exception as exc:
-        raise UnsafeURLError(f"Malformed URL {url!r}") from exc
+        raise UnsafeURLError(f"Malformed URL {url!r}", reason="malformed") from exc
     return prepared.url
 
 
-def assert_url_is_safe(url, *, allow_private=None):
+def _assert_url_is_safe(url, *, allow_private=None):
     """Validate an outbound URL against SSRF before fetching it.
 
     Checks the scheme is http(s), the host is present and the port is a web
@@ -200,12 +206,14 @@ def assert_url_is_safe(url, *, allow_private=None):
 
     parsed = urlparse(url)
     if parsed.scheme not in _ALLOWED_URL_SCHEMES:
-        raise UnsafeURLError(f"Disallowed URL scheme: {parsed.scheme!r}")
+        raise UnsafeURLError(
+            f"Disallowed URL scheme: {parsed.scheme!r}", reason="scheme"
+        )
 
     parsed = urlparse(_canonical_url(url))
     host = parsed.hostname
     if not host:
-        raise UnsafeURLError("URL has no host")
+        raise UnsafeURLError("URL has no host", reason="host")
 
     if allow_private:
         return parsed
@@ -214,22 +222,41 @@ def assert_url_is_safe(url, *, allow_private=None):
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
     except ValueError as exc:
         # urlparse defers the port syntax check to attribute access.
-        raise UnsafeURLError(f"Malformed port in {url!r}") from exc
+        raise UnsafeURLError(f"Malformed port in {url!r}", reason="malformed") from exc
     if port not in _ALLOWED_PORTS:
-        raise UnsafeURLError(f"Disallowed port {port} for host {host!r}")
+        raise UnsafeURLError(f"Disallowed port {port} for host {host!r}", reason="port")
 
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
-        raise UnsafeURLError(f"DNS resolution failed for {host!r}") from exc
+        raise UnsafeURLError(
+            f"DNS resolution failed for {host!r}", reason="dns"
+        ) from exc
 
     resolved = {info[4][0] for info in infos}
     if not resolved:
-        raise UnsafeURLError(f"No addresses resolved for {host!r}")
+        raise UnsafeURLError(f"No addresses resolved for {host!r}", reason="dns")
     for ip_str in resolved:
         if not _address_is_public(ip_str):
-            raise UnsafeURLError(f"{host!r} resolves to non-public address {ip_str}")
+            raise UnsafeURLError(
+                f"{host!r} resolves to non-public address {ip_str}", reason="private"
+            )
     return parsed
+
+
+def assert_url_is_safe(url, *, allow_private=None):
+    """Validate an outbound URL against SSRF before fetching it.
+
+    See :func:`_assert_url_is_safe` for the rules. A refusal is counted in
+    ``manuspectrum_ssrf_rejections_total``.
+    """
+    try:
+        return _assert_url_is_safe(url, allow_private=allow_private)
+    except UnsafeURLError as error:
+        metrics.SSRF_REJECTIONS.labels(
+            reason=metrics.bounded(error.reason, metrics.SSRF_REASONS)
+        ).inc()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +515,7 @@ def _read_capped(response, max_bytes, budget=None):
     return b"".join(chunks)
 
 
-def safe_fetch(
+def _safe_fetch(
     url,
     *,
     session=None,
@@ -561,7 +588,39 @@ def safe_fetch(
             return FetchedResponse(target, response.status_code, response.headers, body)
         response.close()
         target = urljoin(target, location)
-    raise UnsafeURLError(f"More than {hops} redirects from {url}")
+    metrics.SSRF_REJECTIONS.labels(reason="redirects").inc()
+    raise UnsafeURLError(f"More than {hops} redirects from {url}", reason="redirects")
+
+
+def safe_fetch(url, *, purpose="other", **kwargs):
+    """``_safe_fetch`` counted in ``manuspectrum_outbound_fetches_total`` and timed in
+    ``manuspectrum_outbound_fetch_seconds`` under *purpose* (``metrics.FETCH_PURPOSES``).
+
+    Same keywords, same return value, same exceptions as ``_safe_fetch``.
+    """
+    purpose = metrics.bounded(purpose, metrics.FETCH_PURPOSES)
+    started, outcome = time.monotonic(), "error"
+    try:
+        response = _safe_fetch(url, **kwargs)
+        outcome = "ok" if response.status_code < 400 else "http_error"
+        return response
+    except UnsafeURLError:
+        outcome = "unsafe"
+        raise
+    except ResponseTooLargeError:
+        outcome = "too_large"
+        raise
+    except BudgetSpent:
+        outcome = "budget"
+        raise
+    except requests.exceptions.Timeout:
+        outcome = "timeout"
+        raise
+    finally:
+        metrics.OUTBOUND_FETCHES.labels(purpose=purpose, outcome=outcome).inc()
+        metrics.OUTBOUND_FETCH_SECONDS.labels(purpose=purpose).observe(
+            time.monotonic() - started
+        )
 
 
 def fetch_iiif_manifest(url, *, session=None, timeout=None, allow_private=None):
@@ -575,6 +634,7 @@ def fetch_iiif_manifest(url, *, session=None, timeout=None, allow_private=None):
         timeout = (_ssrf_timeout(), _MANIFEST_READ_TIMEOUT)
     return safe_fetch(
         url,
+        purpose="manifest",
         session=session,
         timeout=timeout,
         allow_private=allow_private,

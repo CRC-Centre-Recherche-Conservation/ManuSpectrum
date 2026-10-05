@@ -106,7 +106,9 @@ class DocumentThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            return _image_payload(safe_fetch(thumbnail_url, headers=_IMAGE_HEADERS))
+            return _image_payload(
+                safe_fetch(thumbnail_url, headers=_IMAGE_HEADERS, purpose="thumbnail")
+            )
 
         except Exception as e:
             logger.error(
@@ -190,7 +192,9 @@ class ComponentThumbnailFetcher(SearchThumbnailFetcher):
             # IIIF Image API request (region -> full size -> rotation 0 -> default.jpg)
             thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
 
-            return _image_payload(safe_fetch(thumb_url, headers=_IMAGE_HEADERS))
+            return _image_payload(
+                safe_fetch(thumb_url, headers=_IMAGE_HEADERS, purpose="thumbnail")
+            )
 
         except Exception as e:
             logger.error(
@@ -268,7 +272,9 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                     thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
                     if thumb_url:
                         payload = _image_payload(
-                            safe_fetch(thumb_url, headers=_IMAGE_HEADERS)
+                            safe_fetch(
+                                thumb_url, headers=_IMAGE_HEADERS, purpose="thumbnail"
+                            )
                         )
                         if payload:
                             return payload
@@ -325,7 +331,9 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
             x, y, w, h = bbox
             thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
 
-            return _image_payload(safe_fetch(thumb_url, headers=_IMAGE_HEADERS))
+            return _image_payload(
+                safe_fetch(thumb_url, headers=_IMAGE_HEADERS, purpose="thumbnail")
+            )
 
         except Exception as e:
             logger.error(
