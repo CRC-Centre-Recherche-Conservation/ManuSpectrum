@@ -48,7 +48,7 @@ jobs:
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
           stack='deploy/(docker|compose)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|pyproject\.toml$|uv\.lock$'
-          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$'
+          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflow)")"
@@ -175,8 +175,12 @@ jobs:
       - name: Check the stack
         run: |
           deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh observability
           deploy/compose/smoke.sh mark
           deploy/compose/smoke.sh init-guard
+
+      - name: Readiness follows Elasticsearch
+        run: deploy/compose/smoke.sh readiness
 
       - name: Data survives down and up
         run: |
