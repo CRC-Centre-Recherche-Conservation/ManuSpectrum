@@ -29,6 +29,7 @@ from .settings import (
     DATABASES,
     ELASTICSEARCH_CONNECTION_OPTIONS,
     ELASTICSEARCH_PREFIX,
+    MIDDLEWARE,
     EXTRA_EMAIL_CONTEXT,
     UPLOADED_FILES_DIR,
 )
@@ -228,3 +229,10 @@ LOGGING = build_logging(
 )
 # The worker keeps LOGGING: Celery leaves a root logger that already has handlers alone.
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False
+
+METRICS_ENABLED = True
+MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    *MIDDLEWARE,
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
+]

@@ -64,6 +64,7 @@ from manuspectrum.views.explorer.api import (
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
+from manuspectrum.observability.views import MetricsView
 from manuspectrum.views.health import HealthzView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
@@ -617,3 +618,4 @@ urlpatterns.append(
     )
 )
 urlpatterns.append(path("healthz", HealthzView.as_view(), name="healthz"))
+urlpatterns.append(path("metrics", MetricsView.as_view(), name="metrics"))

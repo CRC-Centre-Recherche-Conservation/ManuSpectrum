@@ -42,6 +42,8 @@ BASE_ENV = {
 }
 
 NAMES = [
+    "METRICS_ENABLED",
+    "MIDDLEWARE",
     "DEBUG",
     "SECRET_KEY",
     "SESSION_COOKIE_SECURE",
@@ -125,6 +127,20 @@ class SettingsDockerTests(SimpleTestCase):
         values = load(env, **options)
         self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
         self.assertIn(fragment, values["message"])
+
+    def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
+        values = load(BASE_ENV)
+        self.assertIs(values["METRICS_ENABLED"], True)
+        middleware = values["MIDDLEWARE"]
+        self.assertEqual(
+            middleware[0], "django_prometheus.middleware.PrometheusBeforeMiddleware"
+        )
+        self.assertEqual(
+            middleware[1], "manuspectrum.observability.middleware.RequestIdMiddleware"
+        )
+        self.assertEqual(
+            middleware[-1], "django_prometheus.middleware.PrometheusAfterMiddleware"
+        )
 
     def test_missing_required_variable_is_refused(self):
         for name in (

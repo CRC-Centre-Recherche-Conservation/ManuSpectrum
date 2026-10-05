@@ -17,6 +17,10 @@ class ManuspectrumConfig(AppConfig):
         from manuspectrum import checks  # noqa: F401  (registers system checks)
         from manuspectrum import signals  # noqa: F401  (connects the receivers)
 
+        from manuspectrum.observability import web as observability_web
+
+        observability_web.connect()
+
         self._check_async_indexing_config()
         self._check_contact_email_config()
 
