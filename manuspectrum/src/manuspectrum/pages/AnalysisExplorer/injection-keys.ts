@@ -1,7 +1,10 @@
 import type { InjectionKey, Ref } from "vue";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
+import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
 export interface ResultsMemo {
@@ -32,6 +35,32 @@ export const CURTAIN_KEY: InjectionKey<Ref<string | null>> = Symbol("curtain");
 /** Analyses that have a rectangle or polygon on the page shown: an imaging layer can be laid only there. */
 export const FOLIO_ZONES_KEY: InjectionKey<Ref<ReadonlySet<string>>> =
     Symbol("folio-zones");
+
+/** A folio asked of the folio image tools of Compare; `count` grows with each request, so the same folio asked again is a new one. */
+export interface FolioRequest {
+    canvas: string;
+    count: number;
+}
+
+/** Where the folio image tools of Compare take the folio asked of them. */
+export interface FolioRequests {
+    asked: Readonly<Ref<FolioRequest | null>>;
+    /** Asks every folio image tool to show `canvas`, named `label` in the announcement. */
+    show: (canvas: string, label: string) => void;
+}
+
+export const FOLIO_REQUEST_KEY: InjectionKey<FolioRequests> =
+    Symbol("folio-request");
+
+/** Where an imaging preview keeps its laid layers (`overlayKey` → setting). */
+export interface ImagingOverlays {
+    settings: Readonly<Ref<Record<string, Overlay>>>;
+    set(key: string, overlay: Overlay | null): void;
+}
+
+/** The laid layers of the imaging previews below; without it they are the document screen's (`store.overlays`). */
+export const IMAGING_OVERLAYS_KEY: InjectionKey<ImagingOverlays> =
+    Symbol("imaging-overlays");
 
 /** Speaks a message through the shell's polite live region. */
 export const ANNOUNCE_KEY: InjectionKey<(message: string) => void> =
@@ -65,3 +94,11 @@ export const WINDOW_RESIZE_KEY: InjectionKey<Readonly<Ref<number>>> =
 /** The one reading of the Selection's items, shared by the Selection panel and the Compare view; created on first call. Provided by the shell. */
 export const SELECTION_ITEMS_KEY: InjectionKey<() => SelectionItems> =
     Symbol("selection-items");
+
+/** The linked selection of the Compare view shown (`useLinkedSelection`); provided by the Compare view. */
+export const LINKED_SELECTION_KEY: InjectionKey<LinkedSelection> =
+    Symbol("linked-selection");
+
+/** Where the body of a Compare window declares its actions, shown in the window's header (`useWindowActions`); provided by the window. */
+export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
+    Symbol("window-actions");

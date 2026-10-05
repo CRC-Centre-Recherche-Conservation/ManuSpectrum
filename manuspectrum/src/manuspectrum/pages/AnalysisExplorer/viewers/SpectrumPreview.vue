@@ -15,10 +15,14 @@ import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
 import {
     PLOT_CONFIG,
+    closestHoverLine,
+    escapePlotlyText,
+    hoverModeFor,
     plotLayout,
     readPlotTheme,
     resetAxes,
     seriesColour,
+    unifiedHoverLine,
     whenFontsReady,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
@@ -43,6 +47,10 @@ const LINE_WIDTH = 2;
  * The quick view of a readable spectrum and of the files of its analysis
  * sharing its axes. Its words are the chart's accessible name; the reset of
  * the zoom is an icon in the chart's corner, shown on hover and on focus.
+ * Hover shares the workshop's compact box (`xy/plot-theme.ts`): one line per
+ * curve under « x unified » (its name and value alone, the shared x in the
+ * box header), « closest » beyond `UNIFIED_HOVER_MAX_CURVES` — never reached
+ * here in practice, an analysis rarely sharing that many axes.
  */
 const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
 
@@ -184,22 +192,40 @@ async function draw(): Promise<void> {
         plotly ??= await loadPlotly();
         await whenFontsReady();
         const theme = readPlotTheme();
+        const mode = hoverModeFor(curves.value.length);
         await plotly.react(
             element,
-            curves.value.map(({ file, index, series }) => ({
-                x: series.x,
-                y: series.y,
-                name: legendName(file),
-                type: "scatter",
-                mode: "lines",
-                line: { color: seriesColour(theme, index), width: LINE_WIDTH },
-            })),
+            curves.value.map(({ file, index, series }) => {
+                const label = legendName(file);
+                const hoverLine =
+                    mode === "closest"
+                        ? closestHoverLine(
+                              label,
+                              "y",
+                              titles.value.x,
+                              titles.value.y,
+                          )
+                        : unifiedHoverLine(label, "y");
+                return {
+                    x: series.x,
+                    y: series.y,
+                    name: escapePlotlyText(label),
+                    type: "scatter",
+                    mode: "lines",
+                    hovertemplate: `${hoverLine}<extra></extra>`,
+                    line: {
+                        color: seriesColour(theme, index),
+                        width: LINE_WIDTH,
+                    },
+                };
+            }),
             plotLayout(theme, {
                 lang,
                 xTitle: titles.value.x,
                 yTitle: titles.value.y,
                 xReversed: xReversed.value,
                 legend: curves.value.length > 1,
+                hovermode: mode,
             }),
             PLOT_CONFIG,
         );

@@ -2,11 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     PLOT_CONFIG,
+    UNIFIED_HOVER_MAX_CURVES,
+    WORKSHOP_CONFIG,
+    closestHoverLine,
+    escapePlotlyText,
+    hoverModeFor,
     plotLayout,
     readPlotTheme,
     resetAxes,
     separatorsFor,
     seriesColour,
+    unifiedHoverLine,
+    unifiedHoverTitle,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 function setTokens(tokens: Record<string, string>): void {
@@ -34,11 +41,87 @@ describe("plot theme", () => {
         expect(theme.background).toBe("#faf9f7");
     });
 
-    it("gives A1…A8 their series colour and later slots the ink", () => {
+    it("reads the grey of context curves", () => {
+        setTokens({ "--series-context": "#8a8999" });
+        expect(readPlotTheme().context).toBe("#8a8999");
+    });
+
+    it("reads the surface and the elevated border the hover label draws on", () => {
+        setTokens({
+            "--surface": "#ffffff",
+            "--border-hover": "rgba(26,26,46,0.14)",
+        });
+        const theme = readPlotTheme();
+        expect(theme.surface).toBe("#ffffff");
+        expect(theme.borderHover).toBe("rgba(26,26,46,0.14)");
+    });
+
+    it("styles the hover label like the app's popovers: surface, elevated border, left-aligned", () => {
+        setTokens({
+            "--surface": "#ffffff",
+            "--border-hover": "rgba(26,26,46,0.14)",
+            "--ink": "#1a1a2e",
+            "--font-mono": "JetBrains Mono",
+        });
+        const layout = plotLayout(readPlotTheme(), {
+            lang: "en",
+            xTitle: "Energy (keV)",
+            yTitle: "Counts",
+            xReversed: false,
+        });
+        expect(layout.hoverlabel).toMatchObject({
+            bgcolor: "#ffffff",
+            bordercolor: "rgba(26,26,46,0.14)",
+            align: "left",
+            font: { family: "JetBrains Mono", size: 12, color: "#1a1a2e" },
+        });
+    });
+
+    it("draws readable axes: ink titles, outside mono ticks, SI exponents, dotted spikes, margins made to fit", () => {
+        setTokens({ "--ink": "#1a1a2e", "--font-mono": "JetBrains Mono" });
+        const layout = plotLayout(readPlotTheme(), {
+            lang: "en",
+            xTitle: "Energy (keV)",
+            yTitle: "Counts",
+            xReversed: false,
+            hovermode: "closest",
+        });
+        for (const axis of [layout.xaxis, layout.yaxis]) {
+            expect(axis).toMatchObject({
+                automargin: true,
+                ticks: "outside",
+                showline: true,
+                exponentformat: "SI",
+                minexponent: 3,
+                showspikes: true,
+                spikedash: "dot",
+            });
+            expect(axis?.title).toMatchObject({
+                font: { size: 12, color: "#1a1a2e" },
+            });
+            expect(axis?.tickfont).toMatchObject({
+                family: "JetBrains Mono",
+                size: 11,
+            });
+        }
+        expect(layout.hovermode).toBe("closest");
+    });
+
+    it("lets the workshop resize its chart itself, a double click resetting the zoom, no wheel zoom", () => {
+        expect(WORKSHOP_CONFIG).toMatchObject({
+            displayModeBar: false,
+            responsive: false,
+            doubleClick: "reset",
+            scrollZoom: false,
+        });
+        expect(PLOT_CONFIG.responsive).toBe(true);
+    });
+
+    it("gives each of the twelve first positions its series colour, the next ones the colours again, and none the ink", () => {
         setTokens({ "--series-3": "#6d28d9", "--ink": "#1a1a2e" });
         const theme = readPlotTheme();
         expect(seriesColour(theme, 2)).toBe("#6d28d9");
-        expect(seriesColour(theme, 8)).toBe("#1a1a2e");
+        expect(seriesColour(theme, 12)).toBe(seriesColour(theme, 0));
         expect(seriesColour(theme, null)).toBe("#1a1a2e");
     });
 
@@ -62,6 +145,46 @@ describe("plot theme", () => {
         expect(layout.hovermode).toBe("x unified");
         expect(layout.separators).toBe(", ");
         expect(PLOT_CONFIG.displayModeBar).toBe(false);
+    });
+
+    it("carries the shared x, with its axis title, in the unified box's header once, built into the axis", () => {
+        const layout = plotLayout(readPlotTheme(), {
+            lang: "en",
+            xTitle: "Energy (keV)",
+            yTitle: "Counts",
+            xReversed: false,
+        });
+        expect(
+            (layout.xaxis as { unifiedhovertitle?: { text?: string } })
+                .unifiedhovertitle?.text,
+        ).toBe("%{x:.4~g} · Energy (keV)");
+        expect(unifiedHoverTitle("")).toEqual({ text: "%{x:.4~g}" });
+    });
+
+    it("hovers along X up to twelve curves, closest beyond", () => {
+        expect(UNIFIED_HOVER_MAX_CURVES).toBe(12);
+        expect(hoverModeFor(12)).toBe("x unified");
+        expect(hoverModeFor(13)).toBe("closest");
+    });
+
+    it("escapes a hover label's pseudo-HTML the same way as an axis title", () => {
+        expect(escapePlotlyText("A & B <raw>")).toBe("A &amp; B &lt;raw&gt;");
+        expect(escapePlotlyText("A %{x} B")).toBe("A %&#123;x} B");
+        expect(unifiedHoverLine("A %{x}", "y")).toBe("A %&#123;x} · %{y:.4~g}");
+    });
+
+    it("builds one compact line per curve under x unified, its label and value alone", () => {
+        expect(unifiedHoverLine("A1", "y")).toBe("A1 · %{y:.4~g}");
+        expect(unifiedHoverLine("A & B", "y")).toBe("A &amp; B · %{y:.4~g}");
+    });
+
+    it("builds a curve's own x and y line under closest, each with its axis title", () => {
+        expect(closestHoverLine("A1", "y", "Energy (keV)", "Counts")).toBe(
+            "A1<br>x: %{x:.4~g} Energy (keV) · y: %{y:.4~g} Counts",
+        );
+        expect(closestHoverLine("A1", "y", "", "")).toBe(
+            "A1<br>x: %{x:.4~g} · y: %{y:.4~g}",
+        );
     });
 
     it("restores the reversed x axis on reset", async () => {

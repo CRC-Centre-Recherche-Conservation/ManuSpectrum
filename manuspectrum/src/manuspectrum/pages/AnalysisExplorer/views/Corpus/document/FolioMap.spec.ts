@@ -446,6 +446,7 @@ describe("FolioMap", () => {
             ] as [[number, number], [number, number]],
             opacity: 0.5,
             label: "Pb",
+            fallbackUrls: [],
         };
         const wrapper = mountFolio({ overlays: [overlay] });
         await flushPromises();
@@ -467,6 +468,7 @@ describe("FolioMap", () => {
             ] as [[number, number], [number, number]],
             opacity: 0.5,
             label: "Pb",
+            fallbackUrls: [],
         };
         const wrapper = mountFolio({ overlays: [overlay] });
         await flushPromises();
@@ -701,6 +703,9 @@ describe("FolioMap", () => {
             return {
                 key,
                 url: `https://iiif.example/${key}/full/!2048,2048/0/default.jpg`,
+                fallbackUrls: [
+                    `https://iiif.example/${key}/full/max/0/default.jpg`,
+                ],
                 bounds: [
                     [-1, 0],
                     [0, 2],

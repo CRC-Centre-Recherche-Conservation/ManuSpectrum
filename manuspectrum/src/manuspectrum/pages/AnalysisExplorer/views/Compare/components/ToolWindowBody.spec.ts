@@ -4,12 +4,20 @@ import { createPinia, setActivePinia } from "pinia";
 
 import ToolWindowBody from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue";
 
-import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    LINKED_SELECTION_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     technique,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import { startLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import {
+    cellNode,
+    elementNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { Pinia } from "pinia";
 import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -19,13 +27,46 @@ const AZURITE = valueRef("http://example.org/azurite", "Azurite");
 const CHALK = valueRef("http://example.org/chalk", "Chalk");
 const SYNTHESIS: SynthesisResponse = {
     coverage: [
-        { canvas: "c1", label: "f. 1r", document: "d", counts: { xrf: 2 } },
-        { canvas: "c2", label: "f. 1v", document: "d", counts: { xrf: 1 } },
+        {
+            canvas: "c1",
+            label: "f. 1r",
+            document: "d",
+            counts: { xrf: 2 },
+            components: [{ component: null, counts: { xrf: 2 } }],
+        },
+        {
+            canvas: "c2",
+            label: "f. 1v",
+            document: "d",
+            counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
+        },
     ],
     canvases: [
-        { canvas: "c1", label: "f. 1r", document: "d", selected: true },
-        { canvas: "c2", label: "f. 1v", document: "d", selected: true },
-        { canvas: "c3", label: "f. 2r", document: "d", selected: false },
+        {
+            canvas: "c1",
+            label: "f. 1r",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
+        {
+            canvas: "c2",
+            label: "f. 1v",
+            document: "d",
+            selected: true,
+            analyses: [],
+            materials: [],
+        },
+        {
+            canvas: "c3",
+            label: "f. 2r",
+            document: "d",
+            selected: false,
+            analyses: [],
+            materials: [],
+        },
     ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [
@@ -38,13 +79,8 @@ const SYNTHESIS: SynthesisResponse = {
                     symbol: "Cu",
                 },
             ],
-            canvases: ["c1", "c3"],
-            confidenceBest: null,
+            materials: [],
             count: 2,
-            cells: [
-                ["c1", "xrf"],
-                ["c3", "xrf"],
-            ],
         },
         {
             colour: null,
@@ -55,16 +91,15 @@ const SYNTHESIS: SynthesisResponse = {
                     symbol: "Ca",
                 },
             ],
-            canvases: ["c2"],
-            confidenceBest: null,
+            materials: [],
             count: 1,
-            cells: [["c2", "xrf"]],
         },
     ],
     elements: [
-        { symbol: "Cu", level: null, count: 2 },
-        { symbol: "Ca", level: null, count: 1 },
+        { symbol: "Cu", level: null, count: 2, materials: [] },
+        { symbol: "Ca", level: null, count: 1, materials: [] },
     ],
+    materials: [],
     unpublishedCount: 0,
 };
 
@@ -91,74 +126,53 @@ function mountBody(props: Partial<BodyProps> & Pick<BodyProps, "kind">) {
 }
 
 describe("ToolWindowBody", () => {
-    it("filters the other tools by the element clicked, and says so", async () => {
+    it("selects the element clicked, pressed, without filtering the other tools", async () => {
         const periodic = mountBody({ kind: "periodic" });
-        const table = mountBody({ kind: "colour-material" });
+        const matrix = mountBody({ kind: "coverage" });
+        const cu = () => periodic.find('.grid button[aria-label="Cu, 2"]');
+        await cu().trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
+        expect(cu().attributes("aria-pressed")).toBe("true");
+        expect(periodic.find(".chip").exists()).toBe(false);
+        expect(matrix.findAll("tbody tr")).toHaveLength(2);
+        await cu().trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([]);
+        expect(cu().attributes("aria-pressed")).toBe("false");
+    });
+
+    it("adds each element and cell clicked to the selection, several at once", async () => {
+        const periodic = mountBody({ kind: "periodic" });
         const matrix = mountBody({ kind: "coverage" });
         await periodic
-            .find('.grid button[aria-label="Cu, 2"]')
+            .find('.grid button[aria-label="Ca, 1"]')
             .trigger("click");
-        expect(useExplorerStore().compare.toolFilters.element).toBe("Cu");
-        expect(announce).toHaveBeenLastCalledWith("Tools filtered by Cu");
-        expect(
-            periodic
-                .find('.grid button[aria-label="Cu, 2"]')
-                .attributes("aria-pressed"),
-        ).toBe("true");
-        expect(periodic.find(".chip").exists()).toBe(false);
-        expect(table.find(".chip").text()).toBe("Filtered by Cu×");
-        expect(table.findAll("tbody tr")).toHaveLength(1);
-        expect(
-            matrix.findAll("tbody tr").map((row) => row.find("th").text()),
-        ).toEqual(["f. 1r"]);
-    });
-
-    it("clears a filter from its chip, or by clicking the pressed control again", async () => {
-        const table = mountBody({ kind: "colour-material" });
-        const periodic = mountBody({ kind: "periodic" });
-        await table.findAll("tbody tr")[1].trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toEqual([
-            null,
-            CHALK.id,
+        await matrix.findAll("tbody .cell")[1].trigger("click");
+        expect(useExplorerStore().compare.selection).toEqual([
+            elementNode("Ca"),
+            cellNode("c2", null, "xrf"),
         ]);
-        const chip = periodic.find(".chip");
-        expect(chip.text()).toBe("Filtered by Chalk×");
-        expect(chip.attributes("aria-label")).toBe(
-            "Filtered by Chalk. Remove this filter",
-        );
-        expect(periodic.findAll(".grid button")).toHaveLength(1);
-        await chip.trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toBeNull();
-        expect(announce).toHaveBeenLastCalledWith("Filter removed: Chalk");
-        await table.findAll("tbody tr")[0].trigger("click");
-        await table.findAll("tbody tr")[0].trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toBeNull();
-    });
-
-    it("filters by a coverage cell, named by its folio and technique", async () => {
-        const matrix = mountBody({ kind: "coverage" });
-        const periodic = mountBody({ kind: "periodic" });
-        await matrix.findAll("tbody button")[1].trigger("click");
-        expect(useExplorerStore().compare.toolFilters.cell).toEqual([
-            "c2",
-            "xrf",
-        ]);
-        expect(periodic.find(".chip").text()).toBe("Filtered by f. 1v · XRF×");
         expect(
-            periodic
-                .findAll(".grid button")
-                .map((button) => button.attributes("aria-label")),
-        ).toEqual(["Ca, 1"]);
+            matrix
+                .findAll("tbody .cell")
+                .map((button) => button.attributes("aria-pressed")),
+        ).toEqual(["false", "true"]);
     });
 
-    it("says when nothing matches the filters", async () => {
-        useExplorerStore().setToolFilter("element", "Cu");
-        useExplorerStore().setToolFilter("cell", ["c2", "xrf"]);
-        const table = mountBody({ kind: "colour-material" });
-        expect(table.find(".empty").text()).toBe(
-            "Nothing matches the filters.",
-        );
-        expect(table.findAll(".chip")).toHaveLength(2);
+    it("toggles through the linked selection of the view when there is one", async () => {
+        const { linked, stop } = startLinkedSelection();
+        const toggle = vi.spyOn(linked, "toggle");
+        const periodic = mount(ToolWindowBody, {
+            props: { kind: "periodic", status: "ready", synthesis: SYNTHESIS },
+            global: {
+                plugins: [pinia],
+                provide: { [LINKED_SELECTION_KEY as symbol]: linked },
+            },
+        });
+        await periodic
+            .find('.grid button[aria-label="Ca, 1"]')
+            .trigger("click");
+        expect(toggle).toHaveBeenCalledWith("el:Ca");
+        stop();
     });
 
     it("says when the Selection has nothing for the tool", () => {
@@ -195,13 +209,6 @@ describe("ToolWindowBody", () => {
         );
     });
 
-    it("names the folios of a pair from every canvas the Selection is placed on", () => {
-        const table = mountBody({ kind: "colour-material" });
-        expect(table.findAll("tbody tr")[0].findAll("td")[2].text()).toBe(
-            "f. 1r, f. 2r",
-        );
-    });
-
     it("gives the folio image the canvases holding a Selection item, with or without coverage", () => {
         const folio = mountBody({
             kind: "folio",
@@ -230,11 +237,10 @@ describe("ToolWindowBody", () => {
         const failed = mountBody({ kind: "periodic", status: "error" });
         expect(failed.find(".unavailable-state").exists()).toBe(true);
         expect(failed.find(".periodic-table").exists()).toBe(false);
-        expect(failed.find(".chips").exists()).toBe(false);
     });
 
-    it("says the synthesis is being read over the previous one, and takes no filter from it", async () => {
-        useExplorerStore().setToolFilter("pair", [null, CHALK.id]);
+    it("says the synthesis is being read over the previous one, and selects nothing from it", async () => {
+        useExplorerStore().toggleSelection(elementNode("Ca"));
         const periodic = mountBody({ kind: "periodic", status: "loading" });
         expect(periodic.find(".loading").text()).toBe("Reading the Selection…");
         expect(periodic.find(".view .loading").exists()).toBe(false);
@@ -249,29 +255,22 @@ describe("ToolWindowBody", () => {
                 (button) => button.attributes("aria-disabled") === "true",
             ),
         ).toBe(true);
-        await periodic.find(".chip").trigger("click");
-        expect(useExplorerStore().compare.toolFilters.pair).toEqual([
-            null,
-            CHALK.id,
-        ]);
         await periodic
-            .find('.grid button[aria-label="Ca, 1"]')
+            .find('.grid button[aria-label="Cu, 2"]')
             .trigger("click");
-        expect(useExplorerStore().compare.toolFilters.element).toBeNull();
+        expect(useExplorerStore().compare.selection).toEqual(["el:Ca"]);
         expect(announce).not.toHaveBeenCalled();
     });
 
-    it("marks the stale matrix and table toggles disabled while the synthesis is read", () => {
-        for (const kind of ["coverage", "colour-material"] as const) {
-            const body = mountBody({ kind, status: "loading" });
-            const toggles = body.findAll(".view tbody button");
-            expect(toggles.length).toBeGreaterThan(0);
-            expect(
-                toggles.every(
-                    (button) => button.attributes("aria-disabled") === "true",
-                ),
-            ).toBe(true);
-        }
+    it("marks the stale matrix toggles disabled while the synthesis is read", () => {
+        const body = mountBody({ kind: "coverage", status: "loading" });
+        const toggles = body.findAll(".view tbody button");
+        expect(toggles.length).toBeGreaterThan(0);
+        expect(
+            toggles.every(
+                (button) => button.attributes("aria-disabled") === "true",
+            ),
+        ).toBe(true);
         const ready = mountBody({ kind: "coverage" });
         expect(
             ready.find(".view tbody button").attributes("aria-disabled"),

@@ -67,7 +67,6 @@ from manuspectrum.views.explorer.citations import (
 )
 from manuspectrum.views.explorer.conditions import clean_html, conditions_of
 from manuspectrum.views.explorer.values import (
-    ELEMENT_SYMBOL,
     FALLBACK_LANGUAGE,
     StoredConfig,
     acronym,
@@ -1754,6 +1753,30 @@ def sample_summaries(analyses, visible, user, language, dims, sample_of=None):
     ]
 
 
+def component_zones(document_id, bundle, dims, position, readable):
+    """``{component id: [AnalysisZone, …]}`` of the visible Components of *document_id* placed on a canvas of its manifest.
+
+    A Component belongs to the document through a readable
+    ``item_visual_is_part_of_document`` link; its zones are read off
+    ``location_in_document`` as analysis zones are, by page then feature id.
+    A Component without a zone on a listed canvas is left out.
+    """
+    ids = sorted(
+        c
+        for c, documents in bundle.links["part_of"].items()
+        if document_id in documents and c in bundle.visible.components
+    )
+    zones = defaultdict(list)
+    for component, feature, canvas, shape in annotation_features(
+        role_node(*ROLES["comp_zone"]), ids, dims, readable
+    ):
+        if canvas in position:
+            zones[component].append(
+                {"canvas": position[canvas], "shape": shape, "feature": feature}
+            )
+    return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
+
+
 def document_payload(document_id, user, language, ticket=None):
     """``DocumentPayload`` of a visible document, the same whatever the filters; None when it is unknown or not visible.
 
@@ -1761,7 +1784,9 @@ def document_payload(document_id, user, language, ticket=None):
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases`` and named by its ``feature`` id.
     A zone on a canvas the manifest does not list is left out; an analysis
-    without zones is not located on a page. ``document_match`` says what the filters keep. ``history`` (the
+    without zones is not located on a page. ``components`` lists the visible
+    Components placed on its pages (``component_zones``), by first page then
+    name. ``document_match`` says what the filters keep. ``history`` (the
     document's dated and placed events, spec §5) is empty until the map and
     timeline API fills it.
     """
@@ -1787,6 +1812,7 @@ def document_payload(document_id, user, language, ticket=None):
             zones[analysis].append(
                 {"canvas": position[canvas], "shape": shape, "feature": feature}
             )
+    placed = component_zones(document_id, bundle, dims, position, readable)
     techniques = {}
     analyses = []
     for row in rows:
@@ -1818,7 +1844,11 @@ def document_payload(document_id, user, language, ticket=None):
         for v in values.get(document_id, "doc_owner")
         if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    label_of = names({document_id} | set(owners[:1]), language, user)
+    label_of = names({document_id} | set(owners[:1]) | set(placed), language, user)
+    components = sorted(
+        (c for c in placed if c in label_of),
+        key=lambda c: (placed[c][0]["canvas"], fold(label_of[c]["value"]), c),
+    )
     per_canvas = Counter(
         zone["canvas"]
         for entry in analyses
@@ -1840,6 +1870,9 @@ def document_payload(document_id, user, language, ticket=None):
         ],
         "techniques": techniques,
         "analyses": analyses,
+        "components": [
+            {"id": c, "name": label_of[c], "zones": placed[c]} for c in components
+        ],
         "characterizations": summaries,
         "history": [],
         "unpublishedCount": sum(1 for row in rows if row["unpublished"])
@@ -1857,43 +1890,9 @@ def document_payload(document_id, user, language, ticket=None):
     }
 
 
-_BAND = re.compile(
-    r"^(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>nm|µm|um|cm-1|cm⁻¹|keV|eV)$"
-)
-
-
 def layer_of(index, text, image):
-    """One image layer of an imaging manifest (D46): an element map (maXRF), a spectral band (hyperspectral) or another image."""
-    text = (text or "").strip()
-    band = _BAND.match(text)
-    if ELEMENT_SYMBOL.match(text):
-        return {
-            "index": index,
-            "label": text,
-            "kind": "element",
-            "element": text,
-            "band": None,
-            "image": image,
-        }
-    if band:
-        value = float(band["value"].replace(",", "."))
-        unit = band["unit"].replace("um", "µm").replace("cm-1", "cm⁻¹")
-        return {
-            "index": index,
-            "label": text,
-            "kind": "band",
-            "element": None,
-            "band": {"value": value, "unit": unit},
-            "image": image,
-        }
-    return {
-        "index": index,
-        "label": text,
-        "kind": "other",
-        "element": None,
-        "band": None,
-        "image": image,
-    }
+    """One image layer of an imaging manifest: its position, its label as stored, its image."""
+    return {"index": index, "label": (text or "").strip(), "image": image}
 
 
 def imaging_entries(analysis_id, manifest_values, language, read=None):
@@ -1914,12 +1913,6 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
         for canvas in canvases_of(manifest):
             layers.append(layer_of(index, canvas["label"], canvas["image"]))
             index += 1
-        layers.sort(
-            key=lambda layer: (
-                layer["kind"] != "band",
-                layer["band"]["value"] if layer["band"] else 0,
-            )
-        )
         entries.append(
             {
                 "id": f"{analysis_id}:imaging:{position}",

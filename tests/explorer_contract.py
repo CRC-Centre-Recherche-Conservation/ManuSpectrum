@@ -27,12 +27,15 @@ IMAGE_REF = {
     "height": int,
 }
 
+FILE_LAYER = {"index": int, "label": str, "image": "ImageRef"}
+
 SHAPES = {
     "Label": LABEL,
     "Ref": REF,
     "ValueRef": VALUE_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
+    "FileLayer": FILE_LAYER,
     "NamedRef": NAMED_REF,
     "Citation": CITATION,
     "Technique": TECHNIQUE,
@@ -94,6 +97,7 @@ SHAPES = {
         "canvases": list,
         "techniques": dict,
         "analyses": list,
+        "components": list,
         "characterizations": list,
         "history": list,
         "unpublishedCount": int,
@@ -110,6 +114,7 @@ SHAPES = {
         "zones": list,
     },
     "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
+    "DocumentComponent": {"id": str, "name": "Label", "zones": list},
     "ContentStateLink": {"feature": str, "url": str},
     "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
     "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
@@ -211,6 +216,7 @@ SHAPES = {
         "techniques": list,
         "pairs": list,
         "elements": list,
+        "materials": list,
         "unpublishedCount": int,
     },
     "SynthesisCoverage": {
@@ -218,16 +224,23 @@ SHAPES = {
         "label": str,
         "document": str,
         "counts": dict,
+        "components": list,
     },
-    "SynthesisCanvas": {"canvas": str, "document": str, "label": str, "selected": bool},
+    "SynthesisCoverageComponent": {"component": ("Ref", None), "counts": dict},
+    "SynthesisCanvas": {
+        "canvas": str,
+        "document": str,
+        "label": str,
+        "selected": bool,
+        "analyses": list,
+        "materials": list,
+    },
     "SynthesisPair": {
         "colour": ("ValueRef", None),
         "material": "ValueRef",
         "elements": list,
-        "canvases": list,
-        "confidenceBest": ("RankedValue", None),
         "count": int,
-        "cells": list,
+        "materials": list,
     },
     "SynthesisElementRef": {
         "id": str,
@@ -235,7 +248,20 @@ SHAPES = {
         "label": "Label",
         "symbol": (str, type(None)),
     },
-    "SynthesisElement": {"symbol": str, "level": ("RankedValue", None), "count": int},
+    "SynthesisElement": {
+        "symbol": str,
+        "level": ("RankedValue", None),
+        "count": int,
+        "materials": list,
+    },
+    "SynthesisMaterial": {
+        "id": str,
+        "evidence": list,
+        "canvases": list,
+        "objects": list,
+        "summary": "CharacterizationSummary",
+        "selected": bool,
+    },
     "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
     "ProductLink": {"url": str, "path": str},
     "ShareLinks": {

@@ -21,12 +21,14 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 const MIN_ZOOM = -5;
-const ZOOM_SNAP = 0.25;
+const ZOOM_DELTA = 0.5;
 
 /**
  * One micro-image, zoomable. It reads the file only: the analysis card passes
  * its record as every preview gets it, Compare shows a Selection file without
- * one. Inside a Compare window it follows the window's size.
+ * one. The whole image fills its well at first (no zoom snap); inside a
+ * Compare window it follows the window's size, and fits the whole image
+ * again after a resize until the reader zooms or drags it.
  */
 const props = defineProps<{
     file: FileEntry;
@@ -44,10 +46,17 @@ const href = computed(() => safeHref(props.file.downloadUrl));
 // The Leaflet map lives outside Vue reactivity.
 let map: L.Map | null = null;
 let probe: HTMLImageElement | null = null;
+let imageBounds: L.LatLngBounds | null = null;
+/** Whether the view is still the fitted one: the reader has not zoomed or dragged. */
+let fitted = true;
+let fitting = false;
 
 watch(
     () => windowResize?.value,
-    () => map?.invalidateSize(),
+    () => {
+        map?.invalidateSize();
+        if (fitted) fitImage();
+    },
 );
 
 onMounted(() => {
@@ -85,13 +94,27 @@ function show(width: number, height: number): void {
         crs: L.CRS.Simple,
         attributionControl: false,
         minZoom: MIN_ZOOM,
-        zoomSnap: ZOOM_SNAP,
+        zoomSnap: 0,
+        zoomDelta: ZOOM_DELTA,
     });
     L.imageOverlay(href.value!, bounds, {
         className: "micro-image",
         alt: props.file.name,
     }).addTo(map);
-    map.fitBounds(bounds, { animate: false });
+    imageBounds = bounds;
+    map.on("zoomstart dragstart", onReaderMove);
+    fitImage();
+}
+
+function fitImage(): void {
+    if (!map || !imageBounds) return;
+    fitting = true;
+    map.fitBounds(imageBounds, { animate: false });
+    fitting = false;
+}
+
+function onReaderMove(): void {
+    if (!fitting) fitted = false;
 }
 </script>
 

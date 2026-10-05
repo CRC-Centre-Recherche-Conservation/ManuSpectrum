@@ -4,13 +4,17 @@ import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 import {
     annotation,
+    documentPayload,
+    label,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import {
+    componentOutlines,
     markedZones,
     shapeBounds,
     shapeCentre,
+    shapeCorner,
     shapeFeature,
     toLatLng,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -60,6 +64,61 @@ describe("folio geometry", () => {
         expect(shapeCentre(empty)).toBeNull();
         expect(shapeBounds(empty)).toBeNull();
         expect(shapeFeature(empty, {})).toBeNull();
+    });
+
+    it("puts a label corner at the north-west of an extent, none on a point", () => {
+        expect(shapeCorner({ type: "rect", x: 0, y: 0, w: 64, h: 32 })).toEqual(
+            [0, 0],
+        );
+        expect(
+            shapeCorner({
+                type: "polygon",
+                points: [
+                    [32, 64],
+                    [96, 64],
+                    [64, 128],
+                ],
+            }),
+        ).toEqual([-2, 1]);
+        expect(shapeCorner({ type: "point", x: 5, y: 5 })).toBeNull();
+    });
+
+    it("outlines the components with an extent on one folio, in the payload's order", () => {
+        const rect = { type: "rect", x: 0, y: 0, w: 64, h: 32 } as const;
+        const point = { type: "point", x: 5, y: 5 } as const;
+        const payload = documentPayload({
+            components: [
+                {
+                    id: uuid(901),
+                    name: label("Initial"),
+                    zones: [
+                        { canvas: 1, shape: rect, feature: "k1" },
+                        { canvas: 0, shape: rect, feature: "k2" },
+                    ],
+                },
+                {
+                    id: uuid(902),
+                    name: label("Point only"),
+                    zones: [{ canvas: 0, shape: point, feature: "k3" }],
+                },
+                {
+                    id: uuid(903),
+                    name: label("Border"),
+                    zones: [{ canvas: 0, shape: rect, feature: "k4" }],
+                },
+            ],
+        });
+        const [first, second] = payload.canvases;
+        expect(componentOutlines(payload, first.id)).toEqual([
+            { id: uuid(901), name: label("Initial"), shapes: [rect] },
+            { id: uuid(903), name: label("Border"), shapes: [rect] },
+        ]);
+        expect(
+            componentOutlines(payload, second.id).map((outline) => outline.id),
+        ).toEqual([uuid(901)]);
+        expect(
+            componentOutlines(payload, "https://iiif.example/other"),
+        ).toEqual([]);
     });
 
     it("has no bounds for a point", () => {

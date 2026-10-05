@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-27 08:36-0500\n"
+"POT-Creation-Date: 2026-09-28 05:32-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -170,7 +170,7 @@ msgstr "Statut"
 msgid "Draft"
 msgstr "Brouillon"
 
-#: iiif/bodies.py:46 iiif/sources.py:224 templates/explorer/export_readme.md:33
+#: iiif/bodies.py:46 iiif/sources.py:276 templates/explorer/export_readme.md:33
 #: templates/views/components/ms-file-workbench.htm:44
 #: templates/views/components/ms-file-workbench.htm:47
 msgid "Attribution"
@@ -209,45 +209,45 @@ msgstr "Éléments : %(elements)s"
 msgid "%(name)s (%(qualifier)s)"
 msgstr "%(name)s (%(qualifier)s)"
 
-#: iiif/manifest.py:124
+#: iiif/manifest.py:128
 #, python-format
 msgid "Selection of %(count)d page of %(document)s"
 msgid_plural "Selection of %(count)d pages of %(document)s"
 msgstr[0] "Sélection de %(count)d folio de %(document)s"
 msgstr[1] "Sélection de %(count)d folios de %(document)s"
 
-#: iiif/manifest.py:131
+#: iiif/manifest.py:135
 #, python-format
 msgid "Selection of %(count)d page of %(documents)d documents"
 msgid_plural "Selection of %(count)d pages of %(documents)d documents"
 msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
 msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
 
-#: iiif/manifest.py:168
+#: iiif/manifest.py:172
 msgid "Without a position on the image"
 msgstr "Sans position sur l'image"
 
-#: iiif/manifest.py:174 views/explorer/export.py:385
-#: views/explorer/series.py:116
+#: iiif/manifest.py:178 views/explorer/export.py:384
+#: views/explorer/series.py:126
 msgid "Contains drafts"
 msgstr "Contient des brouillons"
 
-#: iiif/pages.py:30
+#: iiif/pages.py:32
 #, python-format
 msgid "Analyses of %(name)s"
 msgstr "Analyses de %(name)s"
 
-#: iiif/pages.py:31
+#: iiif/pages.py:33
 #, python-format
 msgid "Analyses of %(name)s, %(canvas)s"
 msgstr "Analyses de %(name)s, %(canvas)s"
 
-#: iiif/pages.py:34
+#: iiif/pages.py:36
 #, python-format
 msgid "Identified materials of %(name)s"
 msgstr "Matériaux identifiés de %(name)s"
 
-#: iiif/pages.py:35
+#: iiif/pages.py:37
 #, python-format
 msgid "Identified materials of %(name)s, %(canvas)s"
 msgstr "Matériaux identifiés de %(name)s, %(canvas)s"
@@ -497,7 +497,7 @@ msgstr ""
 "Les données proviennent des jeux de données ci-dessous ; citez-les et "
 "réutilisez-les par leur identifiant."
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:507
 msgid "Licences per file"
 msgstr "Licences par fichier"
 
@@ -4858,22 +4858,22 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
 
-#: views/explorer/export.py:378
+#: views/explorer/export.py:377
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] "Sélection de %(count)d élément"
 msgstr[1] "Sélection de %(count)d éléments"
 
-#: views/explorer/export.py:510
+#: views/explorer/export.py:509
 msgid "Each file carries its own licence, given with the file."
 msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
 
-#: views/explorer/export.py:514
+#: views/explorer/export.py:513
 msgid "Licence of the files of this package that name it."
 msgstr "Licence des fichiers de ce paquet qui la mentionnent."
 
-#: views/explorer/export.py:797
+#: views/explorer/export.py:796
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
@@ -4882,7 +4882,7 @@ msgstr ""
 "Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus "
 "de %(count)d canvases) : ouvrez-le par document."
 
-#: views/explorer/export.py:807
+#: views/explorer/export.py:806
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
@@ -4891,7 +4891,7 @@ msgstr ""
 "json) ; ses images sont servies par des serveurs d'images IIIF et ne sont "
 "pas dans le paquet."
 
-#: views/explorer/export.py:814
+#: views/explorer/export.py:813
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
@@ -4900,47 +4900,47 @@ msgstr ""
 "Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être "
 "récupéré."
 
-#: views/explorer/series.py:84
+#: views/explorer/series.py:94
 #, python-format
 msgid "licence %(licence)s"
 msgstr "licence %(licence)s"
 
-#: views/explorer/series.py:86
+#: views/explorer/series.py:96
 #, python-format
 msgid "attribution %(text)s"
 msgstr "attribution %(text)s"
 
-#: views/explorer/series.py:88
+#: views/explorer/series.py:98
 #, python-format
 msgid "configuration %(name)s"
 msgstr "configuration %(name)s"
 
-#: views/explorer/series.py:93
+#: views/explorer/series.py:103
 #, python-format
 msgid "x axis %(label)s"
 msgstr "axe x %(label)s"
 
-#: views/explorer/series.py:95
+#: views/explorer/series.py:105
 #, python-format
 msgid "y axis %(label)s"
 msgstr "axe y %(label)s"
 
-#: views/explorer/series.py:96
+#: views/explorer/series.py:106
 #, python-format
 msgid "raw file %(url)s"
 msgstr "fichier brut %(url)s"
 
-#: views/explorer/series.py:112
+#: views/explorer/series.py:122
 #, python-format
 msgid "%(site)s: spectra of a Selection"
 msgstr "%(site)s : spectres d'une Sélection"
 
-#: views/explorer/series.py:113
+#: views/explorer/series.py:123
 #, python-format
 msgid "Generated on %(date)s"
 msgstr "Produit le %(date)s"
 
-#: views/explorer/series.py:158
+#: views/explorer/series.py:168
 #, python-format
 msgid ""
 "excluded: %(file)s — licence %(licence)s forbids derivatives; raw file: "
@@ -4949,10 +4949,15 @@ msgstr ""
 "exclu : %(file)s — la licence %(licence)s interdit les œuvres dérivées ; "
 "fichier brut : %(url)s"
 
-#: views/explorer/series.py:173
+#: views/explorer/series.py:183
 #, python-format
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
+
+#: views/explorer/synthesis.py:75
+#, python-format
+msgid "%(label)s · view %(number)s"
+msgstr "%(label)s · vue %(number)s"
 
 #: views/iiif/auth.py:51
 msgid "The request to the token service is malformed."

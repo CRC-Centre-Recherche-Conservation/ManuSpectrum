@@ -30,7 +30,7 @@ describe("CanvasStrip", () => {
         expect(wrapper.findAll("button")).toHaveLength(2);
     });
 
-    it("draws a thumbnail from the IIIF service and drops it once refused", async () => {
+    it("draws a thumbnail from the IIIF service, and drops it once the server refuses it", async () => {
         const canvases = documentPayload().canvases.map((canvas) => ({
             ...canvas,
             image: {
