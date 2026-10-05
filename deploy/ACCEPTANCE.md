@@ -196,7 +196,7 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
   files; the commands by hand are in `deploy/compose/secrets/README.md`);
   `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`,
-  `email_password` (empty) as `-r--r--r--`, plus `README.md`; `ls -ld deploy/compose/secrets` →
+  `email_password` (empty), `admin_password` as `-r--r--r--`, plus `README.md`; `ls -ld deploy/compose/secrets` →
   `drwx------`.
 - [ ] *(service account)* `git status --short deploy/compose` → empty (neither `.env` nor
   the secrets are tracked or untracked-visible).
@@ -231,6 +231,19 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
     `has no Arches system settings`. Drop it, then start again:
     `dc exec postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists <PGDBNAME>'` and
     `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
+- [ ] *(service account)* The end of the `init` output says
+  `admin password set from the admin_password secret`. Read the password once,
+  `cat deploy/compose/secrets/admin_password`, and sign in as `admin` on the
+  rehearsal address (`/en/auth/`): it works, and `admin` / `admin` is refused.
+  Store it immediately in the institution's password manager (break-glass account),
+  create a named account for each operator and use those day to day. To read it as the
+  service account from another login: `sudo -iu <service-account> cat <SECRETS_DIR>/admin_password`.
+  Change it any time from the profile page or with
+  `make -C deploy manage ARGS="changepassword admin"` (interactive): the file then no
+  longer matches and only served the installation, the password manager is the
+  reference. PP-2 (sops) will keep an encrypted copy in Git.
+  - On failure: `init` ends with `the admin password could not be set` (the database
+    exists with the default password): fix the file, then `make -C deploy admin-password`.
 - [ ] *(service account)* Run `make -C deploy init` again → exit ≠ 0 with
   `refusing: database <PGDBNAME> exists and setup_db would drop it`, and the data is intact
   (`deploy/compose/smoke.sh init-guard` → four `ok:` lines: `init`, `manage setup_db`,
@@ -247,6 +260,7 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   often on a new host:
   - `ok: database collation and encoding` (`en_US.utf8|UTF8`);
   - `ok: standard_conforming_strings` (the value is `off`: Arches needs it);
+  - `ok: admin keeps Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
   - `ok: /healthz for the public name` (`200`) then
     `ok: /healthz for Host localhost (not allowed)` (`400`): gunicorn answers
     `Host: web` and the `DOMAIN_NAMES` only.

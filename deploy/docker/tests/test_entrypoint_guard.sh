@@ -75,15 +75,19 @@ SH
 cp "$TMP/pg_isready" "$TMP/curl"
 cat >"$TMP/python" <<'SH'
 #!/bin/sh
+if [ "$2" = set_admin_password ]; then exit "${ADMIN_STATUS:-0}"; fi
 cat >/dev/null
 if [ "$2" = database ]; then exit 0; fi
-echo "entrypoint: OperationalError: connection lost" >&2
-exit "$SETTINGS_STATUS"
+if [ "$2" = settings ] && [ "$SETTINGS_STATUS" -ne 0 ]; then
+  echo "entrypoint: OperationalError: connection lost" >&2
+  exit "$SETTINGS_STATUS"
+fi
+echo "STUB python $*"
 SH
 chmod +x "$TMP/pg_isready" "$TMP/curl" "$TMP/python"
 
-run_web() { # run_web SETTINGS_STATUS
-  SETTINGS_STATUS="$1" PATH="$TMP:$PATH" PGHOST=h PGPORT=1 PGUSERNAME=u PGDBNAME=d \
+run_web() { # run_web SETTINGS_STATUS [ADMIN_STATUS]
+  SETTINGS_STATUS="$1" ADMIN_STATUS="${2:-0}" PATH="$TMP:$PATH" PGHOST=h PGPORT=1 PGUSERNAME=u PGDBNAME=d \
     ESHOST=e ESPORT=1 bash "$ENTRYPOINT" web 2>&1
 }
 
@@ -95,5 +99,20 @@ assert "web: an unanswered settings probe does not suggest dropping the database
 out="$(run_web 1)" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'drop the database and run make -C deploy init again' <<<"$out"
 assert "web: missing system settings suggests the recovery" $?
+
+# The settings exist: web refuses while admin still accepts Arches' default
+# password, and does not reach migrate or gunicorn.
+out="$(run_web 0 3)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "the admin account still has Arches' default password: run make -C deploy admin-password" <<<"$out" \
+  && ! grep -q 'STUB python manage.py migrate' <<<"$out"
+assert "web: refuses to start on the default admin password" $?
+
+out="$(run_web 0 1)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q 'cannot tell whether the admin account' <<<"$out"
+assert "web: refuses when the admin check itself fails" $?
+
+out="$(run_web 0 0)" || true
+grep -q 'STUB python manage.py migrate' <<<"$out"
+assert "web: a changed or missing admin goes on to migrate" $?
 
 exit "$failed"

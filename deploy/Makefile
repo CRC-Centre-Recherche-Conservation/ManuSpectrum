@@ -10,10 +10,10 @@ SECRETS_DIR ?= $(COMPOSE_DIR)/secrets
 IMAGE ?= manuspectrum:local
 EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 
-.PHONY: help config volumes secrets build init up down restart status logs smoke
+.PHONY: help config volumes secrets build init admin-password manage up down restart status logs smoke
 
 help: ## List the targets
-	@grep -E '^[a-z]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
+	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
 
 config: ## Validate the merged Compose files
 	$(COMPOSE) config --quiet && echo "compose files valid"
@@ -26,7 +26,7 @@ volumes: ## Create the external data volumes (once per host, idempotent)
 
 # Each file is written to a temporary name and moved into place, so a failed
 # generator leaves no empty secret; an existing file is never replaced.
-SECRET_FILES := pg_password elastic_password django_secret_key email_password
+SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password
 
 secrets: ## Create the secrets directory (0700) and the secret files that are missing
 	@command -v openssl >/dev/null || { echo "openssl is required to generate the secrets" >&2; exit 1; }
@@ -36,7 +36,7 @@ secrets: ## Create the secrets directory (0700) and the secret files that are mi
 	for f in $(SECRET_FILES); do \
 		[ -e $$f ] && continue; \
 		case $$f in \
-			pg_password|elastic_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
+			pg_password|elastic_password|admin_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
 			django_secret_key) python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > $$f.tmp ;; \
 			email_password) : > $$f.tmp ;; \
 		esac; \
@@ -50,6 +50,12 @@ build: ## Build the image (CI or rehearsal VM, 10 GB free RAM; never the develop
 init: ## First installation only: Arches setup_db, refused when the database exists
 	$(COMPOSE) up -d --wait postgres elasticsearch redis-broker redis-cache
 	$(COMPOSE) run --rm -T web init
+
+admin-password: ## Set the admin password from the admin_password secret (first install, rotation)
+	$(COMPOSE) run --rm --no-deps -T web manage set_admin_password
+
+manage: ## Run a management command, interactive: make -C deploy manage ARGS="changepassword admin"
+	$(COMPOSE) run --rm --no-deps web manage $(ARGS)
 
 # `up --wait` refuses a service whose healthcheck is disabled, and beat has
 # none on purpose: wait for every other service, then start beat (it depends

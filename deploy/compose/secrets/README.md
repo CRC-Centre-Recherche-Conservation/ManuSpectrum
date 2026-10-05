@@ -1,12 +1,16 @@
 # Secret files
 
-Compose reads four files from this directory (or from `SECRETS_DIR` in `.env`):
+Compose reads five files from this directory (or from `SECRETS_DIR` in `.env`):
 
 - `pg_password`: password of the PostgreSQL superuser.
 - `elastic_password`: password of the Elasticsearch `elastic` user.
 - `django_secret_key`: Django `SECRET_KEY` (at least 50 characters).
 - `email_password`: password of the SMTP relay. The file must exist; leave it
   empty for a relay without authentication.
+- `admin_password`: password of the Arches superuser `admin`. `setup_db` creates
+  that account with the publicly known password `admin`; `make -C deploy init`
+  replaces it with this file's content right after (`set_admin_password`).
+  Mounted on `web` only. At least 16 characters.
 
 One value per file, without a trailing newline. `make -C deploy secrets`
 creates the directory (`0700`) and every missing file (the generated ones as
@@ -17,6 +21,7 @@ overwrites an existing file.
 openssl rand -base64 48 | tr -d '\n' > pg_password
 openssl rand -base64 48 | tr -d '\n' > elastic_password
 python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > django_secret_key
+openssl rand -base64 48 | tr -d '\n' > admin_password
 ```
 
 Modes: the directory `0700`, owned by the service account; the files `0444`
@@ -30,6 +35,22 @@ change what PostgreSQL and Elasticsearch already store: the services keep the
 old password and the applications, given the new one, fail to authenticate.
 Change the password inside the service first (`ALTER USER`, the Elasticsearch
 security API), then the file.
+
+Operator procedure for `admin_password` (the break-glass account):
+
+1. Read it once, as the service account:
+   `sudo -iu <service-account> cat <SECRETS_DIR>/admin_password`.
+2. Store it immediately in the institution's password manager.
+3. Log in as `admin`, create a named account for each operator, and use those
+   accounts day to day; `admin` is kept for emergencies.
+4. Change it whenever needed, from the profile page or interactively with
+   `make -C deploy manage ARGS="changepassword admin"`. The file then no
+   longer matches and only served the installation: the password manager is
+   the reference. To reset the account to the file's value instead, write the
+   new value into the file (deliberately; `make secrets` never replaces it),
+   then `make -C deploy admin-password`.
+
+PP-2 (sops) will keep an encrypted copy of the secrets in Git.
 
 The files are never committed (`.gitignore` here ignores everything but this
 README), never put in an image, a log or a clear-text backup. PP-2 replaces

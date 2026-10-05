@@ -33,7 +33,9 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `config` | Validate the merged Compose files |
 | `volumes` | Create the external data volumes (once per host, idempotent) |
 | `build` | Build the image (CI or rehearsal VM only) |
-| `init` | First installation: Arches `setup_db`, refused when the database exists |
+| `init` | First installation: Arches `setup_db` then the `admin` password from the `admin_password` secret, refused when the database exists |
+| `admin-password` | Set (or rotate) the `admin` password from the `admin_password` secret |
+| `manage` | Run `manage.py ARGS` in a one-off `web` container (interactive); the commands that drop the database stay refused |
 | `up` | Start or update the stack and wait until it is healthy |
 | `down` | Stop and remove the containers; volumes are kept |
 | `restart` | Restart `web`, `worker` and `beat` |
@@ -67,7 +69,8 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   (the `dc` alias of `ACCEPTANCE.md`), then `make -C deploy init`.
 - Secrets: `make -C deploy secrets` creates the `0700` directory and the
   missing files, including an empty `email_password` (a relay without
-  authentication).
+  authentication) and `admin_password`, the password `init` gives the
+  superuser `admin` in place of Arches' public default `admin`.
 - `web` runs gunicorn `gthread`: `GUNICORN_WORKERS` processes of
   `GUNICORN_THREADS` threads each; production sets 5 x 4, a ceiling of 20
   concurrent requests.

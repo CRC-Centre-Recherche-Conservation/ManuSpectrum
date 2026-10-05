@@ -105,6 +105,14 @@ cmd_check() {
   compose exec -T cantaloupe sh -c 'test -x /imageroot && ls -A /imageroot >/dev/null' \
     || fail "Cantaloupe cannot list /imageroot"
   ok "Cantaloupe lists /imageroot"
+
+  # The script is read from stdin and prints a verdict, never a hash or a password.
+  expect "admin keeps Arches' default password" no \
+    "$(in_web python manage.py shell -c "
+from django.contrib.auth import get_user_model
+user = get_user_model().objects.filter(username='admin').first()
+print('yes' if user is not None and user.check_password('admin') else 'no')
+" | tail -n 1)"
 }
 
 cmd_mark() {

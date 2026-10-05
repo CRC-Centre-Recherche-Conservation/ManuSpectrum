@@ -4,7 +4,8 @@
 #                  static files, then run gunicorn
 #   worker         wait for PostgreSQL and Elasticsearch, then the Celery worker
 #   beat           wait for PostgreSQL, then Celery beat
-#   init           first installation: Arches setup_db, refused when the
+#   init           first installation: Arches setup_db, then the admin
+#                  password from the admin_password secret; refused when the
 #                  database already exists (setup_db drops and recreates it)
 #   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
 #                  packages -db / -o setup) only through `init`
@@ -157,6 +158,15 @@ case "$command" in
       fi
       exit 1
     fi
+    python manage.py set_admin_password --check-default && status=0 || status=$?
+    if [ "$status" -ne 0 ]; then
+      if [ "$status" -eq 3 ]; then
+        log "the admin account still has Arches' default password: run make -C deploy admin-password"
+      else
+        log "cannot tell whether the admin account still has Arches' default password; not starting"
+      fi
+      exit 1
+    fi
     # Migrations run without the timeouts web's requests carry.
     PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 python manage.py migrate --noinput
     publish-static /app/static /srv/static
@@ -194,7 +204,14 @@ case "$command" in
       *) log "refusing: cannot tell whether database ${PGDBNAME} exists"; exit 1 ;;
     esac
     export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
-    exec python manage.py setup_db --force
+    python manage.py setup_db --force
+    # setup_db creates the superuser admin with the publicly known password
+    # "admin"; replace it before anything else can start.
+    if ! python manage.py set_admin_password; then
+      log "setup_db succeeded but the admin password could not be set: the account still has Arches' default password; fix ${ADMIN_PASSWORD_FILE:-ADMIN_PASSWORD_FILE}, then run: make -C deploy admin-password"
+      exit 1
+    fi
+    log "admin password set from the admin_password secret (deploy/compose/secrets/admin_password on the host); create named accounts next and keep admin for emergencies (deploy/compose/secrets/README.md)"
     ;;
   manage)
     shift

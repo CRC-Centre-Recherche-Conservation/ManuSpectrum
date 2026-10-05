@@ -53,7 +53,12 @@ def render(*files):
         )
         secrets = Path(tmp) / "secrets"
         secrets.mkdir()
-        for name in ("pg_password", "elastic_password", "django_secret_key"):
+        for name in (
+            "pg_password",
+            "elastic_password",
+            "django_secret_key",
+            "admin_password",
+        ):
             (secrets / name).write_text("x" * 64)
         (secrets / "email_password").write_text("")
         media = Path(tmp) / "media"

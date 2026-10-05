@@ -193,6 +193,8 @@ services:
       <<: *app_environment
       PG_STATEMENT_TIMEOUT_MS: ${PG_STATEMENT_TIMEOUT_MS:-60000}
       PG_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${PG_IDLE_IN_TRANSACTION_TIMEOUT_MS:-60000}
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+    secrets: [pg_password, elastic_password, django_secret_key, email_password, admin_password]
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=1g"]
     volumes:
       - *media
@@ -250,6 +252,9 @@ secrets:
   # Optional content: empty means a relay without authentication.
   email_password:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/email_password
+  # Password given to the Arches superuser `admin` by `init`; only web mounts it.
+  admin_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/admin_password
 
 volumes:
   pg_data:
