@@ -40,6 +40,7 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `status` | Containers and their health |
 | `logs` | Follow the last 200 lines of every service |
 | `smoke` | Read-only checks of the running stack |
+| `secrets` | Create the secrets directory (`0700`) and the missing secret files |
 
 ## Rules
 
@@ -55,7 +56,18 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 - `web`, `worker` and `beat` run as `APP_UID:APP_GID` on a read-only root
   filesystem; the image works under any uid.
 - The first installation goes through `make init` only. It refuses to run when
-  the database exists, because `setup_db` drops and recreates it.
+  the database exists, because `setup_db` drops and recreates it. The
+  entrypoint's `manage` refuses every command that would do it: `setup_db`,
+  `packages ... -db` / `--setup_db`, `packages -o setup`. `web` refuses to
+  start on a database that exists without the Arches system settings.
+- A failed first installation (the database is half created): `make init`
+  refuses because the database exists, and `web` logs
+  `has no Arches system settings`. Drop the database and start again:
+  `docker compose ... exec postgres sh -c 'dropdb -U "$POSTGRES_USER" <PGDBNAME>'`
+  (the `dc` alias of `ACCEPTANCE.md`), then `make -C deploy init`.
+- Secrets: `make -C deploy secrets` creates the `0700` directory and the
+  missing files, including an empty `email_password` (a relay without
+  authentication).
 - `web` runs gunicorn `gthread`: `GUNICORN_WORKERS` processes of
   `GUNICORN_THREADS` threads each; production sets 5 x 4, a ceiling of 20
   concurrent requests.

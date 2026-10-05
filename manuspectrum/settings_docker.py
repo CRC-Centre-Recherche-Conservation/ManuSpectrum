@@ -95,9 +95,12 @@ if not DOMAIN_NAMES:
 ALLOWED_HOSTS = DOMAIN_NAMES + ["web"]
 CSRF_TRUSTED_ORIGINS = [f"https://{name}" for name in DOMAIN_NAMES]
 
-PUBLIC_SERVER_ADDRESS = get_env_variable("PUBLIC_SERVER_ADDRESS").rstrip("/") + "/"
+PUBLIC_SERVER_ADDRESS = get_env_variable("PUBLIC_SERVER_ADDRESS")
 if not PUBLIC_SERVER_ADDRESS.startswith("https://"):
     raise ImproperlyConfigured("PUBLIC_SERVER_ADDRESS must be an https:// URL")
+# Compose appends `iiifserver` to this value without a separator.
+if not PUBLIC_SERVER_ADDRESS.endswith("/"):
+    raise ImproperlyConfigured("PUBLIC_SERVER_ADDRESS must end with a slash")
 ARCHES_NAMESPACE_FOR_DATA_EXPORT = PUBLIC_SERVER_ADDRESS
 EXTRA_EMAIL_CONTEXT = {
     **EXTRA_EMAIL_CONTEXT,
@@ -113,9 +116,32 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "SAMEORIGIN"
 SECURE_SSL_REDIRECT = False
 
+
+def statement_timeout_ms():
+    """Return PG_STATEMENT_TIMEOUT_MS as an int: 60000 when unset, 0 for no timeout."""
+    value = get_optional_env_variable("PG_STATEMENT_TIMEOUT_MS", "60000").strip()
+    try:
+        timeout = int(value)
+    except ValueError:
+        timeout = -1
+    if timeout < 0:
+        raise ImproperlyConfigured(
+            f"PG_STATEMENT_TIMEOUT_MS must be a number of milliseconds, not {value!r}"
+        )
+    return timeout
+
+
+# Compose sets it for `web` alone: gthread request threads are not bounded by
+# gunicorn's timeout, so PostgreSQL bounds each statement. Worker, beat and
+# management commands run without one.
+DATABASE_OPTIONS = dict(DATABASES["default"]["OPTIONS"])
+if statement_timeout_ms():
+    DATABASE_OPTIONS["options"] += f" -c statement_timeout={statement_timeout_ms()}"
+
 DATABASES = {
     "default": {
         **DATABASES["default"],
+        "OPTIONS": DATABASE_OPTIONS,
         "NAME": get_env_variable("PGDBNAME"),
         "USER": get_env_variable("PGUSERNAME"),
         "PASSWORD": read_secret("PGPASSWORD"),
@@ -188,6 +214,9 @@ LOGGING = {
     },
     "root": {"handlers": ["console"], "level": "WARNING"},
     "loggers": {
+        # Django's default configuration sends `django` to mail_admins; this
+        # entry replaces it so no error is e-mailed from a request thread.
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "arches": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "django.request": {
             "handlers": ["console"],

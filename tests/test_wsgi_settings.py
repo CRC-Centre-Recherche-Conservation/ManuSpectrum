@@ -3,9 +3,11 @@
 import os
 import subprocess
 import sys
+import importlib
 import tempfile
 import textwrap
 from pathlib import Path
+from unittest import mock
 
 from django.test import SimpleTestCase
 
@@ -56,3 +58,22 @@ class WsgiSettingsModuleTests(SimpleTestCase):
 
     def test_development_settings_remain_the_default(self):
         self.assertEqual(settings_module_after_wsgi_import({}), "manuspectrum.settings")
+
+
+class WsgiConnectionsTests(SimpleTestCase):
+    def test_import_time_connections_are_closed_after_the_settings_load(self):
+        from arches.app.models.system_settings import SystemSettings
+        from django.db import connections
+
+        calls = mock.Mock()
+        sys.modules.pop("manuspectrum.wsgi", None)
+        self.addCleanup(sys.modules.pop, "manuspectrum.wsgi", None)
+        with (
+            mock.patch("django.core.wsgi.get_wsgi_application"),
+            mock.patch.object(SystemSettings, "update_from_db", calls.update_from_db),
+            mock.patch.object(connections, "close_all", calls.close_all),
+        ):
+            importlib.import_module("manuspectrum.wsgi")
+        self.assertEqual(
+            [call[0] for call in calls.mock_calls], ["update_from_db", "close_all"]
+        )

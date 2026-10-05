@@ -6,7 +6,8 @@
 #   beat           wait for PostgreSQL, then Celery beat
 #   init           first installation: Arches setup_db, refused when the
 #                  database already exists (setup_db drops and recreates it)
-#   manage ARGS    manage.py ARGS; setup_db only through `init`
+#   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
+#                  packages -db / -o setup) only through `init`
 #   anything else  executed as given
 # Docker applies no depends_on order when it restarts containers after a host
 # reboot, so every command waits for what it needs itself (WAIT_SECONDS).
@@ -41,38 +42,97 @@ elasticsearch_ready() {
     | curl -fsS -K - "http://${ESHOST}:${ESPORT}/_cluster/health?wait_for_status=yellow&timeout=5s"
 }
 
-# Exit status 0: PGDBNAME exists; 1: it does not; 2: the question could not be answered.
-database_exists() {
-  python - <<'PY'
+# pg_probe WHAT: exit status 0 when it holds, 1 when it does not, 2 when the
+# question could not be answered. WHAT is `database` (PGDBNAME exists) or
+# `settings` (the Arches system settings resource instance is in PGDBNAME: a
+# database that setup_db did not finish lacks it).
+pg_probe() {
+  python - "$1" <<'PY'
 import os
 import sys
 
 try:
     import psycopg2
 
+    what = sys.argv[1]
     path = os.environ.get("PGPASSWORD_FILE")
     if path:
         with open(path, encoding="utf-8") as handle:
             password = handle.read().strip()
     else:
         password = os.environ.get("PGPASSWORD", "")
+    if what == "database":
+        dbname = "postgres"
+        query = ("SELECT 1 FROM pg_database WHERE datname = %s", (os.environ["PGDBNAME"],))
+    else:
+        from arches.settings import SYSTEM_SETTINGS_RESOURCE_ID
+
+        dbname = os.environ["PGDBNAME"]
+        query = (
+            "SELECT 1 FROM resource_instances WHERE resourceinstanceid = %s",
+            (SYSTEM_SETTINGS_RESOURCE_ID,),
+        )
     connection = psycopg2.connect(
         host=os.environ["PGHOST"],
         port=os.environ["PGPORT"],
         user=os.environ["PGUSERNAME"],
         password=password,
-        dbname="postgres",
+        dbname=dbname,
         connect_timeout=5,
     )
-    with connection, connection.cursor() as cursor:
-        cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (os.environ["PGDBNAME"],))
-        found = cursor.fetchone() is not None
-    connection.close()
+    try:
+        with connection, connection.cursor() as cursor:
+            try:
+                cursor.execute(*query)
+                found = cursor.fetchone() is not None
+            except psycopg2.errors.UndefinedTable:
+                found = False
+    finally:
+        connection.close()
 except Exception as error:
     print(f"entrypoint: {type(error).__name__}: {error}", file=sys.stderr)
     sys.exit(2)
 sys.exit(0 if found else 1)
 PY
+}
+
+database_exists() { pg_probe database; }
+system_settings_exist() { pg_probe settings; }
+
+# manage_refusal ARGS...: prints the command that drops the database when ARGS
+# would run it, through Arches' setup_db or through `packages` (`-db`,
+# `--setup_db`, `-o setup`), and returns 0; returns 1 otherwise.
+manage_refusal() {
+  local arg previous="" packages=0
+  for arg in "$@"; do
+    if [ "$arg" = setup_db ]; then
+      echo "setup_db"
+      return 0
+    fi
+    [ "$arg" = packages ] && packages=1
+    if [ "$packages" = 1 ]; then
+      case "$arg" in
+        -db | --setup*)
+          echo "packages $arg"
+          return 0
+          ;;
+        -osetup | -o=setup | --op*=setup)
+          echo "packages -o setup"
+          return 0
+          ;;
+      esac
+      if [ "$arg" = setup ]; then
+        case "$previous" in
+          -o | --op | --ope | --oper | --opera | --operat | --operati | --operatio | --operation)
+            echo "packages -o setup"
+            return 0
+            ;;
+        esac
+      fi
+    fi
+    previous="$arg"
+  done
+  return 1
 }
 
 command="${1:-web}"
@@ -85,7 +145,13 @@ case "$command" in
       log "database ${PGDBNAME} is missing or unreachable: run the init command once (make -C deploy init)"
       exit 1
     fi
-    python manage.py migrate --noinput
+    system_settings_exist && status=0 || status=$?
+    if [ "$status" -ne 0 ]; then
+      log "database ${PGDBNAME} has no Arches system settings: the first installation did not finish; drop the database and run make -C deploy init again (deploy/README.md, \"A failed first installation\")"
+      exit 1
+    fi
+    # Migrations run without the statement timeout web's requests carry.
+    PG_STATEMENT_TIMEOUT_MS=0 python manage.py migrate --noinput
     publish-static /app/static /srv/static
     exec gunicorn --config /app/gunicorn.conf.py
     ;;
@@ -96,7 +162,8 @@ case "$command" in
       --loglevel="${CELERY_LOG_LEVEL:-INFO}" \
       --concurrency="${CELERY_CONCURRENCY:-2}" \
       --prefetch-multiplier=1 \
-      --max-tasks-per-child=200
+      --max-tasks-per-child=200 \
+      --max-memory-per-child="${CELERY_MAX_MEMORY_PER_CHILD:-600000}"
     ;;
   beat)
     wait_for PostgreSQL postgres_ready
@@ -119,14 +186,17 @@ case "$command" in
       1) ;;
       *) log "refusing: cannot tell whether database ${PGDBNAME} exists"; exit 1 ;;
     esac
+    export PG_STATEMENT_TIMEOUT_MS=0
     exec python manage.py setup_db --force
     ;;
   manage)
     shift
-    if [ "${1:-}" = setup_db ]; then
-      log "refusing: setup_db drops the database; use the init command"
+    if refused="$(manage_refusal "$@")"; then
+      log "refusing: ${refused} drops and recreates the database; the first installation goes through make -C deploy init"
       exit 1
     fi
+    # Management commands (reindex, imports) run without a statement timeout.
+    export PG_STATEMENT_TIMEOUT_MS=0
     exec python manage.py "$@"
     ;;
   *)

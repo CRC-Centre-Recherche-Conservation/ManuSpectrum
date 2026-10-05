@@ -182,7 +182,10 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   Compose v2 and `json-file`.
 - [ ] `sudo install -d -o manuspectrum -g manuspectrum -m 0750 /data/manuspectrum /data/manuspectrum/media /data/manuspectrum/media/uploadedfiles`
   (paths and account from `rehearsal.env`), then `ls -ldn /data/manuspectrum/media` →
-  owner and group = `id -u manuspectrum`, `id -g manuspectrum`.
+  owner and group = `id -u manuspectrum`, `id -g manuspectrum`. Directories `0750`, files
+  `0640`, owned by the account: Cantaloupe is not that account, it reads the uploads through
+  `group_add: APP_GID`. Files that web or worker write later get `0644` (umask 022).
+  Over NFS the export must keep the uid and gid (no `root_squash` remapping of them).
 - [ ] *(service account)* the repository is at `~/manuspectrum` at the commit under test:
   `git clone https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`,
   `git -C manuspectrum checkout <commit>`, `git -C manuspectrum log -1 --format=%H` → `<commit>`.
@@ -190,9 +193,11 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   `APP_UID`, `APP_GID` (`id -u`, `id -g`), `MEDIA_HOST_DIR`, `DOMAIN_NAMES` and
   `PUBLIC_SERVER_ADDRESS` to the rehearsal values; leave `MANUSPECTRUM_IMAGE=manuspectrum:local`.
   Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`.
-- [ ] *(service account)* create the three secret files as `deploy/compose/secrets/README.md`
-  says; `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`
-  as `-r--r--r--`; `ls -ld deploy/compose/secrets` → `drwx------`.
+- [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
+  files; the commands by hand are in `deploy/compose/secrets/README.md`);
+  `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`,
+  `email_password` (empty) as `-r--r--r--`, plus `README.md`; `ls -ld deploy/compose/secrets` →
+  `drwx------`.
 - [ ] *(service account)* `git status --short deploy/compose` → empty (neither `.env` nor
   the secrets are tracked or untracked-visible).
 
@@ -221,9 +226,15 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   (`echo $?`).
   - On failure: `dc logs --tail=100 postgres elasticsearch`; an Elasticsearch that never
     gets healthy: `sysctl vm.max_map_count` → at least `262144`.
+  - A failed first installation (Elasticsearch flapping, out of memory, Ctrl-C) leaves a
+    half-created database: `make init` then refuses, and `web` refuses to start with
+    `has no Arches system settings`. Drop it, then start again:
+    `dc exec postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists <PGDBNAME>'` and
+    `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
 - [ ] *(service account)* Run `make -C deploy init` again → exit ≠ 0 with
   `refusing: database <PGDBNAME> exists and setup_db would drop it`, and the data is intact
-  (`deploy/compose/smoke.sh init-guard` → two `ok:` lines). **(CI too)**
+  (`deploy/compose/smoke.sh init-guard` → four `ok:` lines: `init`, `manage setup_db`,
+  `manage packages ... -db`, `manage packages -o setup`). **(CI too)**
 - [ ] *(service account)* `make -C deploy up` → returns without error (it waits for every
   service but `beat`, then starts `beat`); up to 15 minutes on a first start.
   - On failure: `make -C deploy status`, then `dc logs --tail=100 <service>` of the one
@@ -247,15 +258,24 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
 ### 2.5 Resources and restart policy (D-H6)
 
 - [ ] `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
-  elasticsearch 6GiB, postgres 6GiB, web 4GiB, worker 2GiB, cantaloupe 1.5GiB,
-  redis-broker 256MiB, redis-cache 768MiB, beat 512MiB. Record the idle usage of each.
+  elasticsearch 4GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
+  redis-broker 256MiB, redis-cache 768MiB, beat 256MiB. Record the idle usage of each.
+  Expected idle (capacity review §2.11): elasticsearch 2.3-2.5 GiB, postgres 0.8-1.2,
+  web 2.5-3.0, worker 0.4-0.6, cantaloupe 0.3 (1.3 warm).
+- [ ] `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' $(dc ps -q)`
+  → eight lines where the two figures are equal (a container never swaps).
   - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
     applied: the `-f` list or `make` was bypassed.
 - [ ] `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
   each worker runs 4 threads: 20 concurrent requests, `GUNICORN_WORKERS`/`GUNICORN_THREADS`).
 - [ ] `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
+- [ ] `docker inspect -f '{{.Config.StopTimeout}}' manuspectrum-web-1` → `310` (above gunicorn's
+  `graceful_timeout` of 300 s: a download in progress survives a worker recycle and a stop).
+- [ ] `dc exec -T web python manage.py shell -c "from django.db import connection as c; k=c.cursor(); k.execute('SHOW statement_timeout'); print(k.fetchone()[0])"`
+  → `1min`; the same command with `worker` instead of `web` → `0`.
+- [ ] `dc exec -T cantaloupe id` → the groups list contains `APP_GID`.
 - [ ] `dc exec elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/_local/stats/jvm?filter_path=**.heap_max_in_bytes"'`
-  → `4294967296`.
+  → `2147483648`.
 - [ ] `dc exec elasticsearch sh -c 'stat -c %a /tmp/elastic_password; stat -c %a /run/secrets/elastic_password'`
   → `600` then `444` (Elasticsearch reads its own `0600` copy; the host file stays shared).
 - [ ] `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' $(dc ps -q)` → eight lines

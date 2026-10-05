@@ -30,6 +30,15 @@ class GunicornConfTests(unittest.TestCase):
         self.assertEqual(conf["threads"], 6)
         self.assertEqual(conf["workers"], 3)
 
+    def test_graceful_timeout_lets_long_downloads_finish(self):
+        conf = load()
+        self.assertEqual(conf["graceful_timeout"], 300)
+        self.assertEqual(conf["max_requests"], 1000)
+        self.assertEqual(conf["max_requests_jitter"], 100)
+
+    def test_graceful_timeout_comes_from_the_environment(self):
+        self.assertEqual(load(GUNICORN_GRACEFUL_TIMEOUT="60")["graceful_timeout"], 60)
+
     def test_no_preload(self):
         self.assertFalse(load().get("preload_app", False))
 

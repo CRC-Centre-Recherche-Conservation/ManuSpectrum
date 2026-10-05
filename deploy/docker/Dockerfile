@@ -66,7 +66,7 @@ COPY --from=frontend /app/node_modules ./node_modules
 RUN set -a && . /tmp/placeholder.env && set +a \
     && python manage.py collectstatic --noinput \
     && python -m compileall -q manuspectrum \
-    && find static -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum \
+    && find static -type f ! -name .build-id -print0 | LC_ALL=C sort -z | xargs -0 sha256sum \
         | sha256sum | cut -c1-16 > static/.build-id
 
 FROM ${PYTHON_IMAGE} AS runtime

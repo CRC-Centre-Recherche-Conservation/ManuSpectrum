@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
-# publish-static tests, the Compose rules, actionlint, uv.lock freshness and
-# gitleaks. Builds nothing and starts no service: safe on the development VM.
+# publish-static and entrypoint guard tests, the Compose rules, actionlint,
+# uv.lock freshness and gitleaks. Builds nothing and starts no service: safe on the development VM.
 # Stops at the first failure.
 set -euo pipefail
 
@@ -28,6 +28,9 @@ echo "hadolint: no warning"
 
 step "publish-static tests"
 bash deploy/docker/tests/test_publish_static.sh
+
+step "entrypoint guard tests"
+bash deploy/docker/tests/test_entrypoint_guard.sh
 
 step "Compose rules"
 python3 -m unittest discover -s deploy/compose/tests -p 'test_*.py'

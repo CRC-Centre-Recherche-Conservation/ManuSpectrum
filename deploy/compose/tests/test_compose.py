@@ -8,6 +8,7 @@ checks the result. Starts nothing; needs the docker CLI with Compose v2.
 
 import json
 import re
+import runpy
 import shutil
 import subprocess
 import tempfile
@@ -26,12 +27,12 @@ EXTERNAL_VOLUMES = {
 MIB = 1024**2
 GIB = 1024**3
 PROD_LIMITS = {
-    "elasticsearch": 6 * GIB,
-    "postgres": 6 * GIB,
+    "elasticsearch": 4 * GIB,
+    "postgres": 3 * GIB,
     "web": 4 * GIB,
     "worker": 2 * GIB,
-    "beat": 512 * MIB,
-    "cantaloupe": 1536 * MIB,
+    "beat": 256 * MIB,
+    "cantaloupe": 1792 * MIB,
     "redis-broker": 256 * MIB,
     "redis-cache": 768 * MIB,
 }
@@ -54,6 +55,7 @@ def render(*files):
         secrets.mkdir()
         for name in ("pg_password", "elastic_password", "django_secret_key"):
             (secrets / name).write_text("x" * 64)
+        (secrets / "email_password").write_text("")
         media = Path(tmp) / "media"
         (media / "uploadedfiles").mkdir(parents=True)
         env = (COMPOSE_DIR / ".env.example").read_text()
@@ -226,13 +228,90 @@ class ComposeStackTests(unittest.TestCase):
         self.assertEqual(services["web"]["environment"]["GUNICORN_WORKERS"], "5")
         self.assertEqual(services["web"]["environment"]["GUNICORN_THREADS"], "4")
         self.assertEqual(services["worker"]["environment"]["CELERY_CONCURRENCY"], "3")
-        self.assertEqual(
-            services["elasticsearch"]["environment"]["ES_JAVA_OPTS"], "-Xms4g -Xmx4g"
+        elasticsearch = services["elasticsearch"]["environment"]
+        self.assertEqual(elasticsearch["ES_JAVA_OPTS"], "-Xms2g -Xmx2g")
+        self.assertEqual(elasticsearch["xpack.ml.enabled"], "false")
+        java = services["cantaloupe"]["environment"]["JAVA_TOOL_OPTIONS"].split()
+        self.assertIn("-Xmx1g", java)
+        self.assertIn("-XX:+ExitOnOutOfMemoryError", java)
+
+    def test_production_services_never_swap(self):
+        for name, limit in PROD_LIMITS.items():
+            with self.subTest(service=name):
+                self.assertEqual(
+                    to_bytes(self.prod["services"][name]["memswap_limit"]), limit
+                )
+
+    def test_production_postgres_settings(self):
+        command = self.prod["services"]["postgres"]["command"]
+        settings = dict(
+            item.split("=", 1) for item in command if re.match(r"^[a-z_]+=", item)
         )
+        for key, value in {
+            "standard_conforming_strings": "off",
+            "shared_buffers": "1GB",
+            "effective_cache_size": "3GB",
+            "work_mem": "16MB",
+            "maintenance_work_mem": "256MB",
+            "autovacuum_work_mem": "128MB",
+            "max_connections": "60",
+            "idle_in_transaction_session_timeout": "60s",
+        }.items():
+            with self.subTest(setting=key):
+                self.assertEqual(settings.get(key), value)
         self.assertEqual(
-            services["cantaloupe"]["environment"]["JAVA_TOOL_OPTIONS"], "-Xmx1g"
+            self.prod["services"]["postgres"]["environment"]["POSTGRES_INITDB_ARGS"],
+            "--encoding=UTF8 --locale=en_US.utf8",
         )
-        self.assertIn("shared_buffers=4GB", services["postgres"]["command"])
+
+    def test_cantaloupe_reads_the_uploaded_files_through_the_host_group(self):
+        for label, stack in self.stacks.items():
+            with self.subTest(stack=label):
+                self.assertEqual(
+                    stack["services"]["cantaloupe"]["group_add"], ["10001"]
+                )
+
+    def test_web_outlives_gunicorns_graceful_timeout(self):
+        conf = runpy.run_path(str(DEPLOY_DIR / "docker" / "gunicorn.conf.py"))
+        for label, stack in self.stacks.items():
+            with self.subTest(stack=label):
+                grace = stack["services"]["web"]["stop_grace_period"]
+                self.assertEqual(grace, "5m10s")
+                self.assertGreater(310, conf["graceful_timeout"])
+
+    def test_only_web_sets_a_statement_timeout(self):
+        for label, stack in self.stacks.items():
+            with self.subTest(stack=label):
+                services = stack["services"]
+                self.assertEqual(
+                    services["web"]["environment"]["PG_STATEMENT_TIMEOUT_MS"], "60000"
+                )
+                for name in ("worker", "beat"):
+                    self.assertEqual(
+                        services[name]["environment"]["PG_STATEMENT_TIMEOUT_MS"], "0"
+                    )
+
+    def test_smtp_password_is_an_optional_secret_file(self):
+        for label, stack in self.stacks.items():
+            with self.subTest(stack=label):
+                self.assertIn("email_password", stack["secrets"])
+                for name in APP_SERVICES:
+                    service = stack["services"][name]
+                    self.assertEqual(
+                        service["environment"]["EMAIL_HOST_PASSWORD_FILE"],
+                        "/run/secrets/email_password",
+                    )
+                    self.assertIn(
+                        "email_password", [s["source"] for s in service["secrets"]]
+                    )
+
+    def test_cantaloupe_base_uri_is_the_public_address_plus_iiifserver(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertTrue(
+            environment["CANTALOUPE_BASE_URI"].endswith("manuspectrum.test/iiifserver")
+        )
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(env, r"(?m)^PUBLIC_SERVER_ADDRESS=https://\S+/$")
 
     def test_third_party_images_are_pinned_by_digest(self):
         for name, service in self.base["services"].items():

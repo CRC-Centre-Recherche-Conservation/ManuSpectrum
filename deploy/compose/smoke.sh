@@ -6,7 +6,8 @@
 #                redis-broker, media; remembered in SMOKE_STATE
 #   survived     the markers written by `mark` are still there
 #   static-swap  a stale `current` static release is replaced on web restart
-#   init-guard   `init` and `manage setup_db` are refused on a live database
+#   init-guard   `init`, `manage setup_db` and the `packages` forms that call it
+#                are refused on a live database
 #   clean        remove the markers
 # mark, static-swap, init-guard and clean are for CI and rehearsal only.
 set -euo pipefail
@@ -79,6 +80,8 @@ cmd_check() {
 
   expect "database collation and encoding" "en_US.utf8|UTF8" \
     "$(psql_app "SELECT datcollate || '|' || pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database()")"
+  expect "Arches system settings" 1 \
+    "$(psql_app "SELECT count(*) FROM resource_instances WHERE resourceinstanceid = 'a106c400-260c-11e7-a604-14109fd34195'")"
   expect "template_postgis" "true|en_US.utf8" \
     "$(psql_app "SELECT datistemplate::text || '|' || datcollate FROM pg_database WHERE datname = 'template_postgis'")"
   expect "standard_conforming_strings" off "$(psql_app 'SHOW standard_conforming_strings')"
@@ -99,6 +102,9 @@ cmd_check() {
   [ "$(compose exec -T cantaloupe curl -s -o /dev/null -w '%{http_code}' http://localhost:8182/admin)" != 200 ] \
     || fail "Cantaloupe admin endpoint answers"
   ok "Cantaloupe admin endpoint closed"
+  compose exec -T cantaloupe sh -c 'test -x /imageroot && ls -A /imageroot >/dev/null' \
+    || fail "Cantaloupe cannot list /imageroot"
+  ok "Cantaloupe lists /imageroot"
 }
 
 cmd_mark() {
@@ -111,7 +117,7 @@ cmd_mark() {
   redis redis-broker -n 5 SET ms-smoke-marker "$token" >/dev/null
   # $0 is expanded by the container's sh.
   # shellcheck disable=SC2016
-  in_web sh -c 'printf %s "$0" > /srv/media/.ms-smoke-marker' "$token"
+  in_web sh -c 'printf %s "$0" > /srv/media/.ms-smoke-marker; cp /srv/media/.ms-smoke-marker /srv/media/uploadedfiles/' "$token"
   sleep 2 # redis-broker fsyncs its append-only file every second
   printf 'TOKEN=%s\nMIGRATIONS=%s\n' "$token" "$migrations" >"$SMOKE_STATE"
   ok "markers written ($token)"
@@ -129,6 +135,8 @@ cmd_survived() {
   ok "Elasticsearch marker"
   expect "redis-broker marker" "$TOKEN" "$(redis redis-broker -n 5 GET ms-smoke-marker)"
   expect "media marker" "$TOKEN" "$(in_web cat /srv/media/.ms-smoke-marker)"
+  expect "Cantaloupe reads the uploaded files" "$TOKEN" \
+    "$(compose exec -T cantaloupe cat /imageroot/.ms-smoke-marker)"
 }
 
 cmd_static_swap() {
@@ -152,13 +160,19 @@ cmd_init_guard() {
   if out="$(compose run --rm --no-deps -T web manage setup_db --force 2>&1)"; then fail "manage setup_db ran"; fi
   grep -q "refusing" <<<"$out" || fail "manage setup_db failed without refusing: $out"
   ok "manage setup_db refused"
+  for args in "packages -o load_package -s pkg -db -y" "packages -o setup"; do
+    # shellcheck disable=SC2086
+    if out="$(compose run --rm --no-deps -T web manage $args 2>&1)"; then fail "manage $args ran"; fi
+    grep -q "refusing" <<<"$out" || fail "manage $args failed without refusing: $out"
+    ok "manage $args refused"
+  done
 }
 
 cmd_clean() {
   psql_app "DROP TABLE IF EXISTS ms_smoke_marker" >/dev/null
   es DELETE /ms-smoke-marker >/dev/null || true
   redis redis-broker -n 5 DEL ms-smoke-marker >/dev/null
-  in_web rm -f /srv/media/.ms-smoke-marker
+  in_web rm -f /srv/media/.ms-smoke-marker /srv/media/uploadedfiles/.ms-smoke-marker
   rm -f "$SMOKE_STATE"
   ok "markers removed"
 }
@@ -171,5 +185,5 @@ case "${1:-}" in
   static-swap) cmd_static_swap ;;
   init-guard) cmd_init_guard ;;
   clean) cmd_clean ;;
-  *) sed -n '2,11p' "$0" >&2; exit 2 ;;
+  *) sed -n '2,12p' "$0" >&2; exit 2 ;;
 esac

@@ -10,6 +10,12 @@ request, and a request thread blocked in a network call is never killed. The
 guards are the application budgets: BIBLISSIMA_VIEW_DEADLINE, the SSRF_*
 timeouts and SUMMARY_ES_TIMEOUT.
 
+A worker that reaches `max_requests` stops accepting requests and waits at
+most `graceful_timeout` for the requests its threads still serve before it
+exits; a stop or a restart of the container waits the same. 300 s lets the
+longest downloads (Explorer export, `series.csv`, full spectra) finish, and
+the Compose `stop_grace_period` of `web` (310 s) stays above it.
+
 No preload: Arches opens connections when it is imported, and `wsgi.py`
 closes the import-time connections in each worker. Forwarded headers are
 trusted from any address because the container publishes no port: only the
@@ -25,7 +31,7 @@ workers = int(os.environ.get("GUNICORN_WORKERS", 2))
 threads = int(os.environ.get("GUNICORN_THREADS", 4))
 worker_class = "gthread"
 timeout = 90
-graceful_timeout = 30
+graceful_timeout = int(os.environ.get("GUNICORN_GRACEFUL_TIMEOUT", 300))
 keepalive = 5
 max_requests = 1000
 max_requests_jitter = 100

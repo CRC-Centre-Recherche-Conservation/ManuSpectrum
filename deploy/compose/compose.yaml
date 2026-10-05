@@ -34,7 +34,7 @@ x-app: &app
   env_file:
     - path: .env
       required: true
-  environment:
+  environment: &app_environment
     PGHOST: postgres
     PGPORT: "5432"
     PGPASSWORD_FILE: /run/secrets/pg_password
@@ -46,7 +46,10 @@ x-app: &app
     REDIS_CACHE_URL: redis://redis-cache:6379
     CANTALOUPE_HOST: cantaloupe
     CANTALOUPE_PORT: "8182"
-  secrets: [pg_password, elastic_password, django_secret_key]
+    # 0: no statement timeout; web alone sets one (settings_docker).
+    PG_STATEMENT_TIMEOUT_MS: "0"
+    EMAIL_HOST_PASSWORD_FILE: /run/secrets/email_password
+  secrets: [pg_password, elastic_password, django_secret_key, email_password]
   read_only: true
 
 services:
@@ -151,9 +154,11 @@ services:
 
   cantaloupe:
     <<: *service
+    # Reads the uploaded files, owned by APP_UID:APP_GID with group read access.
+    group_add: ["${APP_GID:?set APP_GID in .env}"]
     image: uclalibrary/cantaloupe:5.0.7-2@sha256:76140291a6320626e4ba58ecae0937f39f6e21318ff62adc78215ae44fd094df
     environment:
-      CANTALOUPE_BASE_URI: ${PUBLIC_SERVER_ADDRESS:?set PUBLIC_SERVER_ADDRESS in .env}iiifserver
+      CANTALOUPE_BASE_URI: ${PUBLIC_SERVER_ADDRESS:?set PUBLIC_SERVER_ADDRESS in .env (https://host/, trailing slash)}iiifserver
       CANTALOUPE_ENDPOINT_ADMIN_ENABLED: "false"
       CANTALOUPE_FILESYSTEMSOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: /imageroot/
       CANTALOUPE_HTTP_ACCESSCONTROLALLOWORIGIN: "*"
@@ -183,11 +188,16 @@ services:
   web:
     <<: *app
     command: ["web"]
+    environment:
+      <<: *app_environment
+      PG_STATEMENT_TIMEOUT_MS: ${PG_STATEMENT_TIMEOUT_MS:-60000}
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=1g"]
     volumes:
       - *media
       - static:/srv/static
-    stop_grace_period: 35s
+    # Above gunicorn's graceful_timeout (300 s): a recycled or stopped worker
+    # lets its downloads finish.
+    stop_grace_period: 310s
     depends_on:
       postgres: {condition: service_healthy}
       elasticsearch: {condition: service_healthy}
@@ -235,6 +245,9 @@ secrets:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/elastic_password
   django_secret_key:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/django_secret_key
+  # Optional content: empty means a relay without authentication.
+  email_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/email_password
 
 volumes:
   pg_data:
