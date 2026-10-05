@@ -765,6 +765,18 @@ BIBLISSIMA_SUGGEST_DEADLINE = 4
 # call in the project carries a timeout (prod checklist).
 BIBLISSIMA_VIEW_DEADLINE = 30
 
+# Budget, in seconds, of EACH item the Biblissima create views write
+# (create-resource and every item of create-all): manifest import, Wikibase
+# claims. Same mechanism as BIBLISSIMA_VIEW_DEADLINE (utils.budget): no call
+# starts once it is spent, each call's connect and read timeouts are capped by
+# what is left, and the IIIF fetches of the item are not retried. An item that
+# runs out is reported failed (504 for a single create) and the batch goes on;
+# nothing of it is committed. This is the guard of the write path under the
+# gthread worker, where no gunicorn timeout kills a request thread stuck in a
+# network call. A create-all POST carries at most 10 items, so one request
+# holds its thread at most 10 x this value.
+BIBLISSIMA_WRITE_ITEM_DEADLINE = 60
+
 # 24h Django-cache TTL for resolved Wikibase entities, manuscript enrichment
 # results and complete suggest prefix entries.
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
