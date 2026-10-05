@@ -48,7 +48,8 @@ One ``INFO`` line per build on the ``manuspectrum.explorer`` logger, its
 fields in ``extra``: ``duration_s``, ``rows``, ``stored_bytes``,
 ``language``, ``reason`` (``data``, ``permissions``, ``visibility``,
 ``cold``), ``background`` and ``stale_served`` (answers given from the
-previous bundle while it ran).
+previous bundle while it ran). The same values feed `manuspectrum_explorer_bundle_*`
+(`observability/metrics.py`).
 
 A bundle is shared between threads and requests: callers read it, never
 change it.
@@ -70,6 +71,7 @@ from django.core.cache import cache
 from django.db import connections
 from django.utils import translation
 
+from manuspectrum.observability import metrics
 from manuspectrum.observability.context import bound_request_id, current_request_id
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.data_version import data_version
@@ -422,6 +424,10 @@ def _rebuild_in_background(held, user, build):
         except Exception:
             logger.exception("explorer bundle rebuild failed", extra=extra)
         finally:
+            if not kept:
+                metrics.EXPLORER_REBUILD_FAILURES.labels(
+                    language=metrics.language_label(held.language)
+                ).inc()
             try:
                 if not kept:
                     cache.set(
@@ -499,6 +505,9 @@ def _count_stale(held):
         cache.incr(counter)
     except ValueError:
         cache.add(counter, 1, LOCK_TIMEOUT)
+    metrics.EXPLORER_STALE_SERVED.labels(
+        language=metrics.language_label(held.language)
+    ).inc()
     logger.debug("explorer bundle served stale", extra={"language": held.language})
 
 
@@ -514,6 +523,19 @@ def _log_build(key, language, reason, started, bundle, packed, background):
         "background": background,
         "stale_served": stale_served,
     }
+    language_label = metrics.language_label(language)
+    metrics.EXPLORER_BUNDLE_BUILD_SECONDS.labels(language=language_label).observe(
+        fields["duration_s"]
+    )
+    metrics.EXPLORER_BUNDLE_BYTES.labels(language=language_label).set(
+        fields["stored_bytes"]
+    )
+    metrics.EXPLORER_BUNDLE_ROWS.labels(language=language_label).set(fields["rows"])
+    metrics.EXPLORER_BUNDLE_BUILDS.labels(
+        language=language_label,
+        reason=metrics.bounded(reason, metrics.BUNDLE_REASONS),
+        background="true" if background else "false",
+    ).inc()
     logger.info(
         "explorer bundle built: %(duration_s)ss, %(rows)s rows, %(stored_bytes)s bytes, "
         "language=%(language)s reason=%(reason)s "

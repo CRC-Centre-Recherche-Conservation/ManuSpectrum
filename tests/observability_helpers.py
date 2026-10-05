@@ -18,3 +18,12 @@ def delta(name, **labels):
     before = sample(name, **labels)
     yield result
     result.value = sample(name, **labels) - before
+
+
+def headers_without_request_id(response):
+    """The sorted ``(name, value)`` headers of *response*, minus the per-request ``X-Request-ID``."""
+    return sorted(
+        (name, value)
+        for name, value in response.headers.items()
+        if name.lower() != "x-request-id"
+    )
