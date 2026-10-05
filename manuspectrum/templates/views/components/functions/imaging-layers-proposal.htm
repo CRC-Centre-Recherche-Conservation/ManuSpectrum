@@ -1,0 +1,34 @@
+{% load i18n %}
+
+<div class="imaging-layers-proposal">
+    <div class="alert alert-info">
+        <h4>{% trans "Automatic imaging layer proposal" %}</h4>
+        <p>
+            {% blocktrans %}When a chemical imaging manifest is saved, each of its
+            canvases without a layer description receives one, proposed from the
+            canvas label: an element symbol, a spectral band, a video frame or a
+            deconvolved element map.{% endblocktrans %}
+        </p>
+        <p>
+            <strong>{% trans "An existing layer is never modified." %}</strong>
+            {% blocktrans %}Canvases whose label is not recognised are left
+            without a layer. Nothing is proposed for an edit awaiting review,
+            and a manifest that cannot be read is logged and skipped.{% endblocktrans %}
+        </p>
+        <p class="text-muted">
+            {% blocktrans %}Layers of analyses recorded before this function
+            existed are filled once by a maintenance script.{% endblocktrans %}
+        </p>
+    </div>
+
+    <!-- ko if: triggeringNodegroups().length -->
+    <div class="form-group">
+        <label class="control-label">{% trans "Triggered by" %}</label>
+        <ul class="list-unstyled text-muted">
+            <!-- ko foreach: triggeringNodegroups -->
+            <li><code data-bind="text: $data"></code></li>
+            <!-- /ko -->
+        </ul>
+    </div>
+    <!-- /ko -->
+</div>

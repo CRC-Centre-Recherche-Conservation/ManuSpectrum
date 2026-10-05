@@ -198,7 +198,7 @@ class RuleCase(ExplorerCase):
             rule, "manifest_json", return_value=manifest(*labels)
         ) as read:
             result = rule.plan(self.analyses["open"].pk, tile or self.manifest_tile)
-        read.assert_called_once_with(MANIFEST_URL)
+        read.assert_called_once()
         return result
 
 
@@ -228,6 +228,20 @@ class CanvasesTests(RuleCase):
             rule.canvases(MANIFEST_URL)
             rule.canvases([{"url": MANIFEST_URL}])
         self.assertEqual(read.call_args_list, [mock.call(MANIFEST_URL)] * 2)
+
+    @override_settings(
+        EXPLORER_LEGACY_HOSTS=("legacy.example.org",),
+        PUBLIC_SERVER_ADDRESS="https://new.example.org/",
+    )
+    def test_the_manifest_is_fetched_at_its_rewritten_url_and_the_ids_stay_raw(self):
+        legacy_canvas = "https://legacy.example.org/canvas/0"
+        value = {"url": "https://legacy.example.org/manifest/imaging"}
+        legacy = manifest("Pb")
+        legacy["sequences"][0]["canvases"][0]["@id"] = legacy_canvas
+        with mock.patch.object(rule, "manifest_json", return_value=legacy) as read:
+            found = rule.canvases(value)
+        read.assert_called_once_with("https://new.example.org/manifest/imaging")
+        self.assertEqual(found, [(legacy_canvas, "Pb")])
 
     def test_an_unreadable_manifest_raises(self):
         with mock.patch.object(rule, "manifest_json", return_value=None):

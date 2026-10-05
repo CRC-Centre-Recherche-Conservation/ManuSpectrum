@@ -170,11 +170,12 @@ def _manifest_url(value):
 def canvases(manifest_value):
     """``[(canvas id as stored in the manifest, label)]`` of a manifest tile value.
 
-    Ids are raw: the tile stores them as the manifest writes them, and the
-    Explorer rewrites legacy hosts when it reads.
+    The manifest is fetched at ``rewrite_legacy_url`` of its stored URL; ids are
+    raw: the tile stores them as the manifest writes them, and the Explorer
+    rewrites legacy hosts when it reads.
     """
     url = _manifest_url(manifest_value)
-    manifest = manifest_json(url) if url else None
+    manifest = manifest_json(rewrite_legacy_url(url)) if url else None
     if not isinstance(manifest, dict):
         raise ManifestUnreadableError(f"manifest {url!r} cannot be read")
     if CanvasIIIF.detect_version(manifest) == 3:
