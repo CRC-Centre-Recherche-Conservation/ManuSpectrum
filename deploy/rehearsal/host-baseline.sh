@@ -18,7 +18,7 @@ place is reported as "already done".
   --env FILE     variables file (default: rehearsal.env next to the script)
 Variables : ADMIN_USER, ADMIN2_USER, ADMIN2_PUBKEY, SSH_PASSWORD_AUTH,
 UNATTENDED_REBOOT, UNATTENDED_REBOOT_TIME, ROOT_ALIAS, SMTP_RELAY,
-NFS_SERVER, NFS_EXPORT, DOCKER_APT_CODENAME (voir rehearsal.env.example).
+NFS_SERVER, NFS_EXPORT_DIR, DOCKER_APT_CODENAME (voir rehearsal.env.example).
 USAGE
 }
 
@@ -33,7 +33,7 @@ done
 
 # Values given in the environment win over the variables file.
 declare -A caller_env=()
-for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT DOCKER_APT_CODENAME NFS_VERS; do
+for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT NFS_EXPORT_DIR DOCKER_APT_CODENAME NFS_VERS REHEARSAL_HOST; do
   [ -z "${!v+x}" ] || caller_env[$v]="${!v}"
 done
 if [ -f "$env_file" ]; then
@@ -54,8 +54,14 @@ UNATTENDED_REBOOT_TIME="${UNATTENDED_REBOOT_TIME:-03:30}"
 ROOT_ALIAS="${ROOT_ALIAS:-}"
 SMTP_RELAY="${SMTP_RELAY:-}"
 NFS_SERVER="${NFS_SERVER:-192.168.123.1}"
-NFS_EXPORT="${NFS_EXPORT:-/srv/ms-rehearsal-data}"
+NFS_EXPORT_DIR="${NFS_EXPORT_DIR:-/srv/ms-rehearsal-data}"
+NFS_EXPORT="${NFS_EXPORT:-$NFS_EXPORT_DIR}"
+if [ "$NFS_EXPORT" != "$NFS_EXPORT_DIR" ]; then
+  echo "NFS_EXPORT (${NFS_EXPORT}) must equal NFS_EXPORT_DIR (${NFS_EXPORT_DIR}), the directory the host exports: drop NFS_EXPORT from rehearsal.env." >&2
+  exit 1
+fi
 DOCKER_APT_CODENAME="${DOCKER_APT_CODENAME:-}"
+REHEARSAL_HOST="${REHEARSAL_HOST:-no}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "This script must be run as root (sudo)." >&2
@@ -218,6 +224,19 @@ if findmnt -t nfs4 /data >/dev/null 2>&1; then
 elif ! mount /data; then
   echo "Mounting /data failed: on the host, check \"sudo ./host-nfs.sh\" (export) and, with firewalld, the \"libvirt\" zone (nfs service)." >&2
   exit 1
+fi
+
+echo "== Rehearsal host marker"
+# load-snapshot.sh refuses to replace a database on a host without this file,
+# whatever DEPLOY_ENVIRONMENT says. Written only when rehearsal.env sets
+# REHEARSAL_HOST=yes, so replaying this script on another host never marks it.
+if [ "$REHEARSAL_HOST" = yes ]; then
+  write_file /etc/manuspectrum/rehearsal-host <<'MARKER' || true
+This host is the ManuSpectrum rehearsal VM: `make load-snapshot` may replace its database.
+Created by deploy/rehearsal/host-baseline.sh. Never create this file on a production host.
+MARKER
+else
+  echo "No marker written: REHEARSAL_HOST is not 'yes' in rehearsal.env (make load-snapshot stays refused on this host)."
 fi
 
 echo "== Automatic updates"

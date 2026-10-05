@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
-# publish-static and entrypoint guard tests, the Compose rules, actionlint,
+# publish-static, entrypoint guard and load-snapshot tests, the Compose rules, actionlint,
 # uv.lock freshness and gitleaks. Builds nothing and starts no service: safe on the development VM.
 # Stops at the first failure.
 set -euo pipefail
@@ -19,7 +19,8 @@ cd "$ROOT"
 
 step "shellcheck"
 docker run --rm -v "$ROOT:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" \
-  deploy/check-stack.sh deploy/docker/*.sh deploy/docker/tests/*.sh deploy/compose/*.sh
+  deploy/check-stack.sh deploy/docker/*.sh deploy/docker/tests/*.sh deploy/compose/*.sh \
+  deploy/scripts/*.sh deploy/scripts/tests/*.sh
 echo "shellcheck: no warning"
 
 step "hadolint"
@@ -31,6 +32,9 @@ bash deploy/docker/tests/test_publish_static.sh
 
 step "entrypoint guard tests"
 bash deploy/docker/tests/test_entrypoint_guard.sh
+
+step "load-snapshot tests"
+bash deploy/scripts/tests/test_load_snapshot.sh
 
 step "Compose rules"
 python3 -m unittest discover -s deploy/compose/tests -p 'test_*.py'
