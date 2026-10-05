@@ -535,7 +535,7 @@ class ComposeEnvironmentTests(SimpleTestCase):
             environment = {
                 key: str(value).replace("/run/secrets", str(secrets))
                 for key, value in environment.items()
-                if value is not None
+                if value is not None and key != "PROMETHEUS_MULTIPROC_DIR"
             }
             values = load(environment)
         self.assertNotIn("error", values, values)

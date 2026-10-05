@@ -121,6 +121,42 @@ class ComposeStackTests(unittest.TestCase):
         test = " ".join(self.base["services"]["worker"]["healthcheck"]["test"])
         self.assertIn("inspect ping", test)
 
+    def test_web_and_worker_keep_metrics_on_a_tmpfs_beat_does_not(self):
+        for label, stack in self.stacks.items():
+            services = stack["services"]
+            for name in ("web", "worker"):
+                with self.subTest(stack=label, service=name):
+                    self.assertEqual(
+                        services[name]["environment"]["PROMETHEUS_MULTIPROC_DIR"],
+                        "/run/prometheus",
+                    )
+                    self.assertTrue(
+                        any(
+                            t.startswith("/run/prometheus:") and "noexec" in t
+                            for t in services[name]["tmpfs"]
+                        )
+                    )
+            with self.subTest(stack=label, service="beat"):
+                self.assertNotIn(
+                    "PROMETHEUS_MULTIPROC_DIR", services["beat"]["environment"]
+                )
+
+    def test_only_the_worker_serves_its_metrics_port(self):
+        for label, stack in self.stacks.items():
+            services = stack["services"]
+            with self.subTest(stack=label):
+                self.assertEqual(
+                    services["worker"]["environment"]["MS_CELERY_METRICS_PORT"], "9808"
+                )
+                self.assertNotIn(
+                    "MS_CELERY_METRICS_PORT", services["web"]["environment"]
+                )
+                self.assertFalse(services["worker"].get("ports"))
+
+    def test_worker_healthcheck_writes_no_metrics(self):
+        test = " ".join(self.base["services"]["worker"]["healthcheck"]["test"])
+        self.assertIn("env -u PROMETHEUS_MULTIPROC_DIR", test)
+
     def test_application_services_run_as_the_host_account_on_a_read_only_root(self):
         for label, name, service in self.each_service():
             if name not in APP_SERVICES:

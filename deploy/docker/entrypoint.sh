@@ -10,6 +10,7 @@
 #   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
 #                  packages -db / -o setup) only through `init`
 #   anything else  executed as given
+# web and worker empty PROMETHEUS_MULTIPROC_DIR before they start.
 # Docker applies no depends_on order when it restarts containers after a host
 # reboot, so every command waits for what it needs itself (WAIT_SECONDS).
 set -euo pipefail
@@ -17,6 +18,19 @@ set -euo pipefail
 WAIT_SECONDS="${WAIT_SECONDS:-300}"
 
 log() { echo "entrypoint: $*" >&2; }
+
+# Empties PROMETHEUS_MULTIPROC_DIR, when set, right before the server starts: files of
+# earlier processes (migrate, the probes, a previous run) would be summed with the new
+# ones. A directory that is missing or not writable stops the start.
+reset_metrics_dir() {
+  local dir="${PROMETHEUS_MULTIPROC_DIR:-}"
+  [ -n "$dir" ] || return 0
+  if [ ! -d "$dir" ] || [ ! -w "$dir" ]; then
+    log "PROMETHEUS_MULTIPROC_DIR ($dir) is not a writable directory"
+    exit 1
+  fi
+  find "$dir" -mindepth 1 -delete
+}
 
 wait_for() { # wait_for NAME COMMAND...
   local name="$1" deadline=$((SECONDS + WAIT_SECONDS)) output
@@ -170,11 +184,13 @@ case "$command" in
     # Migrations run without the timeouts web's requests carry.
     PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 python manage.py migrate --noinput
     publish-static /app/static /srv/static
+    reset_metrics_dir
     exec gunicorn --config /app/gunicorn.conf.py
     ;;
   worker)
     wait_for PostgreSQL postgres_ready
     wait_for Elasticsearch elasticsearch_ready
+    reset_metrics_dir
     exec celery -A manuspectrum.celery worker \
       --loglevel="${CELERY_LOG_LEVEL:-INFO}" \
       --concurrency="${CELERY_CONCURRENCY:-2}" \

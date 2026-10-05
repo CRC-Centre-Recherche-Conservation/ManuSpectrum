@@ -10,7 +10,11 @@ CONF = Path(__file__).resolve().parents[2] / "docker" / "gunicorn.conf.py"
 
 
 def load(**env):
-    clean = {k: v for k, v in os.environ.items() if not k.startswith("GUNICORN_")}
+    clean = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("GUNICORN_") and k != "PROMETHEUS_MULTIPROC_DIR"
+    }
     clean.update(env)
     with mock.patch.dict(os.environ, clean, clear=True):
         return runpy.run_path(str(CONF))
@@ -56,6 +60,31 @@ class GunicornConfTests(unittest.TestCase):
 
     def test_no_preload(self):
         self.assertFalse(load().get("preload_app", False))
+
+    def test_no_access_log(self):
+        self.assertIsNone(load()["accesslog"])
+
+    def test_child_exit_marks_the_worker_dead_when_metrics_are_multiprocess(self):
+        dead = mock.Mock()
+        fake = mock.Mock(multiprocess=mock.Mock(mark_process_dead=dead))
+        modules = {
+            "prometheus_client": fake,
+            "prometheus_client.multiprocess": fake.multiprocess,
+        }
+        conf = load(PROMETHEUS_MULTIPROC_DIR="/run/prometheus")
+        with (
+            mock.patch.dict("sys.modules", modules),
+            mock.patch.dict(
+                os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/run/prometheus"}
+            ),
+        ):
+            conf["child_exit"](None, mock.Mock(pid=4242))
+        dead.assert_called_once_with(4242)
+
+    def test_child_exit_does_nothing_without_the_directory(self):
+        conf = load()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            conf["child_exit"](None, mock.Mock(pid=1))
 
 
 if __name__ == "__main__":

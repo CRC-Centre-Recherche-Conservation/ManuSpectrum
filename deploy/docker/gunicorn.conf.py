@@ -23,7 +23,12 @@ file raises ValueError otherwise. The Compose `stop_grace_period` of `web`
 No preload: Arches opens connections when it is imported, and `wsgi.py`
 closes the import-time connections in each worker. Forwarded headers are
 trusted from any address because the container publishes no port: only the
-Compose network (nginx, from PP-3) reaches it. Logs go to stdout/stderr.
+Compose network (nginx, from PP-3) reaches it.
+
+nginx writes the access log (rotated on the host, 30 days); gunicorn writes only
+its error log, to stderr. With `PROMETHEUS_MULTIPROC_DIR` set (Compose),
+`child_exit` marks a dead worker so its live gauges stop counting; the
+entrypoint empties the directory before gunicorn starts.
 """
 
 import os
@@ -45,6 +50,13 @@ keepalive = 5
 max_requests = 1000
 max_requests_jitter = 100
 forwarded_allow_ips = os.environ.get("GUNICORN_FORWARDED_ALLOW_IPS", "*")
-accesslog = "-"
+accesslog = None
 errorlog = "-"
 loglevel = os.environ.get("GUNICORN_LOG_LEVEL", "info")
+
+
+def child_exit(server, worker):
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        from prometheus_client import multiprocess
+
+        multiprocess.mark_process_dead(worker.pid)

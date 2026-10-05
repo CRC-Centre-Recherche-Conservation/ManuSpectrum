@@ -118,4 +118,32 @@ out="$(run_web 0 0)" || true
 grep -q 'STUB python manage.py migrate' <<<"$out"
 assert "web: a changed or missing admin goes on to migrate" $?
 
+# The Prometheus multiprocess directory is emptied right before gunicorn and the
+# Celery worker start, and a missing or read-only one stops the start.
+printf '#!/bin/sh\nexit 0\n' >"$TMP/publish-static"
+cat >"$TMP/gunicorn" <<'SH'
+#!/bin/sh
+echo "STUB $(basename "$0") files=$(find "$PROMETHEUS_MULTIPROC_DIR" -mindepth 1 | wc -l | tr -d ' ')"
+SH
+cp "$TMP/gunicorn" "$TMP/celery"
+chmod +x "$TMP/publish-static" "$TMP/gunicorn" "$TMP/celery"
+metrics="$TMP/metrics"
+mkdir -p "$metrics"
+
+touch "$metrics/counter_1.db" "$metrics/gauge_livesum_2.db"
+out="$(PROMETHEUS_MULTIPROC_DIR="$metrics" run_web 0 0)" || true
+grep -q 'STUB gunicorn files=0' <<<"$out"
+assert "web: the metrics directory is emptied before gunicorn" $?
+
+touch "$metrics/counter_3.db"
+out="$(PROMETHEUS_MULTIPROC_DIR="$metrics" PATH="$TMP:$PATH" PGHOST=h PGPORT=1 PGUSERNAME=u \
+  ESHOST=e ESPORT=1 bash "$ENTRYPOINT" worker 2>&1)" || true
+grep -q 'STUB celery files=0' <<<"$out"
+assert "worker: the metrics directory is emptied before celery" $?
+
+out="$(PROMETHEUS_MULTIPROC_DIR="$TMP/missing" run_web 0 0)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q 'PROMETHEUS_MULTIPROC_DIR .* is not a writable directory' <<<"$out" \
+  && ! grep -q 'STUB gunicorn' <<<"$out"
+assert "web: a missing metrics directory stops the start" $?
+
 exit "$failed"
