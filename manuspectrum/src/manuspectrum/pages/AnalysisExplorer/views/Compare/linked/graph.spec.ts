@@ -18,6 +18,10 @@ import {
     SYNTHESIS,
     SYNTHESIS_WITH_COMPONENT,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import {
+    layerOf,
+    valueRef,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { buildGraph } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/graph.ts";
 import {
     analysisNode,
@@ -203,6 +207,80 @@ describe("buildGraph", () => {
             synthesis: null,
         });
         expect(graph.nodes.size).toBe(0);
+    });
+
+    describe("element layers", () => {
+        const ELEMENT = valueRef("http://example.org/element-map", "Element");
+        const withLayers = (layers: ReturnType<typeof layerOf>[]) => {
+            const item = BY_KEY.get(BASKET[0].key)!;
+            if (item.kind !== "analysis") throw new Error("analysis expected");
+            const files = item.files.map((file) =>
+                file.layers.length ? { ...file, layers } : file,
+            );
+            return new Map(BY_KEY).set(BASKET[0].key, { ...item, files });
+        };
+        const copper = layerOf({
+            index: 0,
+            label: "Cu Ka",
+            content: ELEMENT,
+            elements: [
+                {
+                    value: valueRef("http://example.org/cu", "Copper"),
+                    symbol: "Cu",
+                },
+            ],
+        });
+        const other = layerOf({ index: 1, label: "Pb La" });
+
+        it("links an analysis to the element of each of its layers and to no other", () => {
+            const graph = buildGraph({
+                basket: BASKET,
+                byKey: withLayers([copper, other]),
+                synthesis: null,
+            });
+            expect(around(graph, analysisNode(AN1))).toContain(
+                elementNode("Cu"),
+            );
+            expect(around(graph, analysisNode(AN1))).not.toContain(
+                elementNode("Pb"),
+            );
+            expect(around(graph, elementNode("Cu"))).toEqual([
+                analysisNode(AN1),
+            ]);
+        });
+
+        it("links every symbol of a composite layer and skips a layer without one", () => {
+            const composite = layerOf({
+                index: 0,
+                content: ELEMENT,
+                elements: [
+                    { value: valueRef("e:fe", "Iron"), symbol: "Fe" },
+                    { value: valueRef("e:x", "Unknown"), symbol: null },
+                ],
+            });
+            const graph = buildGraph({
+                basket: BASKET,
+                byKey: withLayers([composite, other]),
+                synthesis: null,
+            });
+            expect(around(graph, elementNode("Fe"))).toEqual([
+                analysisNode(AN1),
+            ]);
+            expect(
+                [...graph.nodes].filter((id) => id.startsWith("el:")),
+            ).toEqual([elementNode("Fe")]);
+        });
+
+        it("adds no element node when no layer has a tile", () => {
+            const graph = buildGraph({
+                basket: BASKET,
+                byKey: BY_KEY,
+                synthesis: null,
+            });
+            expect([...graph.nodes].some((id) => id.startsWith("el:"))).toBe(
+                false,
+            );
+        });
     });
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
     PERIODIC_COLUMNS,
     PERIODIC_TABLE,
+    atomicNumber,
     placeOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/periodic.ts";
 
@@ -36,5 +37,17 @@ describe("periodic table", () => {
 
     it("places nothing for an unknown symbol", () => {
         expect(placeOf("Xx")).toBeNull();
+    });
+
+    it("gives the atomic number of each of the 118 elements, once", () => {
+        const numbers = PERIODIC_TABLE.map((place) =>
+            atomicNumber(place.symbol),
+        );
+        expect(new Set(numbers).size).toBe(118);
+        expect(Math.min(...(numbers as number[]))).toBe(1);
+        expect(Math.max(...(numbers as number[]))).toBe(118);
+        expect(atomicNumber("Cu")).toBe(29);
+        expect(atomicNumber("Pb")).toBe(82);
+        expect(atomicNumber("Xx")).toBeNull();
     });
 });
