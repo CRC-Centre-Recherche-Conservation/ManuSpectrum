@@ -186,6 +186,13 @@ CACHES["iiif_auth"]["LOCATION"] = f"{REDIS_BROKER_URL}/3"
 CACHES["default"]["LOCATION"] = f"{REDIS_CACHE_URL}/0"
 CACHES["user_permission"]["LOCATION"] = f"{REDIS_CACHE_URL}/1"
 
+READYZ_ENABLED = True
+READYZ_REDIS_URLS = {
+    "redis-broker": f"{REDIS_BROKER_URL}/0",
+    "redis-cache": f"{REDIS_CACHE_URL}/0",
+}
+READYZ_CANTALOUPE = env_bool("READYZ_CANTALOUPE", True)
+
 CANTALOUPE_HTTP_ENDPOINT = "http://{}:{}/".format(
     get_env_variable("CANTALOUPE_HOST"), get_env_variable("CANTALOUPE_PORT")
 )

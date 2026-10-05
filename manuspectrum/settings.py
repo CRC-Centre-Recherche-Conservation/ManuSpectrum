@@ -859,6 +859,12 @@ EXPLORER_BACKGROUND_REBUILD = True
 # Observability (manuspectrum/observability/README.md). Off on the development VM;
 # settings_docker turns them on.
 METRICS_ENABLED = False
+READYZ_ENABLED = False
+# Seconds each /readyz probe may take; the probes run concurrently.
+READYZ_TIMEOUT = 2.0
+# Redis instances /readyz pings, by component name.
+READYZ_REDIS_URLS = {}
+READYZ_CANTALOUPE = False
 # django-prometheus request latency buckets, aligned on the search SLO (2 s).
 PROMETHEUS_LATENCY_BUCKETS = (
     0.05,

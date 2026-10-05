@@ -43,6 +43,9 @@ BASE_ENV = {
 
 NAMES = [
     "METRICS_ENABLED",
+    "READYZ_ENABLED",
+    "READYZ_REDIS_URLS",
+    "READYZ_CANTALOUPE",
     "MIDDLEWARE",
     "DEBUG",
     "SECRET_KEY",
@@ -127,6 +130,22 @@ class SettingsDockerTests(SimpleTestCase):
         values = load(env, **options)
         self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
         self.assertIn(fragment, values["message"])
+
+    def test_readyz_is_on_and_probes_both_redis_instances(self):
+        values = load(BASE_ENV)
+        self.assertIs(values["READYZ_ENABLED"], True)
+        self.assertIs(values["READYZ_CANTALOUPE"], True)
+        self.assertEqual(
+            values["READYZ_REDIS_URLS"],
+            {
+                "redis-broker": "redis://redis-broker:6379/0",
+                "redis-cache": "redis://redis-cache:6379/0",
+            },
+        )
+        self.assertIs(
+            load(dict(BASE_ENV, READYZ_CANTALOUPE="false"))["READYZ_CANTALOUPE"],
+            False,
+        )
 
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
         values = load(BASE_ENV)
