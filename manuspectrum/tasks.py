@@ -9,8 +9,11 @@ is safe and simply re-applies the same ES document.
 """
 
 import logging
+import time
 
 from celery import shared_task
+
+from manuspectrum.observability import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ def index_resources_async(transaction_id=None, resource_ids=None):
         from arches.app.utils.index_database import index_resources_by_transaction
 
         index_resources_by_transaction(transaction_id, recalculate_descriptors=True)
+        metrics.INDEX_RESOURCES.labels(mode="transaction", outcome="indexed").inc()
     elif resource_ids:
         from arches.app.models.resource import Resource
 
@@ -45,20 +49,34 @@ def index_resources_async(transaction_id=None, resource_ids=None):
             try:
                 resource = Resource.objects.get(pk=resource_id)
                 resource.index()
+                outcome = "indexed"
             except Resource.DoesNotExist:
+                outcome = "not_found"
                 logger.warning(
                     "index_resources_async: resource %s not found, skipping",
                     resource_id,
                 )
             except Exception:
+                outcome = "failed"
                 logger.exception(
                     "index_resources_async: failed to index resource %s", resource_id
                 )
+            metrics.INDEX_RESOURCES.labels(mode="resource", outcome=outcome).inc()
 
 
 @shared_task(name="manuspectrum.prune_data_changes")
 def prune_data_changes_task():
-    """Delete the data-version ledger rows older than ``PRUNE_AFTER_DAYS``."""
+    """Delete the data-version ledger rows older than ``PRUNE_AFTER_DAYS``.
+
+    Records the ledger size and the prune time (``manuspectrum_data_change_*``).
+    """
+    from django.db import connection
+
     from manuspectrum.utils.data_version import prune_data_changes
 
-    return prune_data_changes()
+    deleted = prune_data_changes()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT count(*) FROM ms_data_change")
+        metrics.DATA_CHANGE_ROWS.set(cursor.fetchone()[0])
+    metrics.DATA_CHANGE_PRUNED.set(time.time())
+    return deleted
