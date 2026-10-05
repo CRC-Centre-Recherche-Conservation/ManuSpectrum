@@ -19,8 +19,8 @@ Levels: root at WARNING; `django`, `arches`, `manuspectrum` and `celery` at INFO
 
 Redaction happens in the formatter, whatever the logger: values of keys naming a password,
 token, cookie, session, CSRF value, API key or credential; in text, `Authorization` values,
-IIIF tokens (`msiiif1.`), `password=`-style query values, URL credentials and e-mail
-addresses. Do not log personal data on the strength of it: redaction is the net, not the rule.
+IIIF tokens (`msiiif1.`), bare `Bearer` tokens, JSON `access_token`/`refresh_token` values, `password=`/`code=`/`key=`/`sig=`-style query values, URL credentials and e-mail
+addresses (non-string `extra` values are stringified first). Do not log personal data on the strength of it: redaction is the net, not the rule.
 
 Reading them:
 
@@ -48,7 +48,9 @@ every log record.
 - `/readyz`: readiness. PostgreSQL, Elasticsearch, the Celery broker, both Redis instances
   and Cantaloupe, probed concurrently. 200 when all are `up`, else 503; JSON with `status`
   and, per component, `up` (with `seconds`), `down` (with the exception class only) or
-  `timeout`. Bounded by `READYZ_TIMEOUT` (2 s); `READYZ_REDIS_URLS` and `READYZ_CANTALOUPE`
+  `timeout` (logged as a WARNING by component name). Probes run on daemon threads; a process
+  runs one evaluation at a time and a concurrent call reuses its result if it ended less
+  than 2 s ago. Bounded by `READYZ_TIMEOUT` (2 s); `READYZ_REDIS_URLS` and `READYZ_CANTALOUPE`
   choose the components. Each probe sets `manuspectrum_readyz_component_up`.
 
 To add a component: write `probe_<name>(timeout)` in `health.py`, add it to `components()`,
@@ -62,9 +64,19 @@ Both live below the language boundary of `urls.py` (`/en/readyz` is 404).
 - Internal only: a request carrying `X-Forwarded-For` (relayed by nginx) gets a bodyless 404;
   nginx also denies the path (PP-3).
 - Multiprocess: `PROMETHEUS_MULTIPROC_DIR` (`/run/prometheus`, a tmpfs) holds one file set per
-  process; the entrypoint empties it before the server starts and gunicorn's `child_exit` /
-  Celery's `worker_process_shutdown` mark dead processes. Scrape cost grows with the number
-  of recycled processes until the container restarts.
+  process; the entrypoint empties it before the server starts. When a process dies,
+  gunicorn's `child_exit` / Celery's `worker_process_shutdown` call
+  `multiproc.archive_dead_process(pid, path)`: its counter, histogram and summary files are
+  added into `counter_archive.db`, `histogram_archive.db` and `summary_archive.db`, its
+  `gauge_mostrecent` file keeps the newest value in `gauge_mostrecent_archive.db`, its
+  `gauge_live*` files are dropped (as `mark_process_dead` does) and the pid's files are
+  deleted, under an `flock`. Totals never fall and the directory holds one file per type
+  plus the live processes' files, however many workers were recycled. No other gauge mode
+  exists in the project (`metrics.gauge()` refuses them); one added would be left as
+  prometheus_client leaves it.
+- `manuspectrum_metrics_dir_bytes` (mostrecent gauge, updated on each archive) is the space
+  the directory occupies. Alert when it exceeds 70 % of the tmpfs (`size=64m` of web and
+  worker, so 45 MB) for 10 minutes: live files alone should stay a few MB.
 - A one-off process started with `docker compose exec web python ...` would write its own
   files there and be summed into `/metrics`: run it with `env -u PROMETHEUS_MULTIPROC_DIR`,
   or through `make -C deploy manage`.
@@ -89,7 +101,8 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   `manuspectrum_ssrf_rejections`
 - Celery: `manuspectrum_celery_tasks`, `manuspectrum_celery_task_seconds`,
   `manuspectrum_index_resources`, `manuspectrum_data_change_rows`,
-  `manuspectrum_data_change_pruned_timestamp_seconds`
+  `manuspectrum_data_change_pruned_timestamp_seconds` (both also set when the worker starts,
+  the start time standing for the last prune until the daily one records its own)
 
 django-prometheus adds the HTTP request metrics (`django_http_*`).
 

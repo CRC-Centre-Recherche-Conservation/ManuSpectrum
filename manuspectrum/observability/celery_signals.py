@@ -5,9 +5,10 @@ The request id follows a task from its publisher to the worker (message header
 (``manuspectrum_celery_tasks_total``, ``manuspectrum_celery_task_seconds``). A
 worker whose environment sets ``MS_CELERY_METRICS_PORT`` and
 ``PROMETHEUS_MULTIPROC_DIR`` serves the metrics of all its processes on that port
-from its main process; a child that exits is marked dead for the live gauges.
+from its main process; a child that exits has its metric files archived (``multiproc``).
 """
 
+import logging
 import os
 import time
 
@@ -29,6 +30,7 @@ from manuspectrum.observability.context import (
 HEADER = "ms_request_id"
 _STATES = {"SUCCESS": "success", "FAILURE": "failure", "RETRY": "retry"}
 _running = {}
+logger = logging.getLogger(__name__)
 
 
 def _header(task):
@@ -80,9 +82,28 @@ def serve_worker_metrics(**kwargs):
     start_http_server(int(port), addr="0.0.0.0", registry=registry)
 
 
+@worker_ready.connect(weak=False, dispatch_uid="ms-ledger-gauges")
+def record_ledger_gauges(**kwargs):
+    """Set the ``manuspectrum_data_change_*`` gauges when the worker starts.
+
+    The row count is read from the ledger; the prune time is the start time, the
+    reference the 26 h staleness alert counts from until the daily prune
+    records its own. A database error is logged and never stops the worker.
+    """
+    try:
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM ms_data_change")
+            metrics.DATA_CHANGE_ROWS.set(cursor.fetchone()[0])
+        metrics.DATA_CHANGE_PRUNED.set(time.time())
+    except Exception:
+        logger.warning("ledger gauges not set at worker start", exc_info=True)
+
+
 @worker_process_shutdown.connect(weak=False, dispatch_uid="ms-worker-child-exit")
 def forget_child(pid=None, **kwargs):
     if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
-        from prometheus_client import multiprocess
+        from manuspectrum.observability import multiproc
 
-        multiprocess.mark_process_dead(pid or os.getpid())
+        multiproc.archive_dead_process(pid or os.getpid())

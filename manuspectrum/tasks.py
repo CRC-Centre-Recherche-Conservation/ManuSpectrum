@@ -10,6 +10,7 @@ is safe and simply re-applies the same ES document.
 
 import logging
 import time
+import uuid
 
 from celery import shared_task
 
@@ -40,7 +41,17 @@ def index_resources_async(transaction_id=None, resource_ids=None):
     if transaction_id:
         from arches.app.utils.index_database import index_resources_by_transaction
 
-        index_resources_by_transaction(transaction_id, recalculate_descriptors=True)
+        try:
+            uuid.UUID(str(transaction_id))
+        except ValueError:
+            logger.error("index_resources_async: transaction id is not a uuid")
+            metrics.INDEX_RESOURCES.labels(mode="transaction", outcome="failed").inc()
+            return
+        try:
+            index_resources_by_transaction(transaction_id, recalculate_descriptors=True)
+        except Exception:
+            metrics.INDEX_RESOURCES.labels(mode="transaction", outcome="failed").inc()
+            raise
         metrics.INDEX_RESOURCES.labels(mode="transaction", outcome="indexed").inc()
     elif resource_ids:
         from arches.app.models.resource import Resource

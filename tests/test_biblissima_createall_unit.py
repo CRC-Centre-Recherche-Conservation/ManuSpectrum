@@ -449,8 +449,21 @@ class Pass2FailureTests(CreateAllBase):
         )
 
         items = [_item("c0"), _item("c1")]
-        response, payload = self._post({"resourceType": "Document", "items": items})
+        with (
+            delta(
+                "manuspectrum_biblissima_created_items_total",
+                resource_type="Document",
+                outcome="failed",
+            ) as failed,
+            delta(
+                "manuspectrum_biblissima_created_items_total",
+                resource_type="Document",
+                outcome="created",
+            ) as created,
+        ):
+            response, payload = self._post({"resourceType": "Document", "items": items})
 
+        self.assertEqual((failed.value, created.value), (2, 0))
         self.assertEqual(response.status_code, 500)
         self.assertEqual(payload, {"error": "Batch creation failed"})
         # A Pass-2 failure returns 500 and never reaches the post-commit index

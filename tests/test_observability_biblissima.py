@@ -8,7 +8,7 @@ from django.test import TestCase
 
 from manuspectrum.utils import budget as budget_module
 from manuspectrum.views import biblissima_proxy as bp
-from tests.observability_helpers import delta
+from tests.observability_helpers import delta, sample
 
 
 def _make_response(status_code=200):
@@ -95,10 +95,22 @@ class UpstreamOutcomeTests(TestCase):
                 self.call(200)
         self.assertEqual((busy.value, slots.value, timed.value), (1, 1, 0))
 
-    def test_in_flight_returns_to_zero(self):
+    def test_in_flight_is_one_inside_the_slot_and_returns_to_zero(self):
         with delta("manuspectrum_biblissima_inflight") as inflight:
+            with bp._biblissima_slot():
+                self.assertEqual(sample("manuspectrum_biblissima_inflight"), 1)
             self.call(200)
         self.assertEqual(inflight.value, 0)
+
+    def test_a_failing_metric_never_keeps_the_slot(self):
+        with patch.object(bp, "_incr_stat", side_effect=[None, RuntimeError("metric")]):
+            with self.assertRaises(RuntimeError):
+                with bp._biblissima_slot():
+                    pass
+        for _ in range(bp._BIBLISSIMA_CONCURRENCY_LIMIT):
+            self.assertTrue(bp._biblissima_semaphore.acquire(timeout=0))
+        for _ in range(bp._BIBLISSIMA_CONCURRENCY_LIMIT):
+            bp._biblissima_semaphore.release()
 
 
 class CacheMirrorTests(TestCase):

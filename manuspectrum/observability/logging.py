@@ -9,6 +9,7 @@ values, URL credentials and e-mail addresses. ``LogRecordCounter`` counts
 records at WARNING and above into ``manuspectrum_log_records_total``.
 """
 
+import datetime
 import logging
 import re
 import socket
@@ -27,7 +28,7 @@ _SENSITIVE_KEY = re.compile(
 )
 _TEXT_RULES = (
     (
-        re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]*:[^/\s@]*@"),
+        re.compile(r"(?i)\b([a-z][a-z0-9+.-]{0,31}://)[^/\s:@]{0,256}:[^/\s@]{0,256}@"),
         r"\1" + REDACTED + "@",
     ),
     (
@@ -37,14 +38,26 @@ _TEXT_RULES = (
         r"\1" + REDACTED,
     ),
     (re.compile(r"msiiif1\.[A-Za-z0-9._~+/=-]+"), REDACTED),
+    (re.compile(r"(?i)\b(bearer\s+)[^\s,;\"']+"), r"\1" + REDACTED),
     (
         re.compile(
-            r"(?i)\b((?:password|passwd|pwd|token|access_token|secret|api_?key|sessionid"
-            r"|csrftoken|csrfmiddlewaretoken)=)[^&\s;,]+"
+            r"(?i)([\"'](?:access_token|refresh_token|id_token|client_secret)[\"']\s*:\s*)"
+            r"([\"'])[^\"']*\2"
+        ),
+        r"\1\2" + REDACTED + r"\2",
+    ),
+    (
+        re.compile(
+            r"(?i)\b((?:password|passwd|pwd|token|access_token|refresh_token|secret"
+            r"|client_secret|api_?key|sessionid|csrftoken|csrfmiddlewaretoken"
+            r"|code|key|sig|signature)=)[^&\s;,]+"
         ),
         r"\1" + REDACTED,
     ),
-    (re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), "[email]"),
+    (
+        re.compile(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,24}"),
+        "[email]",
+    ),
 )
 # Fields the formatter writes itself: their values are redacted as text, their keys never.
 _OWN_FIELDS = frozenset(
@@ -81,7 +94,13 @@ def redact(value, key=None):
         return {k: redact(v, k) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [redact(v) for v in value]
-    return value
+    if value is None or isinstance(
+        value, (bool, int, float, datetime.date, datetime.time)
+    ):
+        return value
+    if isinstance(value, BaseException):
+        return redact_text(f"{type(value).__name__}: {value}")
+    return redact_text(str(value))
 
 
 def _request_id_of(record):

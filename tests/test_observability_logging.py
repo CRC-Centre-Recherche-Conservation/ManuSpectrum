@@ -87,6 +87,42 @@ class RedactionTests(SimpleTestCase):
             with self.subTest(text=text):
                 self.assertEqual(obs_logging.redact_text(text), expected)
 
+    def test_bearer_json_token_and_signed_query_values(self):
+        cases = {
+            "sent Bearer abc123.def-456 to the API": "sent Bearer [redacted] to the API",
+            'body {"access_token": "abc", "n": 1}': 'body {"access_token": "[redacted]", "n": 1}',
+            "{'refresh_token': 'r-1'}": "{'refresh_token': '[redacted]'}",
+            "GET /cb?code=AUTHCODE&state=s": "GET /cb?code=[redacted]&state=s",
+            "GET /i?key=K1&sig=S2&signature=S3": "GET /i?key=[redacted]&sig=[redacted]&signature=[redacted]",
+            "status_code=404 passed": "status_code=404 passed",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(obs_logging.redact_text(text), expected)
+
+    def test_a_long_run_of_address_characters_is_scanned_in_linear_time(self):
+        import time
+
+        for text in ("a" * 32768, "a." * 16384 + "@" + "b-" * 16384):
+            started = time.perf_counter()
+            obs_logging.redact_text(text)
+            self.assertLess(time.perf_counter() - started, 0.05)
+
+    def test_an_email_with_a_long_local_part_still_matches_its_tail(self):
+        self.assertEqual(obs_logging.redact_text("x@example.org"), "[email]")
+
+    def test_objects_in_extras_are_redacted_after_stringification(self):
+        error = RuntimeError("redis://:s3cret@cache:6379/0 down for a@b.org")
+        record = json.loads(
+            emit("json", "x", error=error, nested={"items": [error]}, count=3, ok=True)
+        )
+        self.assertEqual(
+            record["error"],
+            "RuntimeError: redis://[redacted]@cache:6379/0 down for [email]",
+        )
+        self.assertNotIn("s3cret", json.dumps(record))
+        self.assertEqual((record["count"], record["ok"]), (3, True))
+
     def test_sensitive_keys_are_masked_in_nested_extras(self):
         value = {
             "password": "x",

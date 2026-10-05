@@ -424,12 +424,11 @@ def _rebuild_in_background(held, user, build):
         except Exception:
             logger.exception("explorer bundle rebuild failed", extra=extra)
         finally:
-            if not kept:
-                metrics.EXPLORER_REBUILD_FAILURES.labels(
-                    language=metrics.language_label(held.language)
-                ).inc()
             try:
                 if not kept:
+                    metrics.EXPLORER_REBUILD_FAILURES.labels(
+                        language=metrics.language_label(held.language)
+                    ).inc()
                     cache.set(
                         failed,
                         1,

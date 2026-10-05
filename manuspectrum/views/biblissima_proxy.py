@@ -430,8 +430,10 @@ def _biblissima_slot(timeout=None):
         _incr_stat("requests_in_flight", 1)
         yield
     finally:
-        _incr_stat("requests_in_flight", -1)
-        _biblissima_semaphore.release()
+        try:
+            _incr_stat("requests_in_flight", -1)
+        finally:
+            _biblissima_semaphore.release()
 
 
 def _bib_request(
@@ -5694,6 +5696,18 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 # committed -> unattributed 500. Manifests imported in
                 # Pass 1 remain (benign/dedupable).
                 logger.exception("Biblissima batch creation failed")
+                _count_created_items(
+                    resource_type,
+                    [
+                        (
+                            {**result, "status": "failed"}
+                            if result.get("status") == "created"
+                            else result
+                        )
+                        for result in results
+                    ],
+                    out_of_budget,
+                )
                 return JsonResponse({"error": "Batch creation failed"}, status=500)
 
         # Schedule ES indexing for the committed batch via the on_commit seam.

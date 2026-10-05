@@ -13,6 +13,9 @@ from tests.observability_helpers import delta, sample
 class BundleMetricsTests(TestCase):
     def setUp(self):
         cache.clear()
+        guard = patch.object(memo, "_rebuilding", set())
+        guard.start()
+        self.addCleanup(guard.stop)
 
     def test_a_build_records_duration_size_rows_and_reason(self):
         bundle = SimpleNamespace(rows=[1, 2, 3])
@@ -81,6 +84,33 @@ class BundleMetricsTests(TestCase):
         ):
             memo._rebuild_in_background(held, None, lambda *a: None)
         self.assertEqual(failures.value, 1)
+
+    @override_settings(
+        EXPLORER_BACKGROUND_REBUILD=False, EXPLORER_REBUILD_MIN_INTERVAL=0
+    )
+    def test_a_failing_metric_still_releases_the_rebuild_slot(self):
+        held = SimpleNamespace(
+            current="explorer-bundle:k4", language="en", reason="data"
+        )
+        with (
+            patch.object(memo, "_build_and_keep", side_effect=RuntimeError("boom")),
+            patch.object(memo, "spawn", side_effect=swallowing_thread),
+            patch.object(
+                memo.metrics.EXPLORER_REBUILD_FAILURES,
+                "labels",
+                side_effect=RuntimeError("metric"),
+            ),
+        ):
+            memo._rebuild_in_background(held, None, lambda *a: None)
+        self.assertNotIn("en", memo._rebuilding)
+
+
+def swallowing_thread(target):
+    """What a daemon thread does with an exception: ends, the caller never sees it."""
+    try:
+        target()
+    except Exception:
+        pass
 
 
 class ExportBytesTests(TestCase):

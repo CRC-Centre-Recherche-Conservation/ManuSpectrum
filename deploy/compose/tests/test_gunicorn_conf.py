@@ -64,22 +64,28 @@ class GunicornConfTests(unittest.TestCase):
     def test_no_access_log(self):
         self.assertIsNone(load()["accesslog"])
 
-    def test_child_exit_marks_the_worker_dead_when_metrics_are_multiprocess(self):
-        dead = mock.Mock()
-        fake = mock.Mock(multiprocess=mock.Mock(mark_process_dead=dead))
-        modules = {
-            "prometheus_client": fake,
-            "prometheus_client.multiprocess": fake.multiprocess,
-        }
+    def test_child_exit_archives_the_worker_files_when_metrics_are_multiprocess(self):
+        archive = mock.Mock()
         conf = load(PROMETHEUS_MULTIPROC_DIR="/run/prometheus")
+        fake = mock.Mock(archive_dead_process=archive)
         with (
-            mock.patch.dict("sys.modules", modules),
+            mock.patch.dict(
+                conf["child_exit"].__globals__, {"_multiproc": lambda: fake}
+            ),
             mock.patch.dict(
                 os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/run/prometheus"}
             ),
         ):
             conf["child_exit"](None, mock.Mock(pid=4242))
-        dead.assert_called_once_with(4242)
+        archive.assert_called_once_with(4242)
+
+    def test_the_archive_module_is_where_the_hook_loads_it_from(self):
+        conf = load()
+        path = Path(conf["chdir"]) / "manuspectrum" / "observability" / "multiproc.py"
+        self.assertEqual(path.name, "multiproc.py")
+        repo = CONF.parents[2] / "manuspectrum" / "observability" / "multiproc.py"
+        self.assertTrue(repo.is_file())
+        self.assertNotIn("django", repo.read_text().split('"""')[2])
 
     def test_child_exit_does_nothing_without_the_directory(self):
         conf = load()

@@ -2,11 +2,15 @@ import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from celery.signals import worker_ready
+
 from django.test import SimpleTestCase, TestCase
 
 from manuspectrum import tasks
-from manuspectrum.observability import celery_signals
+from manuspectrum.observability import celery_signals, metrics
 from tests.observability_helpers import delta, sample
+
+TX = "6f1c2a9e-3b57-4d0e-9a41-0c5d8e7b2f13"
 
 
 def task(name):
@@ -66,13 +70,15 @@ class WorkerEndpointTests(SimpleTestCase):
             start.call_args.kwargs["registry"], collector.call_args.args[0]
         )
 
-    def test_a_child_that_exits_is_marked_dead(self):
+    def test_a_child_that_exits_is_archived(self):
         with (
             patch.dict(os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/tmp"}),
-            patch("prometheus_client.multiprocess.mark_process_dead") as dead,
+            patch(
+                "manuspectrum.observability.multiproc.archive_dead_process"
+            ) as archive,
         ):
             celery_signals.forget_child(pid=4242)
-        dead.assert_called_once_with(4242)
+        archive.assert_called_once_with(4242)
 
 
 class IndexTaskTests(TestCase):
@@ -99,8 +105,49 @@ class IndexTaskTests(TestCase):
                 outcome="indexed",
             ) as indexed,
         ):
-            tasks.index_resources_async(transaction_id="tx")
+            tasks.index_resources_async(transaction_id=TX)
         self.assertEqual(indexed.value, 1)
+
+    def test_a_transaction_error_is_counted_failed_and_raised(self):
+        with (
+            patch(
+                "arches.app.utils.index_database.index_resources_by_transaction",
+                side_effect=RuntimeError("es down"),
+            ),
+            delta(
+                "manuspectrum_index_resources_total",
+                mode="transaction",
+                outcome="failed",
+            ) as failed,
+            delta(
+                "manuspectrum_index_resources_total",
+                mode="transaction",
+                outcome="indexed",
+            ) as indexed,
+        ):
+            with self.assertRaises(RuntimeError):
+                tasks.index_resources_async(transaction_id=TX)
+        self.assertEqual((failed.value, indexed.value), (1, 0))
+
+    def test_a_malformed_transaction_id_is_failed_not_indexed(self):
+        with (
+            patch(
+                "arches.app.utils.index_database.index_resources_by_transaction"
+            ) as arches,
+            delta(
+                "manuspectrum_index_resources_total",
+                mode="transaction",
+                outcome="failed",
+            ) as failed,
+            delta(
+                "manuspectrum_index_resources_total",
+                mode="transaction",
+                outcome="indexed",
+            ) as indexed,
+        ):
+            tasks.index_resources_async(transaction_id="tx")
+        self.assertEqual((failed.value, indexed.value), (1, 0))
+        arches.assert_not_called()
 
 
 class PruneTaskTests(TestCase):
@@ -110,3 +157,19 @@ class PruneTaskTests(TestCase):
             sample("manuspectrum_data_change_pruned_timestamp_seconds"), 0
         )
         self.assertGreaterEqual(sample("manuspectrum_data_change_rows"), 0)
+
+
+class LedgerGaugesAtStartTests(TestCase):
+    def test_worker_ready_sets_the_ledger_gauges(self):
+        with (
+            patch.object(metrics.DATA_CHANGE_ROWS, "set") as rows,
+            patch.object(metrics.DATA_CHANGE_PRUNED, "set") as pruned,
+        ):
+            worker_ready.send(sender=None)
+        rows.assert_called_once()
+        self.assertGreaterEqual(rows.call_args.args[0], 0)
+        self.assertGreater(pruned.call_args.args[0], 0)
+
+    def test_a_database_error_does_not_break_worker_ready(self):
+        with patch("django.db.connection.cursor", side_effect=RuntimeError("db")):
+            worker_ready.send(sender=None)

@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -7,6 +8,8 @@ from django.test import TestCase, override_settings
 from manuspectrum.observability import health
 from tests.observability_helpers import sample
 
+REAL_ELASTICSEARCH = health.probe_elasticsearch
+REAL_BROKER = health.probe_broker
 ON = override_settings(
     READYZ_ENABLED=True,
     READYZ_TIMEOUT=0.5,
@@ -90,11 +93,7 @@ class ReadyzTests(TestCase):
         engine = MagicMock()
         engine.es.options.return_value.cluster.health.return_value = {"status": "red"}
         with (
-            patch.object(
-                health,
-                "probe_elasticsearch",
-                health.__dict__["_real_probe_elasticsearch"],
-            ),
+            patch.object(health, "probe_elasticsearch", REAL_ELASTICSEARCH),
             patch.object(health, "search_engine", return_value=engine),
         ):
             entry = json.loads(self.get().content)["components"]["elasticsearch"]
@@ -113,13 +112,66 @@ class ReadyzTests(TestCase):
             {"status": "timeout"},
         )
 
+    def test_a_timed_out_probe_is_logged_once_by_component_name(self):
+        with (
+            patch.object(health, "probe_cantaloupe", lambda timeout: time.sleep(1.5)),
+            self.assertLogs("manuspectrum.observability.health", "WARNING") as logs,
+        ):
+            self.get()
+        self.assertEqual(
+            logs.output,
+            [
+                "WARNING:manuspectrum.observability.health:readiness: cantaloupe timed out"
+            ],
+        )
+
+    def test_probe_threads_are_daemons(self):
+        seen = []
+
+        def slow(timeout):
+            seen.append(threading.current_thread())
+            time.sleep(1.2)
+
+        with patch.object(health, "probe_cantaloupe", slow):
+            self.get()
+        self.assertTrue(seen and all(thread.daemon for thread in seen))
+        self.assertTrue(seen[0].name.startswith("readyz-"))
+
+    def test_concurrent_calls_share_one_evaluation(self):
+        calls = []
+
+        def slow(timeout):
+            calls.append(1)
+            time.sleep(0.3)
+
+        reports = []
+        with patch.object(health, "probe_cantaloupe", slow):
+            threads = [
+                threading.Thread(target=lambda: reports.append(health.readiness()))
+                for _ in range(5)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(reports), 5)
+        self.assertTrue(all(report["status"] == "ready" for report in reports))
+
+    def test_sequential_calls_each_evaluate(self):
+        calls = []
+        with patch.object(health, "probe_cantaloupe", lambda t: calls.append(1)):
+            self.get()
+            self.get()
+        self.assertEqual(len(calls), 2)
+
     def test_cantaloupe_is_optional(self):
         with override_settings(READYZ_CANTALOUPE=False):
             self.assertNotIn("cantaloupe", json.loads(self.get().content)["components"])
 
     def test_broker_probe_targets_the_celery_broker_url(self):
         with (
-            patch.object(health, "probe_broker", health.__dict__["_real_probe_broker"]),
+            patch.object(health, "probe_broker", REAL_BROKER),
             patch("kombu.Connection") as connection,
             override_settings(CELERY_BROKER_URL="redis://redis-broker:6379/0"),
         ):

@@ -1,18 +1,19 @@
 """Readiness probes behind ``/readyz``.
 
 Each probe takes a timeout in seconds and returns, or raises. ``readiness()``
-runs them concurrently, waits at most ``READYZ_TIMEOUT`` + 0.5 s in all, and
-reports per component ``up`` (with its duration), ``down`` (with the exception
-class, or the fixed reason of ``ProbeFailed``; never the message, which may
-hold a URL with credentials) or ``timeout``. A probe still running after the
-bound is left to finish on its own socket timeout; it holds no Django
-connection. To add a component: write ``probe_<name>(timeout)``, add it to
+runs them concurrently on daemon threads, waits at most ``READYZ_TIMEOUT`` + 0.5 s
+in all, and reports per component ``up`` (with its duration), ``down`` (with the
+exception class, or the fixed reason of ``ProbeFailed``; never the message, which
+may hold a URL with credentials) or ``timeout`` (logged once, by component name).
+A probe still running after the bound is left to finish on its own socket
+timeout; its daemon thread never delays the exit of the worker and it holds no
+Django connection. A process runs one evaluation at a time (see ``readiness``). To add a component: write ``probe_<name>(timeout)``, add it to
 ``components()``, add its name to ``metrics.READYZ_COMPONENTS``.
 """
 
-import concurrent.futures
 import functools
 import logging
+import threading
 import time
 
 from django.conf import settings
@@ -112,33 +113,50 @@ def components():
     return checks
 
 
-def _timed(probe, timeout):
+REUSE_WINDOW = 2.0
+_gate = threading.Lock()
+_last = None  # (monotonic time, report) of the last finished evaluation
+
+
+def _run(probe, timeout, outcome):
     started = time.monotonic()
-    probe(timeout)
-    return time.monotonic() - started
+    try:
+        probe(timeout)
+        outcome["seconds"] = time.monotonic() - started
+    except BaseException as error:  # noqa: BLE001 - reported by class, never raised
+        outcome["error"] = error
 
 
-def readiness():
+def _evaluate():
+    """Run every probe on its own daemon thread, wait at most ``READYZ_TIMEOUT`` + 0.5 s in all."""
     timeout = float(settings.READYZ_TIMEOUT)
-    checks = components()
-    pool = concurrent.futures.ThreadPoolExecutor(
-        max_workers=len(checks), thread_name_prefix="readyz"
-    )
-    futures = {name: pool.submit(_timed, probe, timeout) for name, probe in checks}
-    concurrent.futures.wait(futures.values(), timeout=timeout + 0.5)
-    pool.shutdown(wait=False, cancel_futures=True)
+    runs = []
+    for name, probe in components():
+        outcome = {}
+        thread = threading.Thread(
+            target=_run,
+            args=(probe, timeout, outcome),
+            name=f"readyz-{name}",
+            daemon=True,
+        )
+        thread.start()
+        runs.append((name, thread, outcome))
+    deadline = time.monotonic() + timeout + 0.5
     report = {}
-    for name, future in futures.items():
-        if not future.done():
+    for name, thread, outcome in runs:
+        thread.join(max(0.0, deadline - time.monotonic()))
+        if thread.is_alive():
             entry = {"status": "timeout"}
-        else:
-            try:
-                entry = {"status": "up", "seconds": round(future.result(), 3)}
-            except ProbeFailed as failure:
-                entry = {"status": "down", "error": str(failure)}
-            except Exception as error:
+            logger.warning("readiness: %s timed out", name)
+        elif "error" in outcome:
+            error = outcome["error"]
+            if isinstance(error, ProbeFailed):
+                entry = {"status": "down", "error": str(error)}
+            else:
                 entry = {"status": "down", "error": type(error).__name__}
                 logger.warning("readiness: %s is down: %s", name, error)
+        else:
+            entry = {"status": "up", "seconds": round(outcome["seconds"], 3)}
         metrics.READYZ_UP.labels(
             component=metrics.bounded(name, metrics.READYZ_COMPONENTS)
         ).set(1 if entry["status"] == "up" else 0)
@@ -147,5 +165,39 @@ def readiness():
     return {"status": "ready" if ready else "not ready", "components": report}
 
 
-_real_probe_elasticsearch = probe_elasticsearch
-_real_probe_broker = probe_broker
+def _fresh():
+    last = _last
+    if last is not None and time.monotonic() - last[0] < REUSE_WINDOW:
+        return last[1]
+    return None
+
+
+def readiness():
+    """The readiness report. One evaluation runs per process at a time: a call that
+    finds one running reuses its result when it ends within ``REUSE_WINDOW`` seconds, or
+    after waiting at most ``READYZ_TIMEOUT`` reports every component ``timeout``."""
+    global _last
+    if not _gate.acquire(blocking=False):
+        report = _fresh()
+        if report is not None:
+            return report
+        if not _gate.acquire(timeout=float(settings.READYZ_TIMEOUT)):
+            return {
+                "status": "not ready",
+                "components": {
+                    name: {"status": "timeout"} for name, _probe in components()
+                },
+            }
+        try:
+            report = _fresh()
+            if report is not None:
+                return report
+        except BaseException:
+            _gate.release()
+            raise
+    try:
+        report = _evaluate()
+        _last = (time.monotonic(), report)
+        return report
+    finally:
+        _gate.release()

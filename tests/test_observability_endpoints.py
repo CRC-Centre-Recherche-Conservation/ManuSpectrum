@@ -1,3 +1,4 @@
+from django.core.signals import request_finished, request_started
 from django.test import TestCase, modify_settings, override_settings
 from prometheus_client.parser import text_string_to_metric_families
 
@@ -74,7 +75,15 @@ class InflightTests(TestCase):
         web.request_finished_handler(sender=None)
         self.assertEqual(sample("manuspectrum_inflight_requests"), before)
 
-    def test_a_real_request_leaves_the_gauge_where_it_was(self):
+    def test_a_real_request_is_counted_while_served_and_released_after(self):
         before = sample("manuspectrum_inflight_requests")
+        seen = []
+
+        def spy(sender, **kwargs):
+            seen.append(sample("manuspectrum_inflight_requests"))
+
+        request_started.connect(spy, weak=False, dispatch_uid="inflight-spy")
+        self.addCleanup(request_started.disconnect, dispatch_uid="inflight-spy")
         self.client.get("/healthz")
+        self.assertEqual(seen, [before + 1])
         self.assertEqual(sample("manuspectrum_inflight_requests"), before)

@@ -27,7 +27,8 @@ Compose network (nginx, from PP-3) reaches it.
 
 nginx writes the access log (rotated on the host, 30 days); gunicorn writes only
 its error log, to stderr. With `PROMETHEUS_MULTIPROC_DIR` set (Compose),
-`child_exit` marks a dead worker so its live gauges stop counting; the
+`child_exit` archives a dead worker's metric files
+(`manuspectrum/observability/multiproc.py`) so the directory stays bounded; the
 entrypoint empties the directory before gunicorn starts.
 """
 
@@ -55,8 +56,20 @@ errorlog = "-"
 loglevel = os.environ.get("GUNICORN_LOG_LEVEL", "info")
 
 
+def _multiproc():
+    """``manuspectrum/observability/multiproc.py`` loaded by path: importing the
+    ``manuspectrum`` package would build the Celery app in the arbiter."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "ms_multiproc",
+        os.path.join(chdir, "manuspectrum", "observability", "multiproc.py"),
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def child_exit(server, worker):
     if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
-        from prometheus_client import multiprocess
-
-        multiprocess.mark_process_dead(worker.pid)
+        _multiproc().archive_dead_process(worker.pid)
