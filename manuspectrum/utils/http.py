@@ -19,6 +19,7 @@ from django.conf import settings as django_settings
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from manuspectrum.utils.budget import BudgetSpent, capped_timeout, current_budget
 from manuspectrum.utils.contact import publishable_contact_email
 
 # Public page an external operator should land on when they look us up: it
@@ -276,8 +277,11 @@ def _rate_key_and_interval(host):
     return host or "default", limits.get("default", 0)
 
 
-def throttle_for_host(url):
+def throttle_for_host(url, budget=None):
     """Block until the per-host minimum interval has elapsed before a request.
+
+    With a *budget* (``utils.budget``), raises ``BudgetSpent`` instead of
+    waiting past its deadline, for the host lock as well as for the interval.
 
     Enforces e.g. 1 request / 3 s for *.bnf.fr so a bulk import does not trip
     Gallica/BnF's (undocumented, discretionary) abuse blocking. No-op when the
@@ -289,11 +293,19 @@ def throttle_for_host(url):
         return
     with _host_rate_guard:
         lock = _host_rate_locks.setdefault(key, threading.Lock())
-    with lock:
+    if budget is None:
+        lock.acquire()
+    elif budget.left() <= 0 or not lock.acquire(timeout=budget.left()):
+        raise BudgetSpent()
+    try:
         wait = _host_rate_last.get(key, 0.0) + interval - time.monotonic()
         if wait > 0:
+            if budget is not None and wait >= budget.left():
+                raise BudgetSpent()
             time.sleep(wait)
         _host_rate_last[key] = time.monotonic()
+    finally:
+        lock.release()
 
 
 # ---------------------------------------------------------------------------
@@ -304,11 +316,26 @@ _iiif_session = None
 _iiif_session_guard = threading.Lock()
 
 
-def _build_iiif_session():
+class CappedRetry(Retry):
+    """``Retry`` whose ``Retry-After`` sleep never exceeds ``IIIF_RETRY_AFTER_MAX``.
+
+    The cap is read from settings at each sleep, not stored on the instance, so
+    the copies urllib3 makes with ``new()`` on every attempt keep it.
+    Written against urllib3 1.26 (``get_retry_after``).
+    """
+
+    def get_retry_after(self, response):
+        retry_after = super().get_retry_after(response)
+        if retry_after is None:
+            return None
+        return min(retry_after, django_settings.IIIF_RETRY_AFTER_MAX)
+
+
+def _build_iiif_session(retry=None):
     session = requests.Session()
     # Carries our User-Agent (get_user_agent) + JSON-LD Accept on every request.
     session.headers.update(get_json_request_headers())
-    retry = Retry(
+    retry = retry or CappedRetry(
         total=3,
         connect=2,
         read=2,
@@ -338,6 +365,23 @@ def get_iiif_session():
             if _iiif_session is None:
                 _iiif_session = _build_iiif_session()
     return _iiif_session
+
+
+_iiif_budget_session = None
+
+
+def _get_iiif_budget_session():
+    """Process-wide session without retries, for fetches made under a budget
+    (``utils.budget``): a retry loop inside urllib3 cannot be stopped when the
+    deadline passes."""
+    global _iiif_budget_session
+    if _iiif_budget_session is None:
+        with _iiif_session_guard:
+            if _iiif_budget_session is None:
+                _iiif_budget_session = _build_iiif_session(
+                    retry=Retry(total=0, raise_on_status=False)
+                )
+    return _iiif_budget_session
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +442,7 @@ def _max_bytes(explicit=None):
     return getattr(django_settings, "SSRF_MAX_RESPONSE_BYTES", _DEFAULT_MAX_BYTES)
 
 
-def _read_capped(response, max_bytes):
+def _read_capped(response, max_bytes, budget=None):
     """Read at most *max_bytes* of a streamed response, decompressed.
 
     ``iter_content`` decodes the transfer encoding as it goes, so the count is
@@ -406,6 +450,9 @@ def _read_capped(response, max_bytes):
     to, not the size it was sent as. Stacked codings ("gzip, gzip") are refused
     outright: they are the shape of the urllib3 1.x decompression CVEs that
     Arches' pin leaves unfixed, and no IIIF server emits them.
+
+    With a *budget*, raises ``BudgetSpent`` between chunks once it is spent: a
+    socket read timeout bounds one read, not a body sent a few bytes at a time.
     """
     codings = [
         c.strip()
@@ -430,6 +477,8 @@ def _read_capped(response, max_bytes):
     chunks = []
     total = 0
     for chunk in response.iter_content(_READ_CHUNK):
+        if budget is not None and budget.spent():
+            raise BudgetSpent()
         total += len(chunk)
         if total > max_bytes:
             raise ResponseTooLargeError(
@@ -461,11 +510,20 @@ def safe_fetch(
     its own outbound rate (the Biblissima proxy holds a concurrency semaphore
     for the whole call).
 
+    Inside a budget (``utils.budget``) no hop starts once it is spent, the
+    throttle never waits past it, each hop's connect and read timeouts are
+    capped by what is left, and a caller that gave no *session* gets one
+    without retries. Outside one nothing changes.
+
     Raises ``UnsafeURLError`` for a rejected URL or redirect chain,
-    ``ResponseTooLargeError`` past the cap, and whatever ``requests`` raises
-    for a transport failure.
+    ``ResponseTooLargeError`` past the cap, ``BudgetSpent`` when the budget
+    ran out, and whatever ``requests`` raises for a transport failure.
     """
-    session = session or get_iiif_session()
+    budget = current_budget()
+    if session is None:
+        session = (
+            _get_iiif_budget_session() if budget is not None else get_iiif_session()
+        )
     if timeout is None:
         timeout = (_ssrf_timeout(), _ssrf_timeout())
     cap = _max_bytes(max_bytes)
@@ -476,19 +534,28 @@ def safe_fetch(
         # The guard hands back the canonical form; sending anything else would
         # reopen the parser gap it just closed.
         target = assert_url_is_safe(target, allow_private=allow_private).geturl()
+        hop_timeout = timeout
+        if budget is not None:
+            if budget.spent():
+                raise BudgetSpent()
         if throttle:
-            throttle_for_host(target)
+            throttle_for_host(target, budget)
+        if budget is not None:
+            left = budget.left()
+            if left <= 0:
+                raise BudgetSpent()
+            hop_timeout = capped_timeout(timeout, left)
         response = session.get(
             target,
             headers=headers,
-            timeout=timeout,
+            timeout=hop_timeout,
             allow_redirects=False,
             stream=True,
         )
         location = response.headers.get("Location") if response.is_redirect else None
         if not location:
             try:
-                body = _read_capped(response, cap)
+                body = _read_capped(response, cap, budget)
             finally:
                 response.close()
             return FetchedResponse(target, response.status_code, response.headers, body)
