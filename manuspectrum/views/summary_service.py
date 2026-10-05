@@ -51,7 +51,7 @@ from guardian.models import GroupObjectPermission, UserObjectPermission
 from arches.app.models import models
 from arches.app.models.models import ResourceInstance
 from arches.app.search.mappings import RESOURCES_INDEX
-from arches.app.search.search_engine_factory import SearchEngineFactory
+from arches.app.search.search_engine_factory import SearchEngineInstance
 from arches_controlled_lists.models import ListItemValue
 
 from manuspectrum.functions.resource_summary import (
@@ -491,8 +491,13 @@ def es_client():
     The client carries ``SUMMARY_ES_TIMEOUT`` rather than the project's 30 s:
     a sick cluster has to fall into the degraded payload instead of holding a
     worker for half a minute.
+
+    ``options()`` is a cheap copy of Arches' process-wide client that shares
+    its transport and connection pool. ``SearchEngineFactory().create()`` would
+    instead build a new transport (and mutate the process-global warnings
+    filters) on every popup, once per thread under gthread.
     """
-    engine = SearchEngineFactory().create()
+    engine = SearchEngineInstance
     return (
         engine.es.options(request_timeout=settings.SUMMARY_ES_TIMEOUT),
         engine._add_prefix(RESOURCES_INDEX),
