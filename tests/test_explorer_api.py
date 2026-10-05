@@ -1105,6 +1105,218 @@ class ItemsRouteTests(CorpusCase):
         for layer in files[1]["layers"]:
             assert_shape(self, layer, "FileLayer")
 
+    LAYER_MANIFEST = {
+        "@context": "http://iiif.io/api/presentation/3/context.json",
+        "id": "https://example.org/iiif/imaging/x",
+        "items": [
+            {
+                "id": "https://example.org/iiif/imaging/x/canvas/pb",
+                "type": "Canvas",
+                "label": {"none": ["Pb map"]},
+            },
+            {
+                "id": "https://example.org/iiif/imaging/x/canvas/650",
+                "type": "Canvas",
+                "label": {"none": ["650 nm"]},
+            },
+        ],
+    }
+    LAYER_CANVASES = {
+        "pb": "https://example.org/iiif/imaging/x/canvas/pb",
+        "650": "https://example.org/iiif/imaging/x/canvas/650",
+    }
+
+    def layer_files(self, manifest=None):
+        node = self.nodes[("analysis", "chemical_imaging_manifest")]
+        if not TileModel.objects.filter(
+            resourceinstance=self.analyses["open"], nodegroup_id=node.nodegroup_id
+        ).exists():
+            self.tile(
+                self.analyses["open"],
+                "chemical_imaging_manifest",
+                "https://example.org/iiif/imaging/x",
+            )
+        with mock.patch(
+            "manuspectrum.views.explorer.service.manifest_json",
+            return_value=manifest or self.LAYER_MANIFEST,
+        ):
+            payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
+        return payload["items"][0]["files"][-1]["layers"]
+
+    def layer_tile(self, canvas, **values):
+        return self.tile_values(
+            self.analyses["open"],
+            "analysis",
+            imaging_layer_canvas=canvas,
+            **values,
+        )
+
+    def ref(self, uri, en, fr=None, alt=None):
+        return self.reference_value(uri, en, fr, alt=alt)
+
+    def test_a_layer_tile_fills_content_elements_band_and_processing(self):
+        lead = self.ref("https://example.org/el/lead", "Lead", "Plomb", alt="Pb")
+        self.layer_tile(
+            self.LAYER_CANVASES["pb"],
+            imaging_layer_label="Pb map",
+            imaging_layer_content=self.ref(
+                "https://example.org/c/element", "Element distribution"
+            ),
+            imaging_layer_elements=lead,
+            imaging_layer_emission_line=self.ref("https://example.org/l/la", "Lα"),
+            imaging_layer_processing_method=self.ref(
+                "https://example.org/m/deconv", "Deconvolution / fitting"
+            ),
+            imaging_layer_component_index=2,
+            imaging_layer_processing_inputs="  a, b ",
+            imaging_layer_note=self.string_value("  A note  "),
+        )
+        self.layer_tile(
+            self.LAYER_CANVASES["650"],
+            imaging_layer_content=self.ref("https://example.org/c/band", "Band"),
+            imaging_layer_band_value=650.0,
+            imaging_layer_band_lower=640,
+            imaging_layer_band_upper=660,
+            imaging_layer_band_unit=self.ref(
+                "https://example.org/u/nm", "Nanometre", alt="nm"
+            ),
+        )
+
+        pb, band = self.layer_files()
+
+        assert_shape(self, pb, "FileLayer")
+        assert_shape(self, band, "FileLayer")
+        self.assertEqual(
+            (pb["index"], pb["id"], pb["label"]),
+            (0, self.LAYER_CANVASES["pb"], "Pb map"),
+        )
+        self.assertEqual(pb["content"]["label"]["value"], "Element distribution")
+        self.assertEqual(
+            [(e["value"]["label"]["value"], e["symbol"]) for e in pb["elements"]],
+            [("Lead", "Pb")],
+        )
+        assert_shape(self, pb["elements"][0], "LayerElement")
+        self.assertEqual(pb["emissionLine"]["label"]["value"], "Lα")
+        self.assertIsNone(pb["band"])
+        assert_shape(self, pb["processing"], "LayerProcessing")
+        self.assertEqual(
+            (
+                pb["processing"]["method"]["label"]["value"],
+                pb["processing"]["index"],
+                pb["processing"]["inputs"],
+            ),
+            ("Deconvolution / fitting", 2, "a, b"),
+        )
+        self.assertEqual(pb["note"], "A note")
+        assert_shape(self, band["band"], "LayerBand")
+        self.assertEqual(
+            (band["band"]["value"], band["band"]["lower"], band["band"]["upper"]),
+            (650, 640, 660),
+        )
+        self.assertEqual(band["band"]["unit"]["label"]["value"], "Nanometre")
+        self.assertEqual(
+            (band["elements"], band["emissionLine"], band["processing"], band["note"]),
+            ([], None, None, None),
+        )
+
+    def test_all_layers_unclassified_when_no_tile_exists(self):
+        layers = self.layer_files()
+
+        self.assertEqual([layer["index"] for layer in layers], [0, 1])
+        self.assertEqual(
+            [layer["id"] for layer in layers], list(self.LAYER_CANVASES.values())
+        )
+        for layer in layers:
+            assert_shape(self, layer, "FileLayer")
+            self.assertEqual(
+                (
+                    layer["content"],
+                    layer["elements"],
+                    layer["emissionLine"],
+                    layer["band"],
+                    layer["processing"],
+                    layer["note"],
+                ),
+                (None, [], None, None, None, None),
+            )
+        self.assertEqual([layer["label"] for layer in layers], ["Pb map", "650 nm"])
+
+    def test_some_layers_classified_and_a_content_only_tile(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["650"],
+            imaging_layer_content=self.ref("https://example.org/c/video", "Video"),
+        )
+
+        first, second = self.layer_files()
+
+        self.assertEqual(
+            (first["content"], first["elements"], first["band"]), (None, [], None)
+        )
+        self.assertEqual(second["content"]["label"]["value"], "Video")
+        self.assertEqual(
+            (second["elements"], second["band"], second["processing"]),
+            ([], None, None),
+        )
+        self.assertEqual(second["label"], "650 nm")
+
+    def test_layer_nodegroup_unreadable_reads_as_unclassified(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["pb"],
+            imaging_layer_content=self.ref("https://example.org/c/el", "Element"),
+        )
+        self.restrict_nodegroup(
+            self.nodes[("analysis", "imaging_layer_canvas")].nodegroup_id,
+            self.editor,
+        )
+
+        layers = self.layer_files()
+
+        self.assertEqual([layer["content"] for layer in layers], [None, None])
+        self.assertEqual([layer["label"] for layer in layers], ["Pb map", "650 nm"])
+
+    def legacy_case(self, tile_host, manifest_host):
+        canvas = "/iiif/manifest/canvas/pb.json"
+        manifest = {
+            **self.LAYER_MANIFEST,
+            "items": [
+                {"id": f"http://{manifest_host}{canvas}", "type": "Canvas"},
+            ],
+        }
+        self.layer_tile(
+            f"http://{tile_host}{canvas}",
+            imaging_layer_content=self.ref("https://example.org/c/el", "Element"),
+        )
+        return self.layer_files(manifest)
+
+    def test_imaging_entries_matches_a_layer_tile_stored_under_a_legacy_host(self):
+        new_host = settings.PUBLIC_SERVER_ADDRESS.split("//", 1)[1].strip("/")
+        group = self.nodes[("analysis", "imaging_layer_canvas")].nodegroup_id
+
+        with self.settings(EXPLORER_LEGACY_HOSTS=["old-host"]):
+            tile_old = self.legacy_case("old-host", new_host)
+            TileModel.objects.filter(nodegroup_id=group).delete()
+            tile_mirror = self.legacy_case(new_host, "old-host")
+
+        for layers in (tile_old, tile_mirror):
+            self.assertEqual(len(layers), 1)
+            self.assertEqual(layers[0]["content"]["label"]["value"], "Element")
+            self.assertTrue(layers[0]["id"].startswith(settings.PUBLIC_SERVER_ADDRESS))
+
+    def test_layers_are_read_in_one_values_query(self):
+        def tile_queries():
+            with CaptureQueriesContext(connection) as queries:
+                self.layer_files()
+            return len([q for q in queries if 'FROM "tiles"' in q["sql"]])
+
+        without = tile_queries()
+        for canvas in self.LAYER_CANVASES.values():
+            self.layer_tile(
+                canvas,
+                imaging_layer_content=self.ref("https://example.org/c/el", "Element"),
+            )
+
+        self.assertEqual(tile_queries(), without)
+
     def test_a_hidden_unknown_or_malformed_analysis_key_is_missing(self):
         self.embargo(self.analyses["open"])
         hidden = f"an:{self.analyses['open'].pk}:-"
@@ -1400,10 +1612,24 @@ class RevalidationTests(CorpusCase):
 
 
 class LayerOfTests(SimpleTestCase):
-    def test_a_layer_is_its_position_its_stored_label_and_its_image(self):
-        layer = layer_of(3, "  Pb  ", {"url": None})
+    def test_a_layer_without_a_tile_is_unclassified(self):
+        layer = layer_of(3, "  Pb  ", {"url": None}, "canvas-id")
 
-        self.assertEqual(layer, {"index": 3, "label": "Pb", "image": {"url": None}})
+        self.assertEqual(
+            layer,
+            {
+                "index": 3,
+                "id": "canvas-id",
+                "label": "Pb",
+                "image": {"url": None},
+                "content": None,
+                "elements": [],
+                "emissionLine": None,
+                "band": None,
+                "processing": None,
+                "note": None,
+            },
+        )
 
     def test_a_missing_label_is_an_empty_string(self):
         layer = layer_of(0, None, {"url": None})

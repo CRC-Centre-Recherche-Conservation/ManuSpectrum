@@ -27,7 +27,30 @@ IMAGE_REF = {
     "height": int,
 }
 
-FILE_LAYER = {"index": int, "label": str, "image": "ImageRef"}
+LAYER_ELEMENT = {"value": "ValueRef", "symbol": (str, type(None))}
+LAYER_BAND = {
+    "value": (int, float, type(None)),
+    "lower": (int, float, type(None)),
+    "upper": (int, float, type(None)),
+    "unit": ("ValueRef", None),
+}
+LAYER_PROCESSING = {
+    "method": ("ValueRef", None),
+    "index": (int, float, type(None)),
+    "inputs": (str, type(None)),
+}
+FILE_LAYER = {
+    "index": int,
+    "id": str,
+    "label": str,
+    "image": "ImageRef",
+    "content": ("ValueRef", None),
+    "elements": list,
+    "emissionLine": ("ValueRef", None),
+    "band": ("LayerBand", None),
+    "processing": ("LayerProcessing", None),
+    "note": (str, type(None)),
+}
 
 SHAPES = {
     "Label": LABEL,
@@ -36,6 +59,9 @@ SHAPES = {
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
     "FileLayer": FILE_LAYER,
+    "LayerElement": LAYER_ELEMENT,
+    "LayerBand": LAYER_BAND,
+    "LayerProcessing": LAYER_PROCESSING,
     "NamedRef": NAMED_REF,
     "Citation": CITATION,
     "Technique": TECHNIQUE,

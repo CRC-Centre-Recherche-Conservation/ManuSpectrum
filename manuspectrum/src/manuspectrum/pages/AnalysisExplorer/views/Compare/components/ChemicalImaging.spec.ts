@@ -19,6 +19,7 @@ import {
     documentPayload,
     imagingEntry,
     label,
+    layerOf,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
@@ -90,7 +91,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
 });
 
 function layer(index: number, name: string): FileLayer {
-    return {
+    return layerOf({
         index,
         label: name,
         image: {
@@ -99,7 +100,7 @@ function layer(index: number, name: string): FileLayer {
             width: 900,
             height: 600,
         },
-    };
+    });
 }
 
 function map(

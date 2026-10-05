@@ -4,6 +4,7 @@ import {
     analysisHit,
     fileEntry,
     imagingEntry,
+    layerOf,
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -44,7 +45,7 @@ function xyWindow(curves: FileLine[]): XyWindow {
 }
 
 function elementLayer(index: number, symbol: string): FileLayer {
-    return {
+    return layerOf({
         index,
         label: symbol,
         image: {
@@ -53,7 +54,7 @@ function elementLayer(index: number, symbol: string): FileLayer {
             width: 2000,
             height: 3000,
         },
-    };
+    });
 }
 
 function mapLine(slot: number, symbols: string[]): MapLine {

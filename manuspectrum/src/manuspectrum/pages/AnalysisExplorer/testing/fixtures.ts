@@ -10,6 +10,7 @@ import type {
     Facet,
     FacetValue,
     FileEntry,
+    FileLayer,
     HomeResponse,
     ProductLink,
     SampleSummary,
@@ -380,6 +381,29 @@ export function fileEntry(overrides: Partial<FileEntry> = {}): FileEntry {
     };
 }
 
+/** A layer with no tile (situation A, spec §7); `overrides` lays a mapping on it. */
+export function layerOf(
+    overrides: Partial<FileLayer> & { index: number },
+): FileLayer {
+    return {
+        id: `http://testserver/iiif/canvas/${overrides.index}`,
+        label: "",
+        image: {
+            service: "https://iiif.example/image/pb",
+            url: null,
+            width: 2000,
+            height: 3000,
+        },
+        content: null,
+        elements: [],
+        emissionLine: null,
+        band: null,
+        processing: null,
+        note: null,
+        ...overrides,
+    };
+}
+
 export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
     const image = {
         service: "https://iiif.example/image/pb",
@@ -405,12 +429,12 @@ export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
             decimated: false,
         },
         layers: [
-            { index: 0, label: "Pb", image },
-            {
+            layerOf({ index: 0, label: "Pb", image }),
+            layerOf({
                 index: 1,
                 label: "Hg",
                 image: { ...image, service: "https://iiif.example/image/hg" },
-            },
+            }),
         ],
         previewUrl: null,
         ...overrides,
