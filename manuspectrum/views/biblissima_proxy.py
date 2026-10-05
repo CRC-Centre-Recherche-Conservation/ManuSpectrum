@@ -100,6 +100,13 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
+from manuspectrum.utils.budget import (
+    BudgetSpent,
+    UpstreamBudget,
+    budget_var,
+    capped_timeout,
+    upstream_budget,
+)
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
@@ -252,8 +259,7 @@ class BiblissimaBusy(Exception):
     """No concurrency slot freed up within ``_BIBLISSIMA_SLOT_TIMEOUT``."""
 
 
-class BiblissimaBudgetSpent(Exception):
-    """The request's deadline passed before this call could start."""
+BiblissimaBudgetSpent = BudgetSpent
 
 
 class BiblissimaHostDown(Exception):
@@ -263,25 +269,8 @@ class BiblissimaHostDown(Exception):
 _BREAKER_STATUSES = frozenset((403, 429, 503))
 
 
-class _UpstreamBudget:
-    """Backstop deadline of one request's Biblissima calls, the hosts found
-    down, and the first failure met."""
-
-    def __init__(self, seconds):
-        self.deadline = time.monotonic() + seconds
-        self.down = set()
-        self.error = None
-
-    def record(self, exc, host=None):
-        if self.error is None:
-            self.error = exc
-        if host is not None:
-            self.down.add(host)
-
-
-_upstream_budget_var = contextvars.ContextVar(
-    "biblissima_upstream_budget", default=None
-)
+_UpstreamBudget = UpstreamBudget
+_upstream_budget_var = budget_var
 
 
 class BiblissimaApiError(ValueError):
@@ -303,7 +292,6 @@ def _record_failure(exc):
         budget.record(exc)
 
 
-@contextmanager
 def _upstream_budget(seconds):
     """Bound every Biblissima call made in this block, pool threads included.
 
@@ -316,12 +304,7 @@ def _upstream_budget(seconds):
     body ``_bib_json`` refuses. A 404 of the portal host and third-party IIIF
     failures are not.
     """
-    budget = _UpstreamBudget(seconds)
-    token = _upstream_budget_var.set(budget)
-    try:
-        yield budget
-    finally:
-        _upstream_budget_var.reset(token)
+    return upstream_budget(seconds)
 
 
 def _default_session():
@@ -353,14 +336,7 @@ def _biblissima_host(url):
     return host if host in _BIBLISSIMA_HOSTS else None
 
 
-def _capped_timeout(timeout, left, connect_cap=None):
-    """``(connect, read)`` of *timeout* (a number or a pair), each at most
-    *left*; the connect also at most *connect_cap* when one is given."""
-    connect, read = timeout if isinstance(timeout, tuple) else (timeout, timeout)
-    connect = min(connect, left)
-    if connect_cap is not None:
-        connect = min(connect, connect_cap)
-    return connect, min(read, left)
+_capped_timeout = capped_timeout
 
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
@@ -2325,6 +2301,48 @@ _MAX_SEARCH_PAGE_SIZE = 200
 _MAX_SEARCH_DESCRIPTORS = 5
 _MAX_CHECK_DUPLICATES_ITEMS = 200
 
+# Items one create-all POST may carry. Each runs under its own write budget
+# (``BIBLISSIMA_WRITE_ITEM_DEADLINE``), so this bounds the time one request
+# thread is held; the client sends larger batches in chunks of this size.
+_MAX_CREATE_ALL_ITEMS = 5
+
+
+class WriteDeadlineExceeded(Exception):
+    """A create ran out of its write budget; the message is shown to the user."""
+
+
+@contextmanager
+def _item_write_budget():
+    """Open the write budget of one item; a failure caused by it surfaces as
+    ``WriteDeadlineExceeded``, any other exception is left untouched."""
+    budget = None
+    try:
+        with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE) as budget:
+            yield budget
+    except Exception as exc:
+        message = _write_deadline_error(budget, exc)
+        if message:
+            raise WriteDeadlineExceeded(message) from exc
+        raise
+
+
+def _write_deadline_error(budget, exc):
+    """The message of an item that ran out of write budget, else ``None``.
+
+    True when *exc* is ``BudgetSpent``, or a transport timeout or connection
+    failure raised once the budget had passed.
+    """
+    if budget is None:
+        return None
+    timed_out = isinstance(
+        exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
+    )
+    if isinstance(exc, BudgetSpent) or (timed_out and budget.spent()):
+        return _("Time limit of %(seconds)s s for this item exceeded.") % {
+            "seconds": settings.BIBLISSIMA_WRITE_ITEM_DEADLINE
+        }
+    return None
+
 
 @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
 class BiblissimaSearchView(View):
@@ -3511,6 +3529,9 @@ class BiblissimaCreateResourceView(View):
                 concept_mappings=concept_mappings,
                 user=request.user,
             )
+        except WriteDeadlineExceeded as exc:
+            logger.warning("Biblissima create abandoned: %s", exc.__cause__)
+            return JsonResponse({"error": str(exc)}, status=504)
         except ValueError as exc:
             # Dangling / malformed dependency (or project) rejected by the
             # existence guard — a client-data problem, so a clean 400 rather
@@ -3586,11 +3607,15 @@ class BiblissimaCreateResourceView(View):
             serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
             nodes_by_id = self._nodes_by_id(serialized_graph)
             factory = DataTypeFactory()
-            self._stage_tiles(self._tile_buffer, nodes_by_id, factory)
-            if resource_type == "Place":
-                self._stage_place_geo(
-                    resource_id, bbma_data.get("biblissimaQid"), nodes_by_id, factory
-                )
+            with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE):
+                self._stage_tiles(self._tile_buffer, nodes_by_id, factory)
+                if resource_type == "Place":
+                    self._stage_place_geo(
+                        resource_id,
+                        bbma_data.get("biblissimaQid"),
+                        nodes_by_id,
+                        factory,
+                    )
 
             with transaction.atomic():
                 resource_instance.save()
@@ -3670,29 +3695,31 @@ class BiblissimaCreateResourceView(View):
         resource_instance = ResourceInstance(graph_id=graph_id)
         resource_id = resource_instance.resourceinstanceid
 
-        if resource_type == "Document":
-            self._create_document_tiles(
-                resource_id,
-                transaction_id,
-                bbma_data,
-                dependencies,
-                concept_mappings,
-                created_deps,
-            )
-        else:
-            self._create_component_tiles(
-                resource_id,
-                transaction_id,
-                bbma_data,
-                dependencies,
-                concept_mappings,
-                created_deps,
-            )
-
         serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-        self._stage_tiles(
-            self._tile_buffer, self._nodes_by_id(serialized_graph), DataTypeFactory()
-        )
+        with _item_write_budget():
+            if resource_type == "Document":
+                self._create_document_tiles(
+                    resource_id,
+                    transaction_id,
+                    bbma_data,
+                    dependencies,
+                    concept_mappings,
+                    created_deps,
+                )
+            else:
+                self._create_component_tiles(
+                    resource_id,
+                    transaction_id,
+                    bbma_data,
+                    dependencies,
+                    concept_mappings,
+                    created_deps,
+                )
+            self._stage_tiles(
+                self._tile_buffer,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+            )
 
         with transaction.atomic():
             resource_instance.save()
@@ -3937,8 +3964,9 @@ class BiblissimaCreateResourceView(View):
 
         Runs before the write transaction opens, never inside it:
         ``pre_tile_save`` on a IIIF manifest node fetches the manifest over
-        HTTP, with retries and a per-host throttle, and a transaction held
-        open meanwhile keeps its connection and row locks. Writes nothing to
+        HTTP (per-host throttled, and without retries under a write budget),
+        and a transaction held open meanwhile keeps its connection and row
+        locks. Writes nothing to
         the resource tables. Raises what the validators and hooks raise
         (``TileValidationError``, ``requests.HTTPError``, ``UnsafeURLError``…).
         """
@@ -5404,6 +5432,11 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             )
         graph_id = self.GRAPH_IDS[resource_type]
 
+        if len(items) > _MAX_CREATE_ALL_ITEMS:
+            return JsonResponse(
+                {"error": "too many items", "max": _MAX_CREATE_ALL_ITEMS}, status=400
+            )
+
         if not items:
             return JsonResponse({"results": []})
 
@@ -5435,8 +5468,8 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         survivors = []
 
         # ---- Pass 1 — per item, NO transaction held --------------------------
-        # Build + validate + run pre_tile_save (the per-host throttled, retrying
-        # IIIF manifest fetch) OUTSIDE any DB transaction, so importing many
+        # Build + validate + run pre_tile_save (the per-host throttled IIIF manifest
+        # fetch, budgeted and not retried) OUTSIDE any DB transaction, so importing many
         # manifests never holds the batch transaction open for minutes — a worker
         # or idle-in-transaction timeout mid-fetch would otherwise roll back and
         # discard every already-succeeded survivor (finding #2). Nothing is
@@ -5452,41 +5485,49 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             concept_mappings = item.get("conceptMappings", {}) or {}
 
             start = len(self._tile_buffer)
+            budget = None
             try:
-                # BEFORE building anything: dangling dep -> failed.
-                self._assert_deps_exist(deps, valid_dep_ids)
-                # A dangling OR malformed project id would make
-                # _link_to_project_batch build a Tile whose FK points at a
-                # nonexistent project (dangling) or coerce a non-string value
-                # with str() (malformed) -> IntegrityError/DataError in Pass 2 ->
-                # whole-batch 500 losing every survivor. Validate it here
-                # (mirroring _assert_deps_exist) so a bad project is a clean
-                # per-item fail, not a batch detonation.
-                proj = deps.get("project")
-                if proj:
-                    if not isinstance(proj, str):
-                        raise ValueError(
-                            f"Project {proj!r} is not a valid resource "
-                            "id; cannot link."
-                        )
-                    if proj.strip() and proj.strip() not in valid_dep_ids:
-                        raise ValueError(f"Project {proj} does not exist; cannot link.")
+                with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE) as budget:
+                    # BEFORE building anything: dangling dep -> failed.
+                    self._assert_deps_exist(deps, valid_dep_ids)
+                    # A dangling OR malformed project id would make
+                    # _link_to_project_batch build a Tile whose FK points at a
+                    # nonexistent project (dangling) or coerce a non-string value
+                    # with str() (malformed) -> IntegrityError/DataError in Pass 2 ->
+                    # whole-batch 500 losing every survivor. Validate it here
+                    # (mirroring _assert_deps_exist) so a bad project is a clean
+                    # per-item fail, not a batch detonation.
+                    proj = deps.get("project")
+                    if proj:
+                        if not isinstance(proj, str):
+                            raise ValueError(
+                                f"Project {proj!r} is not a valid resource "
+                                "id; cannot link."
+                            )
+                        if proj.strip() and proj.strip() not in valid_dep_ids:
+                            raise ValueError(
+                                f"Project {proj} does not exist; cannot link."
+                            )
 
-                # Generate the rid up front (no DB write) so tiles can reference
-                # it; the ResourceInstance row is inserted in Pass 2.
-                rid = uuid.uuid4()
-                created_deps = {"places": {}, "persons": {}, "groups": {}}
-                builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
-                item_tiles = self._tile_buffer[start:]
+                    # Generate the rid up front (no DB write) so tiles can reference
+                    # it; the ResourceInstance row is inserted in Pass 2.
+                    rid = uuid.uuid4()
+                    created_deps = {"places": {}, "persons": {}, "groups": {}}
+                    builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
+                    item_tiles = self._tile_buffer[start:]
 
-                self._stage_tiles(item_tiles, nodes_by_id, factory)
+                    self._stage_tiles(item_tiles, nodes_by_id, factory)
             except Exception as exc:
                 # Drop this item's staged tiles so no residue reaches Pass 2 and
                 # report it failed. No DB rollback needed — nothing was written
                 # to the resource tables for this item.
                 del self._tile_buffer[start:]
                 results.append(
-                    {"clientId": client_id, "status": "failed", "error": str(exc)}
+                    {
+                        "clientId": client_id,
+                        "status": "failed",
+                        "error": _write_deadline_error(budget, exc) or str(exc),
+                    }
                 )
                 continue
 

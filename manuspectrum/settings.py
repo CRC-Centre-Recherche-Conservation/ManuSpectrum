@@ -674,6 +674,12 @@ SSRF_MAX_REDIRECTS = 5
 SSRF_MAX_RESPONSE_BYTES = 25 * 1024 * 1024
 SSRF_ALLOW_PRIVATE = False
 
+# Longest sleep, in seconds, honouring a remote IIIF server's Retry-After on a
+# 429/503. The session retries up to 3 times, so one fetch waits at most
+# 3 x this value on top of its backoff. Under gthread no gunicorn timeout kills
+# a request thread asleep in a retry.
+IIIF_RETRY_AFTER_MAX = 10
+
 # How long a fetched IIIF manifest stays in the cache. Manifests are versioned
 # documents that change when a library re-digitises a codex; a day of staleness
 # costs nothing next to re-fetching one per search result.
@@ -758,6 +764,19 @@ BIBLISSIMA_SUGGEST_DEADLINE = 4
 # SUMMARY_ES_TIMEOUT are then the only guards, which is why every outbound
 # call in the project carries a timeout (prod checklist).
 BIBLISSIMA_VIEW_DEADLINE = 30
+
+# Budget, in seconds, of EACH item the Biblissima create views write
+# (create-resource and every item of create-all): manifest import, Wikibase
+# claims. Same mechanism as BIBLISSIMA_VIEW_DEADLINE (utils.budget): no call
+# starts once it is spent, each call's connect and read timeouts are capped by
+# what is left, the body read and the per-host throttle wait stop with it, and
+# the IIIF fetches of the item are not retried. An item that
+# runs out is reported failed (504 for a single create) and the batch goes on;
+# nothing of it is committed. This is the guard of the write path under the
+# gthread worker, where no gunicorn timeout kills a request thread stuck in a
+# network call. A create-all POST carries at most 5 items, so one request
+# holds its thread at most 5 x this value (300 s, the gunicorn graceful_timeout).
+BIBLISSIMA_WRITE_ITEM_DEADLINE = 60
 
 # 24h Django-cache TTL for resolved Wikibase entities, manuscript enrichment
 # results and complete suggest prefix entries.

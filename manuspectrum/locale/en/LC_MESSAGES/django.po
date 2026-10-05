@@ -4084,6 +4084,11 @@ msgid ""
 "it before saving."
 msgstr ""
 
+#: views/biblissima_proxy.py
+#, python-format
+msgid "Time limit of %(seconds)s s for this item exceeded."
+msgstr ""
+
 #~ msgid ""
 #~ "Specify how to process the data files for viewing.  Any additional files "
 #~ "(such as images) will be automatically displayed if possible."
