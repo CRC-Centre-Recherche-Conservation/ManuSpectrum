@@ -446,6 +446,7 @@ describe("FolioMap", () => {
             ] as [[number, number], [number, number]],
             opacity: 0.5,
             label: "Pb",
+            fallbackUrls: [],
         };
         const wrapper = mountFolio({ overlays: [overlay] });
         await flushPromises();
@@ -467,6 +468,7 @@ describe("FolioMap", () => {
             ] as [[number, number], [number, number]],
             opacity: 0.5,
             label: "Pb",
+            fallbackUrls: [],
         };
         const wrapper = mountFolio({ overlays: [overlay] });
         await flushPromises();
