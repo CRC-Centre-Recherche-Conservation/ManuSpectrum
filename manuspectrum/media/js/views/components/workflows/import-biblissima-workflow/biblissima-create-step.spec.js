@@ -503,6 +503,102 @@ describe('biblissima-create-step', () => {
         });
     });
 
+    describe('createAll — chunks of 10', () => {
+        const createAllCalls = (fetchMock) =>
+            fetchMock.mock.calls.filter(([url]) => url === '/api/biblissima/create-all');
+
+        it('sends 25 items as sequential POSTs of 10, 10 and 5 and merges the results', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 25 }, (_, n) => makeRawItem({ label: `MS ${n}` }))
+            );
+            const items = vm.items();
+            let inFlight = 0;
+            let maxInFlight = 0;
+            const fetchMock = vi.fn().mockImplementation(async (url, init) => {
+                if (url !== '/api/biblissima/create-all') {
+                    return { ok: true, json: () => Promise.resolve({ resourceId: 'dep', results: [] }) };
+                }
+                inFlight += 1;
+                maxInFlight = Math.max(maxInFlight, inFlight);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+                inFlight -= 1;
+                const sent = JSON.parse(init.body).items;
+                return {
+                    ok: true,
+                    json: () => Promise.resolve({
+                        results: sent.map((i) => (
+                            i.clientId === items[12].clientId
+                                ? { clientId: i.clientId, status: 'failed', error: 'Time limit' }
+                                : { clientId: i.clientId, status: 'created', resourceId: `r-${i.clientId}` }
+                        )),
+                    }),
+                };
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createAll();
+
+            const calls = createAllCalls(fetchMock);
+            expect(calls.map(([, init]) => JSON.parse(init.body).items.length)).toEqual([10, 10, 5]);
+            expect(maxInFlight).toBe(1);
+            expect(items.filter((i) => i.status() === 'created')).toHaveLength(24);
+            expect(items[12].status()).toBe('error');
+            expect(items[12].errorMessage()).toBe('Time limit');
+            expect(vm.batchSummary()).toEqual({ created: 24, failed: 1 });
+        });
+
+        it('errors only the items of a failed chunk and still sends the next one', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 15 }, (_, n) => makeRawItem({ label: `MS ${n}` }))
+            );
+            const items = vm.items();
+            let call = 0;
+            vi.stubGlobal('fetch', vi.fn().mockImplementation((url, init) => {
+                if (url !== '/api/biblissima/create-all') {
+                    return Promise.resolve({ ok: true, json: () => Promise.resolve({ resourceId: 'dep', results: [] }) });
+                }
+                call += 1;
+                if (call === 1) {
+                    return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+                }
+                const sent = JSON.parse(init.body).items;
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        results: sent.map((i) => ({ clientId: i.clientId, status: 'created', resourceId: 'r' })),
+                    }),
+                });
+            }));
+
+            await vm.createAll();
+
+            expect(items.slice(0, 10).every((i) => i.status() === 'error')).toBe(true);
+            expect(items.slice(10).every((i) => i.status() === 'created')).toBe(true);
+            expect(vm.batchSummary()).toEqual({ created: 5, failed: 10 });
+        });
+
+        it('keeps a single POST up to 10 items', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 10 }, (_, n) => makeRawItem({ label: `MS ${n}` }))
+            );
+            const fetchMock = vi.fn().mockImplementation((url, init) => {
+                const sent = url === '/api/biblissima/create-all' ? JSON.parse(init.body).items : [];
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        resourceId: 'dep',
+                        results: sent.map((i) => ({ clientId: i.clientId, status: 'created', resourceId: 'r' })),
+                    }),
+                });
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createAll();
+
+            expect(createAllCalls(fetchMock)).toHaveLength(1);
+        });
+    });
+
     // =========================================================================
     // T5: dangling-dep error fan-out — lands on the right item only
     // =========================================================================
