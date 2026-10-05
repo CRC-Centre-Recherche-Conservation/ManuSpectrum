@@ -22,6 +22,7 @@ import {
     AN1,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
+import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import { NEUTRAL_FILTERS } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
@@ -434,7 +435,9 @@ describe("the view", () => {
 describe("dropping a canvas", () => {
     function drop(view: VueWrapper, id: string): Promise<void> {
         return view.find(".imaging-pane").trigger("drop", {
-            dataTransfer: { getData: () => id },
+            dataTransfer: {
+                getData: (type: string) => (type === LAYER_DRAG_TYPE ? id : ""),
+            },
         });
     }
 

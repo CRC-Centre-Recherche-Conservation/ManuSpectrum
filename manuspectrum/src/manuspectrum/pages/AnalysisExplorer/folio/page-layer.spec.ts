@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     fitPage,
     layPage,
+    layServed,
     nativeZoomOf,
     servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -167,5 +168,61 @@ describe("servedSize", () => {
         await Promise.resolve();
         await Promise.resolve();
         expect(servedSize(page)).toBeNull();
+    });
+});
+
+describe("layPage in a pane", () => {
+    it("asks leaflet-iiif for the layer in the given pane, and only then", () => {
+        layPage(map, "https://iiif.example/image/p1", vi.fn(), {
+            fitBounds: false,
+            pane: "stack-a",
+        });
+        expect(factory).toHaveBeenCalledWith(
+            "https://iiif.example/image/p1/info.json",
+            { fitBounds: false, setMaxBounds: false, pane: "stack-a" },
+        );
+    });
+});
+
+describe("layServed", () => {
+    async function settle(): Promise<void> {
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    it("tells the served size and the native zoom once the page is on the map", async () => {
+        const read = vi.fn();
+        layServed(map, "https://iiif.example/image/p1", {
+            read,
+            failed: vi.fn(),
+        });
+        expect(read).not.toHaveBeenCalled();
+        answer.resolve();
+        await settle();
+        expect(read).toHaveBeenCalledWith({ w: 10, h: 10 }, 0);
+    });
+
+    it("fails when the info.json is refused or holds no size", async () => {
+        const failed = vi.fn();
+        fake = pendingPage([{}]);
+        layServed(map, "https://iiif.example/image/p1", {
+            read: vi.fn(),
+            failed,
+        });
+        answer.resolve();
+        await settle();
+        expect(failed).toHaveBeenCalled();
+    });
+
+    it("says nothing of a page removed before it was laid", async () => {
+        const read = vi.fn();
+        const page = layServed(map, "https://iiif.example/image/p1", {
+            read,
+            failed: vi.fn(),
+        });
+        page.remove();
+        answer.resolve();
+        await settle();
+        expect(read).not.toHaveBeenCalled();
     });
 });

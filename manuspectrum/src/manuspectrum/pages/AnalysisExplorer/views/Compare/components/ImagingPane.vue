@@ -19,15 +19,12 @@ import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { layerImageChain } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
-import {
-    layPage,
-    nativeZoomOf,
-    servedSize,
-} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import { layServed } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     ANNOUNCE_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import { pairsOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
@@ -55,8 +52,6 @@ import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compar
 
 type Status = "empty" | "loading" | "ready" | "failed";
 
-/** The browser pointer's drag data of a canvas dragged from the gallery. */
-const DRAG_DATA_TYPE = "text/plain";
 const MIN_ZOOM = -10;
 /** The reader may zoom this far out below the fit of the image. */
 const ZOOM_OUT_BELOW_FIT = 2;
@@ -65,7 +60,7 @@ const ZOOM_SNAP = 0.25;
 /**
  * One pane of the light table: a Leaflet map (`CRS.Simple`) showing one
  * imaging canvas at the size its image service serves, anchored at the
- * origin and never stretched. The page is laid by `layPage`
+ * origin and never stretched. The page is laid by `layServed`
  * (`folio/page-layer.ts`, which reads the info.json); an image given by URL
  * is read through `layerImageChain`. Moves of the reader are emitted as a
  * normalised view (`pane-sync.ts`) and a `view` of another pane is followed;
@@ -313,16 +308,7 @@ function layService(
     failed: () => void,
 ): void {
     if (!map) return;
-    const laid = layPage(map, service, failed, { fitBounds: false });
-    page = laid;
-    const onAdd = (event: L.LayerEvent): void => {
-        if (event.layer !== laid.layer) return;
-        map?.off("layeradd", onAdd);
-        const size = servedSize(laid);
-        if (size) loaded(size, nativeZoomOf(laid));
-        else failed();
-    };
-    map.on("layeradd", onAdd);
+    page = layServed(map, service, { read: loaded, failed });
 }
 
 function layUrl(
@@ -399,7 +385,7 @@ function step(direction: 1 | -1): void {
 }
 
 function onDrop(event: DragEvent): void {
-    const id = event.dataTransfer?.getData(DRAG_DATA_TYPE) ?? "";
+    const id = event.dataTransfer?.getData(LAYER_DRAG_TYPE) ?? "";
     const known = props.maps.some((line) =>
         line.file.layers.some((layer) => layer.id === id),
     );

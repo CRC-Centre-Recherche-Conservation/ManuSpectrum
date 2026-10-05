@@ -24,16 +24,18 @@ export interface PageLayer {
  * addition and its tiles is dropped without calling GridLayer.onRemove.
  * `failed` is called when the info.json cannot be read. The view fits the
  * whole page once laid, unless `fitBounds` is false (the caller keeps it).
+ * With `pane`, the tiles go in that map pane (`overlayPane`).
  */
 export function layPage(
     map: L.Map,
     service: string,
     failed: () => void,
-    { fitBounds = true }: { fitBounds?: boolean } = {},
+    { fitBounds = true, pane }: { fitBounds?: boolean; pane?: string } = {},
 ): PageLayer {
     const layer = L.tileLayer.iiif(infoJsonUrl(service), {
         fitBounds,
         setMaxBounds: false,
+        ...(pane ? { pane } : {}),
     }) as IiifLayer;
     const onRemove = layer.onRemove;
     layer.onRemove = (from: L.Map) =>
@@ -54,6 +56,42 @@ export function layPage(
         remove: () => {
             removed = true;
             if (map.hasLayer(layer)) map.removeLayer(layer);
+        },
+    };
+}
+
+/**
+ * `layPage` that does not fit the view and reports the page once it is on the
+ * map: `read` with the size its service serves and the zoom at which that size
+ * is one pixel per unit, or `failed` when the info.json is refused or holds no
+ * size. Nothing is reported for a page removed first.
+ */
+export function layServed(
+    map: L.Map,
+    service: string,
+    handlers: {
+        read: (size: { w: number; h: number }, nativeZoom: number) => void;
+        failed: () => void;
+    },
+    options: { pane?: string } = {},
+): PageLayer {
+    const laid = layPage(map, service, handlers.failed, {
+        fitBounds: false,
+        ...options,
+    });
+    function onAdd(event: L.LayerEvent): void {
+        if (event.layer !== laid.layer) return;
+        map.off("layeradd", onAdd);
+        const size = servedSize(laid);
+        if (size) handlers.read(size, nativeZoomOf(laid));
+        else handlers.failed();
+    }
+    map.on("layeradd", onAdd);
+    return {
+        layer: laid.layer,
+        remove: () => {
+            map.off("layeradd", onAdd);
+            laid.remove();
         },
     };
 }

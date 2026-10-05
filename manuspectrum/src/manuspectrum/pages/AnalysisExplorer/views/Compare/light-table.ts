@@ -319,7 +319,7 @@ export function applyFiltersToAll(
 
 /** Whether `canvas` may join the stack: a layer of the stack's analysis, or of any when it is empty. */
 export function canStack(
-    state: TableState,
+    state: { stack: { analysis: string | null } },
     canvas: string,
     maps: readonly MapLine[],
 ): boolean {
