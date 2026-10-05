@@ -37,3 +37,13 @@ application = get_wsgi_application()
 from arches.app.models.system_settings import settings
 
 settings.update_from_db()
+
+# update_from_db() ran its queries on the thread importing this module. Under
+# the sync worker that thread serves the requests, so close_old_connections()
+# recycles the connection at the first request; under gthread (or --preload)
+# it never does: the worker's main thread (or the master) serves no request,
+# so the connection would stay open, idle, for the life of the process, and a
+# preloaded one would be inherited by every forked worker. Close it here.
+from django.db import connections
+
+connections.close_all()
