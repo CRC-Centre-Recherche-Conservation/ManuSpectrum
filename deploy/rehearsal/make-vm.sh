@@ -2,21 +2,20 @@
 # Installs the rehearsal VM unattended with virt-install (Ubuntu autoinstall
 # seed rendered by render-seed.sh), then takes the internal snapshot
 # `installed`. Variables: ISO (required), VM_NAME, VCPUS, RAM_MB, DISK_GB,
-# SSH_PUBKEY, NETWORK, MAC, VM_IP, DRY_RUN. ADMIN_USER, ROOT_LV_SIZE, LOCALE
-# and KEYBOARD come from rehearsal.env when present. DRY_RUN=1 prints the
+# SSH_PUBKEY, NETWORK, MAC, VM_IP, DRY_RUN. ADMIN_USER, ROOT_LV_SIZE, LOCALE,
+# KEYBOARD and IMAGES_DIR come from rehearsal.env when present. DRY_RUN=1 prints the
 # commands and checks the generated XML without creating anything.
 set -euo pipefail
 export LC_ALL=C
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONNECT="qemu:///system"
-IMAGES_DIR="/var/lib/libvirt/images"
 BOOT_PART_GB=2
 MARGIN_GB=1
 
 usage() {
   cat <<USAGE
-Usage: ISO=/path/ubuntu-26.04.1-live-server-amd64.iso $(basename "$0") [-h]
+Usage: ISO=/path/ubuntu-26.04.1-live-server-amd64.iso $(basename "$0") [--env FILE] [-h]
 
 Installs the rehearsal VM unattended (about 10-15 min).
 
@@ -30,28 +29,32 @@ Variables (default value):
   NETWORK     ms-rehearsal
   MAC         52:54:00:4d:53:10
   VM_IP       192.168.123.10
+  IMAGES_DIR  rehearsal.env, else /var/lib/libvirt/images (VM disk, seed ISO)
   DRY_RUN     1 = prints the commands and checks the XML, creates nothing
 
 VCPUS, RAM_MB, DISK_GB, ADMIN_USER, ROOT_LV_SIZE (50G), LOCALE (en_US.UTF-8) and
-KEYBOARD (us) come from rehearsal.env; an environment variable passed to the
+KEYBOARD (us) come from rehearsal.env (--env FILE: another file); an environment variable passed to the
 command wins. ROOT_LV_SIZE + ${BOOT_PART_GB}G of /boot + ${MARGIN_GB}G of margin must fit in DISK_GB.
 USAGE
 }
 
-case "${1:-}" in
-  -h | --help) usage; exit 0 ;;
-  "") ;;
-  *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
-esac
+env_file="$HERE/rehearsal.env"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h | --help) usage; exit 0 ;;
+    --env) env_file="${2:?--env needs a value}"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
 
 # Values given in the environment win over the variables file.
 declare -A caller_env=()
-for v in VCPUS RAM_MB DISK_GB ADMIN_USER ROOT_LV_SIZE LOCALE KEYBOARD; do
+for v in VCPUS RAM_MB DISK_GB ADMIN_USER ROOT_LV_SIZE LOCALE KEYBOARD IMAGES_DIR; do
   [ -z "${!v+x}" ] || caller_env[$v]="${!v}"
 done
-if [ -f "$HERE/rehearsal.env" ]; then
+if [ -f "$env_file" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$HERE/rehearsal.env"
+  . "$env_file"
 fi
 for v in "${!caller_env[@]}"; do
   printf -v "$v" '%s' "${caller_env[$v]}"
@@ -68,11 +71,15 @@ DISK_GB="${DISK_GB:-60}"
 ROOT_LV_SIZE="${ROOT_LV_SIZE:-50G}"
 LOCALE="${LOCALE:-en_US.UTF-8}"
 KEYBOARD="${KEYBOARD:-us}"
+IMAGES_DIR="${IMAGES_DIR:-/var/lib/libvirt/images}"
 SSH_PUBKEY="${SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"
 NETWORK="${NETWORK:-ms-rehearsal}"
 MAC="${MAC:-52:54:00:4d:53:10}"
 VM_IP="${VM_IP:-192.168.123.10}"
 DRY_RUN="${DRY_RUN:-0}"
+
+# shellcheck disable=SC1091
+. "$HERE/lib-storage.sh"
 
 virsh_c() { virsh -c "$CONNECT" "$@"; }
 
@@ -166,15 +173,22 @@ fi
 
 # The hypervisor user must be able to open the ISO; a home directory is
 # usually closed to it.
-for qemu_user in libvirt-qemu qemu; do
-  if id "$qemu_user" >/dev/null 2>&1; then
-    if ! sudo -u "$qemu_user" test -r "$ISO"; then
-      echo "User ${qemu_user} cannot read ${ISO}: copy the ISO into ${IMAGES_DIR}/ (sudo cp) and re-run with ISO=${IMAGES_DIR}/${iso_name}." >&2
-      [ "$DRY_RUN" = 1 ] || exit 1
-    fi
+qemu_user=""
+for candidate in libvirt-qemu qemu; do
+  if id "$candidate" >/dev/null 2>&1; then
+    qemu_user="$candidate"
     break
   fi
 done
+if [ -n "$qemu_user" ] && ! sudo -u "$qemu_user" test -r "$ISO"; then
+  echo "User ${qemu_user} cannot read ${ISO}: copy the ISO into ${IMAGES_DIR}/ (sudo cp) and re-run with ISO=${IMAGES_DIR}/${iso_name}." >&2
+  [ "$DRY_RUN" = 1 ] || exit 1
+fi
+
+valid_storage_path IMAGES_DIR "$IMAGES_DIR" || exit 1
+rc=0
+check_storage_dir images "$IMAGES_DIR" "${qemu_user:-root}" || rc=$?
+if [ "$rc" -eq 1 ] || { [ "$rc" -ne 0 ] && [ "$DRY_RUN" != 1 ]; }; then exit 1; fi
 
 mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
 if [ $((RAM_MB * 1024 * 10)) -gt $((mem_kb * 9)) ]; then

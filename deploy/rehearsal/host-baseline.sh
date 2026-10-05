@@ -18,7 +18,7 @@ place is reported as "already done".
   --env FILE     variables file (default: rehearsal.env next to the script)
 Variables : ADMIN_USER, ADMIN2_USER, ADMIN2_PUBKEY, SSH_PASSWORD_AUTH,
 UNATTENDED_REBOOT, UNATTENDED_REBOOT_TIME, ROOT_ALIAS, SMTP_RELAY,
-NFS_SERVER, NFS_EXPORT, DOCKER_APT_CODENAME (voir rehearsal.env.example).
+NFS_SERVER, NFS_EXPORT_DIR, DOCKER_APT_CODENAME (voir rehearsal.env.example).
 USAGE
 }
 
@@ -33,7 +33,7 @@ done
 
 # Values given in the environment win over the variables file.
 declare -A caller_env=()
-for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT DOCKER_APT_CODENAME NFS_VERS; do
+for v in ADMIN_USER ADMIN2_USER ADMIN2_PUBKEY SSH_PASSWORD_AUTH UNATTENDED_REBOOT UNATTENDED_REBOOT_TIME ROOT_ALIAS SMTP_RELAY NFS_SERVER NFS_EXPORT NFS_EXPORT_DIR DOCKER_APT_CODENAME NFS_VERS; do
   [ -z "${!v+x}" ] || caller_env[$v]="${!v}"
 done
 if [ -f "$env_file" ]; then
@@ -54,7 +54,12 @@ UNATTENDED_REBOOT_TIME="${UNATTENDED_REBOOT_TIME:-03:30}"
 ROOT_ALIAS="${ROOT_ALIAS:-}"
 SMTP_RELAY="${SMTP_RELAY:-}"
 NFS_SERVER="${NFS_SERVER:-192.168.123.1}"
-NFS_EXPORT="${NFS_EXPORT:-/srv/ms-rehearsal-data}"
+NFS_EXPORT_DIR="${NFS_EXPORT_DIR:-/srv/ms-rehearsal-data}"
+NFS_EXPORT="${NFS_EXPORT:-$NFS_EXPORT_DIR}"
+if [ "$NFS_EXPORT" != "$NFS_EXPORT_DIR" ]; then
+  echo "NFS_EXPORT (${NFS_EXPORT}) must equal NFS_EXPORT_DIR (${NFS_EXPORT_DIR}), the directory the host exports: drop NFS_EXPORT from rehearsal.env." >&2
+  exit 1
+fi
 DOCKER_APT_CODENAME="${DOCKER_APT_CODENAME:-}"
 
 if [ "$(id -u)" -ne 0 ]; then

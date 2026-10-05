@@ -44,15 +44,15 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 - [ ] Free enough memory on the host: `RAM_MB` + 4 GB.
 - [ ] Clone the repository: `git clone https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git`, then work from `deploy/rehearsal/`.
 - [ ] CPU virtualization is enabled: `egrep -c '(vmx|svm)' /proc/cpuinfo` is greater than 0 (or `kvm-ok` says KVM acceleration can be used).
-- [ ] Disk space: reserve `DISK_GB` under `/var/lib/libvirt/images/` (qcow2 is thin-provisioned, but the space must exist).
+- [ ] Disk space: reserve `DISK_GB` under `IMAGES_DIR` (default `/var/lib/libvirt/images/`; qcow2 is thin-provisioned, but the space must exist).
 - [ ] Create your values file: `cp rehearsal.env.example rehearsal.env`, then put the real production values in it. The file is ignored by Git.
-- [ ] `ubuntu-26.04.1-live-server-amd64.iso` and `SHA256SUMS` from <https://releases.ubuntu.com/26.04.1/>, in the same folder, readable by the libvirt service: a home directory usually is not, so copy them into `/var/lib/libvirt/images/`. `make-vm.sh` checks the ISO checksum and its readability.
+- [ ] `ubuntu-26.04.1-live-server-amd64.iso` and `SHA256SUMS` from <https://releases.ubuntu.com/26.04.1/>, in the same folder, readable by the libvirt service: a home directory usually is not, so copy them into `IMAGES_DIR` (default `/var/lib/libvirt/images/`). `make-vm.sh` checks the ISO checksum and its readability.
 - [ ] An SSH key exists: `~/.ssh/id_ed25519.pub` (otherwise `SSH_PUBKEY=…`).
 
 ## 2. Network and NFS
 
 - [ ] `sudo ./host-network.sh`: the `ms-rehearsal` libvirt network (192.168.123.0/24) is active. The `default` network is never modified.
-- [ ] `sudo ./host-nfs.sh`: `/srv/ms-rehearsal-data` is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you).
+- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you).
 
 ## 3. Install the VM
 
@@ -86,6 +86,43 @@ Before Ansible, `verify-baseline.sh` prints `vm.max_map_count` without checking 
 - [ ] `sudo ./host-nfs.sh --remove`
 - [ ] `virsh -c qemu:///system net-destroy ms-rehearsal && virsh -c qemu:///system net-undefine ms-rehearsal`
 
+## Storage on another disk
+
+By default the VM disk lives in `/var/lib/libvirt/images` and the NFS data in
+`/srv/ms-rehearsal-data`, on the system disk. To use a secondary disk, set both in
+`rehearsal.env` (a value passed in the environment wins), for example:
+
+```
+IMAGES_DIR=/media/<user>/<label>/ms-rehearsal/images
+NFS_EXPORT_DIR=/media/<user>/<label>/ms-rehearsal/data
+```
+
+`NFS_EXPORT` (the path the VM mounts) follows `NFS_EXPORT_DIR`; if you set it too it must be
+equal, `host-baseline.sh` and `verify-baseline.sh` refuse otherwise. `make-vm.sh` and
+`host-nfs.sh` check the directory before creating anything:
+
+- The filesystem must be a Linux one (ext4, xfs, btrfs). vfat, exfat and ntfs are refused
+  (no Unix permissions or ACLs; `exportfs` refuses them too); fuseblk gets a warning.
+- The directory must exist: `sudo install -d -m 0755 <IMAGES_DIR>`.
+- The hypervisor user (`libvirt-qemu` on Debian/Ubuntu, `qemu` on Fedora) must traverse every
+  parent directory and read/write `IMAGES_DIR`. A `/media/<user>` directory is usually closed
+  to it; the script prints the exact fix:
+  `sudo setfacl -m u:libvirt-qemu:x <each parent lacking x>` and
+  `sudo setfacl -m u:libvirt-qemu:rwx <IMAGES_DIR>`.
+- Mount the disk at boot. A desktop automount under `/media` appears only after a login,
+  so after a reboot the VM would not find its disk. If the mount point is not in
+  `/etc/fstab` the scripts warn (they do not refuse) and print the line to add, from
+  `findmnt -no UUID -T <dir>`:
+  `UUID=<uuid>  /media/<user>/<label>  ext4  defaults,nofail,x-systemd.device-timeout=10s  0  2`
+  then `sudo mount -a`. Exporting a directory of a removable automount is fragile: the
+  export fails whenever the disk is absent.
+- Copy the Ubuntu ISO and `SHA256SUMS` into `IMAGES_DIR` and run
+  `ISO=<IMAGES_DIR>/ubuntu-26.04.1-live-server-amd64.iso ./make-vm.sh`.
+
+AppArmor (Debian/Ubuntu hosts): libvirt generates a profile per VM for its disk paths, so a
+custom directory works. If `virt-install` still reports a permission denied although the ACLs
+are right, look at `dmesg | grep apparmor` (or `journalctl -k | grep apparmor`).
+
 ## 8. What comes next
 
 PP-8: Ansible, run from the host against this VM. `/data` is mounted there over NFS
@@ -118,7 +155,7 @@ is over. The command refuses to run unless the stack declares itself a rehearsal
 
 ## Checks
 
-`bash check.sh`: shellcheck, seed render tests, validation of the seed against the
+`bash check.sh`: shellcheck, seed render tests, dev snapshot and storage directory tests, validation of the seed against the
 subiquity autoinstall schema (pinned), network XML, gitleaks. The last line is
 `check.sh: all green.`
 

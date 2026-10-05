@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exports /srv/ms-rehearsal-data to the rehearsal network through a dedicated
+# Exports NFS_EXPORT_DIR (default /srv/ms-rehearsal-data) to the rehearsal network through a dedicated
 # file in /etc/exports.d, and opens NFS in the firewalld `libvirt` zone when
 # firewalld is running. Must run as root. `--remove` drops the export only.
 # The export options come from NFS_EXPORT_OPTIONS in rehearsal.env (next to
@@ -8,7 +8,6 @@ set -euo pipefail
 export LC_ALL=C
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXPORT_DIR="/srv/ms-rehearsal-data"
 EXPORT_FILE="/etc/exports.d/ms-rehearsal.exports"
 EXPORT_CLIENT="192.168.123.10/32"
 
@@ -16,7 +15,7 @@ usage() {
   cat <<USAGE
 Usage: sudo $(basename "$0") [--remove] [--env FILE] [-h]
 
-Exports ${EXPORT_DIR} over NFS to ${EXPORT_CLIENT} (dedicated file
+Exports NFS_EXPORT_DIR (rehearsal.env, default /srv/ms-rehearsal-data) over NFS to ${EXPORT_CLIENT} (dedicated file
 ${EXPORT_FILE}), with NFS_EXPORT_OPTIONS from rehearsal.env, enables the NFS server and, if firewalld runs, opens
 the nfs, rpc-bind and mountd services in the "libvirt" zone.
 
@@ -38,12 +37,21 @@ while [ $# -gt 0 ]; do
 done
 
 # A value given in the environment wins over the variables file.
-caller_options="${NFS_EXPORT_OPTIONS-}" caller_options_set="${NFS_EXPORT_OPTIONS+x}"
+declare -A caller_env=()
+for v in NFS_EXPORT_OPTIONS NFS_EXPORT_DIR; do
+  [ -z "${!v+x}" ] || caller_env[$v]="${!v}"
+done
 if [ -f "$env_file" ]; then
   # shellcheck disable=SC1090
   . "$env_file"
 fi
-[ -z "$caller_options_set" ] || NFS_EXPORT_OPTIONS="$caller_options"
+for v in "${!caller_env[@]}"; do
+  printf -v "$v" '%s' "${caller_env[$v]}"
+done
+EXPORT_DIR="${NFS_EXPORT_DIR:-/srv/ms-rehearsal-data}"
+# shellcheck disable=SC1091
+. "$HERE/lib-storage.sh"
+valid_storage_path NFS_EXPORT_DIR "$EXPORT_DIR" || exit 1
 NFS_EXPORT_OPTIONS="${NFS_EXPORT_OPTIONS:-rw,sync,root_squash,no_subtree_check}"
 if ! [[ "$NFS_EXPORT_OPTIONS" =~ ^[a-z_,=0-9]+$ ]]; then
   echo "Invalid NFS_EXPORT_OPTIONS: \"${NFS_EXPORT_OPTIONS}\"." >&2
@@ -73,6 +81,10 @@ if [ "$remove" -eq 1 ]; then
   echo "The data in ${EXPORT_DIR} is kept; to delete it, type it yourself: rm -rf ${EXPORT_DIR}"
   exit 0
 fi
+
+rc=0
+check_storage_dir nfs "$EXPORT_DIR" || rc=$?
+[ "$rc" -eq 0 ] || exit 1
 
 changed=0
 

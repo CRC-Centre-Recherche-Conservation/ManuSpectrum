@@ -61,9 +61,14 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   (otherwise free enough memory on the host: `RAM_MB` + 4 GB).
 - [ ] `grep -c . deploy/rehearsal/rehearsal.env`: the file exists and contains the
   production values (re-read each line against the production VM sheet).
-- [ ] The ISO and `SHA256SUMS` are in `/var/lib/libvirt/images/`:
-  `cd /var/lib/libvirt/images && sha256sum --ignore-missing -c SHA256SUMS`
+- [ ] The ISO and `SHA256SUMS` are in `IMAGES_DIR` (default `/var/lib/libvirt/images/`):
+  `cd "$IMAGES_DIR" && sha256sum --ignore-missing -c SHA256SUMS`
   → `ubuntu-26.04.1-live-server-amd64.iso: OK`.
+- [ ] Storage on a secondary disk (only if `IMAGES_DIR` / `NFS_EXPORT_DIR` are set in
+  `rehearsal.env`): `DRY_RUN=1 ISO=... deploy/rehearsal/make-vm.sh` and
+  `sudo deploy/rehearsal/host-nfs.sh` print no refusal, the `setfacl` commands they suggest
+  (if any) are applied, and `findmnt --fstab <mount point>` lists the disk (`nofail`), so it is
+  mounted at boot without a login. See README, "Storage on another disk".
 
 ### 1.3 Network and NFS (host)
 
