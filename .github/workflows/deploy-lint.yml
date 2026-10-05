@@ -165,6 +165,7 @@ jobs:
           openssl rand -base64 48 | tr -d '\n' > "$secrets/pg_password"
           openssl rand -base64 48 | tr -d '\n' > "$secrets/elastic_password"
           python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > "$secrets/django_secret_key"
+          : > "$secrets/email_password"  # empty: a relay without authentication
           chmod 0444 "$secrets"/*
           sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
               -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
