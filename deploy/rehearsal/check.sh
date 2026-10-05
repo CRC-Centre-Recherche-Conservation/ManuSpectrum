@@ -46,6 +46,9 @@ fi
 step "seed render tests"
 bash "$HERE/tests/test_render_seed.sh"
 
+step "dev snapshot tests"
+bash "$HERE/tests/test_make_dev_snapshot.sh"
+
 step "autoinstall schema"
 validator=()
 if command -v uvx >/dev/null 2>&1; then
