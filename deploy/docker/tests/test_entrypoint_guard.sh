@@ -4,6 +4,9 @@
 # only prints its arguments: nothing runs. Prints `ok N` / `not ok N`; exits
 # non-zero on failure.
 set -uo pipefail
+# The python stub drains stdin: an inherited open stdin (a terminal, a background
+# job) would block it. Calls that feed a script redirect stdin themselves.
+exec </dev/null
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENTRYPOINT="$HERE/../entrypoint.sh"
