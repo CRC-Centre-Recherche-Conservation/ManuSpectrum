@@ -377,6 +377,26 @@ an XY chart in the editor and in a report, the model page, Compare, a French pag
 secrets under sops, `/readyz` and the JSON logs, backups, the real SMTP relay, and
 pyramidal TIFFs for Cantaloupe (a separate change).
 
+### 2.12 Load the dev snapshot (rehearsal VM only)
+
+A snapshot made on the development machine with `deploy/rehearsal/make-dev-snapshot.sh`
+(see `deploy/rehearsal/README.md`) is copied to the VM. It holds user accounts and
+research data: never in Git, never in a public place.
+
+- [ ] *(service account)* `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
+  - On failure: add the line; a production host sets `production` and the command is refused there.
+- [ ] `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
+- [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → twelve `load-snapshot: step n/12`
+  lines, `checksums match`, counts `equal to the manifest` (or a `WARNING` naming the difference
+  a migration explains), `done: the snapshot is loaded`.
+  - On failure: a `sha256 mismatch` means the copy is damaged, copy it again; a `pg_restore failed`
+    names the first errors, the database is incomplete, run the command again (it recreates it);
+    a failing step stops the run, fix it and run the command again.
+- [ ] `make -C deploy smoke` → only `ok:` lines; `ls -d /data/manuspectrum/media/previous-*` →
+  the previous uploads, kept.
+- [ ] The dev admin password does not survive: `deploy/compose/smoke.sh check` is `ok:` and logging in as
+  `admin` with the development password fails; with the `admin_password` secret it succeeds.
+
 ---
 
 ## Next steps

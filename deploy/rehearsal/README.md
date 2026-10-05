@@ -91,6 +91,31 @@ Before Ansible, `verify-baseline.sh` prints `vm.max_map_count` without checking 
 PP-8: Ansible, run from the host against this VM. `/data` is mounted there over NFS
 with the options of `rehearsal.env`.
 
+## Test data: dev snapshot
+
+The rehearsal VM can be filled with the development database and uploads, again
+and again, from one snapshot directory.
+
+- [ ] On the development machine: `./make-dev-snapshot.sh --out ~/ms-snapshots/ms-snapshot-$(date -u +%F)`
+  (options `--python`, `--repo`; `-h` for the usage). It writes `db.dump`
+  (`pg_dump -Fc`, without the `silk_*` tables), `media.tar` and `manifest.json`
+  (git commit, Arches version, counts, last migration per app, sha256 of the files),
+  directory `0700`, files `0600`. It refuses a non-empty directory and never prints the
+  database password.
+- [ ] Copy it: `scp -r ~/ms-snapshots/ms-snapshot-<date> <admin>@192.168.123.10:`, then
+  move it where the service account reads it.
+- [ ] On the VM, as the service account, with `DEPLOY_ENVIRONMENT=rehearsal` in `deploy/compose/.env`:
+  `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes`. It replaces the database and the
+  uploads (the previous uploads are kept in `previous-<timestamp>/` under `MEDIA_HOST_DIR`),
+  migrates, replaces the admin password with the `admin_password` secret, reindexes
+  Elasticsearch, compares the counts with the manifest and runs `make smoke`.
+- [ ] Reload any time with the same command; to start again from a snapshot of an older
+  development state, make a new snapshot.
+
+**Data protection.** The snapshot contains user accounts and research data. Never put it in
+Git, never in a public place; delete it from the VM and from the host when the rehearsal
+is over. The command refuses to run unless the stack declares itself a rehearsal.
+
 ## Checks
 
 `bash check.sh`: shellcheck, seed render tests, validation of the seed against the
