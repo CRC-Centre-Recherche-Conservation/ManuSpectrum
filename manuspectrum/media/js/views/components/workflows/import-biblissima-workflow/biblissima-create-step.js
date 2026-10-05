@@ -102,7 +102,7 @@ const COMPONENT_FALLBACK_TYPE_CONCEPT = 'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4';
 const ENRICH_FETCH_TIMEOUT_MS = 60000;
 
 // Items per create-all POST; the server's _MAX_CREATE_ALL_ITEMS refuses more.
-const CREATE_ALL_CHUNK_SIZE = 10;
+const CREATE_ALL_CHUNK_SIZE = 5;
 
 // Label lookup for known Component type concepts — mirrors
 // BIBLISSIMA_TYPE_LABELS in constants/biblissima.py. Used when the
