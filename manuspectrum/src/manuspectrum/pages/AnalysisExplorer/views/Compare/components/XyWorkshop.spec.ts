@@ -272,7 +272,7 @@ describe("XyWorkshop", () => {
         ]);
     });
 
-    it("draws each curve in its own hue by its position in the window, all solid within the first twelve, named « A1 · file »", async () => {
+    it("draws each curve in its item's hue, the first file of an item solid and its next file in a dash of its own, named « A1 · file »", async () => {
         await mountWorkshop([curve(0, 1), curve(0, 2), curve(1, 3)]);
         const { traces, layout } = lastDrawing();
         expect(traces.map((trace) => trace.name)).toEqual([
@@ -282,12 +282,12 @@ describe("XyWorkshop", () => {
         ]);
         expect(traces.map((trace) => trace.line.color)).toEqual([
             COLOURS[0],
+            COLOURS[0],
             COLOURS[1],
-            COLOURS[2],
         ]);
         expect(traces.map((trace) => trace.line.dash)).toEqual([
             "solid",
-            "solid",
+            "10px,2px,2px,2px",
             "solid",
         ]);
         expect(layout.showlegend).toBe(false);
@@ -316,9 +316,9 @@ describe("XyWorkshop", () => {
         expect(traces.every((trace) => trace.marker === undefined)).toBe(true);
         expect(traces.map((trace) => trace.line.color)).toEqual([
             COLOURS[0],
+            COLOURS[0],
             COLOURS[1],
-            COLOURS[2],
-            COLOURS[3],
+            COLOURS[9],
         ]);
         expect(traces.map((trace) => trace.line.width)).toEqual([
             1.5, 1.5, 1.5, 1.5,
@@ -330,8 +330,8 @@ describe("XyWorkshop", () => {
         expect(traces.map((trace) => trace.legendrank)).toEqual([0, 0, 1, 9]);
         expect(layout.annotations.map((note) => note.text)).toEqual([
             `<span style="color:${COLOURS[0]}">━</span> A1`,
-            `<span style="color:${COLOURS[2]}">━</span> A2`,
-            `<span style="color:${COLOURS[3]}">━</span> A10`,
+            `<span style="color:${COLOURS[1]}">━</span> A2`,
+            `<span style="color:${COLOURS[9]}">━</span> A10`,
         ]);
         expect(layout.annotations[0]).toMatchObject({ x: 3, y: 20 });
     });
@@ -772,6 +772,7 @@ describe("XyWorkshop", () => {
         ];
         expect(Object.keys(update).sort()).toEqual([
             "hoverinfo",
+            "hovertemplate",
             "line.color",
             "line.dash",
             "line.width",
@@ -786,7 +787,7 @@ describe("XyWorkshop", () => {
         expect(update["line.color"]).toEqual([
             COLOURS[0],
             COLOURS[1],
-            COLOURS[2],
+            COLOURS[9],
         ]);
         expect(update["line.dash"]).toEqual(["solid", "solid", "solid"]);
         expect(plotly.relayout).toHaveBeenCalledTimes(1);
@@ -837,20 +838,20 @@ describe("XyWorkshop", () => {
         expect(plotly.restyle).toHaveBeenCalledTimes(2);
     });
 
-    it("draws a legend swatch as the chart draws its curve: its own per-window hue, never grey or a fallback ink", async () => {
+    it("draws a legend swatch as the chart draws its curve: its item's hue, never grey or a fallback ink", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(9, 2)]);
         const strokes = (): string[] =>
             view
                 .findAll(".xy-legend .swatch line")
                 .map((line) => (line.element as SVGLineElement).style.stroke);
-        expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
+        expect(strokes()).toEqual(["var(--series-1)", "var(--series-10)"]);
         // A link never recolours a curve, only thickens it: the swatch stays the curve's own hue.
         fake.selection.value = [analysisNode(analysisHit(10).id)];
         fake.levels.value = new Map([
             [analysisNode(analysisHit(10).id), "self"],
         ]);
         await flushPromises();
-        expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
+        expect(strokes()).toEqual(["var(--series-1)", "var(--series-10)"]);
     });
 
     it("says so when the selection links no curve of the window", async () => {
@@ -862,6 +863,16 @@ describe("XyWorkshop", () => {
             "No curve here is linked to the selection; press a legend entry to add it.",
         );
         expect(view.findAll(".xy-legend .entry")).toHaveLength(2);
+    });
+
+    it("says so when the legend's eye alone has hidden every curve", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        await eyeButton(view, curveId(1, 2)).trigger("click");
+        await flushPromises();
+        expect(view.find(".isolated").text()).toBe(
+            "Every curve is hidden; « Show all spectra » brings them back.",
+        );
     });
 
     it("emphasises what a preview links, hidden by the selection or not", async () => {
@@ -966,6 +977,26 @@ describe("XyWorkshop", () => {
         expect(second.find(".ctx").exists()).toBe(false);
     });
 
+    it("draws the 13th item of the Selection in the first hue, dashed, in its curve, its legend swatch colour and its end label", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(12, 2)]);
+        const { traces, layout } = lastDrawing();
+        expect(traces.map((trace) => trace.line.color)).toEqual([
+            COLOURS[0],
+            COLOURS[0],
+        ]);
+        expect(traces.map((trace) => trace.line.dash)).toEqual([
+            "solid",
+            "6px,2px",
+        ]);
+        const swatches = view.findAll(".xy-legend .swatch line");
+        expect(
+            swatches.map(
+                (line) => (line.element as SVGLineElement).style.stroke,
+            ),
+        ).toEqual(["var(--series-1)", "var(--series-1)"]);
+        expect(layout.annotations[1].text).toContain("╍");
+    });
+
     it("hides a curve with the legend's eye by restyling once, no redraw, independent of the focus", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
         plotly.react.mockClear();
@@ -999,22 +1030,18 @@ describe("XyWorkshop", () => {
         expect(eyeButton(view, id).attributes("aria-pressed")).toBe("false");
     });
 
-    it("patches Plotly's stale calc data after a restyle, so a hidden curve stops answering hover", async () => {
+    it("gives a hidden curve an empty hovertemplate so Plotly reads its hoverinfo skip", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
-        const chart = view.find(".chart").element as HTMLElement & {
-            calcdata?: { trace: { hoverinfo: string } }[][];
-        };
-        // plotly.js-cartesian-dist 4.0.0 sets this on a full draw; the mock
-        // does not, so a real drawing's calc data is reproduced by hand.
-        chart.calcdata = [
-            [{ trace: { hoverinfo: "all" } }],
-            [{ trace: { hoverinfo: "all" } }],
-        ];
         await eyeButton(view, curveId(0, 1)).trigger("click");
         await nextFrame();
         await flushPromises();
-        expect(chart.calcdata[0][0].trace.hoverinfo).toBe("skip");
-        expect(chart.calcdata[1][0].trace.hoverinfo).toBe("all");
+        const update = plotly.restyle.mock.calls.at(-1)?.[1] as {
+            hovertemplate: string[];
+            hoverinfo: string[];
+        };
+        expect(update.hoverinfo).toEqual(["skip", "all"]);
+        expect(update.hovertemplate[0]).toBe("");
+        expect(update.hovertemplate[1]).toContain("A2");
     });
 
     it("recomputes the hovermode from the curves currently shown, a relayout with its hovertemplates, never a redraw", async () => {
@@ -1090,6 +1117,35 @@ describe("XyWorkshop", () => {
         expect(view.find(".xy-legend .show-all").exists()).toBe(false);
         expect(eyeButton(view, curveId(0, 1)).attributes("aria-pressed")).toBe(
             "false",
+        );
+    });
+
+    it("keeps the eye's name fixed and states its state through aria-pressed only", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const nameOf = (): string | null | undefined => {
+            const id = eyeButton(view, curveId(0, 1)).attributes(
+                "aria-labelledby",
+            );
+            return id ? document.getElementById(id)?.textContent : undefined;
+        };
+        const before = nameOf();
+        expect(before).toContain("Hide A1");
+        await eyeButton(view, curveId(0, 1)).trigger("click");
+        await flushPromises();
+        expect(nameOf()).toBe(before);
+        expect(eyeButton(view, curveId(0, 1)).attributes("aria-pressed")).toBe(
+            "true",
+        );
+    });
+
+    it("moves the focus to the legend's first eye button once « Show all spectra » is pressed", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await eyeButton(view, curveId(1, 2)).trigger("click");
+        await flushPromises();
+        await view.find(".xy-legend .show-all").trigger("click");
+        await flushPromises();
+        expect(document.activeElement).toBe(
+            eyeButton(view, curveId(0, 1)).element,
         );
     });
 

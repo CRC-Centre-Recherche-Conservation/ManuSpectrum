@@ -18,26 +18,28 @@ export type WorkshopLayout = "overlay" | "offset" | "multiples" | "table";
 
 /** Above this many curves, the workshop opens on small multiples. */
 export const OVERLAY_MAX_CURVES = 8;
-/** A global (basket) slot below this takes its own colour in a generic slot badge (`FoldedSummary`); unrelated to a curve's own position-based hue (`CURVE_PALETTE_SIZE`). */
-export const COLOURED_SLOTS = 8;
-/**
- * The XY workshop's curve palette: a curve's colour follows its position in
- * the window (its curves sorted by slot then file — the order they already
- * arrive in), not its basket slot, so a busy Selection never runs out of
- * colours into a permanent grey (`curveHue`, `curveDash`).
- */
-export const CURVE_PALETTE_SIZE = 12;
+/** The hues of the series palette (`--series-1…12`): an item's slot cycles through them. */
+export const SERIES_HUES = 12;
 /** The least room between two end-of-curve labels, in pixels. */
 export const LABEL_GAP = 12;
 
-/** Line styles of the 1st, 2nd, 3rd… file of one slot: short dashes that stay apart at 1.5 px. */
+/**
+ * Line styles in order of use: the first three mark the cycles of an item's
+ * hue (solid, dashed, dotted), the others the 2nd, 3rd… file of one item.
+ */
 const DASHES = [
     "solid",
     "6px,2px",
     "2px,2px",
     "10px,2px,2px,2px",
     "14px,3px",
+    "4px,2px",
+    "8px,2px,2px,2px,2px,2px",
+    "12px,4px",
+    "1px,3px",
 ] as const;
+/** The line styles that mark the cycles of a hue. */
+const CYCLES = 3;
 
 const MAX_COLUMNS = 4;
 const MIN_PANEL_WIDTH = 220;
@@ -49,7 +51,7 @@ const LINE_WIDTH = 1.5;
 const CONTEXT_WIDTH = 1.25;
 const EMPHASIS_WIDTH = 2.5;
 /** The opacity of a curve dimmed for being unrelated to the focus (« Dim »): the legend's `.unrelated` swatch opacity. */
-const DIM_OPACITY = 0.35;
+export const DIM_OPACITY = 0.35;
 /** The room between two offset curves, as a share of the widest curve's span. */
 const OFFSET_GAP = 0.1;
 /** A spreadsheet opens a CSV starting with the UTF-8 byte order mark as UTF-8. */
@@ -77,8 +79,8 @@ export function visibleCurveCount(states: readonly CurveState[]): number {
 }
 
 /**
- * A curve's current colour+dash identity: `"series"` is its own window
- * position (`curveHue`/`curveDash`), unchanged by the focus; `"context"` the
+ * A curve's current colour+dash identity: `"series"` is its item's hue
+ * and dash (`itemHue`/`itemDash`), unchanged by the focus; `"context"` the
  * grey of a dimmed, unrelated curve.
  */
 export type CurveLook =
@@ -131,7 +133,7 @@ export interface LegendGroup {
     /** The nodes its curves stand for (their files and analysis), which the focus marks. */
     nodes: readonly NodeId[];
     pressed: boolean;
-    /** Its first file's current colour, always drawn solid at this aggregate level. */
+    /** Its first file's current colour and dash: the item's own, whatever the dashes of its other files. */
     look: CurveLook;
     entries: LegendEntry[];
 }
@@ -169,33 +171,68 @@ export interface CsvColumn {
     y: readonly number[];
 }
 
-/** The line style at `tier` (0: solid), cycling through `DASHES`. */
-export function dashOf(tier: number): Dash {
-    return DASHES[tier % DASHES.length];
-}
-
 /** A Plotly dash as an SVG `stroke-dasharray`; empty for a solid line. */
 export function dashArray(dash: Dash): string {
     return dash === "solid" ? "" : dash.replaceAll("px", "").replace(/,/g, " ");
 }
 
-/** A curve's hue index (`palette.series`) from its position in the window: the first `CURVE_PALETTE_SIZE` curves take one each. */
-export function curveHue(index: number): number {
-    return index % CURVE_PALETTE_SIZE;
-}
+/** How an item (a Selection slot) is drawn: filled, a ring, a ring with a dot — a marker, a chip, the head of a line. */
+export type ItemMarker = "filled" | "ring" | "ring-dot";
 
-/** A curve's base dash: solid for the first `CURVE_PALETTE_SIZE` curves, the next `DASHES` variant every `CURVE_PALETTE_SIZE` beyond — so a window's (hue, dash) pairs stay distinct well past its realistic curve count. */
-export function curveDash(index: number): Dash {
-    return dashOf(Math.floor(index / CURVE_PALETTE_SIZE));
+/** The item a curve belongs to, and which of that item's files it is (0: the first). */
+export interface CurveItem {
+    slot: number;
+    rank: number;
 }
 
 /**
- * A curve's current identity: its base position in the window, unchanged by
- * the focus, or grey context while dimmed.
+ * The colour of an item, ONE for the whole Compare view: its slot cycling
+ * through the twelve hues (`--series-1…12`); the index of the hue.
  */
-export function curveLook(index: number, state: CurveState): CurveLook {
-    if (state === "dimmed") return { kind: "context", dash: curveDash(index) };
-    return { kind: "series", hue: curveHue(index), dash: curveDash(index) };
+export function itemHue(slot: number): number {
+    return slot % SERIES_HUES;
+}
+
+/** How many times the slot has gone round the twelve hues, 0 to 2: it selects the variant (solid line and filled marker, dashed and ring, dotted and ring with a dot). */
+export function itemCycle(slot: number): number {
+    return Math.floor(slot / SERIES_HUES) % CYCLES;
+}
+
+/** The marker of an item's cycle. */
+export function itemMarker(slot: number): ItemMarker {
+    return (["filled", "ring", "ring-dot"] as const)[itemCycle(slot)];
+}
+
+/** The class a chip or a folio marker carries for its hue: `slot-1…12`. */
+export function itemTone(slot: number): string {
+    return `slot-${itemHue(slot) + 1}`;
+}
+
+/** The classes a chip or a folio marker carries: its hue (`slot-1…12`) and its marker (`item-filled`, `item-ring`, `item-ring-dot`). */
+export function itemClasses(slot: number): string {
+    return `${itemTone(slot)} item-${itemMarker(slot)}`;
+}
+
+/**
+ * The line style of a curve: its item's cycle for the first file, a style of
+ * its own for the 2nd, 3rd… file, drawn from those no cycle uses, spread so
+ * that two items of the same hue never share one (`hue`, `dash`) up to two
+ * extra files each; beyond, the styles repeat.
+ */
+export function itemDash(slot: number, rank: number): Dash {
+    if (rank === 0) return DASHES[itemCycle(slot)];
+    const spare = DASHES.length - CYCLES;
+    return DASHES[CYCLES + (((rank - 1) * CYCLES + itemCycle(slot)) % spare)];
+}
+
+/**
+ * A curve's current identity: its item's hue and its dash, unchanged by the
+ * focus, or grey context while dimmed.
+ */
+export function curveLook(item: CurveItem, state: CurveState): CurveLook {
+    const dash = itemDash(item.slot, item.rank);
+    if (state === "dimmed") return { kind: "context", dash };
+    return { kind: "series", hue: itemHue(item.slot), dash };
 }
 
 /** The CSS colour of a curve's current look, for the legend's inline SVG (DOM `var()`, unlike a Plotly trace which needs a resolved colour — see `curveColour`). */
@@ -249,10 +286,10 @@ export function curveState(
  */
 export function curvePaint(
     palette: CurvePalette,
-    index: number,
+    item: CurveItem,
     state: CurveState,
 ): CurvePaint {
-    const look = curveLook(index, state);
+    const look = curveLook(item, state);
     const colour = curveColour(palette, look);
     if (state === "dimmed") {
         return {
@@ -271,19 +308,20 @@ export function curvePaint(
 
 /**
  * The paints of every trace, in trace order, as the arrays of one
- * `Plotly.restyle`. `line.dash` is `editType: "style"` in
- * plotly.js-cartesian-dist 4.0.0 (verified against its scatter attribute
- * meta, same as `line.color`/`line.width`): a curve's dash never actually
- * changes across a restyle (it is fixed by its window position), but
- * restyling it alongside the rest of the paint costs no recalc and no full
- * redraw.
+ * `Plotly.restyle`; `hovertemplate`, when given, rides along (a curve that
+ * does not answer hover needs an empty one for `hoverinfo: "skip"` to hold).
+ * `line.dash` is restyled with the rest: a style attribute, no recalc.
  */
-export function restyleUpdate(paints: readonly CurvePaint[]): {
+export function restyleUpdate(
+    paints: readonly CurvePaint[],
+    hovertemplate?: readonly string[],
+): {
     opacity: number[];
     "line.color": string[];
     "line.width": number[];
     "line.dash": string[];
     hoverinfo: string[];
+    hovertemplate?: string[];
 } {
     return {
         opacity: paints.map((paint) => paint.opacity),
@@ -291,56 +329,8 @@ export function restyleUpdate(paints: readonly CurvePaint[]): {
         "line.width": paints.map((paint) => paint.width),
         "line.dash": paints.map((paint) => paint.dash),
         hoverinfo: paints.map((paint) => (paint.hover ? "all" : "skip")),
+        ...(hovertemplate ? { hovertemplate: [...hovertemplate] } : {}),
     };
-}
-
-/** A trace as Plotly's internal `gd.calcdata[i][0].trace` holds it. */
-export interface CalcTrace {
-    hoverinfo?: string;
-    hovertemplate?: string;
-}
-
-/**
- * Patches the `hoverinfo` Plotly's own hover search reads, directly on the
- * live chart's calc data.
- *
- * plotly.js-cartesian-dist 4.0.0: a style-only `Plotly.restyle` (`opacity`,
- * `line.*`, `hoverinfo`: none of them `editType: "calc"`) rebuilds
- * `gd._fullData` with fresh trace objects but never relinks
- * `gd.calcdata[i][0].trace` to them — that relink
- * (`gd.calcdata[i][0].trace = gd._fullData[i]`) only happens on a full
- * `newPlot`/`react`. `Fx.hover` reads `cd[0].trace.hoverinfo` from
- * `calcdata`, so a curve's `hoverinfo` set to `"skip"` through a style-only
- * restyle is invisible to hover (the curve keeps answering with its old
- * values) even though its line correctly turns transparent. Mutating the
- * stale trace object in place fixes what the relink would have fixed,
- * without forcing a recalc or a redraw.
- */
-export function patchHoverInfo(
-    calcdata: readonly (readonly { trace?: CalcTrace }[])[] | undefined,
-    paints: readonly CurvePaint[],
-): void {
-    calcdata?.forEach((cd, index) => {
-        const trace = cd[0]?.trace;
-        const paint = paints[index];
-        if (trace && paint) trace.hoverinfo = paint.hover ? "all" : "skip";
-    });
-}
-
-/**
- * The same fix as `patchHoverInfo`, for `hovertemplate`: a hovermode switch
- * (« x unified » ↔ « closest ») restyles every trace's `hovertemplate`
- * without a redraw, and `Fx.hover` reads it from `cd[0].trace` the same way.
- */
-export function patchHoverTemplate(
-    calcdata: readonly (readonly { trace?: CalcTrace }[])[] | undefined,
-    templates: readonly string[],
-): void {
-    calcdata?.forEach((cd, index) => {
-        const trace = cd[0]?.trace;
-        const template = templates[index];
-        if (trace && template !== undefined) trace.hovertemplate = template;
-    });
 }
 
 /**

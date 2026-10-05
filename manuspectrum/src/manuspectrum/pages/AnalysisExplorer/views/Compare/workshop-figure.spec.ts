@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
     annotationOpacities,
     exportFigure,
+    hoverTemplatesFor,
     multiplesFigure,
     stackedFigure,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
@@ -132,6 +133,17 @@ describe("workshop figure", () => {
         ]);
     });
 
+    it("fades an end label to the dim opacity while its curve is dimmed, like the line", () => {
+        const curves = [curve(0, [1, 2]), curve(1, [3, 4])];
+        const stacked = stackedFigure(input(curves), false);
+        expect(annotationOpacities(stacked, ["dimmed", "plain"])).toEqual([
+            0.35, 1,
+        ]);
+        expect(annotationOpacities(stacked, ["dimmed", "hidden"])).toEqual([
+            0.35, 0,
+        ]);
+    });
+
     it("carries the shared x, with its axis title, in the unified box's header once", () => {
         const figure = stackedFigure(input([curve(0, [1, 2])]), false);
         const layout = figure.layout as {
@@ -161,6 +173,21 @@ describe("workshop figure", () => {
         expect(figure.data[1].hovertemplate).toBe(
             "A2 · %{customdata:.4~g}<extra></extra>",
         );
+    });
+
+    it("leaves the hovertemplate of a curve that does not answer hover empty, drawn or restyled, so its hoverinfo skip holds", () => {
+        const hidden = input([curve(0, [1, 2]), curve(1, [3, 4])], {
+            states: ["hidden", "plain"],
+        });
+        expect(
+            stackedFigure(hidden, false).data.map(
+                (trace) => trace.hovertemplate,
+            ),
+        ).toEqual(["", "A2 · %{y:.4~g}<extra></extra>"]);
+        expect(hoverTemplatesFor(hidden, [0, 1], "y", "x unified")).toEqual([
+            "",
+            "A2 · %{y:.4~g}<extra></extra>",
+        ]);
     });
 
     it("adds the file name only to disambiguate two files sharing a slot", () => {

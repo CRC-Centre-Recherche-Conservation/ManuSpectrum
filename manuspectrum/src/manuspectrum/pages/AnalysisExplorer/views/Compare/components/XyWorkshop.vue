@@ -51,8 +51,6 @@ import {
     hoverModeFor,
     openingLayout,
     outOfRange,
-    patchHoverInfo,
-    patchHoverTemplate,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -109,10 +107,9 @@ interface Curve extends FigureCurve {
     xReversed: boolean;
 }
 
-/** A chart Plotly drew: it can bind handlers to its events, and keeps its own calc data (`patchHoverInfo`). */
+/** A chart Plotly drew: it can bind handlers to its events. */
 interface PlotlyTarget extends HTMLElement {
     on?: (name: string, handler: (event: never) => void) => void;
-    calcdata?: readonly (readonly { trace?: { hoverinfo?: string } }[])[];
 }
 
 /** What Plotly keeps of an axis it drew, as `_fullLayout` holds it. */
@@ -150,22 +147,14 @@ const DEFAULT_POINTER = "mouse";
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
- * every readable spectrum of the window, lines only. A curve's colour and
- * dash follow its position among the window's curves (sorted by slot then
- * file, the order they arrive in), not its basket slot: the first
- * `CURVE_PALETTE_SIZE` curves take one hue each, solid; beyond that the
- * hues repeat with the next dash variant, so a busy window never falls
- * back to a permanent grey (`curveHue`/`curveDash`, `curveLook`). It
+ * every readable spectrum of the window, lines only. A curve takes the
+ * colour and dash of its item (`itemHue`/`itemDash`), the same in every
+ * Compare window, never recoloured by the focus (`curveLook`). It
  * carries its label at the visual end of the first file of its slot.
  * Overlaid, offset (each curve lifted above the one before it, no Y tick
  * labels, the real values on hover), in a grid of small multiples (one
  * panel per slot, the X axes zoomed together, each with its own compact
- * hover box — `hoversubplots: "axis"` does not link them in
- * plotly.js-cartesian-dist 4.0.0, verified against its `_hover`: it reads
- * `_subplotsWith`, populated only for subplots literally overlaid on one
- * shared axis, never for a `matches`-linked grid panel's distinct axis
- * (tracked instead, unread by `_hover`, in `_matchGroup`); the default
- * above eight curves) or as a table. Hover lists every curve currently
+ * hover box; the default above eight curves) or as a table. Hover lists every curve currently
  * answering it (`"x unified"`) up to `UNIFIED_HOVER_MAX_CURVES`, falling
  * back to `"closest"` beyond; the mode is a relayout of the curves shown,
  * never a redraw
@@ -197,9 +186,9 @@ const DEFAULT_POINTER = "mouse";
  * per frame (`Plotly.restyle` of style attributes — colour, dash, width,
  * opacity and hoverinfo are all `editType: "style"` in
  * plotly.js-cartesian-dist 4.0.0 — `Plotly.relayout` of annotation
- * opacities and of the hovermode); `patchHoverInfo`/`patchHoverTemplate`
- * also patch the chart's stale calc data a style-only restyle leaves
- * behind, or a hidden curve keeps answering hover with its old box style.
+ * opacities and of the hovermode). A curve that does not answer hover has
+ * an empty `hovertemplate` (`hoverTemplatesFor`): with a template set,
+ * Plotly does not read `hoverinfo: "skip"` into the trace.
  * A click on a legend entry or a curve toggles its node; a mouse resting
  * on either previews it. A press on the chart that slips into a zoom box
  * narrower than `MIN_ZOOM_PX` is the click it was meant to be: the axes go
@@ -448,7 +437,7 @@ const legendGroups = computed<LegendGroup[]>(() =>
                 ),
             ],
             pressed: selected.value.has(node),
-            look: curveLook(indices[0], effectiveStates.value[indices[0]]),
+            look: curveLook(first, effectiveStates.value[indices[0]]),
             entries: indices.map((index) => {
                 const curve = drawn.value[index];
                 const entry = entryNode(curve);
@@ -456,7 +445,7 @@ const legendGroups = computed<LegendGroup[]>(() =>
                     id: curveId(curve),
                     name: curve.line.file.name,
                     slot,
-                    look: curveLook(index, effectiveStates.value[index]),
+                    look: curveLook(curve, effectiveStates.value[index]),
                     node: entry,
                     nodes: [fileNode(curve.line.file.id), node],
                     pressed: selected.value.has(entry),
@@ -531,12 +520,21 @@ const chartLabel = computed(() =>
         true,
     ),
 );
-/** Whether a selection hides every curve drawn. */
+/** Whether every curve drawn is hidden, by the selection or by the legend's eye. */
 const allHidden = computed(
     () =>
-        selecting.value &&
-        states.value.length > 0 &&
-        states.value.every((state) => state === "hidden"),
+        effectiveStates.value.length > 0 &&
+        effectiveStates.value.every((state) => state === "hidden"),
+);
+/** What the window says when every curve is hidden: the selection's doing, or the eye's. */
+const allHiddenNote = computed(() =>
+    selecting.value && states.value.every((state) => state === "hidden")
+        ? $gettext(
+              "No curve here is linked to the selection; press a legend entry to add it.",
+          )
+        : $gettext(
+              "Every curve is hidden; « Show all spectra » brings them back.",
+          ),
 );
 const csvNote = computed(() =>
     $gettext(
@@ -776,11 +774,10 @@ function scheduleRestyle(): void {
  * shown already. The hovermode (`hoverModeFor` on the curves currently
  * answering hover) is `layout.hovermode`, a `modebar` `editType` in
  * plotly.js-cartesian-dist 4.0.0 — a relayout, never a recalc — restyled
- * together with the hovertemplates that name it (a unified box's compact
- * line, or closest's two-line one), themselves `editType: "none"` and
- * patched into the stale calc data the same way `patchHoverInfo` fixes
- * `hoverinfo` (`patchHoverTemplate`). Everything here counts as shown once
- * Plotly has taken it: after a failure the next restyle tries it again.
+ * with the hovertemplates that name it (a unified box's compact line, or
+ * closest's two-line one; empty for a curve that does not answer hover).
+ * Everything here counts as shown once Plotly has taken it: after a failure
+ * the next restyle tries it again.
  */
 async function restyle(): Promise<void> {
     const element = drawnOn;
@@ -792,25 +789,21 @@ async function restyle(): Promise<void> {
     if (key === shownStates) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
+    const mode = hoverModeFor(visibleCurveCount(effectiveStates.value));
+    const templates = hoverTemplatesFor(
+        input,
+        figure.order,
+        layout.value === "offset" ? "customdata" : "y",
+        mode,
+    );
     try {
         await plotly.restyle(
             element,
-            restyleUpdate(paints) as unknown as Parameters<
+            restyleUpdate(paints, templates) as unknown as Parameters<
                 PlotlyModule["restyle"]
             >[1],
         );
-        patchHoverInfo((element as PlotlyTarget).calcdata, paints);
-        const mode = hoverModeFor(visibleCurveCount(effectiveStates.value));
         if (mode !== shownHoverMode) {
-            const hoverValue = layout.value === "offset" ? "customdata" : "y";
-            const templates = hoverTemplatesFor(
-                input,
-                figure.order,
-                hoverValue,
-                mode,
-            );
-            await plotly.restyle(element, { hovertemplate: templates });
-            patchHoverTemplate((element as PlotlyTarget).calcdata, templates);
             await plotly.relayout(element, { hovermode: mode });
             shownHoverMode = mode;
         }
@@ -1172,11 +1165,7 @@ function chooseView(event: Event): void {
                 v-if="allHidden && layout !== 'table'"
                 class="note isolated"
             >
-                <span>{{
-                    $gettext(
-                        "No curve here is linked to the selection; press a legend entry to add it.",
-                    )
-                }}</span>
+                <span>{{ allHiddenNote }}</span>
             </p>
             <div
                 v-if="layout !== 'table'"
@@ -1325,8 +1314,8 @@ function chooseView(event: Event): void {
     background: var(--surface);
     box-shadow:
         0 0.0625rem 0.125rem rgb(26 26 46 / 0.08),
-        inset 0 0 0 0.0625rem var(--sel-own-rule);
-    color: var(--sel-own-ink);
+        inset 0 0 0 0.0625rem var(--seg-on-rule);
+    color: var(--seg-on-ink);
     font-weight: 600;
 }
 

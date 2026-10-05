@@ -64,8 +64,8 @@ const overlays = computed<FolioOverlay[]>(() => {
         {
             key: String(props.layer.index),
             url,
-            maxUrl: layerImageUrl(props.layer.image, undefined, {
-                max: true,
+            fallbackUrl: layerImageUrl(props.layer.image, undefined, {
+                fallback: true,
             }),
             bounds: props.bounds,
             opacity: props.opacity,

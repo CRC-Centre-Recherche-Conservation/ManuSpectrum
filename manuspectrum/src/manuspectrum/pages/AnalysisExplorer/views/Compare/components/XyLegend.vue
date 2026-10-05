@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useId } from "vue";
+import { nextTick, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
@@ -78,6 +78,7 @@ const emit = defineEmits<{
 const { $gettext, interpolate } = useGettext();
 const marks = useLinkedMarks();
 const hintId = useId();
+const root = useTemplateRef<HTMLElement>("root");
 
 function isHidden(id: string): boolean {
     return props.hiddenIds.has(id);
@@ -87,20 +88,24 @@ function eyeIcon(id: string): IconName {
     return isHidden(id) ? "eye-slash" : "eye";
 }
 
-/** « Show A1 · S1.csv » / « Hide A1 · S1.csv »: the curve named as its entry already shows it. */
-function eyeLabel(label: string, name: string, id: string): string {
-    const full = `${label} · ${name}`;
-    return isHidden(id)
-        ? interpolate($gettext("Show %{name}"), { name: full }, true)
-        : interpolate($gettext("Hide %{name}"), { name: full }, true);
+/** « Hide A1 · S1.csv »: the curve named as its entry already shows it; `aria-pressed` says whether it is hidden. */
+function eyeLabel(label: string, name: string): string {
+    return interpolate(
+        $gettext("Hide %{name}"),
+        { name: `${label} · ${name}` },
+        true,
+    );
 }
 
 function toggleEye(id: string): void {
     emit(TOGGLE_EYE_EVENT, { id });
 }
 
-function showAll(): void {
+/** « Show all spectra » unmounts itself: the focus moves to the first eye button. */
+async function showAll(): Promise<void> {
     emit(SHOW_ALL_EVENT);
+    await nextTick();
+    root.value?.querySelector<HTMLElement>('[data-action="eye"]')?.focus();
 }
 
 /** The `data-rel` of an entry: `self` only while its own node is pinned, else the strongest level of the other nodes its curves stand for. */
@@ -155,7 +160,10 @@ function leave(event: PointerEvent): void {
 </script>
 
 <template>
-    <div class="xy-legend">
+    <div
+        ref="root"
+        class="xy-legend"
+    >
         <div
             v-if="props.hiddenIds.size > 0"
             class="header"
@@ -183,13 +191,7 @@ function leave(event: PointerEvent): void {
                         data-action="eye"
                         :data-curve="group.entries[0].id"
                         :icon="eyeIcon(group.entries[0].id)"
-                        :label="
-                            eyeLabel(
-                                group.label,
-                                group.entries[0].name,
-                                group.entries[0].id,
-                            )
-                        "
+                        :label="eyeLabel(group.label, group.entries[0].name)"
                         :pressed="isHidden(group.entries[0].id)"
                         tip-placement="below"
                         tip-align="start"
@@ -226,9 +228,7 @@ function leave(event: PointerEvent): void {
                                 y1="4"
                                 x2="24"
                                 y2="4"
-                                :style="
-                                    strokeOf({ ...group.look, dash: 'solid' })
-                                "
+                                :style="strokeOf(group.look)"
                             />
                         </svg>
                         <span class="id">
@@ -301,9 +301,7 @@ function leave(event: PointerEvent): void {
                                 data-action="eye"
                                 :data-curve="entry.id"
                                 :icon="eyeIcon(entry.id)"
-                                :label="
-                                    eyeLabel(group.label, entry.name, entry.id)
-                                "
+                                :label="eyeLabel(group.label, entry.name)"
                                 :pressed="isHidden(entry.id)"
                                 tip-placement="below"
                                 tip-align="start"

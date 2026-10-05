@@ -196,6 +196,20 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("escapes a file name once in the trace name and once in its hover line", async () => {
+        const { wrapper } = mountPreview(
+            [readable(1, { name: "A&B<1>.csv" }), readable(2)],
+            () => jsonResponse(SERIES),
+        );
+        await flushPromises();
+        const { traces } = lastDrawing();
+        expect(traces[0].name).toBe("A&amp;B&lt;1&gt;.csv");
+        expect(traces[0].hovertemplate).toBe(
+            "A&amp;B&lt;1&gt;.csv · %{y:.4~g}<extra></extra>",
+        );
+        wrapper.unmount();
+    });
+
     it("names a file in the Selection by its A-label in the legend", async () => {
         const { wrapper, store } = mountPreview(
             [readable(1), readable(2)],

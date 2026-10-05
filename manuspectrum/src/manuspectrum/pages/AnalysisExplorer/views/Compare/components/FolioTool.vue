@@ -44,6 +44,7 @@ import {
     slotNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { folioMarks } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
+import { itemClasses } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
 import type { Feature } from "geojson";
 import type { SynthesisCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -105,14 +106,11 @@ const RELATED_PADDING = 0.25;
 /** The other folios « Show » buttons are offered for. */
 const SHOWN_ELSEWHERE = 3;
 const NO_IMAGE_PADDING = 0.5;
-/** Slots drawn in a series colour (A1…A8); the others in ink. */
-const SERIES_SLOTS = 8;
-
 /**
  * The folio image tool: one of the canvases the Selection's items are
  * placed on (picked among `canvases`, the first at first) with the
  * Selection's analyses and identified materials placed on it, each marked
- * with its A-labels in the colour of its first slot (ink from A9) and its
+ * with its A-labels in the colour and marker of its first slot (`itemClasses`) and its
  * zones framed in that colour over a halo; the same
  * marks are listed under the image. The page comes from the document
  * payload (`useDocument`, the tab memo the document screen shares). The
@@ -340,8 +338,7 @@ function inSelection(id: NodeId): boolean {
 }
 
 function slotClass(mark: FolioMark): string {
-    const first = mark.slots[0];
-    return first < SERIES_SLOTS ? `slot-${first + 1}` : "slot-ink";
+    return itemClasses(mark.slots[0]);
 }
 
 function slotsText(mark: FolioMark): string {
@@ -1162,6 +1159,19 @@ function wholePage(): void {
     color: var(--ink);
 }
 
+.folio-tool
+    :deep(
+        .folio-tool-marker-host[data-rel="none"]
+            .folio-tool-marker:is(.item-ring, .item-ring-dot)
+    ) {
+    border-color: color-mix(
+        in srgb,
+        var(--slot-fill) calc(var(--linked-fade, 0.35) * 100%),
+        var(--surface)
+    );
+    background: var(--surface);
+}
+
 .folio-tool :deep(.folio-tool-marker-host[data-rel="self"] .folio-tool-marker) {
     outline: 0.1875rem solid var(--h1, var(--focus-1));
     outline-offset: 0.0625rem;
@@ -1294,90 +1304,50 @@ function wholePage(): void {
     );
 }
 
-.folio-tool .slot-1,
-.folio-tool :deep(.folio-tool-marker.slot-1) {
-    --slot-fill: var(--series-1);
-    --slot-on: var(--series-1-on);
+.folio-tool :deep(.folio-tool-marker.item-ring),
+.folio-tool :deep(.folio-tool-marker.item-ring-dot) {
+    position: relative;
+    border-color: var(--slot-fill);
+    background: var(--surface);
+    color: var(--ink);
 }
 
-.folio-tool .slot-2,
-.folio-tool :deep(.folio-tool-marker.slot-2) {
-    --slot-fill: var(--series-2);
-    --slot-on: var(--series-2-on);
+.folio-tool :deep(.folio-tool-marker.item-ring-dot)::before {
+    content: "";
+    position: absolute;
+    inset-block-start: -0.25rem;
+    inset-inline-end: -0.25rem;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border: 0.0625rem solid var(--surface);
+    border-radius: 50%;
+    background: var(--slot-fill);
 }
 
-.folio-tool .slot-3,
-.folio-tool :deep(.folio-tool-marker.slot-3) {
-    --slot-fill: var(--series-3);
-    --slot-on: var(--series-3-on);
+.folio-tool .marks :is(.item-ring, .item-ring-dot) {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 0.125rem var(--slot-fill);
+    color: var(--ink);
 }
 
-.folio-tool .slot-4,
-.folio-tool :deep(.folio-tool-marker.slot-4) {
-    --slot-fill: var(--series-4);
-    --slot-on: var(--series-4-on);
-}
-
-.folio-tool .slot-5,
-.folio-tool :deep(.folio-tool-marker.slot-5) {
-    --slot-fill: var(--series-5);
-    --slot-on: var(--series-5-on);
-}
-
-.folio-tool .slot-6,
-.folio-tool :deep(.folio-tool-marker.slot-6) {
-    --slot-fill: var(--series-6);
-    --slot-on: var(--series-6-on);
-}
-
-.folio-tool .slot-7,
-.folio-tool :deep(.folio-tool-marker.slot-7) {
-    --slot-fill: var(--series-7);
-    --slot-on: var(--series-7-on);
-}
-
-.folio-tool .slot-8,
-.folio-tool :deep(.folio-tool-marker.slot-8) {
-    --slot-fill: var(--series-8);
-    --slot-on: var(--series-8-on);
-}
-
-.folio-tool .slot-ink,
-.folio-tool :deep(.folio-tool-marker.slot-ink) {
-    --slot-fill: var(--ink);
-    --slot-on: var(--surface);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-1) {
-    stroke: var(--series-1);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-2) {
-    stroke: var(--series-2);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-3) {
-    stroke: var(--series-3);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-4) {
-    stroke: var(--series-4);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-5) {
-    stroke: var(--series-5);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-6) {
-    stroke: var(--series-6);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-7) {
-    stroke: var(--series-7);
-}
-
-.folio-tool :deep(.folio-tool-frame.slot-8) {
-    stroke: var(--series-8);
+.folio-tool
+    :deep(
+        .folio-tool-frame:is(
+                .slot-1,
+                .slot-2,
+                .slot-3,
+                .slot-4,
+                .slot-5,
+                .slot-6,
+                .slot-7,
+                .slot-8,
+                .slot-9,
+                .slot-10,
+                .slot-11,
+                .slot-12
+            )
+    ) {
+    stroke: var(--slot-fill);
 }
 
 .folio-tool :deep(.folio-tool-frame[data-preview]),

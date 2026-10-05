@@ -23,15 +23,11 @@ export interface FolioOverlay {
     key: string;
     url: string;
     /**
-     * The IIIF `max` size of the same image, or null when `url` already is
-     * one (an `image.url`, or no `image.service`): the one-shot fallback a
-     * laid layer tries when `url` fails to load (`laidLayers`). `image.width`
-     * / `image.height` come from a manifest cached at import time and can be
-     * stale or simply wrong relative to what the image service serves today,
-     * so a bounded `!W,H` request built from them can itself ask for an
-     * upscale the image server refuses; `max` never does (IIIF Image API 2.1).
+     * The address `laidLayers` retries once when `url` fails to load: the
+     * same image sized relative to what the server holds (`layerImageUrl`'s
+     * `fallback`). Equal to `url` for an `image.url`, null without image.
      */
-    maxUrl: string | null;
+    fallbackUrl: string | null;
     bounds: [LatLng, LatLng];
     opacity: number;
     label: string;
@@ -45,22 +41,30 @@ export function overlayKey(analysisId: string, index: number): string {
 /**
  * The layer image: its own URL, else the IIIF image service at most `size` px
  * on a side and never beyond the image's own declared size (servers refuse
- * to scale up); a declared size left at 0 is unknown. `max` asks the image
- * service for its own IIIF `max` size instead: never an upscale, whatever
- * the declared size says (a stale or wrong manifest can declare a size
- * larger than the image the server actually holds, which a bounded request
- * would still try to upscale to). Only an address `safeHref` accepts is
- * returned; null otherwise.
+ * to scale up); a declared size left at 0 is unknown. `fallback` asks for the
+ * same image as a percentage of the size the server really holds,
+ * `pct:min(100, 100 × size / declared largest side)`: a stale declared size
+ * cannot make it an upscale; `max` when no size is declared. Only an
+ * address `safeHref` accepts is returned; null otherwise.
  */
 export function layerImageUrl(
     image: ImageRef,
     size = OVERLAY_SIZE,
-    options?: { max?: boolean },
+    options?: { fallback?: boolean },
 ): string | null {
     if (image.url) return safeHref(image.url);
     if (image.service) {
-        if (options?.max) {
-            return safeHref(imageUrl(image.service, { size: "max" }));
+        if (options?.fallback) {
+            const declared = Math.max(image.width, image.height);
+            const percent =
+                declared > 0
+                    ? Math.min(100, Math.round((100 * size) / declared))
+                    : 0;
+            return safeHref(
+                imageUrl(image.service, {
+                    size: percent > 0 ? `pct:${percent}` : "max",
+                }),
+            );
         }
         const width = image.width > 0 ? Math.min(size, image.width) : size;
         const height = image.height > 0 ? Math.min(size, image.height) : size;
@@ -98,8 +102,8 @@ export function folioOverlays(
                 result.push({
                     key,
                     url,
-                    maxUrl: layerImageUrl(layer.image, undefined, {
-                        max: true,
+                    fallbackUrl: layerImageUrl(layer.image, undefined, {
+                        fallback: true,
                     }),
                     bounds,
                     opacity: setting.opacity,

@@ -38,8 +38,6 @@ const motion = usePreferredReducedMotion();
 const list = useTemplateRef<HTMLUListElement>("list");
 
 const failed = ref(new Set<string>());
-/** Canvas ids whose thumbnail already fell back to the IIIF `max` size once. */
-const maxFallback = ref(new Set<string>());
 const roving = ref<string | null>(null);
 const onlyResults = ref(false);
 
@@ -113,13 +111,10 @@ onMounted(() => reveal(props.current));
 /**
  * A small image of the page from its IIIF service, an http(s) address only
  * (`safeHref`); none once the server refused it (some hosts refuse hotlinks).
- * The canvas's declared size can be stale or wrong, so a first failure tries
- * the service's own `max` size (never an upscale) before giving up.
  */
 function thumbnailOf(canvas: DocumentCanvas): string | null {
     if (!canvas.image.service || failed.value.has(canvas.id)) return null;
-    const size = maxFallback.value.has(canvas.id) ? "max" : THUMBNAIL_SIZE;
-    return safeHref(imageUrl(canvas.image.service, { size }));
+    return safeHref(imageUrl(canvas.image.service, { size: THUMBNAIL_SIZE }));
 }
 
 function matchingOf(canvas: DocumentCanvas): number {
@@ -181,11 +176,7 @@ function goTo(canvas: DocumentCanvas | null): void {
 }
 
 function onThumbnailError(canvas: DocumentCanvas): void {
-    if (!maxFallback.value.has(canvas.id)) {
-        maxFallback.value = new Set(maxFallback.value).add(canvas.id);
-    } else {
-        failed.value = new Set(failed.value).add(canvas.id);
-    }
+    failed.value = new Set(failed.value).add(canvas.id);
 }
 
 function buttonOf(id: string | null): HTMLButtonElement | null {

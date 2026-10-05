@@ -196,7 +196,7 @@ async function draw(): Promise<void> {
         await plotly.react(
             element,
             curves.value.map(({ file, index, series }) => {
-                const label = escapePlotlyText(legendName(file));
+                const label = legendName(file);
                 const hoverLine =
                     mode === "closest"
                         ? closestHoverLine(
@@ -209,7 +209,7 @@ async function draw(): Promise<void> {
                 return {
                     x: series.x,
                     y: series.y,
-                    name: label,
+                    name: escapePlotlyText(label),
                     type: "scatter",
                     mode: "lines",
                     hovertemplate: `${hoverLine}<extra></extra>`,

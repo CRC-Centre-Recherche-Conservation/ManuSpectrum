@@ -29,7 +29,12 @@ describe("FoldedSummary", () => {
         const chips = view.findAll(".slots li");
         expect(chips.map((chip) => chip.text())).toEqual(["A3", "A12", "A13"]);
         expect(chips[0].classes()).toContain("slot-3");
-        expect(chips[1].classes()).toContain("slot-context");
+        expect(chips[1].classes()).toContain("slot-12");
+        expect(chips[1].classes()).toContain("item-filled");
+        // The 13th item: the first hue again, as a ring.
+        expect(chips[2].classes()).toEqual(
+            expect.arrayContaining(["slot-1", "item-ring"]),
+        );
         expect(view.find(".line").text()).toBe("4 FTIR spectra, not drawn");
         const draw = view.find("button.unfold");
         expect(draw.text()).toBe("Draw");

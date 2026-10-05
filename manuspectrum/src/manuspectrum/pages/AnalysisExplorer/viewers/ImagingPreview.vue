@@ -86,8 +86,8 @@ const position = ref(
 
 const imageFailed = ref(false);
 const attempt = ref(0);
-/** Whether the plain-`<img>` path already fell back to the IIIF `max` size once for this layer. */
-const maxFallback = ref(false);
+/** Whether the plain-`<img>` path already retried at `fallbackUrl` once for this layer. */
+const retried = ref(false);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
@@ -109,35 +109,34 @@ const underCurtain = computed(
 const imageUrl = computed(() =>
     layer.value
         ? layerImageUrl(layer.value.image, PREVIEW_SIZE, {
-              max: maxFallback.value,
+              fallback: retried.value,
           })
         : null,
 );
-const maxImageUrl = computed(() =>
+const fallbackImageUrl = computed(() =>
     layer.value
-        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, { max: true })
+        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, { fallback: true })
         : null,
 );
 const labels = computed(() => props.file.layers.map((entry) => entry.label));
 
 watch(key, () => {
     imageFailed.value = false;
-    maxFallback.value = false;
+    retried.value = false;
 });
 
 /**
- * A first failure retries once at the image's own IIIF `max` size, silently
- * (the declared size a bounded request clamps to can itself be stale or
- * wrong, and still ask for an upscale the image server refuses); only a
- * second failure shows the "unavailable" state.
+ * A first failure retries once at a size relative to the one the server
+ * holds (`layerImageUrl`'s `fallback`), silently; only a second failure
+ * shows the "unavailable" state.
  */
 function onImageError(): void {
     if (
-        !maxFallback.value &&
-        maxImageUrl.value &&
-        maxImageUrl.value !== imageUrl.value
+        !retried.value &&
+        fallbackImageUrl.value &&
+        fallbackImageUrl.value !== imageUrl.value
     ) {
-        maxFallback.value = true;
+        retried.value = true;
     } else {
         imageFailed.value = true;
     }
@@ -146,10 +145,10 @@ function onImageError(): void {
 function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
-    maxFallback.value = false;
+    retried.value = false;
 }
 
-/** The `stage` slot (a laid Leaflet map) already tried its own `max` fallback (`laidLayers`); its failure is final. */
+/** The `stage` slot (a laid Leaflet map) already retried at its `fallbackUrl` (`laidLayers`); its failure is final. */
 function onStageFailed(): void {
     imageFailed.value = true;
 }

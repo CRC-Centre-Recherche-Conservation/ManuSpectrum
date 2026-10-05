@@ -66,10 +66,13 @@ export function readPlotTheme(
     };
 }
 
-/** A1…A12 take the series colours in order; further slots and unslotted curves are drawn in ink. */
-export function seriesColour(theme: PlotTheme, slot: number | null): string {
-    return slot !== null && slot >= 0 && slot < SERIES
-        ? theme.series[slot]
+/** A position takes the twelve series colours in turn, the 13th the colour of the 1st; null is drawn in ink. */
+export function seriesColour(
+    theme: PlotTheme,
+    position: number | null,
+): string {
+    return position !== null && position >= 0
+        ? theme.series[position % SERIES]
         : theme.ink;
 }
 

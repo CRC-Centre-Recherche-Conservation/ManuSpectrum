@@ -1,7 +1,9 @@
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
+    DIM_OPACITY,
     LABEL_GAP,
-    curveHue,
+    itemCycle,
+    itemHue,
     curvePaint,
     endPoint,
     extent,
@@ -100,12 +102,15 @@ const EXPORT_TITLE_SIZE = 14;
 /** Room above the exported figure for its title and source line. */
 export const EXPORT_TITLE_ROOM = 72;
 
-function swatch(colour: string): string {
-    return `<span style="color:${colour}">━</span>`;
+/** The stroke glyph of an item's cycle: solid, dashed, dotted. */
+const SWATCH_GLYPHS = ["━", "╍", "┈"] as const;
+
+function swatch(colour: string, slot: number): string {
+    return `<span style="color:${colour}">${SWATCH_GLYPHS[itemCycle(slot)]}</span>`;
 }
 
 export function paintOf(input: FigureInput, index: number): CurvePaint {
-    return curvePaint(input.theme, index, input.states[index]);
+    return curvePaint(input.theme, input.curves[index], input.states[index]);
 }
 
 /** The hover mode this figure draws under: unified up to the curves currently answering hover, closest beyond. */
@@ -152,7 +157,7 @@ function traceOf(
         mode: "lines",
         x: curve.x,
         name: escapePlotlyText(curve.label),
-        hovertemplate: `${hoverLine}<extra></extra>`,
+        hovertemplate: paint.hover ? `${hoverLine}<extra></extra>` : "",
         hoverinfo: paint.hover ? "all" : "skip",
         opacity: paint.opacity,
         // Plotly takes a dash length list (« 6px,2px »); its types list only the named dashes.
@@ -161,20 +166,17 @@ function traceOf(
             width: paint.width,
             dash: paint.dash,
         } as PlotData["line"],
-        // No legendgroup/legendgrouptitle here: plotly.js-cartesian-dist 4.0.0's
-        // "x/y unified" hover box is itself drawn as a mock legend (createHoverText),
-        // and a group title set on the live trace resurfaces there as a second,
-        // redundant name line above this trace's own hovertemplate line. The
-        // grouped PNG legend is rebuilt from `legendrank` in `exportFigure` instead,
-        // where no hover box reads it.
+        // A legend group on a live trace shows as a second name line in the unified hover box.
         legendrank: curve.slot,
     };
 }
 
 /**
- * The hovertemplates of every trace, in trace order, for `mode`: what a
- * hovermode change restyles (`XyWorkshop.vue`'s `restyle`) so the box
- * content matches the mode it now shows under, without a redraw.
+ * The hovertemplates of every trace, in trace order, for `mode`, restyled
+ * (`XyWorkshop.vue`'s `restyle`) with the curve states and the hovermode
+ * without a redraw. A curve that does not answer hover gets an empty one:
+ * plotly.js-cartesian-dist 4.0.0 reads `hoverinfo: "skip"` into the
+ * trace only while its `hovertemplate` is empty.
  */
 export function hoverTemplatesFor(
     input: FigureInput,
@@ -183,6 +185,7 @@ export function hoverTemplatesFor(
     mode: "x unified" | "closest",
 ): string[] {
     return order.map((index) => {
+        if (!paintOf(input, index).hover) return "";
         const label = shortLabel(input, index);
         const line =
             mode === "closest"
@@ -240,7 +243,7 @@ function endLabels(
         return {
             x: point.x,
             y: point.y,
-            text: `${swatch(theme.series[curveHue(index)])} ${slotLabel(slot)}`,
+            text: `${swatch(theme.series[itemHue(slot)], slot)} ${slotLabel(slot)}`,
             xanchor: "left",
             yanchor: "middle",
             font: {
@@ -313,16 +316,13 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     };
 }
 
-/** « ━ A5 · analysis », the analysis cut to `chars` characters, in its first curve's hue. */
+/** « ━ A5 · analysis », the analysis cut to `chars` characters, in its item's hue. */
 function panelTitle(input: FigureInput, slot: number, chars: number): string {
     const index = input.curves.findIndex((curve) => curve.slot === slot);
     const text = index === -1 ? "" : input.curves[index].analysis;
     const short = text.length > chars ? `${text.slice(0, chars - 1)}…` : text;
-    const colour =
-        index === -1
-            ? input.theme.context
-            : input.theme.series[curveHue(index)];
-    return `${swatch(colour)} ${slotLabel(slot)} · ${escapePlotlyText(short)}`;
+    const colour = input.theme.series[itemHue(slot)];
+    return `${swatch(colour, slot)} ${slotLabel(slot)} · ${escapePlotlyText(short)}`;
 }
 
 /**
@@ -371,14 +371,7 @@ export function multiplesFigure(input: FigureInput): Figure {
             xgap: spacing.xgap,
             ygap: spacing.ygap,
         },
-        // No `hoversubplots: "axis"` here: verified against
-        // plotly.js-cartesian-dist 4.0.0's `_hover` (`linkSubplots` in
-        // `plot_api.js`) that its cross-subplot pull reads `_subplotsWith`,
-        // populated only for subplots literally overlaid on one shared axis
-        // object; a `matches: "x"` grid panel keeps its own distinct axis
-        // (tracked instead in `_matchGroup`, which `_hover` never reads), so
-        // the setting would be a no-op here. Each panel answers its own
-        // compact hover box independently, in the same style as the rest.
+        // Each panel answers its own hover box: `hoversubplots` does not link `matches` panels.
         margin,
         ...(height === null ? {} : { height }),
     };
@@ -480,7 +473,8 @@ export function multiplesFigure(input: FigureInput): Figure {
 
 /**
  * The opacity of each annotation of `figure` under `states`: a label goes
- * with its curve, a panel title dims with its panel. A small-multiples
+ * with its curve, a panel title dims with its panel; a label or title whose
+ * live curves are all `"dimmed"` fades to the dim opacity like the line. A small-multiples
  * panel whose only curve is `"hidden"` (the selection, or the legend's eye
  * folded in by `effectiveStates`) keeps its axes and dims only its title,
  * empty otherwise: the panel is never dropped, which would reflow the grid
@@ -490,12 +484,15 @@ export function annotationOpacities(
     figure: Figure,
     states: readonly CurveState[],
 ): number[] {
-    return figure.follows.map((curves, index) =>
-        curves.length === 0 ||
-        curves.some((curve) => states[curve] !== "hidden")
-            ? figure.shown[index].on
-            : figure.shown[index].off,
-    );
+    return figure.follows.map((curves, index) => {
+        const { on, off } = figure.shown[index];
+        if (curves.length === 0) return on;
+        const live = curves.filter((curve) => states[curve] !== "hidden");
+        if (live.length === 0) return off;
+        return live.every((curve) => states[curve] === "dimmed")
+            ? Math.min(on, DIM_OPACITY)
+            : on;
+    });
 }
 
 /**

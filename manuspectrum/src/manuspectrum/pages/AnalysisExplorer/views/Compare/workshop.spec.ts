@@ -7,14 +7,16 @@ import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 
 import {
-    curveDash,
-    curveHue,
     curveLook,
+    itemClasses,
+    itemCycle,
+    itemDash,
+    itemHue,
+    itemMarker,
     curveColourVar,
     curvePaint,
     curveState,
     dashArray,
-    dashOf,
     endPoint,
     extent,
     hoverModeFor,
@@ -24,8 +26,6 @@ import {
     outOfRange,
     panelGrid,
     panelSpacing,
-    patchHoverInfo,
-    patchHoverTemplate,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -162,18 +162,9 @@ describe("workshop", () => {
         });
     });
 
-    it("dashes the 2nd, 3rd… file of a slot with short dashes, the first solid", () => {
-        const ranks = ranksInSlot([0, 0, 1, 0, 1, 0, 0, 0]);
-        expect(ranks).toEqual([0, 1, 0, 2, 1, 3, 4, 5]);
-        expect(ranks.map(dashOf)).toEqual([
-            "solid",
-            "6px,2px",
-            "solid",
-            "2px,2px",
-            "6px,2px",
-            "10px,2px,2px,2px",
-            "14px,3px",
-            "solid",
+    it("ranks the files of a slot in order of arrival", () => {
+        expect(ranksInSlot([0, 0, 1, 0, 1, 0, 0, 0])).toEqual([
+            0, 1, 0, 2, 1, 3, 4, 5,
         ]);
     });
 
@@ -182,14 +173,50 @@ describe("workshop", () => {
         expect(dashArray("10px,2px,2px,2px")).toBe("10 2 2 2");
     });
 
-    it("cycles a curve's hue every CURVE_PALETTE_SIZE positions, its dash to the next variant each time round", () => {
-        expect(curveHue(0)).toBe(0);
-        expect(curveHue(11)).toBe(11);
-        expect(curveHue(12)).toBe(0);
-        expect(curveDash(0)).toBe("solid");
-        expect(curveDash(11)).toBe("solid");
-        expect(curveDash(12)).toBe("6px,2px");
-        expect(curveDash(24)).toBe("2px,2px");
+    it("gives an item one hue by its slot, cycling the twelve, and its cycle selects solid / dashed / dotted and filled / ring / ring with a dot", () => {
+        expect(itemHue(0)).toBe(0);
+        expect(itemHue(11)).toBe(11);
+        expect(itemHue(12)).toBe(0);
+        expect(itemHue(24)).toBe(0);
+        expect([0, 12, 24].map(itemCycle)).toEqual([0, 1, 2]);
+        expect([0, 12, 24].map((slot) => itemDash(slot, 0))).toEqual([
+            "solid",
+            "6px,2px",
+            "2px,2px",
+        ]);
+        expect([0, 11, 12, 24].map(itemMarker)).toEqual([
+            "filled",
+            "filled",
+            "ring",
+            "ring-dot",
+        ]);
+        expect(itemClasses(12)).toBe("slot-1 item-ring");
+    });
+
+    it("keeps (hue, dash) unique across the items of a window, the extra files of an item included", () => {
+        const seen = new Set<string>();
+        for (const slot of [0, 12, 24, 1, 13]) {
+            for (const rank of [0, 1, 2]) {
+                const key = `${itemHue(slot)}|${itemDash(slot, rank)}`;
+                expect(seen.has(key)).toBe(false);
+                seen.add(key);
+            }
+        }
+    });
+
+    it("draws the 13th item in the first hue, dashed, as its folded chip and folio marker do", () => {
+        const thirteenth = { slot: 12, rank: 0 };
+        expect(curveLook(thirteenth, "plain")).toEqual({
+            kind: "series",
+            hue: 0,
+            dash: "6px,2px",
+        });
+        expect(itemClasses(12)).toBe("slot-1 item-ring");
+        expect(curveLook({ slot: 0, rank: 0 }, "plain")).toEqual({
+            kind: "series",
+            hue: 0,
+            dash: "solid",
+        });
     });
 
     const PALETTE = {
@@ -197,23 +224,23 @@ describe("workshop", () => {
         context: "#999",
     };
 
-    it("paints every curve in its own hue at 1.5 px, never grey or a fallback ink, whatever its position", () => {
-        expect(curvePaint(PALETTE, 1, "plain")).toEqual({
+    it("paints every curve in its item's hue at 1.5 px, never grey or a fallback ink, whatever its slot", () => {
+        expect(curvePaint(PALETTE, { slot: 1, rank: 0 }, "plain")).toEqual({
             colour: "#s1",
             dash: "solid",
             width: 1.5,
             opacity: 1,
             hover: true,
         });
-        // The 13th curve (index 12): hue wraps to the 1st series colour, dash to the 2nd variant.
-        expect(curvePaint(PALETTE, 12, "plain")).toEqual({
+        // The 13th item (slot 12): hue wraps to the 1st series colour, dash to the 2nd variant.
+        expect(curvePaint(PALETTE, { slot: 12, rank: 0 }, "plain")).toEqual({
             colour: "#s0",
             dash: "6px,2px",
             width: 1.5,
             opacity: 1,
             hover: true,
         });
-        expect(curvePaint(PALETTE, 12, "hidden")).toEqual({
+        expect(curvePaint(PALETTE, { slot: 12, rank: 0 }, "hidden")).toEqual({
             colour: "#s0",
             dash: "6px,2px",
             width: 1.5,
@@ -223,20 +250,24 @@ describe("workshop", () => {
     });
 
     it("thickens an emphasised curve without changing its colour or dash: the focus never recolours a curve", () => {
-        expect(curvePaint(PALETTE, 5, "emphasised")).toEqual({
-            colour: "#s5",
-            dash: "solid",
-            width: 2.5,
-            opacity: 1,
-            hover: true,
-        });
-        expect(curveLook(5, "emphasised")).toEqual(curveLook(5, "plain"));
+        expect(curvePaint(PALETTE, { slot: 5, rank: 0 }, "emphasised")).toEqual(
+            {
+                colour: "#s5",
+                dash: "solid",
+                width: 2.5,
+                opacity: 1,
+                hover: true,
+            },
+        );
+        expect(curveLook({ slot: 5, rank: 0 }, "emphasised")).toEqual(
+            curveLook({ slot: 5, rank: 0 }, "plain"),
+        );
     });
 
     it("looks up a curve's own CSS var for the legend's swatch, resolved to the theme's hex for a Plotly trace", () => {
-        const seriesLook = curveLook(1, "plain");
+        const seriesLook = curveLook({ slot: 1, rank: 0 }, "plain");
         expect(curveColourVar(seriesLook)).toBe("var(--series-2)");
-        const dimmedLook = curveLook(1, "dimmed");
+        const dimmedLook = curveLook({ slot: 1, rank: 0 }, "dimmed");
         expect(curveColourVar(dimmedLook)).toBe("var(--series-context)");
     });
 
@@ -256,14 +287,14 @@ describe("workshop", () => {
     });
 
     it("draws a dimmed curve in grey context at reduced opacity, out of the hover, even one a pin would otherwise light", () => {
-        expect(curvePaint(PALETTE, 0, "dimmed")).toEqual({
+        expect(curvePaint(PALETTE, { slot: 0, rank: 0 }, "dimmed")).toEqual({
             colour: "#999",
             dash: "solid",
             width: 1.25,
             opacity: 0.35,
             hover: false,
         });
-        expect(curvePaint(PALETTE, 12, "dimmed")).toEqual({
+        expect(curvePaint(PALETTE, { slot: 12, rank: 0 }, "dimmed")).toEqual({
             colour: "#999",
             dash: "6px,2px",
             width: 1.25,
@@ -298,62 +329,18 @@ describe("workshop", () => {
         });
     });
 
-    it("patches Plotly's stale calc-data trace with the hoverinfo a style-only restyle set, in trace order", () => {
-        const calcdata = [
-            [{ trace: { hoverinfo: "all" } }],
-            [{ trace: { hoverinfo: "all" } }],
-        ];
-        patchHoverInfo(calcdata, [
+    it("carries the hovertemplates along when given, one per trace", () => {
+        const paints = [
             {
                 colour: "#111",
-                dash: "solid",
+                dash: "solid" as const,
                 width: 1.5,
                 opacity: 0,
                 hover: false,
             },
-            {
-                colour: "#222",
-                dash: "solid",
-                width: 1.5,
-                opacity: 1,
-                hover: true,
-            },
-        ]);
-        expect(calcdata[0][0].trace.hoverinfo).toBe("skip");
-        expect(calcdata[1][0].trace.hoverinfo).toBe("all");
-    });
-
-    it("patches the same stale trace with the hovertemplate a hovermode switch restyled, in trace order", () => {
-        const calcdata = [
-            [{ trace: { hovertemplate: "A1 · %{y}<extra></extra>" } }],
-            [{ trace: { hovertemplate: "A2 · %{y}<extra></extra>" } }],
         ];
-        patchHoverTemplate(calcdata, [
-            "A1<br>x: %{x} · y: %{y}<extra></extra>",
-            "A2<br>x: %{x} · y: %{y}<extra></extra>",
-        ]);
-        expect(calcdata[0][0].trace.hovertemplate).toBe(
-            "A1<br>x: %{x} · y: %{y}<extra></extra>",
-        );
-        expect(calcdata[1][0].trace.hovertemplate).toBe(
-            "A2<br>x: %{x} · y: %{y}<extra></extra>",
-        );
-    });
-
-    it("does nothing when the chart holds no calc data yet, or a row lacks a trace", () => {
-        expect(() => patchHoverInfo(undefined, [])).not.toThrow();
-        const calcdata = [[]];
-        expect(() =>
-            patchHoverInfo(calcdata, [
-                {
-                    colour: "#111",
-                    dash: "solid",
-                    width: 1.5,
-                    opacity: 1,
-                    hover: true,
-                },
-            ]),
-        ).not.toThrow();
+        expect(restyleUpdate(paints, [""]).hovertemplate).toEqual([""]);
+        expect(restyleUpdate(paints)).not.toHaveProperty("hovertemplate");
     });
 
     it("finds where a curve ends on screen, the smallest X on a reversed axis", () => {

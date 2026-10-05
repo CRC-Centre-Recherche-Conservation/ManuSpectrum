@@ -46,14 +46,14 @@ function mountPreview(
 }
 
 describe("ImagingPreview", () => {
-    it("silently retries at the image's own max size before saying the map is unavailable, and asks again on Retry", async () => {
+    it("silently retries at a size relative to the server's own before saying the map is unavailable, and asks again on Retry", async () => {
         const { wrapper } = mountPreview();
         const bounded = wrapper.find("img.layer-image").attributes("src");
         expect(bounded).toContain("!480,480");
         await wrapper.find("img.layer-image").trigger("error");
         expect(wrapper.find(".unavailable").exists()).toBe(false);
         expect(wrapper.find("img.layer-image").attributes("src")).toContain(
-            "/full/max/0/default.jpg",
+            "/full/pct:",
         );
         await wrapper.find("img.layer-image").trigger("error");
         const status = wrapper.find(".unavailable");

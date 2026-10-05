@@ -30,7 +30,7 @@ describe("CanvasStrip", () => {
         expect(wrapper.findAll("button")).toHaveLength(2);
     });
 
-    it("draws a thumbnail from the IIIF service, retries at max once refused, and drops it once that fails too", async () => {
+    it("draws a thumbnail from the IIIF service, and drops it once the server refuses it", async () => {
         const canvases = documentPayload().canvases.map((canvas) => ({
             ...canvas,
             image: {
@@ -46,10 +46,6 @@ describe("CanvasStrip", () => {
             "https://iiif.example/image/p1/full/,96/0/default.jpg",
         );
         await image.trigger("error");
-        expect(wrapper.find("img").attributes("src")).toBe(
-            "https://iiif.example/image/p1/full/max/0/default.jpg",
-        );
-        await wrapper.find("img").trigger("error");
         expect(wrapper.find("img").exists()).toBe(false);
     });
 

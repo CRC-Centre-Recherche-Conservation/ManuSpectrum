@@ -117,11 +117,11 @@ describe("plot theme", () => {
         expect(PLOT_CONFIG.responsive).toBe(true);
     });
 
-    it("gives A1…A12 their series colour and further slots the ink", () => {
+    it("gives each of the twelve first positions its series colour, the next ones the colours again, and none the ink", () => {
         setTokens({ "--series-3": "#6d28d9", "--ink": "#1a1a2e" });
         const theme = readPlotTheme();
         expect(seriesColour(theme, 2)).toBe("#6d28d9");
-        expect(seriesColour(theme, 12)).toBe("#1a1a2e");
+        expect(seriesColour(theme, 12)).toBe(seriesColour(theme, 0));
         expect(seriesColour(theme, null)).toBe("#1a1a2e");
     });
 

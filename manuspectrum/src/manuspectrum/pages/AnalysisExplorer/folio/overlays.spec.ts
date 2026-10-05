@@ -56,38 +56,38 @@ describe("folio overlays", () => {
         );
     });
 
-    it("asks the service's own max size regardless of the declared width and height", () => {
-        // The declared size (from a manifest cached once at import time) can be
-        // stale or simply wrong relative to what the image service serves
-        // today; a bounded request built from it can still ask for an upscale
-        // the server refuses (see laid-layers.ts and ImagingPreview.vue, which
-        // retry here once such a request fails to load).
+    it("falls back to a percentage of the size the server holds, never an upscale, and to max when no size is declared", () => {
         const large = {
             service: "https://iiif.example/pb",
             url: null,
             width: 4000,
             height: 3000,
         };
-        expect(layerImageUrl(large, 480, { max: true })).toBe(
-            "https://iiif.example/pb/full/max/0/default.jpg",
+        expect(layerImageUrl(large, 480, { fallback: true })).toBe(
+            "https://iiif.example/pb/full/pct:12/0/default.jpg",
         );
         expect(
+            layerImageUrl({ ...large, width: 300, height: 200 }, 480, {
+                fallback: true,
+            }),
+        ).toBe("https://iiif.example/pb/full/pct:100/0/default.jpg");
+        expect(
             layerImageUrl({ ...large, width: 0, height: 0 }, 480, {
-                max: true,
+                fallback: true,
             }),
         ).toBe("https://iiif.example/pb/full/max/0/default.jpg");
         expect(
             layerImageUrl(
                 { service: null, url: "https://x/pb.png", width: 1, height: 1 },
                 480,
-                { max: true },
+                { fallback: true },
             ),
         ).toBe("https://x/pb.png");
         expect(
             layerImageUrl(
                 { service: null, url: null, width: 1, height: 1 },
                 480,
-                { max: true },
+                { fallback: true },
             ),
         ).toBeNull();
     });
@@ -118,7 +118,8 @@ describe("folio overlays", () => {
             {
                 key: `${uuid(101)}:1`,
                 url: "https://iiif.example/image/hg/full/!2000,2048/0/default.jpg",
-                maxUrl: "https://iiif.example/image/hg/full/max/0/default.jpg",
+                fallbackUrl:
+                    "https://iiif.example/image/hg/full/pct:68/0/default.jpg",
                 bounds: [
                     [-1, 0],
                     [0, 2],

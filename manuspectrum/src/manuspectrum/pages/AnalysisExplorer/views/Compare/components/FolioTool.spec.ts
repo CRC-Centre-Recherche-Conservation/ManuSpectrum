@@ -271,6 +271,21 @@ describe("FolioTool", () => {
         expect(view.findAll(".folio-tool-frame")).toHaveLength(1);
     });
 
+    it("marks the 13th item of the Selection in the first hue as a ring, the colour and marker of its folded chip", async () => {
+        const view = await mountTool(new Map([[uuid(101), [12]]]));
+        const marker = view.find(".folio-tool-marker");
+        expect(marker.text()).toBe("A13");
+        expect(marker.classes()).toEqual(
+            expect.arrayContaining(["slot-1", "item-ring"]),
+        );
+        expect(view.find(".marks .slot").classes()).toEqual(
+            expect.arrayContaining(["slot-1", "item-ring"]),
+        );
+        expect(view.find("path.folio-tool-frame").classes()).toContain(
+            "slot-1",
+        );
+    });
+
     it("frames a zone in its slot colour over a halo", async () => {
         const view = await mountTool();
         const halo = view.find("path.folio-tool-halo");

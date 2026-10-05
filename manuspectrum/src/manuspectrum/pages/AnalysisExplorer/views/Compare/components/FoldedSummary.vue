@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
-import { COLOURED_SLOTS } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
+import { itemClasses } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
 import type { FoldedSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/folded-summary.ts";
 
@@ -12,7 +12,7 @@ const SHOWN_NAMES = 6;
 
 /**
  * What a folded window shows under its header: a chip per slot it holds
- * (in its series colour for A1–A8, the context grey beyond; the first
+ * (in its item's colour and marker, `itemClasses`; the first
  * `SHOWN_SLOTS`, then how many more), one counted line (« 4 FTIR spectra,
  * not drawn », « 2 maps · Pb, Hg ») and the button that unfolds it,
  * named after the window's `title`.
@@ -27,7 +27,7 @@ const chips = computed(() => {
     const shown = props.summary.slots.slice(0, SHOWN_SLOTS).map((slot) => ({
         key: String(slot),
         text: slotLabel(slot),
-        tone: slot < COLOURED_SLOTS ? `slot-${slot + 1}` : "slot-context",
+        tone: itemClasses(slot),
     }));
     const more = props.summary.slots.length - shown.length;
     return more > 0
@@ -136,7 +136,7 @@ const actionLabel = computed(() =>
     padding-block: 0.0625rem;
     padding-inline: 0.375rem;
     border-radius: 0.25rem;
-    background: var(--series-context);
+    background: var(--bg-alt);
     color: var(--ink);
     font: 600 0.6875rem var(--font-mono);
     font-variant-numeric: tabular-nums;
@@ -147,44 +147,41 @@ const actionLabel = computed(() =>
     color: var(--ink-muted);
 }
 
-.folded-summary .slots .slot-1 {
-    background: var(--series-1);
-    color: var(--series-1-on);
+.folded-summary
+    .slots
+    :is(
+        .slot-1,
+        .slot-2,
+        .slot-3,
+        .slot-4,
+        .slot-5,
+        .slot-6,
+        .slot-7,
+        .slot-8,
+        .slot-9,
+        .slot-10,
+        .slot-11,
+        .slot-12
+    ) {
+    background: var(--slot-fill);
+    color: var(--slot-on);
 }
 
-.folded-summary .slots .slot-2 {
-    background: var(--series-2);
-    color: var(--series-2-on);
+.folded-summary .slots :is(.item-ring, .item-ring-dot) {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 0.125rem var(--slot-fill);
+    color: var(--ink);
 }
 
-.folded-summary .slots .slot-3 {
-    background: var(--series-3);
-    color: var(--series-3-on);
-}
-
-.folded-summary .slots .slot-4 {
-    background: var(--series-4);
-    color: var(--series-4-on);
-}
-
-.folded-summary .slots .slot-5 {
-    background: var(--series-5);
-    color: var(--series-5-on);
-}
-
-.folded-summary .slots .slot-6 {
-    background: var(--series-6);
-    color: var(--series-6-on);
-}
-
-.folded-summary .slots .slot-7 {
-    background: var(--series-7);
-    color: var(--series-7-on);
-}
-
-.folded-summary .slots .slot-8 {
-    background: var(--series-8);
-    color: var(--series-8-on);
+.folded-summary .slots .item-ring-dot::before {
+    content: "";
+    display: inline-block;
+    inline-size: 0.3125rem;
+    block-size: 0.3125rem;
+    margin-inline-end: 0.1875rem;
+    border-radius: 50%;
+    background: var(--slot-fill);
+    vertical-align: 0.0625rem;
 }
 
 .folded-summary .line {

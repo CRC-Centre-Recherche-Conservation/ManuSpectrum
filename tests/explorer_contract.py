@@ -27,12 +27,15 @@ IMAGE_REF = {
     "height": int,
 }
 
+FILE_LAYER = {"index": int, "label": str, "image": "ImageRef"}
+
 SHAPES = {
     "Label": LABEL,
     "Ref": REF,
     "ValueRef": VALUE_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
+    "FileLayer": FILE_LAYER,
     "NamedRef": NAMED_REF,
     "Citation": CITATION,
     "Technique": TECHNIQUE,

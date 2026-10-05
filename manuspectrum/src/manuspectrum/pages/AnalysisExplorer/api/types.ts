@@ -541,6 +541,10 @@ export const SHAPE_KEYS = {
         width: true,
         height: true,
     } satisfies Record<keyof ImageRef, true>,
+    FileLayer: { index: true, label: true, image: true } satisfies Record<
+        keyof FileLayer,
+        true
+    >,
     Technique: {
         id: true,
         uri: true,

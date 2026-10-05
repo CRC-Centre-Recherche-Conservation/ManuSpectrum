@@ -951,8 +951,8 @@ function groupToggleLabel(row: Row): string {
     background: var(--surface);
     box-shadow:
         0 0.0625rem 0.125rem rgb(26 26 46 / 0.08),
-        inset 0 0 0 0.0625rem var(--sel-own-rule);
-    color: var(--sel-own-ink);
+        inset 0 0 0 0.0625rem var(--seg-on-rule);
+    color: var(--seg-on-ink);
     font-weight: 600;
 }
 

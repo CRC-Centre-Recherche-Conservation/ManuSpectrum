@@ -1102,6 +1102,8 @@ class ItemsRouteTests(CorpusCase):
         files = payload["items"][0]["files"]
         self.assertEqual([f["dataKind"] for f in files], ["xy", "chemical-imaging"])
         self.assertEqual([layer["label"] for layer in files[1]["layers"]], ["Pb"])
+        for layer in files[1]["layers"]:
+            assert_shape(self, layer, "FileLayer")
 
     def test_a_hidden_unknown_or_malformed_analysis_key_is_missing(self):
         self.embargo(self.analyses["open"])
