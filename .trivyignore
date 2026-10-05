@@ -1,0 +1,24 @@
+# Accepted findings of `trivy image` (HIGH and CRITICAL with a fix upstream).
+# One finding per line with its reason above it and an expiry that forces a
+# new decision. Only findings this project cannot fix belong here: a version
+# pinned by Arches or served by Arches' npm dependencies. A finding the
+# project can fix (a floor in pyproject.toml, a bump in package.json) is fixed.
+
+# urllib3 1.26.20: arches 8.1.x requires urllib3<2 (elasticsearch 8 client).
+# Revisit when arches lifts the cap.
+CVE-2025-66418 exp:2026-12-31
+CVE-2025-66471 exp:2026-12-31
+CVE-2026-21441 exp:2026-12-31
+CVE-2026-44431 exp:2026-12-31
+CVE-2026-97687 exp:2026-12-31
+CVE-2026-97689 exp:2026-12-31
+
+# maplibre-gl 4.7.1: arches-vue-components 2.0.x requires maplibre-gl ^4.7.1;
+# the fix is only in 6.4.1. Collected into /app/static, not run server side.
+CVE-2026-85061 exp:2026-12-31
+
+# nanoid 2.1.11: @mapbox/mapbox-gl-geocoder 4.7.4 (pinned by arches) requires
+# nanoid ^2 and the fixes are only in 3.x/5.x. The 3.x copies are on 3.3.19.
+CVE-2026-67213 exp:2026-12-31
+CVE-2026-67214 exp:2026-12-31
+CVE-2026-73086 exp:2026-12-31

@@ -41,3 +41,7 @@ agents_*.md
 docs/
 docs_claude/
 deploy/rehearsal/rehearsal.env
+
+# Compose stack (deploy/)
+deploy/compose/.env
+deploy/compose/.smoke-state

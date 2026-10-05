@@ -139,9 +139,249 @@ provider's backup and the real SMTP relay. They are checked in production
 
 ---
 
+## Step 2 — Image and Compose (`deploy/docker/`, `deploy/compose/`)
+
+The image, the Compose stack and its operator commands (`deploy/README.md`). On the
+rehearsal VM, start from the `baseline` snapshot of step 1.
+
+**What CI already proves, and what only the rehearsal VM can.** The `deploy-lint` workflow
+runs on every pull request touching the stack: `check-stack.sh` (2.1), the image build and
+`probe-image.sh` (2.3), then on a runner `make volumes init up`, `smoke.sh check`, `mark`,
+`init-guard`, `down`/`up` + `survived`, a `systemctl restart docker` + `survived`,
+`static-swap` and `down -v` + `survived`; `trivy-weekly` scans the image every Monday.
+A runner has no NFS media, no 22 GB / 8 vCPU sizing, no unattended reboot and no
+service account. So here the rehearsal VM is what proves: the real service account and
+media directory (2.2), the memory limits and the measured memory of a full reindex
+(2.5, 2.9), the host reboot (2.8), and everything the CI also runs, replayed on the
+production-shaped VM. Rows marked **(CI too)** repeat a CI check on purpose.
+
+In this step, `dc` means:
+`docker compose --project-directory deploy/compose -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml`
+(`alias dc='…'` once per terminal). Commands marked *(service account)* run after
+`sudo -iu manuspectrum` and `cd ~/manuspectrum`. Host-specific values (accounts, paths,
+names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
+
+### 2.1 The kit is sound (host or CI)
+
+- [ ] `bash deploy/check-stack.sh`
+  - Expected: last line `check-stack.sh: all green.`
+  - On failure: the section header (`== …`) names the tool (shellcheck, hadolint,
+    publish-static tests, Compose rules, actionlint, uv.lock, gitleaks); fix the kit,
+    not the VM.
+- [ ] The pull request's `deploy-lint` run is green:
+  `gh run list --workflow deploy-lint.yml --branch <branch> --limit 1` → `completed success`.
+  - On failure: `gh run view <id> --log-failed`; record the failing step. The last
+    `trivy-weekly` run on the default branch is also `completed success`
+    (`gh run list --workflow trivy-weekly.yml --limit 1`); otherwise read the issue it opened.
+
+### 2.2 Service account, media directory, `.env` and secrets (rehearsal VM)
+
+- [ ] `command -v make git` → two paths. Otherwise `sudo apt-get install -y make git` and
+  record it (Ansible installs them from PP-8).
+- [ ] `docker compose version` and `docker info --format '{{.LoggingDriver}}'` →
+  Compose v2 and `json-file`.
+- [ ] `sudo install -d -o manuspectrum -g manuspectrum -m 0750 /data/manuspectrum /data/manuspectrum/media /data/manuspectrum/media/uploadedfiles`
+  (paths and account from `rehearsal.env`), then `ls -ldn /data/manuspectrum/media` →
+  owner and group = `id -u manuspectrum`, `id -g manuspectrum`. Directories `0750`, files
+  `0640`, owned by the account: Cantaloupe is not that account, it reads the uploads through
+  `group_add: APP_GID`. Files that web or worker write later get `0644` (umask 022).
+  Over NFS the export must keep the uid and gid (no `root_squash` remapping of them).
+- [ ] *(service account)* the repository is at `~/manuspectrum` at the commit under test:
+  `git clone https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`,
+  `git -C manuspectrum checkout <commit>`, `git -C manuspectrum log -1 --format=%H` → `<commit>`.
+- [ ] *(service account)* `cp deploy/compose/.env.example deploy/compose/.env`, then set
+  `APP_UID`, `APP_GID` (`id -u`, `id -g`), `MEDIA_HOST_DIR`, `DOMAIN_NAMES` and
+  `PUBLIC_SERVER_ADDRESS` to the rehearsal values; leave `MANUSPECTRUM_IMAGE=manuspectrum:local`.
+  Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`.
+- [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
+  files; the commands by hand are in `deploy/compose/secrets/README.md`);
+  `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`,
+  `email_password` (empty), `admin_password` as `-r--r--r--`, plus `README.md`; `ls -ld deploy/compose/secrets` →
+  `drwx------`.
+- [ ] *(service account)* `git status --short deploy/compose` → empty (neither `.env` nor
+  the secrets are tracked or untracked-visible).
+
+### 2.3 Build or load, and probe, the image (rehearsal VM; never the development VM)
+
+- [ ] `free -g` → at least 10 GB available.
+- [ ] *(service account)* `make -C deploy build` (20 to 40 min). To test an image built
+  elsewhere instead: `docker load -i <archive>` then
+  `docker tag <loaded image> manuspectrum:local`.
+  - Expected: ends with `naming to docker.io/library/manuspectrum:local`;
+    `docker image ls manuspectrum:local` lists it.
+  - On failure: keep the last 50 lines; `sudo dmesg | grep -i oom` for a killed build.
+- [ ] *(service account)* `bash deploy/docker/probe-image.sh manuspectrum:local`
+  → last line `probe-image.sh: all green.` **(CI too)**
+  - On failure: the `FAIL:` line names the property (uid, read-only root, build tool,
+    gunicorn 26, `.build-id`, writable path…); fix the Dockerfile, rebuild.
+
+### 2.4 First installation
+
+- [ ] *(service account)* `make -C deploy volumes` → four lines `ms_pg_data`, `ms_es_data`,
+  `ms_redis_broker`, `ms_cantaloupe_cache` (the output of `docker volume create`); run it
+  again → four `… exists`.
+- [ ] *(service account)* `make -C deploy config` → `compose files valid`.
+  - On failure: the message names the unset variable of `.env`.
+- [ ] *(service account)* `make -C deploy init` → Arches `setup_db` output, exit 0
+  (`echo $?`).
+  - On failure: `dc logs --tail=100 postgres elasticsearch`; an Elasticsearch that never
+    gets healthy: `sysctl vm.max_map_count` → at least `262144`.
+  - A failed first installation (Elasticsearch flapping, out of memory, Ctrl-C) leaves a
+    half-created database: `make init` then refuses, and `web` refuses to start with
+    `has no Arches system settings`. Drop it, then start again:
+    `dc exec postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists <PGDBNAME>'` and
+    `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
+- [ ] *(service account)* The end of the `init` output says
+  `admin password set from the admin_password secret`. Read the password once,
+  `cat deploy/compose/secrets/admin_password`, and sign in as `admin` on the
+  rehearsal address (`/en/auth/`): it works, and `admin` / `admin` is refused.
+  Store it immediately in the institution's password manager (break-glass account),
+  create a named account for each operator and use those day to day. To read it as the
+  service account from another login: `sudo -iu <service-account> cat <SECRETS_DIR>/admin_password`.
+  Change it any time from the profile page or with
+  `make -C deploy manage ARGS="changepassword admin"` (interactive): the file then no
+  longer matches and only served the installation, the password manager is the
+  reference. PP-2 (sops) will keep an encrypted copy in Git.
+  - On failure: `init` ends with `the admin password could not be set` (the database
+    exists with the default password): fix the file, then `make -C deploy admin-password`.
+- [ ] *(service account)* Run `make -C deploy init` again → exit ≠ 0 with
+  `refusing: database <PGDBNAME> exists and setup_db would drop it`, and the data is intact
+  (`deploy/compose/smoke.sh init-guard` → four `ok:` lines: `init`, `manage setup_db`,
+  `manage packages ... -db`, `manage packages -o setup`). **(CI too)**
+- [ ] *(service account)* `make -C deploy up` → returns without error (it waits for every
+  service but `beat`, then starts `beat`); up to 15 minutes on a first start.
+  - On failure: `make -C deploy status`, then `dc logs --tail=100 <service>` of the one
+    that is not healthy.
+- [ ] *(service account)* `make -C deploy status` → eight services: `postgres`,
+  `elasticsearch`, `redis-broker`, `redis-cache`, `cantaloupe`, `web`, `worker` as
+  `healthy`, `beat` as `running` (it has no health check on purpose).
+- [ ] *(service account)* `make -C deploy smoke` (= `deploy/compose/smoke.sh check`) →
+  only `ok:` lines, exit 0. **(CI too)** Among them, the three that fail most
+  often on a new host:
+  - `ok: database collation and encoding` (`en_US.utf8|UTF8`);
+  - `ok: standard_conforming_strings` (the value is `off`: Arches needs it);
+  - `ok: admin keeps Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
+  - `ok: /healthz for the public name` (`200`) then
+    `ok: /healthz for Host localhost (not allowed)` (`400`): gunicorn answers
+    `Host: web` and the `DOMAIN_NAMES` only.
+  - On failure: the `FAIL:` line names the check and the value found;
+    `dc logs --tail=100 <service>`.
+- [ ] Same Host rule by hand: `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' http://127.0.0.1:8000/healthz`
+  → `200`; with `-H 'Host: localhost'` → `400`.
+
+### 2.5 Resources and restart policy (D-H6)
+
+- [ ] `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
+  elasticsearch 4GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
+  redis-broker 256MiB, redis-cache 768MiB, beat 256MiB. Record the idle usage of each.
+  Expected idle (capacity review §2.11): elasticsearch 2.3-2.5 GiB, postgres 0.8-1.2,
+  web 2.5-3.0, worker 0.4-0.6, cantaloupe 0.3 (1.3 warm).
+- [ ] `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' $(dc ps -q)`
+  → eight lines where the two figures are equal (a container never swaps).
+  - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
+    applied: the `-f` list or `make` was bypassed.
+- [ ] `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
+  each worker runs 4 threads: 20 concurrent requests, `GUNICORN_WORKERS`/`GUNICORN_THREADS`).
+- [ ] `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
+- [ ] `docker inspect -f '{{.Config.StopTimeout}}' manuspectrum-web-1` → `310` (above gunicorn's
+  `graceful_timeout` of 300 s, which bounds a stop and a `max_requests` recycle because
+  `timeout` is 330 s, at least `graceful_timeout`: a download in progress survives both).
+- [ ] `dc exec -T web python manage.py shell -c "from django.db import connection as c; k=c.cursor(); k.execute('SHOW statement_timeout'); print(k.fetchone()[0])"`
+  → `1min`; the same command with `worker` instead of `web` → `0`.
+- [ ] `dc exec -T cantaloupe id` → the groups list contains `APP_GID`.
+- [ ] `dc exec elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/_local/stats/jvm?filter_path=**.heap_max_in_bytes"'`
+  → `2147483648`.
+- [ ] `dc exec elasticsearch sh -c 'stat -c %a /tmp/elastic_password; stat -c %a /run/secrets/elastic_password'`
+  → `600` then `444` (Elasticsearch reads its own `0600` copy; the host file stays shared).
+- [ ] `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' $(dc ps -q)` → eight lines
+  `unless-stopped`.
+- [ ] No published port: `docker ps --format '{{.Ports}}'` → no `0.0.0.0:` nor `:::` entry
+  (the reverse proxy comes with the nginx and TLS step).
+
+### 2.6 Logs and rotation
+
+- [ ] `for c in $(dc ps -q); do docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $c; done`
+  → eight lines ending `{json-file map[max-file:5 max-size:10m]}`.
+  - On failure: `logging` is missing for that service in `compose.yaml`.
+- [ ] `sudo ls -lh $(docker inspect -f '{{.LogPath}}' manuspectrum-web-1)*` → `*-json.log`,
+  no file above 10 MB. To see rotation itself, write about 12 MB:
+  `docker exec manuspectrum-web-1 sh -c 'yes ms-log-test | head -c 12000000 >/proc/1/fd/1'`,
+  then the same `ls` → a second file `*-json.log.1`, none larger than 10 MB, at most five.
+- [ ] `docker logs --tail=5 manuspectrum-web-1` still answers (rotation does not break it).
+
+### 2.7 Data survives (rehearsal VM only)
+
+- [ ] *(service account)* `deploy/compose/smoke.sh mark` → `ok: markers written (…)`.
+- [ ] *(service account)* `make -C deploy down up && deploy/compose/smoke.sh check && deploy/compose/smoke.sh survived`
+  → only `ok:`. **(CI too)**
+- [ ] *(service account)* Docker daemon restart (what a host reboot does to the
+  containers, without the reboot): `sudo systemctl restart docker` from the admin
+  account, then `deploy/compose/smoke.sh wait && deploy/compose/smoke.sh check && deploy/compose/smoke.sh survived`
+  → only `ok:`. **(CI too)**
+  - On failure: `dc ps -a`; a service restarted before its dependency is a start-order
+    defect (`entrypoint.sh` waits for PostgreSQL and Elasticsearch itself).
+- [ ] *(service account)* `dc down -v` (a test gesture, never in production), then
+  `docker volume ls --format '{{.Name}}' | grep -c '^ms_'` → `4` (the volumes are
+  external); then `make -C deploy up && deploy/compose/smoke.sh survived` → only `ok:`.
+  **(CI too)**
+- [ ] `ls -ln /data/manuspectrum/media/.ms-smoke-marker` → owner = `APP_UID` (files written
+  by the containers on the NFS share belong to the service account).
+
+### 2.8 Static files follow the image, and the host reboot
+
+- [ ] *(service account)* `deploy/compose/smoke.sh static-swap` → only `ok:` (a stale
+  `current` is replaced on restart, the previous release kept once, pruned at the next
+  restart). **(CI too)**
+- [ ] After a new image: `docker exec manuspectrum-web-1 cat /app/static/.build-id` → note
+  `<id1>`. Build the next commit (`git checkout <next commit>`,
+  `make -C deploy build IMAGE=manuspectrum:next`), set `MANUSPECTRUM_IMAGE=manuspectrum:next`
+  in `.env`, `make -C deploy up`. Then
+  `docker exec manuspectrum-web-1 cat /app/static/.build-id` → `<id2>` and
+  `docker exec manuspectrum-web-1 readlink /srv/static/current` → `releases/<id2>`
+  (identical to `<id1>` only if the commits build the same files).
+  - On failure: `docker exec manuspectrum-web-1 ls /srv/static/releases`; `dc logs web`
+    for a `publish-static` message.
+- [ ] Host reboot (the production VM reboots itself after kernel updates): from the admin
+  account `sudo reboot`; wait 5 minutes and type nothing else on the VM.
+  Then, *(service account)* `deploy/compose/smoke.sh wait && deploy/compose/smoke.sh check && deploy/compose/smoke.sh survived`
+  → only `ok:` lines, with nobody having started anything by hand.
+  - On failure: `systemctl is-enabled docker` → `enabled`; `findmnt /data` still mounted
+    before Docker starts; `dc ps -a`; `dc logs --tail=100 <service>` of the one not back.
+
+### 2.9 Memory under a full reindex (feeds the capacity review)
+
+- [ ] *(service account)* In a second terminal, sample every 10 s:
+  `while sleep 10; do date +%T; docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}'; done | tee ~/reindex-stats.txt`
+- [ ] *(service account)* In the first: `time dc exec -T web python manage.py es reindex_database`
+  → exits 0. Stop the sampling. Record: the duration, the peak `MemUsage` of
+  `elasticsearch`, `postgres`, `web`, `worker`, and any container at its limit.
+  - Expected: no container at its limit, `docker inspect -f '{{.State.OOMKilled}}' $(dc ps -q)`
+    → eight `false`, `sudo dmesg | grep -ci 'out of memory'` → `0`.
+  - On failure: record the peak and the killed service; the limits in `compose.prod.yaml`
+    are starting values until this figure is in.
+- [ ] `make -C deploy smoke` → only `ok:` after the reindex.
+
+### 2.10 Clean up
+
+The markers of 2.7 stay in place until here: 2.8 reuses them.
+
+- [ ] *(service account)* `deploy/compose/smoke.sh clean` → `ok: markers removed`.
+- [ ] (host) optional snapshot of the installed stack:
+  `virsh shutdown ms-rehearsal`, wait for `shut off`,
+  `virsh snapshot-create-as ms-rehearsal stack-step2`, `virsh start ms-rehearsal`.
+
+### 2.11 What cannot be tested in this step
+
+nginx, TLS and the public ports, hence any check in a browser (step « nginx and TLS »:
+an XY chart in the editor and in a report, the model page, Compare, a French page),
+secrets under sops, `/readyz` and the JSON logs, backups, the real SMTP relay, and
+pyramidal TIFFs for Cantaloupe (a separate change).
+
+---
+
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): image and Compose, application observability, nginx and TLS,
+what to do on failure): application observability, nginx and TLS,
 secrets, backups, deployed observability, accounts, Ansible, delivery, then
 "Before production".

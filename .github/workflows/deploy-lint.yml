@@ -1,0 +1,274 @@
+name: deploy-lint
+
+# Checks the deployment kit on every pull request: the rehearsal VM kit, the
+# image and Compose files offline, then the image itself (build, probe, the
+# whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
+# job decides which jobs have work to do, the others are skipped, and the
+# `conclusion` job always concludes so it can be a required check.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      rehearsal: ${{ steps.filter.outputs.rehearsal }}
+      stack: ${{ steps.filter.outputs.stack }}
+      image: ${{ steps.filter.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
+          matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
+          workflow='\.github/workflows/deploy-lint\.yml$'
+          stack='deploy/(docker|compose)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|pyproject\.toml$|uv\.lock$'
+          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$'
+          {
+            echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
+            echo "stack=$(matches "^($stack|$workflow)")"
+            echo "image=$(matches "^($stack|$build|$workflow)")"
+          } >> "$GITHUB_OUTPUT"
+
+  rehearsal-kit:
+    needs: changes
+    if: needs.changes.outputs.rehearsal == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+
+      # check.sh looks for jsonschema in ../venv relative to the repository root.
+      - name: Install the schema validator
+        run: |
+          python3 -m venv "$GITHUB_WORKSPACE/../venv"
+          "$GITHUB_WORKSPACE/../venv/bin/python" -m pip install jsonschema==4.26.0 PyYAML==6.0.3
+
+      - name: Check the rehearsal kit
+        run: bash deploy/rehearsal/check.sh
+
+  stack:
+    needs: changes
+    if: needs.changes.outputs.stack == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the image and Compose files
+        run: bash deploy/check-stack.sh
+
+  image:
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+    env:
+      IMAGE: manuspectrum:ci
+      ENV_FILE: ${{ github.workspace }}/deploy/compose/.env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Kernel setting for Elasticsearch
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Probe the image
+        run: bash deploy/docker/probe-image.sh "$IMAGE"
+
+      - name: Export the frontend build
+        run: |
+          out="$RUNNER_TEMP/frontend"
+          mkdir -p "$out/webpack" "$out/manuspectrum/media"
+          id="$(docker create "$IMAGE")"
+          docker cp "$id:/app/webpack/webpack-stats.json" "$out/webpack/"
+          docker cp "$id:/app/manuspectrum/media/build" "$out/manuspectrum/media/"
+          docker rm "$id" >/dev/null
+          du -sh "$out"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-build
+          path: ${{ runner.temp }}/frontend
+          retention-days: 5
+
+      - name: Prepare the stack environment
+        run: |
+          secrets="$RUNNER_TEMP/secrets"
+          media="$RUNNER_TEMP/media"
+          install -d "$media/uploadedfiles"
+          make -C deploy secrets SECRETS_DIR="$secrets"
+          sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
+              -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
+              -e "s#^APP_GID=.*#APP_GID=$(id -g)#" \
+              -e "s#^MEDIA_HOST_DIR=.*#MEDIA_HOST_DIR=$media#" \
+              -e "s#^SECRETS_DIR=.*#SECRETS_DIR=$secrets#" \
+              deploy/compose/.env.example > "$ENV_FILE"
+
+      - name: First installation
+        run: make -C deploy volumes init up
+
+      - name: Check the stack
+        run: |
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh mark
+          deploy/compose/smoke.sh init-guard
+
+      - name: Data survives down and up
+        run: |
+          make -C deploy down up
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh survived
+
+      - name: Data survives a Docker restart (the host reboot path)
+        run: |
+          sudo systemctl restart docker
+          deploy/compose/smoke.sh wait
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh survived
+
+      - name: Static files follow the image
+        run: deploy/compose/smoke.sh static-swap
+
+      - name: External volumes survive down -v
+        run: |
+          docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
+            -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml down -v
+          for volume in ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache; do
+            docker volume inspect "$volume" >/dev/null
+          done
+          make -C deploy up
+          deploy/compose/smoke.sh survived
+
+      - name: Collect the service logs
+        if: failure()
+        run: |
+          [ -f "$ENV_FILE" ] || { echo "The stack was never started: no service log."; exit 0; }
+          mkdir -p "$RUNNER_TEMP/compose-logs"
+          compose() {
+            docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
+              -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml "$@"
+          }
+          compose ps -a | tee "$RUNNER_TEMP/compose-logs/ps.txt"
+          compose logs --no-color --timestamps > "$RUNNER_TEMP/compose-logs/services.log" || true
+          compose ps -aq | xargs -r docker inspect \
+            -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} exit={{.State.ExitCode}}' \
+            | tee "$RUNNER_TEMP/compose-logs/state.txt" || true
+          # The last lines of each service, not of the interleaved log: the
+          # failing service is rarely the one that logged last.
+          for service in $(compose ps -a --format '{{.Service}}' | sort -u); do
+            echo "::group::$service (last 80 lines)"
+            compose logs --no-color --tail 80 "$service" || true
+            echo "::endgroup::"
+          done
+
+      - name: Upload the service logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compose-logs
+          path: ${{ runner.temp }}/compose-logs
+          retention-days: 5
+
+      # Reported, never fatal: a pull request is judged on what it changes, and
+      # an advisory published overnight is not a change. The blocking scan runs
+      # weekly on the default branch (trivy-weekly.yml).
+      - name: Trivy
+        id: trivy
+        if: always() && steps.build.outcome == 'success'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          version: v0.74.0
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          format: json
+          output: ${{ runner.temp }}/trivy.json
+          exit-code: "0"
+
+      - name: Trivy report
+        if: always() && steps.trivy.outcome == 'success'
+        run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json"
+
+  conclusion:
+    needs: [changes, rehearsal-kit, stack, image]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job that ran passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "::error::a deploy-lint job ended with: $result"; exit 1 ;;
+            esac
+          done

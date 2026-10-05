@@ -8,6 +8,25 @@ updates:
       - dependencies
       - javascript
     versioning-strategy: "increase"
+  # Base image digests of deploy/docker/Dockerfile: a rebuilt python or node
+  # image carries the Debian security updates.
+  - package-ecosystem: "docker"
+    directory: "/deploy/docker"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - docker
+    target-branch: "dev"
+  # Compose service images, pinned by digest.
+  - package-ecosystem: "docker"
+    directory: "/deploy/compose"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - docker
+    target-branch: "dev"
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
