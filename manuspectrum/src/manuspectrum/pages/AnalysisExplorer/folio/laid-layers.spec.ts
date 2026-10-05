@@ -22,12 +22,12 @@ let sideBySide: ReturnType<typeof vi.fn>;
 function overlay(
     key: string,
     opacity = 1,
-    fallbackUrl: string | null = null,
+    fallbackUrls: string[] = [],
 ): FolioOverlay {
     return {
         key,
         url: `https://iiif.example/${key}.png`,
-        fallbackUrl,
+        fallbackUrls,
         bounds: [
             [0, 0],
             [-10, 10],
@@ -84,39 +84,39 @@ describe("laidLayers", () => {
         expect(sideBySide).not.toHaveBeenCalled();
     });
 
-    it("falls back to the layer's fallback address once before reporting a failure", () => {
+    it("tries each fallback address in turn before reporting a failure", () => {
         const failed = vi.fn();
         const laid = laidLayers(map, { curtainLabel: "Curtain", failed });
         laid.draw(
-            [overlay("a:0", 1, "https://iiif.example/a:0-fallback.png")],
+            [
+                overlay("a:0", 1, [
+                    "https://iiif.example/a:0-pct.png",
+                    "https://iiif.example/a:0-max.png",
+                ]),
+            ],
             null,
         );
         const image = images()[0];
         expect(image.src).toBe("https://iiif.example/a:0.png");
         image.dispatchEvent(new Event("error"));
-        expect(image.src).toBe("https://iiif.example/a:0-fallback.png");
+        expect(image.src).toBe("https://iiif.example/a:0-pct.png");
+        image.dispatchEvent(new Event("error"));
+        expect(image.src).toBe("https://iiif.example/a:0-max.png");
         expect(failed).not.toHaveBeenCalled();
         image.dispatchEvent(new Event("error"));
         expect(failed).toHaveBeenCalledWith("a:0");
         expect(failed).toHaveBeenCalledTimes(1);
     });
 
-    it("tries the fallback address only once: a redraw at the same URL does not retry it", () => {
+    it("tries each fallback address only once: a redraw does not restart the chain", () => {
         const failed = vi.fn();
         const laid = laidLayers(map, { curtainLabel: "Curtain", failed });
-        const withMax = overlay(
-            "a:0",
-            1,
-            "https://iiif.example/a:0-fallback.png",
-        );
-        laid.draw([withMax], null);
+        const chain = ["https://iiif.example/a:0-fallback.png"];
+        laid.draw([overlay("a:0", 1, chain)], null);
         const image = images()[0];
         image.dispatchEvent(new Event("error"));
         expect(image.src).toBe("https://iiif.example/a:0-fallback.png");
-        laid.draw(
-            [overlay("a:0", 0.5, "https://iiif.example/a:0-fallback.png")],
-            null,
-        );
+        laid.draw([overlay("a:0", 0.5, chain)], null);
         image.dispatchEvent(new Event("error"));
         expect(failed).toHaveBeenCalledWith("a:0");
     });

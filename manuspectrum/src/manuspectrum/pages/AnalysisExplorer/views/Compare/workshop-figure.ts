@@ -133,6 +133,27 @@ function shortLabel(input: FigureInput, index: number): string {
         : slotLabel(curve.slot);
 }
 
+/** The hovertemplate of curve `index` for `mode`; empty when the curve does not answer hover. */
+function hoverTemplateOf(
+    input: FigureInput,
+    index: number,
+    hoverValue: string,
+    mode: "x unified" | "closest",
+): string {
+    if (!paintOf(input, index).hover) return "";
+    const label = shortLabel(input, index);
+    const line =
+        mode === "closest"
+            ? closestHoverLine(
+                  label,
+                  hoverValue,
+                  input.titles.x,
+                  input.titles.y,
+              )
+            : unifiedHoverLine(label, hoverValue);
+    return `${line}<extra></extra>`;
+}
+
 /** A trace's line, its name for the legend of the PNG, and its current paint. */
 function traceOf(
     input: FigureInput,
@@ -142,22 +163,12 @@ function traceOf(
 ): Trace {
     const curve = input.curves[index];
     const paint = paintOf(input, index);
-    const label = shortLabel(input, index);
-    const hoverLine =
-        mode === "closest"
-            ? closestHoverLine(
-                  label,
-                  hoverValue,
-                  input.titles.x,
-                  input.titles.y,
-              )
-            : unifiedHoverLine(label, hoverValue);
     return {
         type: "scatter",
         mode: "lines",
         x: curve.x,
         name: escapePlotlyText(curve.label),
-        hovertemplate: paint.hover ? `${hoverLine}<extra></extra>` : "",
+        hovertemplate: hoverTemplateOf(input, index, hoverValue, mode),
         hoverinfo: paint.hover ? "all" : "skip",
         opacity: paint.opacity,
         // Plotly takes a dash length list (« 6px,2px »); its types list only the named dashes.
@@ -184,20 +195,9 @@ export function hoverTemplatesFor(
     hoverValue: string,
     mode: "x unified" | "closest",
 ): string[] {
-    return order.map((index) => {
-        if (!paintOf(input, index).hover) return "";
-        const label = shortLabel(input, index);
-        const line =
-            mode === "closest"
-                ? closestHoverLine(
-                      label,
-                      hoverValue,
-                      input.titles.x,
-                      input.titles.y,
-                  )
-                : unifiedHoverLine(label, hoverValue);
-        return `${line}<extra></extra>`;
-    });
+    return order.map((index) =>
+        hoverTemplateOf(input, index, hoverValue, mode),
+    );
 }
 
 function baseLayout(input: FigureInput): Record<string, unknown> {

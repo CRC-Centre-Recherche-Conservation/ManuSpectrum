@@ -23,11 +23,10 @@ export interface FolioOverlay {
     key: string;
     url: string;
     /**
-     * The address `laidLayers` retries once when `url` fails to load: the
-     * same image sized relative to what the server holds (`layerImageUrl`'s
-     * `fallback`). Equal to `url` for an `image.url`, null without image.
+     * The addresses `laidLayers` tries in turn, once each, when `url` fails
+     * to load (`layerImageChain` after its first); empty for an `image.url`.
      */
-    fallbackUrl: string | null;
+    fallbackUrls: string[];
     bounds: [LatLng, LatLng];
     opacity: number;
     label: string;
@@ -41,19 +40,23 @@ export function overlayKey(analysisId: string, index: number): string {
 /**
  * The layer image: its own URL, else the IIIF image service at most `size` px
  * on a side and never beyond the image's own declared size (servers refuse
- * to scale up); a declared size left at 0 is unknown. `fallback` asks for the
- * same image as a percentage of the size the server really holds,
- * `pct:min(100, 100 × size / declared largest side)`: a stale declared size
- * cannot make it an upscale; `max` when no size is declared. Only an
- * address `safeHref` accepts is returned; null otherwise.
+ * to scale up); a declared size left at 0 is unknown. `fallback: true` asks
+ * for the same image as a percentage of the size the server really holds,
+ * `pct:min(100, 100 × size / declared largest side)` (`max` when no size is
+ * declared): a stale declared size cannot make it an upscale. `fallback:
+ * "max"` asks for the full image, the only size a level-0 server gives. Only
+ * an address `safeHref` accepts is returned; null otherwise.
  */
 export function layerImageUrl(
     image: ImageRef,
     size = OVERLAY_SIZE,
-    options?: { fallback?: boolean },
+    options?: { fallback?: boolean | "max" },
 ): string | null {
     if (image.url) return safeHref(image.url);
     if (image.service) {
+        if (options?.fallback === "max") {
+            return safeHref(imageUrl(image.service, { size: "max" }));
+        }
         if (options?.fallback) {
             const declared = Math.max(image.width, image.height);
             const percent =
@@ -73,6 +76,26 @@ export function layerImageUrl(
         );
     }
     return null;
+}
+
+/**
+ * The addresses to try for a layer image, in order, none twice: bounded
+ * `!w,h` (level 2), `pct:n` (level 1), `max` (level 0). An image with its
+ * own URL has one; no usable address, none.
+ */
+export function layerImageChain(
+    image: ImageRef,
+    size = OVERLAY_SIZE,
+): string[] {
+    const steps = [
+        layerImageUrl(image, size),
+        layerImageUrl(image, size, { fallback: true }),
+        layerImageUrl(image, size, { fallback: "max" }),
+    ];
+    return steps.filter(
+        (url, index): url is string =>
+            url !== null && steps.indexOf(url) === index,
+    );
 }
 
 /**
@@ -102,9 +125,7 @@ export function folioOverlays(
                 result.push({
                     key,
                     url,
-                    fallbackUrl: layerImageUrl(layer.image, undefined, {
-                        fallback: true,
-                    }),
+                    fallbackUrls: layerImageChain(layer.image).slice(1),
                     bounds,
                     opacity: setting.opacity,
                     label: layer.label,

@@ -276,10 +276,14 @@ const answers = computed(() => {
         urls.map((url, index) => [url, data[index]]),
     );
 });
+/** Each readable file's rank in its slot, over every curve the window will draw, loaded or not. */
+const ranks = computed(() =>
+    ranksInSlot(readable.value.map((line) => line.slot)),
+);
 const loadedCurves = computed(() =>
-    readable.value.flatMap((line) => {
+    readable.value.flatMap((line, index) => {
         const series = answers.value.get(line.file.previewUrl ?? "")?.series;
-        return series ? [{ line, series }] : [];
+        return series ? [{ line, series, rank: ranks.value[index] }] : [];
     }),
 );
 const treatments = computed(() =>
@@ -294,8 +298,7 @@ const view = computed<XyView>(
 );
 const viewNames = computed(() => viewLabels($gettext));
 const drawn = computed<Curve[]>(() => {
-    const ranks = ranksInSlot(loadedCurves.value.map(({ line }) => line.slot));
-    return loadedCurves.value.map(({ line, series }, index) => {
+    return loadedCurves.value.map(({ line, series, rank }) => {
         const y = treat(series.x, series.y, view.value);
         return {
             line,
@@ -303,7 +306,7 @@ const drawn = computed<Curve[]>(() => {
             analysis: line.analysis.name.value,
             label: `${slotLabel(line.slot)} · ${line.file.name}`,
             fileName: line.file.name,
-            rank: ranks[index],
+            rank,
             x: series.x,
             y,
             xRange: extent(series.x),

@@ -36,29 +36,26 @@ function unclip(event: L.LeafletEvent): void {
  * The laid layers of `map`: each an image overlay in a pane of its own
  * (`overlayPane`, the pane leaflet-side-by-side clips), the curtain being
  * Arches' vendored `leaflet-side-by-side` with its range named
- * `curtainLabel`. A layer whose image does not load is tried once more at
- * `fallbackUrl`; `failed` is called with the key only once
- * that fallback has also failed, or had none to try.
+ * `curtainLabel`. A layer whose image does not load is tried at each of
+ * `fallbackUrls` in turn, once each; `failed` is called with the key only once
+ * the last has also failed, or there was none to try.
  */
 export function laidLayers(
     map: L.Map,
     options: { curtainLabel: string; failed: (key: string) => void },
 ): LaidLayers {
     const images = new Map<string, L.ImageOverlay>();
-    /** Keys whose layer already fell back to `fallbackUrl` once. */
-    const fallenBack = new Set<string>();
+    /** How many of its `fallbackUrls` each layer has already tried. */
+    const fallenBack = new Map<string, number>();
     let sideBySide: L.SideBySide | null = null;
 
     function onError(overlay: FolioOverlay): void {
         const layer = images.get(overlay.key);
-        if (
-            layer &&
-            !fallenBack.has(overlay.key) &&
-            overlay.fallbackUrl &&
-            overlay.fallbackUrl !== overlay.url
-        ) {
-            fallenBack.add(overlay.key);
-            layer.setUrl(overlay.fallbackUrl);
+        const tried = fallenBack.get(overlay.key) ?? 0;
+        const next = overlay.fallbackUrls[tried];
+        if (layer && next) {
+            fallenBack.set(overlay.key, tried + 1);
+            layer.setUrl(next);
             return;
         }
         options.failed(overlay.key);

@@ -86,12 +86,17 @@ export function hoverModeFor(curves: number): "x unified" | "closest" {
     return curves <= UNIFIED_HOVER_MAX_CURVES ? "x unified" : "closest";
 }
 
-/** Text Plotly would read as its pseudo-HTML (names, hover templates, annotations), escaped. */
+/**
+ * Text Plotly would read as its pseudo-HTML (names, hover templates,
+ * annotations), escaped; `%{` becomes `%&#123;`, which its placeholder
+ * pattern no longer matches and its entity pass shows as `%{`.
+ */
 export function escapePlotlyText(text: string): string {
     return text
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
+        .replaceAll(">", "&gt;")
+        .replaceAll("%{", "%&#123;");
 }
 
 /**

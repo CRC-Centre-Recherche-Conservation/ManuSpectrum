@@ -7,7 +7,7 @@ import Slider from "primevue/slider";
 import LayerScroll from "@/manuspectrum/pages/AnalysisExplorer/viewers/LayerScroll.vue";
 
 import {
-    layerImageUrl,
+    layerImageChain,
     overlayKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
@@ -86,8 +86,8 @@ const position = ref(
 
 const imageFailed = ref(false);
 const attempt = ref(0);
-/** Whether the plain-`<img>` path already retried at `fallbackUrl` once for this layer. */
-const retried = ref(false);
+/** How many steps of `imageChain` the plain-`<img>` path has already gone past for this layer. */
+const step = ref(0);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
@@ -106,37 +106,25 @@ const canLay = computed(() => zones.value.has(props.analysis.id));
 const underCurtain = computed(
     () => key.value !== "" && curtain.value === key.value,
 );
-const imageUrl = computed(() =>
-    layer.value
-        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, {
-              fallback: retried.value,
-          })
-        : null,
+const imageChain = computed(() =>
+    layer.value ? layerImageChain(layer.value.image, PREVIEW_SIZE) : [],
 );
-const fallbackImageUrl = computed(() =>
-    layer.value
-        ? layerImageUrl(layer.value.image, PREVIEW_SIZE, { fallback: true })
-        : null,
-);
+const imageUrl = computed(() => imageChain.value[step.value] ?? null);
 const labels = computed(() => props.file.layers.map((entry) => entry.label));
 
 watch(key, () => {
     imageFailed.value = false;
-    retried.value = false;
+    step.value = 0;
 });
 
 /**
- * A first failure retries once at a size relative to the one the server
- * holds (`layerImageUrl`'s `fallback`), silently; only a second failure
- * shows the "unavailable" state.
+ * A failure goes to the next address of `layerImageChain` (bounded size,
+ * percentage, `max`), silently, each tried once; only the last failing shows
+ * the "unavailable" state.
  */
 function onImageError(): void {
-    if (
-        !retried.value &&
-        fallbackImageUrl.value &&
-        fallbackImageUrl.value !== imageUrl.value
-    ) {
-        retried.value = true;
+    if (step.value + 1 < imageChain.value.length) {
+        step.value += 1;
     } else {
         imageFailed.value = true;
     }
@@ -145,10 +133,10 @@ function onImageError(): void {
 function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
-    retried.value = false;
+    step.value = 0;
 }
 
-/** The `stage` slot (a laid Leaflet map) already retried at its `fallbackUrl` (`laidLayers`); its failure is final. */
+/** The `stage` slot (a laid Leaflet map) already tried its `fallbackUrls` (`laidLayers`); its failure is final. */
 function onStageFailed(): void {
     imageFailed.value = true;
 }

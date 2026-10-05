@@ -946,7 +946,7 @@ msgstr "Événement"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:535
 msgid "Every curve is hidden; « Show all spectra » brings them back."
-msgstr "Toutes les courbes sont masquées ; « Afficher tous les spectres » les rend."
+msgstr "Toutes les courbes sont masquées ; « Afficher tous les spectres » les réaffiche."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:546
 msgid "Evidence"

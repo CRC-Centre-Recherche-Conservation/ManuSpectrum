@@ -1172,6 +1172,18 @@ function wholePage(): void {
     background: var(--surface);
 }
 
+.folio-tool
+    :deep(
+        .folio-tool-marker-host[data-rel="none"]
+            .folio-tool-marker.item-ring-dot
+    )::before {
+    background: color-mix(
+        in srgb,
+        var(--slot-fill) calc(var(--linked-fade, 0.35) * 100%),
+        var(--surface)
+    );
+}
+
 .folio-tool :deep(.folio-tool-marker-host[data-rel="self"] .folio-tool-marker) {
     outline: 0.1875rem solid var(--h1, var(--focus-1));
     outline-offset: 0.0625rem;

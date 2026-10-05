@@ -169,6 +169,8 @@ describe("plot theme", () => {
 
     it("escapes a hover label's pseudo-HTML the same way as an axis title", () => {
         expect(escapePlotlyText("A & B <raw>")).toBe("A &amp; B &lt;raw&gt;");
+        expect(escapePlotlyText("A %{x} B")).toBe("A %&#123;x} B");
+        expect(unifiedHoverLine("A %{x}", "y")).toBe("A %&#123;x} · %{y:.4~g}");
     });
 
     it("builds one compact line per curve under x unified, its label and value alone", () => {

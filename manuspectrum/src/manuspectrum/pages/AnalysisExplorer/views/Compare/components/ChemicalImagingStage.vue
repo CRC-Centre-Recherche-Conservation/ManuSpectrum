@@ -13,7 +13,10 @@ import { useGettext } from "vue3-gettext";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
 import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
-import { layerImageUrl } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import {
+    layerImageChain,
+    layerImageUrl,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import { layPage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { WINDOW_RESIZE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
@@ -64,9 +67,7 @@ const overlays = computed<FolioOverlay[]>(() => {
         {
             key: String(props.layer.index),
             url,
-            fallbackUrl: layerImageUrl(props.layer.image, undefined, {
-                fallback: true,
-            }),
+            fallbackUrls: layerImageChain(props.layer.image).slice(1),
             bounds: props.bounds,
             opacity: props.opacity,
             label: props.layer.label,

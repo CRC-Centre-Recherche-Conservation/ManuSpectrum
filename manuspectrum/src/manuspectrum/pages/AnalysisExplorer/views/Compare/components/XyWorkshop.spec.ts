@@ -393,6 +393,14 @@ describe("XyWorkshop", () => {
         expect(view.find(".retry").exists()).toBe(false);
     });
 
+    it("keeps a file's dash when an earlier file of its item failed to load", async () => {
+        answer(1, jsonResponse({}, 503));
+        await mountWorkshop([curve(0, 1), curve(0, 2)]);
+        const { traces } = lastDrawing();
+        expect(traces.map((trace) => trace.name)).toEqual(["A1 · S2.csv"]);
+        expect(traces[0].line.dash).toBe("10px,2px,2px,2px");
+    });
+
     it("offers a retry when a file fails on a server error", async () => {
         answer(1, jsonResponse({}, 503));
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
@@ -1042,6 +1050,24 @@ describe("XyWorkshop", () => {
         expect(update.hoverinfo).toEqual(["skip", "all"]);
         expect(update.hovertemplate[0]).toBe("");
         expect(update.hovertemplate[1]).toContain("A2");
+    });
+
+    it("gives a hidden curve back its hovertemplate and hoverinfo all when shown again", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const id = curveId(0, 1);
+        await eyeButton(view, id).trigger("click");
+        await nextFrame();
+        await flushPromises();
+        await eyeButton(view, id).trigger("click");
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls.at(-1)?.[1] as {
+            hovertemplate: string[];
+            hoverinfo: string[];
+        };
+        expect(update.hoverinfo).toEqual(["all", "all"]);
+        expect(update.hovertemplate[0]).not.toBe("");
+        expect(update.hovertemplate[0]).toContain("A1");
     });
 
     it("recomputes the hovermode from the curves currently shown, a relayout with its hovertemplates, never a redraw", async () => {
