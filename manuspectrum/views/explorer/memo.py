@@ -70,6 +70,7 @@ from django.core.cache import cache
 from django.db import connections
 from django.utils import translation
 
+from manuspectrum.observability.context import bound_request_id, current_request_id
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.public_visibility import (
@@ -228,15 +229,18 @@ def spawn(target):
     """Run *target* in a daemon thread that closes its database connections at the end.
 
     Runs it in the calling thread when ``settings.EXPLORER_BACKGROUND_REBUILD``
-    is False.
+    is False. The thread logs under the request id of its caller.
     """
     if not getattr(settings, "EXPLORER_BACKGROUND_REBUILD", True):
         target()
         return None
 
+    request_id = current_request_id()
+
     def run():
         try:
-            target()
+            with bound_request_id(request_id):
+                target()
         finally:
             connections.close_all()
 

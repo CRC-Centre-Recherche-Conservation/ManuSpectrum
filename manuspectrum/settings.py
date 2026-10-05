@@ -238,6 +238,7 @@ INSTALLED_APPS = (
 INSTALLED_APPS += ("arches.app", "django.contrib.admin")
 
 MIDDLEWARE = [
+    "manuspectrum.observability.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -854,6 +855,26 @@ EXPLORER_BUNDLE_TTL = 2 * 60 * 60
 # Rebuild a corpus bundle after a data change in a background thread, readers
 # answered from the previous bundle meanwhile; False rebuilds in the request.
 EXPLORER_BACKGROUND_REBUILD = True
+
+# Observability (manuspectrum/observability/README.md). Off on the development VM;
+# settings_docker turns them on.
+METRICS_ENABLED = False
+# django-prometheus request latency buckets, aligned on the search SLO (2 s).
+PROMETHEUS_LATENCY_BUCKETS = (
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1,
+    1.5,
+    2,
+    3,
+    5,
+    8,
+    13,
+    float("inf"),
+)
 # Seconds no background rebuild of a language starts after one failed.
 EXPLORER_REBUILD_RETRY_AFTER = 60
 # Seconds no background rebuild of a language starts after one stored its
