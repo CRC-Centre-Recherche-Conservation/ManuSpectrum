@@ -31,6 +31,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseNotModified
 
+from manuspectrum.observability import metrics
 from manuspectrum.utils.cache import (
     etag_already_held,
     get_or_build,
@@ -158,6 +159,7 @@ def answer(request, reader_gate, kind, parts, build, *, content_type):
     other exception propagates and nothing is stored.
     """
     if not _shares(request, reader_gate):
+        metrics.IIIF_ANSWERS.labels(mode="private").inc()
         return _response(orjson.dumps(build()), content_type, PRIVATE)
     key = _key(kind, parts, reader_gate)
     etag = _etag(key)
@@ -167,6 +169,7 @@ def answer(request, reader_gate, kind, parts, build, *, content_type):
     body, degraded = _stored(key, build)
     if any_tag:
         return _not_modified(etag)
+    metrics.IIIF_ANSWERS.labels(mode="shared").inc()
     return _response(body, content_type, PUBLIC, None if degraded else etag)
 
 
@@ -182,6 +185,7 @@ def answer_derived(request, reader_gate, kind, parts, build, derive, *, content_
     """
     if not _shares(request, reader_gate):
         document, _ = derive(build())
+        metrics.IIIF_ANSWERS.labels(mode="private").inc()
         return _response(orjson.dumps(document), content_type, PRIVATE)
     key = _key(kind, parts, reader_gate)
     source, degraded = _stored(key, build)
@@ -189,10 +193,12 @@ def answer_derived(request, reader_gate, kind, parts, build, derive, *, content_
     etag = None if degraded else _etag(f"{key}\n{variant}")
     if etag and etag_already_held(request, etag):
         return _not_modified(etag)
+    metrics.IIIF_ANSWERS.labels(mode="shared").inc()
     return _response(orjson.dumps(document), content_type, PUBLIC, etag)
 
 
 def _not_modified(etag):
+    metrics.IIIF_ANSWERS.labels(mode="not_modified").inc()
     response = HttpResponseNotModified()
     response["ETag"] = etag
     response["Cache-Control"] = PUBLIC

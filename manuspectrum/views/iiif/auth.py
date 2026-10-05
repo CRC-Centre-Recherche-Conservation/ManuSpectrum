@@ -41,6 +41,7 @@ from django_ratelimit.core import is_ratelimited
 from manuspectrum.iiif import data, services, tokens
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.services import AUTH2_CONTEXT
+from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import is_connected
 from manuspectrum.views.iiif.cors import iiif_cors
 
@@ -157,6 +158,9 @@ class TokenView(View):
                 token = tokens.issue(request, origin)
             except tokens.TokenError as refused:
                 error = refused.code
+        metrics.IIIF_AUTH_TOKENS.labels(
+            outcome=metrics.bounded(error or "issued", metrics.IIIF_TOKEN_OUTCOMES)
+        ).inc()
         message = _message(self.version, message_id, token, error)
         if message_id is None:
             return _private(JsonResponse(message))

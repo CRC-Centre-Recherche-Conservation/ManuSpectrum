@@ -27,6 +27,7 @@ from arches.app.models.models import File
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.iiif.constants import MEDIA_TYPE_BY_EXTENSION, OCTET_STREAM
+from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.utils.spectrum_preview import is_readable
 from manuspectrum.views.summary_service import readable_nodegroups
@@ -122,6 +123,7 @@ def readable_file(file_id, reader, version=None):
     resource_id = str(row.tile.resourceinstance_id)
     nodegroup_id = str(row.tile.nodegroup_id)
     if not file_allowed(resource_id, nodegroup_id, reader, version):
+        metrics.READ_REFUSALS.labels(surface="iiif_file").inc()
         raise Refused(file_id)
     entry = file_entry(row.tile.data, file_id)
     path = row.path.path

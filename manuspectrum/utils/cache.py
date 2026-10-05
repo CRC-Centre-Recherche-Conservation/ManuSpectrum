@@ -5,6 +5,8 @@ import time
 
 from django.core.cache import cache
 
+from manuspectrum.observability import metrics
+
 
 def stable_cache_key(prefix, *parts):
     """A bounded key: fixed prefix plus the sha1 of the joined parts.
@@ -69,6 +71,9 @@ def get_or_build(
 
     `kept` runs on a value this call has just stored, never on a memo hit: it
     is how a caller gives the answer it built a lifetime of its own.
+
+    Each lookup is counted in `manuspectrum_memo_lookups_total` under the
+    key's known prefix (`metrics.memo_label`).
     """
 
     def keep(value):
@@ -78,13 +83,17 @@ def get_or_build(
                 kept(value)
         return value
 
+    def counted(outcome, value):
+        metrics.MEMO_LOOKUPS.labels(memo=metrics.memo_label(key), outcome=outcome).inc()
+        return value
+
     value = cache.get(key)
     if value is not None:
-        return value
+        return counted("hit", value)
     lock_key = f"{key}:lock"
     if cache.add(lock_key, 1, lock_timeout):
         try:
-            return keep(build())
+            return counted("built", keep(build()))
         finally:
             cache.delete(lock_key)
     deadline = time.monotonic() + wait
@@ -92,14 +101,14 @@ def get_or_build(
         time.sleep(poll)
         value = cache.get(key)
         if value is not None:
-            return value
+            return counted("waited", value)
         if cache.get(lock_key) is None:
             value = cache.get(key)
             if value is not None:
-                return value
+                return counted("waited", value)
             if cache.add(lock_key, 1, lock_timeout):
                 try:
-                    return keep(build())
+                    return counted("built", keep(build()))
                 finally:
                     cache.delete(lock_key)
-    return keep(build())
+    return counted("built", keep(build()))
