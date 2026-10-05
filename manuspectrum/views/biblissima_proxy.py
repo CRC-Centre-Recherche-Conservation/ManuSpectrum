@@ -2304,7 +2304,26 @@ _MAX_CHECK_DUPLICATES_ITEMS = 200
 # Items one create-all POST may carry. Each runs under its own write budget
 # (``BIBLISSIMA_WRITE_ITEM_DEADLINE``), so this bounds the time one request
 # thread is held; the client sends larger batches in chunks of this size.
-_MAX_CREATE_ALL_ITEMS = 10
+_MAX_CREATE_ALL_ITEMS = 5
+
+
+class WriteDeadlineExceeded(Exception):
+    """A create ran out of its write budget; the message is shown to the user."""
+
+
+@contextmanager
+def _item_write_budget():
+    """Open the write budget of one item; a failure caused by it surfaces as
+    ``WriteDeadlineExceeded``, any other exception is left untouched."""
+    budget = None
+    try:
+        with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE) as budget:
+            yield budget
+    except Exception as exc:
+        message = _write_deadline_error(budget, exc)
+        if message:
+            raise WriteDeadlineExceeded(message) from exc
+        raise
 
 
 def _write_deadline_error(budget, exc):
@@ -3500,29 +3519,26 @@ class BiblissimaCreateResourceView(View):
                 graph_id, resource_type, bbma_data, request.user
             )
 
-        budget = None
         try:
-            with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE) as budget:
-                resource_id, created_deps = self._create_resource(
-                    graph_id=graph_id,
-                    resource_type=resource_type,
-                    transaction_id=transaction_id,
-                    bbma_data=bbma_data,
-                    dependencies=dependencies,
-                    concept_mappings=concept_mappings,
-                    user=request.user,
-                )
+            resource_id, created_deps = self._create_resource(
+                graph_id=graph_id,
+                resource_type=resource_type,
+                transaction_id=transaction_id,
+                bbma_data=bbma_data,
+                dependencies=dependencies,
+                concept_mappings=concept_mappings,
+                user=request.user,
+            )
+        except WriteDeadlineExceeded as exc:
+            logger.warning("Biblissima create abandoned: %s", exc.__cause__)
+            return JsonResponse({"error": str(exc)}, status=504)
         except ValueError as exc:
             # Dangling / malformed dependency (or project) rejected by the
             # existence guard — a client-data problem, so a clean 400 rather
             # than an opaque 500.
             logger.warning("Biblissima create rejected: %s", exc)
             return JsonResponse({"error": str(exc)}, status=400)
-        except Exception as exc:
-            deadline_error = _write_deadline_error(budget, exc)
-            if deadline_error:
-                logger.warning("Biblissima create abandoned: %s", exc)
-                return JsonResponse({"error": deadline_error}, status=504)
+        except Exception:
             logger.exception("Failed to create resource from Biblissima data")
             return JsonResponse({"error": "Resource creation failed"}, status=500)
 
@@ -3679,29 +3695,31 @@ class BiblissimaCreateResourceView(View):
         resource_instance = ResourceInstance(graph_id=graph_id)
         resource_id = resource_instance.resourceinstanceid
 
-        if resource_type == "Document":
-            self._create_document_tiles(
-                resource_id,
-                transaction_id,
-                bbma_data,
-                dependencies,
-                concept_mappings,
-                created_deps,
-            )
-        else:
-            self._create_component_tiles(
-                resource_id,
-                transaction_id,
-                bbma_data,
-                dependencies,
-                concept_mappings,
-                created_deps,
-            )
-
         serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-        self._stage_tiles(
-            self._tile_buffer, self._nodes_by_id(serialized_graph), DataTypeFactory()
-        )
+        with _item_write_budget():
+            if resource_type == "Document":
+                self._create_document_tiles(
+                    resource_id,
+                    transaction_id,
+                    bbma_data,
+                    dependencies,
+                    concept_mappings,
+                    created_deps,
+                )
+            else:
+                self._create_component_tiles(
+                    resource_id,
+                    transaction_id,
+                    bbma_data,
+                    dependencies,
+                    concept_mappings,
+                    created_deps,
+                )
+            self._stage_tiles(
+                self._tile_buffer,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+            )
 
         with transaction.atomic():
             resource_instance.save()
@@ -3946,8 +3964,9 @@ class BiblissimaCreateResourceView(View):
 
         Runs before the write transaction opens, never inside it:
         ``pre_tile_save`` on a IIIF manifest node fetches the manifest over
-        HTTP, with retries and a per-host throttle, and a transaction held
-        open meanwhile keeps its connection and row locks. Writes nothing to
+        HTTP (per-host throttled, and without retries under a write budget),
+        and a transaction held open meanwhile keeps its connection and row
+        locks. Writes nothing to
         the resource tables. Raises what the validators and hooks raise
         (``TileValidationError``, ``requests.HTTPError``, ``UnsafeURLError``…).
         """
@@ -5449,8 +5468,8 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         survivors = []
 
         # ---- Pass 1 — per item, NO transaction held --------------------------
-        # Build + validate + run pre_tile_save (the per-host throttled, retrying
-        # IIIF manifest fetch) OUTSIDE any DB transaction, so importing many
+        # Build + validate + run pre_tile_save (the per-host throttled IIIF manifest
+        # fetch, budgeted and not retried) OUTSIDE any DB transaction, so importing many
         # manifests never holds the batch transaction open for minutes — a worker
         # or idle-in-transaction timeout mid-fetch would otherwise roll back and
         # discard every already-succeeded survivor (finding #2). Nothing is

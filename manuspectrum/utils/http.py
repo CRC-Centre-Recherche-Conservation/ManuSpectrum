@@ -281,7 +281,7 @@ def throttle_for_host(url, budget=None):
     """Block until the per-host minimum interval has elapsed before a request.
 
     With a *budget* (``utils.budget``), raises ``BudgetSpent`` instead of
-    waiting past its deadline.
+    waiting past its deadline, for the host lock as well as for the interval.
 
     Enforces e.g. 1 request / 3 s for *.bnf.fr so a bulk import does not trip
     Gallica/BnF's (undocumented, discretionary) abuse blocking. No-op when the
@@ -293,13 +293,19 @@ def throttle_for_host(url, budget=None):
         return
     with _host_rate_guard:
         lock = _host_rate_locks.setdefault(key, threading.Lock())
-    with lock:
+    if budget is None:
+        lock.acquire()
+    elif budget.left() <= 0 or not lock.acquire(timeout=budget.left()):
+        raise BudgetSpent()
+    try:
         wait = _host_rate_last.get(key, 0.0) + interval - time.monotonic()
         if wait > 0:
             if budget is not None and wait >= budget.left():
                 raise BudgetSpent()
             time.sleep(wait)
         _host_rate_last[key] = time.monotonic()
+    finally:
+        lock.release()
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +442,7 @@ def _max_bytes(explicit=None):
     return getattr(django_settings, "SSRF_MAX_RESPONSE_BYTES", _DEFAULT_MAX_BYTES)
 
 
-def _read_capped(response, max_bytes):
+def _read_capped(response, max_bytes, budget=None):
     """Read at most *max_bytes* of a streamed response, decompressed.
 
     ``iter_content`` decodes the transfer encoding as it goes, so the count is
@@ -444,6 +450,9 @@ def _read_capped(response, max_bytes):
     to, not the size it was sent as. Stacked codings ("gzip, gzip") are refused
     outright: they are the shape of the urllib3 1.x decompression CVEs that
     Arches' pin leaves unfixed, and no IIIF server emits them.
+
+    With a *budget*, raises ``BudgetSpent`` between chunks once it is spent: a
+    socket read timeout bounds one read, not a body sent a few bytes at a time.
     """
     codings = [
         c.strip()
@@ -468,6 +477,8 @@ def _read_capped(response, max_bytes):
     chunks = []
     total = 0
     for chunk in response.iter_content(_READ_CHUNK):
+        if budget is not None and budget.spent():
+            raise BudgetSpent()
         total += len(chunk)
         if total > max_bytes:
             raise ResponseTooLargeError(
@@ -544,7 +555,7 @@ def safe_fetch(
         location = response.headers.get("Location") if response.is_redirect else None
         if not location:
             try:
-                body = _read_capped(response, cap)
+                body = _read_capped(response, cap, budget)
             finally:
                 response.close()
             return FetchedResponse(target, response.status_code, response.headers, body)
