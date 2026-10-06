@@ -93,6 +93,7 @@ describe("scaleNotes", () => {
             ...defaultState(one),
             layout: "grid4",
             panes: ["c1-0", "c1-1", "c1-2", null],
+            syncViews: true,
         };
         const notes = scaleNotes(
             state,
@@ -104,18 +105,21 @@ describe("scaleNotes", () => {
             ...state,
             panes: ["c1-0", "c1-1", null, null],
             layout: "grid2",
+            syncViews: false,
         };
         expect(
             scaleNotes(unlinked, one, sizes({ "c1-0": BIG, "c1-1": SMALL }))
                 .size,
-        ).toBe(1);
+        ).toBe(0);
     });
 
-    it("does not note panes of two analyses unless linked on demand", () => {
+    it("does not note panes of two analyses unless the views are synced", () => {
         const state: TableState = { ...defaultState(maps), layout: "grid2" };
         const all = sizes({ "c1-0": BIG, "c2-0": SMALL });
         expect(scaleNotes(state, maps, all).size).toBe(0);
-        expect(scaleNotes({ ...state, linkAll: true }, maps, all).size).toBe(1);
+        expect(scaleNotes({ ...state, syncViews: true }, maps, all).size).toBe(
+            1,
+        );
     });
 
     it("notes each stack layer whose size differs from the first shown", () => {

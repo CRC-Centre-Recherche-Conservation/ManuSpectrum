@@ -25,9 +25,10 @@ export function sameSize(a: ServedSize, b: ServedSize): boolean {
 
 /**
  * The canvases shown together that are not served at the same size, by
- * canvas id. The reference is the first of a linked group, pane A of a
- * curtain, the first layer shown of a stack. Nothing is said while a size of
- * the pair is not read.
+ * canvas id: the panes of the synced group (`syncViews`, against its first),
+ * the two sides of a curtain (against pane A) and the layers of a stack
+ * (against the first shown). Nothing is said while a size of the pair is not
+ * read.
  */
 export function scaleNotes(
     state: TableState,

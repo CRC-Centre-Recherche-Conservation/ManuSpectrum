@@ -45,9 +45,9 @@ describe("storedOf", () => {
             "filters",
             "grouping",
             "layout",
-            "linkAll",
             "panes",
             "stack",
+            "syncViews",
         ]);
         expect(stored.panes[1]).toBe("c1-2");
     });

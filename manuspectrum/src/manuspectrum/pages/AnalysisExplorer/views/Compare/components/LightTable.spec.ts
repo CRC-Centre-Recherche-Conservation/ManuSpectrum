@@ -235,7 +235,7 @@ function stored(partial: Partial<StoredImaging>): StoredImaging {
     return {
         layout: "grid2",
         panes: ["c1-2", "c2-1", null, null],
-        linkAll: false,
+        syncViews: false,
         filters: Array.from({ length: 5 }, () => ({
             brightness: 100,
             contrast: 100,
@@ -320,13 +320,26 @@ describe("without layer tiles", () => {
             expect(view.find('[data-action="swap"]').exists()).toBe(false);
         });
 
-        it("disables « link across analyses » with one analysis and says why", async () => {
+        it("offers one sync toggle, pressed off by default, and presses it", async () => {
+            const view = await mountTable(PLAIN_TWO);
+            const toggle = () => view.find('[data-action="sync-views"]');
+            expect(toggle().exists()).toBe(true);
+            expect(toggle().element.tagName).toBe("BUTTON");
+            expect(toggle().attributes("aria-pressed")).toBe("false");
+            expect(view.find('[data-action="link-all"]').exists()).toBe(false);
+            await click(view, '[data-action="sync-views"]');
+            expect(toggle().attributes("aria-pressed")).toBe("true");
+            await click(view, '[data-action="sync-views"]');
+            expect(toggle().attributes("aria-pressed")).toBe("false");
+        });
+
+        it("names the toggle by its sync tip", async () => {
             const view = await mountTable(PLAIN_ONE);
-            const toggle = view.find('[data-action="link-all"]');
-            expect(toggle.attributes("role")).toBe("switch");
-            expect(toggle.attributes("aria-checked")).toBe("false");
-            expect(toggle.attributes("aria-disabled")).toBe("true");
-            expect(toggle.attributes("title")).toContain("linked");
+            expect(view.find('[data-action="sync-views"]').text()).toBe("");
+            expect(view.text()).toContain("Sync zoom and pan across panes");
+            expect(view.find('[data-action="follow-focus"]').exists()).toBe(
+                false,
+            );
         });
 
         it("sets the filters of one pane on its map", async () => {
@@ -376,20 +389,29 @@ describe("without layer tiles", () => {
             origin: "c1-0",
         };
 
-        it("relays a move to the other panes of the same analysis", async () => {
+        it("relays nothing by default, even within one analysis", async () => {
             const view = await mountTable(PLAIN_ONE);
             await click(view, '[data-layout="grid2"]');
+            panes(view)[0].vm.$emit("view-changed", VIEW);
+            await flushPromises();
+            expect(viewOf(panes(view)[1])).toBeNull();
+        });
+
+        it("relays a move to the other panes of the same analysis once synced", async () => {
+            const view = await mountTable(PLAIN_ONE);
+            await click(view, '[data-layout="grid2"]');
+            await click(view, '[data-action="sync-views"]');
             panes(view)[0].vm.$emit("view-changed", VIEW);
             await flushPromises();
             expect(viewOf(panes(view)[1])).toEqual(VIEW);
         });
 
-        it("does not relay a move between analyses until asked", async () => {
+        it("relays a move between analyses once synced, and not before", async () => {
             const view = await mountTable(PLAIN_TWO);
             panes(view)[0].vm.$emit("view-changed", VIEW);
             await flushPromises();
             expect(viewOf(panes(view)[1])).toBeNull();
-            await click(view, '[data-action="link-all"]');
+            await click(view, '[data-action="sync-views"]');
             panes(view)[0].vm.$emit("view-changed", VIEW);
             await flushPromises();
             expect(viewOf(panes(view)[1])).toEqual(VIEW);
@@ -398,6 +420,7 @@ describe("without layer tiles", () => {
         it("drops the view relayed to a pane when its canvas changes, so a stale view of another pane is not applied", async () => {
             const view = await mountTable(PLAIN_ONE);
             await click(view, '[data-layout="grid2"]');
+            await click(view, '[data-action="sync-views"]');
             const other = { ...VIEW, cx: 0.8, origin: "c1-1" };
             panes(view)[0].vm.$emit("view-changed", VIEW);
             panes(view)[1].vm.$emit("view-changed", other);
@@ -432,7 +455,7 @@ describe("without layer tiles", () => {
 
         it("drops the view of a pane that is given a canvas of another analysis", async () => {
             const view = await mountTable(PLAIN_TWO);
-            await click(view, '[data-action="link-all"]');
+            await click(view, '[data-action="sync-views"]');
             panes(view)[0].vm.$emit("view-changed", VIEW);
             await flushPromises();
             expect(viewOf(panes(view)[1])).toEqual(VIEW);
@@ -461,16 +484,19 @@ describe("without layer tiles", () => {
             expect(said()).toBe(1);
         });
 
-        it("notes the pane served at another size than the one it is linked to", async () => {
+        it("notes the pane served at another size than the one it is synced with, and none while unsynced", async () => {
             iiif = stubIiifLayer({
                 size: (url) => (url.includes("/1-1/") ? SMALL : SIZE),
             });
             const view = await mountTable(PLAIN_ONE);
             await click(view, '[data-layout="grid2"]');
-            const badged = view
-                .findAll(".imaging-pane")
-                .map((pane) => pane.find(".scale-badge").exists());
-            expect(badged).toEqual([false, true]);
+            const badges = () =>
+                view
+                    .findAll(".imaging-pane")
+                    .map((pane) => pane.find(".scale-badge").exists());
+            expect(badges()).toEqual([false, false]);
+            await click(view, '[data-action="sync-views"]');
+            expect(badges()).toEqual([false, true]);
         });
 
         it("notes nothing when every size is the same", async () => {
@@ -559,10 +585,41 @@ describe("without layer tiles", () => {
             expect(readImaging()).toBeUndefined();
             vi.advanceTimersByTime(1000);
             expect(readImaging()?.layout).toBe("grid4");
-            await wrapper!.find('[data-action="link-all"]').trigger("click");
+            await wrapper!.find('[data-action="sync-views"]').trigger("click");
             wrapper!.unmount();
             wrapper = null;
-            expect(readImaging()?.linkAll).toBe(true);
+            expect(readImaging()?.syncViews).toBe(true);
+        });
+
+        it("opens unsynced on a record that holds the old linkAll", async () => {
+            window.localStorage.setItem(
+                LAYOUT_STORAGE_KEY,
+                JSON.stringify({
+                    version: 3,
+                    boxes: {},
+                    imaging: {
+                        ...stored({}),
+                        syncViews: undefined,
+                        linkAll: true,
+                    },
+                }),
+            );
+            const view = await mountTable(PLAIN_TWO);
+            expect(
+                view
+                    .find('[data-action="sync-views"]')
+                    .attributes("aria-pressed"),
+            ).toBe("false");
+        });
+
+        it("reads a stored syncViews on opening", async () => {
+            writeImaging(stored({ syncViews: true }));
+            const view = await mountTable(PLAIN_TWO);
+            expect(
+                view
+                    .find('[data-action="sync-views"]')
+                    .attributes("aria-pressed"),
+            ).toBe("true");
         });
 
         it("keeps no zoom, pan or active pane", async () => {
@@ -578,9 +635,9 @@ describe("without layer tiles", () => {
                     "filters",
                     "grouping",
                     "layout",
-                    "linkAll",
                     "panes",
                     "stack",
+                    "syncViews",
                 ].sort(),
             );
         });
@@ -752,7 +809,7 @@ describe("announcements", () => {
         expect(
             announced.filter((message) => message.includes("scale")),
         ).toEqual([]);
-        await click(view, '[data-action="link-all"]');
+        await click(view, '[data-action="sync-views"]');
         await flushPromises();
         const said = announced.filter((message) => message.includes("scale"));
         expect(said).toHaveLength(1);
@@ -762,8 +819,8 @@ describe("announcements", () => {
     it("does not say it again while the pair stays the same", async () => {
         iiif = MIXED();
         const view = await mountTable(PLAIN_TWO);
-        await click(view, '[data-action="link-all"]');
-        await click(view, '[data-action="follow-focus"]');
+        await click(view, '[data-action="sync-views"]');
+        await flushPromises();
         await flushPromises();
         expect(
             announced.filter((message) => message.includes("scale")),
@@ -773,7 +830,7 @@ describe("announcements", () => {
     it("leaves the curtain to its own pane, which already says it", async () => {
         iiif = MIXED();
         const view = await mountTable(PLAIN_TWO);
-        await click(view, '[data-action="link-all"]');
+        await click(view, '[data-action="sync-views"]');
         announced.length = 0;
         await click(view, '[data-layout="curtain"]');
         await flushPromises();
@@ -803,39 +860,5 @@ describe("the focus", () => {
         expect(added).not.toHaveBeenCalled();
         expect(reset).not.toHaveBeenCalled();
         expect(paneLabels(view)).toEqual(labels);
-    });
-
-    it("keeps « Follow the focus » off by default, as a switch", async () => {
-        const { view } = await mountLinked(TILED);
-        const toggle = view.find('[data-action="follow-focus"]');
-        expect(toggle.attributes("role")).toBe("switch");
-        expect(toggle.attributes("aria-checked")).toBe("false");
-        await click(view, '[data-action="follow-focus"]');
-        expect(
-            view
-                .find('[data-action="follow-focus"]')
-                .attributes("aria-checked"),
-        ).toBe("true");
-    });
-
-    it("moves each pane to the layer of a pinned element once « Follow the focus » is on", async () => {
-        const { view, linked } = await mountLinked(TILED);
-        expect(paneLabels(view)).toEqual(["Pb map", "Fe map"]);
-        await click(view, '[data-action="follow-focus"]');
-        linked.toggle(elementNode("Cu"));
-        await flushPromises();
-        expect(paneLabels(view)).toEqual(["Cu map 1", "Cu map 2"]);
-        expect(announced.some((text) => text.includes("Cu"))).toBe(true);
-    });
-
-    it("does not persist the toggle", async () => {
-        const { view } = await mountLinked(TILED);
-        await click(view, '[data-action="follow-focus"]');
-        await click(view, '[data-layout="single"]');
-        view.unmount();
-        wrapper = null;
-        const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY) ?? "";
-        expect(raw).toContain("single");
-        expect(raw).not.toContain("follow");
     });
 });

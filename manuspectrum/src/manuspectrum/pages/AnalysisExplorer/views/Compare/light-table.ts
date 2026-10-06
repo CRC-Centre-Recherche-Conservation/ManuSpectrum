@@ -27,8 +27,8 @@ export interface StoredImaging {
     layout: TableLayout;
     /** Canvas ids (`FileLayer.id`), one per pane A to D. */
     panes: (string | null)[];
-    /** Zoom and pan linked across analyses; within one analysis they are linked anyway. */
-    linkAll: boolean;
+    /** Every shown pane zooms and pans together; off, none follows another. */
+    syncViews: boolean;
     /** One per pane, then the stack's at index 4. */
     filters: PaneFilters[];
     /** A stack holds layers of one analysis, fixed by the first laid. */
@@ -161,7 +161,7 @@ export function defaultState(maps: readonly MapLine[]): TableState {
         layout,
         panes,
         active: 0,
-        linkAll: false,
+        syncViews: false,
         filters: neutralFilters(),
         stack: { analysis: null, layers: [] },
         grouping: sharesFamily(maps) ? "tag" : "analysis",
@@ -278,8 +278,11 @@ export function setActive(state: TableState, pane: number): TableState {
     return inPanes(pane) ? { ...state, active: pane } : state;
 }
 
-export function setLinkAll(state: TableState, linkAll: boolean): TableState {
-    return { ...state, linkAll };
+export function setSyncViews(
+    state: TableState,
+    syncViews: boolean,
+): TableState {
+    return { ...state, syncViews };
 }
 
 export function setGrouping(
@@ -435,22 +438,23 @@ export function pairsOf(canvas: string, maps: readonly MapLine[]): FileLayer[] {
 }
 
 /**
- * Panes whose zoom and pan follow each other, as lists of pane indexes: the
- * panes of one analysis, or every filled pane when `linkAll`. Only the grids
- * have synchronised maps; a single pane, a curtain and a stack draw one map.
+ * Panes whose zoom and pan follow each other, as lists of pane indexes: one
+ * group of every filled pane when `syncViews`, none otherwise, whatever the
+ * analyses. Only the grids have synchronised maps; a single pane, a curtain
+ * and a stack draw one map.
  */
 export function linkedGroups(
     state: TableState,
     maps: readonly MapLine[],
 ): number[][] {
     if (state.layout !== "grid2" && state.layout !== "grid4") return [];
-    const groups = new Map<string, number[]>();
+    if (!state.syncViews) return [];
+    const group: number[] = [];
     for (let pane = 0; pane < PANES_SHOWN[state.layout]; pane++) {
         const canvas = state.panes[pane];
-        if (canvas === null) continue;
-        const analysis = state.linkAll ? "all" : analysisOf(canvas, maps);
-        if (analysis === null) continue;
-        groups.set(analysis, [...(groups.get(analysis) ?? []), pane]);
+        if (canvas !== null && analysisOf(canvas, maps) !== null) {
+            group.push(pane);
+        }
     }
-    return [...groups.values()].filter((group) => group.length > 1);
+    return group.length > 1 ? [group] : [];
 }

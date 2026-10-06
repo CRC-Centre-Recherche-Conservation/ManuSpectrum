@@ -319,7 +319,7 @@ describe("Compare layout, imaging record (v3)", () => {
     const IMAGING = {
         layout: "curtain" as const,
         panes: ["c1-0", "c2-0", null, null],
-        linkAll: true,
+        syncViews: true,
         filters: [
             { brightness: 120, contrast: 90, saturation: 100, greyscale: true },
             ...Array.from({ length: 4 }, () => ({
@@ -425,8 +425,21 @@ describe("Compare layout, imaging record (v3)", () => {
         expect(repaired.filters[0].brightness).toBe(200);
         expect(repaired.filters[0].contrast).toBe(100);
         expect(repaired.grouping).toBe("analysis");
-        expect(repaired.linkAll).toBe(false);
+        expect(repaired.syncViews).toBe(false);
         expect(repaired.stack).toEqual({ analysis: null, layers: [] });
+    });
+
+    it("reads the old linkAll as nothing: the record opens unsynced", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 3,
+                boxes: {},
+                imaging: { ...IMAGING, syncViews: undefined, linkAll: true },
+            }),
+        );
+        expect(readImaging()?.syncViews).toBe(false);
+        expect(readImaging()).not.toHaveProperty("linkAll");
     });
 
     it("reads nothing, and writes nothing, when storage is blocked", () => {

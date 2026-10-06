@@ -129,7 +129,7 @@ async function settle(): Promise<void> {
 }
 
 describe("two canvases served at different sizes, on the real leaflet-iiif", () => {
-    it("says « Different scale » in a grid of two, with no error thrown in the tile layer", async () => {
+    it("says « Different scale » in a synced grid of two, with no error thrown in the tile layer", async () => {
         wrapper = mount(LightTable, {
             attachTo: document.body,
             props: { maps: [line()], windowId: "auto:chemical-imaging" },
@@ -145,6 +145,7 @@ describe("two canvases served at different sizes, on the real leaflet-iiif", () 
             },
         });
         await wrapper.find('[data-layout="grid2"]').trigger("click");
+        await wrapper.find('[data-action="sync-views"]').trigger("click");
         await settle();
         expect(errors).toEqual([]);
         expect(wrapper.findAll(".scale-badge")).toHaveLength(1);

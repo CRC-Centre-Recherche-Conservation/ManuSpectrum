@@ -85,7 +85,7 @@ const gripMask = `url("data:image/svg+xml,${encodeURIComponent(GRIP_SVG)}")`;
  * two layers, side A on the left and side B on the right of the divider of
  * Arches' `L.control.sideBySide`. The two canvases may come from any two
  * analyses; each is laid by `layImage` in a pane of its own (so each side
- * has its own CSS filter), anchored at the origin, as a leaflet-iiif layer
+ * has its own CSS filter), centred in the frame of the larger side, as a leaflet-iiif layer
  * at the size its image service serves, or, without a service, as an image
  * overlay at the natural size of its URL; the layer answers `getContainer()`
  * with its pane so the divider clips it. The two sides share one pixel
@@ -227,7 +227,7 @@ useMapResize({
             !state?.size ||
             keepsFit({
                 map,
-                size: state.size,
+                size: scale?.frame() ?? state.size,
                 nativeZoom: scale?.zoom() ?? 0,
             })
         );
@@ -385,17 +385,18 @@ function drawSide(side: Side): void {
     );
 }
 
-/** The side the view is fitted on: A, else B. */
+/** The first side read, A else B; the view is fitted on the frame of the group (the larger side) once one is read. */
 function reference(): SideState | null {
     return [sides[0], sides[1]].find((state) => state.size) ?? null;
 }
 
-/** Fits the first image read, and again only when the reference side is served at another size. */
+/** Fits the frame of the sides read, and again only when that frame changes. */
 function fitOnce(): void {
     const state = reference();
     if (!state?.size) return;
-    if (fitted && sameSize(fitted, state.size)) return;
-    fitted = state.size;
+    const frame = scale?.frame() ?? state.size;
+    if (fitted && sameSize(fitted, frame)) return;
+    fitted = frame;
     fit();
 }
 
@@ -404,7 +405,7 @@ function fit(): void {
     if (!map || !state?.size) return;
     const target = {
         map,
-        size: state.size,
+        size: scale?.frame() ?? state.size,
         nativeZoom: scale?.zoom() ?? 0,
     };
     const zoom = fitZoomOf(target);

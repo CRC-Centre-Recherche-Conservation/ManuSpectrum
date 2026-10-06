@@ -117,16 +117,33 @@ export function layPage(
     };
 }
 
+/** A size in image pixels. */
+interface PixelSize {
+    w: number;
+    h: number;
+}
+
+/** A shift in image pixels at the group's pixel scale, y downwards. */
+export interface PixelOffset {
+    x: number;
+    y: number;
+}
+
 /** A layer taken into a `ScaleGroup`. */
 export interface ScaleMember {
+    /** The size the layer is served at, in image pixels. */
+    size: PixelSize;
     /**
      * The map zoom at which the layer shows one image pixel per screen pixel
      * when it is drawn alone (leaflet-iiif's `maxNativeZoom`); null for a
      * layer that follows any zoom (a plain image).
      */
     nativeZoom: number | null;
-    /** Draws the layer so that one image pixel is one screen pixel at map zoom `zoom`. */
-    apply: (zoom: number) => void;
+    /**
+     * Draws the layer so that one image pixel is one screen pixel at map zoom
+     * `zoom`, its top-left corner `offset` image pixels from the frame's.
+     */
+    apply: (zoom: number, offset: PixelOffset) => void;
 }
 
 /**
@@ -144,18 +161,30 @@ export interface ScaleMember {
  * zoom at which one image pixel is one screen pixel). Every layer then
  * spans `size / 2^zoom` units and shows one image pixel per screen pixel at
  * `zoom`. A plain image is simply laid at `size / 2^zoom` units.
+ *
+ * The layers are centred in the group's frame, the box of the widest and the
+ * tallest of them (`frame`), so a smaller canvas sits in the middle of the
+ * largest one, at the same pixel scale and never stretched; each member is
+ * told its offset in image pixels from the frame's top-left corner, which is
+ * the map's origin. How a leaflet-iiif layer is moved is in `shiftTiles`.
  */
 export interface ScaleGroup {
     join: (member: ScaleMember) => void;
     leave: (member: ScaleMember) => void;
     /** The map zoom at which every layer of the group shows one image pixel per screen pixel. */
     zoom: () => number;
+    /** The box that holds every layer, in image pixels at the group's scale; null while the group is empty. */
+    frame: () => PixelSize | null;
 }
 
-/** A scale group; `changed` is called with the new zoom when joining or leaving moves it. */
+/**
+ * A scale group; `changed` is called with the zoom when joining or leaving
+ * moves the zoom or the frame.
+ */
 export function createScaleGroup(changed?: (zoom: number) => void): ScaleGroup {
     const members: ScaleMember[] = [];
     let current: number | null = null;
+    let box: PixelSize | null = null;
 
     function target(): number {
         const own = members.flatMap((member) =>
@@ -164,15 +193,35 @@ export function createScaleGroup(changed?: (zoom: number) => void): ScaleGroup {
         return own.length ? Math.min(...own) : 0;
     }
 
+    function frameOf(): PixelSize | null {
+        if (!members.length) return null;
+        return {
+            w: Math.max(...members.map((member) => member.size.w)),
+            h: Math.max(...members.map((member) => member.size.h)),
+        };
+    }
+
+    function place(member: ScaleMember, zoom: number): void {
+        const frame = box as PixelSize;
+        member.apply(zoom, {
+            x: (frame.w - member.size.w) / 2,
+            y: (frame.h - member.size.h) / 2,
+        });
+    }
+
     function settle(added?: ScaleMember): void {
         const next = target();
-        if (next === current) {
-            added?.apply(next);
-            return;
-        }
+        const frame = frameOf();
+        const same =
+            next === current && frame?.w === box?.w && frame?.h === box?.h;
         const before = current;
         current = next;
-        for (const member of members) member.apply(next);
+        box = frame;
+        if (same) {
+            if (added) place(added, next);
+            return;
+        }
+        for (const member of members) place(member, next);
         if (before !== null) changed?.(next);
     }
 
@@ -186,31 +235,105 @@ export function createScaleGroup(changed?: (zoom: number) => void): ScaleGroup {
             if (index < 0) return;
             members.splice(index, 1);
             if (members.length) settle();
-            else current = null;
+            else {
+                current = null;
+                box = null;
+            }
         },
         zoom: () => current ?? 0,
+        frame: () => box,
+    };
+}
+
+/**
+ * Moves the tiles of a leaflet-iiif layer by a pixel offset without moving
+ * its map pane (leaflet-side-by-side clips the pane, so a pane moved by CSS
+ * would carry the divider with it). Leaflet 1.6 places a tile at
+ * `coords * tileSize - level.origin` and loads the tiles that cover the
+ * viewport; the layer's image is shifted by `offset` image pixels (at the
+ * group's zoom `zoom`, so `offset * 2^(z - zoom)` map pixels at the tile zoom
+ * `z`, whole pixels so that the tiles keep touching) by adding that shift to
+ * `_getTilePos`, and the viewport the layer loads for is shifted back by
+ * the same amount in `_getTiledPixelBounds`, so the tiles that are asked are
+ * the ones under the screen after the shift. Nothing else moves: the map's
+ * CRS, the clip and the clicks stay in the map's own coordinates. `set`
+ * tells whether the shift changed.
+ */
+function shiftTiles(layer: IiifLayer): {
+    set: (zoom: number, offset: PixelOffset) => boolean;
+} {
+    let groupZoom = 0;
+    let offset: PixelOffset = { x: 0, y: 0 };
+    function pixelsAt(tileZoom: number): L.Point {
+        const factor = 2 ** (tileZoom - groupZoom);
+        return L.point(
+            Math.round(offset.x * factor),
+            Math.round(offset.y * factor),
+        );
+    }
+    const raw = layer as unknown as {
+        _getTilePos?: (coords: L.Coords) => L.Point;
+        _getTiledPixelBounds?: (center: L.LatLng) => L.Bounds;
+        _tileZoom?: number;
+    };
+    const getTilePos = raw._getTilePos;
+    if (getTilePos) {
+        raw._getTilePos = (coords) =>
+            getTilePos.call(layer, coords).add(pixelsAt(coords.z));
+    }
+    const getBounds = raw._getTiledPixelBounds;
+    if (getBounds) {
+        raw._getTiledPixelBounds = (center) => {
+            const bounds = getBounds.call(layer, center);
+            const shift = pixelsAt(raw._tileZoom ?? 0);
+            return L.bounds(
+                bounds.min?.subtract(shift) as L.Point,
+                bounds.max?.subtract(shift) as L.Point,
+            );
+        };
+    }
+    return {
+        set(zoom, next) {
+            const moved =
+                zoom !== groupZoom ||
+                next.x !== offset.x ||
+                next.y !== offset.y;
+            groupZoom = zoom;
+            offset = next;
+            return moved;
+        },
     };
 }
 
 /** The scale member of a leaflet-iiif layer whose info.json is read. */
-function iiifMember(map: L.Map, layer: IiifLayer): ScaleMember {
+function iiifMember(
+    map: L.Map,
+    layer: IiifLayer,
+    size: PixelSize,
+): ScaleMember {
     const own = nativeZoomOf({ layer, remove: () => undefined });
+    const shift = shiftTiles(layer);
     return {
         nativeZoom: own,
-        apply(zoom) {
-            const offset = own - zoom;
+        size,
+        apply(zoom, offset) {
+            const zoomOffset = own - zoom;
+            const moved = shift.set(zoom, offset);
             if (
-                layer.options.zoomOffset === offset &&
+                !moved &&
+                layer.options.zoomOffset === zoomOffset &&
                 layer.options.maxNativeZoom === zoom
             ) {
                 return;
             }
-            layer.options.zoomOffset = offset;
+            layer.options.zoomOffset = zoomOffset;
             layer.options.maxNativeZoom = zoom;
             if (layer._container && map.hasLayer(layer)) {
                 // Leaflet 1.6 keeps a stale tile zoom within one level of the
-                // map's; a view reset recomputes it.
+                // map's; a view reset recomputes it. Tiles already placed
+                // keep their old position until they are drawn again.
                 layer._resetView();
+                if (moved) layer.redraw();
             }
         },
     };
@@ -247,7 +370,7 @@ export function layServed(
             return;
         }
         if (options.scale) {
-            member = iiifMember(map, laid.layer as IiifLayer);
+            member = iiifMember(map, laid.layer as IiifLayer, size);
             options.scale.join(member);
         }
         handlers.read(
@@ -272,21 +395,22 @@ export interface LaidImage {
     remove: () => void;
 }
 
-/** The bounds of an image of `size` pixels, one pixel per unit at map zoom `zoom`, anchored at the origin. */
+/** The bounds of an image of `size` pixels, one pixel per unit at map zoom `zoom`, `offset` pixels from the origin. */
 function imageBounds(
     map: L.Map,
     size: { w: number; h: number },
     zoom: number,
+    offset: PixelOffset = { x: 0, y: 0 },
 ): L.LatLngBounds {
     return L.latLngBounds(
-        map.unproject([0, size.h], zoom),
-        map.unproject([size.w, 0], zoom),
+        map.unproject([offset.x, offset.y + size.h], zoom),
+        map.unproject([offset.x + size.w, offset.y], zoom),
     );
 }
 
 /**
- * Lays a layer's image on `map`, anchored at the origin, at the size it is
- * served at: through its IIIF image service (`layServed`), else through its
+ * Lays a layer's image on `map` at the size it is served at, anchored at the
+ * origin or, in a `scale` group, centred in the group's frame: through its IIIF image service (`layServed`), else through its
  * own URL as an image overlay at its natural size, trying the addresses of
  * `layerImageChain` in turn. `read` is called once it is on the map with its
  * size, the zoom at which that size is one pixel per unit (the `scale`
@@ -355,8 +479,9 @@ export function layImage(
             if (options.scale) {
                 member = {
                     nativeZoom: null,
-                    apply: (zoom) =>
-                        laid.setBounds(imageBounds(map, size, zoom)),
+                    size,
+                    apply: (zoom, offset) =>
+                        laid.setBounds(imageBounds(map, size, zoom, offset)),
                 };
                 options.scale.join(member);
             }

@@ -89,13 +89,13 @@ const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
  * analysis: one Leaflet map (`CRS.Simple`) holding one layer per layer of
  * the stack, each laid by `layImage` in a pane of its own (named after a hash
  * of the canvas id and taken off the map when the layer leaves the stack),
- * anchored at the origin: a leaflet-iiif layer at the size its image service
+ * centred in the frame of the largest layer: a leaflet-iiif layer at the size its image service
  * serves, or, without a service, an image overlay at the natural size of its
  * URL (`folio/laid-layers.ts` is not used). The layers share one pixel scale
  * (`createScaleGroup`): an image pixel is the same size on screen for every
  * layer, so layers of different sizes keep their size relative to each other
- * and none is stretched or fitted to another; the view is fitted on the first
- * layer read, and again only when the common scale moves. The panes carry
+ * and none is stretched or fitted to another; the view is fitted on the frame
+ * of the layers laid, and again only when the common scale or the frame moves. The panes carry
  * opacity, `mix-blend-mode: screen` (but the first layer shown), the stack's
  * CSS filter and the hue, an SVG `feColorMatrix` per hue (`stack-panes.ts`,
  * `stack-tints.ts`); the map is isolated so `screen` blends the layers among
@@ -211,7 +211,7 @@ useMapResize({
             !entry?.size ||
             keepsFit({
                 map,
-                size: entry.size,
+                size: scale?.frame() ?? entry.size,
                 nativeZoom: scale?.zoom() ?? 0,
             })
         );
@@ -327,12 +327,12 @@ function lay(canvas: string): void {
     );
 }
 
-/** Fits the layer given, centred, at the common pixel scale; later layers keep the reader's view. */
+/** Fits the frame of the layers laid (the largest, each centred in it) at the common pixel scale; later layers keep the reader's view. */
 function fitOn(entry: Laid): void {
     if (!map || !entry.size) return;
     const target = {
         map,
-        size: entry.size,
+        size: scale?.frame() ?? entry.size,
         nativeZoom: scale?.zoom() ?? 0,
     };
     const zoom = fitZoomOf(target);
@@ -790,7 +790,7 @@ function tintLabel(tint: Tint | null): string {
             >
                 <span>{{
                     $gettext(
-                        "The layers are not all at the same scale: they are laid at the origin, not registered.",
+                        "The layers are not all at the same scale: they are laid centred, not registered.",
                     )
                 }}</span>
             </p>

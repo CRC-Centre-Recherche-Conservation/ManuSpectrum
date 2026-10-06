@@ -743,7 +743,7 @@ describe("the scale", () => {
         expect(rows(view)[0].find(".scale-badge").exists()).toBe(false);
         expect(rows(view)[1].find(".scale-badge").exists()).toBe(true);
         expect(view.text()).toContain(
-            "The layers are not all at the same scale: they are laid at the origin, not registered.",
+            "The layers are not all at the same scale: they are laid centred, not registered.",
         );
     });
 

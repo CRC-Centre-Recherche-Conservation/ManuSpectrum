@@ -15,6 +15,8 @@ const SIZES: Record<string, { width: number; height: number }> = {
     large: { width: 1529, height: 2405 },
     same: { width: 700, height: 1300 },
     huge: { width: 14000, height: 14000 },
+    wide: { width: 1378, height: 1355 },
+    narrow: { width: 600, height: 677 },
 };
 
 type IiifTiles = L.TileLayer & {
@@ -173,6 +175,96 @@ describe("layers of different power-of-two buckets in one map (real leaflet-iiif
     });
 });
 
+/** Where leaflet places the tile `coords` of the layer, in map pixels at the tile zoom (what it writes on the tile element). */
+function placedAt(layer: L.TileLayer, x: number, y: number): L.Point {
+    const tiles = layer as IiifTiles & {
+        _getTilePos: (coords: L.Coords) => L.Point;
+        _level: { origin: L.Point };
+    };
+    const coords = Object.assign(L.point(x, y), {
+        z: tiles._tileZoom,
+    }) as L.Coords;
+    return tiles._getTilePos(coords).add(tiles._level.origin);
+}
+
+/** The drawn rectangle of the layer's image, in CRS units: its tile (0, 0) corner and the size its info.json gives at the group's scale. */
+function drawnBox(
+    layer: L.TileLayer,
+    name: string,
+): { left: number; top: number; width: number; height: number } {
+    const tiles = layer as IiifTiles;
+    const factor = 2 ** tiles._tileZoom;
+    const origin = placedAt(layer, 0, 0);
+    const info = SIZES[name];
+    return {
+        left: origin.x / factor,
+        top: origin.y / factor,
+        width: info.width / 2 ** group.zoom(),
+        height: info.height / 2 ** group.zoom(),
+    };
+}
+
+describe("layers of different sizes in one frame (real leaflet-iiif)", () => {
+    it("centres the 600×677 layer in the 1378×1355 one, at the same pixel scale", async () => {
+        const wide = lay("wide") as IiifTiles;
+        const narrow = lay("narrow") as IiifTiles;
+        await settle();
+        expect(group.frame()).toEqual({ w: 1378, h: 1355 });
+        const outer = drawnBox(wide, "wide");
+        const inner = drawnBox(narrow, "narrow");
+        expect(outer.left).toBe(0);
+        expect(outer.top).toBe(0);
+        expect(inner.left + inner.width / 2).toBeCloseTo(
+            outer.left + outer.width / 2,
+            1,
+        );
+        expect(inner.top + inner.height / 2).toBeCloseTo(
+            outer.top + outer.height / 2,
+            1,
+        );
+        expect(inner.width / outer.width).toBeCloseTo(600 / 1378, 6);
+        expect(sourcePixelsPerUnit(narrow)).toBeCloseTo(
+            sourcePixelsPerUnit(wide),
+            6,
+        );
+    });
+
+    it("puts a layer back at the origin when the larger one leaves, and the same whichever is laid first", async () => {
+        const narrow = lay("narrow") as IiifTiles;
+        const wide = layServed(
+            map,
+            "https://iiif.example/wide",
+            { read: vi.fn(), failed: vi.fn() },
+            { pane: "pane-wide", scale: group },
+        );
+        await settle();
+        expect(drawnBox(narrow, "narrow").left).toBeGreaterThan(0);
+        expect(drawnBox(wide.layer, "wide").left).toBe(0);
+        wide.remove();
+        expect(group.frame()).toEqual({ w: 600, h: 677 });
+        expect(drawnBox(narrow, "narrow").left).toBe(0);
+        expect(drawnBox(narrow, "narrow").top).toBe(0);
+    });
+
+    it("loads the tiles that lie under the screen after the shift, so the smaller layer is not cut at its first column", async () => {
+        const narrow = lay("narrow") as IiifTiles;
+        lay("wide");
+        await settle();
+        map.setView(map.unproject([1378 / 2, 1355 / 2], 2), 2, {
+            animate: false,
+        });
+        await settle();
+        const keys = Object.values(narrow._tiles).map(
+            (tile) => `${tile.coords.x}:${tile.coords.y}`,
+        );
+        expect(keys).toContain("0:0");
+        expect(keys).toContain("0:1");
+        expect(Math.max(...keys.map((key) => Number(key.split(":")[0])))).toBe(
+            2,
+        );
+    });
+});
+
 describe("a view set as soon as a page is reported read (real leaflet-iiif)", () => {
     it("does not throw in the tile layer: two pages added one after the other", async () => {
         const thrown: unknown[] = [];
@@ -273,23 +365,46 @@ describe("createScaleGroup", () => {
         const changed = vi.fn();
         const scale = createScaleGroup(changed);
         const apply = vi.fn();
-        const large = { nativeZoom: 4, apply };
-        const small = { nativeZoom: 3, apply };
+        const large = { nativeZoom: 4, size: { w: 9, h: 9 }, apply };
+        const small = { nativeZoom: 3, size: { w: 5, h: 5 }, apply };
         scale.join(large);
         expect(changed).not.toHaveBeenCalled();
         scale.join(small);
         expect(changed).toHaveBeenCalledWith(3);
-        expect(apply).toHaveBeenLastCalledWith(3);
+        expect(apply).toHaveBeenLastCalledWith(3, { x: 2, y: 2 });
         scale.leave(small);
         expect(changed).toHaveBeenLastCalledWith(4);
     });
 
     it("lays a plain image at the common zoom, whatever the zoom of the others", () => {
         const scale = createScaleGroup();
-        const image = { nativeZoom: null, apply: vi.fn() };
+        const image = {
+            nativeZoom: null,
+            size: { w: 8, h: 8 },
+            apply: vi.fn(),
+        };
         scale.join(image);
-        expect(image.apply).toHaveBeenLastCalledWith(0);
-        scale.join({ nativeZoom: 3, apply: vi.fn() });
-        expect(image.apply).toHaveBeenLastCalledWith(3);
+        expect(image.apply).toHaveBeenLastCalledWith(0, { x: 0, y: 0 });
+        scale.join({ nativeZoom: 3, size: { w: 8, h: 8 }, apply: vi.fn() });
+        expect(image.apply).toHaveBeenLastCalledWith(3, { x: 0, y: 0 });
+    });
+
+    it("centres each member in the box of the widest and the tallest, and tells when the box moves", () => {
+        const changed = vi.fn();
+        const scale = createScaleGroup(changed);
+        const wide = { nativeZoom: 3, size: { w: 100, h: 40 }, apply: vi.fn() };
+        const tall = { nativeZoom: 3, size: { w: 60, h: 80 }, apply: vi.fn() };
+        scale.join(wide);
+        expect(scale.frame()).toEqual({ w: 100, h: 40 });
+        scale.join(tall);
+        expect(scale.frame()).toEqual({ w: 100, h: 80 });
+        expect(changed).toHaveBeenLastCalledWith(3);
+        expect(wide.apply).toHaveBeenLastCalledWith(3, { x: 0, y: 20 });
+        expect(tall.apply).toHaveBeenLastCalledWith(3, { x: 20, y: 0 });
+        scale.leave(tall);
+        expect(scale.frame()).toEqual({ w: 100, h: 40 });
+        expect(wide.apply).toHaveBeenLastCalledWith(3, { x: 0, y: 0 });
+        scale.leave(wide);
+        expect(scale.frame()).toBeNull();
     });
 });

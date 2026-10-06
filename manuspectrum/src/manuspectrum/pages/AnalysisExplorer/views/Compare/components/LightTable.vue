@@ -6,7 +6,7 @@ import CurtainPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ImagingPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue";
 import LayerGallery from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue";
 import LayerStack from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue";
-import SwitchButton from "@/manuspectrum/pages/AnalysisExplorer/components/SwitchButton.vue";
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 
 import {
     ICONS,
@@ -15,10 +15,8 @@ import {
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
     ANNOUNCE_KEY,
-    LINKED_SELECTION_KEY,
     WINDOW_FRAME_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import { followElement } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/follow-focus.ts";
 import { layGroup } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/group-actions.ts";
 import {
     applyFiltersToAll,
@@ -35,7 +33,7 @@ import {
     setFilters,
     setGrouping,
     setLayout,
-    setLinkAll,
+    setSyncViews,
     setOpacity,
     setTint,
     setVisible,
@@ -43,7 +41,6 @@ import {
     swap,
     toggleInStack,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
-import { parseNodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     writeImaging,
     readImaging,
@@ -94,12 +91,12 @@ const DEFAULT_FRAME: TableFrame = {
  * four folded to two and the gallery below the table in M, the gallery to
  * the right in L and enlarged. The table keeps its layout in the browser
  * (`table-memory.ts`, `writeImaging`) after a pause and on closing, and
- * follows the Selection (`reconcile`). Zoom and pan of the panes of one
- * analysis (or of all, `linkAll`) are relayed here from the pane moved, and a
+ * follows the Selection (`reconcile`). Zoom and pan are relayed here from the
+ * pane moved to every other shown pane only while the sync toggle
+ * (`syncViews`, off by default, stored) is on, whatever the analyses, and a
  * relayed view is dropped when its pane changes canvas; the
  * sizes the panes are served at give the scale notes. The focus only
- * styles; « Follow the focus », off until the reader turns it on and never
- * stored, moves the panes onto the layer of an element newly pinned.
+ * styles.
  */
 const props = defineProps<{
     maps: readonly MapLine[];
@@ -108,7 +105,6 @@ const props = defineProps<{
 
 const { $gettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
-const linked = inject(LINKED_SELECTION_KEY, null);
 const frameRef = inject(WINDOW_FRAME_KEY, ref(DEFAULT_FRAME));
 
 const state = ref<TableState>(restoreState(readImaging(), props.maps));
@@ -116,7 +112,6 @@ const sizes = shallowRef<ReadonlyMap<string, ServedSize | null>>(new Map());
 const views = shallowRef<(NormalisedView | null)[]>(
     Array(PANE_COUNT).fill(null),
 );
-const followFocus = ref(false);
 const notice = ref("");
 const galleryOpen = ref(
     galleryOpensWith(frameRef.value, analysisCount(props.maps)),
@@ -151,7 +146,6 @@ const notes = computed(() =>
 const paneIndexes = computed(() =>
     Array.from({ length: shownCount.value }, (_, pane) => pane),
 );
-const canLinkAll = computed(() => analysisIds.value.length > 1);
 const canSwap = computed(
     () => !small.value && ["curtain", "grid2", "grid4"].includes(shown.value),
 );
@@ -187,7 +181,7 @@ const allChoices = computed<
     },
     {
         layout: "grid2",
-        icon: "objects-column",
+        icon: "two-columns",
         text: "2",
         name: $gettext("Two panes"),
     },
@@ -205,15 +199,6 @@ const allChoices = computed<
         word: true,
     },
 ]);
-const linkTitle = computed(() =>
-    canLinkAll.value
-        ? $gettext(
-              "Link zoom and pan between analyses. Within one analysis they are linked already.",
-          )
-        : $gettext(
-              "Zoom and pan are always linked within one analysis, and there is no other analysis to link.",
-          ),
-);
 const persisted = computed(() => JSON.stringify(storedOf(state.value)));
 
 useWindowActions(() => [
@@ -295,18 +280,6 @@ watch(notes, (now, before) => {
         );
     }
 });
-watch(
-    () => linked?.selection.value ?? [],
-    (now, before) => {
-        if (!followFocus.value) return;
-        for (const id of now.filter((node) => !before.includes(node))) {
-            const parsed = parseNodeId(id);
-            const symbol = parsed?.kind === "el" ? parsed.parts[0] : null;
-            if (symbol) follow(symbol);
-        }
-    },
-);
-
 onBeforeUnmount(flushPersist);
 
 function analysisCount(maps: readonly MapLine[]): number {
@@ -383,38 +356,13 @@ function onSwap(): void {
     apply(swap(state.value), $gettext("Panes A and B swapped"));
 }
 
-function onLinkAll(): void {
-    if (!canLinkAll.value) return;
-    const on = !state.value.linkAll;
+function onSyncViews(): void {
+    const on = !state.value.syncViews;
     apply(
-        setLinkAll(state.value, on),
+        setSyncViews(state.value, on),
         on
-            ? $gettext("Zoom and pan linked across analyses")
-            : $gettext("Zoom and pan linked within each analysis only"),
-    );
-}
-
-function onFollowFocus(): void {
-    followFocus.value = !followFocus.value;
-    announce(
-        followFocus.value
-            ? $gettext("Following the focus: on")
-            : $gettext("Following the focus: off"),
-    );
-}
-
-function follow(symbol: string): void {
-    const next = followElement(shownState.value, symbol, props.maps);
-    if (next === shownState.value) return;
-    apply(
-        { ...state.value, panes: next.panes },
-        interpolate(
-            $gettext("Following the focus: panes moved to %{element}"),
-            {
-                element: symbol,
-            },
-            true,
-        ),
+            ? $gettext("Zoom and pan synced across panes")
+            : $gettext("Zoom and pan no longer synced"),
     );
 }
 
@@ -567,16 +515,14 @@ function onGrouping(grouping: TableGrouping): void {
                     }}</span>
                 </button>
             </div>
-            <SwitchButton
+            <IconButton
                 v-if="!small"
-                data-action="link-all"
-                :title="linkTitle"
-                :checked="state.linkAll"
-                :disabled="!canLinkAll"
-                @toggle="onLinkAll"
-            >
-                {{ $gettext("Link analyses") }}
-            </SwitchButton>
+                icon="link"
+                data-action="sync-views"
+                :label="$gettext('Sync zoom and pan across panes')"
+                :pressed="state.syncViews"
+                @click="onSyncViews"
+            />
             <button
                 v-if="canSwap"
                 type="button"
@@ -599,18 +545,6 @@ function onGrouping(grouping: TableGrouping): void {
                 </svg>
                 <span class="word">{{ $gettext("Swap A/B") }}</span>
             </button>
-            <SwitchButton
-                data-action="follow-focus"
-                :title="
-                    $gettext(
-                        'When an element is pinned in the focus, move the panes onto that element\'s layer.',
-                    )
-                "
-                :checked="followFocus"
-                @toggle="onFollowFocus"
-            >
-                {{ $gettext("Follow the focus") }}
-            </SwitchButton>
         </div>
         <p
             v-if="notice"

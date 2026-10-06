@@ -11,6 +11,7 @@ import {
     canStack,
     defaultState,
     linkedGroups,
+    setSyncViews,
     moveInStack,
     pairsOf,
     place,
@@ -76,7 +77,7 @@ describe("defaultState", () => {
         expect(state.filters).toHaveLength(5);
         expect(state.filters.every((f) => f === NEUTRAL_FILTERS)).toBe(false);
         expect(state.filters[0]).toEqual(NEUTRAL_FILTERS);
-        expect(state.linkAll).toBe(false);
+        expect(state.syncViews).toBe(false);
         expect(state.stack).toEqual({ analysis: null, layers: [] });
         expect(state.grouping).toBe("analysis");
     });
@@ -290,18 +291,16 @@ describe("pairsOf", () => {
 });
 
 describe("linkedGroups", () => {
-    it("links the panes of one analysis only, unless linkAll", () => {
+    it("links no pane by default, not even two of the same analysis", () => {
         const maps = [line(1, [{}, {}, {}]), line(2, [{}, {}])];
         let state = { ...defaultState(maps), layout: "grid4" as const };
         state = {
             ...state,
             panes: ["c1-0", "c2-0", "c1-1", "c2-1"],
         };
-        expect(linkedGroups(state, maps)).toEqual([
-            [0, 2],
-            [1, 3],
-        ]);
-        expect(linkedGroups({ ...state, linkAll: true }, maps)).toEqual([
+        expect(state.syncViews).toBe(false);
+        expect(linkedGroups(state, maps)).toEqual([]);
+        expect(linkedGroups(setSyncViews(state, true), maps)).toEqual([
             [0, 1, 2, 3],
         ]);
     });
@@ -313,12 +312,18 @@ describe("linkedGroups", () => {
             layout: "grid2" as const,
             panes: ["c1-0", "c1-1", "c1-0", null],
         };
-        expect(linkedGroups(grid2, maps)).toEqual([[0, 1]]);
-        expect(linkedGroups({ ...grid2, layout: "curtain" }, maps)).toEqual([]);
-        expect(linkedGroups({ ...grid2, layout: "stack" }, maps)).toEqual([]);
-        expect(linkedGroups({ ...grid2, layout: "single" }, maps)).toEqual([]);
+        const synced = { ...grid2, syncViews: true };
+        expect(linkedGroups(synced, maps)).toEqual([[0, 1]]);
+        expect(linkedGroups({ ...synced, layout: "curtain" }, maps)).toEqual(
+            [],
+        );
+        expect(linkedGroups({ ...synced, layout: "stack" }, maps)).toEqual([]);
+        expect(linkedGroups({ ...synced, layout: "single" }, maps)).toEqual([]);
         expect(
-            linkedGroups({ ...grid2, panes: ["c1-0", null, null, null] }, maps),
+            linkedGroups(
+                { ...synced, panes: ["c1-0", null, null, null] },
+                maps,
+            ),
         ).toEqual([]);
     });
 });

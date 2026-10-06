@@ -201,7 +201,7 @@ function imagingOf(value: unknown): StoredImaging | undefined {
             const pane: unknown = panes[index];
             return typeof pane === "string" && pane !== "" ? pane : null;
         }),
-        linkAll: value.linkAll === true,
+        syncViews: value.syncViews === true,
         filters: filtersOf(value.filters),
         stack: {
             analysis:

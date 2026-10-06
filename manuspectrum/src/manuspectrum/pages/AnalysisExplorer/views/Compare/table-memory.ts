@@ -11,8 +11,8 @@ import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compar
 
 /** What of the table the browser keeps: not the target pane, nor zoom, pan or the curtain's position. */
 export function storedOf(state: TableState): StoredImaging {
-    const { layout, panes, linkAll, filters, stack, grouping } = state;
-    return { layout, panes, linkAll, filters, stack, grouping };
+    const { layout, panes, syncViews, filters, stack, grouping } = state;
+    return { layout, panes, syncViews, filters, stack, grouping };
 }
 
 /**

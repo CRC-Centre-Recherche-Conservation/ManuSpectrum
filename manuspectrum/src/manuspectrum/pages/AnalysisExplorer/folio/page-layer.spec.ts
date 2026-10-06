@@ -362,8 +362,54 @@ describe("layImage", () => {
         await settle();
         const layer = read.mock.calls[0][2] as L.ImageOverlay;
         expect(drawnExtent(layer)).toEqual({ w: 600, h: 1000 });
-        scale.join({ nativeZoom: 3, apply: vi.fn() });
+        scale.join({ nativeZoom: 3, size: { w: 10, h: 10 }, apply: vi.fn() });
         expect(drawnExtent(layer)).toEqual({ w: 75, h: 125 });
+    });
+
+    it("centres an overlay in the frame of a larger one at the same pixel scale, never stretched", async () => {
+        FakeImage.served = {
+            "https://img.example/a.png": { w: 600, h: 1000 },
+            "https://img.example/big.png": { w: 1400, h: 1200 },
+        };
+        const scale = createScaleGroup();
+        const read = vi.fn();
+        layImage(map, BY_URL, { read, failed: vi.fn() }, { scale });
+        layImage(
+            map,
+            { ...BY_URL, url: "https://img.example/big.png" },
+            { read, failed: vi.fn() },
+            { scale },
+        );
+        await settle();
+        const [small, big] = read.mock.calls.map(
+            (call) => call[2] as L.ImageOverlay,
+        );
+        expect(scale.frame()).toEqual({ w: 1400, h: 1200 });
+        const bounds = (layer: L.ImageOverlay) => {
+            const box = layer.getBounds();
+            return {
+                west: box.getWest(),
+                east: box.getEast(),
+                north: box.getNorth(),
+                south: box.getSouth(),
+            };
+        };
+        const outer = bounds(big);
+        const inner = bounds(small);
+        expect(outer.west).toBe(0);
+        expect(outer.north).toBeCloseTo(0, 9);
+        expect((inner.west + inner.east) / 2).toBeCloseTo(
+            (outer.west + outer.east) / 2,
+            6,
+        );
+        expect((inner.north + inner.south) / 2).toBeCloseTo(
+            (outer.north + outer.south) / 2,
+            6,
+        );
+        expect(drawnExtent(small)).toEqual({ w: 600, h: 1000 });
+        expect(drawnExtent(big)).toEqual({ w: 1400, h: 1200 });
+        expect(inner.west).toBe(400);
+        expect(inner.north).toBe(-100);
     });
 
     it("leaves the group when the image is removed", async () => {
@@ -376,7 +422,7 @@ describe("layImage", () => {
             { scale },
         );
         await settle();
-        const peer = { nativeZoom: 3, apply: vi.fn() };
+        const peer = { nativeZoom: 3, size: { w: 10, h: 10 }, apply: vi.fn() };
         scale.join(peer);
         laid.remove();
         scale.leave(peer);
