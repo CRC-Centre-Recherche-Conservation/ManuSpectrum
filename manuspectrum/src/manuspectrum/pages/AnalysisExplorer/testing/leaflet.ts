@@ -49,3 +49,23 @@ export function sizedContainer(width = 800, height = 600): HTMLDivElement {
     document.body.append(element);
     return element;
 }
+
+/**
+ * `L.control.sideBySide` without the plugin (specs mock `leaflet-side-by-side`):
+ * a control that records nothing and sits at 400 px.
+ */
+export function stubSideBySide(): ReturnType<typeof vi.fn> {
+    const factory = vi.fn(() => {
+        const control = {
+            addTo: vi.fn(() => control),
+            remove: vi.fn(),
+            setLeftLayers: vi.fn(() => control),
+            setRightLayers: vi.fn(() => control),
+            getPosition: () => 400,
+            _range: document.createElement("input"),
+        };
+        return control;
+    });
+    (L.control as unknown as { sideBySide: unknown }).sideBySide = factory;
+    return factory;
+}

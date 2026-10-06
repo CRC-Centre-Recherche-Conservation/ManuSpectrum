@@ -59,7 +59,7 @@ export const TABLE_LAYOUTS: readonly TableLayout[] = [
 ];
 
 /** Panes a layout shows. */
-const PANES_SHOWN: Readonly<Record<TableLayout, number>> = {
+export const PANES_SHOWN: Readonly<Record<TableLayout, number>> = {
     single: 1,
     curtain: 2,
     grid2: 2,

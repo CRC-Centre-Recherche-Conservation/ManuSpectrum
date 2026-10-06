@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, inject, ref, useId, useTemplateRef, watch } from "vue";
+import {
+    computed,
+    inject,
+    provide,
+    ref,
+    useId,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
@@ -16,7 +24,10 @@ import {
     useWindowFocus,
     windowHue,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowFocus.ts";
-import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    LINKED_SELECTION_KEY,
+    WINDOW_FRAME_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     focusHue,
     focusStripe,
@@ -95,6 +106,10 @@ const headingId = useId();
 const bodyId = useId();
 const menuId = useId();
 const actions = provideWindowActions();
+provide(
+    WINDOW_FRAME_KEY,
+    computed(() => ({ size: props.size, enlarged: props.enlarged })),
+);
 const moreRoot = useTemplateRef<HTMLElement>("moreRoot");
 const bodyElement = useTemplateRef<HTMLElement>("bodyElement");
 const lit = useWindowFocus(bodyElement);

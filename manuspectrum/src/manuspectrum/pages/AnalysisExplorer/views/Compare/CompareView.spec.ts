@@ -22,6 +22,10 @@ import {
     installDialog,
     pressEscape,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/dialog.ts";
+import {
+    stubIiifLayer,
+    stubSideBySide,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
 import { resetFakeGrids } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
 import {
     plotly,
@@ -37,6 +41,15 @@ import type {
     Item,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+vi.hoisted(() => {
+    // jsdom's SVG has no createSVGRect: without it Leaflet has no path renderer.
+    (
+        SVGSVGElement.prototype as unknown as { createSVGRect: () => object }
+    ).createSVGRect = () => ({});
+});
+vi.mock("leaflet-iiif", () => ({}));
+vi.mock("leaflet-side-by-side", () => ({}));
 
 vi.mock("gridstack", async () =>
     (
@@ -185,6 +198,8 @@ let wrapper: VueWrapper | null = null;
 let uninstallDialog: () => void;
 
 beforeEach(() => {
+    stubIiifLayer({ size: { w: 2000, h: 3000 } });
+    stubSideBySide();
     uninstallDialog = installDialog();
     resetFakeGrids();
     forgetPayloads();
@@ -456,7 +471,7 @@ describe("CompareView", () => {
         expect(sizes.filter(([, size]) => size !== "M")).toEqual([]);
     });
 
-    it("puts the layered maps side by side in their own window, not among the items in no chart", async () => {
+    it("puts the layered maps on the light table in their own window, not among the items in no chart", async () => {
         select(MAPS_ITEM, EMPTY_ITEM);
         const view = await mountView();
         expect(windowIds(view)).toEqual([
@@ -464,12 +479,54 @@ describe("CompareView", () => {
             "auto:not-in-chart",
         ]);
         const maps = windowOf(view, "auto:chemical-imaging");
-        expect(maps.find("h3 .name").text()).toBe("Chemical imaging");
-        expect(maps.find("figcaption").text()).toContain("A1");
-        expect(maps.find(".imaging-preview .current .value").text()).toBe("Pb");
+        expect(maps.find("h3 .name").text()).toBe("Imaging");
+        expect(maps.find("h3 .subtitle").text()).toBe(
+            "1 analysis · 2 canvases",
+        );
+        expect(maps.find(".light-table").exists()).toBe(true);
+        expect(maps.find(".curtain-pane").exists()).toBe(true);
+        expect(
+            maps
+                .findAll(".curtain-pane .chip .label")
+                .map((node) => node.text()),
+        ).toEqual(["Pb", "Hg"]);
         expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
             1,
         );
+    });
+
+    it("counts the analyses and the canvases of the light table", async () => {
+        select(MAPS_ITEM, whole(12, [imagingEntry()]));
+        ITEMS.set(whole(12, [imagingEntry()]).key, whole(12, [imagingEntry()]));
+        const view = await mountView();
+        expect(
+            windowOf(view, "auto:chemical-imaging").find("h3 .subtitle").text(),
+        ).toBe("2 analyses · 4 canvases");
+        ITEMS.delete(whole(12, [imagingEntry()]).key);
+    });
+
+    it("keeps the window id, so a box saved for it is applied again", async () => {
+        select(MAPS_ITEM);
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: { "auto:chemical-imaging": { x: 6, y: 0, w: 6, h: 5 } },
+                hidden: [],
+                folded: { "auto:chemical-imaging": false },
+            }),
+        );
+        const view = await mountView();
+        expect(windowIds(view)).toEqual(["auto:chemical-imaging"]);
+        expect(
+            windowOf(view, "auto:chemical-imaging")
+                .find('[data-action="fold"]')
+                .attributes("aria-expanded"),
+        ).toBe("true");
+        expect(storedLayout()?.boxes["auto:chemical-imaging"]).toMatchObject({
+            x: 6,
+            w: 6,
+        });
     });
 
     it("opens the fourth XY window folded to its header", async () => {

@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { h } from "vue";
+import { defineComponent, h, inject } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import CompareWindow from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue";
 import LinkedChip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LinkedChip.vue";
 
-import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    LINKED_SELECTION_KEY,
+    WINDOW_FRAME_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     AN2,
     CH1,
@@ -130,5 +133,41 @@ describe("CompareWindow and the focus", () => {
         expect(frame.attributes("style")).toContain(
             "--rim: linear-gradient(var(--focus-1), var(--focus-1))",
         );
+    });
+});
+
+describe("CompareWindow and its body's frame", () => {
+    function probeText(): string | undefined {
+        return document.body.querySelector(".probe")?.textContent ?? undefined;
+    }
+
+    const Probe = defineComponent({
+        setup() {
+            const frame = inject(WINDOW_FRAME_KEY);
+            return () =>
+                h(
+                    "span",
+                    { class: "probe" },
+                    `${frame?.value.size}|${frame?.value.enlarged}`,
+                );
+        },
+    });
+
+    it("tells its body its size and whether it is enlarged", async () => {
+        wrapper = mount(CompareWindow, {
+            attachTo: document.body,
+            props: {
+                title: "Imaging",
+                position: 1,
+                total: 1,
+                size: "L",
+                folded: null,
+            },
+            slots: { default: () => h(Probe) },
+        });
+        expect(probeText()).toBe("L|false");
+        await wrapper.setProps({ size: null, enlarged: true });
+        await flushPromises();
+        expect(probeText()).toBe("null|true");
     });
 });

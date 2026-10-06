@@ -1,10 +1,17 @@
 import type { InjectionKey, Ref } from "vue";
 
-import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    FileLayer,
+    Label,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { TableState } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
+import type { ServedSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
+import type { TableFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
+import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
 export interface ResultsMemo {
@@ -102,3 +109,25 @@ export const LINKED_SELECTION_KEY: InjectionKey<LinkedSelection> =
 /** Where the body of a Compare window declares its actions, shown in the window's header (`useWindowActions`); provided by the window. */
 export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
     Symbol("window-actions");
+
+/** How the Compare window holding a body is framed (its preset size, enlarged or not); provided by the window. */
+export const WINDOW_FRAME_KEY: InjectionKey<Readonly<Ref<TableFrame>>> =
+    Symbol("window-frame");
+
+/** What the light table lets its parts read; the table owns the state, the parts emit. */
+export interface LightTableContext {
+    state: Readonly<Ref<TableState>>;
+    maps: Readonly<Ref<readonly MapLine[]>>;
+    /** Every canvas of the Selection with its layer and map line. */
+    byCanvas: Readonly<
+        Ref<ReadonlyMap<string, { layer: FileLayer; line: MapLine }>>
+    >;
+    /** Sizes the panes were served at, by canvas; null while not read. */
+    sizes: Readonly<Ref<ReadonlyMap<string, ServedSize | null>>>;
+    /** Lays a canvas in a pane (the target by default). */
+    place: (canvas: string, pane?: number) => void;
+}
+
+/** The state and actions of the light table shown; provided by `LightTable`. */
+export const LIGHT_TABLE_KEY: InjectionKey<LightTableContext> =
+    Symbol("light-table");
