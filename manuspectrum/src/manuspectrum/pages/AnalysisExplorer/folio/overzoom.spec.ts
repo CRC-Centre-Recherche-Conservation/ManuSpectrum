@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
     createScaleGroup,
+    layImage,
     layServed,
     OVERZOOM_LEVELS,
+    PIXELATED_CLASS,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     fitView,
@@ -12,6 +14,7 @@ import {
     keepsFit,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 
+import type { ImageRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ScaleGroup } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { SyncTarget } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 
@@ -156,6 +159,86 @@ describe("zoom past the served size (real leaflet-iiif)", () => {
         expect(group.zoom()).toBe(0);
         map.setZoom(20, { animate: false });
         expect(map.getZoom()).toBe(group.zoom() + OVERZOOM_LEVELS);
+    });
+});
+
+describe("tiles and pixels of a light-table layer (real leaflet-iiif)", () => {
+    const IMAGE = { service: "https://iiif.example/tiny" } as ImageRef;
+
+    async function layTable(
+        scale?: ScaleGroup,
+        tileFormat?: "png",
+    ): Promise<L.TileLayer> {
+        let laid: L.Layer | null = null;
+        layImage(
+            map,
+            IMAGE,
+            {
+                read: (_size, _zoom, layer) => {
+                    laid = layer;
+                },
+                failed: vi.fn(),
+            },
+            { scale, tileFormat },
+        );
+        await settle();
+        return laid as unknown as L.TileLayer;
+    }
+
+    function tileUrl(layer: L.TileLayer): string {
+        return (
+            layer as unknown as { getTileUrl: (coords: object) => string }
+        ).getTileUrl({ x: 0, y: 0, z: 0 });
+    }
+
+    it("asks the tiles as default.png when the caller says png, default.jpg otherwise", async () => {
+        expect(tileUrl(await layTable(undefined, "png"))).toMatch(
+            /default\.png$/,
+        );
+        expect(tileUrl(await layTable())).toMatch(/default\.jpg$/);
+    });
+
+    it("marks the layer's tiles pixelated above its native zoom, not at or below it", async () => {
+        const layer = await layTable(undefined, "png");
+        const container = layer.getContainer() as HTMLElement;
+        map.setZoom(0, { animate: false });
+        expect(container.classList.contains(PIXELATED_CLASS)).toBe(false);
+        map.setZoom(1, { animate: false });
+        expect(container.classList.contains(PIXELATED_CLASS)).toBe(true);
+        map.setZoom(-1, { animate: false });
+        expect(container.classList.contains(PIXELATED_CLASS)).toBe(false);
+    });
+
+    it("measures the native zoom of a scale group by the group's", async () => {
+        const group = createScaleGroup();
+        await lay("large", group);
+        const layer = await layTable(group, "png");
+        const container = layer.getContainer() as HTMLElement;
+        map.setZoom(group.zoom(), { animate: false });
+        expect(container.classList.contains(PIXELATED_CLASS)).toBe(false);
+        map.setZoom(group.zoom() + 1, { animate: false });
+        expect(container.classList.contains(PIXELATED_CLASS)).toBe(true);
+    });
+
+    it("drops the mark when the layer is removed", async () => {
+        let gridLayer: L.GridLayer | null = null;
+        const laid = layImage(
+            map,
+            IMAGE,
+            {
+                read: (_size, _zoom, layer) => {
+                    gridLayer = layer as L.GridLayer;
+                },
+                failed: vi.fn(),
+            },
+            { tileFormat: "png" },
+        );
+        await settle();
+        const element = (gridLayer as unknown as L.GridLayer).getContainer();
+        map.setZoom(2, { animate: false });
+        expect(element?.classList.contains(PIXELATED_CLASS)).toBe(true);
+        laid.remove();
+        expect(element?.classList.contains(PIXELATED_CLASS)).toBe(false);
     });
 });
 

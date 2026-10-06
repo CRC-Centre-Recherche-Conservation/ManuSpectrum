@@ -192,7 +192,10 @@ describe("the curtain", () => {
         const [first, second] = iiif.mock.calls;
         expect(first[0]).toBe("https://iiif.example/image/1-0/info.json");
         expect(second[0]).toBe("https://iiif.example/image/2-0/info.json");
-        expect(first[1]).toMatchObject({ fitBounds: false });
+        expect(first[1]).toMatchObject({
+            fitBounds: false,
+            tileFormat: "png",
+        });
         expect(first[1].pane).not.toBe(second[1].pane);
         expect(paneOf(view, 0)).not.toBe(paneOf(view, 1));
     });

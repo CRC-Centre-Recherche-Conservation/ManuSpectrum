@@ -6,6 +6,7 @@ import {
     onBeforeUnmount,
     ref,
     shallowRef,
+    useId,
     useTemplateRef,
     watch,
 } from "vue";
@@ -18,6 +19,7 @@ import LayerStack from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 
 import {
+    glyphOf,
     ICONS,
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
@@ -70,7 +72,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-memory.ts";
 
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import type {
+    IconName,
+    PixelIconName,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type {
     PaneFilters,
     TableGrouping,
@@ -100,7 +105,7 @@ const DEFAULT_FRAME: TableFrame = {
  * window's size decides what is drawn (`table-frame.ts`): the layout the
  * reader chose at any size (one pane in S and, for the two grids, on a phone,
  * where their buttons are disabled), the gallery in a panel to the right of
- * the table that a rail on its edge shows or hides (open by default when the
+ * the table that a toggle in its corner (a tab when folded) shows or hides (open by default when the
  * window holds the table and the gallery, a strip under the table on a
  * phone). The table keeps its layout and the choice about the gallery in the
  * browser (`table-memory.ts`, `writeImaging`) after a pause and on closing, and
@@ -130,6 +135,7 @@ const views = shallowRef<(NormalisedView | null)[]>(
     Array(PANE_COUNT).fill(null),
 );
 const notice = ref("");
+const dockId = `${useId()}-gallery`;
 
 const analysisIds = computed(() => [
     ...new Set(props.maps.map((line) => line.analysis.id)),
@@ -175,7 +181,7 @@ const phone = computed(() => frame.value.phone);
 const layoutChoices = computed<
     {
         layout: TableLayout;
-        icon: IconName;
+        icon: IconName | PixelIconName;
         text: string;
         name: string;
         word?: boolean;
@@ -190,7 +196,7 @@ const layoutChoices = computed<
 const allChoices = computed<
     {
         layout: TableLayout;
-        icon: IconName;
+        icon: IconName | PixelIconName;
         text: string;
         name: string;
         word?: boolean;
@@ -198,7 +204,7 @@ const allChoices = computed<
 >(() => [
     {
         layout: "single",
-        icon: "stop",
+        icon: "layout-one",
         text: "1",
         name: $gettext("One pane"),
     },
@@ -211,13 +217,13 @@ const allChoices = computed<
     },
     {
         layout: "grid2",
-        icon: "two-columns",
+        icon: "layout-two",
         text: "2",
         name: $gettext("Two panes"),
     },
     {
         layout: "grid4",
-        icon: "th-large",
+        icon: "layout-four",
         text: "4",
         name: $gettext("Four panes"),
     },
@@ -553,12 +559,12 @@ function onGrouping(grouping: TableGrouping): void {
                 >
                     <svg
                         class="icon"
-                        :viewBox="ICON_VIEW_BOX"
+                        :viewBox="glyphOf(choice.icon).viewBox"
                         aria-hidden="true"
                         focusable="false"
                     >
                         <path
-                            v-for="(path, index) in ICONS[choice.icon]"
+                            v-for="(path, index) in glyphOf(choice.icon).paths"
                             :key="index"
                             :d="path"
                         />
@@ -684,24 +690,66 @@ function onGrouping(grouping: TableGrouping): void {
                     />
                 </div>
             </div>
-            <button
+            <div
                 v-if="railed"
-                type="button"
-                class="rail"
-                data-action="gallery-rail"
-                :aria-expanded="galleryOpen ? 'true' : 'false'"
-                :aria-label="galleryName"
-                :title="galleryName"
-                @click="toggleGallery"
+                :id="dockId"
+                class="dock"
+                :data-open="galleryOpen ? 'true' : 'false'"
             >
-                <span
-                    class="arrow"
-                    aria-hidden="true"
-                    >{{ galleryOpen ? "›" : "‹" }}</span
+                <button
+                    type="button"
+                    class="gallery-toggle"
+                    data-action="gallery-toggle"
+                    :aria-expanded="galleryOpen ? 'true' : 'false'"
+                    :aria-controls="dockId"
+                    :aria-label="galleryName"
+                    :title="galleryName"
+                    @click="toggleGallery"
                 >
-            </button>
+                    <svg
+                        class="icon"
+                        :viewBox="ICON_VIEW_BOX"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <path
+                            v-for="(path, index) in ICONS[
+                                galleryOpen
+                                    ? 'angle-double-right'
+                                    : 'angle-double-left'
+                            ]"
+                            :key="index"
+                            :d="path"
+                        />
+                    </svg>
+                    <template v-if="!galleryOpen">
+                        <span
+                            class="label"
+                            aria-hidden="true"
+                            >{{ $gettext("Gallery") }}</span
+                        >
+                        <span
+                            class="count"
+                            aria-hidden="true"
+                            >{{ props.maps.length }}</span
+                        >
+                    </template>
+                </button>
+                <LayerGallery
+                    v-if="galleryOpen"
+                    class="gallery"
+                    :maps="props.maps"
+                    :state="shownState"
+                    @place="apply(place(state, $event, shownState.active))"
+                    @toggle-stack="onToggleStack"
+                    @set-target="apply(setActive(state, $event))"
+                    @group-change="onGrouping"
+                    @place-group="onPlaceGroup"
+                    @compare="onCompare"
+                />
+            </div>
             <LayerGallery
-                v-if="galleryAt !== 'hidden'"
+                v-else-if="galleryAt === 'strip'"
                 class="gallery"
                 :maps="props.maps"
                 :state="shownState"
@@ -830,30 +878,102 @@ function onGrouping(grouping: TableGrouping): void {
 }
 
 .light-table[data-rail="true"][data-gallery="right"] .body {
-    grid-template-columns: minmax(10rem, 1fr) 1.75rem minmax(0, 18.5rem);
+    grid-template-columns: minmax(10rem, 1fr) minmax(0, 18.5rem);
 }
 
 .light-table[data-gallery="strip"] .body {
     grid-template-rows: minmax(8rem, 1fr) minmax(0, 7rem);
 }
 
-.light-table .rail {
-    display: grid;
+.light-table .dock {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+}
+
+.light-table .dock .gallery {
+    flex: 1 1 0;
+}
+
+.light-table .gallery-toggle {
+    display: inline-grid;
     place-items: center;
     padding: 0;
     border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.5rem;
     background: var(--surface);
     color: var(--ink-muted);
     font: inherit;
-    font-size: 1.125rem;
-    line-height: 1;
     cursor: pointer;
 }
 
-.light-table .rail:hover {
+.light-table .gallery-toggle:hover {
     background: var(--bg-alt);
     color: var(--ink);
+}
+
+.light-table .dock[data-open="true"] .gallery-toggle {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 0.5rem;
+    inset-inline-start: 0.5rem;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    border-radius: 0.4375rem;
+}
+
+.light-table .dock[data-open="true"] .gallery :deep(.top) {
+    padding-inline-start: 1.875rem;
+    min-block-size: 1.375rem;
+}
+
+.light-table .dock[data-open="false"] .gallery-toggle {
+    inline-size: 1.75rem;
+    grid-auto-flow: row;
+    align-content: start;
+    gap: 0.5rem;
+    padding: 0.4375rem 0 0.5rem;
+    border-radius: 0.625rem;
+    background: var(--bg);
+}
+
+.light-table .dock[data-open="false"] .gallery-toggle:hover {
+    background: var(--bg-alt);
+}
+
+.light-table .gallery-toggle .label {
+    writing-mode: vertical-rl;
+    font: 600 0.75rem/1 var(--font-body);
+    letter-spacing: 0.02em;
+    color: var(--ink);
+}
+
+.light-table .gallery-toggle .count {
+    min-inline-size: 1.25rem;
+    padding: 0.125rem 0.1875rem;
+    border-radius: 0.3125rem;
+    background: var(--bg-alt);
+    color: var(--ink-muted);
+    font: 500 0.625rem/1 var(--font-mono);
+    text-align: center;
+}
+
+.light-table[data-size="S"] .gallery-toggle .label {
+    display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .light-table .dock[data-open="true"] .gallery {
+        animation: gallery-in 160ms ease-out;
+    }
+}
+
+@keyframes gallery-in {
+    from {
+        opacity: 0;
+        translate: 0.75rem 0;
+    }
 }
 
 .light-table .stage {

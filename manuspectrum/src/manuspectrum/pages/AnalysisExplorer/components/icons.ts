@@ -32,6 +32,14 @@ export const ICON_VIEW_BOX = "0 0 24 24";
 
 /** The paths of each icon, by its primeicons name. */
 export const ICONS = {
+    "angle-double-left": [
+        "M11,16.25a.74.74,0,0,1-.53-.22L7,12.53a.75.75,0,0,1,0-1.06L10.47,8A.75.75,0,0,1,11.53,9l-3,3,3,3a.75.75,0,0,1,0,1.06A.74.74,0,0,1,11,16.25Z",
+        "M16.5,16.25A.74.74,0,0,1,16,16l-3.5-3.5a.75.75,0,0,1,0-1.06L16,8A.75.75,0,0,1,17,9l-3,3,3,3A.75.75,0,0,1,17,16,.74.74,0,0,1,16.5,16.25Z",
+    ],
+    "angle-double-right": [
+        "M13,16.25a.74.74,0,0,1-.53-.22.75.75,0,0,1,0-1.06l3-3-3-3A.75.75,0,0,1,13.53,8l3.5,3.5a.75.75,0,0,1,0,1.06L13.53,16A.74.74,0,0,1,13,16.25Z",
+        "M7.5,16.25A.74.74,0,0,1,7,16,.75.75,0,0,1,7,15l3-3L7,9A.75.75,0,0,1,8,8l3.5,3.5a.75.75,0,0,1,0,1.06L8,16A.74.74,0,0,1,7.5,16.25Z",
+    ],
     "arrow-down-left-and-arrow-up-right-to-center": [
         "M19 11.25C19.4142 11.25 19.75 10.9142 19.75 10.5C19.75 10.0858 19.4142 9.75 19 9.75L15.3107 9.75L20.0303 5.03033C20.3232 4.73744 20.3232 4.26257 20.0304 3.96967C19.7375 3.67678 19.2626 3.67678 18.9697 3.96967L14.25 8.68935L14.25 5C14.25 4.58579 13.9142 4.25 13.5 4.25C13.0858 4.25 12.75 4.58579 12.75 5L12.75 10.5C12.75 10.9142 13.0858 11.25 13.5 11.25L19 11.25ZM5 12.75C4.58579 12.75 4.25 13.0858 4.25 13.5C4.25 13.9142 4.58579 14.25 5 14.25H8.68934L3.96967 18.9697C3.67678 19.2626 3.67678 19.7374 3.96967 20.0303C4.26256 20.3232 4.73744 20.3232 5.03033 20.0303L9.75 15.3107V19C9.75 19.4142 10.0858 19.75 10.5 19.75C10.9142 19.75 11.25 19.4142 11.25 19V13.5C11.25 13.0858 10.9142 12.75 10.5 12.75H5Z",
     ],
@@ -169,11 +177,48 @@ export const ICONS = {
     times: [
         "M13.06,12l4.42-4.42a.75.75,0,1,0-1.06-1.06L12,10.94,7.58,6.52A.75.75,0,0,0,6.52,7.58L10.94,12,6.52,16.42a.75.75,0,0,0,0,1.06.75.75,0,0,0,1.06,0L12,13.06l4.42,4.42a.75.75,0,0,0,1.06,0,.75.75,0,0,0,0-1.06Z",
     ],
-    /** Project-drawn, as primeicons has no two-column icon: two `th-large` panes, as tall as `stop`. */
-    "two-columns": [
-        "M9,19.75H6A2.25,2.25,0,0,1,3.75,17.5V6.5A2.25,2.25,0,0,1,6,4.25H9A2.25,2.25,0,0,1,11.25,6.5v11A2.25,2.25,0,0,1,9,19.75ZM6,5.75a.75.75,0,0,0-.75.75v11a.75.75,0,0,0,.75.75H9a.75.75,0,0,0,.75-.75V6.5A.75.75,0,0,0,9,5.75Z",
-        "M18,19.75H15A2.25,2.25,0,0,1,12.75,17.5V6.5A2.25,2.25,0,0,1,15,4.25h3A2.25,2.25,0,0,1,20.25,6.5v11A2.25,2.25,0,0,1,18,19.75ZM15,5.75a.75.75,0,0,0-.75.75v11a.75.75,0,0,0,.75.75h3a.75.75,0,0,0,.75-.75V6.5a.75.75,0,0,0-.75-.75Z",
-    ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;
+
+/** The grid of `PIXEL_ICONS`: one unit is one pixel at 1 rem (16 px), two at 200 % zoom. */
+export const PIXEL_VIEW_BOX = "0 0 16 16";
+
+/** The outline of a rectangle, one unit thick, inside its box: the outer contour then the inner one, wound the other way. */
+function frame(x: number, y: number, w: number, h: number): string {
+    return `M${x} ${y}h${w}v${h}H${x}zM${x + 1} ${y + 1}v${h - 2}h${w - 2}V${y + 1}z`;
+}
+
+/**
+ * Project-drawn: the layout glyphs 1, 2 and 4 of the light table, one family of
+ * rectangles on a 16-unit grid. Every edge is one unit thick and lies on a
+ * whole unit, so it covers whole pixels at 1 rem and at 2 rem; primeicons'
+ * 24-unit paths (`stop`, `th-large`, no two-column glyph at all) fall between
+ * pixels at 1 rem and blur. The frames are 12 units tall, the gaps 2 wide.
+ */
+export const PIXEL_ICONS = {
+    "layout-one": [frame(2, 2, 12, 12)],
+    "layout-two": [frame(2, 2, 5, 12), frame(9, 2, 5, 12)],
+    "layout-four": [
+        frame(2, 2, 5, 5),
+        frame(9, 2, 5, 5),
+        frame(2, 9, 5, 5),
+        frame(9, 9, 5, 5),
+    ],
+} as const satisfies Record<string, readonly string[]>;
+
+export type PixelIconName = keyof typeof PIXEL_ICONS;
+
+/** The view box and the paths of an icon of either set. */
+export function glyphOf(name: IconName | PixelIconName): {
+    viewBox: string;
+    paths: readonly string[];
+} {
+    if (name in PIXEL_ICONS) {
+        return {
+            viewBox: PIXEL_VIEW_BOX,
+            paths: PIXEL_ICONS[name as PixelIconName],
+        };
+    }
+    return { viewBox: ICON_VIEW_BOX, paths: ICONS[name as IconName] };
+}

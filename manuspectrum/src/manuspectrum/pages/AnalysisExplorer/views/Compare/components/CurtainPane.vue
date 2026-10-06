@@ -381,7 +381,12 @@ function drawSide(side: Side): void {
                 );
             },
         },
-        { pane: state.pane, scale: scale ?? undefined, curtain: true },
+        {
+            pane: state.pane,
+            scale: scale ?? undefined,
+            curtain: true,
+            tileFormat: "png",
+        },
     );
 }
 

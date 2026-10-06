@@ -305,7 +305,7 @@ function lay(canvas: string): void {
                 statuses[canvas] = "failed";
             },
         },
-        { pane: entry.pane, scale: scale ?? undefined },
+        { pane: entry.pane, scale: scale ?? undefined, tileFormat: "png" },
     );
 }
 

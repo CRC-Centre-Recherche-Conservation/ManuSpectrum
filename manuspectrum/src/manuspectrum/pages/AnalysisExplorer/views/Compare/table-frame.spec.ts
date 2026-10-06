@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
     GALLERY_OPEN_REM,
+    GALLERY_REM,
+    TAB_REM,
+    TABLE_MIN_REM,
     galleryOpensWith,
     galleryPlace,
     isMultiPane,
@@ -80,7 +83,8 @@ describe("galleryOpensWith", () => {
     });
 
     it("holds 40 rem for the table", () => {
-        expect(GALLERY_OPEN_REM).toBeGreaterThan(40 + 18.5);
+        expect(GALLERY_OPEN_REM).toBe(TABLE_MIN_REM + GALLERY_REM + 0.5);
+        expect(TAB_REM).toBe(1.75);
     });
 
     it("falls back on the size while the width is not measured", () => {

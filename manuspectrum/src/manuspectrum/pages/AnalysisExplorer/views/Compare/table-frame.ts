@@ -18,12 +18,15 @@ export type GalleryPlace = "right" | "strip" | "hidden";
 
 /** The width, in rem, the table keeps for itself before the gallery takes the rest. */
 export const TABLE_MIN_REM = 40;
-/** The width, in rem, of the gallery panel and of its rail. */
+/** The width, in rem, of the gallery panel. */
 export const GALLERY_REM = 18.5;
-export const RAIL_REM = 1.75;
+/** The width, in rem, of the tab the folded gallery leaves beside the table. */
+export const TAB_REM = 1.75;
+/** The gap, in rem, between the table and the gallery column. */
+const BODY_GAP_REM = 0.5;
 
 /** The width, in rem, from which the gallery starts open beside the table. */
-export const GALLERY_OPEN_REM = TABLE_MIN_REM + GALLERY_REM + RAIL_REM;
+export const GALLERY_OPEN_REM = TABLE_MIN_REM + GALLERY_REM + BODY_GAP_REM;
 
 /** Layouts that put several panes side by side, which a phone cannot hold. */
 export function isMultiPane(layout: TableLayout): boolean {

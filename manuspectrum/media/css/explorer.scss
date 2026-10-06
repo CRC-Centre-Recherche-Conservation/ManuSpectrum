@@ -35,6 +35,12 @@ body.ms-page--app::after {
     display: none;
 }
 
+// A light-table layer zoomed past its native zoom (`pixelatedAbove`): image
+// pixels are drawn as sharp squares; `image-rendering` is inherited by tiles.
+.ms-pixelated {
+    image-rendering: pixelated;
+}
+
 // --- Intro: the homepage heading on the Explorer home, one line elsewhere ---
 .ms-explorer-intro {
     @include ms-app-container;

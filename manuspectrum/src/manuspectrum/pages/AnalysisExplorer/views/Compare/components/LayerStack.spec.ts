@@ -223,7 +223,11 @@ describe("the layers", () => {
         expect(factory).toHaveBeenNthCalledWith(
             1,
             "https://iiif.example/image/1-0/info.json",
-            expect.objectContaining({ fitBounds: false, setMaxBounds: false }),
+            expect.objectContaining({
+                fitBounds: false,
+                setMaxBounds: false,
+                tileFormat: "png",
+            }),
         );
         expect(fakes[0].options.pane).not.toBe(fakes[1].options.pane);
         expect(paneOf(view, 0)).not.toBe(paneOf(view, 1));

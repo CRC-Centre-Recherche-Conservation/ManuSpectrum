@@ -313,7 +313,12 @@ function drawCanvas(): void {
             ),
         );
     }
-    page = layImage(map, layer.image, { read: loaded, failed });
+    page = layImage(
+        map,
+        layer.image,
+        { read: loaded, failed },
+        { tileFormat: "png" },
+    );
 }
 
 /** Fits the whole image in the pane, centred; the pane's own move, never the reader's. */

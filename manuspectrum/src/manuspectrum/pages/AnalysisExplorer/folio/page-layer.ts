@@ -60,6 +60,12 @@ export function allowOverzoom(map: L.Map, nativeZoom: number): void {
     if (map.options.maxZoom !== limit) map.setMaxZoom(limit);
 }
 
+/** The image format a tile is asked in; the image server's JPEG is lossy. */
+export type TileFormat = "jpg" | "png";
+
+/** The class of a layer's element once its map is zoomed past the layer's native zoom (`pixelatedAbove`). */
+export const PIXELATED_CLASS = "ms-pixelated";
+
 /** A page image on its way to a map; `remove` takes it off, laid or not. */
 export interface PageLayer {
     layer: L.TileLayer;
@@ -84,18 +90,25 @@ export interface PageLayer {
  * layer is given no minimum, and reads the view again. `failed` is called when the
  * info.json cannot be read. The view fits the
  * whole page once laid, unless `fitBounds` is false (the caller keeps it).
- * With `pane`, the tiles go in that map pane (`overlayPane`).
+ * With `pane`, the tiles go in that map pane (`overlayPane`). With
+ * `tileFormat`, tiles are asked as `default.<tileFormat>` (leaflet-iiif asks
+ * `jpg` unless told otherwise).
  */
 export function layPage(
     map: L.Map,
     service: string,
     failed: () => void,
-    { fitBounds = true, pane }: { fitBounds?: boolean; pane?: string } = {},
+    {
+        fitBounds = true,
+        pane,
+        tileFormat,
+    }: { fitBounds?: boolean; pane?: string; tileFormat?: TileFormat } = {},
 ): PageLayer {
     const layer = L.tileLayer.iiif(infoJsonUrl(service), {
         fitBounds,
         setMaxBounds: false,
         ...(pane ? { pane } : {}),
+        ...(tileFormat ? { tileFormat } : {}),
     }) as IiifLayer;
     const setView = layer._setView;
     layer._setView = function (...args: Parameters<typeof setView>) {
@@ -372,11 +385,16 @@ export function layServed(
         read: (size: { w: number; h: number }, nativeZoom: number) => void;
         failed: () => void;
     },
-    options: { pane?: string; scale?: ScaleGroup } = {},
+    options: {
+        pane?: string;
+        scale?: ScaleGroup;
+        tileFormat?: TileFormat;
+    } = {},
 ): PageLayer {
     const laid = layPage(map, service, handlers.failed, {
         fitBounds: false,
         ...(options.pane ? { pane: options.pane } : {}),
+        ...(options.tileFormat ? { tileFormat: options.tileFormat } : {}),
     });
     let member: ScaleMember | null = null;
     function onAdd(event: L.LayerEvent): void {
@@ -404,6 +422,42 @@ export function layServed(
             member = null;
             laid.remove();
         },
+    };
+}
+
+/** The DOM element that holds a laid layer's images: the tile container, or the overlay's image. */
+function elementOf(layer: L.Layer): HTMLElement | null {
+    if (layer instanceof L.GridLayer) return layer.getContainer();
+    if (layer instanceof L.ImageOverlay) return layer.getElement() ?? null;
+    return null;
+}
+
+/**
+ * Marks `layer`'s element with `PIXELATED_CLASS` while `map` is zoomed past
+ * `nativeZoom()` (the zoom of one image pixel per screen pixel), so that
+ * enlarged pixels are drawn as sharp squares; a view at or below it stays
+ * smooth. Re-read on every `zoomend` and when a tile starts loading (leaflet-iiif
+ * lays its tile container after the layer is added); the returned function
+ * stops it.
+ */
+export function pixelatedAbove(
+    map: L.Map,
+    layer: L.Layer,
+    nativeZoom: () => number,
+): () => void {
+    function paint(): void {
+        elementOf(layer)?.classList.toggle(
+            PIXELATED_CLASS,
+            map.getZoom() > nativeZoom(),
+        );
+    }
+    paint();
+    map.on("zoomend", paint);
+    layer.on("tileloadstart", paint);
+    return () => {
+        map.off("zoomend", paint);
+        layer.off("tileloadstart", paint);
+        elementOf(layer)?.classList.remove(PIXELATED_CLASS);
     };
 }
 
@@ -436,6 +490,8 @@ function imageBounds(
  * the layer answers `getContainer()` with that pane so that
  * leaflet-side-by-side clips it (`curtainable`). In a `scale` group every
  * image keeps its own pixel scale relative to the others (`ScaleGroup`).
+ * `tileFormat` is the format of the IIIF tiles (`layPage`); a layer's element
+ * carries `PIXELATED_CLASS` while the map is zoomed past its native zoom.
  */
 export function layImage(
     map: L.Map,
@@ -448,8 +504,20 @@ export function layImage(
         ) => void;
         failed: () => void;
     },
-    options: { pane?: string; scale?: ScaleGroup; curtain?: boolean } = {},
+    options: {
+        pane?: string;
+        scale?: ScaleGroup;
+        curtain?: boolean;
+        tileFormat?: TileFormat;
+    } = {},
 ): LaidImage {
+    let stopPixelating: (() => void) | null = null;
+    function pixelate(layer: L.Layer, zoom: number): void {
+        stopPixelating?.();
+        stopPixelating = pixelatedAbove(map, layer, () =>
+            options.scale ? options.scale.zoom() : zoom,
+        );
+    }
     const paneElement = options.pane ? map.getPane(options.pane) : undefined;
     function wrap<T extends L.Layer>(layer: T): T {
         return options.curtain && paneElement
@@ -462,14 +530,26 @@ export function layImage(
             map,
             image.service,
             {
-                read: (size, zoom) =>
-                    handlers.read(size, zoom, (page as PageLayer).layer),
+                read: (size, zoom) => {
+                    pixelate((page as PageLayer).layer, zoom);
+                    handlers.read(size, zoom, (page as PageLayer).layer);
+                },
                 failed: handlers.failed,
             },
-            { pane: options.pane, scale: options.scale },
+            {
+                pane: options.pane,
+                scale: options.scale,
+                tileFormat: options.tileFormat,
+            },
         );
         wrap(page.layer);
-        return { remove: () => page?.remove() };
+        return {
+            remove: () => {
+                stopPixelating?.();
+                stopPixelating = null;
+                page?.remove();
+            },
+        };
     }
     const addresses = layerImageChain(image);
     let removed = false;
@@ -504,6 +584,7 @@ export function layImage(
                 };
                 options.scale.join(member);
             } else allowOverzoom(map, 0);
+            pixelate(laid, options.scale?.zoom() ?? 0);
             handlers.read(size, options.scale?.zoom() ?? 0, laid);
         };
         probe.onerror = tryNext;
@@ -513,6 +594,8 @@ export function layImage(
     return {
         remove: () => {
             removed = true;
+            stopPixelating?.();
+            stopPixelating = null;
             if (member) options.scale?.leave(member);
             member = null;
             overlay?.remove();

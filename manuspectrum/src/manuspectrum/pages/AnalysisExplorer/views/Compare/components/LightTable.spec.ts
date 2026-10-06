@@ -724,12 +724,12 @@ describe("with some tiles", () => {
 });
 
 describe("the size of the window", () => {
-    it("starts the gallery closed in M, open in L, and offers the rail in both", async () => {
+    it("starts the gallery closed in M, open in L, and offers the toggle in both", async () => {
         const medium = await mountTable(PLAIN_TWO, { frame: M_FRAME });
         expect(medium.find(".layer-gallery").exists()).toBe(false);
         expect(
             medium
-                .find('[data-action="gallery-rail"]')
+                .find('[data-action="gallery-toggle"]')
                 .attributes("aria-expanded"),
         ).toBe("false");
         medium.unmount();
@@ -741,15 +741,15 @@ describe("the size of the window", () => {
         );
         expect(
             large
-                .find('[data-action="gallery-rail"]')
+                .find('[data-action="gallery-toggle"]')
                 .attributes("aria-expanded"),
         ).toBe("true");
     });
 
-    it("shows and hides the gallery to the right of the table with the rail, at every size", async () => {
+    it("shows and hides the gallery to the right of the table with the toggle, at every size", async () => {
         for (const frame of [S_FRAME, M_FRAME, L_FRAME, BY_HAND_FRAME]) {
             const view = await mountTable(PLAIN_TWO, { frame });
-            const rail = () => view.find('[data-action="gallery-rail"]');
+            const rail = () => view.find('[data-action="gallery-toggle"]');
             const was = view.find(".layer-gallery").exists();
             await rail().trigger("click");
             expect(view.find(".layer-gallery").exists()).toBe(!was);
@@ -757,11 +757,35 @@ describe("the size of the window", () => {
             expect(rail().attributes("aria-label")).toBe(
                 was ? "Show the gallery" : "Hide the gallery",
             );
-            expect(rail().text()).toBe(was ? "‹" : "›");
+            expect(rail().find(".count").exists()).toBe(was);
+            if (was) {
+                expect(rail().find(".count").text()).toBe("2");
+            }
             await rail().trigger("click");
             expect(view.find(".layer-gallery").exists()).toBe(was);
             view.unmount();
             wrapper = null;
+        }
+    });
+
+    it("keeps the same button, focused, when the gallery is hidden and shown, and names the dock it controls", async () => {
+        const view = await mountTable(PLAIN_TWO, { frame: L_FRAME });
+        const button = view.find('[data-action="gallery-toggle"]')
+            .element as HTMLButtonElement;
+        button.focus();
+        for (const open of [false, true]) {
+            await view.find('[data-action="gallery-toggle"]').trigger("click");
+            const again = view.find('[data-action="gallery-toggle"]')
+                .element as HTMLButtonElement;
+            expect(again).toBe(button);
+            expect(document.activeElement).toBe(button);
+            expect(button.getAttribute("aria-expanded")).toBe(String(open));
+            const dock = document.getElementById(
+                button.getAttribute("aria-controls") as string,
+            );
+            expect(dock).not.toBeNull();
+            expect(dock?.contains(button)).toBe(true);
+            expect(dock?.getAttribute("data-open")).toBe(String(open));
         }
     });
 
@@ -794,7 +818,7 @@ describe("the size of the window", () => {
     it("keeps the reader's choice over the default, and stores it", async () => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
         await mountTable(PLAIN_TWO, { frame: L_FRAME });
-        await wrapper!.find('[data-action="gallery-rail"]').trigger("click");
+        await wrapper!.find('[data-action="gallery-toggle"]').trigger("click");
         expect(wrapper!.find(".layer-gallery").exists()).toBe(false);
         vi.advanceTimersByTime(1000);
         expect(readImaging()?.gallery).toBe(false);
@@ -802,7 +826,7 @@ describe("the size of the window", () => {
         wrapper = null;
         const again = await mountTable(PLAIN_TWO, { frame: L_FRAME });
         expect(again.find(".layer-gallery").exists()).toBe(false);
-        await again.find('[data-action="gallery-rail"]').trigger("click");
+        await again.find('[data-action="gallery-toggle"]').trigger("click");
         again.unmount();
         wrapper = null;
         expect(readImaging()?.gallery).toBe(true);
@@ -849,7 +873,7 @@ describe("the size of the window", () => {
         const grid = view.find('[data-layout="grid2"]');
         expect(grid.attributes("aria-disabled")).toBe("true");
         expect(grid.attributes("title")).toBeTruthy();
-        expect(view.find('[data-action="gallery-rail"]').exists()).toBe(true);
+        expect(view.find('[data-action="gallery-toggle"]').exists()).toBe(true);
     });
 
     it("lays the table out again from the Selection on « Rearrange »", async () => {
@@ -906,12 +930,14 @@ describe("a phone", () => {
         ).toBe("true");
     });
 
-    it("puts the gallery in a strip below the table, with no rail, and keeps the header action", async () => {
+    it("puts the gallery in a strip below the table, with no toggle, and keeps the header action", async () => {
         const view = await mountTable(PLAIN_FIVE, { frame: PHONE_FRAME });
         expect(view.find(".light-table").attributes("data-gallery")).toBe(
             "strip",
         );
-        expect(view.find('[data-action="gallery-rail"]').exists()).toBe(false);
+        expect(view.find('[data-action="gallery-toggle"]').exists()).toBe(
+            false,
+        );
         expect(actions().map((action) => action.id)).toEqual([
             "gallery",
             "rearrange",

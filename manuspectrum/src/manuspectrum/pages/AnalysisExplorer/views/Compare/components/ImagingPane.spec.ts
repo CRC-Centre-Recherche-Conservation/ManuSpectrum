@@ -167,7 +167,7 @@ describe("the image", () => {
         expect(iiif).toHaveBeenCalledTimes(1);
         expect(iiif).toHaveBeenCalledWith(
             "https://iiif.example/image/1-0/info.json",
-            { fitBounds: false, setMaxBounds: false },
+            { fitBounds: false, setMaxBounds: false, tileFormat: "png" },
         );
     });
 
