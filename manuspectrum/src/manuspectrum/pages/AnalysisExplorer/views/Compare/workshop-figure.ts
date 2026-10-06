@@ -35,6 +35,8 @@ export type Trace = Partial<PlotData>;
 /** One curve as the figure draws it. */
 export interface FigureCurve {
     slot: number;
+    /** Its order among the curves of its window (0: the first): it picks its hue and dash. */
+    order: number;
     /** Its rank among the files of its slot (0: the first); the first file of a slot gets the chart's end-of-curve label and panel-title swatch. */
     rank: number;
     /** « A1 · file name ». */
@@ -102,11 +104,11 @@ const EXPORT_TITLE_SIZE = 14;
 /** Room above the exported figure for its title and source line. */
 export const EXPORT_TITLE_ROOM = 72;
 
-/** The stroke glyph of an item's cycle: solid, dashed, dotted. */
+/** The stroke glyph of a hue cycle: solid, dashed, dotted. */
 const SWATCH_GLYPHS = ["━", "╍", "┈"] as const;
 
-function swatch(colour: string, slot: number): string {
-    return `<span style="color:${colour}">${SWATCH_GLYPHS[itemCycle(slot)]}</span>`;
+function swatch(colour: string, order: number): string {
+    return `<span style="color:${colour}">${SWATCH_GLYPHS[itemCycle(order)]}</span>`;
 }
 
 export function paintOf(input: FigureInput, index: number): CurvePaint {
@@ -237,13 +239,13 @@ function endLabels(
             ? spreadLabels(wanted, LABEL_GAP, { min: 0, max: plotHeight })
             : wanted;
     const annotations = ends.map(({ index, point }, rank): Annotation => {
-        const slot = input.curves[index].slot;
+        const { slot, order } = input.curves[index];
         const shift = placed[rank] - wanted[rank];
         const moved = Math.abs(shift) >= LABEL_MOVED;
         return {
             x: point.x,
             y: point.y,
-            text: `${swatch(theme.series[itemHue(slot)], slot)} ${slotLabel(slot)}`,
+            text: `${swatch(theme.series[itemHue(order)], order)} ${slotLabel(slot)}`,
             xanchor: "left",
             yanchor: "middle",
             font: {
@@ -316,13 +318,14 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     };
 }
 
-/** « ━ A5 · analysis », the analysis cut to `chars` characters, in its item's hue. */
+/** « ━ A5 · analysis », the analysis cut to `chars` characters, in the hue of its first curve. */
 function panelTitle(input: FigureInput, slot: number, chars: number): string {
     const index = input.curves.findIndex((curve) => curve.slot === slot);
     const text = index === -1 ? "" : input.curves[index].analysis;
     const short = text.length > chars ? `${text.slice(0, chars - 1)}…` : text;
-    const colour = input.theme.series[itemHue(slot)];
-    return `${swatch(colour, slot)} ${slotLabel(slot)} · ${escapePlotlyText(short)}`;
+    const order = index === -1 ? 0 : input.curves[index].order;
+    const colour = input.theme.series[itemHue(order)];
+    return `${swatch(colour, order)} ${slotLabel(slot)} · ${escapePlotlyText(short)}`;
 }
 
 /**

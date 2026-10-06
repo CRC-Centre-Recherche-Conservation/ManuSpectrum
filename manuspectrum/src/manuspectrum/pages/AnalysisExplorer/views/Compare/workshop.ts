@@ -18,26 +18,13 @@ export type WorkshopLayout = "overlay" | "offset" | "multiples" | "table";
 
 /** Above this many curves, the workshop opens on small multiples. */
 export const OVERLAY_MAX_CURVES = 8;
-/** The hues of the series palette (`--series-1…12`): an item's slot cycles through them. */
+/** The hues of the series palette (`--series-1…12`): the curves of a window, or the slots of a marker, cycle through them. */
 export const SERIES_HUES = 12;
 /** The least room between two end-of-curve labels, in pixels. */
 export const LABEL_GAP = 12;
 
-/**
- * Line styles in order of use: the first three mark the cycles of an item's
- * hue (solid, dashed, dotted), the others the 2nd, 3rd… file of one item.
- */
-const DASHES = [
-    "solid",
-    "6px,2px",
-    "2px,2px",
-    "10px,2px,2px,2px",
-    "14px,3px",
-    "4px,2px",
-    "8px,2px,2px,2px,2px,2px",
-    "12px,4px",
-    "1px,3px",
-] as const;
+/** Line styles by cycle of the twelve hues: solid, dashed, dotted. */
+const DASHES = ["solid", "6px,2px", "2px,2px"] as const;
 /** The line styles that mark the cycles of a hue. */
 const CYCLES = 3;
 
@@ -79,9 +66,9 @@ export function visibleCurveCount(states: readonly CurveState[]): number {
 }
 
 /**
- * A curve's current colour+dash identity: `"series"` is its item's hue
- * and dash (`itemHue`/`itemDash`), unchanged by the focus; `"context"` the
- * grey of a dimmed, unrelated curve.
+ * A curve's current colour+dash identity: `"series"` is the hue and dash
+ * of its order in its window (`itemHue`/`itemCycle`), unchanged by the
+ * focus; `"context"` the grey of a dimmed, unrelated curve.
  */
 export type CurveLook =
     | { kind: "series"; hue: number; dash: Dash }
@@ -179,60 +166,48 @@ export function dashArray(dash: Dash): string {
 /** How an item (a Selection slot) is drawn: filled, a ring, a ring with a dot — a marker, a chip, the head of a line. */
 export type ItemMarker = "filled" | "ring" | "ring-dot";
 
-/** The item a curve belongs to, and which of that item's files it is (0: the first). */
+/** The place of a curve in its window: its order among the curves the window draws, loaded or not (0: the first). */
 export interface CurveItem {
-    slot: number;
-    rank: number;
+    order: number;
 }
 
 /**
- * The colour of an item, ONE for the whole Compare view: its slot cycling
- * through the twelve hues (`--series-1…12`); the index of the hue.
+ * The colour index of a curve or a marker: it cycles through the twelve
+ * hues (`--series-1…12`); the index of the hue.
  */
-export function itemHue(slot: number): number {
-    return slot % SERIES_HUES;
+export function itemHue(index: number): number {
+    return index % SERIES_HUES;
 }
 
-/** How many times the slot has gone round the twelve hues, 0 to 2: it selects the variant (solid line and filled marker, dashed and ring, dotted and ring with a dot). */
-export function itemCycle(slot: number): number {
-    return Math.floor(slot / SERIES_HUES) % CYCLES;
+/** How many times the index has gone round the twelve hues, 0 to 2: it selects the variant (solid line and filled marker, dashed and ring, dotted and ring with a dot). */
+export function itemCycle(index: number): number {
+    return Math.floor(index / SERIES_HUES) % CYCLES;
 }
 
-/** The marker of an item's cycle. */
-export function itemMarker(slot: number): ItemMarker {
-    return (["filled", "ring", "ring-dot"] as const)[itemCycle(slot)];
+/** The marker of an index's cycle. */
+export function itemMarker(index: number): ItemMarker {
+    return (["filled", "ring", "ring-dot"] as const)[itemCycle(index)];
 }
 
 /** The class a chip or a folio marker carries for its hue: `slot-1…12`. */
-export function itemTone(slot: number): string {
-    return `slot-${itemHue(slot) + 1}`;
+export function itemTone(index: number): string {
+    return `slot-${itemHue(index) + 1}`;
 }
 
 /** The classes a chip or a folio marker carries: its hue (`slot-1…12`) and its marker (`item-filled`, `item-ring`, `item-ring-dot`). */
-export function itemClasses(slot: number): string {
-    return `${itemTone(slot)} item-${itemMarker(slot)}`;
+export function itemClasses(index: number): string {
+    return `${itemTone(index)} item-${itemMarker(index)}`;
 }
 
 /**
- * The line style of a curve: its item's cycle for the first file, a style of
- * its own for the 2nd, 3rd… file, drawn from those no cycle uses, spread so
- * that two items of the same hue never share one (`hue`, `dash`) up to two
- * extra files each; beyond, the styles repeat.
- */
-export function itemDash(slot: number, rank: number): Dash {
-    if (rank === 0) return DASHES[itemCycle(slot)];
-    const spare = DASHES.length - CYCLES;
-    return DASHES[CYCLES + (((rank - 1) * CYCLES + itemCycle(slot)) % spare)];
-}
-
-/**
- * A curve's current identity: its item's hue and its dash, unchanged by the
+ * A curve's current identity: the hue of its order in its window, solid
+ * for the first twelve curves, then dashed, then dotted; unchanged by the
  * focus, or grey context while dimmed.
  */
 export function curveLook(item: CurveItem, state: CurveState): CurveLook {
-    const dash = itemDash(item.slot, item.rank);
+    const dash = DASHES[itemCycle(item.order)];
     if (state === "dimmed") return { kind: "context", dash };
-    return { kind: "series", hue: itemHue(item.slot), dash };
+    return { kind: "series", hue: itemHue(item.order), dash };
 }
 
 /** The CSS colour of a curve's current look, for the legend's inline SVG (DOM `var()`, unlike a Plotly trace which needs a resolved colour — see `curveColour`). */
@@ -279,7 +254,7 @@ export function curveState(
 }
 
 /**
- * Every curve at 1.5 px in its own hue, emphasised (a pin or a preview) at
+ * Every curve at 1.5 px in the hue of its order in the window, emphasised (a pin or a preview) at
  * 2.5 px, colour and dash unchanged by the focus (`curveLook`). A hidden
  * curve keeps its line, at opacity 0, out of the hover. A dimmed curve draws
  * in grey context at reduced opacity and width, out of the hover too.
