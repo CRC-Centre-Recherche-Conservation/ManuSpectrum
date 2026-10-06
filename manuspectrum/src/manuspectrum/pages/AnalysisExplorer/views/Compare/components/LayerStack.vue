@@ -1049,4 +1049,31 @@ function tintLabel(tint: Tint | null): string {
         transition: opacity 0.15s ease-out;
     }
 }
+
+.layer-stack .stage {
+    container-type: size;
+}
+
+@container (max-height: 14rem) or (max-width: 18rem) {
+    .layer-stack .stage .zoom {
+        opacity: 0;
+    }
+}
+
+.layer-stack .stage:hover .zoom,
+.layer-stack .stage:focus-within .zoom {
+    opacity: 1;
+}
+
+@media (width < 48rem) {
+    .layer-stack .stage {
+        container-type: normal;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .layer-stack .stage .zoom {
+        transition: opacity 0.15s ease-out;
+    }
+}
 </style>

@@ -988,4 +988,52 @@ function onApplyAll(side: Side): void {
 .curtain-pane .stage :deep(.leaflet-sbs-range:focus-visible)::-moz-range-thumb {
     box-shadow: 0 0 0 0.1875rem var(--accent);
 }
+
+.curtain-pane {
+    container-type: size;
+}
+
+@container (max-height: 14rem) or (max-width: 18rem) {
+    .curtain-pane .zoom {
+        opacity: 0;
+    }
+
+    .curtain-pane .chip .analysis > span:last-child {
+        display: none;
+    }
+
+    .curtain-pane .chip .analysis {
+        min-inline-size: 0;
+    }
+
+    .curtain-pane :deep(.scale-badge-chip > span:last-child) {
+        position: absolute;
+        overflow: hidden;
+        inline-size: 0.0625rem;
+        block-size: 0.0625rem;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .curtain-pane :deep(.scale-badge-chip) {
+        padding-inline: 0.3125rem;
+    }
+}
+
+.curtain-pane:hover .zoom,
+.curtain-pane:focus-within .zoom {
+    opacity: 1;
+}
+
+@media (max-width: 48rem) {
+    .curtain-pane {
+        container-type: normal;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .curtain-pane .zoom {
+        transition: opacity 0.15s ease-out;
+    }
+}
 </style>

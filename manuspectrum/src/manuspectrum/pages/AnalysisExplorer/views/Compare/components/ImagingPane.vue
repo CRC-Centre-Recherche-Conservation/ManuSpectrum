@@ -498,7 +498,12 @@ function retry(): void {
                 :title="pairTitle"
                 @click.stop="emit('pair', pair.canvas)"
             >
-                <span>{{ pairLabel }}</span>
+                <span class="text">{{ pairLabel }}</span>
+                <span
+                    class="glyph"
+                    aria-hidden="true"
+                    >→</span
+                >
             </button>
         </div>
         <span class="zoom">
@@ -849,6 +854,68 @@ function retry(): void {
 
 @media (prefers-reduced-motion: no-preference) {
     .imaging-pane .stage {
+        transition: opacity 0.15s ease-out;
+    }
+}
+
+.imaging-pane {
+    container-type: size;
+}
+
+.imaging-pane .corner .pair .glyph {
+    display: none;
+}
+
+@container (max-height: 14rem) or (max-width: 18rem) {
+    .imaging-pane .zoom {
+        opacity: 0;
+    }
+
+    .imaging-pane .chip .analysis > span:last-child {
+        display: none;
+    }
+
+    .imaging-pane .chip .analysis {
+        min-inline-size: 0;
+    }
+
+    .imaging-pane .corner .pair {
+        min-inline-size: 1.625rem;
+        padding-inline: 0.375rem;
+    }
+
+    .imaging-pane .corner .pair .glyph {
+        display: block;
+    }
+
+    .imaging-pane .corner .pair .text,
+    .imaging-pane .corner :deep(.scale-badge-chip > span:last-child) {
+        position: absolute;
+        overflow: hidden;
+        inline-size: 0.0625rem;
+        block-size: 0.0625rem;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .imaging-pane .corner :deep(.scale-badge-chip) {
+        padding-inline: 0.3125rem;
+    }
+}
+
+.imaging-pane:hover .zoom,
+.imaging-pane:focus-within .zoom {
+    opacity: 1;
+}
+
+@media (max-width: 48rem) {
+    .imaging-pane {
+        container-type: normal;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .imaging-pane .zoom {
         transition: opacity 0.15s ease-out;
     }
 }
