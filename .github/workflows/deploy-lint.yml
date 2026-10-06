@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     defaults:
       run:
@@ -58,7 +58,7 @@ jobs:
   rehearsal-kit:
     needs: changes
     if: needs.changes.outputs.rehearsal == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     defaults:
       run:
@@ -85,7 +85,7 @@ jobs:
   stack:
     needs: changes
     if: needs.changes.outputs.stack == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     defaults:
       run:
@@ -101,7 +101,7 @@ jobs:
   image:
     needs: changes
     if: needs.changes.outputs.image == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 75
     defaults:
       run:
@@ -263,7 +263,7 @@ jobs:
   conclusion:
     needs: [changes, rehearsal-kit, stack, image]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Every job that ran passed
