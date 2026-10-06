@@ -73,7 +73,11 @@ interface Group {
  * click lays a canvas in the target pane (`place`), or adds it to or takes it
  * out of the stack (`toggle-stack`); a drag carries its id; a group lays its
  * first layers (`place-group`) or, for a family shared by analyses, compares
- * them (`compare`). The thumbnails are one tab stop.
+ * them (`compare`). The thumbnails are one tab stop. The panes marked on a
+ * thumbnail and offered as targets are those the layout shows (A for one pane,
+ * A and B for the curtain and two panes, A to D for four); a layer in the
+ * stack is marked only in the Stack layout. The state of the other panes is
+ * kept, not drawn.
  */
 const props = defineProps<{
     maps: readonly MapLine[];
@@ -290,14 +294,17 @@ function groupsByTag(list: Entry[]): Group[] {
 
 function panesOf(canvas: string): string[] {
     return props.state.panes.flatMap((pane, index) =>
-        pane === canvas && index < PANE_LETTERS.length
+        pane === canvas && index < targets.value.length
             ? [PANE_LETTERS[index]]
             : [],
     );
 }
 
 function inStack(canvas: string): boolean {
-    return props.state.stack.layers.some((layer) => layer.canvas === canvas);
+    return (
+        stacked.value &&
+        props.state.stack.layers.some((layer) => layer.canvas === canvas)
+    );
 }
 
 function ids(group: Group): string[] {

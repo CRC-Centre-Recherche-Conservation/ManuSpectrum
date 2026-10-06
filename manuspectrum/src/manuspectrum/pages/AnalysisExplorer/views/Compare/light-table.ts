@@ -34,6 +34,8 @@ export interface StoredImaging {
     /** A stack holds layers of one analysis, fixed by the first laid. */
     stack: { analysis: string | null; layers: StackLayer[] };
     grouping: TableGrouping;
+    /** The reader's choice to show or hide the gallery; absent, the window's width decides. */
+    gallery?: boolean;
 }
 
 export interface TableState extends StoredImaging {

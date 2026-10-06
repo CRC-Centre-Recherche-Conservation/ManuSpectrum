@@ -43,22 +43,19 @@ export function paneFilter(adjust: string, filterId: string | null): string {
 
 /**
  * The appearance of each layer of the stack, by canvas. `tintId` gives the
- * id of the hue filter of a canvas, null when it has none; `blinkedOff`
- * is the canvas a blink hides at this moment (the stack itself is not
- * changed).
+ * id of the hue filter of a canvas, null when it has none.
  */
 export function stackAppearances(
     layers: readonly StackLayer[],
     options: {
         filter: string;
         tintId: (canvas: string) => string | null;
-        blinkedOff?: string | null;
     },
 ): Map<string, PaneAppearance> {
     const result = new Map<string, PaneAppearance>();
     let firstShown = true;
     layers.forEach((layer, order) => {
-        const shown = layer.on && layer.canvas !== options.blinkedOff;
+        const shown = layer.on;
         result.set(layer.canvas, {
             order,
             shown,

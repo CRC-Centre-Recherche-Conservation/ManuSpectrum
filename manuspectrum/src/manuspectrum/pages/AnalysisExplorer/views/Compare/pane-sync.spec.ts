@@ -41,6 +41,52 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
+describe("fitZoomOf past the map's zoom limits", () => {
+    it("fits an image smaller than its pane although the map's maximum is the image's native zoom", () => {
+        const target = pane({ w: 236, h: 235 }, 800, 600);
+        target.map.setMaxZoom(0);
+        const fit = fitZoomOf(target) as number;
+        expect(fit).toBeGreaterThanOrEqual(1);
+        fitView(target, fit);
+        expect(target.map.getZoom()).toBe(fit);
+        expect(keepsFit(target)).toBe(true);
+    });
+
+    it("fits a pane that shrank below the minimum set by a larger one", () => {
+        let room = { w: 800, h: 600 };
+        const container = document.createElement("div");
+        Object.defineProperty(container, "clientWidth", {
+            get: () => room.w,
+        });
+        Object.defineProperty(container, "clientHeight", {
+            get: () => room.h,
+        });
+        document.body.append(container);
+        const map = L.map(container, {
+            crs: L.CRS.Simple,
+            zoomSnap: 0.25,
+            minZoom: -10,
+            attributionControl: false,
+        });
+        maps.push(map);
+        map.setView([0, 0], 0, { animate: false });
+        const target: SyncTarget = {
+            map,
+            size: { w: 236, h: 235 },
+            nativeZoom: 0,
+        };
+        fitView(target, fitZoomOf(target) as number);
+        const large = map.getZoom();
+        room = { w: 40, h: 30 };
+        map.invalidateSize({ animate: false });
+        const fit = fitZoomOf(target) as number;
+        expect(fit).toBeLessThan(large - 2);
+        fitView(target, fit);
+        expect(map.getZoom()).toBe(fit);
+        expect(keepsFit(target)).toBe(true);
+    });
+});
+
 describe("readView and fitZoomOf", () => {
     it("reads the fitted image as its centre at one half and no relative zoom", () => {
         const target = pane();

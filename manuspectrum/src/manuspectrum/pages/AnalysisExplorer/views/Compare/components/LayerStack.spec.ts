@@ -49,7 +49,6 @@ vi.mock("leaflet-iiif", () => ({}));
 
 const SIZE = { w: 2000, h: 3000 };
 const SMALL = { w: 600, h: 1000 };
-const BLINK_MS = 700;
 
 type Fake = L.LayerGroup & {
     _imageSizes: { x: number; y: number }[];
@@ -529,48 +528,6 @@ describe("the order", () => {
         const view = await mountStack();
         await rows(view)[1].find('[data-action="remove"]').trigger("click");
         expect(view.emitted("remove")).toEqual([["c1-1"]]);
-    });
-});
-
-describe("the blink", () => {
-    it("switches a layer off and on every 700 ms until Escape, without touching the stack", async () => {
-        vi.useFakeTimers();
-        const view = await mountStack();
-        await rows(view)[1].find('[data-action="blink"]').trigger("click");
-        expect(paneOf(view, 1).style.display).toBe("");
-        await vi.advanceTimersByTimeAsync(BLINK_MS);
-        expect(paneOf(view, 1).style.display).toBe("none");
-        await vi.advanceTimersByTimeAsync(BLINK_MS);
-        expect(paneOf(view, 1).style.display).toBe("");
-        await vi.advanceTimersByTimeAsync(BLINK_MS);
-        expect(paneOf(view, 1).style.display).toBe("none");
-        await view.find(".layer-stack").trigger("keydown", { key: "Escape" });
-        expect(paneOf(view, 1).style.display).toBe("");
-        await vi.advanceTimersByTimeAsync(BLINK_MS * 3);
-        expect(paneOf(view, 1).style.display).toBe("");
-        expect(view.emitted("set-visible")).toBeUndefined();
-    });
-
-    it("stops when the same button is pressed again", async () => {
-        vi.useFakeTimers();
-        const view = await mountStack();
-        const button = rows(view)[0].find('[data-action="blink"]');
-        await button.trigger("click");
-        await vi.advanceTimersByTimeAsync(BLINK_MS);
-        expect(paneOf(view, 0).style.display).toBe("none");
-        await button.trigger("click");
-        expect(paneOf(view, 0).style.display).toBe("");
-        expect(vi.getTimerCount()).toBe(0);
-    });
-
-    it("is not offered under reduced motion", async () => {
-        vi.stubGlobal("matchMedia", (query: string) => ({
-            matches: query.includes("reduce"),
-            addEventListener: () => undefined,
-            removeEventListener: () => undefined,
-        }));
-        const view = await mountStack();
-        expect(view.find('[data-action="blink"]').exists()).toBe(false);
     });
 });
 

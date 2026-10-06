@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { useResizeObserver } from "@vueuse/core";
+import {
+    computed,
+    inject,
+    onBeforeUnmount,
+    ref,
+    shallowRef,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import CurtainPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue";
@@ -52,6 +61,7 @@ import {
 import {
     galleryOpensWith,
     galleryPlace,
+    isMultiPane,
     shownLayout,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
 import {
@@ -87,10 +97,13 @@ const DEFAULT_FRAME: TableFrame = {
  * (`light-table.ts`) and its parts only emit what the reader does: one to
  * four `ImagingPane`s, a `CurtainPane` between any two canvases, a
  * `LayerStack`, and the `LayerGallery` of every canvas of the Selection. The
- * window's size decides what is drawn (`table-frame.ts`): one pane in S,
- * four folded to two and the gallery below the table in M, the gallery to
- * the right in L and enlarged. The table keeps its layout in the browser
- * (`table-memory.ts`, `writeImaging`) after a pause and on closing, and
+ * window's size decides what is drawn (`table-frame.ts`): the layout the
+ * reader chose at any size (one pane in S and, for the two grids, on a phone,
+ * where their buttons are disabled), the gallery in a panel to the right of
+ * the table that a rail on its edge shows or hides (open by default when the
+ * window holds the table and the gallery, a strip under the table on a
+ * phone). The table keeps its layout and the choice about the gallery in the
+ * browser (`table-memory.ts`, `writeImaging`) after a pause and on closing, and
  * follows the Selection (`reconcile`). Zoom and pan are relayed here from the
  * pane moved to every other shown pane only while the sync toggle
  * (`syncViews`, off by default, stored) is on, whatever the analyses, and a
@@ -107,15 +120,16 @@ const { $gettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
 const frameRef = inject(WINDOW_FRAME_KEY, ref(DEFAULT_FRAME));
 
-const state = ref<TableState>(restoreState(readImaging(), props.maps));
+const stored = readImaging();
+const state = ref<TableState>(restoreState(stored, props.maps));
+const root = useTemplateRef<HTMLElement>("root");
+const width = ref<number | null>(null);
+const galleryChoice = ref<boolean | null>(stored?.gallery ?? null);
 const sizes = shallowRef<ReadonlyMap<string, ServedSize | null>>(new Map());
 const views = shallowRef<(NormalisedView | null)[]>(
     Array(PANE_COUNT).fill(null),
 );
 const notice = ref("");
-const galleryOpen = ref(
-    galleryOpensWith(frameRef.value, analysisCount(props.maps)),
-);
 
 const analysisIds = computed(() => [
     ...new Set(props.maps.map((line) => line.analysis.id)),
@@ -129,7 +143,17 @@ const shownState = computed<TableState>(() => ({
     layout: shown.value,
     active: Math.min(state.value.active, Math.max(shownCount.value - 1, 0)),
 }));
+const galleryOpen = computed(
+    () =>
+        galleryChoice.value ??
+        galleryOpensWith(
+            frame.value,
+            analysisIds.value.length,
+            width.value === null ? null : width.value / rem(),
+        ),
+);
 const galleryAt = computed(() => galleryPlace(frame.value, galleryOpen.value));
+const railed = computed(() => !frame.value.phone);
 const byCanvas = computed(
     () =>
         new Map(
@@ -146,16 +170,22 @@ const notes = computed(() =>
 const paneIndexes = computed(() =>
     Array.from({ length: shownCount.value }, (_, pane) => pane),
 );
-const canSwap = computed(
-    () => !small.value && ["curtain", "grid2", "grid4"].includes(shown.value),
-);
+const canSwap = computed(() => ["curtain", "grid2"].includes(shown.value));
 const phone = computed(() => frame.value.phone);
-const layoutChoices = computed(() =>
-    allChoices.value.filter(
-        (choice) =>
-            !phone.value ||
-            ["single", "curtain", "stack"].includes(choice.layout),
-    ),
+const layoutChoices = computed<
+    {
+        layout: TableLayout;
+        icon: IconName;
+        text: string;
+        name: string;
+        word?: boolean;
+        unavailable: string | null;
+    }[]
+>(() =>
+    allChoices.value.map((choice) => ({
+        ...choice,
+        unavailable: unavailableBecause(choice.layout),
+    })),
 );
 const allChoices = computed<
     {
@@ -199,18 +229,36 @@ const allChoices = computed<
         word: true,
     },
 ]);
-const persisted = computed(() => JSON.stringify(storedOf(state.value)));
+const persisted = computed(() =>
+    JSON.stringify(storedOf(state.value, galleryChoice.value)),
+);
+const galleryName = computed(() =>
+    galleryOpen.value
+        ? $gettext("Hide the gallery")
+        : $gettext("Show the gallery"),
+);
+
+useResizeObserver(root, (entries) => {
+    const box = entries[0]?.contentRect;
+    if (box && box.width > 0) width.value = box.width;
+});
 
 useWindowActions(() => [
-    {
-        id: "gallery",
-        icon: "image",
-        label: $gettext("Gallery"),
-        description: $gettext("Show or hide the gallery of every map"),
-        pressed: galleryOpen.value && !small.value,
-        disabled: small.value,
-        run: toggleGallery,
-    },
+    ...(phone.value
+        ? [
+              {
+                  id: "gallery",
+                  icon: "image" as const,
+                  label: $gettext("Gallery"),
+                  description: $gettext(
+                      "Show or hide the gallery of every map",
+                  ),
+                  pressed: galleryOpen.value && !small.value,
+                  disabled: small.value,
+                  run: toggleGallery,
+              },
+          ]
+        : []),
     {
         id: "rearrange",
         icon: "th-large",
@@ -245,15 +293,6 @@ watch(persisted, () => {
     if (persistTimer !== null) clearTimeout(persistTimer);
     persistTimer = setTimeout(flushPersist, PERSIST_DELAY_MS);
 });
-watch(
-    () => [frame.value.size, frame.value.enlarged],
-    () => {
-        galleryOpen.value = galleryOpensWith(
-            frame.value,
-            analysisIds.value.length,
-        );
-    },
-);
 watch(notes, (now, before) => {
     if (shown.value === "curtain") return;
     for (const [canvas, note] of now) {
@@ -282,8 +321,21 @@ watch(notes, (now, before) => {
 });
 onBeforeUnmount(flushPersist);
 
-function analysisCount(maps: readonly MapLine[]): number {
-    return new Set(maps.map((line) => line.analysis.id)).size;
+function rem(): number {
+    return (
+        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+    );
+}
+
+/** Why a layout cannot be chosen in this frame, or null. */
+function unavailableBecause(layout: TableLayout): string | null {
+    if (small.value) {
+        return $gettext("The layouts need a window larger than S");
+    }
+    if (phone.value && isMultiPane(layout)) {
+        return $gettext("Several panes side by side need a wider screen");
+    }
+    return null;
 }
 
 function flushPersist(): void {
@@ -291,7 +343,7 @@ function flushPersist(): void {
     persistTimer = null;
     if (!dirty) return;
     dirty = false;
-    writeImaging(storedOf(state.value));
+    writeImaging(storedOf(state.value, galleryChoice.value));
 }
 
 function labelOf(canvas: string | null): string {
@@ -329,11 +381,7 @@ function layoutName(layout: TableLayout): string {
 }
 
 function onLayout(layout: TableLayout): void {
-    if (
-        small.value ||
-        !layoutChoices.value.some((c) => c.layout === layout) ||
-        layout === state.value.layout
-    )
+    if (unavailableBecause(layout) !== null || layout === state.value.layout)
         return;
     const next = setLayout(state.value, layout, props.maps);
     apply(
@@ -367,8 +415,8 @@ function onSyncViews(): void {
 }
 
 function toggleGallery(): void {
-    if (small.value) return;
-    galleryOpen.value = !galleryOpen.value;
+    if (phone.value && small.value) return;
+    galleryChoice.value = !galleryOpen.value;
     announce(
         galleryOpen.value
             ? $gettext("Gallery shown")
@@ -470,11 +518,13 @@ function onGrouping(grouping: TableGrouping): void {
 
 <template>
     <section
+        ref="root"
         class="light-table"
         :aria-label="$gettext('Imaging light table')"
         :data-size="frame.enlarged ? 'enlarged' : frame.size ?? 'M'"
         :data-shown="shown"
         :data-gallery="galleryAt"
+        :data-rail="railed ? 'true' : undefined"
     >
         <div
             class="toolbar"
@@ -492,10 +542,13 @@ function onGrouping(grouping: TableGrouping): void {
                     type="button"
                     :data-layout="choice.layout"
                     :aria-label="choice.name"
+                    :title="choice.unavailable ?? undefined"
                     :aria-pressed="
-                        state.layout === choice.layout ? 'true' : 'false'
+                        (phone ? shown : state.layout) === choice.layout
+                            ? 'true'
+                            : 'false'
                     "
-                    :aria-disabled="small ? 'true' : undefined"
+                    :aria-disabled="choice.unavailable ? 'true' : undefined"
                     @click="onLayout(choice.layout)"
                 >
                     <svg
@@ -631,6 +684,22 @@ function onGrouping(grouping: TableGrouping): void {
                     />
                 </div>
             </div>
+            <button
+                v-if="railed"
+                type="button"
+                class="rail"
+                data-action="gallery-rail"
+                :aria-expanded="galleryOpen ? 'true' : 'false'"
+                :aria-label="galleryName"
+                :title="galleryName"
+                @click="toggleGallery"
+            >
+                <span
+                    class="arrow"
+                    aria-hidden="true"
+                    >{{ galleryOpen ? "›" : "‹" }}</span
+                >
+            </button>
             <LayerGallery
                 v-if="galleryAt !== 'hidden'"
                 class="gallery"
@@ -756,16 +825,39 @@ function onGrouping(grouping: TableGrouping): void {
     min-block-size: 0;
 }
 
-.light-table[data-gallery="right"] .body {
-    grid-template-columns: minmax(0, 1fr) 18.5rem;
+.light-table[data-rail="true"] .body {
+    grid-template-columns: minmax(0, 1fr) 1.75rem;
 }
 
-.light-table[data-gallery="below"] .body,
+.light-table[data-rail="true"][data-gallery="right"] .body {
+    grid-template-columns: minmax(10rem, 1fr) 1.75rem minmax(0, 18.5rem);
+}
+
 .light-table[data-gallery="strip"] .body {
     grid-template-rows: minmax(8rem, 1fr) minmax(0, 7rem);
 }
 
+.light-table .rail {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 1.125rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.light-table .rail:hover {
+    background: var(--bg-alt);
+    color: var(--ink);
+}
+
 .light-table .stage {
+    isolation: isolate;
     display: grid;
     min-inline-size: 0;
     min-block-size: 8rem;
@@ -833,10 +925,6 @@ function onGrouping(grouping: TableGrouping): void {
     .light-table[data-shown="grid2"] .panes {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: repeat(2, minmax(0, 1fr));
-    }
-
-    .light-table[data-gallery="right"] .body {
-        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>

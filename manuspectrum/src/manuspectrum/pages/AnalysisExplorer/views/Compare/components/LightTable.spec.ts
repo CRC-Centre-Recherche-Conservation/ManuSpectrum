@@ -52,6 +52,11 @@ const ELEMENT_MAP = valueRef("http://example.org/element-map", "Element map");
 const L_FRAME: TableFrame = { size: "L", enlarged: false, phone: false };
 const M_FRAME: TableFrame = { size: "M", enlarged: false, phone: false };
 const S_FRAME: TableFrame = { size: "S", enlarged: false, phone: false };
+const BY_HAND_FRAME: TableFrame = {
+    size: null,
+    enlarged: false,
+    phone: false,
+};
 
 function element(symbol: string, label: string): Partial<FileLayer> {
     return {
@@ -719,9 +724,14 @@ describe("with some tiles", () => {
 });
 
 describe("the size of the window", () => {
-    it("hides the gallery in M and shows it to the right in L", async () => {
+    it("starts the gallery closed in M, open in L, and offers the rail in both", async () => {
         const medium = await mountTable(PLAIN_TWO, { frame: M_FRAME });
         expect(medium.find(".layer-gallery").exists()).toBe(false);
+        expect(
+            medium
+                .find('[data-action="gallery-rail"]')
+                .attributes("aria-expanded"),
+        ).toBe("false");
         medium.unmount();
         wrapper = null;
         const large = await mountTable(PLAIN_TWO, { frame: L_FRAME });
@@ -729,36 +739,117 @@ describe("the size of the window", () => {
         expect(large.find(".light-table").attributes("data-gallery")).toBe(
             "right",
         );
+        expect(
+            large
+                .find('[data-action="gallery-rail"]')
+                .attributes("aria-expanded"),
+        ).toBe("true");
     });
 
-    it("shows the gallery below the table in M when the header action asks", async () => {
-        const view = await mountTable(PLAIN_TWO, { frame: M_FRAME });
-        await runAction("gallery");
-        expect(view.find(".layer-gallery").exists()).toBe(true);
-        expect(view.find(".light-table").attributes("data-gallery")).toBe(
-            "below",
+    it("shows and hides the gallery to the right of the table with the rail, at every size", async () => {
+        for (const frame of [S_FRAME, M_FRAME, L_FRAME, BY_HAND_FRAME]) {
+            const view = await mountTable(PLAIN_TWO, { frame });
+            const rail = () => view.find('[data-action="gallery-rail"]');
+            const was = view.find(".layer-gallery").exists();
+            await rail().trigger("click");
+            expect(view.find(".layer-gallery").exists()).toBe(!was);
+            expect(rail().attributes("aria-expanded")).toBe(String(!was));
+            expect(rail().attributes("aria-label")).toBe(
+                was ? "Show the gallery" : "Hide the gallery",
+            );
+            expect(rail().text()).toBe(was ? "‹" : "›");
+            await rail().trigger("click");
+            expect(view.find(".layer-gallery").exists()).toBe(was);
+            view.unmount();
+            wrapper = null;
+        }
+    });
+
+    it("opens the gallery by default once the window holds the table and the gallery, and closes it below", async () => {
+        const observers: ((entries: unknown[]) => void)[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: (entries: unknown[]) => void) {
+                    observers.push(callback);
+                }
+                observe(): void {}
+                unobserve(): void {}
+                disconnect(): void {}
+            },
         );
+        const view = await mountTable(PLAIN_TWO, { frame: M_FRAME });
+        const measure = async (px: number) => {
+            observers.forEach((callback) =>
+                callback([{ contentRect: { width: px } }]),
+            );
+            await flushPromises();
+        };
+        await measure(1100);
+        expect(view.find(".layer-gallery").exists()).toBe(true);
+        await measure(700);
+        expect(view.find(".layer-gallery").exists()).toBe(false);
     });
 
-    it("draws two panes instead of four in M and keeps the four in the state", async () => {
-        const view = await mountTable(PLAIN_FIVE, { frame: M_FRAME });
-        expect(panes(view)).toHaveLength(2);
-        expect(tableState(view).layout).toBe("grid4");
-        expect(tableState(view).panes).toEqual([
-            "c1-0",
-            "c2-0",
-            "c3-0",
-            "c4-0",
-        ]);
+    it("keeps the reader's choice over the default, and stores it", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        await mountTable(PLAIN_TWO, { frame: L_FRAME });
+        await wrapper!.find('[data-action="gallery-rail"]').trigger("click");
+        expect(wrapper!.find(".layer-gallery").exists()).toBe(false);
+        vi.advanceTimersByTime(1000);
+        expect(readImaging()?.gallery).toBe(false);
+        wrapper!.unmount();
+        wrapper = null;
+        const again = await mountTable(PLAIN_TWO, { frame: L_FRAME });
+        expect(again.find(".layer-gallery").exists()).toBe(false);
+        await again.find('[data-action="gallery-rail"]').trigger("click");
+        again.unmount();
+        wrapper = null;
+        expect(readImaging()?.gallery).toBe(true);
+        const third = await mountTable(PLAIN_TWO, { frame: M_FRAME });
+        expect(third.find(".layer-gallery").exists()).toBe(true);
     });
 
-    it("forces one pane in S and shows no gallery", async () => {
+    it("writes no choice about the gallery until the reader makes one", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        await mountTable(PLAIN_TWO, { frame: L_FRAME });
+        await wrapper!.find('[data-layout="grid4"]').trigger("click");
+        vi.advanceTimersByTime(1000);
+        expect(readImaging()?.layout).toBe("grid4");
+        expect(readImaging()).not.toHaveProperty("gallery");
+    });
+
+    it("reads a record stored before the gallery choice existed", async () => {
+        writeImaging(stored({}));
+        const view = await mountTable(PLAIN_TWO, { frame: L_FRAME });
+        expect(view.find(".layer-gallery").exists()).toBe(true);
+    });
+
+    it("has no gallery action in the window header beside the table, and one on a phone", async () => {
+        await mountTable(PLAIN_TWO, { frame: M_FRAME });
+        expect(actions().map((action) => action.id)).toEqual(["rearrange"]);
+    });
+
+    it("draws four panes in M, S aside, and in a window resized by hand when four is chosen", async () => {
+        for (const frame of [M_FRAME, L_FRAME, BY_HAND_FRAME]) {
+            const view = await mountTable(PLAIN_FIVE, { frame });
+            expect(panes(view)).toHaveLength(4);
+            expect(tableState(view).layout).toBe("grid4");
+            expect(view.find(".light-table").attributes("data-shown")).toBe(
+                "grid4",
+            );
+            view.unmount();
+            wrapper = null;
+        }
+    });
+
+    it("forces one pane in S, with its layouts disabled and explained, and the gallery still reachable", async () => {
         const view = await mountTable(PLAIN_TWO, { frame: S_FRAME });
         expect(panes(view)).toHaveLength(1);
-        expect(view.find(".layer-gallery").exists()).toBe(false);
-        expect(
-            actions().find((action) => action.id === "gallery")?.disabled,
-        ).toBe(true);
+        const grid = view.find('[data-layout="grid2"]');
+        expect(grid.attributes("aria-disabled")).toBe("true");
+        expect(grid.attributes("title")).toBeTruthy();
+        expect(view.find('[data-action="gallery-rail"]').exists()).toBe(true);
     });
 
     it("lays the table out again from the Selection on « Rearrange »", async () => {
@@ -769,31 +860,62 @@ describe("the size of the window", () => {
     });
 });
 
+describe("the swap", () => {
+    it.each([
+        ["curtain", true],
+        ["grid2", true],
+        ["single", false],
+        ["grid4", false],
+        ["stack", false],
+    ])("in %s: offered %s", async (layout, offered) => {
+        const view = await mountTable(PLAIN_FIVE);
+        await click(view, `[data-layout="${layout}"]`);
+        expect(view.find('[data-action="swap"]').exists()).toBe(offered);
+    });
+});
+
 describe("a phone", () => {
     const PHONE_FRAME: TableFrame = { size: "M", enlarged: false, phone: true };
 
-    it("offers one pane, the curtain and the stack only", async () => {
+    it("disables the two grids with a reason and keeps the other layouts", async () => {
         const view = await mountTable(PLAIN_TWO, { frame: PHONE_FRAME });
-        const layouts = view
-            .findAll(".segment button")
+        const buttons = view.findAll(".segment button");
+        expect(
+            buttons.map((button) => button.attributes("data-layout")),
+        ).toEqual(["single", "curtain", "grid2", "grid4", "stack"]);
+        const disabled = buttons
+            .filter((button) => button.attributes("aria-disabled") === "true")
             .map((button) => button.attributes("data-layout"));
-        expect(layouts).toEqual(["single", "curtain", "stack"]);
+        expect(disabled).toEqual(["grid2", "grid4"]);
+        expect(
+            view.find('[data-layout="grid4"]').attributes("title"),
+        ).toContain("wider screen");
+        await click(view, '[data-layout="grid4"]');
+        expect(storedLayout(view)).not.toBe("grid4");
     });
 
-    it("draws one pane for a stored grid and keeps the grid in the state", async () => {
+    it("draws one pane for a stored grid, keeps the grid in the state and presses One pane", async () => {
         const view = await mountTable(PLAIN_FIVE, { frame: PHONE_FRAME });
         expect(panes(view)).toHaveLength(1);
         expect(view.find(".light-table").attributes("data-shown")).toBe(
             "single",
         );
         expect(storedLayout(view)).toBe("grid4");
+        expect(
+            view.find('[data-layout="single"]').attributes("aria-pressed"),
+        ).toBe("true");
     });
 
-    it("puts the gallery in a strip below the table", async () => {
+    it("puts the gallery in a strip below the table, with no rail, and keeps the header action", async () => {
         const view = await mountTable(PLAIN_FIVE, { frame: PHONE_FRAME });
         expect(view.find(".light-table").attributes("data-gallery")).toBe(
             "strip",
         );
+        expect(view.find('[data-action="gallery-rail"]').exists()).toBe(false);
+        expect(actions().map((action) => action.id)).toEqual([
+            "gallery",
+            "rearrange",
+        ]);
     });
 });
 

@@ -43,6 +43,23 @@ function startsInside(layer: IiifLayer, coords: L.Coords): boolean {
     return coords.x * side < layer.x && coords.y * side < layer.y;
 }
 
+/** Zoom levels the reader may go past the zoom at which a layer shows one image pixel per screen pixel. */
+export const OVERZOOM_LEVELS = 3;
+
+/**
+ * Lets the reader zoom `OVERZOOM_LEVELS` past `nativeZoom` on `map`. leaflet-iiif
+ * 3.0.0 sets the map's `_layersMaxZoom` to the layer's own `maxNativeZoom`
+ * (0 for an image of one tile), which is the map's maximum while its
+ * `maxZoom` option is unset: an image served at 236 px could not be shown
+ * larger than 236 px. An explicit `maxZoom` takes precedence over it; the
+ * layers are still never asked for tiles beyond `maxNativeZoom`, Leaflet
+ * scales the tiles it has.
+ */
+export function allowOverzoom(map: L.Map, nativeZoom: number): void {
+    const limit = nativeZoom + OVERZOOM_LEVELS;
+    if (map.options.maxZoom !== limit) map.setMaxZoom(limit);
+}
+
 /** A page image on its way to a map; `remove` takes it off, laid or not. */
 export interface PageLayer {
     layer: L.TileLayer;
@@ -318,6 +335,7 @@ function iiifMember(
         size,
         apply(zoom, offset) {
             const zoomOffset = own - zoom;
+            allowOverzoom(map, zoom);
             const moved = shift.set(zoom, offset);
             if (
                 !moved &&
@@ -373,10 +391,9 @@ export function layServed(
             member = iiifMember(map, laid.layer as IiifLayer, size);
             options.scale.join(member);
         }
-        handlers.read(
-            size,
-            options.scale ? options.scale.zoom() : nativeZoomOf(laid),
-        );
+        const zoom = options.scale ? options.scale.zoom() : nativeZoomOf(laid);
+        allowOverzoom(map, zoom);
+        handlers.read(size, zoom);
     }
     map.on("layeradd", onAdd);
     return {
@@ -480,11 +497,13 @@ export function layImage(
                 member = {
                     nativeZoom: null,
                     size,
-                    apply: (zoom, offset) =>
-                        laid.setBounds(imageBounds(map, size, zoom, offset)),
+                    apply: (zoom, offset) => {
+                        allowOverzoom(map, zoom);
+                        laid.setBounds(imageBounds(map, size, zoom, offset));
+                    },
                 };
                 options.scale.join(member);
-            }
+            } else allowOverzoom(map, 0);
             handlers.read(size, options.scale?.zoom() ?? 0, laid);
         };
         probe.onerror = tryNext;

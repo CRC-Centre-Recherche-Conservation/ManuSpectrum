@@ -9,10 +9,25 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
-/** What of the table the browser keeps: not the target pane, nor zoom, pan or the curtain's position. */
-export function storedOf(state: TableState): StoredImaging {
+/**
+ * What of the table the browser keeps: not the target pane, nor zoom, pan or
+ * the curtain's position; the reader's choice about the gallery (`gallery`)
+ * only once made.
+ */
+export function storedOf(
+    state: TableState,
+    gallery: boolean | null = null,
+): StoredImaging {
     const { layout, panes, syncViews, filters, stack, grouping } = state;
-    return { layout, panes, syncViews, filters, stack, grouping };
+    return {
+        layout,
+        panes,
+        syncViews,
+        filters,
+        stack,
+        grouping,
+        ...(gallery === null ? {} : { gallery }),
+    };
 }
 
 /**

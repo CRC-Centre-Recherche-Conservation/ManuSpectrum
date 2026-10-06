@@ -1,5 +1,6 @@
 import L from "leaflet";
 
+import { OVERZOOM_LEVELS } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { sameSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
 
 import type { ServedSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
@@ -39,17 +40,26 @@ const FIT_TOLERANCE = 1e-3;
 /** Leaflet rounds a pan to whole pixels when its container is resized. */
 const CENTRE_TOLERANCE_PX = 2;
 
-/** The zoom that fits the whole image in the pane, or null while the map has no size. */
+/**
+ * The zoom that fits the whole image in the pane, or null while the map has
+ * no size. Measured from the image's own size, not with Leaflet's
+ * `getBoundsZoom`, which stops at the map's minimum and maximum zoom: the
+ * minimum is the fit of an earlier, larger pane, and the maximum the native
+ * zoom of a small image, so a pane that shrank or an image served smaller
+ * than its pane would not be fitted.
+ */
 export function fitZoomOf(target: SyncTarget): number | null {
     const { map, size, nativeZoom } = target;
     const room = map.getSize();
-    if (room.x === 0 || room.y === 0) return null;
-    const bounds = L.latLngBounds(
-        map.unproject([0, size.h], nativeZoom),
-        map.unproject([size.w, 0], nativeZoom),
-    );
-    const zoom = map.getBoundsZoom(bounds);
-    return Number.isFinite(zoom) ? zoom : null;
+    if (room.x === 0 || room.y === 0 || !size.w || !size.h) return null;
+    const exact =
+        nativeZoom + Math.log2(Math.min(room.x / size.w, room.y / size.h));
+    if (!Number.isFinite(exact)) return null;
+    const snap = L.Browser.any3d ? map.options.zoomSnap : 1;
+    if (!snap) return exact;
+    // Within 1% of a level, as Leaflet does, the level is not skipped.
+    const level = Math.round(exact / (snap / 100)) * (snap / 100);
+    return Math.floor(level / snap) * snap;
 }
 
 /**
@@ -61,6 +71,9 @@ export function fitZoomOf(target: SyncTarget): number | null {
 export function fitView(target: SyncTarget, zoom: number): void {
     const { map, size, nativeZoom } = target;
     const floor = zoom - ZOOM_OUT_BELOW_FIT;
+    if (zoom + OVERZOOM_LEVELS > map.getMaxZoom()) {
+        map.setMaxZoom(zoom + OVERZOOM_LEVELS);
+    }
     if (floor < map.getMinZoom()) map.setMinZoom(floor);
     map.setView(map.unproject([size.w / 2, size.h / 2], nativeZoom), zoom, {
         animate: false,

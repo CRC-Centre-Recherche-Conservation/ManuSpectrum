@@ -320,7 +320,7 @@ describe("LayerGallery targets and keyboard", () => {
         expect(view.find(".target").exists()).toBe(false);
     });
 
-    it("marks the panes holding a canvas and the layers in the stack", () => {
+    it("marks the panes holding a canvas, and the layers in the stack only in the Stack layout", () => {
         const base = defaultState(PLAIN);
         const state = toggleInStack(base, "c1-2", PLAIN);
         const view = gallery(PLAIN, state);
@@ -328,7 +328,53 @@ describe("LayerGallery targets and keyboard", () => {
         expect(thumbs[0].findAll(".pane-badge").map((n) => n.text())).toEqual([
             "A",
         ]);
-        expect(thumbs[2].classes()).toContain("in-stack");
+        expect(thumbs[2].classes()).not.toContain("in-stack");
+        const stacked = gallery(PLAIN, { ...state, layout: "stack" });
+        expect(stacked.findAll(".layer-thumb")[2].classes()).toContain(
+            "in-stack",
+        );
+    });
+
+    it("marks and offers only the panes the layout shows", () => {
+        const base = {
+            ...defaultState(PLAIN),
+            panes: ["c1-0", "c1-1", "c1-2", "c2-0"],
+        };
+        const letters = (layout: TableState["layout"]): string[][] => {
+            const view = gallery(PLAIN, { ...base, layout });
+            return [
+                view.findAll(".target-pane").map((n) => n.text()),
+                view.findAll(".layer-thumb .pane-badge").map((n) => n.text()),
+            ];
+        };
+        expect(letters("single")).toEqual([["A"], ["A"]]);
+        expect(letters("curtain")).toEqual([
+            ["A", "B"],
+            ["A", "B"],
+        ]);
+        expect(letters("grid2")).toEqual([
+            ["A", "B"],
+            ["A", "B"],
+        ]);
+        expect(letters("grid4")).toEqual([
+            ["A", "B", "C", "D"],
+            ["A", "B", "C", "D"],
+        ]);
+        expect(letters("stack")).toEqual([[], []]);
+    });
+
+    it("keeps the hidden panes in the state and gives no outline to a canvas only they hold", () => {
+        const state = {
+            ...defaultState(PLAIN),
+            layout: "grid2" as const,
+            panes: ["c1-0", "c1-1", "c1-2", null],
+        };
+        const view = gallery(PLAIN, state);
+        const held = view.findAll(".layer-thumb")[2];
+        expect(held.classes()).not.toContain("placed");
+        expect(held.attributes("data-pane")).toBeUndefined();
+        expect(held.attributes("aria-label")).not.toContain("C");
+        expect(state.panes[2]).toBe("c1-2");
     });
 
     it("carries the canvas id on drag", async () => {

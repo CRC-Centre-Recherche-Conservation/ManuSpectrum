@@ -429,6 +429,27 @@ describe("Compare layout, imaging record (v3)", () => {
         expect(repaired.stack).toEqual({ analysis: null, layers: [] });
     });
 
+    it("round-trips the choice about the gallery, and reads a record without it as no choice", () => {
+        writeImaging({ ...IMAGING, gallery: false });
+        expect(readImaging()?.gallery).toBe(false);
+        writeImaging({ ...IMAGING, gallery: true });
+        expect(readImaging()?.gallery).toBe(true);
+        writeImaging(IMAGING);
+        expect(readImaging()).not.toHaveProperty("gallery");
+    });
+
+    it("drops a choice about the gallery that is not a boolean", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 3,
+                boxes: {},
+                imaging: { ...IMAGING, gallery: "yes" },
+            }),
+        );
+        expect(readImaging()).not.toHaveProperty("gallery");
+    });
+
     it("reads the old linkAll as nothing: the record opens unsynced", () => {
         window.localStorage.setItem(
             LAYOUT_STORAGE_KEY,

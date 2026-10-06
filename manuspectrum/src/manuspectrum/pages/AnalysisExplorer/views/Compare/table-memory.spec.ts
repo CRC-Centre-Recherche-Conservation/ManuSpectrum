@@ -51,6 +51,13 @@ describe("storedOf", () => {
         ]);
         expect(stored.panes[1]).toBe("c1-2");
     });
+
+    it("adds the choice about the gallery only once the reader made one", () => {
+        const state = defaultState(MAPS);
+        expect(storedOf(state)).not.toHaveProperty("gallery");
+        expect(storedOf(state, false).gallery).toBe(false);
+        expect(storedOf(state, true).gallery).toBe(true);
+    });
 });
 
 describe("restoreState", () => {

@@ -64,8 +64,8 @@ function isBox(value: unknown): value is WindowBox {
  * (`true`) or unfolded (`false`), and the tools open (kind and parameters,
  * written only when one is open). `folded` and `tools` came after `hidden`
  * in the same version and may be absent. Version 3 adds `imaging`, the light
- * table (panes, stack, filters, grouping, linking); a version 2 record has
- * none.
+ * table (panes, stack, filters, grouping, linking, and `gallery` when the
+ * reader showed or hid the gallery); a version 2 record has none.
  */
 const LAYOUT_VERSION = 3;
 const READABLE_VERSIONS: readonly number[] = [2, LAYOUT_VERSION];
@@ -211,6 +211,9 @@ function imagingOf(value: unknown): StoredImaging | undefined {
             layers,
         },
         grouping,
+        ...(typeof value.gallery === "boolean"
+            ? { gallery: value.gallery }
+            : {}),
     };
 }
 

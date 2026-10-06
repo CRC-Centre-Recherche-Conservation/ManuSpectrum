@@ -80,9 +80,7 @@ interface Laid {
 
 const MIN_ZOOM = -10;
 const ZOOM_SNAP = 0.25;
-const BLINK_MS = 700;
 const OPACITY_STEP = 5;
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**
  * The false-colour stack of the light table, for the layers of one
@@ -136,15 +134,10 @@ const host = useTemplateRef<HTMLDivElement>("host");
 const statuses = reactive<Record<string, Status>>({});
 const filtersOpen = ref(false);
 const paletteFor = ref<string | null>(null);
-const blinking = ref<string | null>(null);
-const blinkedOff = ref(false);
-const reducedMotion = ref(false);
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
 let fitted = false;
 let scale: ScaleGroup | null = null;
-let blinkTimer: number | null = null;
-let motionQuery: MediaQueryList | null = null;
 const laid = new Map<string, Laid>();
 
 const record = computed(() =>
@@ -220,9 +213,6 @@ useMapResize({
 });
 
 onMounted(() => {
-    motionQuery = window.matchMedia?.(REDUCED_MOTION) ?? null;
-    reducedMotion.value = motionQuery?.matches ?? false;
-    motionQuery?.addEventListener?.("change", onMotionChange);
     if (!host.value) return;
     map = L.map(host.value, {
         crs: L.CRS.Simple,
@@ -240,8 +230,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     scale = null;
-    stopBlink();
-    motionQuery?.removeEventListener?.("change", onMotionChange);
     for (const entry of laid.values()) {
         entry.generation += 1;
         entry.page?.remove();
@@ -253,11 +241,6 @@ onBeforeUnmount(() => {
 
 function leafletMap(): L.Map | null {
     return map;
-}
-
-function onMotionChange(event: MediaQueryListEvent): void {
-    reducedMotion.value = event.matches;
-    if (event.matches) stopBlink();
 }
 
 /** Lays the layers that are on and not yet laid, takes off those that left the stack, then paints. */
@@ -272,7 +255,6 @@ function sync(): void {
         laid.delete(canvas);
         delete statuses[canvas];
     }
-    if (blinking.value && !wanted.has(blinking.value)) stopBlink();
     if (paletteFor.value && !wanted.has(paletteFor.value)) {
         paletteFor.value = null;
     }
@@ -372,7 +354,6 @@ function paint(): void {
             const tint = tints.get(canvas);
             return tint ? tintFilterId(tint) : null;
         },
-        blinkedOff: blinkedOff.value ? blinking.value : null,
     });
     for (const [canvas, appearance] of appearances) {
         const pane = laid.get(canvas)?.pane;
@@ -428,36 +409,6 @@ function togglePalette(canvas: string): void {
     paletteFor.value = paletteFor.value === canvas ? null : canvas;
 }
 
-function toggleBlink(canvas: string, label: string): void {
-    if (blinking.value === canvas) {
-        stopBlink();
-        return;
-    }
-    stopBlink();
-    blinking.value = canvas;
-    blinkedOff.value = false;
-    blinkTimer = window.setInterval(() => {
-        blinkedOff.value = !blinkedOff.value;
-        paint();
-    }, BLINK_MS);
-    announce(
-        interpolate(
-            $gettext("Blinking %{label}: Escape stops"),
-            { label },
-            true,
-        ),
-    );
-}
-
-function stopBlink(): void {
-    if (blinkTimer !== null) window.clearInterval(blinkTimer);
-    blinkTimer = null;
-    const wasBlinking = blinking.value !== null;
-    blinking.value = null;
-    blinkedOff.value = false;
-    if (wasBlinking) paint();
-}
-
 function onReset(): void {
     emit("filters-reset");
     announce($gettext("Stack: filters reset"));
@@ -481,7 +432,6 @@ function tintLabel(tint: Tint | null): string {
         :style="record ? marks.rowStyle(record) : undefined"
         @dragover.prevent
         @drop.prevent="onDrop"
-        @keydown.esc="stopBlink"
     >
         <svg
             class="tint-filters"
@@ -711,22 +661,6 @@ function tintLabel(tint: Tint | null): string {
                                     on: !row.layer.on,
                                 })
                             "
-                        />
-                        <IconButton
-                            v-if="!reducedMotion"
-                            icon="bolt"
-                            data-action="blink"
-                            :label="
-                                interpolate(
-                                    $gettext('Blink %{label}'),
-                                    {
-                                        label: row.label,
-                                    },
-                                    true,
-                                )
-                            "
-                            :pressed="blinking === row.layer.canvas"
-                            @click="toggleBlink(row.layer.canvas, row.label)"
                         />
                         <IconButton
                             icon="times"

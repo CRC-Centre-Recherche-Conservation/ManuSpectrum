@@ -67,17 +67,6 @@ describe("stackAppearances", () => {
         expect(result.get("b")?.order).toBe(1);
         expect(result.get("b")?.shown).toBe(false);
     });
-
-    it("hides a layer that blinks off without touching the stack", () => {
-        const stack = [layer("a"), layer("b")];
-        const off = stackAppearances(stack, {
-            filter: NO_FILTER,
-            tintId: TINT_ID,
-            blinkedOff: "b",
-        });
-        expect(off.get("b")?.shown).toBe(false);
-        expect(stack[1].on).toBe(true);
-    });
 });
 
 describe("applyAppearance", () => {
