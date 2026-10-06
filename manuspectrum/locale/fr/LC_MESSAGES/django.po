@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 05:32-0500\n"
+"POT-Creation-Date: 2026-10-05 16:35-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -67,6 +67,11 @@ msgstr "Manifeste introuvable"
 #: datatypes/manifest.py:218
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
+
+#: functions/imaging_layers_proposal.py:66
+#, python-format
+msgid "Imaging layers not proposed for tile %(tile)s: %(error)s"
+msgstr "Couches d'imagerie non proposées pour la tuile %(tile)s : %(error)s"
 
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
@@ -2769,6 +2774,52 @@ msgstr "Réinitialiser à la config"
 msgid "Apply & re-render"
 msgstr "Appliquer et re-rendre"
 
+#: templates/views/components/functions/imaging-layers-proposal.htm:5
+msgid "Automatic imaging layer proposal"
+msgstr "Proposition automatique des couches d'imagerie"
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:7
+msgid ""
+"When a chemical imaging manifest is saved, each of its\n"
+"            canvases without a layer description receives one, proposed from "
+"the\n"
+"            canvas label: an element symbol, a spectral band, a video frame "
+"or a\n"
+"            deconvolved element map."
+msgstr ""
+"Lorsqu'un manifeste d'imagerie chimique est enregistré, chacun de ses "
+"canvas sans description de couche en reçoit une, proposée à partir du "
+"libellé du canvas : un symbole d'élément, une bande spectrale, une image "
+"de vidéo ou une carte d'élément déconvoluée."
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:13
+msgid "An existing layer is never modified."
+msgstr "Une couche existante n'est jamais modifiée."
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:14
+msgid ""
+"Canvases whose label is not recognised are left\n"
+"            without a layer. Nothing is proposed for an edit awaiting "
+"review,\n"
+"            and a manifest that cannot be read is logged and skipped."
+msgstr ""
+"Les canvas dont le libellé n'est pas reconnu restent sans couche. Rien "
+"n'est proposé pour une modification en attente de relecture, et un "
+"manifeste illisible est consigné dans le journal puis ignoré."
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:19
+msgid ""
+"Layers of analyses recorded before this function\n"
+"            existed are filled once by a maintenance script."
+msgstr ""
+"Les couches des analyses enregistrées avant cette fonction sont remplies "
+"une fois par un script de maintenance."
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:26
+#: templates/views/components/functions/xy-technique-config.htm:26
+msgid "Triggered by"
+msgstr "Déclenchée par"
+
 #: templates/views/components/functions/resource-summary.htm:5
 msgid ""
 "This configuration is saved with its own button. The Save button of the "
@@ -2819,10 +2870,6 @@ msgid ""
 msgstr ""
 "La table technique-vers-preset est maintenue dans\n"
 "            manuspectrum/constants/xy_presets.py."
-
-#: templates/views/components/functions/xy-technique-config.htm:26
-msgid "Triggered by"
-msgstr "Déclenchée par"
 
 #: templates/views/components/ms-file-license.htm:20
 msgid "Licence name"
@@ -4954,7 +5001,7 @@ msgstr ""
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
 
-#: views/explorer/synthesis.py:75
+#: views/explorer/synthesis.py:85
 #, python-format
 msgid "%(label)s · view %(number)s"
 msgstr "%(label)s · vue %(number)s"
