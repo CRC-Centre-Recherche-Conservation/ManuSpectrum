@@ -248,7 +248,7 @@ jobs:
         with:
           image-ref: ${{ env.IMAGE }}
           version: v0.74.0
-          scanners: vuln
+          scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore
