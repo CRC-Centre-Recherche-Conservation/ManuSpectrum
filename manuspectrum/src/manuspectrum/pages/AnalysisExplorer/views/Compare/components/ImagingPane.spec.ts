@@ -354,6 +354,18 @@ describe("the chip", () => {
         expect(view.find(".tag").text()).toBe("Cu");
     });
 
+    it("shows no tag chip when the tag says what the stored label says", async () => {
+        const same = await mountPane({ maps: [line(1, [cu("cu")])] });
+        expect(same.find(".label").text()).toBe("cu");
+        expect(same.find(".tag").exists()).toBe(false);
+        same.unmount();
+        const differ = await mountPane({
+            maps: [line(1, [cu("MS59-f13v-deconv_Cu")])],
+        });
+        expect(differ.find(".label").text()).toBe("MS59-f13v-deconv_Cu");
+        expect(differ.find(".tag").text()).toBe("Cu");
+    });
+
     async function tagOf(overrides: Partial<FileLayer>): Promise<string> {
         const view = await mountPane({ maps: [line(1, [overrides])] });
         const text = view.find(".tag").text();

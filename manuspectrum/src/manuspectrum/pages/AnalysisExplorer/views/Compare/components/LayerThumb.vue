@@ -4,8 +4,8 @@ import { useGettext } from "vue3-gettext";
 import { imageUrl } from "utils/iiif-image";
 
 import {
-    foldText,
     safeHref,
+    sameText,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 
@@ -40,9 +40,7 @@ const source = computed(() =>
         : null,
 );
 const badge = computed(() =>
-    props.tag && foldText(props.tag) !== foldText(props.label)
-        ? props.tag
-        : null,
+    props.tag && !sameText(props.tag, props.label) ? props.tag : null,
 );
 const name = computed(() => {
     const parts = [props.label];

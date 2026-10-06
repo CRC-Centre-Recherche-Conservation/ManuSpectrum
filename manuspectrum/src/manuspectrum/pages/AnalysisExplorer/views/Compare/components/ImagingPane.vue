@@ -17,6 +17,7 @@ import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/compon
 import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PaneFilters.vue";
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
+import { sameText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMapResize.ts";
 import { layImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -125,7 +126,9 @@ const rightSide = computed(() =>
 );
 const tag = computed(() => {
     const parts = found.value ? layerTag(found.value.layer)?.parts : null;
-    return parts ? tagText(parts, { $gettext, interpolate }) : "";
+    if (!parts) return "";
+    const text = tagText(parts, { $gettext, interpolate });
+    return sameText(text, label.value) ? "" : text;
 });
 const neighbours = computed(() => {
     const layers = found.value?.line.file.layers ?? [];

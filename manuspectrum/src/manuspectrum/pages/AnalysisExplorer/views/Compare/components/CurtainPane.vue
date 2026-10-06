@@ -23,6 +23,7 @@ import {
     ICONS,
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import { sameText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMapResize.ts";
 import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
@@ -49,6 +50,7 @@ import type {
     LaidImage,
     ScaleGroup,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import type { TagParts } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import type { PaneFilters as PaneFiltersValue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type {
     ScaleNote,
@@ -102,12 +104,15 @@ const props = defineProps<{
     filtersA: PaneFiltersValue;
     filtersB: PaneFiltersValue;
     scaleNote: ScaleNote | null;
+    /** The side the keyboard steps. */
+    active?: number;
 }>();
 
 const emit = defineEmits<{
     (event: "size-read", payload: { canvas: string; size: ServedSize }): void;
     (event: "place", payload: { pane: Side; canvas: string }): void;
     (event: "activate", payload: Side): void;
+    (event: "step", payload: { pane: Side; delta: 1 | -1 }): void;
     (
         event: "filters-change",
         payload: { pane: Side; filters: Partial<PaneFiltersValue> },
@@ -149,13 +154,14 @@ const views = computed(() =>
             letter: LETTERS[side],
             canvas,
             label: found?.layer.label || canvas || "",
-            tag: parts ? tagText(parts, { $gettext, interpolate }) : "",
+            tag: shownTag(parts, found?.layer.label || canvas || ""),
             analysis: found?.line.analysis.name ?? null,
             analysisShort: found
                 ? shortAnalysisName(found.line.analysis.name.value)
                 : "",
             record: found ? analysisNode(found.line.analysis.id) : null,
             status: status.value[side],
+            ...neighboursOf(canvas),
         };
     }),
 );
@@ -281,6 +287,41 @@ function paintFilters(): void {
         const element = map.getPane(sides[side].pane);
         if (element) element.style.filter = filterCss(filters.value[side]);
     }
+}
+
+/** Whether the canvas has a layer before and after it in its manifest; `stepPane` does not wrap. */
+function neighboursOf(canvas: string | null): {
+    hasPrevious: boolean;
+    hasNext: boolean;
+} {
+    const layers = canvas
+        ? layerById(canvas, props.maps)?.line.file.layers ?? []
+        : [];
+    const index = layers.findIndex((layer) => layer.id === canvas);
+    return {
+        hasPrevious: index > 0,
+        hasNext: index >= 0 && index < layers.length - 1,
+    };
+}
+
+/** The tag text, or nothing when it only repeats the stored label. */
+function shownTag(parts: TagParts | null | undefined, label: string): string {
+    if (!parts) return "";
+    const text = tagText(parts, { $gettext, interpolate });
+    return sameText(text, label) ? "" : text;
+}
+
+function step(side: Side, delta: 1 | -1): void {
+    const view = views.value[side];
+    if (delta === 1 ? view.hasNext : view.hasPrevious) {
+        emit("step", { pane: side, delta });
+    }
+}
+
+function onKeydown(event: KeyboardEvent): void {
+    const side: Side = props.active === SIDE_B ? SIDE_B : 0;
+    if (event.key === "[") step(side, -1);
+    else if (event.key === "]") step(side, 1);
 }
 
 function setLayer(side: Side, layer: L.Layer | null): void {
@@ -438,6 +479,7 @@ function onApplyAll(side: Side): void {
                 role="group"
                 tabindex="0"
                 :aria-label="groupLabel"
+                @keydown="onKeydown"
             ></div>
             <p
                 v-for="view in views.filter(
@@ -493,6 +535,19 @@ function onApplyAll(side: Side): void {
                 @click="emit('activate', view.side)"
             >
                 <span class="letter">{{ view.letter }}</span>
+                <IconButton
+                    icon="chevron-left"
+                    data-action="previous"
+                    :label="
+                        interpolate(
+                            $gettext('Previous layer of side %{letter}'),
+                            { letter: view.letter },
+                            true,
+                        )
+                    "
+                    :disabled="!view.hasPrevious"
+                    @click.stop="step(view.side, -1)"
+                />
                 <span
                     v-if="view.canvas"
                     class="label"
@@ -504,6 +559,19 @@ function onApplyAll(side: Side): void {
                     class="label"
                     >{{ $gettext("empty") }}</span
                 >
+                <IconButton
+                    icon="chevron-right"
+                    data-action="next"
+                    :label="
+                        interpolate(
+                            $gettext('Next layer of side %{letter}'),
+                            { letter: view.letter },
+                            true,
+                        )
+                    "
+                    :disabled="!view.hasNext"
+                    @click.stop="step(view.side, 1)"
+                />
                 <span
                     v-if="view.tag"
                     class="tag"

@@ -348,28 +348,24 @@ function onKeydown(event: KeyboardEvent): void {
         <div class="head">
             <div class="top">
                 <h3 class="title">{{ $gettext("Gallery") }}</h3>
-                <div class="target">
-                    <template v-if="stacked">
-                        <span>{{ $gettext("Click: add to the stack") }}</span>
-                    </template>
-                    <template v-else>
-                        <span class="target-text">{{
-                            $gettext("Place in")
-                        }}</span>
-                        <button
-                            v-for="(letter, index) in targets"
-                            :key="letter"
-                            type="button"
-                            class="target-pane"
-                            :data-pane="letter.toLowerCase()"
-                            :aria-pressed="
-                                props.state.active === index ? 'true' : 'false'
-                            "
-                            @click="emit('set-target', index)"
-                        >
-                            {{ letter }}
-                        </button>
-                    </template>
+                <div
+                    v-if="!stacked"
+                    class="target"
+                >
+                    <span class="target-text">{{ $gettext("Place in") }}</span>
+                    <button
+                        v-for="(letter, index) in targets"
+                        :key="letter"
+                        type="button"
+                        class="target-pane"
+                        :data-pane="letter.toLowerCase()"
+                        :aria-pressed="
+                            props.state.active === index ? 'true' : 'false'
+                        "
+                        @click="emit('set-target', index)"
+                    >
+                        {{ letter }}
+                    </button>
                 </div>
             </div>
             <div class="search">

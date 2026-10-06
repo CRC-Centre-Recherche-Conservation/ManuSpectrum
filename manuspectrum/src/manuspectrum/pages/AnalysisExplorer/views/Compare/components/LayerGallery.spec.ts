@@ -313,11 +313,11 @@ describe("LayerGallery targets and keyboard", () => {
         expect(view.emitted("set-target")?.[0]).toEqual([1]);
     });
 
-    it("asks for a click to add to the pile instead of naming a pane in a stack", () => {
+    it("names no target pane and shows no hint in a stack", () => {
         const stacked = { ...defaultState(PLAIN), layout: "stack" as const };
         const view = gallery(PLAIN, stacked);
         expect(view.find(".target-pane").exists()).toBe(false);
-        expect(view.find(".target").text()).toContain("add to the stack");
+        expect(view.find(".target").exists()).toBe(false);
     });
 
     it("marks the panes holding a canvas and the layers in the stack", () => {

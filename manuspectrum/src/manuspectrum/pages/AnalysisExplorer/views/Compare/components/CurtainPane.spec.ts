@@ -572,6 +572,21 @@ describe("the chips", () => {
     });
 });
 
+describe("the tag chip against the stored label", () => {
+    it("is left out when the tag says what the label says, and kept when it differs", async () => {
+        const view = await mountCurtain({
+            maps: [line(1, [cu(" CU ")]), line(2, [cu("MS59-f13v-deconv_Cu")])],
+            canvasB: "c2-0",
+        });
+        expect(view.find('.chip[data-pane="a"] .tag').exists()).toBe(false);
+        expect(view.find('.chip[data-pane="a"] .label').text()).toBe("CU");
+        expect(view.find('.chip[data-pane="b"] .tag').text()).toBe("Cu");
+        expect(view.find('.chip[data-pane="b"] .label').text()).toBe(
+            "MS59-f13v-deconv_Cu",
+        );
+    });
+});
+
 describe("without layer tiles", () => {
     it("works the same on bare labels: laid, clipped, filtered, announced", async () => {
         const announce = vi.fn();
@@ -659,5 +674,61 @@ describe("labels with quotes and angle brackets", () => {
             provide: { [ANNOUNCE_KEY as symbol]: announce },
         });
         expect(announce).toHaveBeenCalledWith(`Curtain, side A: ${QUOTED}`);
+    });
+});
+
+describe("stepping through the layers of a side", () => {
+    it("steps side A and side B to the neighbouring canvas of their own manifest", async () => {
+        const view = await mountCurtain({ canvasA: "c1-0", canvasB: "c2-1" });
+        await view
+            .find('.chip[data-pane="a"] [data-action="next"]')
+            .trigger("click");
+        await view
+            .find('.chip[data-pane="b"] [data-action="previous"]')
+            .trigger("click");
+        expect(view.emitted("step")).toEqual([
+            [{ pane: 0, delta: 1 }],
+            [{ pane: 1, delta: -1 }],
+        ]);
+    });
+
+    it("disables the arrows at the ends of the manifest and emits nothing there", async () => {
+        const view = await mountCurtain({ canvasA: "c1-0", canvasB: "c2-1" });
+        const previousA = view.find(
+            '.chip[data-pane="a"] [data-action="previous"]',
+        );
+        const nextB = view.find('.chip[data-pane="b"] [data-action="next"]');
+        expect(previousA.attributes("aria-disabled")).toBe("true");
+        expect(nextB.attributes("aria-disabled")).toBe("true");
+        expect(
+            view
+                .find('.chip[data-pane="a"] [data-action="next"]')
+                .attributes("aria-disabled"),
+        ).not.toBe("true");
+        await previousA.trigger("click");
+        await nextB.trigger("click");
+        expect(view.emitted("step")).toBeUndefined();
+    });
+
+    it("disables both arrows of an empty side", async () => {
+        const view = await mountCurtain({ canvasB: null });
+        for (const action of ["previous", "next"]) {
+            expect(
+                view
+                    .find(`.chip[data-pane="b"] [data-action="${action}"]`)
+                    .attributes("aria-disabled"),
+            ).toBe("true");
+        }
+    });
+
+    it("steps the active side with [ and ] on the map", async () => {
+        const view = await mountCurtain({ canvasA: "c1-0", canvasB: "c2-1" });
+        await view.find(".map").trigger("keydown", { key: "]" });
+        await view.setProps({ active: 1 });
+        await view.find(".map").trigger("keydown", { key: "[" });
+        expect(view.emitted("step")).toEqual([
+            [{ pane: 0, delta: 1 }],
+            [{ pane: 1, delta: -1 }],
+        ]);
     });
 });

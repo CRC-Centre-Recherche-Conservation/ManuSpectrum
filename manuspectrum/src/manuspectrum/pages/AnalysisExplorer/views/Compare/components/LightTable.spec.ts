@@ -4,6 +4,7 @@ import L from "leaflet";
 import { nextTick, ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 
+import CurtainPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue";
 import ImagingPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue";
 import LightTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue";
 
@@ -408,6 +409,25 @@ describe("without layer tiles", () => {
             expect(paneLabels(view)[1]).toBe("L1.2");
             expect(viewOf(panes(view)[1])).toBeNull();
             expect(viewOf(panes(view)[0])).toEqual(other);
+        });
+
+        it("steps the pane of the curtain a side asks for, and leaves the other side", async () => {
+            const view = await mountTable(PLAIN_ONE);
+            const curtain = view.findComponent(CurtainPane);
+            curtain.vm.$emit("step", { pane: 1, delta: 1 });
+            await flushPromises();
+            expect(
+                view
+                    .findAll(".curtain-pane .chip .label")
+                    .map((node) => node.text()),
+            ).toEqual(["L1.0", "L1.2"]);
+            curtain.vm.$emit("step", { pane: 0, delta: 1 });
+            await flushPromises();
+            expect(
+                view
+                    .findAll(".curtain-pane .chip .label")
+                    .map((node) => node.text()),
+            ).toEqual(["L1.1", "L1.2"]);
         });
 
         it("drops the view of a pane that is given a canvas of another analysis", async () => {

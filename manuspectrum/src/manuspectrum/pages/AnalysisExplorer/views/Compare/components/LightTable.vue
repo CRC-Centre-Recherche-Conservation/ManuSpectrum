@@ -575,7 +575,7 @@ function onGrouping(grouping: TableGrouping): void {
                 :disabled="!canLinkAll"
                 @toggle="onLinkAll"
             >
-                {{ $gettext("Link zoom across analyses") }}
+                {{ $gettext("Link analyses") }}
             </SwitchButton>
             <button
                 v-if="canSwap"
@@ -653,6 +653,7 @@ function onGrouping(grouping: TableGrouping): void {
                     :maps="props.maps"
                     :filters-a="state.filters[0]"
                     :filters-b="state.filters[1]"
+                    :active="shownState.active"
                     :scale-note="
                         state.panes[1]
                             ? notes.get(state.panes[1]) ?? null
@@ -660,6 +661,7 @@ function onGrouping(grouping: TableGrouping): void {
                     "
                     @size-read="onSizeRead"
                     @place="onCurtainPlace"
+                    @step="onPaneStep($event.pane, $event.delta)"
                     @activate="apply(setActive(state, $event))"
                     @filters-change="onFilters($event.pane, $event.filters)"
                     @filters-reset="onFiltersReset"
