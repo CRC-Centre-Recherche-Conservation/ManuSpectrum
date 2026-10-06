@@ -52,7 +52,10 @@ import {
     writeImaging,
     readImaging,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
-import { scaleNotes } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
+import {
+    sameSize,
+    scaleNotes,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
 import {
     galleryOpensWith,
     galleryPlace,
@@ -79,7 +82,11 @@ type Side = 0 | 1;
 
 const PERSIST_DELAY_MS = 400;
 const PANE_LETTERS = ["A", "B", "C", "D"] as const;
-const DEFAULT_FRAME: TableFrame = { size: "M", enlarged: false };
+const DEFAULT_FRAME: TableFrame = {
+    size: "M",
+    enlarged: false,
+    phone: false,
+};
 
 /**
  * The body of the imaging window: the light table. It owns the table's state
@@ -150,7 +157,15 @@ const canLinkAll = computed(() => analysisIds.value.length > 1);
 const canSwap = computed(
     () => !small.value && ["curtain", "grid2", "grid4"].includes(shown.value),
 );
-const layoutChoices = computed(() => [
+const phone = computed(() => frame.value.phone);
+const layoutChoices = computed(() =>
+    allChoices.value.filter(
+        (choice) =>
+            !phone.value ||
+            ["single", "curtain", "stack"].includes(choice.layout),
+    ),
+);
+const allChoices = computed(() => [
     { layout: "single" as const, text: "1", name: $gettext("One pane") },
     {
         layout: "curtain" as const,
@@ -226,6 +241,31 @@ watch(
         );
     },
 );
+watch(notes, (now, before) => {
+    if (shown.value === "curtain") return;
+    for (const [canvas, note] of now) {
+        const had = before.get(canvas);
+        if (
+            had &&
+            sameSize(had.size, note.size) &&
+            had.against === note.against
+        )
+            continue;
+        announce(
+            interpolate(
+                $gettext(
+                    "%{label} is at a different scale from %{against} (%{size} against %{reference})",
+                ),
+                {
+                    label: labelOf(canvas),
+                    against: labelOf(note.against),
+                    size: `${note.size.w} × ${note.size.h} px`,
+                    reference: `${note.againstSize.w} × ${note.againstSize.h} px`,
+                },
+            ),
+        );
+    }
+});
 watch(
     () => linked?.selection.value ?? [],
     (now, before) => {
@@ -286,7 +326,12 @@ function layoutName(layout: TableLayout): string {
 }
 
 function onLayout(layout: TableLayout): void {
-    if (small.value || layout === state.value.layout) return;
+    if (
+        small.value ||
+        !layoutChoices.value.some((c) => c.layout === layout) ||
+        layout === state.value.layout
+    )
+        return;
     const next = setLayout(state.value, layout, props.maps);
     apply(
         setActive(
@@ -708,6 +753,29 @@ function onGrouping(grouping: TableGrouping): void {
 .light-table .gallery {
     max-block-size: var(--table-block-size);
     overflow: auto;
+}
+
+.light-table[data-gallery="strip"] .gallery {
+    block-size: 7rem;
+    max-block-size: 7rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.light-table[data-gallery="strip"] .gallery :deep(.head),
+.light-table[data-gallery="strip"] .gallery :deep(.tabs) {
+    display: none;
+}
+
+.light-table[data-gallery="strip"] .gallery :deep(.groups) {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.light-table[data-gallery="strip"] .gallery :deep(.grid) {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: 4.5rem;
 }
 
 @media (max-width: 48rem) {

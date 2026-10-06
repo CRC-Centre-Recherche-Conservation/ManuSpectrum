@@ -18,6 +18,7 @@ import {
     ICONS,
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import { usePhone } from "@/manuspectrum/pages/AnalysisExplorer/composables/usePhone.ts";
 import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
 import { provideWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
@@ -106,9 +107,14 @@ const headingId = useId();
 const bodyId = useId();
 const menuId = useId();
 const actions = provideWindowActions();
+const phone = usePhone();
 provide(
     WINDOW_FRAME_KEY,
-    computed(() => ({ size: props.size, enlarged: props.enlarged })),
+    computed(() => ({
+        size: props.size,
+        enlarged: props.enlarged,
+        phone: phone.value,
+    })),
 );
 const moreRoot = useTemplateRef<HTMLElement>("moreRoot");
 const bodyElement = useTemplateRef<HTMLElement>("bodyElement");

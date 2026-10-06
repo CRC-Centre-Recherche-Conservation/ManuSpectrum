@@ -118,6 +118,19 @@ function onGreyscale(event: Event): void {
     font-size: 0.8125rem;
 }
 
+@media (max-width: 48rem) {
+    .pane-filters {
+        position: fixed;
+        inset-inline: 0;
+        inset-block-end: 0;
+        z-index: 20;
+        max-block-size: 60vh;
+        overflow-y: auto;
+        border-radius: 0.75rem 0.75rem 0 0;
+        box-shadow: 0 -0.25rem 1rem rgb(0 0 0 / 25%);
+    }
+}
+
 .pane-filters .row {
     display: grid;
     grid-template-columns: 6rem minmax(0, 1fr) 2.5rem;

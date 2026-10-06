@@ -10,27 +10,32 @@ import type { WindowSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Com
 export interface TableFrame {
     size: WindowSize | null;
     enlarged: boolean;
+    /** The screen is narrower than 48 rem. */
+    phone: boolean;
 }
 
-export type GalleryPlace = "right" | "below" | "hidden";
+export type GalleryPlace = "right" | "below" | "strip" | "hidden";
 
 function isLarge(frame: TableFrame): boolean {
     return frame.enlarged || frame.size === "L";
 }
 
-/** The layout drawn: one pane in S, two instead of four in M. The stored layout is not changed. */
+/** The layout drawn: one pane in S and on a phone (curtain and stack kept), two instead of four in M. The stored layout is not changed. */
 export function shownLayout(
     layout: TableLayout,
     frame: TableFrame,
 ): TableLayout {
     if (!frame.enlarged && frame.size === "S") return "single";
+    if (frame.phone && (layout === "grid2" || layout === "grid4"))
+        return "single";
     if (layout === "grid4" && !isLarge(frame)) return "grid2";
     return layout;
 }
 
-/** Where the gallery is drawn: to the right in L and enlarged, below the table in M, nowhere in S or when closed. */
+/** Where the gallery is drawn: a strip under the table on a phone, to the right in L and enlarged, below the table in M, nowhere in S or when closed. */
 export function galleryPlace(frame: TableFrame, open: boolean): GalleryPlace {
     if (!open || (!frame.enlarged && frame.size === "S")) return "hidden";
+    if (frame.phone) return "strip";
     return isLarge(frame) ? "right" : "below";
 }
 

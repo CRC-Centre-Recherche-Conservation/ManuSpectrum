@@ -50,9 +50,9 @@ vi.mock("leaflet-side-by-side", () => ({}));
 const SIZE = { w: 2000, h: 3000 };
 const SMALL = { w: 600, h: 1000 };
 const ELEMENT_MAP = valueRef("http://example.org/element-map", "Element map");
-const L_FRAME: TableFrame = { size: "L", enlarged: false };
-const M_FRAME: TableFrame = { size: "M", enlarged: false };
-const S_FRAME: TableFrame = { size: "S", enlarged: false };
+const L_FRAME: TableFrame = { size: "L", enlarged: false, phone: false };
+const M_FRAME: TableFrame = { size: "M", enlarged: false, phone: false };
+const S_FRAME: TableFrame = { size: "S", enlarged: false, phone: false };
 
 function element(symbol: string, label: string): Partial<FileLayer> {
     return {
@@ -184,6 +184,15 @@ async function mountTable(
     });
     await flushPromises();
     return wrapper;
+}
+
+function storedLayout(view: VueWrapper): string {
+    const provided = (
+        view.vm.$ as unknown as {
+            provides: Record<symbol, LightTableContext>;
+        }
+    ).provides[LIGHT_TABLE_KEY as symbol];
+    return provided.state.value.layout;
 }
 
 function panes(view: VueWrapper): VueWrapper[] {
@@ -633,6 +642,77 @@ describe("the size of the window", () => {
         await click(view, '[data-layout="single"]');
         await runAction("rearrange");
         expect(paneLabels(view)).toEqual(["L1.0", "L2.0"]);
+    });
+});
+
+describe("a phone", () => {
+    const PHONE_FRAME: TableFrame = { size: "M", enlarged: false, phone: true };
+
+    it("offers one pane, the curtain and the stack only", async () => {
+        const view = await mountTable(PLAIN_TWO, { frame: PHONE_FRAME });
+        const layouts = view
+            .findAll(".segment button")
+            .map((button) => button.attributes("data-layout"));
+        expect(layouts).toEqual(["single", "curtain", "stack"]);
+    });
+
+    it("draws one pane for a stored grid and keeps the grid in the state", async () => {
+        const view = await mountTable(PLAIN_FIVE, { frame: PHONE_FRAME });
+        expect(panes(view)).toHaveLength(1);
+        expect(view.find(".light-table").attributes("data-shown")).toBe(
+            "single",
+        );
+        expect(storedLayout(view)).toBe("grid4");
+    });
+
+    it("puts the gallery in a strip below the table", async () => {
+        const view = await mountTable(PLAIN_FIVE, { frame: PHONE_FRAME });
+        expect(view.find(".light-table").attributes("data-gallery")).toBe(
+            "strip",
+        );
+    });
+});
+
+describe("announcements", () => {
+    const MIXED = () =>
+        stubIiifLayer({
+            size: (url) => (url.includes("image/2-") ? SMALL : SIZE),
+        });
+
+    it("says a layer is at a different scale once it is laid beside another", async () => {
+        iiif = MIXED();
+        const view = await mountTable(PLAIN_TWO);
+        expect(
+            announced.filter((message) => message.includes("scale")),
+        ).toEqual([]);
+        await click(view, '[data-action="link-all"]');
+        await flushPromises();
+        const said = announced.filter((message) => message.includes("scale"));
+        expect(said).toHaveLength(1);
+        expect(said[0]).toContain("L2.0");
+    });
+
+    it("does not say it again while the pair stays the same", async () => {
+        iiif = MIXED();
+        const view = await mountTable(PLAIN_TWO);
+        await click(view, '[data-action="link-all"]');
+        await click(view, '[data-action="follow-focus"]');
+        await flushPromises();
+        expect(
+            announced.filter((message) => message.includes("scale")),
+        ).toHaveLength(1);
+    });
+
+    it("leaves the curtain to its own pane, which already says it", async () => {
+        iiif = MIXED();
+        const view = await mountTable(PLAIN_TWO);
+        await click(view, '[data-action="link-all"]');
+        announced.length = 0;
+        await click(view, '[data-layout="curtain"]');
+        await flushPromises();
+        expect(
+            announced.filter((message) => message.includes("scale")),
+        ).toHaveLength(1);
     });
 });
 

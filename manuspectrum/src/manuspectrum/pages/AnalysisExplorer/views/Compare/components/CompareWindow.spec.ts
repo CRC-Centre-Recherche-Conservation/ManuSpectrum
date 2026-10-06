@@ -148,7 +148,7 @@ describe("CompareWindow and its body's frame", () => {
                 h(
                     "span",
                     { class: "probe" },
-                    `${frame?.value.size}|${frame?.value.enlarged}`,
+                    `${frame?.value.size}|${frame?.value.enlarged}|${frame?.value.phone}`,
                 );
         },
     });
@@ -165,9 +165,31 @@ describe("CompareWindow and its body's frame", () => {
             },
             slots: { default: () => h(Probe) },
         });
-        expect(probeText()).toBe("L|false");
+        expect(probeText()).toBe("L|false|false");
         await wrapper.setProps({ size: null, enlarged: true });
         await flushPromises();
-        expect(probeText()).toBe("null|true");
+        expect(probeText()).toBe("null|true|false");
+    });
+
+    it("tells its body when the screen is a phone", async () => {
+        vi.stubGlobal("matchMedia", (query: string) => ({
+            matches: query.includes("max-width"),
+            media: query,
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+        }));
+        wrapper = mount(CompareWindow, {
+            attachTo: document.body,
+            props: {
+                title: "Imaging",
+                position: 1,
+                total: 1,
+                size: "M",
+                folded: null,
+            },
+            slots: { default: () => h(Probe) },
+        });
+        expect(probeText()).toBe("M|false|true");
+        vi.unstubAllGlobals();
     });
 });

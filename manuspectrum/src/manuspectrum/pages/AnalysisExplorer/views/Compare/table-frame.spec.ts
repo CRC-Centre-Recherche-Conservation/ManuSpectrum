@@ -6,11 +6,11 @@ import {
     shownLayout,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
 
-const S = { size: "S", enlarged: false } as const;
-const M = { size: "M", enlarged: false } as const;
-const L = { size: "L", enlarged: false } as const;
-const ENLARGED = { size: "M", enlarged: true } as const;
-const BY_HAND = { size: null, enlarged: false } as const;
+const S = { size: "S", enlarged: false, phone: false } as const;
+const M = { size: "M", enlarged: false, phone: false } as const;
+const L = { size: "L", enlarged: false, phone: false } as const;
+const ENLARGED = { size: "M", enlarged: true, phone: false } as const;
+const BY_HAND = { size: null, enlarged: false, phone: false } as const;
 
 describe("shownLayout", () => {
     it("forces one pane in S, whatever the layout", () => {
@@ -69,5 +69,24 @@ describe("galleryOpensWith", () => {
     it("opens in M for more analyses than panes", () => {
         expect(galleryOpensWith(M, 4)).toBe(false);
         expect(galleryOpensWith(M, 5)).toBe(true);
+    });
+});
+
+describe("on a phone", () => {
+    const PHONE = { size: "M", enlarged: false, phone: true } as const;
+    const PHONE_ENLARGED = { size: "M", enlarged: true, phone: true } as const;
+
+    it("keeps one pane, the curtain and the stack, and folds the grids to one pane", () => {
+        expect(shownLayout("single", PHONE)).toBe("single");
+        expect(shownLayout("curtain", PHONE)).toBe("curtain");
+        expect(shownLayout("stack", PHONE)).toBe("stack");
+        expect(shownLayout("grid2", PHONE)).toBe("single");
+        expect(shownLayout("grid4", PHONE_ENLARGED)).toBe("single");
+    });
+
+    it("puts the gallery in a strip under the table, enlarged or not", () => {
+        expect(galleryPlace(PHONE, true)).toBe("strip");
+        expect(galleryPlace(PHONE_ENLARGED, true)).toBe("strip");
+        expect(galleryPlace(PHONE, false)).toBe("hidden");
     });
 });
