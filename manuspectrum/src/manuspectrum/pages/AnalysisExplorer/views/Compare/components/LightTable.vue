@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useResizeObserver } from "@vueuse/core";
+import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import {
     computed,
     inject,
@@ -11,6 +12,7 @@ import {
     watch,
 } from "vue";
 import { useGettext } from "vue3-gettext";
+import { imageUrl } from "utils/iiif-image";
 
 import CurtainPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue";
 import ImagingPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue";
@@ -90,6 +92,8 @@ import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compar
 type Side = 0 | 1;
 
 const PERSIST_DELAY_MS = 400;
+const PREVIEW_SIZE = "!48,60";
+const PREVIEW_MAX = 3;
 const PANE_LETTERS = ["A", "B", "C", "D"] as const;
 const DEFAULT_FRAME: TableFrame = {
     size: "M",
@@ -121,7 +125,7 @@ const props = defineProps<{
     windowId: string;
 }>();
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
 const frameRef = inject(WINDOW_FRAME_KEY, ref(DEFAULT_FRAME));
 
@@ -159,6 +163,26 @@ const galleryOpen = computed(
         ),
 );
 const galleryAt = computed(() => galleryPlace(frame.value, galleryOpen.value));
+const imageCount = computed(() => byCanvas.value.size);
+const imageUnit = computed(() =>
+    $ngettext("image", "images", imageCount.value),
+);
+const previews = computed(() =>
+    [...byCanvas.value.values()]
+        .flatMap(({ layer }) =>
+            layer.image.service
+                ? [
+                      safeHref(
+                          imageUrl(layer.image.service, {
+                              size: PREVIEW_SIZE,
+                          }),
+                      ),
+                  ]
+                : [],
+        )
+        .filter((source): source is string => source !== null)
+        .slice(0, PREVIEW_MAX),
+);
 const railed = computed(() => !frame.value.phone);
 const byCanvas = computed(
     () =>
@@ -729,9 +753,24 @@ function onGrouping(grouping: TableGrouping): void {
                             >{{ $gettext("Gallery") }}</span
                         >
                         <span
+                            v-if="previews.length > 0"
+                            class="previews"
+                            aria-hidden="true"
+                        >
+                            <img
+                                v-for="source in previews"
+                                :key="source"
+                                alt=""
+                                loading="lazy"
+                                referrerpolicy="no-referrer"
+                                :src="source"
+                            />
+                        </span>
+                        <span
                             class="count"
                             aria-hidden="true"
-                            >{{ props.maps.length }}</span
+                            ><span class="n">{{ imageCount }}</span
+                            ><span class="unit">{{ imageUnit }}</span></span
                         >
                     </template>
                 </button>
@@ -925,7 +964,7 @@ function onGrouping(grouping: TableGrouping): void {
 
 .light-table .dock[data-open="true"] .gallery :deep(.top) {
     padding-inline-start: 1.875rem;
-    min-block-size: 1.375rem;
+    min-block-size: 1.75rem;
 }
 
 .light-table .dock[data-open="false"] .gallery-toggle {
@@ -947,6 +986,50 @@ function onGrouping(grouping: TableGrouping): void {
     font: 600 0.75rem/1 var(--font-body);
     letter-spacing: 0.02em;
     color: var(--ink);
+}
+
+.light-table .gallery-toggle .previews {
+    display: grid;
+    gap: 0.25rem;
+    justify-items: center;
+}
+
+.light-table .gallery-toggle .previews img {
+    inline-size: 1.25rem;
+    block-size: 1.5625rem;
+    border-radius: 0.1875rem;
+    background: var(--stage);
+    object-fit: cover;
+}
+
+.light-table .gallery-toggle .count .unit {
+    display: none;
+}
+
+.light-table .dock {
+    container-type: size;
+}
+
+@container (max-height: 15rem) {
+    .light-table .gallery-toggle .previews img:nth-child(n + 3) {
+        display: none;
+    }
+}
+
+@container (max-height: 11rem) {
+    .light-table .gallery-toggle .previews {
+        display: none;
+    }
+
+    .light-table .gallery-toggle .count {
+        writing-mode: vertical-rl;
+        padding-block: 0.1875rem;
+    }
+
+    .light-table .gallery-toggle .count .unit {
+        display: inline-block;
+        margin-block-start: 0.375rem;
+    }
 }
 
 .light-table .gallery-toggle .count {
@@ -1005,12 +1088,14 @@ function onGrouping(grouping: TableGrouping): void {
 
 .light-table .gallery {
     min-block-size: 0;
-    overflow: auto;
+    overflow: hidden;
 }
 
-.light-table[data-gallery="strip"] .gallery {
+.light-table[data-gallery="strip"] .gallery :deep(.scroller) {
     overflow-x: auto;
     overflow-y: hidden;
+    mask-image: none;
+    animation: none;
 }
 
 .light-table[data-gallery="strip"] .gallery :deep(.head),

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, ref, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 import LayerThumb from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerThumb.vue";
 
@@ -96,6 +97,8 @@ const { $gettext, $ngettext, interpolate } = useGettext();
 const marks = useLinkedMarks();
 const root = useTemplateRef<HTMLElement>("root");
 
+const filtersId = useId();
+const filtersOpen = ref(false);
 const query = ref("");
 const only = ref<string | null>(null);
 const roving = ref<string | null>(null);
@@ -150,6 +153,26 @@ const visible = computed(() => {
         );
     });
 });
+const activeFilters = computed(
+    () =>
+        Number(query.value.trim() !== "") +
+        Number(only.value !== null) +
+        Number(grouping.value === "tag"),
+);
+const filtersName = computed(() =>
+    activeFilters.value > 0
+        ? interpolate(
+              $gettext("Filters, %{n} active"),
+              { n: activeFilters.value },
+              true,
+          )
+        : $gettext("Filters"),
+);
+const hint = computed(() =>
+    $gettext(
+        "Click: lay in the target pane. Drag: onto any pane. In Stack mode, a click adds or removes the layer.",
+    ),
+);
 const groups = computed<Group[]>(() =>
     grouping.value === "tag"
         ? groupsByTag(visible.value)
@@ -355,6 +378,40 @@ function onKeydown(event: KeyboardEvent): void {
         <div class="head">
             <div class="top">
                 <h3 class="title">{{ $gettext("Gallery") }}</h3>
+                <span class="head-count">{{
+                    canvasCount(entries.length)
+                }}</span>
+                <HelpTip
+                    class="compact-help"
+                    :text="hint"
+                    align="end"
+                    placement="below"
+                >
+                    <template #default="{ describedby }">
+                        <span
+                            class="help-chip"
+                            tabindex="0"
+                            role="img"
+                            :aria-label="$gettext('How to use the gallery')"
+                            :aria-describedby="describedby"
+                        >
+                            <svg
+                                class="icon"
+                                :viewBox="ICON_VIEW_BOX"
+                                aria-hidden="true"
+                                focusable="false"
+                            >
+                                <path
+                                    v-for="(path, index) in ICONS[
+                                        'info-circle'
+                                    ]"
+                                    :key="index"
+                                    :d="path"
+                                />
+                            </svg>
+                        </span>
+                    </template>
+                </HelpTip>
                 <div
                     v-if="!stacked"
                     class="target"
@@ -375,14 +432,21 @@ function onKeydown(event: KeyboardEvent): void {
                     </button>
                 </div>
             </div>
-            <div class="search">
-                <input
-                    v-model="query"
-                    class="filter"
-                    type="search"
-                    :aria-label="$gettext('Filter the layers')"
-                    :placeholder="$gettext('Filter by label or tag')"
-                />
+            <button
+                type="button"
+                class="filters-toggle"
+                :aria-expanded="filtersOpen ? 'true' : 'false'"
+                :aria-controls="filtersId"
+                :aria-label="filtersName"
+                @click="filtersOpen = !filtersOpen"
+            >
+                <span aria-hidden="true">{{ $gettext("Filters") }}</span>
+                <span
+                    v-if="activeFilters > 0"
+                    class="active-count"
+                    aria-hidden="true"
+                    >{{ activeFilters }}</span
+                >
                 <svg
                     class="icon"
                     :viewBox="ICON_VIEW_BOX"
@@ -390,211 +454,250 @@ function onKeydown(event: KeyboardEvent): void {
                     focusable="false"
                 >
                     <path
-                        v-for="(path, index) in ICONS.search"
+                        v-for="(path, index) in ICONS[
+                            filtersOpen ? 'chevron-up' : 'chevron-down'
+                        ]"
                         :key="index"
                         :d="path"
                     />
                 </svg>
-            </div>
+            </button>
             <div
-                v-if="analyses.length > 1"
-                class="tabs"
-                role="group"
-                :aria-label="$gettext('Analyses')"
+                :id="filtersId"
+                class="filters"
+                :data-open="filtersOpen ? 'true' : 'false'"
             >
-                <button
-                    type="button"
-                    class="analysis-tab"
-                    :aria-pressed="only === null ? 'true' : 'false'"
-                    @click="toggleAnalysis(null)"
-                >
-                    {{ $gettext("All") }}
-                </button>
-                <span
-                    v-for="line in analyses"
-                    :key="line.analysis.id"
-                    class="analysis"
-                    :data-on="only === line.analysis.id ? 'true' : 'false'"
+                <div class="search">
+                    <input
+                        v-model="query"
+                        class="filter"
+                        type="search"
+                        :aria-label="$gettext('Filter the layers')"
+                        :placeholder="$gettext('Filter by label or tag')"
+                    />
+                    <svg
+                        class="icon"
+                        :viewBox="ICON_VIEW_BOX"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <path
+                            v-for="(path, index) in ICONS.search"
+                            :key="index"
+                            :d="path"
+                        />
+                    </svg>
+                </div>
+                <div
+                    v-if="analyses.length > 1"
+                    class="tabs"
+                    role="group"
+                    :aria-label="$gettext('Analyses')"
                 >
                     <button
                         type="button"
                         class="analysis-tab"
-                        :title="line.analysis.name.value"
-                        :aria-pressed="
-                            only === line.analysis.id ? 'true' : 'false'
-                        "
-                        @click="toggleAnalysis(line.analysis.id)"
+                        :aria-pressed="only === null ? 'true' : 'false'"
+                        @click="toggleAnalysis(null)"
                     >
-                        {{ shortAnalysisName(line.analysis.name.value) }}
+                        {{ $gettext("All") }}
                     </button>
-                    <button
-                        type="button"
-                        class="analysis-focus ms-focus"
-                        v-bind="marks.focus(analysisNode(line.analysis.id))"
-                        :title="
-                            interpolate(
-                                $gettext('Focus on %{name}'),
-                                { name: line.analysis.name.value },
-                                true,
-                            )
-                        "
-                        :aria-label="
-                            interpolate(
-                                $gettext('Focus on %{name}'),
-                                { name: line.analysis.name.value },
-                                true,
-                            )
-                        "
-                        :aria-pressed="
-                            marks.pressed(analysisNode(line.analysis.id))
-                        "
-                        @click="marks.toggle(analysisNode(line.analysis.id))"
-                    >
-                        <FocusPip :node="analysisNode(line.analysis.id)" />
-                    </button>
-                </span>
-            </div>
-            <div class="grouping-row">
-                <span class="grouping-label">{{ $gettext("Group by") }}</span>
-                <div
-                    class="grouping"
-                    role="group"
-                    :aria-label="$gettext('Group by')"
-                >
-                    <button
-                        type="button"
-                        data-grouping="analysis"
-                        :aria-pressed="
-                            grouping === 'analysis' ? 'true' : 'false'
-                        "
-                        @click="setGrouping('analysis')"
-                    >
-                        {{ $gettext("Analysis") }}
-                    </button>
-                    <button
-                        type="button"
-                        data-grouping="tag"
-                        :disabled="!hasFamily"
-                        :aria-pressed="grouping === 'tag' ? 'true' : 'false'"
-                        :title="
-                            hasFamily
-                                ? undefined
-                                : $gettext(
-                                      'No layer of the Selection has a declared element or band.',
-                                  )
-                        "
-                        @click="setGrouping('tag')"
-                    >
-                        {{ $gettext("Element or band") }}
-                    </button>
-                </div>
-            </div>
-        </div>
-        <div
-            class="groups"
-            @keydown="onKeydown"
-        >
-            <p
-                v-if="groups.length === 0"
-                class="empty"
-            >
-                {{ $gettext("No layer matches the filter.") }}
-            </p>
-            <section
-                v-for="group in groups"
-                :key="group.id"
-                class="group"
-                :aria-labelledby="`${group.id}-title`"
-            >
-                <header>
                     <span
-                        v-if="pinsOf(group).length > 0"
-                        class="pins"
-                        aria-hidden="true"
+                        v-for="line in analyses"
+                        :key="line.analysis.id"
+                        class="analysis"
+                        :data-on="only === line.analysis.id ? 'true' : 'false'"
                     >
-                        <b
-                            v-for="pin in pinsOf(group)"
-                            :key="pin.slot"
-                            :style="{ '--h': pin.hue }"
-                            >{{ pin.slot }}</b
+                        <button
+                            type="button"
+                            class="analysis-tab"
+                            :title="line.analysis.name.value"
+                            :aria-pressed="
+                                only === line.analysis.id ? 'true' : 'false'
+                            "
+                            @click="toggleAnalysis(line.analysis.id)"
                         >
+                            {{ shortAnalysisName(line.analysis.name.value) }}
+                        </button>
+                        <button
+                            type="button"
+                            class="analysis-focus ms-focus"
+                            v-bind="marks.focus(analysisNode(line.analysis.id))"
+                            :title="
+                                interpolate(
+                                    $gettext('Focus on %{name}'),
+                                    { name: line.analysis.name.value },
+                                    true,
+                                )
+                            "
+                            :aria-label="
+                                interpolate(
+                                    $gettext('Focus on %{name}'),
+                                    { name: line.analysis.name.value },
+                                    true,
+                                )
+                            "
+                            :aria-pressed="
+                                marks.pressed(analysisNode(line.analysis.id))
+                            "
+                            @click="
+                                marks.toggle(analysisNode(line.analysis.id))
+                            "
+                        >
+                            <FocusPip :node="analysisNode(line.analysis.id)" />
+                        </button>
                     </span>
-                    <h4
-                        :id="`${group.id}-title`"
-                        class="group-title"
-                        :title="group.fullTitle ?? group.note ?? undefined"
-                    >
-                        {{ group.title }}
-                    </h4>
-                    <span
-                        v-if="group.meta"
-                        class="group-meta"
-                        >{{ group.meta }}</span
-                    >
-                    <span class="spacer"></span>
-                    <button
-                        type="button"
-                        class="place-all"
-                        @click="placeAll(group)"
-                    >
-                        {{ $gettext("Place all") }}
-                    </button>
-                    <button
-                        v-if="group.compare"
-                        type="button"
-                        class="compare"
-                        @click="compare(group)"
-                    >
-                        {{ $gettext("Compare") }}
-                    </button>
-                </header>
-                <p
-                    v-if="group.note"
-                    class="note"
-                >
-                    {{ group.note }}
-                </p>
-                <div class="grid">
-                    <LayerThumb
-                        v-for="entry in group.entries"
-                        :key="entry.layer.id"
-                        :canvas="entry.layer.id"
-                        :label="entry.layer.label"
-                        :service="entry.layer.image.service"
-                        :tag="entry.tag ? entry.text : null"
-                        :panes="panesOf(entry.layer.id)"
-                        :in-stack="inStack(entry.layer.id)"
-                        :stop="entry.layer.id === stop"
-                        :data-rel="
-                            entry.nodes.length > 0
-                                ? marks.rel(entry.nodes)
-                                : undefined
-                        "
-                        :style="
-                            entry.nodes.length > 0
-                                ? marks.rowStyle(entry.nodes)
-                                : undefined
-                        "
-                        @pick="pick(entry.layer.id)"
-                    />
                 </div>
-            </section>
+                <div class="grouping-row">
+                    <span class="grouping-label">{{
+                        $gettext("Group by")
+                    }}</span>
+                    <div
+                        class="grouping"
+                        role="group"
+                        :aria-label="$gettext('Group by')"
+                    >
+                        <button
+                            type="button"
+                            data-grouping="analysis"
+                            :aria-pressed="
+                                grouping === 'analysis' ? 'true' : 'false'
+                            "
+                            @click="setGrouping('analysis')"
+                        >
+                            {{ $gettext("Analysis") }}
+                        </button>
+                        <button
+                            type="button"
+                            data-grouping="tag"
+                            :disabled="!hasFamily"
+                            :aria-pressed="
+                                grouping === 'tag' ? 'true' : 'false'
+                            "
+                            :title="
+                                hasFamily
+                                    ? undefined
+                                    : $gettext(
+                                          'No layer of the Selection has a declared element or band.',
+                                      )
+                            "
+                            @click="setGrouping('tag')"
+                        >
+                            {{ $gettext("Element or band") }}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <p class="hint">
-            {{
-                $gettext(
-                    "Click: lay in the target pane. Drag: onto any pane. In Stack mode, a click adds or removes the layer.",
-                )
-            }}
-        </p>
+        <div class="scroller">
+            <div
+                class="groups"
+                @keydown="onKeydown"
+            >
+                <p
+                    v-if="groups.length === 0"
+                    class="empty"
+                >
+                    {{ $gettext("No layer matches the filter.") }}
+                </p>
+                <section
+                    v-for="group in groups"
+                    :key="group.id"
+                    class="group"
+                    :aria-labelledby="`${group.id}-title`"
+                >
+                    <header>
+                        <span
+                            v-if="pinsOf(group).length > 0"
+                            class="pins"
+                            aria-hidden="true"
+                        >
+                            <b
+                                v-for="pin in pinsOf(group)"
+                                :key="pin.slot"
+                                :style="{ '--h': pin.hue }"
+                                >{{ pin.slot }}</b
+                            >
+                        </span>
+                        <h4
+                            :id="`${group.id}-title`"
+                            class="group-title"
+                            :title="group.fullTitle ?? group.note ?? undefined"
+                        >
+                            {{ group.title }}
+                        </h4>
+                        <span
+                            v-if="group.meta"
+                            class="group-meta"
+                            >{{ group.meta }}</span
+                        >
+                        <span class="spacer"></span>
+                        <button
+                            type="button"
+                            class="place-all"
+                            @click="placeAll(group)"
+                        >
+                            {{ $gettext("Place all") }}
+                        </button>
+                        <button
+                            v-if="group.compare"
+                            type="button"
+                            class="compare"
+                            @click="compare(group)"
+                        >
+                            {{ $gettext("Compare") }}
+                        </button>
+                    </header>
+                    <p
+                        v-if="group.note"
+                        class="note"
+                    >
+                        {{ group.note }}
+                    </p>
+                    <div class="grid">
+                        <LayerThumb
+                            v-for="entry in group.entries"
+                            :key="entry.layer.id"
+                            :canvas="entry.layer.id"
+                            :label="entry.layer.label"
+                            :service="entry.layer.image.service"
+                            :tag="entry.tag ? entry.text : null"
+                            :panes="panesOf(entry.layer.id)"
+                            :in-stack="inStack(entry.layer.id)"
+                            :stop="entry.layer.id === stop"
+                            :data-rel="
+                                entry.nodes.length > 0
+                                    ? marks.rel(entry.nodes)
+                                    : undefined
+                            "
+                            :style="
+                                entry.nodes.length > 0
+                                    ? marks.rowStyle(entry.nodes)
+                                    : undefined
+                            "
+                            @pick="pick(entry.layer.id)"
+                        />
+                    </div>
+                </section>
+            </div>
+        </div>
+        <p class="hint">{{ hint }}</p>
     </section>
 </template>
 
 <style scoped>
+@property --fade {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0rem;
+}
+
 .layer-gallery {
+    container-type: size;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     min-block-size: 0;
+    overflow: hidden;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.625rem;
     background: var(--bg);
@@ -613,6 +716,66 @@ function onKeydown(event: KeyboardEvent): void {
     align-items: center;
     justify-content: space-between;
     gap: 0.375rem;
+}
+
+.layer-gallery .head-count {
+    flex: 1;
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+    white-space: nowrap;
+}
+
+.layer-gallery .compact-help,
+.layer-gallery .filters-toggle {
+    display: none;
+}
+
+.layer-gallery .help-chip {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border-radius: 50%;
+    color: var(--ink-muted);
+    cursor: help;
+}
+
+.layer-gallery .help-chip .icon,
+.layer-gallery .filters-toggle .icon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    fill: currentcolor;
+}
+
+.layer-gallery .filters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.layer-gallery .filters-toggle {
+    align-items: center;
+    gap: 0.375rem;
+    align-self: flex-start;
+    padding: 0.1875rem 0.5rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.4375rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.layer-gallery .filters-toggle .active-count {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 1rem;
+    block-size: 1rem;
+    border-radius: 999rem;
+    background: var(--ink);
+    color: var(--surface);
+    font: 600 0.625rem var(--font-mono);
 }
 
 .layer-gallery .title {
@@ -792,6 +955,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .layer-gallery button:focus-visible,
+.layer-gallery .help-chip:focus-visible,
 .layer-gallery .filter:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
@@ -812,11 +976,41 @@ function onKeydown(event: KeyboardEvent): void {
     cursor: pointer;
 }
 
+.layer-gallery .scroller {
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+@supports (animation-timeline: scroll()) {
+    .layer-gallery .scroller {
+        mask-image: linear-gradient(
+            to bottom,
+            #000 calc(100% - var(--fade)),
+            transparent
+        );
+        animation: scroll-fade linear both;
+        animation-timeline: scroll(self block);
+    }
+
+    @keyframes scroll-fade {
+        0% {
+            --fade: 1.75rem;
+        }
+
+        92% {
+            --fade: 1.75rem;
+        }
+
+        100% {
+            --fade: 0rem;
+        }
+    }
+}
+
 .layer-gallery .groups {
     display: block;
-    min-block-size: 0;
     padding: 0.25rem 0.75rem 0.75rem;
-    overflow-y: auto;
 }
 
 .layer-gallery .group {
@@ -887,6 +1081,87 @@ function onKeydown(event: KeyboardEvent): void {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(4.375rem, 1fr));
     gap: 0.375rem;
+}
+
+@container (max-height: 26rem) {
+    .layer-gallery .head {
+        position: relative;
+        gap: 0.25rem;
+        padding: 0.375rem 0.75rem 0.25rem;
+    }
+
+    .layer-gallery .compact-help,
+    .layer-gallery .filters-toggle {
+        display: inline-flex;
+    }
+
+    .layer-gallery .target-text,
+    .layer-gallery .hint,
+    .layer-gallery .group-meta {
+        display: none;
+    }
+
+    .layer-gallery .filters[data-open="false"] {
+        display: none;
+    }
+
+    .layer-gallery .filters[data-open="true"] {
+        position: absolute;
+        z-index: 2;
+        inset-block-start: 100%;
+        inset-inline: 0;
+        max-block-size: calc(100cqh - 3rem);
+        padding: 0.5rem 0.75rem;
+        overflow-y: auto;
+        border-block-end: 0.0625rem solid var(--border-hover);
+        background: var(--bg);
+        box-shadow: var(--shadow-md);
+    }
+
+    .layer-gallery .groups {
+        padding-block: 0 0.5rem;
+    }
+
+    .layer-gallery .group {
+        margin-block-start: 0.375rem;
+    }
+
+    .layer-gallery .group header {
+        flex-wrap: nowrap;
+        margin-block-end: 0.25rem;
+    }
+
+    .layer-gallery .grid {
+        grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+        gap: 0.25rem;
+    }
+
+    .layer-gallery :deep(.layer-thumb .picture) {
+        aspect-ratio: 1;
+    }
+}
+
+@container (max-height: 13rem) {
+    .layer-gallery .head {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .layer-gallery .top {
+        flex: 1;
+    }
+
+    .layer-gallery .head-count {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .layer-gallery .scroller {
+        scroll-behavior: auto;
+    }
 }
 
 .layer-gallery .hint {

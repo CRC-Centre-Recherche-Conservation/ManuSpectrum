@@ -759,13 +759,32 @@ describe("the size of the window", () => {
             );
             expect(rail().find(".count").exists()).toBe(was);
             if (was) {
-                expect(rail().find(".count").text()).toBe("2");
+                expect(rail().find(".count .n").text()).toBe("5");
+                expect(rail().find(".count .unit").text()).toBe("images");
             }
             await rail().trigger("click");
             expect(view.find(".layer-gallery").exists()).toBe(was);
             view.unmount();
             wrapper = null;
         }
+    });
+
+    it("shows up to three preview images in the closed tab", async () => {
+        const view = await mountTable(PLAIN_TWO, { frame: M_FRAME });
+        const previews = view.findAll(
+            '[data-action="gallery-toggle"] .previews img',
+        );
+        expect(previews).toHaveLength(3);
+        expect(previews[0].attributes("src")).toContain("iiif.example");
+        expect(
+            view
+                .find('[data-action="gallery-toggle"] .previews')
+                .attributes("aria-hidden"),
+        ).toBe("true");
+        await view.find('[data-action="gallery-toggle"]').trigger("click");
+        expect(
+            view.find('[data-action="gallery-toggle"] .previews').exists(),
+        ).toBe(false);
     });
 
     it("keeps the same button, focused, when the gallery is hidden and shown, and names the dock it controls", async () => {

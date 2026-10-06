@@ -416,3 +416,47 @@ describe("LayerGallery targets and keyboard", () => {
         ]);
     });
 });
+
+describe("LayerGallery header and filters disclosure", () => {
+    it("keeps the title, the canvas count and the help in a header apart from the scrolling content", () => {
+        const view = gallery(PLAIN);
+        const head = view.find(".head");
+        expect(head.find(".title").text()).toBe("Gallery");
+        expect(head.find(".head-count").text()).toBe("5 canvases");
+        expect(head.find(".compact-help").exists()).toBe(true);
+        const scroller = view.find(".scroller");
+        expect(scroller.find(".groups").exists()).toBe(true);
+        expect(scroller.find(".head").exists()).toBe(false);
+        expect(head.find(".groups").exists()).toBe(false);
+    });
+
+    it("folds the search, the analyses and the grouping behind a Filters button, closed by default", async () => {
+        const view = gallery(PLAIN);
+        const toggle = view.find(".filters-toggle");
+        const panel = view.find(".filters");
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(toggle.attributes("aria-controls")).toBe(panel.attributes("id"));
+        expect(panel.attributes("data-open")).toBe("false");
+        expect(panel.find(".filter").exists()).toBe(true);
+        expect(panel.find(".tabs").exists()).toBe(true);
+        expect(panel.find(".grouping").exists()).toBe(true);
+        await toggle.trigger("click");
+        expect(toggle.attributes("aria-expanded")).toBe("true");
+        expect(panel.attributes("data-open")).toBe("true");
+    });
+
+    it("shows how many filters are active on the closed button", async () => {
+        const view = gallery(PLAIN);
+        expect(view.find(".filters-toggle .active-count").exists()).toBe(false);
+        await view.find(".filter").setValue("L1");
+        expect(view.find(".filters-toggle .active-count").text()).toBe("1");
+        await view.findAll(".analysis-tab")[1].trigger("click");
+        expect(view.find(".filters-toggle .active-count").text()).toBe("2");
+        expect(view.find(".filters-toggle").attributes("aria-label")).toBe(
+            "Filters, 2 active",
+        );
+        await view.find(".filter").setValue("");
+        await view.findAll(".analysis-tab")[0].trigger("click");
+        expect(view.find(".filters-toggle .active-count").exists()).toBe(false);
+    });
+});
