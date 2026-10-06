@@ -6,8 +6,13 @@ import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/compon
 import LayerThumb from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerThumb.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import {
+    ICONS,
+    ICON_VIEW_BOX,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { nextId } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
 import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import { shortAnalysisName } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/analysis-short-name.ts";
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import {
     compareFamilies,
@@ -18,6 +23,7 @@ import {
     analysisNode,
     elementNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import { focusHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import { atomicNumber } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/periodic.ts";
 
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -50,6 +56,8 @@ interface Entry {
 interface Group {
     id: string;
     title: string;
+    fullTitle: string | null;
+    node: ReturnType<typeof analysisNode> | null;
     meta: string;
     note: string | null;
     entries: Entry[];
@@ -152,6 +160,14 @@ const stop = computed(() =>
         : order.value[0] ?? null,
 );
 
+function pinsOf(group: Group): { slot: number; hue: string }[] {
+    return group.node
+        ? marks
+              .slots(group.node)
+              .map(({ slot }) => ({ slot, hue: focusHue(slot) }))
+        : [];
+}
+
 function canvasCount(n: number): string {
     return interpolate(
         $ngettext("%{n} canvas", "%{n} canvases", n),
@@ -171,7 +187,9 @@ function groupsByAnalysis(list: Entry[]): Group[] {
         const technique = analysis.technique?.label.value;
         return {
             id: `analysis:${id}`,
-            title: analysis.name.value,
+            title: shortAnalysisName(analysis.name.value),
+            fullTitle: analysis.name.value,
+            node: analysisNode(id),
             meta: [technique, canvasCount(members.length)]
                 .filter(Boolean)
                 .join(" · "),
@@ -226,6 +244,8 @@ function groupsByTag(list: Entry[]): Group[] {
             ([family, members]): Group => ({
                 id: `family:${family}`,
                 title: members[0].text,
+                fullTitle: null,
+                node: null,
                 meta: familyMeta(family, members, spread(members)),
                 note: null,
                 entries: members,
@@ -236,6 +256,8 @@ function groupsByTag(list: Entry[]): Group[] {
         ([key, members]): Group => ({
             id: key,
             title: members[0].text,
+            fullTitle: null,
+            node: null,
             meta: canvasCount(members.length),
             note: null,
             entries: members,
@@ -247,6 +269,8 @@ function groupsByTag(list: Entry[]): Group[] {
             ? [
                   {
                       id: "unclassified",
+                      fullTitle: null,
+                      node: null,
                       title: interpolate(
                           $gettext("Unclassified · %{n}"),
                           { n: unclassified.length },
@@ -322,63 +346,52 @@ function onKeydown(event: KeyboardEvent): void {
         :aria-label="$gettext('Gallery')"
     >
         <div class="head">
-            <h3 class="title">{{ $gettext("Gallery") }}</h3>
-            <div class="target">
-                <template v-if="stacked">
-                    <span>{{ $gettext("Click: add to the stack") }}</span>
-                </template>
-                <template v-else>
-                    <span class="target-text">{{ $gettext("Place in") }}</span>
-                    <button
-                        v-for="(letter, index) in targets"
-                        :key="letter"
-                        type="button"
-                        class="target-pane"
-                        :aria-pressed="
-                            props.state.active === index ? 'true' : 'false'
-                        "
-                        @click="emit('set-target', index)"
-                    >
-                        {{ letter }}
-                    </button>
-                </template>
+            <div class="top">
+                <h3 class="title">{{ $gettext("Gallery") }}</h3>
+                <div class="target">
+                    <template v-if="stacked">
+                        <span>{{ $gettext("Click: add to the stack") }}</span>
+                    </template>
+                    <template v-else>
+                        <span class="target-text">{{
+                            $gettext("Place in")
+                        }}</span>
+                        <button
+                            v-for="(letter, index) in targets"
+                            :key="letter"
+                            type="button"
+                            class="target-pane"
+                            :data-pane="letter.toLowerCase()"
+                            :aria-pressed="
+                                props.state.active === index ? 'true' : 'false'
+                            "
+                            @click="emit('set-target', index)"
+                        >
+                            {{ letter }}
+                        </button>
+                    </template>
+                </div>
             </div>
-            <input
-                v-model="query"
-                class="filter"
-                type="search"
-                :aria-label="$gettext('Filter the layers')"
-                :placeholder="$gettext('Filter by label or tag')"
-            />
-            <div
-                class="grouping"
-                role="group"
-                :aria-label="$gettext('Group by')"
-            >
-                <button
-                    type="button"
-                    data-grouping="analysis"
-                    :aria-pressed="grouping === 'analysis' ? 'true' : 'false'"
-                    @click="setGrouping('analysis')"
+            <div class="search">
+                <input
+                    v-model="query"
+                    class="filter"
+                    type="search"
+                    :aria-label="$gettext('Filter the layers')"
+                    :placeholder="$gettext('Filter by label or tag')"
+                />
+                <svg
+                    class="icon"
+                    :viewBox="ICON_VIEW_BOX"
+                    aria-hidden="true"
+                    focusable="false"
                 >
-                    {{ $gettext("Analysis") }}
-                </button>
-                <button
-                    type="button"
-                    data-grouping="tag"
-                    :disabled="!hasFamily"
-                    :aria-pressed="grouping === 'tag' ? 'true' : 'false'"
-                    :title="
-                        hasFamily
-                            ? undefined
-                            : $gettext(
-                                  'No layer of the Selection has a declared element or band.',
-                              )
-                    "
-                    @click="setGrouping('tag')"
-                >
-                    {{ $gettext("Element or band") }}
-                </button>
+                    <path
+                        v-for="(path, index) in ICONS.search"
+                        :key="index"
+                        :d="path"
+                    />
+                </svg>
             </div>
             <div
                 v-if="analyses.length > 1"
@@ -398,16 +411,18 @@ function onKeydown(event: KeyboardEvent): void {
                     v-for="line in analyses"
                     :key="line.analysis.id"
                     class="analysis"
+                    :data-on="only === line.analysis.id ? 'true' : 'false'"
                 >
                     <button
                         type="button"
                         class="analysis-tab"
+                        :title="line.analysis.name.value"
                         :aria-pressed="
                             only === line.analysis.id ? 'true' : 'false'
                         "
                         @click="toggleAnalysis(line.analysis.id)"
                     >
-                        {{ line.analysis.name.value }}
+                        {{ shortAnalysisName(line.analysis.name.value) }}
                     </button>
                     <button
                         type="button"
@@ -436,6 +451,41 @@ function onKeydown(event: KeyboardEvent): void {
                     </button>
                 </span>
             </div>
+            <div class="grouping-row">
+                <span class="grouping-label">{{ $gettext("Group by") }}</span>
+                <div
+                    class="grouping"
+                    role="group"
+                    :aria-label="$gettext('Group by')"
+                >
+                    <button
+                        type="button"
+                        data-grouping="analysis"
+                        :aria-pressed="
+                            grouping === 'analysis' ? 'true' : 'false'
+                        "
+                        @click="setGrouping('analysis')"
+                    >
+                        {{ $gettext("Analysis") }}
+                    </button>
+                    <button
+                        type="button"
+                        data-grouping="tag"
+                        :disabled="!hasFamily"
+                        :aria-pressed="grouping === 'tag' ? 'true' : 'false'"
+                        :title="
+                            hasFamily
+                                ? undefined
+                                : $gettext(
+                                      'No layer of the Selection has a declared element or band.',
+                                  )
+                        "
+                        @click="setGrouping('tag')"
+                    >
+                        {{ $gettext("Element or band") }}
+                    </button>
+                </div>
+            </div>
         </div>
         <div
             class="groups"
@@ -454,10 +504,22 @@ function onKeydown(event: KeyboardEvent): void {
                 :aria-labelledby="`${group.id}-title`"
             >
                 <header>
+                    <span
+                        v-if="pinsOf(group).length > 0"
+                        class="pins"
+                        aria-hidden="true"
+                    >
+                        <b
+                            v-for="pin in pinsOf(group)"
+                            :key="pin.slot"
+                            :style="{ '--h': pin.hue }"
+                            >{{ pin.slot }}</b
+                        >
+                    </span>
                     <h4
                         :id="`${group.id}-title`"
                         class="group-title"
-                        :title="group.note ?? undefined"
+                        :title="group.fullTitle ?? group.note ?? undefined"
                     >
                         {{ group.title }}
                     </h4>
@@ -466,6 +528,7 @@ function onKeydown(event: KeyboardEvent): void {
                         class="group-meta"
                         >{{ group.meta }}</span
                     >
+                    <span class="spacer"></span>
                     <button
                         type="button"
                         class="place-all"
@@ -514,79 +577,213 @@ function onKeydown(event: KeyboardEvent): void {
                 </div>
             </section>
         </div>
+        <p class="hint">
+            {{
+                $gettext(
+                    "Click: lay in the target pane. Drag: onto any pane. In Stack mode, a click adds or removes the layer.",
+                )
+            }}
+        </p>
     </section>
 </template>
 
 <style scoped>
 .layer-gallery {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 0.5rem;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     min-block-size: 0;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.625rem;
+    background: var(--bg);
 }
 
 .layer-gallery .head {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
     gap: 0.5rem;
+    padding: 0.625rem 0.75rem 0.5rem;
+    border-block-end: 0.0625rem solid var(--border-hover);
+}
+
+.layer-gallery .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.375rem;
 }
 
 .layer-gallery .title {
     margin: 0;
-    color: var(--ink-muted);
-    font: 0.6875rem var(--font-mono);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font: 600 1.0625rem/1.1 var(--font-display);
 }
 
-.layer-gallery .analysis {
+.layer-gallery .target {
     display: flex;
-    flex: 1 1 100%;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.25rem;
-    min-inline-size: 0;
-    font-size: 0.75rem;
+    color: var(--ink-muted);
+    font-size: 0.71875rem;
 }
 
-.layer-gallery .analysis .analysis-tab {
-    flex: 0 1 auto;
-    min-inline-size: 0;
-    text-align: start;
+.layer-gallery .target-pane {
+    --pane: var(--pane-a);
+    inline-size: 1.5rem;
+    block-size: 1.375rem;
+    padding: 0;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.3125rem;
+    background: var(--surface);
+    color: var(--ink-muted);
+    font: 600 0.6875rem var(--font-mono);
+    cursor: pointer;
 }
 
-.layer-gallery .analysis .analysis-focus {
-    flex: none;
+.layer-gallery .target-pane[data-pane="b"] {
+    --pane: var(--pane-b);
 }
 
-.layer-gallery .target,
-.layer-gallery .grouping,
+.layer-gallery .target-pane[data-pane="c"] {
+    --pane: var(--pane-c);
+}
+
+.layer-gallery .target-pane[data-pane="d"] {
+    --pane: var(--pane-d);
+}
+
+.layer-gallery .target-pane[aria-pressed="true"] {
+    border-color: var(--pane);
+    background: var(--pane);
+    color: var(--surface);
+}
+
+.layer-gallery .search {
+    position: relative;
+}
+
+.layer-gallery .search .filter {
+    inline-size: 100%;
+    padding: 0.375rem 1.75rem 0.375rem 0.5625rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.4375rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.78125rem;
+}
+
+.layer-gallery .search .icon {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 0.5rem;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    translate: 0 -50%;
+    fill: var(--ink-muted);
+    pointer-events: none;
+}
+
 .layer-gallery .tabs {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.75rem;
 }
 
-.layer-gallery button:not(.analysis-focus) {
-    padding: 0.125rem 0.5rem;
+.layer-gallery .analysis {
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    min-inline-size: 0;
     border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.375rem;
+    border-radius: 999rem;
     background: var(--surface);
-    color: var(--ink);
+}
+
+.layer-gallery .analysis[data-on="true"] {
+    border-color: var(--ink);
+    background: var(--ink);
+}
+
+.layer-gallery .analysis-tab {
+    min-inline-size: 0;
+    max-inline-size: 11rem;
+    padding: 0.125rem 0.5625rem;
+    overflow: hidden;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink-muted);
     font: inherit;
-    font-size: 0.75rem;
+    font-size: 0.71875rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     cursor: pointer;
 }
 
-.layer-gallery button[aria-pressed="true"] {
+.layer-gallery .analysis-tab[aria-pressed="true"] {
     border-color: var(--ink);
     background: var(--ink);
     color: var(--surface);
 }
 
-.layer-gallery button:disabled {
+.layer-gallery .analysis .analysis-tab {
+    border: none;
+    background: none;
+}
+
+.layer-gallery .analysis[data-on="true"] .analysis-tab {
+    color: var(--surface);
+}
+
+.layer-gallery .analysis .analysis-focus {
+    flex: none;
+    margin-inline-end: 0.1875rem;
+}
+
+.layer-gallery .grouping-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.375rem;
+}
+
+.layer-gallery .grouping-label {
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+}
+
+.layer-gallery .grouping {
+    display: inline-flex;
+    overflow: hidden;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.4375rem;
+    background: var(--surface);
+}
+
+.layer-gallery .grouping button {
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-inline-end: 0.0625rem solid var(--border);
+    background: none;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.layer-gallery .grouping button:last-child {
+    border-inline-end: none;
+}
+
+.layer-gallery .grouping button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--surface);
+}
+
+.layer-gallery .grouping button:disabled {
     color: var(--ink-dim);
     cursor: not-allowed;
 }
@@ -599,8 +796,8 @@ function onKeydown(event: KeyboardEvent): void {
 
 .layer-gallery .analysis-focus {
     position: relative;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
     padding: 0;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
@@ -612,27 +809,15 @@ function onKeydown(event: KeyboardEvent): void {
     cursor: pointer;
 }
 
-.layer-gallery .filter {
-    flex: 1;
-    min-inline-size: 8rem;
-    padding: 0.125rem 0.5rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.375rem;
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.75rem;
-}
-
 .layer-gallery .groups {
-    display: grid;
-    align-content: start;
-    gap: 0.75rem;
+    display: block;
     min-block-size: 0;
+    padding: 0.25rem 0.75rem 0.75rem;
     overflow-y: auto;
 }
 
 .layer-gallery .group {
+    margin-block-start: 0.75rem;
     content-visibility: auto;
     contain-intrinsic-size: auto 8rem;
 }
@@ -641,13 +826,34 @@ function onKeydown(event: KeyboardEvent): void {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.5rem;
-    margin-block-end: 0.25rem;
+    gap: 0.125rem 0.5rem;
+    margin-block-end: 0.375rem;
+}
+
+.layer-gallery .group .pins {
+    display: inline-flex;
+    align-self: center;
+    gap: 0.0625rem;
+}
+
+.layer-gallery .group .pins b {
+    display: grid;
+    place-items: center;
+    inline-size: 1rem;
+    block-size: 1rem;
+    border-radius: 50%;
+    background: var(--h, var(--ink));
+    color: var(--focus-on);
+    font: 600 0.625rem var(--font-mono);
 }
 
 .layer-gallery .group-title {
+    min-inline-size: 0;
     margin: 0;
-    font-size: 0.8125rem;
+    overflow: hidden;
+    font: 600 0.9375rem/1.1 var(--font-display);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .layer-gallery .group-meta,
@@ -658,10 +864,35 @@ function onKeydown(event: KeyboardEvent): void {
     font-size: 0.6875rem;
 }
 
+.layer-gallery .group .spacer {
+    flex: 1;
+}
+
+.layer-gallery .group :is(.place-all, .compare) {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 0.6875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.125rem;
+    cursor: pointer;
+}
+
 .layer-gallery .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(4.375rem, 1fr));
     gap: 0.375rem;
+}
+
+.layer-gallery .hint {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-block-start: 0.0625rem solid var(--border-hover);
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+    line-height: 1.5;
 }
 
 .layer-gallery

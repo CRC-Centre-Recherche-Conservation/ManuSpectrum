@@ -322,6 +322,8 @@ describe("without layer tiles", () => {
         it("disables « link across analyses » with one analysis and says why", async () => {
             const view = await mountTable(PLAIN_ONE);
             const toggle = view.find('[data-action="link-all"]');
+            expect(toggle.attributes("role")).toBe("switch");
+            expect(toggle.attributes("aria-checked")).toBe("false");
             expect(toggle.attributes("aria-disabled")).toBe("true");
             expect(toggle.attributes("title")).toContain("linked");
         });
@@ -783,13 +785,17 @@ describe("the focus", () => {
         expect(paneLabels(view)).toEqual(labels);
     });
 
-    it("keeps « Follow the focus » off by default", async () => {
+    it("keeps « Follow the focus » off by default, as a switch", async () => {
         const { view } = await mountLinked(TILED);
+        const toggle = view.find('[data-action="follow-focus"]');
+        expect(toggle.attributes("role")).toBe("switch");
+        expect(toggle.attributes("aria-checked")).toBe("false");
+        await click(view, '[data-action="follow-focus"]');
         expect(
             view
                 .find('[data-action="follow-focus"]')
-                .attributes("aria-pressed"),
-        ).toBe("false");
+                .attributes("aria-checked"),
+        ).toBe("true");
     });
 
     it("moves each pane to the layer of a pinned element once « Follow the focus » is on", async () => {

@@ -8,6 +8,7 @@ import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/inje
 import {
     analysisHit,
     imagingEntry,
+    label,
     layerOf,
     layerUnit,
     valueRef,
@@ -19,7 +20,10 @@ import {
     setGrouping,
     toggleInStack,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
-import { elementNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import {
+    analysisNode,
+    elementNode,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
 
@@ -212,6 +216,25 @@ describe("LayerGallery with some tiles", () => {
         expect(view.findAll(".layer-thumb")).toHaveLength(2);
     });
 
+    it("names a tab and a group by the first segment of the analysis name, the whole name in the title", async () => {
+        const whole = "REC-0031 — MA-XRF — parchment — 61v";
+        const maps = PLAIN.map((entry, index) =>
+            index === 0
+                ? {
+                      ...entry,
+                      analysis: { ...entry.analysis, name: label(whole) },
+                  }
+                : entry,
+        );
+        const view = gallery(maps);
+        const tab = view.findAll(".analysis-tab")[1];
+        expect(tab.text()).toBe("REC-0031");
+        expect(tab.attributes("title")).toBe(whole);
+        const title = view.find(".group-title");
+        expect(title.text()).toBe("REC-0031");
+        expect(title.attributes("title")).toBe(whole);
+    });
+
     it("switches grouping through the segment", async () => {
         const view = gallery(TILED);
         await view.find('[data-grouping="analysis"]').trigger("click");
@@ -238,6 +261,24 @@ describe("LayerGallery with some tiles", () => {
         expect(rel("MS59-deconv_Cu")).toBe("self");
         expect(rel("MS59-deconv_Pb")).toBe("none");
         expect(rel("band_650")).toBeUndefined();
+    });
+
+    it("shows the focus slot of a pinned analysis on the head of its group, and none on the others", async () => {
+        const started = startLinkedSelection(() => undefined);
+        stop = started.stop;
+        const view = mount(LayerGallery, {
+            props: { maps: PLAIN, state: defaultState(PLAIN) },
+            global: {
+                provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
+            },
+        });
+        expect(view.findAll(".group .pins")).toHaveLength(0);
+        started.linked.toggle(analysisNode(PLAIN[0].analysis.id));
+        await view.vm.$nextTick();
+        const pins = view.findAll(".group .pins");
+        expect(pins).toHaveLength(1);
+        expect(pins[0].text()).toBe("1");
+        expect(view.findAll(".group")[0].find(".pins").exists()).toBe(true);
     });
 
     it("gives a thumb linked by the focus the hue of its slot, for the outline of the recipe", async () => {

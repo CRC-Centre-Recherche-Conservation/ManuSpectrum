@@ -19,6 +19,10 @@ import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/compon
 import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PaneFilters.vue";
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
+import {
+    ICONS,
+    ICON_VIEW_BOX,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMapResize.ts";
 import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
@@ -27,6 +31,7 @@ import {
     layImage,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { shortAnalysisName } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/analysis-short-name.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
@@ -67,6 +72,11 @@ const LETTERS = ["A", "B"] as const;
 const MIN_ZOOM = -10;
 const ZOOM_SNAP = 0.25;
 const SIDE_B: Side = 1;
+/** The knob of the divider, in pixels: the range's thumb is this size and the plugin positions the divider for it. */
+const THUMB_SIZE_PX = 34;
+const GRIP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEW_BOX}"><path transform="translate(-4.5 0)" d="${ICONS["chevron-left"][0]}"/><path transform="translate(4.5 0)" d="${ICONS["chevron-right"][0]}"/></svg>`;
+/** The « ‹ › » of the knob, drawn from the primeicons chevrons as a mask so the knob takes the ink token. */
+const gripMask = `url("data:image/svg+xml,${encodeURIComponent(GRIP_SVG)}")`;
 
 /**
  * The curtain of the light table: one Leaflet map (`CRS.Simple`) holding
@@ -141,6 +151,9 @@ const views = computed(() =>
             label: found?.layer.label || canvas || "",
             tag: parts ? tagText(parts, { $gettext, interpolate }) : "",
             analysis: found?.line.analysis.name ?? null,
+            analysisShort: found
+                ? shortAnalysisName(found.line.analysis.name.value)
+                : "",
             record: found ? analysisNode(found.line.analysis.id) : null,
             status: status.value[side],
         };
@@ -234,7 +247,9 @@ onMounted(() => {
         );
     }
     scale = createScaleGroup(() => refit());
-    curtain = L.control.sideBySide([], []).addTo(map);
+    curtain = L.control
+        .sideBySide([], [], { thumbSize: THUMB_SIZE_PX })
+        .addTo(map);
     (curtain as L.SideBySide & { _range?: HTMLElement })._range?.setAttribute(
         "aria-label",
         $gettext("Curtain position"),
@@ -416,64 +431,6 @@ function onApplyAll(side: Side): void {
         @dragover.prevent
         @drop.prevent="onDrop"
     >
-        <figcaption class="chips">
-            <span
-                v-for="view in views"
-                :key="view.side"
-                class="chip"
-                :data-pane="view.letter.toLowerCase()"
-                @click="emit('activate', view.side)"
-            >
-                <span class="letter">{{ view.letter }}</span>
-                <span
-                    v-if="view.canvas"
-                    class="label"
-                    :title="view.label"
-                    >{{ view.label }}</span
-                >
-                <span
-                    v-else
-                    class="label"
-                    >{{ $gettext("empty") }}</span
-                >
-                <span
-                    v-if="view.tag"
-                    class="tag"
-                    >{{ view.tag }}</span
-                >
-                <button
-                    v-if="view.record && view.analysis"
-                    type="button"
-                    class="analysis ms-focus"
-                    v-bind="marks.focus(view.record)"
-                    :title="view.analysis.value"
-                    :lang="view.analysis.lang"
-                    :aria-pressed="marks.pressed(view.record)"
-                    @click.stop="marks.toggle(view.record)"
-                >
-                    <FocusPip :node="view.record" />
-                    <span>{{ view.analysis.value }}</span>
-                </button>
-                <IconButton
-                    icon="sliders-h"
-                    data-action="filters"
-                    :aria-expanded="filtersOpen[view.side] ? 'true' : 'false'"
-                    :label="
-                        interpolate(
-                            $gettext('Filters of side %{letter}'),
-                            {
-                                letter: view.letter,
-                            },
-                            true,
-                        )
-                    "
-                    :pressed="filtersOpen[view.side]"
-                    @click.stop="
-                        filtersOpen[view.side] = !filtersOpen[view.side]
-                    "
-                />
-            </span>
-        </figcaption>
         <div class="stage">
             <div
                 ref="host"
@@ -526,39 +483,100 @@ function onApplyAll(side: Side): void {
                     }}</span>
                 </button>
             </p>
-            <ScaleBadge
-                v-if="props.scaleNote"
-                class="badge badge-b"
-                :size="props.scaleNote.size"
-                :against="props.scaleNote.againstSize"
-            />
-            <span class="zoom">
+        </div>
+        <figcaption class="chips">
+            <span
+                v-for="view in views"
+                :key="view.side"
+                class="chip"
+                :data-pane="view.letter.toLowerCase()"
+                @click="emit('activate', view.side)"
+            >
+                <span class="letter">{{ view.letter }}</span>
+                <span
+                    v-if="view.canvas"
+                    class="label"
+                    :title="view.label"
+                    >{{ view.label }}</span
+                >
+                <span
+                    v-else
+                    class="label"
+                    >{{ $gettext("empty") }}</span
+                >
+                <span
+                    v-if="view.tag"
+                    class="tag"
+                    >{{ view.tag }}</span
+                >
+                <button
+                    v-if="view.record && view.analysis"
+                    type="button"
+                    class="analysis ms-focus"
+                    v-bind="marks.focus(view.record)"
+                    :title="view.analysis.value"
+                    :lang="view.analysis.lang"
+                    :aria-label="view.analysis.value"
+                    :aria-pressed="marks.pressed(view.record)"
+                    @click.stop="marks.toggle(view.record)"
+                >
+                    <FocusPip :node="view.record" />
+                    <span>{{ view.analysisShort }}</span>
+                </button>
                 <IconButton
-                    icon="search-plus"
-                    data-action="zoom-in"
-                    :label="$gettext('Zoom in')"
-                    @click.stop="zoom(1)"
-                />
-                <IconButton
-                    icon="search-minus"
-                    data-action="zoom-out"
-                    :label="$gettext('Zoom out')"
-                    @click.stop="zoom(-1)"
-                />
-                <IconButton
-                    icon="expand"
-                    data-action="fit"
-                    :label="$gettext('Fit the whole image')"
-                    @click.stop="fit"
+                    icon="sliders-h"
+                    data-action="filters"
+                    :aria-expanded="filtersOpen[view.side] ? 'true' : 'false'"
+                    :label="
+                        interpolate(
+                            $gettext('Filters of side %{letter}'),
+                            {
+                                letter: view.letter,
+                            },
+                            true,
+                        )
+                    "
+                    :pressed="filtersOpen[view.side]"
+                    @click.stop="
+                        filtersOpen[view.side] = !filtersOpen[view.side]
+                    "
                 />
             </span>
-        </div>
+        </figcaption>
+        <ScaleBadge
+            v-if="props.scaleNote"
+            class="badge badge-b"
+            :size="props.scaleNote.size"
+            :against="props.scaleNote.againstSize"
+        />
+        <span class="zoom">
+            <IconButton
+                icon="plus"
+                data-action="zoom-in"
+                :label="$gettext('Zoom in')"
+                @click.stop="zoom(1)"
+            />
+            <IconButton
+                icon="minus"
+                data-action="zoom-out"
+                :label="$gettext('Zoom out')"
+                @click.stop="zoom(-1)"
+            />
+            <IconButton
+                icon="expand"
+                data-action="fit"
+                :label="$gettext('Fit the whole image')"
+                @click.stop="fit"
+            />
+        </span>
         <template
             v-for="view in views"
             :key="`filters-${view.side}`"
         >
             <PaneFilters
                 v-if="filtersOpen[view.side]"
+                class="popover"
+                :data-side="view.letter.toLowerCase()"
                 :filters="filters[view.side]"
                 :letter="view.letter"
                 @change="
@@ -576,79 +594,129 @@ function onApplyAll(side: Side): void {
 
 <style scoped>
 .curtain-pane {
+    position: relative;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
     margin: 0;
-    border: 0.125rem solid var(--border);
     border-radius: 0.375rem;
-    background: var(--surface);
-}
-
-.curtain-pane .chips {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0.25rem;
-    padding: 0.25rem;
-    font-size: 0.8125rem;
+    background: var(--stage);
 }
 
 .curtain-pane .chip {
     --pane: var(--pane-a);
+    position: absolute;
+    z-index: 1000;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.125rem;
     min-inline-size: 0;
+    max-inline-size: 48%;
+    padding: 0.1875rem 0.25rem;
+    border: 0.0625rem solid color-mix(in srgb, var(--surface) 12%, transparent);
+    border-radius: 999rem;
+    background: color-mix(in srgb, var(--ink) 82%, transparent);
+    backdrop-filter: blur(0.25rem);
+    box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 30%);
+    color: var(--surface);
+    font-size: 0.75rem;
+}
+
+.curtain-pane .chip[data-pane="a"] {
+    inset-block-start: 0.5rem;
+    inset-inline-start: 0.5rem;
 }
 
 .curtain-pane .chip[data-pane="b"] {
     --pane: var(--pane-b);
+    inset-block-end: 0.5rem;
+    inset-inline-end: 0.5rem;
 }
 
 .curtain-pane .chip .letter {
     display: inline-grid;
+    flex: none;
     place-items: center;
-    min-inline-size: 1.5rem;
-    block-size: 1.5rem;
-    border-radius: 0.375rem;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-inline-end: 0.125rem;
+    border-radius: 999rem;
     background: var(--pane);
     color: var(--surface);
-    font-family: var(--font-mono);
-    font-weight: 600;
+    font: 600 0.6875rem var(--font-mono);
+}
+
+.curtain-pane .chip :deep(.icon-button-control) {
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    border-radius: 999rem;
+    color: var(--surface);
+}
+
+.curtain-pane .chip :deep(.icon-button-control:hover) {
+    background: color-mix(in srgb, var(--surface) 18%, transparent);
+    color: var(--surface);
+}
+
+.curtain-pane .chip :deep(.icon-button-control[aria-pressed="true"]) {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--surface) 24%, transparent);
+    color: var(--surface);
+}
+
+.curtain-pane .chip :deep(.icon) {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
 }
 
 .curtain-pane .chip .label {
+    flex: 0 1 auto;
     overflow: hidden;
-    max-inline-size: 12rem;
-    font-family: var(--font-mono);
+    min-inline-size: 1.5rem;
+    max-inline-size: 9rem;
+    padding-inline: 0.125rem;
+    font: 500 0.78125rem var(--font-mono);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .curtain-pane .chip .tag {
-    padding-inline: 0.375rem;
-    border: 0.0625rem solid var(--heat-3);
-    border-radius: 0.75rem;
-    background: var(--heat-1);
-    font-weight: 600;
+    flex: none;
+    padding: 0.0625rem 0.3125rem;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--surface) 20%, transparent);
+    color: var(--surface);
+    font: 500 0.625rem var(--font-mono);
+    white-space: nowrap;
 }
 
 .curtain-pane .chip .analysis {
-    --r: 0.375rem;
+    --r: 999rem;
     --link-pip: 0.8125rem;
     display: flex;
-    min-inline-size: 0;
-    max-inline-size: 12rem;
-    padding: 0.25rem 0.375rem;
+    flex: 0 1 auto;
+    align-items: center;
+    min-inline-size: 2rem;
+    max-inline-size: 7rem;
+    padding: 0.125rem 0.375rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.375rem;
+    border-radius: 999rem;
     background: none;
-    color: var(--ink-muted);
+    color: color-mix(in srgb, var(--surface) 70%, transparent);
     font: inherit;
+    font-size: 0.71875rem;
     cursor: pointer;
+}
+
+.curtain-pane .chip .analysis[data-rel="none"] {
+    background: none !important;
+    color: color-mix(in srgb, var(--surface) 55%, transparent) !important;
+}
+
+.curtain-pane .chip .analysis:hover {
+    color: var(--surface);
 }
 
 .curtain-pane .chip .analysis > span:last-child {
@@ -669,14 +737,15 @@ function onApplyAll(side: Side): void {
 }
 
 .curtain-pane .stage {
-    position: relative;
     display: grid;
     min-block-size: 6rem;
+    border-radius: inherit;
     background: var(--stage);
 }
 
 .curtain-pane .stage .map {
     min-block-size: 0;
+    border-radius: inherit;
     background: var(--stage);
 }
 
@@ -695,7 +764,7 @@ function onApplyAll(side: Side): void {
     justify-content: center;
     gap: 0.5rem;
     margin: 0;
-    color: var(--surface);
+    color: color-mix(in srgb, var(--surface) 70%, transparent);
     font-size: 0.8125rem;
     pointer-events: none;
 }
@@ -709,11 +778,11 @@ function onApplyAll(side: Side): void {
 }
 
 .curtain-pane .stage .note button {
-    min-block-size: var(--explorer-target, 2.75rem);
+    min-block-size: var(--explorer-target, 2rem);
     padding-inline: 0.75rem;
     border: none;
     border-radius: 0.375rem;
-    background: var(--bg-alt);
+    background: var(--surface);
     color: var(--ink);
     font: inherit;
     font-weight: 600;
@@ -721,28 +790,133 @@ function onApplyAll(side: Side): void {
     pointer-events: auto;
 }
 
-.curtain-pane .stage .badge {
+.curtain-pane .badge {
     position: absolute;
     z-index: 1000;
     inset-block-start: 0.5rem;
 }
 
-.curtain-pane .stage .badge-b {
+.curtain-pane .badge-b {
     inset-inline-end: 0.5rem;
 }
 
-.curtain-pane .stage .zoom {
+.curtain-pane .zoom {
     position: absolute;
     z-index: 1000;
-    inset-block-end: 0.5rem;
+    inset-block-end: 3rem;
     inset-inline-end: 0.5rem;
     display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.curtain-pane .zoom :deep(.icon-button-control) {
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 0.375rem;
     background: var(--surface);
+    box-shadow: 0 0.0625rem 0.25rem rgb(0 0 0 / 30%);
+    color: var(--ink);
+}
+
+.curtain-pane .zoom :deep(.icon-button-control:hover) {
+    background: var(--bg-alt);
+}
+
+.curtain-pane .zoom :deep(.icon) {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+}
+
+.curtain-pane .popover {
+    position: absolute;
+    z-index: 1100;
+    inline-size: 15.5rem;
+    max-inline-size: 90%;
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 35%);
+}
+
+.curtain-pane .popover[data-side="a"] {
+    inset-block-start: 2.75rem;
+    inset-inline-start: 0.5rem;
+}
+
+.curtain-pane .popover[data-side="b"] {
+    inset-block-end: 2.75rem;
+    inset-inline-end: 0.5rem;
 }
 
 .curtain-pane button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+@media (max-width: 48rem) {
+    .curtain-pane .popover[data-side="a"],
+    .curtain-pane .popover[data-side="b"] {
+        position: fixed;
+        inset: auto 0 0;
+        inline-size: auto;
+        max-inline-size: none;
+    }
+}
+
+/* Arches' divider, restyled: the plugin's own sheet draws a 40 px thumb with a bitmap grip. */
+.curtain-pane .stage :deep(.leaflet-sbs-divider) {
+    inline-size: 0.125rem;
+    margin-inline-start: -0.0625rem;
+    background: var(--surface);
+    box-shadow: 0 0 0 0.0625rem rgb(0 0 0 / 35%);
+}
+
+.curtain-pane .stage :deep(.leaflet-sbs-divider)::before,
+.curtain-pane .stage :deep(.leaflet-sbs-divider)::after {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    translate: -50% -50%;
+    content: "";
+}
+
+.curtain-pane .stage :deep(.leaflet-sbs-divider)::before {
+    inline-size: 2.125rem;
+    block-size: 2.125rem;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 40%);
+}
+
+.curtain-pane .stage :deep(.leaflet-sbs-divider)::after {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    background: var(--ink);
+    mask: v-bind(gripMask) center / contain no-repeat;
+}
+
+.curtain-pane .stage :deep(.leaflet-sbs-range)::-webkit-slider-thumb {
+    inline-size: 2.125rem;
+    block-size: 2.125rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+}
+
+.curtain-pane .stage :deep(.leaflet-sbs-range)::-moz-range-thumb {
+    inline-size: 2.125rem;
+    block-size: 2.125rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+}
+
+.curtain-pane
+    .stage
+    :deep(.leaflet-sbs-range:focus-visible)::-webkit-slider-thumb {
+    box-shadow: 0 0 0 0.1875rem var(--accent);
+}
+
+.curtain-pane .stage :deep(.leaflet-sbs-range:focus-visible)::-moz-range-thumb {
+    box-shadow: 0 0 0 0.1875rem var(--accent);
 }
 </style>

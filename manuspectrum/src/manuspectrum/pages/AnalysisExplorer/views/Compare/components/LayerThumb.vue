@@ -70,7 +70,11 @@ function onDragStart(event: DragEvent): void {
     <button
         type="button"
         class="layer-thumb"
-        :class="{ 'in-stack': props.inStack }"
+        :class="{
+            'in-stack': props.inStack,
+            placed: props.panes.length > 0,
+        }"
+        :data-pane="props.panes[0]?.toLowerCase()"
         draggable="true"
         :data-canvas="props.canvas"
         :tabindex="props.stop ? 0 : -1"
@@ -117,6 +121,7 @@ function onDragStart(event: DragEvent): void {
                 v-for="pane in props.panes"
                 :key="pane"
                 class="pane-badge"
+                :data-pane="pane.toLowerCase()"
                 >{{ pane }}</b
             >
         </span>
@@ -125,22 +130,39 @@ function onDragStart(event: DragEvent): void {
 
 <style scoped>
 .layer-thumb {
+    --pane: var(--pane-a);
     position: relative;
     display: grid;
     justify-items: stretch;
-    gap: 0.125rem;
+    gap: 0.1875rem;
     min-inline-size: 0;
-    padding: 0.125rem;
+    padding: 0.1875rem;
     border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.375rem;
+    border-radius: 0.4375rem;
     background: var(--surface);
     color: var(--ink);
     font: inherit;
     cursor: pointer;
 }
 
+.layer-thumb[data-pane="b"],
+.layer-thumb .pane-badge[data-pane="b"] {
+    --pane: var(--pane-b);
+}
+
+.layer-thumb[data-pane="c"],
+.layer-thumb .pane-badge[data-pane="c"] {
+    --pane: var(--pane-c);
+}
+
+.layer-thumb[data-pane="d"],
+.layer-thumb .pane-badge[data-pane="d"] {
+    --pane: var(--pane-d);
+}
+
 .layer-thumb:hover {
     border-color: var(--ink-dim);
+    box-shadow: 0 0.125rem 0.375rem rgb(26 26 46 / 8%);
 }
 
 .layer-thumb:focus-visible {
@@ -148,8 +170,14 @@ function onDragStart(event: DragEvent): void {
     outline-offset: 0.125rem;
 }
 
+.layer-thumb.placed {
+    outline: 0.125rem solid var(--pane);
+    outline-offset: -0.0625rem;
+}
+
 .layer-thumb.in-stack {
-    border: 0.125rem solid var(--accent-text);
+    outline: 0.125rem solid var(--accent);
+    outline-offset: -0.0625rem;
 }
 
 .layer-thumb .picture {
@@ -158,7 +186,7 @@ function onDragStart(event: DragEvent): void {
     aspect-ratio: 4 / 5;
     overflow: hidden;
     border-radius: 0.25rem;
-    background: var(--bg-alt);
+    background: var(--stage);
 }
 
 .layer-thumb img {
@@ -169,7 +197,7 @@ function onDragStart(event: DragEvent): void {
 
 .layer-thumb .flat {
     padding: 0.125rem;
-    color: var(--ink-muted);
+    color: color-mix(in srgb, var(--surface) 70%, transparent);
     font: 0.625rem var(--font-mono);
     overflow-wrap: anywhere;
     text-align: center;
@@ -177,7 +205,8 @@ function onDragStart(event: DragEvent): void {
 
 .layer-thumb .label {
     overflow: hidden;
-    font: 0.625rem var(--font-mono);
+    padding-inline: 0.125rem;
+    font: 500 0.65625rem/1.2 var(--font-mono);
     text-align: start;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -185,35 +214,36 @@ function onDragStart(event: DragEvent): void {
 
 .layer-thumb .tag-badge {
     position: absolute;
-    inset-block-start: 0.25rem;
-    inset-inline-start: 0.25rem;
-    max-inline-size: 90%;
+    inset-block-start: 0.3125rem;
+    inset-inline-end: 0.3125rem;
+    max-inline-size: 60%;
     overflow: hidden;
-    padding-inline: 0.25rem;
-    border-radius: 999rem;
-    background: var(--ink);
+    padding: 0.0625rem 0.25rem;
+    border-radius: 0.1875rem;
+    background: color-mix(in srgb, var(--ink) 80%, transparent);
     color: var(--surface);
-    font: 600 0.5625rem var(--font-mono);
+    font: 500 0.5625rem var(--font-mono);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .layer-thumb .panes {
     position: absolute;
-    inset-block-start: 0.25rem;
-    inset-inline-end: 0.25rem;
+    inset-block-start: 0.3125rem;
+    inset-inline-start: 0.3125rem;
     display: flex;
     gap: 0.125rem;
 }
 
 .layer-thumb .pane-badge {
+    --pane: var(--pane-a);
     display: grid;
     place-items: center;
-    min-inline-size: 0.875rem;
-    block-size: 0.875rem;
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
     border-radius: 0.1875rem;
-    background: var(--accent-text);
+    background: var(--pane);
     color: var(--surface);
-    font: 600 0.5625rem var(--font-mono);
+    font: 600 0.59375rem var(--font-mono);
 }
 </style>

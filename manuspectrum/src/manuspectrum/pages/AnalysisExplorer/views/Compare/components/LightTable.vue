@@ -6,7 +6,12 @@ import CurtainPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ImagingPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue";
 import LayerGallery from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue";
 import LayerStack from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue";
+import SwitchButton from "@/manuspectrum/pages/AnalysisExplorer/components/SwitchButton.vue";
 
+import {
+    ICONS,
+    ICON_VIEW_BOX,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
     ANNOUNCE_KEY,
@@ -58,6 +63,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-memory.ts";
 
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type {
     PaneFilters,
     TableGrouping,
@@ -157,19 +163,46 @@ const layoutChoices = computed(() =>
             ["single", "curtain", "stack"].includes(choice.layout),
     ),
 );
-const allChoices = computed(() => [
-    { layout: "single" as const, text: "1", name: $gettext("One pane") },
+const allChoices = computed<
     {
-        layout: "curtain" as const,
+        layout: TableLayout;
+        icon: IconName;
+        text: string;
+        name: string;
+        word?: boolean;
+    }[]
+>(() => [
+    {
+        layout: "single",
+        icon: "stop",
+        text: "1",
+        name: $gettext("One pane"),
+    },
+    {
+        layout: "curtain",
+        icon: "arrows-h",
         text: $gettext("Curtain"),
         name: $gettext("Curtain"),
+        word: true,
     },
-    { layout: "grid2" as const, text: "2", name: $gettext("Two panes") },
-    { layout: "grid4" as const, text: "4", name: $gettext("Four panes") },
     {
-        layout: "stack" as const,
+        layout: "grid2",
+        icon: "objects-column",
+        text: "2",
+        name: $gettext("Two panes"),
+    },
+    {
+        layout: "grid4",
+        icon: "th-large",
+        text: "4",
+        name: $gettext("Four panes"),
+    },
+    {
+        layout: "stack",
+        icon: "clone",
         text: $gettext("Stack"),
         name: $gettext("Stack"),
+        word: true,
     },
 ]);
 const linkTitle = computed(() =>
@@ -517,45 +550,67 @@ function onGrouping(grouping: TableGrouping): void {
                     :aria-disabled="small ? 'true' : undefined"
                     @click="onLayout(choice.layout)"
                 >
-                    <span>{{ choice.text }}</span>
+                    <svg
+                        class="icon"
+                        :viewBox="ICON_VIEW_BOX"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <path
+                            v-for="(path, index) in ICONS[choice.icon]"
+                            :key="index"
+                            :d="path"
+                        />
+                    </svg>
+                    <span :class="{ word: choice.word }">{{
+                        choice.text
+                    }}</span>
                 </button>
             </div>
+            <SwitchButton
+                v-if="!small"
+                data-action="link-all"
+                :title="linkTitle"
+                :checked="state.linkAll"
+                :disabled="!canLinkAll"
+                @toggle="onLinkAll"
+            >
+                {{ $gettext("Link zoom across analyses") }}
+            </SwitchButton>
             <button
                 v-if="canSwap"
                 type="button"
-                class="toggle"
+                class="swap"
                 data-action="swap"
                 :title="$gettext('Exchange the maps of A and B')"
                 @click="onSwap"
             >
-                <span>{{ $gettext("Swap A/B") }}</span>
+                <svg
+                    class="icon"
+                    :viewBox="ICON_VIEW_BOX"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <path
+                        v-for="(path, index) in ICONS['arrow-right-arrow-left']"
+                        :key="index"
+                        :d="path"
+                    />
+                </svg>
+                <span class="word">{{ $gettext("Swap A/B") }}</span>
             </button>
-            <button
-                v-if="!small"
-                type="button"
-                class="toggle"
-                data-action="link-all"
-                :title="linkTitle"
-                :aria-pressed="state.linkAll ? 'true' : 'false'"
-                :aria-disabled="canLinkAll ? undefined : 'true'"
-                @click="onLinkAll"
-            >
-                <span>{{ $gettext("Link zoom across analyses") }}</span>
-            </button>
-            <button
-                type="button"
-                class="toggle"
+            <SwitchButton
                 data-action="follow-focus"
                 :title="
                     $gettext(
                         'When an element is pinned in the focus, move the panes onto that element\'s layer.',
                     )
                 "
-                :aria-pressed="followFocus ? 'true' : 'false'"
-                @click="onFollowFocus"
+                :checked="followFocus"
+                @toggle="onFollowFocus"
             >
-                <span>{{ $gettext("Follow the focus") }}</span>
-            </button>
+                {{ $gettext("Follow the focus") }}
+            </SwitchButton>
         </div>
         <p
             v-if="notice"
@@ -671,31 +726,72 @@ function onGrouping(grouping: TableGrouping): void {
     flex: none;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.5rem 0.75rem;
 }
 
 .light-table .segment {
-    display: flex;
-    gap: 0.125rem;
+    display: inline-flex;
+    overflow: hidden;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.5rem;
+    background: var(--surface);
 }
 
-.light-table .segment button,
-.light-table .toggle {
+.light-table .segment button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
     min-block-size: var(--explorer-target, 2rem);
-    padding-inline: 0.5rem;
-    border: 0.0625rem solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--surface);
+    padding-inline: 0.625rem;
+    border: none;
+    border-inline-end: 0.0625rem solid var(--border);
+    background: transparent;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.light-table .segment button:last-child {
+    border-inline-end: none;
+}
+
+.light-table .segment button:hover {
+    background: var(--bg-alt);
     color: var(--ink);
+}
+
+.light-table .segment button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--surface);
+}
+
+.light-table .icon {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+}
+
+.light-table .swap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: var(--explorer-target, 2rem);
+    padding-inline: 0.625rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    color: var(--ink-muted);
+    font: inherit;
     font-size: 0.8125rem;
     cursor: pointer;
 }
 
-.light-table .segment button[aria-pressed="true"],
-.light-table .toggle[aria-pressed="true"] {
-    border-color: var(--ink);
-    background: var(--ink);
-    color: var(--surface);
+.light-table .swap:hover {
+    background: var(--bg-alt);
+    color: var(--ink);
 }
 
 .light-table [aria-disabled="true"] {
@@ -725,7 +821,7 @@ function onGrouping(grouping: TableGrouping): void {
 }
 
 .light-table[data-gallery="right"] .body {
-    grid-template-columns: minmax(0, 1fr) 18rem;
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
 }
 
 .light-table[data-gallery="below"] .body,
@@ -737,6 +833,8 @@ function onGrouping(grouping: TableGrouping): void {
     display: grid;
     min-inline-size: 0;
     min-block-size: 8rem;
+    padding: 0.125rem;
+    border-radius: 0.625rem;
     background: var(--stage);
 }
 
@@ -744,7 +842,7 @@ function onGrouping(grouping: TableGrouping): void {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
-    gap: 0.5rem;
+    gap: 0.125rem;
     min-block-size: 0;
 }
 
@@ -783,7 +881,19 @@ function onGrouping(grouping: TableGrouping): void {
     grid-auto-columns: 4.5rem;
 }
 
+.light-table:is([data-size="S"], [data-size="M"]) .toolbar .word {
+    display: none;
+}
+
+.light-table:is([data-size="S"], [data-size="M"]) .segment button {
+    padding-inline: 0.5rem;
+}
+
 @media (max-width: 48rem) {
+    .light-table .toolbar .word {
+        display: none;
+    }
+
     .light-table[data-shown="grid2"] .panes {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: repeat(2, minmax(0, 1fr));

@@ -417,6 +417,33 @@ describe("the pairing chip", () => {
     });
 });
 
+describe("long analysis names", () => {
+    const LONG = "REC-0031 — MA-XRF — parchment — 61v — Manchester";
+
+    function long(n: number, layers: Partial<FileLayer>[]): MapLine {
+        const base = line(n, layers);
+        return { ...base, analysis: { ...base.analysis, name: label(LONG) } };
+    }
+
+    it("shows the first segment on the pill and the whole name as its title", async () => {
+        const view = await mountPane({ maps: [long(1, [{}, {}])] });
+        const analysis = view.find(".chip .analysis");
+        expect(analysis.text()).toBe("REC-0031");
+        expect(analysis.attributes("title")).toBe(LONG);
+        expect(analysis.attributes("aria-label")).toBe(LONG);
+    });
+
+    it("names the analysis of the pairing chip by its first segment and keeps the whole name in its title", async () => {
+        const view = await mountPane({
+            maps: [line(1, [cu("Cu 1")]), long(2, [{}, cu("Cu 2")])],
+        });
+        const chip = view.find('[data-action="pair"]');
+        expect(chip.text()).toContain("REC-0031");
+        expect(chip.text()).not.toContain("Manchester");
+        expect(chip.attributes("title")).toContain(LONG);
+    });
+});
+
 describe("names with quotes and angle brackets", () => {
     const QUOTED = 'maXRF - "C" initial <b>';
 

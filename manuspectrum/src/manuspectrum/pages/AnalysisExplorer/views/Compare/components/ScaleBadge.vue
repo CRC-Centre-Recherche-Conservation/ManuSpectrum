@@ -16,10 +16,15 @@ import type { ServedSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Com
  * shown with (a linked pane, the other side of a curtain, the first layer of
  * a stack). The chip's description gives both served sizes.
  */
-const props = defineProps<{
-    size: ServedSize;
-    against: ServedSize;
-}>();
+const props = withDefaults(
+    defineProps<{
+        size: ServedSize;
+        against: ServedSize;
+        placement?: "above" | "below";
+        align?: "start" | "end";
+    }>(),
+    { placement: "below", align: "end" },
+);
 
 const { $gettext, interpolate } = useGettext();
 
@@ -43,8 +48,8 @@ const sizes = computed(() =>
     <HelpTip
         class="scale-badge"
         :text="sizes"
-        placement="below"
-        align="end"
+        :placement="props.placement"
+        :align="props.align"
     >
         <template #default="{ describedby }">
             <span
@@ -78,11 +83,12 @@ const sizes = computed(() =>
     padding-block: 0.125rem;
     padding-inline: 0.5rem;
     border: 0.0625rem solid var(--heat-3);
-    border-radius: 0.75rem;
+    border-radius: 999rem;
     background: var(--heat-1);
+    box-shadow: 0 0.0625rem 0.25rem rgb(0 0 0 / 30%);
     color: var(--ink);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font: 500 0.65625rem var(--font-mono);
+    white-space: nowrap;
 }
 
 .scale-badge .scale-badge-chip:focus-visible {
@@ -91,8 +97,8 @@ const sizes = computed(() =>
 }
 
 .scale-badge .icon {
-    inline-size: 0.875rem;
-    block-size: 0.875rem;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
     fill: currentColor;
 }
 </style>

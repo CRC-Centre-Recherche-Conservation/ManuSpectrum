@@ -524,13 +524,13 @@ function tintLabel(tint: Tint | null): string {
             </p>
             <span class="zoom">
                 <IconButton
-                    icon="search-plus"
+                    icon="plus"
                     data-action="zoom-in"
                     :label="$gettext('Zoom in')"
                     @click.stop="zoom(1)"
                 />
                 <IconButton
-                    icon="search-minus"
+                    icon="minus"
                     data-action="zoom-out"
                     :label="$gettext('Zoom out')"
                     @click.stop="zoom(-1)"
@@ -647,6 +647,11 @@ function tintLabel(tint: Tint | null): string {
                         "
                         @input="onOpacity(row.layer.canvas, $event)"
                     />
+                    <output
+                        class="value"
+                        aria-hidden="true"
+                        >{{ row.layer.opacity }}%</output
+                    >
                     <span class="actions">
                         <IconButton
                             icon="chevron-up"
@@ -795,14 +800,14 @@ function tintLabel(tint: Tint | null): string {
 
 <style scoped>
 .layer-stack {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 16rem;
+    grid-template-columns: minmax(0, 1fr) 17.5rem;
     min-inline-size: 0;
     min-block-size: 0;
     margin: 0;
-    border: 0.125rem solid var(--border);
     border-radius: 0.375rem;
-    background: var(--surface);
+    background: var(--bg);
 }
 
 .layer-stack:is([data-rel="self"], [data-rel="direct"], [data-rel="evidence"]) {
@@ -824,11 +829,13 @@ function tintLabel(tint: Tint | null): string {
     position: relative;
     display: grid;
     min-block-size: 6rem;
+    border-radius: 0.375rem 0 0 0.375rem;
     background: var(--stage);
 }
 
 .layer-stack .stage .map {
     min-block-size: 0;
+    border-radius: inherit;
     background: var(--stage);
 }
 
@@ -845,7 +852,7 @@ function tintLabel(tint: Tint | null): string {
     justify-content: center;
     margin: 0;
     padding: 1rem;
-    color: var(--surface);
+    color: color-mix(in srgb, var(--surface) 70%, transparent);
     font-size: 0.8125rem;
     text-align: center;
     pointer-events: none;
@@ -857,8 +864,27 @@ function tintLabel(tint: Tint | null): string {
     inset-block-end: 0.5rem;
     inset-inline-end: 0.5rem;
     display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.layer-stack .stage .zoom :deep(.icon-button-control) {
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 0.375rem;
     background: var(--surface);
+    box-shadow: 0 0.0625rem 0.25rem rgb(0 0 0 / 30%);
+    color: var(--ink);
+}
+
+.layer-stack .stage .zoom :deep(.icon-button-control:hover) {
+    background: var(--bg-alt);
+}
+
+.layer-stack .stage .zoom :deep(.icon) {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
 }
 
 .layer-stack .panel {
@@ -866,39 +892,62 @@ function tintLabel(tint: Tint | null): string {
     flex-direction: column;
     gap: 0.5rem;
     min-inline-size: 0;
-    padding: 0.5rem;
+    padding: 0.625rem 0.75rem;
     overflow-y: auto;
-    font-size: 0.8125rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-inline-start: none;
+    border-radius: 0 0.375rem 0.375rem 0;
+    background: var(--bg);
+    font-size: 0.75rem;
 }
 
 .layer-stack .panel .bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.25rem;
+    gap: 0.375rem;
 }
 
 .layer-stack .panel .bar .title {
-    margin: 0;
-    font-size: 0.875rem;
+    margin: 0 auto 0 0;
+    font: 600 1.0625rem/1.1 var(--font-display);
+}
+
+.layer-stack .panel .bar .ms-focus {
+    --r: 999rem;
+    --link-pip: 0.8125rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 0.71875rem;
+    cursor: pointer;
+}
+
+.layer-stack .panel .bar :deep(.icon-button-control) {
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
 }
 
 .layer-stack .layers {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
 .layer-stack .layers li {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.25rem;
-    padding-block-end: 0.5rem;
-    border-block-end: 0.0625rem solid var(--border);
+    gap: 0.0625rem 0.5rem;
+    padding-block: 0.375rem;
+    border-block-start: 0.0625rem solid var(--border-hover);
 }
 
 .layer-stack .layers li[data-on="false"] .label {
@@ -906,34 +955,72 @@ function tintLabel(tint: Tint | null): string {
     text-decoration: line-through;
 }
 
+.layer-stack .layers [data-action="tint"] {
+    grid-column: 1;
+    grid-row: 1;
+}
+
 .layer-stack .layers .label {
-    flex: 1 1 6rem;
+    grid-column: 2;
+    grid-row: 1;
     overflow: hidden;
-    font-family: var(--font-mono);
+    font: 500 0.75rem var(--font-mono);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.layer-stack .layers .failed {
-    flex-basis: 100%;
-    color: var(--ink-muted);
+.layer-stack .layers .actions {
+    grid-column: 3;
+    grid-row: 1;
+    display: flex;
+}
+
+.layer-stack .layers .actions :deep(.icon-button-control) {
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    border-radius: 0.25rem;
+}
+
+.layer-stack .layers .actions :deep(.icon) {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
 }
 
 .layer-stack .layers input[type="range"] {
-    flex: 1 1 100%;
+    grid-column: 1 / 3;
+    grid-row: 2;
+    inline-size: 100%;
     min-inline-size: 0;
+    accent-color: var(--accent);
 }
 
-.layer-stack .layers .actions {
-    display: flex;
-    flex-wrap: wrap;
+.layer-stack .layers .value {
+    grid-column: 3;
+    grid-row: 2;
+    color: var(--ink-muted);
+    font: 500 0.6875rem var(--font-mono);
+    text-align: end;
+}
+
+.layer-stack .layers .scale-badge,
+.layer-stack .layers .failed,
+.layer-stack .layers .palette {
+    grid-column: 1 / -1;
+}
+
+.layer-stack .layers .scale-badge {
+    justify-self: start;
+}
+
+.layer-stack .layers .failed {
+    color: var(--ink-muted);
 }
 
 .layer-stack .layers .swatch {
     display: block;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
-    border: 0.0625rem solid var(--border);
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 50%;
 }
 
@@ -950,33 +1037,44 @@ function tintLabel(tint: Tint | null): string {
 .layer-stack .layers [data-action="tint"] {
     display: grid;
     place-items: center;
-    min-inline-size: var(--explorer-target, 2.75rem);
-    min-block-size: var(--explorer-target, 2.75rem);
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
     padding: 0;
     border: none;
+    border-radius: 50%;
     background: none;
     cursor: pointer;
 }
 
+.layer-stack .layers [data-action="tint"]:hover {
+    background: var(--bg-alt);
+}
+
 .layer-stack .layers .palette {
     display: flex;
-    flex-basis: 100%;
     flex-wrap: wrap;
     gap: 0.25rem;
+    padding-block-start: 0.25rem;
 }
 
 .layer-stack .layers .palette button {
     display: grid;
     place-items: center;
-    min-inline-size: var(--explorer-target, 2.75rem);
-    min-block-size: var(--explorer-target, 2.75rem);
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
     padding-inline: 0.5rem;
-    border: 0.0625rem solid var(--border);
-    border-radius: 0.375rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
     background: var(--surface);
     color: var(--ink);
     font: inherit;
+    font-size: 0.71875rem;
     cursor: pointer;
+}
+
+.layer-stack .layers .palette button.choice {
+    padding-inline: 0;
+    border-radius: 50%;
 }
 
 .layer-stack .layers .palette button[aria-pressed="true"] {
@@ -1000,6 +1098,15 @@ function tintLabel(tint: Tint | null): string {
 @media (width < 48rem) {
     .layer-stack {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .layer-stack .stage {
+        border-radius: 0.375rem 0.375rem 0 0;
+    }
+
+    .layer-stack .panel {
+        border-inline-start: 0.0625rem solid var(--border-hover);
+        border-radius: 0 0 0.375rem 0.375rem;
     }
 }
 

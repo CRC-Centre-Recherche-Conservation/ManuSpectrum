@@ -22,6 +22,7 @@ import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/
 import { layImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
+import { shortAnalysisName } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/analysis-short-name.ts";
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import {
@@ -116,6 +117,12 @@ const record = computed(() =>
 );
 const label = computed(() => found.value?.layer.label || props.canvas || "");
 const analysisName = computed(() => found.value?.line.analysis.name ?? null);
+const analysisShort = computed(() =>
+    analysisName.value ? shortAnalysisName(analysisName.value.value) : "",
+);
+const rightSide = computed(() =>
+    ["b", "d"].includes(props.letter.toLowerCase()),
+);
 const tag = computed(() => {
     const parts = found.value ? layerTag(found.value.layer)?.parts : null;
     return parts ? tagText(parts, { $gettext, interpolate }) : "";
@@ -140,10 +147,20 @@ const pair = computed(() => {
               canvas: first.id,
               tag: tagText(parts, { $gettext, interpolate }),
               analysis: line.analysis.name,
+              short: shortAnalysisName(line.analysis.name.value),
           }
         : null;
 });
 const pairLabel = computed(() =>
+    pair.value
+        ? interpolate(
+              $gettext("%{tag} also in %{analysis} →"),
+              { tag: pair.value.tag, analysis: pair.value.short },
+              true,
+          )
+        : "",
+);
+const pairTitle = computed(() =>
     pair.value
         ? interpolate(
               $gettext("%{tag} also in %{analysis} →"),
@@ -382,6 +399,36 @@ function retry(): void {
         @dragover.prevent
         @drop.prevent="onDrop"
     >
+        <div class="stage">
+            <div
+                ref="host"
+                class="map"
+                role="group"
+                tabindex="0"
+                :aria-label="groupLabel"
+                @keydown="onKeydown"
+            ></div>
+            <p
+                v-if="status === 'empty'"
+                class="note"
+            >
+                <span>{{ $gettext("Empty pane") }}</span>
+            </p>
+            <p
+                v-else-if="status === 'failed'"
+                class="note"
+                role="alert"
+            >
+                <span>{{ $gettext("Map unavailable (image server)") }}</span>
+                <button
+                    type="button"
+                    data-action="retry"
+                    @click.stop="retry"
+                >
+                    <span>{{ $gettext("Retry") }}</span>
+                </button>
+            </p>
+        </div>
         <figcaption class="chip">
             <span class="letter">{{ props.letter }}</span>
             <IconButton
@@ -415,11 +462,12 @@ function retry(): void {
                 v-bind="marks.focus(record)"
                 :title="analysisName.value"
                 :lang="analysisName.lang"
+                :aria-label="analysisName.value"
                 :aria-pressed="marks.pressed(record)"
                 @click.stop="marks.toggle(record)"
             >
                 <FocusPip :node="record" />
-                <span>{{ analysisName.value }}</span>
+                <span>{{ analysisShort }}</span>
             </button>
             <IconButton
                 icon="sliders-h"
@@ -430,38 +478,12 @@ function retry(): void {
                 @click.stop="filtersOpen = !filtersOpen"
             />
         </figcaption>
-        <div class="stage">
-            <div
-                ref="host"
-                class="map"
-                role="group"
-                tabindex="0"
-                :aria-label="groupLabel"
-                @keydown="onKeydown"
-            ></div>
-            <p
-                v-if="status === 'empty'"
-                class="note"
-            >
-                <span>{{ $gettext("Empty pane") }}</span>
-            </p>
-            <p
-                v-else-if="status === 'failed'"
-                class="note"
-                role="alert"
-            >
-                <span>{{ $gettext("Map unavailable (image server)") }}</span>
-                <button
-                    type="button"
-                    data-action="retry"
-                    @click.stop="retry"
-                >
-                    <span>{{ $gettext("Retry") }}</span>
-                </button>
-            </p>
+        <div class="corner">
             <ScaleBadge
                 v-if="props.scaleNote"
                 class="badge"
+                placement="above"
+                align="start"
                 :size="props.scaleNote.size"
                 :against="props.scaleNote.againstSize"
             />
@@ -470,34 +492,36 @@ function retry(): void {
                 type="button"
                 class="pair"
                 data-action="pair"
-                :title="pairLabel"
+                :title="pairTitle"
                 @click.stop="emit('pair', pair.canvas)"
             >
                 <span>{{ pairLabel }}</span>
             </button>
-            <span class="zoom">
-                <IconButton
-                    icon="search-plus"
-                    data-action="zoom-in"
-                    :label="$gettext('Zoom in')"
-                    @click.stop="zoom(1)"
-                />
-                <IconButton
-                    icon="search-minus"
-                    data-action="zoom-out"
-                    :label="$gettext('Zoom out')"
-                    @click.stop="zoom(-1)"
-                />
-                <IconButton
-                    icon="expand"
-                    data-action="fit"
-                    :label="$gettext('Fit the whole image')"
-                    @click.stop="onFit"
-                />
-            </span>
         </div>
+        <span class="zoom">
+            <IconButton
+                icon="plus"
+                data-action="zoom-in"
+                :label="$gettext('Zoom in')"
+                @click.stop="zoom(1)"
+            />
+            <IconButton
+                icon="minus"
+                data-action="zoom-out"
+                :label="$gettext('Zoom out')"
+                @click.stop="zoom(-1)"
+            />
+            <IconButton
+                icon="expand"
+                data-action="fit"
+                :label="$gettext('Fit the whole image')"
+                @click.stop="onFit"
+            />
+        </span>
         <PaneFilters
             v-if="filtersOpen"
+            class="popover"
+            :class="{ 'is-end': rightSide }"
             :filters="props.filters"
             :letter="props.letter"
             @change="emit('filters-change', $event)"
@@ -510,14 +534,14 @@ function retry(): void {
 <style scoped>
 .imaging-pane {
     --pane: var(--pane-a);
+    position: relative;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
     margin: 0;
-    border: 0.125rem solid var(--border);
     border-radius: 0.375rem;
-    background: var(--surface);
+    background: var(--stage);
 }
 
 .imaging-pane[data-pane="b"] {
@@ -532,8 +556,17 @@ function retry(): void {
     --pane: var(--pane-d);
 }
 
-.imaging-pane[data-active="true"] {
-    border-color: var(--pane);
+.imaging-pane::after {
+    position: absolute;
+    z-index: 900;
+    inset: 0;
+    border-radius: inherit;
+    content: "";
+    pointer-events: none;
+}
+
+.imaging-pane[data-active="true"]::after {
+    box-shadow: inset 0 0 0 0.125rem var(--pane);
 }
 
 .imaging-pane:is(
@@ -550,60 +583,113 @@ function retry(): void {
 }
 
 .imaging-pane .chip {
+    position: absolute;
+    z-index: 1000;
+    inset-block-start: 0.5rem;
+    inset-inline-start: 0.5rem;
     display: flex;
     flex-wrap: nowrap;
-    min-inline-size: 0;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem;
-    font-size: 0.8125rem;
+    gap: 0.125rem;
+    min-inline-size: 0;
+    max-inline-size: 85%;
+    padding: 0.1875rem 0.25rem;
+    border: 0.0625rem solid color-mix(in srgb, var(--surface) 12%, transparent);
+    border-radius: 999rem;
+    background: color-mix(in srgb, var(--ink) 82%, transparent);
+    backdrop-filter: blur(0.25rem);
+    box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 30%);
+    color: var(--surface);
+    font-size: 0.75rem;
 }
 
 .imaging-pane .chip .letter {
     display: inline-grid;
+    flex: none;
     place-items: center;
-    min-inline-size: 1.5rem;
-    block-size: 1.5rem;
-    border-radius: 0.375rem;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-inline-end: 0.125rem;
+    border-radius: 999rem;
     background: var(--pane);
     color: var(--surface);
-    font-family: var(--font-mono);
-    font-weight: 600;
+    font: 600 0.6875rem var(--font-mono);
+}
+
+.imaging-pane .chip :deep(.icon-button-control) {
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    border-radius: 999rem;
+    color: var(--surface);
+}
+
+.imaging-pane .chip :deep(.icon-button-control:hover) {
+    background: color-mix(in srgb, var(--surface) 18%, transparent);
+    color: var(--surface);
+}
+
+.imaging-pane .chip :deep(.icon-button-control[aria-pressed="true"]) {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--surface) 24%, transparent);
+    color: var(--surface);
+}
+
+.imaging-pane .chip :deep(.icon-button-control[aria-disabled="true"]) {
+    background: transparent;
+    color: color-mix(in srgb, var(--surface) 35%, transparent);
+}
+
+.imaging-pane .chip :deep(.icon) {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
 }
 
 .imaging-pane .chip .label {
     flex: 0 1 auto;
     overflow: hidden;
-    min-inline-size: 2rem;
-    max-inline-size: 12rem;
-    font-family: var(--font-mono);
+    min-inline-size: 1.5rem;
+    max-inline-size: 11rem;
+    padding-inline: 0.125rem;
+    font: 500 0.78125rem var(--font-mono);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .imaging-pane .chip .tag {
     flex: none;
-    padding-inline: 0.375rem;
-    border: 0.0625rem solid var(--heat-3);
-    border-radius: 0.75rem;
-    background: var(--heat-1);
-    font-weight: 600;
+    padding: 0.0625rem 0.3125rem;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--surface) 20%, transparent);
+    color: var(--surface);
+    font: 500 0.625rem var(--font-mono);
+    white-space: nowrap;
 }
 
 .imaging-pane .chip .analysis {
-    --r: 0.375rem;
+    --r: 999rem;
     --link-pip: 0.8125rem;
     display: flex;
     flex: 0 1 auto;
-    min-inline-size: 2.5rem;
-    max-inline-size: 12rem;
-    padding: 0.25rem 0.375rem;
+    align-items: center;
+    min-inline-size: 2rem;
+    max-inline-size: 8rem;
+    padding: 0.125rem 0.375rem;
     border: 0.0625rem solid transparent;
-    border-radius: 0.375rem;
+    border-radius: 999rem;
     background: none;
-    color: var(--ink-muted);
+    color: color-mix(in srgb, var(--surface) 70%, transparent);
     font: inherit;
+    font-size: 0.71875rem;
     cursor: pointer;
+}
+
+.imaging-pane .chip .analysis[data-rel="none"] {
+    background: none !important;
+    color: color-mix(in srgb, var(--surface) 55%, transparent) !important;
+}
+
+.imaging-pane .chip .analysis:hover {
+    color: var(--surface);
 }
 
 .imaging-pane .chip .analysis > span:last-child {
@@ -613,14 +699,15 @@ function retry(): void {
 }
 
 .imaging-pane .stage {
-    position: relative;
     display: grid;
     min-block-size: 6rem;
+    border-radius: inherit;
     background: var(--stage);
 }
 
 .imaging-pane .stage .map {
     min-block-size: 0;
+    border-radius: inherit;
     background: var(--stage);
 }
 
@@ -638,17 +725,17 @@ function retry(): void {
     justify-content: center;
     gap: 0.5rem;
     margin: 0;
-    color: var(--surface);
+    color: color-mix(in srgb, var(--surface) 70%, transparent);
     font-size: 0.8125rem;
     pointer-events: none;
 }
 
 .imaging-pane .stage .note button {
-    min-block-size: var(--explorer-target, 2.75rem);
+    min-block-size: var(--explorer-target, 2rem);
     padding-inline: 0.75rem;
     border: none;
     border-radius: 0.375rem;
-    background: var(--bg-alt);
+    background: var(--surface);
     color: var(--ink);
     font: inherit;
     font-weight: 600;
@@ -656,51 +743,105 @@ function retry(): void {
     pointer-events: auto;
 }
 
-.imaging-pane .stage .badge {
+.imaging-pane .corner {
     position: absolute;
-    z-index: 500;
-    inset-block-start: 0.5rem;
-    inset-inline-end: 0.5rem;
-}
-
-.imaging-pane .stage .pair {
-    position: absolute;
-    z-index: 500;
+    z-index: 1000;
     inset-block-end: 0.5rem;
     inset-inline-start: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
     max-inline-size: 70%;
-    min-block-size: 1.75rem;
+    pointer-events: none;
+}
+
+.imaging-pane .corner > * {
+    pointer-events: auto;
+}
+
+.imaging-pane .corner .pair {
+    max-inline-size: 100%;
+    min-block-size: 1.625rem;
     padding-inline: 0.625rem;
-    border: 0.0625rem solid var(--heat-3);
-    border-radius: 0.875rem;
-    background: var(--heat-2);
-    color: var(--ink);
+    border: none;
+    border-radius: 999rem;
+    background: var(--accent-text);
+    box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 30%);
+    color: var(--surface);
     font: inherit;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.71875rem;
+    font-weight: 500;
     cursor: pointer;
 }
 
-.imaging-pane .stage .pair > span {
+.imaging-pane .corner .pair:hover {
+    background: var(--accent-link-hover);
+}
+
+.imaging-pane .corner .pair > span {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.imaging-pane .stage .zoom {
+.imaging-pane .zoom {
     position: absolute;
-    z-index: 500;
+    z-index: 1000;
     inset-block-end: 0.5rem;
     inset-inline-end: 0.5rem;
     display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.imaging-pane .zoom :deep(.icon-button-control) {
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 0.375rem;
     background: var(--surface);
+    box-shadow: 0 0.0625rem 0.25rem rgb(0 0 0 / 30%);
+    color: var(--ink);
+}
+
+.imaging-pane .zoom :deep(.icon-button-control:hover) {
+    background: var(--bg-alt);
+}
+
+.imaging-pane .zoom :deep(.icon) {
+    inline-size: 0.9375rem;
+    block-size: 0.9375rem;
+}
+
+.imaging-pane .popover {
+    position: absolute;
+    z-index: 1100;
+    inset-block-start: 2.75rem;
+    inset-inline-start: 0.5rem;
+    inline-size: 15.5rem;
+    max-inline-size: 90%;
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 35%);
+}
+
+.imaging-pane .popover.is-end {
+    inset-inline: auto 0.5rem;
 }
 
 .imaging-pane button:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+@media (max-width: 48rem) {
+    .imaging-pane .popover,
+    .imaging-pane .popover.is-end {
+        position: fixed;
+        inset: auto 0 0;
+        inline-size: auto;
+        max-inline-size: none;
+    }
 }
 
 @media (prefers-reduced-motion: no-preference) {
