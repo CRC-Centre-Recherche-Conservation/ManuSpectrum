@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     LAYOUT_STORAGE_KEY,
@@ -10,12 +10,14 @@ import {
     parseLayout,
     readFolded,
     readHidden,
+    readImaging,
     readLayout,
     readTools,
     readingOrder,
     sizeOf,
     writeFolded,
     writeHidden,
+    writeImaging,
     writeLayout,
     writeTools,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
@@ -28,7 +30,7 @@ describe("Compare window layout", () => {
         expect(
             JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
         ).toEqual({
-            version: 2,
+            version: 3,
             boxes: { "auto:micro": { x: 0, y: 0, w: 6, h: 5 } },
             hidden: [],
             folded: {},
@@ -310,5 +312,164 @@ describe("Compare window layout", () => {
         expect(sizeOf({ w: 7, h: 5 })).toBeNull();
         expect(sizeOf({ w: 1, h: 6 }, 1)).toBe("L");
         expect(sizeOf({ w: 1, h: 4 }, 1)).toBe("S");
+    });
+});
+
+describe("Compare layout, imaging record (v3)", () => {
+    const IMAGING = {
+        layout: "curtain" as const,
+        panes: ["c1-0", "c2-0", null, null],
+        syncViews: true,
+        filters: [
+            { brightness: 120, contrast: 90, saturation: 100, greyscale: true },
+            ...Array.from({ length: 4 }, () => ({
+                brightness: 100,
+                contrast: 100,
+                saturation: 100,
+                greyscale: false,
+            })),
+        ],
+        stack: {
+            analysis: "a1",
+            layers: [{ canvas: "c1-0", opacity: 60, on: false, tint: "cyan" }],
+        },
+        grouping: "tag" as const,
+    };
+
+    it("round-trips and is written with the version 3", () => {
+        expect(readImaging()).toBeUndefined();
+        writeImaging(IMAGING);
+        expect(readImaging()).toEqual(IMAGING);
+        expect(
+            JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
+        ).toMatchObject({ version: 3, imaging: IMAGING });
+    });
+
+    it("stays when the boxes, hidden, folded or tools are written", () => {
+        writeImaging(IMAGING);
+        writeLayout({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } });
+        writeHidden(["auto:micro"]);
+        writeFolded({ "auto:micro": true });
+        writeTools([{ kind: "periodic", params: {} }]);
+        expect(readImaging()).toEqual(IMAGING);
+    });
+
+    it("survives clearBoxes and forgetWindows", () => {
+        writeImaging(IMAGING);
+        writeLayout({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } });
+        clearBoxes();
+        expect(readImaging()).toEqual(IMAGING);
+        expect(readLayout()).toEqual({});
+        writeLayout({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } });
+        forgetWindows([]);
+        expect(readImaging()).toEqual(IMAGING);
+        expect(readLayout()).toEqual({});
+    });
+
+    it("is erased by writing undefined, and the record goes when nothing is left", () => {
+        writeImaging(IMAGING);
+        writeImaging(undefined);
+        expect(readImaging()).toBeUndefined();
+        expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull();
+    });
+
+    it("reads a v2 record with no imaging and keeps its other parts", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: { "auto:micro": { x: 0, y: 0, w: 6, h: 5 } },
+                hidden: ["auto:micro"],
+                folded: { "auto:micro": true },
+            }),
+        );
+        expect(readImaging()).toBeUndefined();
+        expect(readHidden()).toEqual(["auto:micro"]);
+        expect(readFolded()).toEqual({ "auto:micro": true });
+        expect(readLayout()).toEqual({
+            "auto:micro": { x: 0, y: 0, w: 6, h: 5 },
+        });
+        writeImaging(IMAGING);
+        expect(readHidden()).toEqual(["auto:micro"]);
+    });
+
+    it("reads a bare T2 box record with no imaging", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ "auto:micro": { x: 0, y: 0, w: 6, h: 5 } }),
+        );
+        expect(readImaging()).toBeUndefined();
+        expect(readLayout()).toEqual({
+            "auto:micro": { x: 0, y: 0, w: 6, h: 5 },
+        });
+    });
+
+    it("drops what is not an imaging record and repairs what is half there", () => {
+        const stored = (imaging: unknown) =>
+            window.localStorage.setItem(
+                LAYOUT_STORAGE_KEY,
+                JSON.stringify({ version: 3, boxes: {}, imaging }),
+            );
+        stored("nope");
+        expect(readImaging()).toBeUndefined();
+        stored({
+            layout: "cube",
+            panes: [1, "c1", null],
+            filters: [{ brightness: 900 }],
+            grouping: 3,
+        });
+        const repaired = readImaging()!;
+        expect(repaired.layout).toBe("single");
+        expect(repaired.panes).toEqual([null, "c1", null, null]);
+        expect(repaired.filters).toHaveLength(5);
+        expect(repaired.filters[0].brightness).toBe(200);
+        expect(repaired.filters[0].contrast).toBe(100);
+        expect(repaired.grouping).toBe("analysis");
+        expect(repaired.syncViews).toBe(false);
+        expect(repaired.stack).toEqual({ analysis: null, layers: [] });
+    });
+
+    it("round-trips the choice about the gallery, and reads a record without it as no choice", () => {
+        writeImaging({ ...IMAGING, gallery: false });
+        expect(readImaging()?.gallery).toBe(false);
+        writeImaging({ ...IMAGING, gallery: true });
+        expect(readImaging()?.gallery).toBe(true);
+        writeImaging(IMAGING);
+        expect(readImaging()).not.toHaveProperty("gallery");
+    });
+
+    it("drops a choice about the gallery that is not a boolean", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 3,
+                boxes: {},
+                imaging: { ...IMAGING, gallery: "yes" },
+            }),
+        );
+        expect(readImaging()).not.toHaveProperty("gallery");
+    });
+
+    it("reads the old linkAll as nothing: the record opens unsynced", () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 3,
+                boxes: {},
+                imaging: { ...IMAGING, syncViews: undefined, linkAll: true },
+            }),
+        );
+        expect(readImaging()?.syncViews).toBe(false);
+        expect(readImaging()).not.toHaveProperty("linkAll");
+    });
+
+    it("reads nothing, and writes nothing, when storage is blocked", () => {
+        const spy = vi
+            .spyOn(Storage.prototype, "getItem")
+            .mockImplementation(() => {
+                throw new Error("blocked");
+            });
+        expect(readImaging()).toBeUndefined();
+        spy.mockRestore();
     });
 });

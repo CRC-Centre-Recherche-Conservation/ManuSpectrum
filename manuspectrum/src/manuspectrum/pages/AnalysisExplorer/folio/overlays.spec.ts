@@ -8,6 +8,8 @@ import {
     layerImageUrl,
     overlayKey,
     overlayPane,
+    paneKey,
+    removeOverlayPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     analysisPayload,
@@ -198,6 +200,30 @@ describe("folio overlays", () => {
                 overlay as unknown as { getContainer: () => unknown }
             ).getContainer(),
         ).toBe(pane);
+        map.remove();
+    });
+});
+
+describe("paneKey and removeOverlayPane", () => {
+    it("keeps apart two ids that overlayPane would sanitise to the same name", () => {
+        const map = L.map(document.createElement("div"));
+        const first = overlayPane(map, `stack-${paneKey("https://x/c_1")}`);
+        const second = overlayPane(map, `stack-${paneKey("https://x/c-1")}`);
+        expect(first).not.toBe(second);
+        expect(paneKey("https://x/c_1")).toBe(paneKey("https://x/c_1"));
+        map.remove();
+    });
+
+    it("takes a pane off the map and lets the name be made again", () => {
+        const map = L.map(document.createElement("div"));
+        const name = overlayPane(map, "a");
+        const pane = map.getPane(name)!;
+        removeOverlayPane(map, name);
+        expect(map.getPane(name)).toBeUndefined();
+        expect(pane.isConnected).toBe(false);
+        expect(overlayPane(map, "a")).toBe(name);
+        expect(map.getPane(name)).not.toBe(pane);
+        removeOverlayPane(map, "never-made");
         map.remove();
     });
 });

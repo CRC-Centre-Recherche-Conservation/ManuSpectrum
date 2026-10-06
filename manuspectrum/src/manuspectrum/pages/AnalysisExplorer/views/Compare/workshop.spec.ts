@@ -10,7 +10,6 @@ import {
     curveLook,
     itemClasses,
     itemCycle,
-    itemDash,
     itemHue,
     itemMarker,
     curveColourVar,
@@ -170,7 +169,7 @@ describe("workshop", () => {
 
     it("draws a dash as an SVG dash array, none for a solid line", () => {
         expect(dashArray("solid")).toBe("");
-        expect(dashArray("10px,2px,2px,2px")).toBe("10 2 2 2");
+        expect(dashArray("6px,2px")).toBe("6 2");
     });
 
     it("gives an item one hue by its slot, cycling the twelve, and its cycle selects solid / dashed / dotted and filled / ring / ring with a dot", () => {
@@ -179,11 +178,6 @@ describe("workshop", () => {
         expect(itemHue(12)).toBe(0);
         expect(itemHue(24)).toBe(0);
         expect([0, 12, 24].map(itemCycle)).toEqual([0, 1, 2]);
-        expect([0, 12, 24].map((slot) => itemDash(slot, 0))).toEqual([
-            "solid",
-            "6px,2px",
-            "2px,2px",
-        ]);
         expect([0, 11, 12, 24].map(itemMarker)).toEqual([
             "filled",
             "filled",
@@ -193,26 +187,20 @@ describe("workshop", () => {
         expect(itemClasses(12)).toBe("slot-1 item-ring");
     });
 
-    it("keeps (hue, dash) unique across the items of a window, the extra files of an item included", () => {
-        const seen = new Set<string>();
-        for (const slot of [0, 12, 24, 1, 13]) {
-            for (const rank of [0, 1, 2]) {
-                const key = `${itemHue(slot)}|${itemDash(slot, rank)}`;
-                expect(seen.has(key)).toBe(false);
-                seen.add(key);
-            }
-        }
-    });
-
-    it("draws the 13th item in the first hue, dashed, as its folded chip and folio marker do", () => {
-        const thirteenth = { slot: 12, rank: 0 };
+    it("draws the 13th curve of a window in the first hue, dashed, then the 25th dotted, whatever the slots", () => {
+        const thirteenth = { order: 12 };
         expect(curveLook(thirteenth, "plain")).toEqual({
             kind: "series",
             hue: 0,
             dash: "6px,2px",
         });
+        expect(curveLook({ order: 24 }, "plain")).toEqual({
+            kind: "series",
+            hue: 0,
+            dash: "2px,2px",
+        });
         expect(itemClasses(12)).toBe("slot-1 item-ring");
-        expect(curveLook({ slot: 0, rank: 0 }, "plain")).toEqual({
+        expect(curveLook({ order: 0 }, "plain")).toEqual({
             kind: "series",
             hue: 0,
             dash: "solid",
@@ -225,7 +213,7 @@ describe("workshop", () => {
     };
 
     it("paints every curve in its item's hue at 1.5 px, never grey or a fallback ink, whatever its slot", () => {
-        expect(curvePaint(PALETTE, { slot: 1, rank: 0 }, "plain")).toEqual({
+        expect(curvePaint(PALETTE, { order: 1 }, "plain")).toEqual({
             colour: "#s1",
             dash: "solid",
             width: 1.5,
@@ -233,14 +221,14 @@ describe("workshop", () => {
             hover: true,
         });
         // The 13th item (slot 12): hue wraps to the 1st series colour, dash to the 2nd variant.
-        expect(curvePaint(PALETTE, { slot: 12, rank: 0 }, "plain")).toEqual({
+        expect(curvePaint(PALETTE, { order: 12 }, "plain")).toEqual({
             colour: "#s0",
             dash: "6px,2px",
             width: 1.5,
             opacity: 1,
             hover: true,
         });
-        expect(curvePaint(PALETTE, { slot: 12, rank: 0 }, "hidden")).toEqual({
+        expect(curvePaint(PALETTE, { order: 12 }, "hidden")).toEqual({
             colour: "#s0",
             dash: "6px,2px",
             width: 1.5,
@@ -250,24 +238,22 @@ describe("workshop", () => {
     });
 
     it("thickens an emphasised curve without changing its colour or dash: the focus never recolours a curve", () => {
-        expect(curvePaint(PALETTE, { slot: 5, rank: 0 }, "emphasised")).toEqual(
-            {
-                colour: "#s5",
-                dash: "solid",
-                width: 2.5,
-                opacity: 1,
-                hover: true,
-            },
-        );
-        expect(curveLook({ slot: 5, rank: 0 }, "emphasised")).toEqual(
-            curveLook({ slot: 5, rank: 0 }, "plain"),
+        expect(curvePaint(PALETTE, { order: 5 }, "emphasised")).toEqual({
+            colour: "#s5",
+            dash: "solid",
+            width: 2.5,
+            opacity: 1,
+            hover: true,
+        });
+        expect(curveLook({ order: 5 }, "emphasised")).toEqual(
+            curveLook({ order: 5 }, "plain"),
         );
     });
 
     it("looks up a curve's own CSS var for the legend's swatch, resolved to the theme's hex for a Plotly trace", () => {
-        const seriesLook = curveLook({ slot: 1, rank: 0 }, "plain");
+        const seriesLook = curveLook({ order: 1 }, "plain");
         expect(curveColourVar(seriesLook)).toBe("var(--series-2)");
-        const dimmedLook = curveLook({ slot: 1, rank: 0 }, "dimmed");
+        const dimmedLook = curveLook({ order: 1 }, "dimmed");
         expect(curveColourVar(dimmedLook)).toBe("var(--series-context)");
     });
 
@@ -287,14 +273,14 @@ describe("workshop", () => {
     });
 
     it("draws a dimmed curve in grey context at reduced opacity, out of the hover, even one a pin would otherwise light", () => {
-        expect(curvePaint(PALETTE, { slot: 0, rank: 0 }, "dimmed")).toEqual({
+        expect(curvePaint(PALETTE, { order: 0 }, "dimmed")).toEqual({
             colour: "#999",
             dash: "solid",
             width: 1.25,
             opacity: 0.35,
             hover: false,
         });
-        expect(curvePaint(PALETTE, { slot: 12, rank: 0 }, "dimmed")).toEqual({
+        expect(curvePaint(PALETTE, { order: 12 }, "dimmed")).toEqual({
             colour: "#999",
             dash: "6px,2px",
             width: 1.25,

@@ -4,6 +4,7 @@ import {
     analysisHit,
     fileEntry,
     imagingEntry,
+    layerOf,
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -44,7 +45,7 @@ function xyWindow(curves: FileLine[]): XyWindow {
 }
 
 function elementLayer(index: number, symbol: string): FileLayer {
-    return {
+    return layerOf({
         index,
         label: symbol,
         image: {
@@ -53,7 +54,7 @@ function elementLayer(index: number, symbol: string): FileLayer {
             width: 2000,
             height: 3000,
         },
-    };
+    });
 }
 
 function mapLine(slot: number, symbols: string[]): MapLine {
@@ -89,8 +90,19 @@ describe("foldedSummary", () => {
             kind: "xy",
             count: 4,
             slots: [11, 12, 14],
+            colours: [0, 1, 3],
             names: ["FTIR"],
         });
+    });
+
+    it("colours each slot by the order of its first drawn curve in the window, as the workshop does, raw files not counting", () => {
+        const raw = curve(5, 50);
+        raw.file = { ...raw.file, previewUrl: null };
+        const summary = foldedSummary(
+            xyWindow([curve(30), raw, curve(30, 31), curve(2, 32)]),
+        );
+        expect(summary?.slots).toEqual([2, 5, 30]);
+        expect(summary?.colours).toEqual([2, 1, 0]);
     });
 
     it("names no technique when the spectra carry none", () => {
@@ -108,6 +120,7 @@ describe("foldedSummary", () => {
             kind: "maps",
             count: 2,
             slots: [1, 3],
+            colours: [1, 3],
             names: ["Pb", "Fe", "Hg"],
         });
     });

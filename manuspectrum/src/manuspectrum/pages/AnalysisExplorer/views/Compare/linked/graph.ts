@@ -37,7 +37,7 @@ export interface NodePlace {
  * What Compare links, as two kinds of edges. `around` joins each record
  * (analysis, identified material) to the things surrounding it (files,
  * layers, technique, folios, document, values, pairs, cells, elements —
- * a material's, from the synthesis, never a layer's — slots) and each of
+ * a material's, from the synthesis, and a layer's declared ones — slots) and each of
  * those back to its records; `evidence` joins an identified material to
  * the analyses it cites. Records are never joined to one another through
  * `around`, nor surroundings to surroundings.
@@ -181,6 +181,9 @@ function addFile(builder: GraphBuilder, record: NodeId, file: FileEntry): void {
             value: layer.label,
             lang: "",
         });
+        for (const { symbol } of layer.elements) {
+            if (symbol) builder.link(record, elementNode(symbol));
+        }
     }
 }
 

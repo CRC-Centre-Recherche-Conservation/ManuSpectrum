@@ -97,6 +97,19 @@ ROLE_NODES = [
     ("characterization", "source_of_statement", "url", "char_source"),
     ("analysis", "instrument", "resource-instance", "an_instrument"),
     ("analysis", "chemical_imaging_manifest", "manifest", "an_imaging"),
+    ("analysis", "imaging_layer_canvas", "non-localized-string", "an_layer"),
+    ("analysis", "imaging_layer_label", "non-localized-string", "an_layer"),
+    ("analysis", "imaging_layer_content", "reference", "an_layer"),
+    ("analysis", "imaging_layer_elements", "reference", "an_layer"),
+    ("analysis", "imaging_layer_emission_line", "reference", "an_layer"),
+    ("analysis", "imaging_layer_band_value", "number", "an_layer"),
+    ("analysis", "imaging_layer_band_lower", "number", "an_layer"),
+    ("analysis", "imaging_layer_band_upper", "number", "an_layer"),
+    ("analysis", "imaging_layer_band_unit", "reference", "an_layer"),
+    ("analysis", "imaging_layer_processing_method", "reference", "an_layer"),
+    ("analysis", "imaging_layer_component_index", "number", "an_layer"),
+    ("analysis", "imaging_layer_processing_inputs", "non-localized-string", "an_layer"),
+    ("analysis", "imaging_layer_note", "string", "an_layer"),
     ("document", "current_owner", "resource-instance-list", "doc_owner"),
     ("document", "value_of_identifier", "string", "doc_identifier"),
     ("document", "type_of_identifier", "reference", "doc_identifier"),
@@ -157,6 +170,9 @@ class ExplorerCase(TestCase):
                 datatype=datatype,
                 istopnode=False,
             )
+        NodeGroup.objects.filter(pk=nodegroups["an_layer"].pk).update(
+            parentnodegroup=nodegroups["an_imaging"]
+        )
         cls.anonymous = User.objects.get(username="anonymous")
         cls.editor = User.objects.create_user("explorer_editor", password="pw")
         cls.editor.groups.add(Group.objects.get(name="Resource Editor"))

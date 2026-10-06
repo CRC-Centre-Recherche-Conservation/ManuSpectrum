@@ -272,7 +272,7 @@ describe("XyWorkshop", () => {
         ]);
     });
 
-    it("draws each curve in its item's hue, the first file of an item solid and its next file in a dash of its own, named « A1 · file »", async () => {
+    it("draws each curve in the hue of its order in the window, solid, named « A1 · file »", async () => {
         await mountWorkshop([curve(0, 1), curve(0, 2), curve(1, 3)]);
         const { traces, layout } = lastDrawing();
         expect(traces.map((trace) => trace.name)).toEqual([
@@ -282,12 +282,12 @@ describe("XyWorkshop", () => {
         ]);
         expect(traces.map((trace) => trace.line.color)).toEqual([
             COLOURS[0],
-            COLOURS[0],
             COLOURS[1],
+            COLOURS[2],
         ]);
         expect(traces.map((trace) => trace.line.dash)).toEqual([
             "solid",
-            "10px,2px,2px,2px",
+            "solid",
             "solid",
         ]);
         expect(layout.showlegend).toBe(false);
@@ -316,9 +316,9 @@ describe("XyWorkshop", () => {
         expect(traces.every((trace) => trace.marker === undefined)).toBe(true);
         expect(traces.map((trace) => trace.line.color)).toEqual([
             COLOURS[0],
-            COLOURS[0],
             COLOURS[1],
-            COLOURS[9],
+            COLOURS[2],
+            COLOURS[3],
         ]);
         expect(traces.map((trace) => trace.line.width)).toEqual([
             1.5, 1.5, 1.5, 1.5,
@@ -330,8 +330,8 @@ describe("XyWorkshop", () => {
         expect(traces.map((trace) => trace.legendrank)).toEqual([0, 0, 1, 9]);
         expect(layout.annotations.map((note) => note.text)).toEqual([
             `<span style="color:${COLOURS[0]}">━</span> A1`,
-            `<span style="color:${COLOURS[1]}">━</span> A2`,
-            `<span style="color:${COLOURS[9]}">━</span> A10`,
+            `<span style="color:${COLOURS[2]}">━</span> A2`,
+            `<span style="color:${COLOURS[3]}">━</span> A10`,
         ]);
         expect(layout.annotations[0]).toMatchObject({ x: 3, y: 20 });
     });
@@ -393,12 +393,13 @@ describe("XyWorkshop", () => {
         expect(view.find(".retry").exists()).toBe(false);
     });
 
-    it("keeps a file's dash when an earlier file of its item failed to load", async () => {
+    it("keeps a curve's colour when an earlier file of the window failed to load", async () => {
         answer(1, jsonResponse({}, 503));
         await mountWorkshop([curve(0, 1), curve(0, 2)]);
         const { traces } = lastDrawing();
         expect(traces.map((trace) => trace.name)).toEqual(["A1 · S2.csv"]);
-        expect(traces[0].line.dash).toBe("10px,2px,2px,2px");
+        expect(traces[0].line.color).toBe(COLOURS[1]);
+        expect(traces[0].line.dash).toBe("solid");
     });
 
     it("offers a retry when a file fails on a server error", async () => {
@@ -795,7 +796,7 @@ describe("XyWorkshop", () => {
         expect(update["line.color"]).toEqual([
             COLOURS[0],
             COLOURS[1],
-            COLOURS[9],
+            COLOURS[2],
         ]);
         expect(update["line.dash"]).toEqual(["solid", "solid", "solid"]);
         expect(plotly.relayout).toHaveBeenCalledTimes(1);
@@ -846,20 +847,20 @@ describe("XyWorkshop", () => {
         expect(plotly.restyle).toHaveBeenCalledTimes(2);
     });
 
-    it("draws a legend swatch as the chart draws its curve: its item's hue, never grey or a fallback ink", async () => {
+    it("draws a legend swatch as the chart draws its curve: its window hue, never grey or a fallback ink", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(9, 2)]);
         const strokes = (): string[] =>
             view
                 .findAll(".xy-legend .swatch line")
                 .map((line) => (line.element as SVGLineElement).style.stroke);
-        expect(strokes()).toEqual(["var(--series-1)", "var(--series-10)"]);
+        expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
         // A link never recolours a curve, only thickens it: the swatch stays the curve's own hue.
         fake.selection.value = [analysisNode(analysisHit(10).id)];
         fake.levels.value = new Map([
             [analysisNode(analysisHit(10).id), "self"],
         ]);
         await flushPromises();
-        expect(strokes()).toEqual(["var(--series-1)", "var(--series-10)"]);
+        expect(strokes()).toEqual(["var(--series-1)", "var(--series-2)"]);
     });
 
     it("says so when the selection links no curve of the window", async () => {
@@ -985,24 +986,116 @@ describe("XyWorkshop", () => {
         expect(second.find(".ctx").exists()).toBe(false);
     });
 
-    it("draws the 13th item of the Selection in the first hue, dashed, in its curve, its legend swatch colour and its end label", async () => {
-        const view = await mountWorkshop([curve(0, 1), curve(12, 2)]);
+    it("draws a window's only curve solid in the first hue even when its item is slot 21", async () => {
+        const view = await mountWorkshop([curve(20, 1)]);
         const { traces, layout } = lastDrawing();
+        expect(traces[0].line).toMatchObject({
+            color: COLOURS[0],
+            dash: "solid",
+        });
+        expect(
+            (view.find(".xy-legend .swatch line").element as SVGLineElement)
+                .style.stroke,
+        ).toBe("var(--series-1)");
+        expect(layout.annotations[0].text).toContain(`color:${COLOURS[0]}">━`);
+    });
+
+    it("draws the 13th curve of a window in the first hue, dashed, in its curve, its legend swatch and its end label", async () => {
+        const view = await mountWorkshop(
+            Array.from({ length: 13 }, (_, index) => curve(index, index + 1)),
+        );
+        const { traces, layout } = lastDrawing();
+        expect(traces[12].line).toMatchObject({
+            color: COLOURS[0],
+            dash: "6px,2px",
+        });
+        expect(traces.slice(0, 12).map((trace) => trace.line.dash)).toEqual(
+            Array(12).fill("solid"),
+        );
+        const swatches = view.findAll(".xy-legend .swatch line");
+        expect((swatches[12].element as SVGLineElement).style.stroke).toBe(
+            "var(--series-1)",
+        );
+        expect(layout.annotations[12].text).toContain("╍");
+    });
+
+    it("colours two windows independently", async () => {
+        const first = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        const one = lastDrawing().traces.map((trace) => trace.line.color);
+        first.unmount();
+        wrapper = null;
+        plotly.react.mockClear();
+        await mountWorkshop([curve(7, 3)], ref(0), "auto:xy:other");
+        const two = lastDrawing().traces.map((trace) => trace.line.color);
+        expect(one).toEqual([COLOURS[0], COLOURS[1]]);
+        expect(two).toEqual([COLOURS[0]]);
+    });
+
+    it("gives the chart, the hover, the legend swatch and the end label the same colour for each curve", async () => {
+        const view = await mountWorkshop([
+            curve(5, 1),
+            curve(2, 2),
+            curve(2, 3),
+        ]);
+        const { traces, layout } = lastDrawing();
+        const swatches = view
+            .findAll(".xy-legend .swatch line")
+            .map((line) => (line.element as SVGLineElement).style.stroke);
         expect(traces.map((trace) => trace.line.color)).toEqual([
             COLOURS[0],
-            COLOURS[0],
+            COLOURS[1],
+            COLOURS[2],
         ]);
-        expect(traces.map((trace) => trace.line.dash)).toEqual([
-            "solid",
-            "6px,2px",
+        // Plotly's hover box takes its swatch from the trace's own line colour.
+        // The legend lists the slots in order (A3 with its two files, then A6).
+        expect(new Set(swatches)).toEqual(
+            new Set(["var(--series-1)", "var(--series-2)", "var(--series-3)"]),
+        );
+        expect(swatches[0]).toBe("var(--series-2)");
+        expect(layout.annotations.map((note) => note.text)).toEqual([
+            `<span style="color:${COLOURS[0]}">━</span> A6`,
+            `<span style="color:${COLOURS[1]}">━</span> A3`,
         ]);
-        const swatches = view.findAll(".xy-legend .swatch line");
+    });
+
+    it("moves no colour when a file fails to load or another curve joins the window", async () => {
+        answer(1, jsonResponse({}, 503));
+        const curves = shallowRef([curve(0, 1), curve(1, 2)]);
+        wrapper = mount(CompareWindow, {
+            attachTo: document.body,
+            props: {
+                title: "XRF",
+                position: 1,
+                total: 1,
+                size: "M",
+                folded: null,
+            },
+            slots: {
+                default: () =>
+                    h(XyWorkshop, {
+                        curves: curves.value,
+                        windowId: WINDOW_ID,
+                    }),
+            },
+            global: {
+                provide: {
+                    [WINDOW_RESIZE_KEY as symbol]: ref(0),
+                    [LINKED_SELECTION_KEY as symbol]: fake.linked,
+                },
+            },
+        });
+        await flushPromises();
         expect(
-            swatches.map(
-                (line) => (line.element as SVGLineElement).style.stroke,
-            ),
-        ).toEqual(["var(--series-1)", "var(--series-1)"]);
-        expect(layout.annotations[1].text).toContain("╍");
+            lastDrawing().traces.map((trace) => [trace.name, trace.line.color]),
+        ).toEqual([["A2 · S2.csv", COLOURS[1]]]);
+        curves.value = [...curves.value, curve(2, 3)];
+        await flushPromises();
+        expect(
+            lastDrawing().traces.map((trace) => [trace.name, trace.line.color]),
+        ).toEqual([
+            ["A2 · S2.csv", COLOURS[1]],
+            ["A3 · S3.csv", COLOURS[2]],
+        ]);
     });
 
     it("hides a curve with the legend's eye by restyling once, no redraw, independent of the focus", async () => {

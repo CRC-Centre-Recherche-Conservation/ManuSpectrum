@@ -148,9 +148,9 @@ const DEFAULT_POINTER = "mouse";
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
  * every readable spectrum of the window, lines only. A curve takes the
- * colour and dash of its item (`itemHue`/`itemDash`), the same in every
- * Compare window, never recoloured by the focus (`curveLook`). It
- * carries its label at the visual end of the first file of its slot.
+ * hue of its order in the window (twelve solid hues, then the same dashed,
+ * then dotted; `curveLook`), the same while files load and never
+ * recoloured by the focus. It carries its label at the visual end of the first file of its slot.
  * Overlaid, offset (each curve lifted above the one before it, no Y tick
  * labels, the real values on hover), in a grid of small multiples (one
  * panel per slot, the X axes zoomed together, each with its own compact
@@ -276,14 +276,16 @@ const answers = computed(() => {
         urls.map((url, index) => [url, data[index]]),
     );
 });
-/** Each readable file's rank in its slot, over every curve the window will draw, loaded or not. */
+/** Each readable file's rank in its slot, over every curve the window will draw, loaded or not. A curve's order in `readable` picks its colour. */
 const ranks = computed(() =>
     ranksInSlot(readable.value.map((line) => line.slot)),
 );
 const loadedCurves = computed(() =>
     readable.value.flatMap((line, index) => {
         const series = answers.value.get(line.file.previewUrl ?? "")?.series;
-        return series ? [{ line, series, rank: ranks.value[index] }] : [];
+        return series
+            ? [{ line, series, rank: ranks.value[index], order: index }]
+            : [];
     }),
 );
 const treatments = computed(() =>
@@ -298,7 +300,7 @@ const view = computed<XyView>(
 );
 const viewNames = computed(() => viewLabels($gettext));
 const drawn = computed<Curve[]>(() => {
-    return loadedCurves.value.map(({ line, series, rank }) => {
+    return loadedCurves.value.map(({ line, series, rank, order }) => {
         const y = treat(series.x, series.y, view.value);
         return {
             line,
@@ -307,6 +309,7 @@ const drawn = computed<Curve[]>(() => {
             label: `${slotLabel(line.slot)} · ${line.file.name}`,
             fileName: line.file.name,
             rank,
+            order,
             x: series.x,
             y,
             xRange: extent(series.x),

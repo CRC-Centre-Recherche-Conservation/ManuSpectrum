@@ -124,7 +124,7 @@ function stored(): unknown {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
     if (raw === null) return null;
     const parsed = JSON.parse(raw);
-    return parsed.version === 2 ? parsed.boxes : parsed;
+    return parsed.version === 3 ? parsed.boxes : parsed;
 }
 
 beforeEach(() => {
@@ -475,7 +475,7 @@ describe("WindowGrid", () => {
         expect(
             JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
         ).toEqual({
-            version: 2,
+            version: 3,
             boxes: { [MICRO.id]: { x: 0, y: 0, w: 4, h: 4 } },
             hidden: [XRF.id, MATERIALS.id],
             folded: { [MICRO.id]: false },

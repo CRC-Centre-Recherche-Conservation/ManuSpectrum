@@ -37,9 +37,16 @@ interface AnnotationCall {
     opacity?: number;
 }
 
-function curve(slot: number, y: number[], rank = 0, file = slot): FigureCurve {
+function curve(
+    slot: number,
+    y: number[],
+    rank = 0,
+    file = slot,
+    order = slot,
+): FigureCurve {
     return {
         slot,
+        order,
         rank,
         label: `A${slot + 1} · S${file}.csv`,
         fileName: `S${file}.csv`,
@@ -268,6 +275,34 @@ describe("workshop figure", () => {
             { color: "#s1", dash: "solid", width: 2.5 },
             { color: "#s2", dash: "solid", width: 1.5 },
         ]);
+    });
+
+    it("colours a curve by its order in the window, not by its slot: a slot-20 curve alone is solid in the first hue, the 13th curve is dashed", () => {
+        const alone = stackedFigure(
+            input([curve(20, [1, 2], 0, 20, 0)]),
+            false,
+        );
+        expect(alone.data[0].line).toMatchObject({
+            color: "#s0",
+            dash: "solid",
+        });
+        const many = stackedFigure(
+            input(
+                Array.from({ length: 13 }, (_, index) =>
+                    curve(30 + index, [1, 2], 0, index, index),
+                ),
+            ),
+            false,
+        );
+        expect(many.data[12].line).toMatchObject({
+            color: "#s0",
+            dash: "6px,2px",
+        });
+        const notes = (many.layout.annotations as AnnotationCall[]).map(
+            (note) => note.text,
+        );
+        expect(notes[0]).toContain('color:#s0">━');
+        expect(notes[12]).toContain('color:#s0">╍');
     });
 
     it("exports the curves shown with Plotly's legend, a title and a source line, a hidden curve out of the legend", () => {

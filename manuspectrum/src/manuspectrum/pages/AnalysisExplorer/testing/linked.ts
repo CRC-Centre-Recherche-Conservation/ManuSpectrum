@@ -7,6 +7,7 @@ import {
     characterization,
     fileEntry,
     imagingEntry,
+    layerOf,
     label,
     technique,
     uuid,
@@ -67,16 +68,16 @@ const A1: Item = {
             id: F2,
             name: "F2.tif",
             layers: [
-                {
+                layerOf({
                     index: 0,
                     label: "Fe Ka",
                     image: { service: null, url: null, width: 1, height: 1 },
-                },
-                {
+                }),
+                layerOf({
                     index: 1,
                     label: "Pb La",
                     image: { service: null, url: null, width: 1, height: 1 },
-                },
+                }),
             ],
         }),
     ],

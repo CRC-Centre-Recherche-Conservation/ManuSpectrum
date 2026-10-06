@@ -71,6 +71,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 import type {
     AutoWindow,
+    ChemicalImagingWindow,
     XyWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type { FolioRequest } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -340,7 +341,7 @@ function titleOf(window: AutoWindow): string {
         case "xy":
             return xyTitle(window);
         case "chemical-imaging":
-            return $gettext("Chemical imaging");
+            return $gettext("Imaging");
         case "micro":
             return $gettext("Micro-images");
         case "characterizations":
@@ -348,6 +349,27 @@ function titleOf(window: AutoWindow): string {
         case "not-in-chart":
             return $gettext("Without visualisation");
     }
+}
+
+/** « 2 analyses · 5 canvases »: what the light table holds. */
+function imagingSubtitle(window: ChemicalImagingWindow): string {
+    const analyses = new Set(window.maps.map((line) => line.analysis.id)).size;
+    const canvases = window.maps.reduce(
+        (total, line) => total + line.file.layers.length,
+        0,
+    );
+    return [
+        interpolate(
+            $ngettext("%{n} analysis", "%{n} analyses", analyses),
+            { n: analyses },
+            true,
+        ),
+        interpolate(
+            $ngettext("%{n} canvas", "%{n} canvases", canvases),
+            { n: canvases },
+            true,
+        ),
+    ].join(" · ");
 }
 
 /** What the window holds, counted. */
@@ -360,16 +382,13 @@ function subtitleOf(window: AutoWindow): string {
             interpolate,
         );
     }
+    if (window.kind === "chemical-imaging") return imagingSubtitle(window);
     let count: number;
     let message: string;
     switch (window.kind) {
         case "xy":
             count = window.curves.length;
             message = $ngettext("%{n} spectrum", "%{n} spectra", count);
-            break;
-        case "chemical-imaging":
-            count = window.maps.length;
-            message = $ngettext("%{n} map", "%{n} maps", count);
             break;
         case "micro":
             count = window.images.length;

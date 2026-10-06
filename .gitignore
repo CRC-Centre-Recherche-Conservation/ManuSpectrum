@@ -40,3 +40,6 @@ agents_*.md
 .claude/
 docs/
 docs_claude/
+
+# Local working notes and screenshots
+/.superpowers/

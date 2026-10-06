@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-28 05:32-0500\n"
+"POT-Creation-Date: 2026-10-05 16:34-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2684,6 +2684,52 @@ msgstr "Reset to config"
 msgid "Apply & re-render"
 msgstr "Apply & re-render"
 
+#: templates/views/components/functions/imaging-layers-proposal.htm:5
+msgid "Automatic imaging layer proposal"
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:7
+msgid ""
+"When a chemical imaging manifest is saved, each of its\n"
+"            canvases without a layer description receives one, proposed from "
+"the\n"
+"            canvas label: an element symbol, a spectral band, a video frame "
+"or a\n"
+"            deconvolved element map."
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:13
+msgid "An existing layer is never modified."
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:14
+msgid ""
+"Canvases whose label is not recognised are left\n"
+"            without a layer. Layers are proposed only when a manifest is "
+"first\n"
+"            saved or its URL changes, so a layer deleted afterwards stays\n"
+"            deleted. Nothing is proposed for an edit awaiting review, and a\n"
+"            failure is logged without blocking the save."
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:19
+msgid ""
+"Layers of analyses recorded before this function\n"
+"            existed are filled once by a maintenance script."
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:24
+msgid ""
+"A resource imported from Arches JSON with its layer\n"
+"            tiles may receive duplicate layers: the manifest tile is saved\n"
+"            before its layers, and the function cannot see them."
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:26
+#: templates/views/components/functions/xy-technique-config.htm:26
+msgid "Triggered by"
+msgstr ""
+
 #: templates/views/components/functions/resource-summary.htm:5
 msgid ""
 "This configuration is saved with its own button. The Save button of the "
@@ -2721,10 +2767,6 @@ msgstr ""
 msgid ""
 "The technique-to-preset table is maintained in\n"
 "            manuspectrum/constants/xy_presets.py."
-msgstr ""
-
-#: templates/views/components/functions/xy-technique-config.htm:26
-msgid "Triggered by"
 msgstr ""
 
 #: templates/views/components/ms-file-license.htm:20
@@ -4751,7 +4793,7 @@ msgstr ""
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr ""
 
-#: views/explorer/synthesis.py:75
+#: views/explorer/synthesis.py:85
 #, python-format
 msgid "%(label)s · view %(number)s"
 msgstr ""

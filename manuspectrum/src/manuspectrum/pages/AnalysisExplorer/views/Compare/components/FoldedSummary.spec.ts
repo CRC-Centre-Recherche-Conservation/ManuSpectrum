@@ -23,15 +23,16 @@ describe("FoldedSummary", () => {
         const view = mountSummary({
             kind: "xy",
             count: 4,
-            slots: [2, 11, 12],
+            slots: [20, 21, 22],
+            colours: [2, 11, 12],
             names: ["FTIR"],
         });
         const chips = view.findAll(".slots li");
-        expect(chips.map((chip) => chip.text())).toEqual(["A3", "A12", "A13"]);
+        expect(chips.map((chip) => chip.text())).toEqual(["A21", "A22", "A23"]);
         expect(chips[0].classes()).toContain("slot-3");
         expect(chips[1].classes()).toContain("slot-12");
         expect(chips[1].classes()).toContain("item-filled");
-        // The 13th item: the first hue again, as a ring.
+        // The 13th curve of the window: the first hue again, as a ring; the slot does not matter.
         expect(chips[2].classes()).toEqual(
             expect.arrayContaining(["slot-1", "item-ring"]),
         );
@@ -48,6 +49,7 @@ describe("FoldedSummary", () => {
             kind: "xy",
             count: 1,
             slots: [0],
+            colours: [0],
             names: [],
         });
         expect(view.find(".line").text()).toBe("1 spectrum, not drawn");
@@ -59,6 +61,7 @@ describe("FoldedSummary", () => {
                 kind: "maps",
                 count: 2,
                 slots: [0, 1],
+                colours: [0, 1],
                 names: ["Pb", "Hg"],
             },
             "Chemical imaging",
@@ -72,6 +75,7 @@ describe("FoldedSummary", () => {
             kind: "xy",
             count: 12,
             slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            colours: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
             names: [],
         });
         expect(view.findAll(".slots li").map((chip) => chip.text())).toEqual([
@@ -93,6 +97,7 @@ describe("FoldedSummary", () => {
                 kind: "maps",
                 count: 1,
                 slots: [0],
+                colours: [0],
                 names: ["Pb", "Hg", "Fe", "Cu", "Ca", "K", "Zn", "Ti"],
             },
             "Chemical imaging",

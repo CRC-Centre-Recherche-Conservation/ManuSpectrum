@@ -17,6 +17,7 @@ import {
     SYNTHESIS,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import {
+    CHEMICAL_IMAGING_WINDOW_ID,
     autoWindows,
     keepUnchangedCurves,
     windowIdsOf,
@@ -281,6 +282,12 @@ describe("autoWindows", () => {
             [gone, "missing"],
         ]);
         expect(window.keys).toEqual([empty.key, blank.key, gone]);
+    });
+
+    it("keeps the id of the imaging window, so a stored layout still finds its box", () => {
+        expect(CHEMICAL_IMAGING_WINDOW_ID).toBe("auto:chemical-imaging");
+        const windows = derive([whole(1, [imagingEntry()])], [0]);
+        expect(windowIdsOf(windows)).toContain("auto:chemical-imaging");
     });
 
     it("puts every layered map of the Selection in one window, after the XY windows, in slot order", () => {

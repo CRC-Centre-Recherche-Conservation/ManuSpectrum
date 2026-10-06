@@ -131,6 +131,32 @@
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;
     --map-coast: #b7c4cf;
+    // Light table: false-colour hues of the stack, drawn through an SVG
+    // feColorMatrix (stack-tints.ts holds the same values; a spec pins them equal).
+    --map-pb: #f1ede0;
+    --map-cu: #22d3ee;
+    --map-fe: #fb923c;
+    --map-hg: #ef4444;
+    --map-ca: #facc15;
+    --map-k: #a78bfa;
+    --map-mn: #e879f9;
+    --map-zn: #4ade80;
+    --map-au: #e0b020;
+    --map-ag: #cfd3d8;
+    --map-as: #a3e635;
+    --map-s: #fef08a;
+    --map-rank-1: #60a5fa;
+    --map-rank-2: #f472b6;
+    --map-rank-3: #34d399;
+    --map-rank-4: #fbbf24;
+    --map-rank-5: #c084fc;
+    --map-rank-6: #f87171;
+    --map-rank-7: #2dd4bf;
+    --map-rank-8: #fb923c;
+    --map-rank-9: #a3e635;
+    --map-rank-10: #38bdf8;
+    --map-rank-11: #e879f9;
+    --map-rank-12: #fde68a;
     // Compare's focus: one hue per pinned slot (1–4), illuminator's inks —
     // indigo, verdigris, orchil, dragon's blood. White digits on them ≥ 5.7:1;
     // as a ring ≥ 3.1:1 on --heat-3. On --heat-4 no such hue reaches 3:1: the
@@ -140,6 +166,12 @@
     --focus-3: #93499e;
     --focus-4: #760a03;
     --focus-on: #ffffff;
+    // Light table: the letter and rim of panes A to D, apart from the focus
+    // hues (gold, teal, orchil, olive: white letters on them >= 4.5:1).
+    --pane-a: var(--accent-text);
+    --pane-b: #2f7a8c;
+    --pane-c: #8a4f7d;
+    --pane-d: #5d6b2e;
     --link-ring: 0.125rem;
     --link-pip: 0.875rem;
     --focus-room: 0.4375rem;

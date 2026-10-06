@@ -901,3 +901,34 @@ class ManifestJsonTests(TestCase):
 
         self.assertEqual(found, {"id": "fetched"})
         fetch.assert_called_once_with(url)
+
+
+class UnresolvedRoleWarningTests(SimpleTestCase):
+    def values(self, keys, resolved=()):
+        with (
+            patch.object(
+                explorer_service,
+                "role_node",
+                side_effect=lambda slug, alias: (
+                    object() if (slug, alias) in resolved else None
+                ),
+            ),
+            patch.object(
+                explorer_service, "readable_nodegroup_ids", return_value=set()
+            ),
+        ):
+            explorer_service.Values([], keys, None)
+
+    def test_missing_layer_roles_warn_once_per_process(self):
+        keys = list(explorer_service.LAYER_KEYS)
+        with patch.object(explorer_service, "_unresolved_optional_warned", False):
+            with self.assertLogs(explorer_service.logger, "WARNING") as first:
+                self.values(keys)
+                self.values(keys)
+        self.assertEqual(len(first.records), 1)
+
+    def test_a_missing_core_role_still_warns_each_time(self):
+        with self.assertLogs(explorer_service.logger, "WARNING") as logged:
+            self.values(["files"])
+            self.values(["files"])
+        self.assertEqual(len(logged.records), 2)

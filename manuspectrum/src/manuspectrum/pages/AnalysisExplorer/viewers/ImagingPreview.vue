@@ -13,7 +13,6 @@ import {
 import {
     CURTAIN_KEY,
     FOLIO_ZONES_KEY,
-    IMAGING_OVERLAYS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
@@ -32,36 +31,19 @@ const OPACITY_STEP = 5;
  * A map the image server does not give is said so in place, with Retry.
  *
  * A classic viewer: a layer scroll steps through the file's own layers, by
- * their stored label. A `stage` slot draws the laid layer (a page of its
- * own) in place of the image while it is laid. The laid layers live where
- * `IMAGING_OVERLAYS_KEY` says, else in `store.overlays` (the document
+ * their stored label. The laid layers live in `store.overlays` (the document
  * screen's folio).
  */
-const props = withDefaults(
-    defineProps<{
-        file: FileEntry;
-        analysis: Pick<AnalysisPayload, "id">;
-        contrastNote?: boolean;
-    }>(),
-    { contrastNote: true },
-);
-
-defineSlots<{
-    stage?: (stage: {
-        layer: FileLayer;
-        opacity: number;
-        underCurtain: boolean;
-        attempt: number;
-        failed: () => void;
-    }) => unknown;
+const props = defineProps<{
+    file: FileEntry;
+    analysis: Pick<AnalysisPayload, "id">;
 }>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
 const zones = inject(FOLIO_ZONES_KEY, ref<ReadonlySet<string>>(new Set()));
-const provided = inject(IMAGING_OVERLAYS_KEY, null);
 
 const store = useExplorerStore();
-const overlays = provided ?? {
+const overlays = {
     settings: toRef(store, "overlays"),
     set: store.setOverlay,
 };
@@ -134,11 +116,6 @@ function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
     step.value = 0;
-}
-
-/** The `stage` slot (a laid Leaflet map) already tried its `fallbackUrls` (`laidLayers`); its failure is final. */
-function onStageFailed(): void {
-    imageFailed.value = true;
 }
 
 function firstValue(value: number | number[]): number {
@@ -219,15 +196,6 @@ function onCurtainChange(event: Event): void {
                 <span>{{ $gettext("Retry") }}</span>
             </button>
         </p>
-        <slot
-            v-else-if="laid && layer && $slots.stage"
-            name="stage"
-            :layer="layer"
-            :opacity="opacity"
-            :under-curtain="underCurtain"
-            :attempt="attempt"
-            :failed="onStageFailed"
-        />
         <img
             v-else-if="imageUrl && layer"
             :key="`${imageUrl}#${attempt}`"
@@ -237,10 +205,7 @@ function onCurtainChange(event: Event): void {
             :alt="layer.label"
             @error="onImageError"
         />
-        <p
-            v-if="props.contrastNote"
-            class="note"
-        >
+        <p class="note">
             <span>{{ $gettext("Each map keeps its own contrast.") }}</span>
         </p>
         <label class="toggle">

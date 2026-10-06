@@ -4,7 +4,7 @@ import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
-import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { TableFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
 
 /** The last results shown (S1) and where the reader left them, to come back to them as they were. */
 export interface ResultsMemo {
@@ -52,16 +52,6 @@ export interface FolioRequests {
 export const FOLIO_REQUEST_KEY: InjectionKey<FolioRequests> =
     Symbol("folio-request");
 
-/** Where an imaging preview keeps its laid layers (`overlayKey` → setting). */
-export interface ImagingOverlays {
-    settings: Readonly<Ref<Record<string, Overlay>>>;
-    set(key: string, overlay: Overlay | null): void;
-}
-
-/** The laid layers of the imaging previews below; without it they are the document screen's (`store.overlays`). */
-export const IMAGING_OVERLAYS_KEY: InjectionKey<ImagingOverlays> =
-    Symbol("imaging-overlays");
-
 /** Speaks a message through the shell's polite live region. */
 export const ANNOUNCE_KEY: InjectionKey<(message: string) => void> =
     Symbol("announce");
@@ -102,3 +92,7 @@ export const LINKED_SELECTION_KEY: InjectionKey<LinkedSelection> =
 /** Where the body of a Compare window declares its actions, shown in the window's header (`useWindowActions`); provided by the window. */
 export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
     Symbol("window-actions");
+
+/** How the Compare window holding a body is framed (its preset size, enlarged or not); provided by the window. */
+export const WINDOW_FRAME_KEY: InjectionKey<Readonly<Ref<TableFrame>>> =
+    Symbol("window-frame");

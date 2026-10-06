@@ -239,11 +239,54 @@ export interface DocumentPayload {
     samples: SampleSummary[];
 }
 
-/** One canvas of a chemical-imaging manifest: its position, its label as stored, its image. */
+/** A chemical element declared for a layer; `symbol` is the altLabel of its list item when it reads as one (`Pb`). */
+export interface LayerElement {
+    value: ValueRef;
+    symbol: string | null;
+}
+
+/** The unit of a layer's band; `symbol` is the altLabel of its list item (`nm`), null when it has none. */
+export interface LayerUnit extends ValueRef {
+    symbol: string | null;
+}
+
+/** The processing method of a layer; `symbol` is the altLabel of its list item (`PCA`), null when it has none. */
+export interface LayerMethod extends ValueRef {
+    symbol: string | null;
+}
+
+/** The spectral band of a layer: a value, or its bounds, and the unit. */
+export interface LayerBand {
+    value: number | null;
+    lower: number | null;
+    upper: number | null;
+    unit: LayerUnit | null;
+}
+
+/** How a layer was derived: the method, its component number and the inputs as stored. */
+export interface LayerProcessing {
+    method: LayerMethod | null;
+    index: number | null;
+    inputs: string | null;
+}
+
+/**
+ * One canvas of a chemical-imaging manifest. `index`, `label` and `image` come from the
+ * manifest (`label` as stored, never interpreted); `id` is the canvas id as the server
+ * rewrites it; the rest comes from the layer tile of that canvas, and a canvas without a
+ * tile is unclassified: `content` null, the others empty.
+ */
 export interface FileLayer {
     index: number;
+    id: string;
     label: string;
     image: ImageRef;
+    content: ValueRef | null;
+    elements: LayerElement[];
+    emissionLine: ValueRef | null;
+    band: LayerBand | null;
+    processing: LayerProcessing | null;
+    note: string | null;
 }
 
 /** How a file is drawn: its stored renderer configuration, as the server read it. */
@@ -541,10 +584,45 @@ export const SHAPE_KEYS = {
         width: true,
         height: true,
     } satisfies Record<keyof ImageRef, true>,
-    FileLayer: { index: true, label: true, image: true } satisfies Record<
-        keyof FileLayer,
+    FileLayer: {
+        index: true,
+        id: true,
+        label: true,
+        image: true,
+        content: true,
+        elements: true,
+        emissionLine: true,
+        band: true,
+        processing: true,
+        note: true,
+    } satisfies Record<keyof FileLayer, true>,
+    LayerElement: { value: true, symbol: true } satisfies Record<
+        keyof LayerElement,
         true
     >,
+    LayerUnit: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerUnit, true>,
+    LayerMethod: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerMethod, true>,
+    LayerBand: {
+        value: true,
+        lower: true,
+        upper: true,
+        unit: true,
+    } satisfies Record<keyof LayerBand, true>,
+    LayerProcessing: {
+        method: true,
+        index: true,
+        inputs: true,
+    } satisfies Record<keyof LayerProcessing, true>,
     Technique: {
         id: true,
         uri: true,

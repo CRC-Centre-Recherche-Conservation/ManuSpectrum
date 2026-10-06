@@ -12,7 +12,7 @@ const SHOWN_NAMES = 6;
 
 /**
  * What a folded window shows under its header: a chip per slot it holds
- * (in its item's colour and marker, `itemClasses`; the first
+ * (in the colour and marker of its curves in the window, `itemClasses`; the first
  * `SHOWN_SLOTS`, then how many more), one counted line (« 4 FTIR spectra,
  * not drawn », « 2 maps · Pb, Hg ») and the button that unfolds it,
  * named after the window's `title`.
@@ -24,11 +24,13 @@ const emit = defineEmits<{ (event: "unfold"): void }>();
 const { $gettext, $ngettext, interpolate } = useGettext();
 
 const chips = computed(() => {
-    const shown = props.summary.slots.slice(0, SHOWN_SLOTS).map((slot) => ({
-        key: String(slot),
-        text: slotLabel(slot),
-        tone: itemClasses(slot),
-    }));
+    const shown = props.summary.slots
+        .slice(0, SHOWN_SLOTS)
+        .map((slot, index) => ({
+            key: String(slot),
+            text: slotLabel(slot),
+            tone: itemClasses(props.summary.colours[index]),
+        }));
     const more = props.summary.slots.length - shown.length;
     return more > 0
         ? [...shown, { key: "more", text: `+${more}`, tone: "more" }]

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, inject, ref, useId, useTemplateRef, watch } from "vue";
+import {
+    computed,
+    inject,
+    provide,
+    ref,
+    useId,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
@@ -10,13 +18,17 @@ import {
     ICONS,
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import { usePhone } from "@/manuspectrum/pages/AnalysisExplorer/composables/usePhone.ts";
 import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
 import { provideWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
     useWindowFocus,
     windowHue,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowFocus.ts";
-import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    LINKED_SELECTION_KEY,
+    WINDOW_FRAME_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     focusHue,
     focusStripe,
@@ -95,6 +107,15 @@ const headingId = useId();
 const bodyId = useId();
 const menuId = useId();
 const actions = provideWindowActions();
+const phone = usePhone();
+provide(
+    WINDOW_FRAME_KEY,
+    computed(() => ({
+        size: props.size,
+        enlarged: props.enlarged,
+        phone: phone.value,
+    })),
+);
 const moreRoot = useTemplateRef<HTMLElement>("moreRoot");
 const bodyElement = useTemplateRef<HTMLElement>("bodyElement");
 const lit = useWindowFocus(bodyElement);
@@ -652,7 +673,7 @@ function onMenuClose(): void {
 
 .compare-window-frame .title {
     display: flex;
-    flex: 1 1 14rem;
+    flex: 1 1 6rem;
     align-items: baseline;
     gap: 0.5rem;
     min-inline-size: 0;
@@ -677,12 +698,17 @@ function onMenuClose(): void {
 }
 
 .compare-window-frame .title .name {
-    min-inline-size: 0;
+    flex: 0 1 auto;
+    min-inline-size: 4.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .compare-window-frame .title .subtitle {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--ink-muted);
     font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
