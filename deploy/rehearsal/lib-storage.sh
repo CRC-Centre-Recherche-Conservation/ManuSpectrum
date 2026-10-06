@@ -25,10 +25,11 @@ valid_storage_path() {
 # KIND is "images" (the hypervisor user, QEMU_USER, must traverse every parent
 # and read/write DIR) or "nfs" (exported by root, no ACL needed). Checks the
 # nearest existing ancestor when DIR does not exist yet.
-# Returns 0 (fine, possibly with warnings), 1 (unusable filesystem) or 2 (a
-# fix is needed: the exact commands are printed).
+# A non-Unix filesystem (vfat, exfat, ntfs, fuseblk over ntfs/exfat) is refused
+# for "nfs" and only warned about for "images". Returns 0 (fine, possibly with
+# warnings), 1 (unusable filesystem) or 2 (a fix is needed: printed).
 check_storage_dir() {
-  local kind="$1" dir="$2" qemu_user="${3:-}" probe fs real="" mp rc=0 p fstab_type
+  local kind="$1" dir="$2" qemu_user="${3:-}" probe fs real="" mp rc=0 p fstab_type nonunix=0
   probe="$dir"
   while [ ! -e "$probe" ] && [ "$probe" != / ]; do probe="$(dirname "$probe")"; done
 
@@ -45,8 +46,13 @@ check_storage_dir() {
   fi
   case "$fs" in
     msdos | vfat | fat | exfat | ntfs | ntfs3)
-      echo "${dir} is on a ${fs} filesystem: no Unix ownership, permissions or ACLs. Use a Linux filesystem (ext4, xfs, btrfs)." >&2
-      return 1
+      if [ "$kind" = nfs ]; then
+        echo "${dir} is on a ${fs} filesystem: no Unix ownership, permissions or ACLs. Use a Linux filesystem (ext4, xfs, btrfs)." >&2
+        return 1
+      fi
+      nonunix=1
+      echo "Warning: ${dir} is on a ${fs} filesystem (FUSE/ntfs-3g or non-Unix). The disk image will work, but I/O is slower, so the timings measured in" >&2
+      echo "  rehearsal (reindex duration, load-snapshot duration) are not comparable to production; memory figures are unaffected." >&2
       ;;
     fuseblk)
       echo "Warning: ${dir} is on a fuseblk filesystem (FUSE; device type: ${real:-unknown}): permissions and ACLs are unreliable, and NFS cannot export it without an fsid. A Linux filesystem is safer." >&2
@@ -85,9 +91,14 @@ check_storage_dir() {
   done
   if [ "${#no_x[@]}" -gt 0 ] || ! sudo -n -u "$qemu_user" test -x "$dir" 2>/dev/null \
     || ! sudo -n -u "$qemu_user" test -w "$dir" 2>/dev/null; then
-    echo "User ${qemu_user} cannot use ${dir} (it must traverse every parent and read/write the directory). Fix:" >&2
-    for p in "${no_x[@]}"; do echo "  sudo setfacl -m u:${qemu_user}:x ${p}" >&2; done
-    echo "  sudo setfacl -m u:${qemu_user}:rwx ${dir}" >&2
+    if [ "$nonunix" = 1 ] || [ "$fs" = fuseblk ]; then
+      echo "User ${qemu_user} cannot use ${dir}. setfacl does not work on ntfs-3g: access is usually granted by mount options (uid/gid/umask, or permissions)." >&2
+      echo "  Check with: sudo -u ${qemu_user} test -r <file>" >&2
+    else
+      echo "User ${qemu_user} cannot use ${dir} (it must traverse every parent and read/write the directory). Fix:" >&2
+      for p in "${no_x[@]}"; do echo "  sudo setfacl -m u:${qemu_user}:x ${p}" >&2; done
+      echo "  sudo setfacl -m u:${qemu_user}:rwx ${dir}" >&2
+    fi
     rc=2
   fi
   return "$rc"

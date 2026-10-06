@@ -100,16 +100,24 @@ grep -q "$TMP/other/ms-rehearsal.qcow2" "$TMP/out" && ! grep -q "$TMP/images/ms-
 assert "an IMAGES_DIR given in the environment wins over rehearsal.env" $?
 
 vm "$TMP/images.env" STUB_FS_MNT=vfat && status=0 || status=$?
-[ "$status" -ne 0 ] && grep -q 'vfat filesystem' "$TMP/out"
-assert "make-vm refuses a vfat IMAGES_DIR" $?
+[ "$status" -eq 0 ] && grep -q 'vfat filesystem' "$TMP/out" && grep -q 'Warning' "$TMP/out" && grep -q 'ms-rehearsal.qcow2' "$TMP/out"
+assert "make-vm warns on a vfat IMAGES_DIR and continues" $?
+
+vm "$TMP/images.env" STUB_FS_MNT=ntfs && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'Warning: .*ntfs filesystem' "$TMP/out" && grep -q 'not comparable' "$TMP/out" && grep -q 'ms-rehearsal.qcow2' "$TMP/out"
+assert "make-vm warns on an ntfs IMAGES_DIR and continues" $?
 
 vm "$TMP/images.env" STUB_FS_MNT=exfat STUB_FS="UNKNOWN (0x2011bab0)" && status=0 || status=$?
-[ "$status" -ne 0 ] && grep -q 'exfat filesystem' "$TMP/out"
-assert "make-vm refuses exfat that an old stat reports as UNKNOWN" $?
+[ "$status" -eq 0 ] && grep -q 'Warning: .*exfat filesystem' "$TMP/out"
+assert "make-vm warns on exfat that an old stat reports as UNKNOWN" $?
 
 vm "$TMP/images.env" STUB_FS_MNT=fuseblk STUB_LSBLK_FS=ntfs && status=0 || status=$?
-[ "$status" -ne 0 ] && grep -q 'ntfs filesystem' "$TMP/out"
-assert "make-vm refuses fuseblk whose device is ntfs" $?
+[ "$status" -eq 0 ] && grep -q 'Warning: .*ntfs filesystem' "$TMP/out" && grep -q 'not comparable' "$TMP/out"
+assert "make-vm warns on fuseblk whose device is ntfs and continues" $?
+
+vm "$TMP/images.env" STUB_FS_MNT=fuseblk STUB_LSBLK_FS=ntfs STUB_DENY_X="$TMP" && status=0 || status=$?
+grep -q 'mount options' "$TMP/out" && grep -q 'test -r' "$TMP/out" && ! grep -q 'setfacl -m' "$TMP/out"
+assert "on ntfs the access fix names mount options, not setfacl, and the checks still run" $?
 
 vm "$TMP/images.env" STUB_FS_MNT=fuseblk STUB_LSBLK_FS=ext4 STUB_MOUNT=/media/someone/disk STUB_IN_FSTAB=0 && status=0 || status=$?
 [ "$status" -eq 0 ] && grep -q 'fuseblk' "$TMP/out" && ! grep -q ' fuseblk  defaults' "$TMP/out"
@@ -144,6 +152,14 @@ echo "NFS_EXPORT_DIR=$TMP/export" >"$TMP/export.env"
 nfs "$TMP/export.env" STUB_FS_MNT=exfat && status=0 || status=$?
 [ "$status" -ne 0 ] && grep -q 'exfat filesystem' "$TMP/out"
 assert "host-nfs refuses an exfat NFS_EXPORT_DIR" $?
+
+nfs "$TMP/export.env" STUB_FS_MNT=ntfs && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q 'ntfs filesystem' "$TMP/out" && ! grep -q 'Warning: .*ntfs filesystem' "$TMP/out"
+assert "host-nfs refuses an ntfs NFS_EXPORT_DIR" $?
+
+nfs "$TMP/export.env" STUB_FS_MNT=fuseblk STUB_LSBLK_FS=ntfs && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q 'ntfs filesystem' "$TMP/out"
+assert "host-nfs refuses fuseblk whose device is ntfs" $?
 
 nfs "$TMP/export.env" STUB_MOUNT=/media/someone/disk STUB_IN_FSTAB=0 && status=0 || status=$?
 grep -q 'not listed in /etc/fstab' "$TMP/out" && grep -q 'removable automount is fragile' "$TMP/out"

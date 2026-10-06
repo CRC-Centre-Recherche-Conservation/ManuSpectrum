@@ -68,7 +68,8 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   `rehearsal.env`): `DRY_RUN=1 ISO=... deploy/rehearsal/make-vm.sh` and
   `sudo deploy/rehearsal/host-nfs.sh` print no refusal, the `setfacl` commands they suggest
   (if any) are applied, and `findmnt --fstab <mount point>` lists the disk (`nofail`), so it is
-  mounted at boot without a login. See README, "Storage on another disk".
+  mounted at boot without a login. `IMAGES_DIR` may be on NTFS/exFAT (warning: slower, timings
+  not comparable); `NFS_EXPORT_DIR` may not. See README, "Storage on another disk".
 
 ### 1.3 Network and NFS (host)
 

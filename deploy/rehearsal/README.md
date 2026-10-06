@@ -101,8 +101,11 @@ NFS_EXPORT_DIR=/media/<user>/<label>/ms-rehearsal/data
 equal, `host-baseline.sh` and `verify-baseline.sh` refuse otherwise. `make-vm.sh` and
 `host-nfs.sh` check the directory before creating anything:
 
-- The filesystem must be a Linux one (ext4, xfs, btrfs). vfat, exfat and ntfs are refused
-  (no Unix permissions or ACLs; `exportfs` refuses them too); fuseblk gets a warning.
+- `NFS_EXPORT_DIR` must be on a Linux filesystem (ext4, xfs, btrfs): vfat, exfat and ntfs are
+  refused (no Unix permissions or ACLs; `exportfs` refuses them too). `IMAGES_DIR` may sit on
+  NTFS/exFAT (for example a BitLocker disk mounted as fuseblk/ntfs-3g): the qcow2 file works,
+  with a warning, but I/O is slower and the timings measured in rehearsal are not comparable
+  to production (memory figures are). An unresolved fuseblk gets a warning for both.
 - The directory must exist: `sudo install -d -m 0755 <IMAGES_DIR>`.
 - The hypervisor user (`libvirt-qemu` on Debian/Ubuntu, `qemu` on Fedora) must traverse every
   parent directory and read/write `IMAGES_DIR`. A `/media/<user>` directory is usually closed
