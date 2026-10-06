@@ -34,6 +34,7 @@ const sizes = computed(() =>
             otherWidth: String(props.against.w),
             otherHeight: String(props.against.h),
         },
+        true,
     ),
 );
 </script>

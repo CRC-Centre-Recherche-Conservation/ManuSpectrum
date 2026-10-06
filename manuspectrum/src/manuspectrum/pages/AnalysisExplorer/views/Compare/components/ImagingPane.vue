@@ -18,11 +18,9 @@ import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMapResize.ts";
 import { layImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
-import {
-    ANNOUNCE_KEY,
-    WINDOW_RESIZE_KEY,
-} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
@@ -33,7 +31,9 @@ import {
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
 import {
+    fitView,
     fitZoomOf,
+    keepsFit,
     readView,
     watchPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
@@ -56,7 +56,6 @@ type Status = "empty" | "loading" | "ready" | "failed";
 
 const MIN_ZOOM = -10;
 /** The reader may zoom this far out below the fit of the image. */
-const ZOOM_OUT_BELOW_FIT = 2;
 const ZOOM_SNAP = 0.25;
 
 /**
@@ -96,7 +95,6 @@ defineExpose({ leafletMap });
 
 const { $gettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
-const resized = inject(WINDOW_RESIZE_KEY, null);
 const marks = useLinkedMarks();
 
 const host = useTemplateRef<HTMLDivElement>("host");
@@ -145,16 +143,33 @@ const pair = computed(() => {
           }
         : null;
 });
+const pairLabel = computed(() =>
+    pair.value
+        ? interpolate(
+              $gettext("%{tag} also in %{analysis} →"),
+              { tag: pair.value.tag, analysis: pair.value.analysis.value },
+              true,
+          )
+        : "",
+);
 const groupLabel = computed(() =>
     found.value
-        ? interpolate($gettext("Pane %{letter}: %{label}, %{analysis}"), {
-              letter: props.letter,
-              label: label.value,
-              analysis: analysisName.value?.value ?? "",
-          })
-        : interpolate($gettext("Pane %{letter}: empty"), {
-              letter: props.letter,
-          }),
+        ? interpolate(
+              $gettext("Pane %{letter}: %{label}, %{analysis}"),
+              {
+                  letter: props.letter,
+                  label: label.value,
+                  analysis: analysisName.value?.value ?? "",
+              },
+              true,
+          )
+        : interpolate(
+              $gettext("Pane %{letter}: empty"),
+              {
+                  letter: props.letter,
+              },
+              true,
+          ),
 );
 
 watch(() => props.canvas, drawCanvas);
@@ -169,10 +184,15 @@ watch(
         if (view) watcher?.apply(view);
     },
 );
-watch(
-    () => resized?.value,
-    () => map?.invalidateSize(),
-);
+useMapResize({
+    host,
+    map: () => map,
+    keepsFit: () => {
+        const current = target();
+        return !current || keepsFit(current);
+    },
+    refit: () => watcher?.silently(fit),
+});
 
 onMounted(() => {
     if (!host.value) return;
@@ -250,10 +270,14 @@ function drawCanvas(): void {
         emit("size-read", { canvas: current, size });
         if (props.view) watcher?.apply(props.view);
         announce(
-            interpolate($gettext("Pane %{letter}: %{label}"), {
-                letter: props.letter,
-                label: layer?.label || current,
-            }),
+            interpolate(
+                $gettext("Pane %{letter}: %{label}"),
+                {
+                    letter: props.letter,
+                    label: layer?.label || current,
+                },
+                true,
+            ),
         );
     }
     function failed(): void {
@@ -265,6 +289,7 @@ function drawCanvas(): void {
                 {
                     letter: props.letter,
                 },
+                true,
             ),
         );
     }
@@ -276,12 +301,7 @@ function fit(): void {
     const current = target();
     const zoom = current ? fitZoomOf(current) : null;
     if (!map || !current || zoom === null) return;
-    map.setMinZoom(zoom - ZOOM_OUT_BELOW_FIT);
-    map.setView(
-        map.unproject([current.size.w / 2, current.size.h / 2], nativeZoom),
-        zoom,
-        { animate: false },
-    );
+    fitView(current, zoom);
 }
 
 function zoom(direction: 1 | -1): void {
@@ -322,9 +342,13 @@ function onDrop(event: DragEvent): void {
 function onReset(): void {
     emit("filters-reset");
     announce(
-        interpolate($gettext("Pane %{letter}: filters reset"), {
-            letter: props.letter,
-        }),
+        interpolate(
+            $gettext("Pane %{letter}: filters reset"),
+            {
+                letter: props.letter,
+            },
+            true,
+        ),
     );
 }
 
@@ -336,6 +360,7 @@ function onApplyAll(): void {
             {
                 letter: props.letter,
             },
+            true,
         ),
     );
 }
@@ -445,14 +470,10 @@ function retry(): void {
                 type="button"
                 class="pair"
                 data-action="pair"
+                :title="pairLabel"
                 @click.stop="emit('pair', pair.canvas)"
             >
-                <span>{{
-                    interpolate($gettext("%{tag} also in %{analysis} →"), {
-                        tag: pair.tag,
-                        analysis: pair.analysis.value,
-                    })
-                }}</span>
+                <span>{{ pairLabel }}</span>
             </button>
             <span class="zoom">
                 <IconButton
@@ -530,7 +551,8 @@ function retry(): void {
 
 .imaging-pane .chip {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-inline-size: 0;
     align-items: center;
     gap: 0.25rem;
     padding: 0.25rem;
@@ -550,7 +572,9 @@ function retry(): void {
 }
 
 .imaging-pane .chip .label {
+    flex: 0 1 auto;
     overflow: hidden;
+    min-inline-size: 2rem;
     max-inline-size: 12rem;
     font-family: var(--font-mono);
     text-overflow: ellipsis;
@@ -558,6 +582,7 @@ function retry(): void {
 }
 
 .imaging-pane .chip .tag {
+    flex: none;
     padding-inline: 0.375rem;
     border: 0.0625rem solid var(--heat-3);
     border-radius: 0.75rem;
@@ -569,7 +594,8 @@ function retry(): void {
     --r: 0.375rem;
     --link-pip: 0.8125rem;
     display: flex;
-    min-inline-size: 0;
+    flex: 0 1 auto;
+    min-inline-size: 2.5rem;
     max-inline-size: 12rem;
     padding: 0.25rem 0.375rem;
     border: 0.0625rem solid transparent;
@@ -589,7 +615,7 @@ function retry(): void {
 .imaging-pane .stage {
     position: relative;
     display: grid;
-    min-block-size: 12rem;
+    min-block-size: 6rem;
     background: var(--stage);
 }
 
@@ -653,6 +679,13 @@ function retry(): void {
     font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
+}
+
+.imaging-pane .stage .pair > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .imaging-pane .stage .zoom {

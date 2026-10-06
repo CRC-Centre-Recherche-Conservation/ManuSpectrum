@@ -14,6 +14,7 @@ import {
 import {
     analysisHit,
     imagingEntry,
+    label,
     layerOf,
     layerMethod,
     layerUnit,
@@ -416,6 +417,43 @@ describe("the pairing chip", () => {
     });
 });
 
+describe("names with quotes and angle brackets", () => {
+    const QUOTED = 'maXRF - "C" initial <b>';
+
+    function quoted(n: number, layers: Partial<FileLayer>[]): MapLine {
+        const base = line(n, layers);
+        return {
+            ...base,
+            analysis: { ...base.analysis, name: label(QUOTED) },
+        };
+    }
+
+    it("shows the pair hint as typed, not escaped twice", async () => {
+        const view = await mountPane({
+            maps: [line(1, [cu("Cu 1")]), quoted(2, [{}, cu("Cu 2")])],
+        });
+        const text = view.find('[data-action="pair"]').text();
+        expect(text).toContain(QUOTED);
+        expect(text).not.toContain("&quot;");
+        expect(text).not.toContain("&lt;");
+    });
+
+    it("names the pane for assistive technology as typed", async () => {
+        const view = await mountPane({ maps: [quoted(1, [{}])] });
+        const name = view.find('[role="group"]').attributes("aria-label");
+        expect(name).toContain(QUOTED);
+    });
+
+    it("announces a quoted layer label as typed", async () => {
+        const announce = vi.fn();
+        await mountPane({
+            maps: [line(1, [{ label: 'Map "Pb" <i>' }])],
+            provide: { [ANNOUNCE_KEY as symbol]: announce },
+        });
+        expect(announce).toHaveBeenCalledWith('Pane A: Map "Pb" <i>');
+    });
+});
+
 describe("the scale badge", () => {
     it("is there only when the pane has a scale note", async () => {
         const view = await mountPane();
@@ -481,6 +519,39 @@ describe("the view", () => {
         await flushPromises();
         expect(invalidate).toHaveBeenCalled();
         invalidate.mockRestore();
+    });
+
+    it("fits the image again in the new size when the reader had not moved it", async () => {
+        const tick = ref(0);
+        const view = await mountPane({
+            provide: { [WINDOW_RESIZE_KEY as symbol]: tick },
+        });
+        const before = leafletMap(view).getZoom();
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+            configurable: true,
+            get: () => 300,
+        });
+        tick.value += 1;
+        await flushPromises();
+        expect(leafletMap(view).getZoom()).toBeLessThan(before);
+    });
+
+    it("keeps the view of a reader who zoomed when the window changes size", async () => {
+        const tick = ref(0);
+        const view = await mountPane({
+            provide: { [WINDOW_RESIZE_KEY as symbol]: tick },
+        });
+        leafletMap(view).setZoom(leafletMap(view).getZoom() + 1, {
+            animate: false,
+        });
+        const zoomed = leafletMap(view).getZoom();
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+            configurable: true,
+            get: () => 300,
+        });
+        tick.value += 1;
+        await flushPromises();
+        expect(leafletMap(view).getZoom()).toBe(zoomed);
     });
 });
 

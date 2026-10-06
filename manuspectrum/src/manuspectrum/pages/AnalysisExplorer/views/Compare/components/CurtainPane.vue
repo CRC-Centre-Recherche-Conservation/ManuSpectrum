@@ -20,22 +20,24 @@ import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMapResize.ts";
 import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     createScaleGroup,
     layImage,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
-import {
-    ANNOUNCE_KEY,
-    WINDOW_RESIZE_KEY,
-} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import { layerById } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
-import { fitZoomOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
+import {
+    fitView,
+    fitZoomOf,
+    keepsFit,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 import { sameSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
 
 import type {
@@ -63,8 +65,6 @@ interface SideState {
 const SIDES: readonly Side[] = [0, 1];
 const LETTERS = ["A", "B"] as const;
 const MIN_ZOOM = -10;
-/** The reader may zoom this far out below the fit of the image. */
-const ZOOM_OUT_BELOW_FIT = 2;
 const ZOOM_SNAP = 0.25;
 const SIDE_B: Side = 1;
 
@@ -110,7 +110,6 @@ defineExpose({ leafletMap });
 
 const { $gettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
-const resized = inject(WINDOW_RESIZE_KEY, null);
 const marks = useLinkedMarks();
 
 const host = useTemplateRef<HTMLDivElement>("host");
@@ -148,10 +147,14 @@ const views = computed(() =>
     }),
 );
 const groupLabel = computed(() =>
-    interpolate($gettext("Curtain: %{a} | %{b}"), {
-        a: `A ${views.value[0].label || $gettext("empty")}`,
-        b: `B ${views.value[1].label || $gettext("empty")}`,
-    }),
+    interpolate(
+        $gettext("Curtain: %{a} | %{b}"),
+        {
+            a: `A ${views.value[0].label || $gettext("empty")}`,
+            b: `B ${views.value[1].label || $gettext("empty")}`,
+        },
+        true,
+    ),
 );
 
 watch(
@@ -189,15 +192,29 @@ watch(
                     size: `${note.size.w} × ${note.size.h} px`,
                     against: `${note.againstSize.w} × ${note.againstSize.h} px`,
                 },
+                true,
             ),
         );
     },
     { immediate: true },
 );
-watch(
-    () => resized?.value,
-    () => map?.invalidateSize(),
-);
+useMapResize({
+    host,
+    map: () => map,
+    keepsFit: () => {
+        const state = reference();
+        return (
+            !map ||
+            !state?.size ||
+            keepsFit({
+                map,
+                size: state.size,
+                nativeZoom: scale?.zoom() ?? 0,
+            })
+        );
+    },
+    refit: fit,
+});
 
 onMounted(() => {
     if (!host.value) return;
@@ -284,10 +301,14 @@ function drawSide(side: Side): void {
                 fitOnce();
                 emit("size-read", { canvas, size });
                 announce(
-                    interpolate($gettext("Curtain, side %{letter}: %{label}"), {
-                        letter: LETTERS[side],
-                        label: layer.label || canvas,
-                    }),
+                    interpolate(
+                        $gettext("Curtain, side %{letter}: %{label}"),
+                        {
+                            letter: LETTERS[side],
+                            label: layer.label || canvas,
+                        },
+                        true,
+                    ),
                 );
             },
             failed: () => {
@@ -299,6 +320,7 @@ function drawSide(side: Side): void {
                             "Curtain, side %{letter}: map unavailable (image server)",
                         ),
                         { letter: LETTERS[side] },
+                        true,
                     ),
                 );
             },
@@ -324,15 +346,13 @@ function fitOnce(): void {
 function fit(): void {
     const state = reference();
     if (!map || !state?.size) return;
-    const nativeZoom = scale?.zoom() ?? 0;
-    const zoom = fitZoomOf({ map, size: state.size, nativeZoom });
-    if (zoom === null) return;
-    map.setMinZoom(zoom - ZOOM_OUT_BELOW_FIT);
-    map.setView(
-        map.unproject([state.size.w / 2, state.size.h / 2], nativeZoom),
-        zoom,
-        { animate: false },
-    );
+    const target = {
+        map,
+        size: state.size,
+        nativeZoom: scale?.zoom() ?? 0,
+    };
+    const zoom = fitZoomOf(target);
+    if (zoom !== null) fitView(target, zoom);
 }
 
 /** The common pixel scale moved (a layer joined or left): the picture is a different size, so it is fitted again. */
@@ -368,9 +388,13 @@ function onDrop(event: DragEvent): void {
 function onReset(side: Side): void {
     emit("filters-reset", side);
     announce(
-        interpolate($gettext("Curtain, side %{letter}: filters reset"), {
-            letter: LETTERS[side],
-        }),
+        interpolate(
+            $gettext("Curtain, side %{letter}: filters reset"),
+            {
+                letter: LETTERS[side],
+            },
+            true,
+        ),
     );
 }
 
@@ -380,6 +404,7 @@ function onApplyAll(side: Side): void {
         interpolate(
             $gettext("Filters of side %{letter} applied to every pane"),
             { letter: LETTERS[side] },
+            true,
         ),
     );
 }
@@ -434,9 +459,13 @@ function onApplyAll(side: Side): void {
                     data-action="filters"
                     :aria-expanded="filtersOpen[view.side] ? 'true' : 'false'"
                     :label="
-                        interpolate($gettext('Filters of side %{letter}'), {
-                            letter: view.letter,
-                        })
+                        interpolate(
+                            $gettext('Filters of side %{letter}'),
+                            {
+                                letter: view.letter,
+                            },
+                            true,
+                        )
                     "
                     :pressed="filtersOpen[view.side]"
                     @click.stop="
@@ -462,9 +491,13 @@ function onApplyAll(side: Side): void {
                 :data-side="view.letter.toLowerCase()"
             >
                 <span>{{
-                    interpolate($gettext("Side %{letter} is empty"), {
-                        letter: view.letter,
-                    })
+                    interpolate(
+                        $gettext("Side %{letter} is empty"),
+                        {
+                            letter: view.letter,
+                        },
+                        true,
+                    )
                 }}</span>
             </p>
             <p
@@ -483,9 +516,13 @@ function onApplyAll(side: Side): void {
                     @click.stop="retry(view.side)"
                 >
                     <span>{{
-                        interpolate($gettext("Retry side %{letter}"), {
-                            letter: view.letter,
-                        })
+                        interpolate(
+                            $gettext("Retry side %{letter}"),
+                            {
+                                letter: view.letter,
+                            },
+                            true,
+                        )
                     }}</span>
                 </button>
             </p>
@@ -634,7 +671,7 @@ function onApplyAll(side: Side): void {
 .curtain-pane .stage {
     position: relative;
     display: grid;
-    min-block-size: 12rem;
+    min-block-size: 6rem;
     background: var(--stage);
 }
 

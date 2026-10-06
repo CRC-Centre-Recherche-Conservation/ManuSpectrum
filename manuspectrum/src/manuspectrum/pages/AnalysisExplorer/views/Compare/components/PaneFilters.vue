@@ -53,9 +53,13 @@ function onGreyscale(event: Event): void {
     <fieldset
         class="pane-filters"
         :aria-label="
-            interpolate($gettext('Filters of pane %{letter}'), {
-                letter: props.letter,
-            })
+            interpolate(
+                $gettext('Filters of pane %{letter}'),
+                {
+                    letter: props.letter,
+                },
+                true,
+            )
         "
     >
         <div

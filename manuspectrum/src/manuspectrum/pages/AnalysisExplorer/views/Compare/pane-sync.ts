@@ -33,6 +33,11 @@ export type Applied = "full" | "zoom" | null;
 
 const ANIMATE_OFF = { animate: false } as const;
 const EPSILON = 1e-6;
+/** The reader may zoom this far out below the fit of the image. */
+const ZOOM_OUT_BELOW_FIT = 2;
+const FIT_TOLERANCE = 1e-3;
+/** Leaflet rounds a pan to whole pixels when its container is resized. */
+const CENTRE_TOLERANCE_PX = 2;
 
 /** The zoom that fits the whole image in the pane, or null while the map has no size. */
 export function fitZoomOf(target: SyncTarget): number | null {
@@ -45,6 +50,36 @@ export function fitZoomOf(target: SyncTarget): number | null {
     );
     const zoom = map.getBoundsZoom(bounds);
     return Number.isFinite(zoom) ? zoom : null;
+}
+
+/**
+ * Shows the whole image of `target` at `zoom` (its `fitZoomOf`), centred, and
+ * lets the reader zoom out `ZOOM_OUT_BELOW_FIT` levels below it. The new
+ * minimum is set after the view when it rises, so that `Map.setMinZoom` never
+ * zooms to it (an animated zoom that would end over the fit).
+ */
+export function fitView(target: SyncTarget, zoom: number): void {
+    const { map, size, nativeZoom } = target;
+    const floor = zoom - ZOOM_OUT_BELOW_FIT;
+    if (floor < map.getMinZoom()) map.setMinZoom(floor);
+    map.setView(map.unproject([size.w / 2, size.h / 2], nativeZoom), zoom, {
+        animate: false,
+    });
+    map.setMinZoom(floor);
+}
+
+/**
+ * Whether the pane still shows the fit of the whole image, centred (or has
+ * no size yet, so nothing is fitted): a pane in that state follows its
+ * container when it is resized, a pane the reader moved does not.
+ */
+export function keepsFit(target: SyncTarget): boolean {
+    const view = readView(target, "");
+    if (!view) return true;
+    const { map, size, nativeZoom } = target;
+    const middle = map.unproject([size.w / 2, size.h / 2], nativeZoom);
+    const off = map.project(middle).distanceTo(map.project(map.getCenter()));
+    return Math.abs(view.dz) < FIT_TOLERANCE && off <= CENTRE_TOLERANCE_PX;
 }
 
 export function readView(

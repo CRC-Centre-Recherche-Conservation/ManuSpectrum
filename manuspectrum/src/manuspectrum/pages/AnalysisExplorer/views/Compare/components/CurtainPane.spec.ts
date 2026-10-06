@@ -638,3 +638,26 @@ describe("the focus", () => {
         stop();
     });
 });
+
+describe("labels with quotes and angle brackets", () => {
+    const QUOTED = 'Map "Pb" <i>';
+
+    it("names the group and the filter buttons as typed, not escaped twice", async () => {
+        const view = await mountCurtain({
+            maps: [line(1, [{ label: QUOTED }]), line(2)],
+            canvasA: "c1-0",
+        });
+        expect(view.find(".map").attributes("aria-label")).toBe(
+            `Curtain: A ${QUOTED} | B L2.0`,
+        );
+    });
+
+    it("announces a side as typed", async () => {
+        const announce = vi.fn();
+        await mountCurtain({
+            maps: [line(1, [{ label: QUOTED }]), line(2)],
+            provide: { [ANNOUNCE_KEY as symbol]: announce },
+        });
+        expect(announce).toHaveBeenCalledWith(`Curtain, side A: ${QUOTED}`);
+    });
+});

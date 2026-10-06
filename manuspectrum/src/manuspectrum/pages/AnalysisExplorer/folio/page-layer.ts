@@ -16,7 +16,32 @@ type IiifLayer = L.TileLayer & {
     _container?: HTMLElement;
     maxNativeZoom?: number;
     _resetView: () => void;
+    _isValidTile: (coords: L.Coords) => boolean;
+    _getZoomForUrl: () => number;
+    /** The image's size in pixels, read from its info.json. */
+    x?: number;
+    y?: number;
+    _setView: (
+        center: L.LatLng,
+        zoom: number,
+        noPrune?: boolean,
+        noUpdate?: boolean,
+    ) => void;
 };
+
+/**
+ * Whether the region of a tile starts inside the image. leaflet-iiif 3.0.0
+ * accepts every tile at a negative zoom, so a view below the image's own
+ * levels asks for regions that begin past its edge, which the image server
+ * refuses.
+ */
+function startsInside(layer: IiifLayer, coords: L.Coords): boolean {
+    if (layer.x === undefined || layer.y === undefined) return true;
+    const side =
+        (layer.options.tileSize as number) *
+        2 ** ((layer.maxNativeZoom ?? 0) - layer._getZoomForUrl());
+    return coords.x * side < layer.x && coords.y * side < layer.y;
+}
 
 /** A page image on its way to a map; `remove` takes it off, laid or not. */
 export interface PageLayer {
@@ -31,7 +56,16 @@ export interface PageLayer {
  * GridLayer.onRemove throws on a layer whose tiles are not laid: an unread
  * page never reaches the map, and a page removed in the instant between its
  * addition and its tiles is dropped without calling GridLayer.onRemove.
- * `failed` is called when the info.json cannot be read. The view fits the
+ * leaflet-iiif lays its tile container in a promise callback, after
+ * `map.addLayer` returned and the layer listens to the map's view events;
+ * `GridLayer._setView` throws on a layer whose container is not laid, so a
+ * view set in that interval is left to the layer's own `onAdd`, which reads
+ * the map's view once the container exists. leaflet-iiif then sets the
+ * layer's `minZoom` to the zoom at which the image fits the map as it is at
+ * that moment, and Leaflet drops every tile of a map zoomed below it; a caller
+ * that owns the view (`fitBounds` false) has its map limit the zoom, so the
+ * layer is given no minimum, and reads the view again. `failed` is called when the
+ * info.json cannot be read. The view fits the
  * whole page once laid, unless `fitBounds` is false (the caller keeps it).
  * With `pane`, the tiles go in that map pane (`overlayPane`).
  */
@@ -46,6 +80,13 @@ export function layPage(
         setMaxBounds: false,
         ...(pane ? { pane } : {}),
     }) as IiifLayer;
+    const setView = layer._setView;
+    layer._setView = function (...args: Parameters<typeof setView>) {
+        if (layer._container) setView.apply(layer, args);
+    };
+    const isValidTile = layer._isValidTile;
+    layer._isValidTile = (coords: L.Coords) =>
+        isValidTile.call(layer, coords) && startsInside(layer, coords);
     const onRemove = layer.onRemove;
     layer.onRemove = (from: L.Map) =>
         layer._container ? onRemove.call(layer, from) : layer;
@@ -53,8 +94,15 @@ export function layPage(
     void Promise.resolve(layer._infoPromise).then(
         () => {
             if (removed) return;
-            if (layer._imageSizes) map.addLayer(layer);
-            else failed();
+            if (layer._imageSizes) {
+                map.addLayer(layer);
+                void Promise.all([layer._infoPromise]).then(() => {
+                    if (!removed && layer._container && map.hasLayer(layer)) {
+                        if (!fitBounds) layer.options.minZoom = -Infinity;
+                        layer._resetView();
+                    }
+                });
+            } else failed();
         },
         () => {
             if (!removed) failed();

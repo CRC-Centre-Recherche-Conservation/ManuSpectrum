@@ -20,6 +20,7 @@ import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { useMapResize } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMapResize.ts";
 import {
     overlayPane,
     paneKey,
@@ -29,10 +30,7 @@ import {
     createScaleGroup,
     layImage,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
-import {
-    ANNOUNCE_KEY,
-    WINDOW_RESIZE_KEY,
-} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import {
     canStack,
@@ -40,7 +38,11 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
-import { fitZoomOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
+import {
+    fitView,
+    fitZoomOf,
+    keepsFit,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 import {
     applyAppearance,
     stackAppearances,
@@ -77,8 +79,6 @@ interface Laid {
 }
 
 const MIN_ZOOM = -10;
-/** The reader may zoom this far out below the fit of the image. */
-const ZOOM_OUT_BELOW_FIT = 2;
 const ZOOM_SNAP = 0.25;
 const BLINK_MS = 700;
 const OPACITY_STEP = 5;
@@ -129,7 +129,6 @@ defineExpose({ leafletMap });
 
 const { $gettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
-const resized = inject(WINDOW_RESIZE_KEY, null);
 const marks = useLinkedMarks();
 const prefix = useId();
 
@@ -187,9 +186,13 @@ const tintNames = computed<Record<string, string>>(() => ({
     "rank-12": $gettext("Cream"),
 }));
 const groupLabel = computed(() =>
-    interpolate($gettext("Stack of %{count} layers"), {
-        count: String(props.stack.layers.length),
-    }),
+    interpolate(
+        $gettext("Stack of %{count} layers"),
+        {
+            count: String(props.stack.layers.length),
+        },
+        true,
+    ),
 );
 
 watch(() => props.stack, sync, { deep: true });
@@ -198,10 +201,23 @@ watch(
     () => props.maps,
     () => paint(),
 );
-watch(
-    () => resized?.value,
-    () => map?.invalidateSize(),
-);
+useMapResize({
+    host,
+    map: () => map,
+    keepsFit: () => {
+        const entry = firstSized();
+        return (
+            !map ||
+            !entry?.size ||
+            keepsFit({
+                map,
+                size: entry.size,
+                nativeZoom: scale?.zoom() ?? 0,
+            })
+        );
+    },
+    refit: refit,
+});
 
 onMounted(() => {
     motionQuery = window.matchMedia?.(REDUCED_MOTION) ?? null;
@@ -293,9 +309,13 @@ function lay(canvas: string): void {
                 if (!fitted) fitOn(entry);
                 emit("size-read", { canvas, size });
                 announce(
-                    interpolate($gettext("Stack: %{label}"), {
-                        label: found.label || canvas,
-                    }),
+                    interpolate(
+                        $gettext("Stack: %{label}"),
+                        {
+                            label: found.label || canvas,
+                        },
+                        true,
+                    ),
                 );
             },
             failed: () => {
@@ -310,26 +330,30 @@ function lay(canvas: string): void {
 /** Fits the layer given, centred, at the common pixel scale; later layers keep the reader's view. */
 function fitOn(entry: Laid): void {
     if (!map || !entry.size) return;
-    const nativeZoom = scale?.zoom() ?? 0;
-    const zoom = fitZoomOf({ map, size: entry.size, nativeZoom });
+    const target = {
+        map,
+        size: entry.size,
+        nativeZoom: scale?.zoom() ?? 0,
+    };
+    const zoom = fitZoomOf(target);
     if (zoom === null) return;
     fitted = true;
-    map.setMinZoom(zoom - ZOOM_OUT_BELOW_FIT);
-    map.setView(
-        map.unproject([entry.size.w / 2, entry.size.h / 2], nativeZoom),
-        zoom,
-        { animate: false },
-    );
+    fitView(target, zoom);
 }
 
 /** The common pixel scale moved (a layer joined or left): the picture is a different size, so it is fitted again. */
 function refit(): void {
     if (!scale) return;
+    const entry = firstSized();
+    if (entry) fitOn(entry);
+}
+
+/** The first layer shown whose size is read: the one the view is fitted on. */
+function firstSized(): Laid | null {
     const first = props.stack.layers.find(
         (layer) => layer.on && laid.get(layer.canvas)?.size,
     );
-    const entry = first ? laid.get(first.canvas) : null;
-    if (entry) fitOn(entry);
+    return first ? laid.get(first.canvas) ?? null : null;
 }
 
 function tintFilterId(tint: Tint): string {
@@ -382,6 +406,7 @@ function onDrop(event: DragEvent): void {
                     "A stack holds the layers of one analysis: %{label} is not added",
                 ),
                 { label: found.label || canvas },
+                true,
             ),
         );
         return;
@@ -416,7 +441,11 @@ function toggleBlink(canvas: string, label: string): void {
         paint();
     }, BLINK_MS);
     announce(
-        interpolate($gettext("Blinking %{label}: Escape stops"), { label }),
+        interpolate(
+            $gettext("Blinking %{label}: Escape stops"),
+            { label },
+            true,
+        ),
     );
 }
 
@@ -564,10 +593,14 @@ function tintLabel(tint: Tint | null): string {
                             paletteFor === row.layer.canvas ? 'true' : 'false'
                         "
                         :aria-label="
-                            interpolate($gettext('Tint of %{label}: %{tint}'), {
-                                label: row.label,
-                                tint: tintLabel(row.tint),
-                            })
+                            interpolate(
+                                $gettext('Tint of %{label}: %{tint}'),
+                                {
+                                    label: row.label,
+                                    tint: tintLabel(row.tint),
+                                },
+                                true,
+                            )
                         "
                         @click.stop="togglePalette(row.layer.canvas)"
                     >
@@ -604,9 +637,13 @@ function tintLabel(tint: Tint | null): string {
                         :step="OPACITY_STEP"
                         :value="row.layer.opacity"
                         :aria-label="
-                            interpolate($gettext('Opacity of %{label}'), {
-                                label: row.label,
-                            })
+                            interpolate(
+                                $gettext('Opacity of %{label}'),
+                                {
+                                    label: row.label,
+                                },
+                                true,
+                            )
                         "
                         @input="onOpacity(row.layer.canvas, $event)"
                     />
@@ -615,9 +652,13 @@ function tintLabel(tint: Tint | null): string {
                             icon="chevron-up"
                             data-action="up"
                             :label="
-                                interpolate($gettext('Move %{label} up'), {
-                                    label: row.label,
-                                })
+                                interpolate(
+                                    $gettext('Move %{label} up'),
+                                    {
+                                        label: row.label,
+                                    },
+                                    true,
+                                )
                             "
                             :disabled="row.rank === 0"
                             @click="
@@ -631,9 +672,13 @@ function tintLabel(tint: Tint | null): string {
                             icon="chevron-down"
                             data-action="down"
                             :label="
-                                interpolate($gettext('Move %{label} down'), {
-                                    label: row.label,
-                                })
+                                interpolate(
+                                    $gettext('Move %{label} down'),
+                                    {
+                                        label: row.label,
+                                    },
+                                    true,
+                                )
                             "
                             :disabled="row.rank === rows.length - 1"
                             @click="
@@ -652,6 +697,7 @@ function tintLabel(tint: Tint | null): string {
                                         ? $gettext('Hide %{label}')
                                         : $gettext('Show %{label}'),
                                     { label: row.label },
+                                    true,
                                 )
                             "
                             @click="
@@ -666,9 +712,13 @@ function tintLabel(tint: Tint | null): string {
                             icon="bolt"
                             data-action="blink"
                             :label="
-                                interpolate($gettext('Blink %{label}'), {
-                                    label: row.label,
-                                })
+                                interpolate(
+                                    $gettext('Blink %{label}'),
+                                    {
+                                        label: row.label,
+                                    },
+                                    true,
+                                )
                             "
                             :pressed="blinking === row.layer.canvas"
                             @click="toggleBlink(row.layer.canvas, row.label)"
@@ -680,6 +730,7 @@ function tintLabel(tint: Tint | null): string {
                                 interpolate(
                                     $gettext('Take %{label} out of the stack'),
                                     { label: row.label },
+                                    true,
                                 )
                             "
                             @click="emit('remove', row.layer.canvas)"
@@ -772,7 +823,7 @@ function tintLabel(tint: Tint | null): string {
 .layer-stack .stage {
     position: relative;
     display: grid;
-    min-block-size: 12rem;
+    min-block-size: 6rem;
     background: var(--stage);
 }
 

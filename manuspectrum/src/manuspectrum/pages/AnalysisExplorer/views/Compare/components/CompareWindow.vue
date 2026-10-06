@@ -673,7 +673,7 @@ function onMenuClose(): void {
 
 .compare-window-frame .title {
     display: flex;
-    flex: 1 1 14rem;
+    flex: 1 1 6rem;
     align-items: baseline;
     gap: 0.5rem;
     min-inline-size: 0;
@@ -698,12 +698,17 @@ function onMenuClose(): void {
 }
 
 .compare-window-frame .title .name {
-    min-inline-size: 0;
+    flex: 0 1 auto;
+    min-inline-size: 4.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .compare-window-frame .title .subtitle {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--ink-muted);
     font-size: 0.75rem;
     font-variant-numeric: tabular-nums;

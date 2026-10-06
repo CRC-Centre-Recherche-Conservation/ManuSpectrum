@@ -846,3 +846,15 @@ describe("announcements", () => {
         expect(announce).toHaveBeenCalledWith("Stack: L1.0");
     });
 });
+
+describe("labels with quotes and angle brackets", () => {
+    it("names the row buttons as typed, not escaped twice", async () => {
+        const view = await mountStack({
+            maps: [line(1, [{ label: 'Map "Pb" <i>' }, {}, {}])],
+            layers: [stacked("c1-0")],
+        });
+        const text = view.text();
+        expect(text).toContain('Hide Map "Pb" <i>');
+        expect(text).not.toContain("&quot;");
+    });
+});

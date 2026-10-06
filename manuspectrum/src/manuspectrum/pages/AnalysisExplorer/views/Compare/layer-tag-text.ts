@@ -3,7 +3,11 @@ import type { TagParts } from "@/manuspectrum/pages/AnalysisExplorer/views/Compa
 /** What a component gives `tagText` to translate and fill in (`useGettext`). */
 export interface TagTranslate {
     $gettext: (msgid: string) => string;
-    interpolate: (msgid: string, values: Record<string, string>) => string;
+    interpolate: (
+        msgid: string,
+        values: Record<string, string>,
+        disableHtmlEscaping?: boolean,
+    ) => string;
 }
 
 function bandText(
@@ -41,9 +45,13 @@ export function tagText(
     if (parts.index !== null) {
         return parts.method
             ? `${parts.method} ${parts.index}`
-            : interpolate($gettext("Component %{index}"), {
-                  index: String(parts.index),
-              });
+            : interpolate(
+                  $gettext("Component %{index}"),
+                  {
+                      index: String(parts.index),
+                  },
+                  true,
+              );
     }
     return parts.contentLabel.value;
 }

@@ -257,6 +257,7 @@ watch(notes, (now, before) => {
                     size: `${note.size.w} × ${note.size.h} px`,
                     reference: `${note.againstSize.w} × ${note.againstSize.h} px`,
                 },
+                true,
             ),
         );
     }
@@ -308,6 +309,7 @@ function refuse(canvas: string): void {
             "A stack holds the layers of one analysis: %{label} is not added",
         ),
         { label: labelOf(canvas) },
+        true,
     );
     notice.value = message;
     announce(message);
@@ -333,9 +335,13 @@ function onLayout(layout: TableLayout): void {
             next,
             Math.min(next.active, Math.max(PANES_SHOWN[layout] - 1, 0)),
         ),
-        interpolate($gettext("Layout: %{layout}"), {
-            layout: layoutName(layout),
-        }),
+        interpolate(
+            $gettext("Layout: %{layout}"),
+            {
+                layout: layoutName(layout),
+            },
+            true,
+        ),
     );
 }
 
@@ -374,6 +380,7 @@ function follow(symbol: string): void {
             {
                 element: symbol,
             },
+            true,
         ),
     );
 }
@@ -524,6 +531,7 @@ function onGrouping(grouping: TableGrouping): void {
                 <span>{{ $gettext("Swap A/B") }}</span>
             </button>
             <button
+                v-if="!small"
                 type="button"
                 class="toggle"
                 data-action="link-all"
@@ -650,22 +658,17 @@ function onGrouping(grouping: TableGrouping): void {
 
 <style scoped>
 .light-table {
-    --table-block-size: 20rem;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
+    block-size: 100%;
     min-inline-size: 0;
-}
-
-.light-table[data-size="L"] {
-    --table-block-size: 30rem;
-}
-
-.light-table[data-size="enlarged"] {
-    --table-block-size: min(70vh, 44rem);
+    min-block-size: 0;
 }
 
 .light-table .toolbar {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
@@ -706,6 +709,7 @@ function onGrouping(grouping: TableGrouping): void {
 }
 
 .light-table .notice {
+    flex: none;
     margin: 0;
     color: var(--ink-muted);
     font-size: 0.8125rem;
@@ -713,25 +717,33 @@ function onGrouping(grouping: TableGrouping): void {
 
 .light-table .body {
     display: grid;
+    flex: 1 1 0;
+    grid-template-rows: minmax(0, 1fr);
     gap: 0.5rem;
     min-inline-size: 0;
+    min-block-size: 0;
 }
 
 .light-table[data-gallery="right"] .body {
     grid-template-columns: minmax(0, 1fr) 18rem;
 }
 
+.light-table[data-gallery="below"] .body,
+.light-table[data-gallery="strip"] .body {
+    grid-template-rows: minmax(8rem, 1fr) minmax(0, 7rem);
+}
+
 .light-table .stage {
     display: grid;
-    block-size: var(--table-block-size);
     min-inline-size: 0;
-    min-block-size: 0;
+    min-block-size: 8rem;
     background: var(--stage);
 }
 
 .light-table .panes {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 0.5rem;
     min-block-size: 0;
 }
@@ -746,13 +758,11 @@ function onGrouping(grouping: TableGrouping): void {
 }
 
 .light-table .gallery {
-    max-block-size: var(--table-block-size);
+    min-block-size: 0;
     overflow: auto;
 }
 
 .light-table[data-gallery="strip"] .gallery {
-    block-size: 7rem;
-    max-block-size: 7rem;
     overflow-x: auto;
     overflow-y: hidden;
 }
@@ -776,6 +786,7 @@ function onGrouping(grouping: TableGrouping): void {
 @media (max-width: 48rem) {
     .light-table[data-shown="grid2"] .panes {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: repeat(2, minmax(0, 1fr));
     }
 
     .light-table[data-gallery="right"] .body {

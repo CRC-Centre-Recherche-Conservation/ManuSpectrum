@@ -413,6 +413,13 @@ function onKeydown(event: KeyboardEvent): void {
                         type="button"
                         class="analysis-focus ms-focus"
                         v-bind="marks.focus(analysisNode(line.analysis.id))"
+                        :title="
+                            interpolate(
+                                $gettext('Focus on %{name}'),
+                                { name: line.analysis.name.value },
+                                true,
+                            )
+                        "
                         :aria-label="
                             interpolate(
                                 $gettext('Focus on %{name}'),
@@ -497,6 +504,11 @@ function onKeydown(event: KeyboardEvent): void {
                                 ? marks.rel(entry.nodes)
                                 : undefined
                         "
+                        :style="
+                            entry.nodes.length > 0
+                                ? marks.rowStyle(entry.nodes)
+                                : undefined
+                        "
                         @pick="pick(entry.layer.id)"
                     />
                 </div>
@@ -528,10 +540,28 @@ function onKeydown(event: KeyboardEvent): void {
     text-transform: uppercase;
 }
 
+.layer-gallery .analysis {
+    display: flex;
+    flex: 1 1 100%;
+    align-items: center;
+    gap: 0.25rem;
+    min-inline-size: 0;
+    font-size: 0.75rem;
+}
+
+.layer-gallery .analysis .analysis-tab {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    text-align: start;
+}
+
+.layer-gallery .analysis .analysis-focus {
+    flex: none;
+}
+
 .layer-gallery .target,
 .layer-gallery .grouping,
-.layer-gallery .tabs,
-.layer-gallery .analysis {
+.layer-gallery .tabs {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -574,7 +604,11 @@ function onKeydown(event: KeyboardEvent): void {
     padding: 0;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 999rem;
-    background: var(--surface);
+    background: radial-gradient(
+        circle,
+        var(--ink-dim) 0.1875rem,
+        var(--surface) 0.25rem
+    );
     cursor: pointer;
 }
 
@@ -628,6 +662,22 @@ function onKeydown(event: KeyboardEvent): void {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
     gap: 0.375rem;
+}
+
+.layer-gallery
+    :deep(
+        .layer-thumb:is(
+                [data-rel="self"],
+                [data-rel="direct"],
+                [data-rel="evidence"]
+            )
+    ) {
+    outline: 0.125rem solid var(--h1, var(--focus-1));
+    outline-offset: 0.0625rem;
+}
+
+.layer-gallery :deep(.layer-thumb[data-rel="evidence"]) {
+    outline-width: 0.0625rem;
 }
 
 .layer-gallery :deep(.layer-thumb[data-rel="none"]) {

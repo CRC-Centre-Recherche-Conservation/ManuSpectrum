@@ -239,6 +239,27 @@ describe("LayerGallery with some tiles", () => {
         expect(rel("MS59-deconv_Pb")).toBe("none");
         expect(rel("band_650")).toBeUndefined();
     });
+
+    it("gives a thumb linked by the focus the hue of its slot, for the outline of the recipe", async () => {
+        const started = startLinkedSelection(() => undefined);
+        stop = started.stop;
+        const view = mount(LayerGallery, {
+            props: { maps: TILED, state: defaultState(TILED) },
+            global: {
+                provide: { [LINKED_SELECTION_KEY as symbol]: started.linked },
+            },
+        });
+        started.linked.toggle(elementNode("Cu"));
+        await view.vm.$nextTick();
+        function style(text: string): string | undefined {
+            return view
+                .findAll(".layer-thumb")
+                .find((node) => node.find(".label").text() === text)
+                ?.attributes("style");
+        }
+        expect(style("MS59-deconv_Cu")).toContain("--h1: var(--focus-1)");
+        expect(style("MS59-deconv_Pb") ?? "").not.toContain("--h1");
+    });
 });
 
 describe("LayerGallery targets and keyboard", () => {

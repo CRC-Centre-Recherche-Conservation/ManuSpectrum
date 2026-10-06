@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
 import {
     applyView,
+    fitView,
     fitZoomOf,
+    keepsFit,
     readView,
     watchPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
@@ -68,6 +70,81 @@ describe("readView and fitZoomOf", () => {
         const hidden = pane(LARGE, 0, 0);
         expect(fitZoomOf(hidden)).toBeNull();
         expect(readView(hidden, "h")).toBeNull();
+    });
+});
+
+describe("fitView", () => {
+    it("shows the whole image centred and lets the reader zoom out two levels below it", () => {
+        const target = pane();
+        const zoom = fitZoomOf(target) as number;
+        fitView(target, zoom);
+        expect(target.map.getZoom()).toBe(zoom);
+        expect(target.map.getMinZoom()).toBe(zoom - 2);
+        expect(keepsFit(target)).toBe(true);
+    });
+
+    it("never asks Leaflet to zoom to the new minimum, which would end an animated zoom over the fit", () => {
+        const target = pane(LARGE, 800, 600);
+        target.map.setMinZoom(-8);
+        target.map.setView([0, 0], -7, { animate: false });
+        const setZoom = vi.spyOn(target.map, "setZoom");
+        const zoom = fitZoomOf(target) as number;
+        fitView(target, zoom);
+        expect(setZoom).not.toHaveBeenCalled();
+        expect(target.map.getZoom()).toBe(zoom);
+    });
+
+    it("fits an image whose fit lies below the zoom range the map had", () => {
+        const target = pane(LARGE, 800, 600);
+        const zoom = fitZoomOf(target) as number;
+        target.map.setMinZoom(3);
+        target.map.setZoom(4, { animate: false });
+        expect(zoom).toBeLessThan(3);
+        fitView(target, zoom);
+        expect(target.map.getZoom()).toBe(zoom);
+    });
+});
+
+describe("keepsFit", () => {
+    function fitted(target: SyncTarget): void {
+        target.map.setView(
+            target.map.unproject(
+                [target.size.w / 2, target.size.h / 2],
+                target.nativeZoom,
+            ),
+            fitZoomOf(target) as number,
+            { animate: false },
+        );
+    }
+
+    it("is true while the view is the fit of the whole image", () => {
+        const target = pane();
+        fitted(target);
+        expect(keepsFit(target)).toBe(true);
+    });
+
+    it("is false once the reader zoomed or moved", () => {
+        const zoomed = pane();
+        fitted(zoomed);
+        zoomed.map.setZoom(zoomed.map.getZoom() + 1, { animate: false });
+        expect(keepsFit(zoomed)).toBe(false);
+        const moved = pane();
+        fitted(moved);
+        moved.map.panBy([120, 0], { animate: false });
+        expect(keepsFit(moved)).toBe(false);
+    });
+
+    it("tolerates the pixel Leaflet rounds a pan to when its container is resized", () => {
+        const target = pane();
+        fitted(target);
+        target.map.panBy([1, 0], { animate: false });
+        expect(keepsFit(target)).toBe(true);
+        target.map.panBy([5, 0], { animate: false });
+        expect(keepsFit(target)).toBe(false);
+    });
+
+    it("is true while the map has no size, nothing being fitted yet", () => {
+        expect(keepsFit(pane(LARGE, 0, 0))).toBe(true);
     });
 });
 

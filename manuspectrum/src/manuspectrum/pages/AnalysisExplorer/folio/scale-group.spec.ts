@@ -14,6 +14,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
     small: { width: 600, height: 1202 },
     large: { width: 1529, height: 2405 },
     same: { width: 700, height: 1300 },
+    huge: { width: 14000, height: 14000 },
 };
 
 type IiifTiles = L.TileLayer & {
@@ -169,6 +170,101 @@ describe("layers of different power-of-two buckets in one map (real leaflet-iiif
         small.remove();
         expect(group.zoom()).toBe(4);
         expect(sourcePixelsPerUnit(large)).toBe(2 ** 4);
+    });
+});
+
+describe("a view set as soon as a page is reported read (real leaflet-iiif)", () => {
+    it("does not throw in the tile layer: two pages added one after the other", async () => {
+        const thrown: unknown[] = [];
+        const reads: { w: number; h: number }[] = [];
+        for (const name of ["large", "small"]) {
+            layServed(
+                map,
+                `https://iiif.example/${name}`,
+                {
+                    read: (size) => {
+                        reads.push(size);
+                        try {
+                            map.setView([0, 0], 1, { animate: false });
+                        } catch (error) {
+                            thrown.push(error);
+                        }
+                    },
+                    failed: vi.fn(),
+                },
+                { pane: `pane-${name}`, scale: group },
+            );
+        }
+        await settle();
+        expect(thrown).toEqual([]);
+        expect(reads).toHaveLength(2);
+    });
+
+    it("draws tiles at a zoom below the one the layer opens at, once leaflet-iiif has settled its zoom range", async () => {
+        map.remove();
+        map = L.map(sizedContainer(1200, 200), {
+            crs: L.CRS.Simple,
+            zoomSnap: 0.25,
+            minZoom: -10,
+        }).setView([0, 0], 3);
+        map.createPane("pane-huge");
+        const large = lay("huge") as IiifTiles;
+        map.setView([0, 0], -1, { animate: false });
+        await settle();
+        expect(large.options.minZoom).toBeLessThan(0);
+        expect(large._tileZoom).toBe(-1);
+        expect(Object.keys(large._tiles).length).toBeGreaterThan(0);
+    });
+
+    it("keeps drawing when the pane is later resized so small that the whole image fits below the layer's own range", async () => {
+        map.remove();
+        map = L.map(sizedContainer(1200, 200), {
+            crs: L.CRS.Simple,
+            zoomSnap: 0.25,
+            minZoom: -10,
+        }).setView([0, 0], 3);
+        map.createPane("pane-huge");
+        const large = lay("huge") as IiifTiles;
+        await settle();
+        map.setView([0, 0], -4, { animate: false });
+        await settle();
+        expect(map.getZoom()).toBe(-4);
+        expect(Object.keys(large._tiles).length).toBeGreaterThan(0);
+    });
+
+    it("asks no tile that lies beyond the image below the zoom range of the image's own levels", async () => {
+        map.remove();
+        map = L.map(sizedContainer(1200, 200), {
+            crs: L.CRS.Simple,
+            zoomSnap: 0.25,
+            minZoom: -10,
+        }).setView([0, 0], 3);
+        map.createPane("pane-huge");
+        const large = lay("huge") as IiifTiles;
+        map.setView([0, 0], -1, { animate: false });
+        await settle();
+        const regions = Object.values(large._tiles).map((tile) =>
+            (large as unknown as { getTileUrl: (c: L.Coords) => string })
+                .getTileUrl(tile.coords)
+                .split("/")
+                .slice(-4)[0]
+                .split(",")
+                .map(Number),
+        );
+        expect(regions.length).toBeGreaterThan(0);
+        for (const [, , width, height] of regions) {
+            expect(width).toBeGreaterThan(0);
+            expect(height).toBeGreaterThan(0);
+        }
+    });
+
+    it("draws the tiles of the view set meanwhile once the container is laid", async () => {
+        const large = lay("large") as IiifTiles;
+        map.setView([0, 0], 2, { animate: false });
+        await settle();
+        expect(large._container).toBeDefined();
+        expect(large._tileZoom).toBe(2);
+        expect(Object.keys(large._tiles).length).toBeGreaterThan(0);
     });
 });
 
