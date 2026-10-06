@@ -22,3 +22,8 @@ CVE-2026-85061 exp:2026-12-31
 CVE-2026-67213 exp:2026-12-31
 CVE-2026-67214 exp:2026-12-31
 CVE-2026-73086 exp:2026-12-31
+
+# @vue/server-renderer 3.5.20: arches 8.1.x pins vue to exactly 3.5.20; the fix
+# is in 3.5.42. Server-side rendering is not used: the package is only
+# collected into /app/static with node_modules, never run or loaded by a page.
+GHSA-g2v6-rqmx-r4w6 exp:2026-12-31
