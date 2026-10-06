@@ -3,7 +3,7 @@
 # python-deps: the virtualenv from uv.lock (without uv's world-writable .lock),
 #              frontend configuration generated
 # frontend:    npm ci and the production webpack build (Node 24)
-# collect:     collectstatic into /app/static and its .build-id
+# collect:     the Explorer bundle check, collectstatic into /app/static and its .build-id
 # runtime:     no compiler, no Node, no uv, no pip; runs under any uid on a read-only root
 
 ARG PYTHON_IMAGE=python:3.13-slim-trixie@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b
@@ -63,6 +63,11 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=frontend /app/manuspectrum/media/build ./manuspectrum/media/build
 COPY --from=frontend /app/webpack/webpack-stats.json ./webpack/webpack-stats.json
 COPY --from=frontend /app/node_modules ./node_modules
+# Fails the build when the Explorer (Plotly) reaches an initial webpack file.
+# Run here, not in `frontend`: the Node image has no Python. The stats file
+# names its assets by absolute path, /app/manuspectrum/media/build/...
+COPY --chmod=0755 deploy/docker/check-explorer-bundle.sh /tmp/check-explorer-bundle.sh
+RUN /tmp/check-explorer-bundle.sh webpack/webpack-stats.json
 RUN set -a && . /tmp/placeholder.env && set +a \
     && python manage.py collectstatic --noinput \
     && python -m compileall -q manuspectrum \

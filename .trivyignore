@@ -3,6 +3,7 @@
 # new decision. Only findings this project cannot fix belong here: a version
 # pinned by Arches or served by Arches' npm dependencies. A finding the
 # project can fix (a floor in pyproject.toml, a bump in package.json) is fixed.
+# A false-positive secret is accepted the same way, by its rule id (e.g. generic-api-key).
 
 # urllib3 1.26.20: arches 8.1.x requires urllib3<2 (elasticsearch 8 client).
 # Revisit when arches lifts the cap.
