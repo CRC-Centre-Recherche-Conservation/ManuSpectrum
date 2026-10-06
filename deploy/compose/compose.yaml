@@ -198,8 +198,9 @@ services:
     secrets: [pg_password, elastic_password, django_secret_key, email_password, admin_password]
     tmpfs:
       - "/tmp:rw,noexec,nosuid,nodev,size=1g"
-      # Prometheus multiprocess files of the gunicorn workers (/metrics sums them).
-      - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m"
+      # Prometheus multiprocess files of the gunicorn workers (/metrics sums them). mode=1777: a tmpfs is recreated root-owned 0755 when
+      # Docker restarts, and the application uid must still write to it.
+      - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m,mode=1777"
     volumes:
       - *media
       - static:/srv/static
@@ -228,7 +229,7 @@ services:
       MS_CELERY_METRICS_PORT: "9808"
     tmpfs:
       - "/tmp:rw,noexec,nosuid,nodev,size=512m"
-      - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m"
+      - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m,mode=1777"
     volumes:
       - *media
     stop_grace_period: 60s

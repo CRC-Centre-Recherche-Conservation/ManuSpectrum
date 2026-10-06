@@ -132,7 +132,9 @@ class ComposeStackTests(unittest.TestCase):
                     )
                     self.assertTrue(
                         any(
-                            t.startswith("/run/prometheus:") and "noexec" in t
+                            t.startswith("/run/prometheus:")
+                            and "noexec" in t
+                            and "mode=1777" in t
                             for t in services[name]["tmpfs"]
                         )
                     )

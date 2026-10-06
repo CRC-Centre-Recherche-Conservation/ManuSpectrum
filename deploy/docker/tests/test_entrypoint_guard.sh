@@ -78,6 +78,7 @@ SH
 cp "$TMP/pg_isready" "$TMP/curl"
 cat >"$TMP/python" <<'SH'
 #!/bin/sh
+echo "PYENV $* multiproc=${PROMETHEUS_MULTIPROC_DIR:-unset}" >>"${PYLOG:-/dev/null}"
 if [ "$2" = set_admin_password ]; then exit "${ADMIN_STATUS:-0}"; fi
 cat >/dev/null
 if [ "$2" = database ]; then exit 0; fi
@@ -124,6 +125,7 @@ printf '#!/bin/sh\nexit 0\n' >"$TMP/publish-static"
 cat >"$TMP/gunicorn" <<'SH'
 #!/bin/sh
 echo "STUB $(basename "$0") files=$(find "$PROMETHEUS_MULTIPROC_DIR" -mindepth 1 | wc -l | tr -d ' ')"
+echo "SERVER $(basename "$0") multiproc=${PROMETHEUS_MULTIPROC_DIR:-unset}" >>"${PYLOG:-/dev/null}"
 SH
 cp "$TMP/gunicorn" "$TMP/celery"
 chmod +x "$TMP/publish-static" "$TMP/gunicorn" "$TMP/celery"
@@ -140,6 +142,26 @@ out="$(PROMETHEUS_MULTIPROC_DIR="$metrics" PATH="$TMP:$PATH" PGHOST=h PGPORT=1 P
   ESHOST=e ESPORT=1 bash "$ENTRYPOINT" worker 2>&1)" || true
 grep -q 'STUB celery files=0' <<<"$out"
 assert "worker: the metrics directory is emptied before celery" $?
+
+# Pre-start Python processes never see the directory; the server does.
+: >"$TMP/pylog"
+PYLOG="$TMP/pylog" PROMETHEUS_MULTIPROC_DIR="$metrics" run_web 0 0 >/dev/null || true
+PYLOG="$TMP/pylog" PROMETHEUS_MULTIPROC_DIR="$metrics" PATH="$TMP:$PATH" PGHOST=h PGPORT=1 PGUSERNAME=u \
+  ESHOST=e ESPORT=1 bash "$ENTRYPOINT" worker >/dev/null 2>&1 || true
+[ "$(grep -c '^PYENV' "$TMP/pylog")" -ge 4 ] && ! grep '^PYENV' "$TMP/pylog" | grep -qv 'multiproc=unset'
+assert "web: every pre-start python call runs without PROMETHEUS_MULTIPROC_DIR" $?
+servers="$(grep -c "^SERVER .* multiproc=$metrics\$" "$TMP/pylog")"
+[ "$servers" -eq 2 ] && ok=0 || ok=1
+assert "web and worker: the server exec keeps PROMETHEUS_MULTIPROC_DIR" "$ok"
+
+# Files the wipe cannot remove do not stop the start.
+mkdir -p "$TMP/locked/sub"; touch "$TMP/locked/sub/f"; chmod 555 "$TMP/locked/sub"
+if [ "$(id -u)" -ne 0 ]; then
+  out="$(PROMETHEUS_MULTIPROC_DIR="$TMP/locked" run_web 0 0)" || true
+  grep -q 'STUB gunicorn' <<<"$out" && grep -q 'could not be removed; continuing' <<<"$out"
+  assert "web: a file the wipe cannot remove is logged, not fatal" $?
+fi
+chmod 755 "$TMP/locked/sub"
 
 out="$(PROMETHEUS_MULTIPROC_DIR="$TMP/missing" run_web 0 0)" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'PROMETHEUS_MULTIPROC_DIR .* is not a writable directory' <<<"$out" \
