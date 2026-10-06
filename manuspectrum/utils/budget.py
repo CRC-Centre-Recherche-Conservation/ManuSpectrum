@@ -11,6 +11,8 @@ import contextvars
 import time
 from contextlib import contextmanager
 
+from manuspectrum.observability import metrics
+
 
 class BudgetSpent(Exception):
     """The budget's deadline passed before this call could start."""
@@ -58,11 +60,13 @@ def capped_timeout(timeout, left, connect_cap=None):
 
 
 @contextmanager
-def upstream_budget(seconds):
+def upstream_budget(seconds, kind="read"):
     """Open a budget of *seconds* for every outbound call made in this block.
 
     Yields the :class:`UpstreamBudget`. Budgets do not nest: an inner block
-    replaces the outer one for its duration.
+    replaces the outer one for its duration. A block that ends with its
+    deadline passed is counted in ``manuspectrum_upstream_budget_spent_total``
+    under *kind* (``read`` for an interactive view, ``write`` for a create).
     """
     budget = UpstreamBudget(seconds)
     token = budget_var.set(budget)
@@ -70,3 +74,7 @@ def upstream_budget(seconds):
         yield budget
     finally:
         budget_var.reset(token)
+        if budget.spent():
+            metrics.UPSTREAM_BUDGET_SPENT.labels(
+                kind=metrics.bounded(kind, metrics.BUDGET_KINDS)
+            ).inc()

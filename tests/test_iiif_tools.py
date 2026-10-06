@@ -573,7 +573,9 @@ class ImageServiceDimensionsTests(SimpleTestCase):
         result = CanvasIIIF.get_image_service_dimensions(P1_SERVICE)
 
         self.assertEqual(result, (4096, 2731))
-        mock_get.assert_called_once_with(f"{P1_SERVICE}/info.json")
+        mock_get.assert_called_once_with(
+            f"{P1_SERVICE}/info.json", purpose="image_info"
+        )
 
     @patch(
         "manuspectrum.utils.iiif_tools.safe_fetch",

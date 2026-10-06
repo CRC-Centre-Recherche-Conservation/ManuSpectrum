@@ -23,7 +23,13 @@ file raises ValueError otherwise. The Compose `stop_grace_period` of `web`
 No preload: Arches opens connections when it is imported, and `wsgi.py`
 closes the import-time connections in each worker. Forwarded headers are
 trusted from any address because the container publishes no port: only the
-Compose network (nginx, from PP-3) reaches it. Logs go to stdout/stderr.
+Compose network (nginx, from PP-3) reaches it.
+
+nginx writes the access log (rotated on the host, 30 days); gunicorn writes only
+its error log, to stderr. With `PROMETHEUS_MULTIPROC_DIR` set (Compose),
+`child_exit` archives a dead worker's metric files
+(`manuspectrum/observability/multiproc.py`) so the directory stays bounded; the
+entrypoint empties the directory before gunicorn starts.
 """
 
 import os
@@ -45,6 +51,34 @@ keepalive = 5
 max_requests = 1000
 max_requests_jitter = 100
 forwarded_allow_ips = os.environ.get("GUNICORN_FORWARDED_ALLOW_IPS", "*")
-accesslog = "-"
+accesslog = None
 errorlog = "-"
 loglevel = os.environ.get("GUNICORN_LOG_LEVEL", "info")
+
+
+def _multiproc():
+    """``manuspectrum/observability/multiproc.py`` loaded by path: importing the
+    ``manuspectrum`` package would build the Celery app in the arbiter."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "ms_multiproc",
+        os.path.join(chdir, "manuspectrum", "observability", "multiproc.py"),
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def child_exit(server, worker):
+    """Archive the metric files of the dead worker. Never raises: gunicorn calls this
+    from the arbiter's reaper, where an exception halts every worker."""
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        try:
+            _multiproc().archive_dead_process(worker.pid)
+        except Exception as error:
+            server.log.error(
+                "manuspectrum.observability.multiproc: metrics archive failed for pid %s: %s",
+                worker.pid,
+                type(error).__name__,
+            )

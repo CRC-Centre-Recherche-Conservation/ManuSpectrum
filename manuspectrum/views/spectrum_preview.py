@@ -63,6 +63,7 @@ from arches.app.models.models import File
 
 from manuspectrum.iiif.data import file_allowed
 from manuspectrum.models import RendererConfig
+from manuspectrum.observability import metrics
 from manuspectrum.utils.cache import etag_already_held, get_or_build
 from manuspectrum.utils.public_visibility import anonymous_user
 from manuspectrum.utils.spectrum_preview import build_preview, is_readable, read_series
@@ -279,7 +280,11 @@ class SpectrumPreviewView(View):
         path, resourceid, config_id, nodegroup_id, name = record
         reader = anonymous_user() if full else request.user
         if not file_allowed(resourceid, nodegroup_id, reader):
+            metrics.READ_REFUSALS.labels(surface="spectrum_preview").inc()
             return _not_found()
+        metrics.SPECTRUM_PREVIEWS.labels(
+            tier=metrics.tier_label(FULL if full else n)
+        ).inc()
 
         if full:
             payload = _full_series(path, renderer_config(config_id), name)

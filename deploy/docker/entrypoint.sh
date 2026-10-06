@@ -10,6 +10,8 @@
 #   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
 #                  packages -db / -o setup) only through `init`
 #   anything else  executed as given
+# web and worker empty PROMETHEUS_MULTIPROC_DIR before they start; every other
+# Python process the entrypoint runs has it unset.
 # Docker applies no depends_on order when it restarts containers after a host
 # reboot, so every command waits for what it needs itself (WAIT_SECONDS).
 set -euo pipefail
@@ -17,6 +19,24 @@ set -euo pipefail
 WAIT_SECONDS="${WAIT_SECONDS:-300}"
 
 log() { echo "entrypoint: $*" >&2; }
+
+# Empties PROMETHEUS_MULTIPROC_DIR, when set, right before the server starts: files of
+# earlier processes (migrate, the probes, a previous run) would be summed with the new
+# ones. A directory that is missing or not writable stops the start.
+reset_metrics_dir() {
+  local dir="${PROMETHEUS_MULTIPROC_DIR:-}"
+  [ -n "$dir" ] || return 0
+  if [ ! -d "$dir" ] || [ ! -w "$dir" ]; then
+    log "PROMETHEUS_MULTIPROC_DIR ($dir) is not a writable directory"
+    exit 1
+  fi
+  find "$dir" -mindepth 1 -delete \
+    || log "some files of $dir could not be removed; continuing"
+}
+
+# Every Python process that runs before the server is a one-off: it must not write
+# metric files into PROMETHEUS_MULTIPROC_DIR (observability/README.md).
+oneoff() { env -u PROMETHEUS_MULTIPROC_DIR "$@"; }
 
 wait_for() { # wait_for NAME COMMAND...
   local name="$1" deadline=$((SECONDS + WAIT_SECONDS)) output
@@ -48,7 +68,7 @@ elasticsearch_ready() {
 # `settings` (the Arches system settings resource instance is in PGDBNAME: a
 # database that setup_db did not finish lacks it).
 pg_probe() {
-  python - "$1" <<'PY'
+  oneoff python - "$1" <<'PY'
 import os
 import sys
 
@@ -158,7 +178,7 @@ case "$command" in
       fi
       exit 1
     fi
-    python manage.py set_admin_password --check-default && status=0 || status=$?
+    oneoff python manage.py set_admin_password --check-default && status=0 || status=$?
     if [ "$status" -ne 0 ]; then
       if [ "$status" -eq 3 ]; then
         log "the admin account still has Arches' default password: run make -C deploy admin-password"
@@ -168,13 +188,15 @@ case "$command" in
       exit 1
     fi
     # Migrations run without the timeouts web's requests carry.
-    PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 python manage.py migrate --noinput
+    PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 oneoff python manage.py migrate --noinput
     publish-static /app/static /srv/static
+    reset_metrics_dir
     exec gunicorn --config /app/gunicorn.conf.py
     ;;
   worker)
     wait_for PostgreSQL postgres_ready
     wait_for Elasticsearch elasticsearch_ready
+    reset_metrics_dir
     exec celery -A manuspectrum.celery worker \
       --loglevel="${CELERY_LOG_LEVEL:-INFO}" \
       --concurrency="${CELERY_CONCURRENCY:-2}" \
@@ -204,10 +226,10 @@ case "$command" in
       *) log "refusing: cannot tell whether database ${PGDBNAME} exists"; exit 1 ;;
     esac
     export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
-    python manage.py setup_db --force
+    oneoff python manage.py setup_db --force
     # setup_db creates the superuser admin with the publicly known password
     # "admin"; replace it before anything else can start.
-    if ! python manage.py set_admin_password; then
+    if ! oneoff python manage.py set_admin_password; then
       log "setup_db succeeded but the admin password could not be set: the account still has Arches' default password; fix ${ADMIN_PASSWORD_FILE:-ADMIN_PASSWORD_FILE}, then run: make -C deploy admin-password"
       exit 1
     fi
@@ -221,7 +243,7 @@ case "$command" in
     fi
     # Management commands (reindex, imports) run without those timeouts.
     export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
-    exec python manage.py "$@"
+    exec env -u PROMETHEUS_MULTIPROC_DIR python manage.py "$@"
     ;;
   *)
     exec "$@"

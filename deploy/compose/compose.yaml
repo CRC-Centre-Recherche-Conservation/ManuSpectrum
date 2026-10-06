@@ -194,8 +194,13 @@ services:
       PG_STATEMENT_TIMEOUT_MS: ${PG_STATEMENT_TIMEOUT_MS:-60000}
       PG_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${PG_IDLE_IN_TRANSACTION_TIMEOUT_MS:-60000}
       ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      PROMETHEUS_MULTIPROC_DIR: /run/prometheus
     secrets: [pg_password, elastic_password, django_secret_key, email_password, admin_password]
-    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=1g"]
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=1g"
+      # Prometheus multiprocess files of the gunicorn workers (/metrics sums them). mode=1777: a tmpfs is recreated root-owned 0755 when
+      # Docker restarts, and the application uid must still write to it.
+      - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m,mode=1777"
     volumes:
       - *media
       - static:/srv/static
@@ -217,14 +222,21 @@ services:
   worker:
     <<: *app
     command: ["worker"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=512m"]
+    environment:
+      <<: *app_environment
+      PROMETHEUS_MULTIPROC_DIR: /run/prometheus
+      # Served from the worker's main process, inside the Compose network only.
+      MS_CELERY_METRICS_PORT: "9808"
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=512m"
+      - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m,mode=1777"
     volumes:
       - *media
     stop_grace_period: 60s
     depends_on:
       web: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "celery -A manuspectrum.celery inspect ping --destination \"celery@$${HOSTNAME}\" --timeout 10 >/dev/null"]
+      test: ["CMD-SHELL", "env -u PROMETHEUS_MULTIPROC_DIR celery -A manuspectrum.celery inspect ping --destination \"celery@$${HOSTNAME}\" --timeout 10 >/dev/null"]
       interval: 60s
       timeout: 30s
       retries: 3

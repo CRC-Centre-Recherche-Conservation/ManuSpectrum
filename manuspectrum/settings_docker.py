@@ -7,8 +7,8 @@ A secret NAME is read from the file named by NAME_FILE when that variable is
 set (Compose secrets), else from NAME itself.
 
 What must never depend on the environment is fixed here: DEBUG, the cookie
-flags, the proxy header, the media and static roots, logging to the console
-only. settings_local.py is a development file: the image does not ship it and
+flags, the proxy header, the media and static roots, JSON logs on stdout (see
+observability/logging.py). settings_local.py is a development file: the image does not ship it and
 this module refuses to run when one was imported.
 
 Redis runs as two instances. The broker (Celery, IIIF sign-ins) never evicts;
@@ -22,11 +22,14 @@ import sys
 from django.core.exceptions import ImproperlyConfigured
 
 from .settings import *  # noqa: F401,F403
+from .observability.logging import FORMATS, build_logging
 from .settings import (
+    APP_VERSION,
     CACHES,
     DATABASES,
     ELASTICSEARCH_CONNECTION_OPTIONS,
     ELASTICSEARCH_PREFIX,
+    MIDDLEWARE,
     EXTRA_EMAIL_CONTEXT,
     UPLOADED_FILES_DIR,
 )
@@ -183,6 +186,13 @@ CACHES["iiif_auth"]["LOCATION"] = f"{REDIS_BROKER_URL}/3"
 CACHES["default"]["LOCATION"] = f"{REDIS_CACHE_URL}/0"
 CACHES["user_permission"]["LOCATION"] = f"{REDIS_CACHE_URL}/1"
 
+READYZ_ENABLED = True
+READYZ_REDIS_URLS = {
+    "redis-broker": f"{REDIS_BROKER_URL}/0",
+    "redis-cache": f"{REDIS_CACHE_URL}/0",
+}
+READYZ_CANTALOUPE = env_bool("READYZ_CANTALOUPE", True)
+
 CANTALOUPE_HTTP_ENDPOINT = "http://{}:{}/".format(
     get_env_variable("CANTALOUPE_HOST"), get_env_variable("CANTALOUPE_PORT")
 )
@@ -213,26 +223,23 @@ CORS_ALLOWED_ORIGINS = get_optional_env_variable("CORS_ALLOWED_ORIGINS", "").spl
 
 BIBLISSIMA_ASYNC_INDEXING = env_bool("BIBLISSIMA_ASYNC_INDEXING", True)
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "console": {"format": "%(asctime)s %(name)-12s %(levelname)-8s %(message)s"},
-    },
-    "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "console"},
-    },
-    "root": {"handlers": ["console"], "level": "WARNING"},
-    "loggers": {
-        # Django's default configuration sends `django` to mail_admins; this
-        # entry replaces it so no error is e-mailed from a request thread.
-        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "arches": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "django.request": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "manuspectrum": {"handlers": ["console"], "level": "INFO", "propagate": False},
-    },
-}
+# JSON on stdout; MS_LOG_FORMAT=text for a human at a terminal.
+MS_LOG_FORMAT = get_optional_env_variable("MS_LOG_FORMAT", "json").strip().lower()
+if MS_LOG_FORMAT not in FORMATS:
+    raise ImproperlyConfigured(
+        f"MS_LOG_FORMAT must be json or text, not {MS_LOG_FORMAT!r}"
+    )
+LOGGING = build_logging(
+    MS_LOG_FORMAT,
+    environment=get_optional_env_variable("DEPLOY_ENVIRONMENT", "development"),
+    version=get_optional_env_variable("MS_VERSION") or str(APP_VERSION),
+)
+# The worker keeps LOGGING: Celery leaves a root logger that already has handlers alone.
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
+
+METRICS_ENABLED = True
+MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
+    *MIDDLEWARE,
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
+]

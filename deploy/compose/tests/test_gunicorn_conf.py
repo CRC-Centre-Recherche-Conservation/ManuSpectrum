@@ -10,7 +10,11 @@ CONF = Path(__file__).resolve().parents[2] / "docker" / "gunicorn.conf.py"
 
 
 def load(**env):
-    clean = {k: v for k, v in os.environ.items() if not k.startswith("GUNICORN_")}
+    clean = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("GUNICORN_") and k != "PROMETHEUS_MULTIPROC_DIR"
+    }
     clean.update(env)
     with mock.patch.dict(os.environ, clean, clear=True):
         return runpy.run_path(str(CONF))
@@ -56,6 +60,54 @@ class GunicornConfTests(unittest.TestCase):
 
     def test_no_preload(self):
         self.assertFalse(load().get("preload_app", False))
+
+    def test_no_access_log(self):
+        self.assertIsNone(load()["accesslog"])
+
+    def test_child_exit_archives_the_worker_files_when_metrics_are_multiprocess(self):
+        archive = mock.Mock()
+        conf = load(PROMETHEUS_MULTIPROC_DIR="/run/prometheus")
+        fake = mock.Mock(archive_dead_process=archive)
+        with (
+            mock.patch.dict(
+                conf["child_exit"].__globals__, {"_multiproc": lambda: fake}
+            ),
+            mock.patch.dict(
+                os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/run/prometheus"}
+            ),
+        ):
+            conf["child_exit"](None, mock.Mock(pid=4242))
+        archive.assert_called_once_with(4242)
+
+    def test_a_failing_archive_never_reaches_the_arbiter(self):
+        conf = load(PROMETHEUS_MULTIPROC_DIR="/run/prometheus")
+        fake = mock.Mock(archive_dead_process=mock.Mock(side_effect=RuntimeError("x")))
+        server = mock.Mock()
+        with (
+            mock.patch.dict(
+                conf["child_exit"].__globals__, {"_multiproc": lambda: fake}
+            ),
+            mock.patch.dict(
+                os.environ, {"PROMETHEUS_MULTIPROC_DIR": "/run/prometheus"}
+            ),
+        ):
+            conf["child_exit"](server, mock.Mock(pid=4242))
+        message = server.log.error.call_args.args
+        self.assertIn("4242", message[0] % message[1:])
+        self.assertIn("RuntimeError", message[0] % message[1:])
+
+    def test_the_archive_module_is_where_the_hook_loads_it_from(self):
+        conf = load()
+        path = Path(conf["chdir"]) / "manuspectrum" / "observability" / "multiproc.py"
+        self.assertEqual(path.name, "multiproc.py")
+        repo = CONF.parents[2] / "manuspectrum" / "observability" / "multiproc.py"
+        self.assertTrue(repo.is_file())
+        self.assertNotIn("django", repo.read_text().split('"""')[2])
+
+    def test_child_exit_does_nothing_without_the_directory(self):
+        conf = load()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            conf["child_exit"](None, mock.Mock(pid=1))
 
 
 if __name__ == "__main__":

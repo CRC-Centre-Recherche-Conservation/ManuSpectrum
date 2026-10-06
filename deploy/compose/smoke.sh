@@ -8,8 +8,12 @@
 #   static-swap  a stale `current` static release is replaced on web restart
 #   init-guard   `init`, `manage setup_db` and the `packages` forms that call it
 #                are refused on a live database
+#   observability /readyz, /metrics, JSON logs and the request id, the worker's
+#                metrics after one prune task (CI and rehearsal)
+#   readiness    /readyz answers 503 while Elasticsearch is stopped, 200 after
+#                (CI and rehearsal only)
 #   clean        remove the markers
-# mark, static-swap, init-guard and clean are for CI and rehearsal only.
+# mark, static-swap, init-guard, readiness and clean are for CI and rehearsal only.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -108,7 +112,7 @@ cmd_check() {
 
   # The script is read from stdin and prints a verdict, never a hash or a password.
   expect "admin keeps Arches' default password" no \
-    "$(in_web python manage.py shell -c "
+    "$(in_web env -u PROMETHEUS_MULTIPROC_DIR python manage.py shell -c "
 from django.contrib.auth import get_user_model
 user = get_user_model().objects.filter(username='admin').first()
 print('yes' if user is not None and user.check_password('admin') else 'no')
@@ -176,6 +180,73 @@ cmd_init_guard() {
   done
 }
 
+json_field() { # json_field PYTHON-EXPRESSION-ON-r  (reads JSON on stdin)
+  python3 -c 'import json, sys; r = json.load(sys.stdin); print(eval(sys.argv[1]))' "$1"
+}
+
+cmd_observability() {
+  local body rid header line
+  expect "/readyz" 200 "$(http_code /readyz)"
+  body="$(in_web curl -s -H 'Host: web' http://127.0.0.1:8000/readyz)"
+  expect "/readyz components" "cantaloupe,celery-broker,elasticsearch,postgres,redis-broker,redis-cache" \
+    "$(json_field '",".join(sorted(r["components"]))' <<<"$body")"
+  expect "/readyz all up" "True" \
+    "$(json_field 'all(c["status"] == "up" for c in r["components"].values())' <<<"$body")"
+  expect "/readyz relayed by a proxy" 404 \
+    "$(in_web curl -s -o /dev/null -w '%{http_code}' -H 'Host: web' -H 'X-Forwarded-For: 203.0.113.9' http://127.0.0.1:8000/readyz)"
+  expect "/en/metrics" 404 "$(http_code /en/metrics)"
+
+  for _ in 1 2 3; do http_code /healthz >/dev/null; done
+  body="$(in_web curl -fsS -H 'Host: web' http://127.0.0.1:8000/metrics)"
+  grep -q '^django_http_requests_total_by_view_transport_method_total{.*view="healthz"' <<<"$body" \
+    || fail "/metrics has no request count for healthz"
+  grep -q '^manuspectrum_inflight_requests ' <<<"$body" || fail "/metrics has no manuspectrum_ metric"
+  ok "/metrics exposes django and manuspectrum metrics"
+
+  rid="smoke-$(date +%s)-$RANDOM"
+  header="$(in_web curl -s -o /dev/null -D - -H 'Host: web' -H "X-Request-ID: $rid" \
+    http://127.0.0.1:8000/en/smoke-no-such-page/ | tr -d '\r' | sed -n 's/^[Xx]-[Rr]equest-[Ii][Dd]: //p')"
+  expect "X-Request-ID echoed" "$rid" "$header"
+  sleep 2
+  line="$(compose logs --no-log-prefix --since 5m web | grep -F "$rid" | grep '^{' | tail -n 1)"
+  [ -n "$line" ] || fail "no JSON log line carries request id $rid"
+  expect "JSON log fields" "manuspectrum||$rid|WARNING|True" \
+    "$(json_field '"|".join([r["service"], r["trace_id"], r["request_id"], r["level"], str(r["timestamp"].endswith("+00:00") and bool(r["message"]))])' <<<"$line")"
+  if compose logs --no-log-prefix --since 5m web | grep -q '"GET /healthz HTTP'; then
+    fail "gunicorn still writes an access log"
+  fi
+  ok "no gunicorn access log"
+
+  rid="smoke-task-$(date +%s)-$RANDOM"
+  in_web env -u PROMETHEUS_MULTIPROC_DIR python manage.py shell -c "
+from manuspectrum.observability.context import bound_request_id
+from manuspectrum.tasks import prune_data_changes_task
+with bound_request_id('$rid'):
+    result = prune_data_changes_task.delay()
+print(result.get(timeout=120))
+" >/dev/null || fail "the prune task did not run"
+  body="$(compose exec -T worker curl -fsS http://127.0.0.1:9808/metrics)"
+  grep -Eq '^manuspectrum_celery_tasks_total\{[^}]*task="manuspectrum.prune_data_changes"' <<<"$body" \
+    || fail "worker metrics have no prune task"
+  grep -q '^manuspectrum_data_change_rows ' <<<"$body" || fail "worker metrics have no ledger size"
+  ok "worker metrics on :9808"
+  sleep 2
+  compose logs --no-log-prefix --since 5m worker | grep '^{' | grep -F "$rid" | grep -q 'succeeded' \
+    || fail "the worker's success line does not carry the publisher's request id"
+  ok "request id followed the task into the worker"
+}
+
+cmd_readiness() {
+  compose stop elasticsearch >/dev/null
+  expect "/readyz with Elasticsearch stopped" 503 "$(http_code /readyz)"
+  expect "/readyz names Elasticsearch" "True" \
+    "$(in_web curl -s -H 'Host: web' http://127.0.0.1:8000/readyz \
+      | json_field 'r["components"]["elasticsearch"]["status"] in ("down", "timeout")')"
+  compose start elasticsearch >/dev/null
+  cmd_wait
+  expect "/readyz after Elasticsearch restarted" 200 "$(http_code /readyz)"
+}
+
 cmd_clean() {
   psql_app "DROP TABLE IF EXISTS ms_smoke_marker" >/dev/null
   es DELETE /ms-smoke-marker >/dev/null || true
@@ -192,6 +263,8 @@ case "${1:-}" in
   survived) cmd_survived ;;
   static-swap) cmd_static_swap ;;
   init-guard) cmd_init_guard ;;
+  observability) cmd_observability ;;
+  readiness) cmd_readiness ;;
   clean) cmd_clean ;;
-  *) sed -n '2,12p' "$0" >&2; exit 2 ;;
+  *) sed -n '2,16p' "$0" >&2; exit 2 ;;
 esac

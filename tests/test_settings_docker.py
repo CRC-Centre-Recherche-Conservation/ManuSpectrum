@@ -42,6 +42,11 @@ BASE_ENV = {
 }
 
 NAMES = [
+    "METRICS_ENABLED",
+    "READYZ_ENABLED",
+    "READYZ_REDIS_URLS",
+    "READYZ_CANTALOUPE",
+    "MIDDLEWARE",
     "DEBUG",
     "SECRET_KEY",
     "SESSION_COOKIE_SECURE",
@@ -78,6 +83,7 @@ NAMES = [
     "MIDDLEWARE",
     "LOGGING",
     "BIBLISSIMA_ASYNC_INDEXING",
+    "CELERY_WORKER_HIJACK_ROOT_LOGGER",
 ]
 
 PROBE = textwrap.dedent("""
@@ -124,6 +130,36 @@ class SettingsDockerTests(SimpleTestCase):
         values = load(env, **options)
         self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
         self.assertIn(fragment, values["message"])
+
+    def test_readyz_is_on_and_probes_both_redis_instances(self):
+        values = load(BASE_ENV)
+        self.assertIs(values["READYZ_ENABLED"], True)
+        self.assertIs(values["READYZ_CANTALOUPE"], True)
+        self.assertEqual(
+            values["READYZ_REDIS_URLS"],
+            {
+                "redis-broker": "redis://redis-broker:6379/0",
+                "redis-cache": "redis://redis-cache:6379/0",
+            },
+        )
+        self.assertIs(
+            load(dict(BASE_ENV, READYZ_CANTALOUPE="false"))["READYZ_CANTALOUPE"],
+            False,
+        )
+
+    def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
+        values = load(BASE_ENV)
+        self.assertIs(values["METRICS_ENABLED"], True)
+        middleware = values["MIDDLEWARE"]
+        self.assertEqual(
+            middleware[0], "django_prometheus.middleware.PrometheusBeforeMiddleware"
+        )
+        self.assertEqual(
+            middleware[1], "manuspectrum.observability.middleware.RequestIdMiddleware"
+        )
+        self.assertEqual(
+            middleware[-1], "django_prometheus.middleware.PrometheusAfterMiddleware"
+        )
 
     def test_missing_required_variable_is_refused(self):
         for name in (
@@ -326,12 +362,33 @@ class SettingsDockerTests(SimpleTestCase):
         values = load(dict(BASE_ENV, EMAIL_HOST_PASSWORD_FILE=empty.name))
         self.assertEqual(values["EMAIL_HOST_PASSWORD"], "")
 
-    def test_logging_writes_to_the_console_only(self):
-        handlers = load(BASE_ENV)["LOGGING"]["handlers"]
-        self.assertTrue(handlers)
-        for handler in handlers.values():
-            self.assertEqual(handler["class"], "logging.StreamHandler")
+    def test_logging_writes_json_to_the_console_and_counts_errors(self):
+        logging_config = load(BASE_ENV)["LOGGING"]
+        self.assertEqual(
+            logging_config["formatters"]["main"]["()"],
+            "manuspectrum.observability.logging.JsonFormatter",
+        )
+        classes = {h["class"] for h in logging_config["handlers"].values()}
+        self.assertEqual(
+            classes,
+            {
+                "logging.StreamHandler",
+                "manuspectrum.observability.logging.LogRecordCounter",
+            },
+        )
+        for handler in logging_config["handlers"].values():
             self.assertNotIn("filename", handler)
+
+    def test_log_format_text_and_unknown_format(self):
+        logging_config = load(dict(BASE_ENV, MS_LOG_FORMAT="text"))["LOGGING"]
+        self.assertEqual(
+            logging_config["formatters"]["main"]["()"],
+            "manuspectrum.observability.logging.TextFormatter",
+        )
+        self.assertRefused(dict(BASE_ENV, MS_LOG_FORMAT="xml"), "MS_LOG_FORMAT")
+
+    def test_celery_keeps_the_django_logging(self):
+        self.assertIs(load(BASE_ENV)["CELERY_WORKER_HIJACK_ROOT_LOGGER"], False)
 
 
 LOGGER_PROBE = textwrap.dedent("""
@@ -378,6 +435,48 @@ class LoggingTests(SimpleTestCase):
             with self.subTest(logger=name):
                 self.assertTrue(handlers)
                 self.assertNotIn("AdminEmailHandler", handlers)
+
+
+JSON_PROBE = textwrap.dedent("""
+    import logging, sys
+    sys.modules["manuspectrum.settings_local"] = None
+    sys.modules["settings_local"] = None
+    import django
+    django.setup()
+    logging.getLogger("manuspectrum.probe").warning(
+        "mail %s with password=%s", "ops@manuspectrum.test", "hunter2")
+    """)
+
+
+class JsonLoggingTests(SimpleTestCase):
+    def test_a_record_is_one_redacted_json_line(self):
+        with tempfile.TemporaryDirectory() as home:
+            result = subprocess.run(
+                [sys.executable, "-c", JSON_PROBE],
+                env={
+                    "PATH": os.environ["PATH"],
+                    "HOME": home,
+                    "PYTHONPATH": str(ROOT),
+                    "DJANGO_SETTINGS_MODULE": "manuspectrum.settings_docker",
+                    **BASE_ENV,
+                    "DEPLOY_ENVIRONMENT": "rehearsal",
+                    "MS_VERSION": "abc1234",
+                },
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr[-3000:])
+        lines = [
+            line for line in result.stdout.splitlines() if "manuspectrum.probe" in line
+        ]
+        self.assertEqual(len(lines), 1, result.stdout[-3000:])
+        record = json.loads(lines[0])
+        self.assertEqual(record["message"], "mail [email] with password=[redacted]")
+        self.assertEqual(
+            (record["environment"], record["version"]), ("rehearsal", "abc1234")
+        )
 
 
 COMPOSE_DIR = ROOT / "deploy" / "compose"
@@ -436,7 +535,7 @@ class ComposeEnvironmentTests(SimpleTestCase):
             environment = {
                 key: str(value).replace("/run/secrets", str(secrets))
                 for key, value in environment.items()
-                if value is not None
+                if value is not None and key != "PROMETHEUS_MULTIPROC_DIR"
             }
             values = load(environment)
         self.assertNotIn("error", values, values)

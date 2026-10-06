@@ -80,6 +80,8 @@ NOT_SHAPING = {
     "views/explorer/scopes.py": "the analysis payload's manifest link, never memoised",
     "views/explorer/manifest.py": "the analysis payload's manifest link, never memoised",
     "iiif/manifest.py": "the Explorer manifest, built per request, never memoised",
+    "observability/metrics.py": "metric counters: they record a build, never shape it",
+    "observability/context.py": "the request id carried to a rebuild thread's log lines",
 }
 
 
@@ -94,7 +96,12 @@ def manuspectrum_imports(relative):
             found.update(f"views/explorer/{a.name}.py" for a in node.names)
         elif node.module.startswith("manuspectrum."):
             path = node.module.removeprefix("manuspectrum.").replace(".", "/")
-            found.add(f"{path}.py")
+            submodules = {
+                f"{path}/{a.name}.py"
+                for a in node.names
+                if Path(settings.APP_ROOT, path, f"{a.name}.py").is_file()
+            }
+            found.update(submodules or {f"{path}.py"})
     return found
 
 

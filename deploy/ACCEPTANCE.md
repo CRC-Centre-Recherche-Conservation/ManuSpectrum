@@ -423,9 +423,80 @@ research data: never in Git, never in a public place.
 
 ---
 
+## Step 3 — Observability foundations (`manuspectrum/observability/`)
+
+What the image now carries: JSON logs on stdout with a `request_id`, `/readyz`, `/metrics`
+(web) and `:9808/metrics` (worker), application metrics (`manuspectrum/observability/README.md`).
+Nothing here is collected yet: Prometheus, Alertmanager and Grafana come with PP-6. Uses the
+`dc` alias of step 2; the stack is up (step 2.4).
+
+**What CI already proves.** The `deploy-lint` image job runs `smoke.sh observability` and
+`smoke.sh readiness` on a runner. The rehearsal VM replays them on the production-shaped
+stack and adds what a runner cannot show: five gunicorn workers aggregated, a worker recycled.
+
+### 3.1 Probes
+
+- [ ] `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/readyz | python3 -m json.tool`
+  - Expected: `"status": "ready"`, six components `postgres`, `elasticsearch`,
+    `celery-broker`, `redis-broker`, `redis-cache`, `cantaloupe`, each `"status": "up"` with
+    `seconds` below 2.
+  - On failure: the component named `down` or `timeout` is the one to look at
+    (`dc ps`, `dc logs --tail 50 <service>`); `error` gives the exception class only, the
+    detail is in `dc logs web | grep readiness`.
+- [ ] *(CI too)* `deploy/compose/smoke.sh readiness`
+  - Expected: `ok: /readyz with Elasticsearch stopped`, `ok: /readyz names Elasticsearch`,
+    `ok: every service is healthy`, `ok: /readyz after Elasticsearch restarted`.
+  - On failure: if the 503 never comes, `/readyz` is not reading Elasticsearch (check
+    `READYZ_ENABLED` in the image); if the 200 never comes back, `dc logs elasticsearch`.
+- [ ] `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' -H 'X-Forwarded-For: 1.2.3.4' http://127.0.0.1:8000/metrics`
+  - Expected: `404` (a proxied request never reads the probes).
+  - On failure: `observability/views.relayed()` is bypassed; do not go on to PP-3.
+
+### 3.2 Metrics
+
+- [ ] *(CI too)* `deploy/compose/smoke.sh observability` → only `ok:` lines.
+  - On failure: the failing line names the piece (readyz, metrics, request id, JSON log,
+    access log, worker metrics, task propagation).
+- [ ] Five workers are summed: `for i in $(seq 50); do dc exec -T web curl -s -o /dev/null -H 'Host: web' http://127.0.0.1:8000/healthz; done; dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep 'view="healthz"' | grep requests_total_by_view`
+  - Expected: one line, value ≥ 50 (not five lines, not a value near 10).
+  - On failure: `PROMETHEUS_MULTIPROC_DIR` is not set in the web container
+    (`dc exec web env | grep PROMETHEUS`).
+- [ ] `dc exec web sh -c 'stat -f -c %T /run/prometheus; ls /run/prometheus | head'`
+  - Expected: `tmpfs`, then files `counter_<pid>.db`, `histogram_<pid>.db`, `gauge_livesum_<pid>.db`.
+  - On failure: the tmpfs is missing in `compose.yaml`.
+- [ ] Replaced workers leave no live gauge: `dc kill -s HUP web` (gunicorn replaces every
+  worker gracefully), wait 20 s, then
+  `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep '^manuspectrum_inflight_requests '`.
+  - Expected: `manuspectrum_inflight_requests 1.0` (the scrape itself), not more.
+  - On failure: `child_exit` is not called (`dc exec web grep -A3 child_exit /app/gunicorn.conf.py`).
+- [ ] Worker: `dc exec -T worker curl -s http://127.0.0.1:9808/metrics | grep -c '^manuspectrum_'`
+  - Expected: a number above 0. `dc port worker 9808` → nothing (not published).
+  - On failure: `dc exec worker env | grep -E 'MS_CELERY_METRICS_PORT|PROMETHEUS'`.
+
+### 3.3 Logs
+
+- [ ] `dc logs --no-log-prefix --since 10m web worker | grep '^{' | tail -n 3 | python3 -c 'import json,sys; [print(sorted(json.loads(l))) for l in sys.stdin]'`
+  - Expected: each list holds `environment`, `hostname`, `level`, `logger`, `message`,
+    `request_id`, `service`, `timestamp`, `trace_id`, `version`; `environment` is `rehearsal`.
+  - On failure: `MS_LOG_FORMAT` overridden in `.env`, or the image predates PP-5.
+- [ ] `dc logs --no-log-prefix --since 1h web worker | grep -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|msiiif1\.|password=[^[]' | wc -l`
+  after logging in once and using the Biblissima import once
+  - Expected: `0`.
+  - On failure: a logger writes personal data the redaction does not cover; record the
+    line (redacted by hand) and open an issue before production.
+- [ ] `dc logs --no-log-prefix --since 10m web | grep -c '"GET /'`
+  - Expected: `0` (gunicorn writes no access log; nginx will, PP-3).
+
+### 3.4 What cannot be tested in this step
+
+Prometheus scraping, alert rules, dashboards and the e-mail route (PP-6); the edge rules that
+deny `/metrics` and `/readyz` (PP-3).
+
+---
+
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): application observability, nginx and TLS,
+what to do on failure): nginx and TLS,
 secrets, backups, deployed observability, accounts, Ansible, delivery, then
 "Before production".
