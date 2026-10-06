@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
     label,
     layerOf,
+    layerMethod,
+    layerUnit,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
@@ -16,7 +18,7 @@ const ELEMENT_MAP = valueRef("http://example.org/element-map", "Element map");
 const COMPONENT = valueRef("http://example.org/pca", "Principal component");
 const TOTAL = valueRef("http://example.org/total", "Total signal");
 const PHOTO = valueRef("http://example.org/photo", "Photograph");
-const NM = valueRef("http://example.org/nm", "nm");
+const NM = layerUnit("Nanometre", "nm");
 
 function element(symbol: string): FileLayer["elements"][number] {
     return {
@@ -95,6 +97,41 @@ describe("layerTag", () => {
         expect(tag?.parts.band?.value).toBe(650);
     });
 
+    it("keys a band on the unit's symbol, never on its localized label", () => {
+        const band = { value: 650, lower: null, upper: null };
+        const english = layerTag(
+            tagged({
+                content: valueRef("c:hsi", "Band"),
+                band: { ...band, unit: layerUnit("Nanometre", "nm", "en") },
+            }),
+        );
+        const french = layerTag(
+            tagged({
+                content: valueRef("c:hsi", "Band"),
+                band: { ...band, unit: layerUnit("Nanomètre", "nm", "fr") },
+            }),
+        );
+        expect(english?.family).toBe("band:650:nm");
+        expect(french?.family).toBe(english?.family);
+        expect(english?.parts.unit).toBe("nm");
+    });
+
+    it("shows the label of a unit without a symbol and keys it on the unit's id", () => {
+        const tag = layerTag(
+            tagged({
+                content: valueRef("c:hsi", "Band"),
+                band: {
+                    value: 650,
+                    lower: null,
+                    upper: null,
+                    unit: layerUnit("Nanometre", null),
+                },
+            }),
+        );
+        expect(tag?.parts.unit).toBe("Nanometre");
+        expect(tag?.family).toBe("band:650:http://example.org/unit-nm");
+    });
+
     it("tags a band given by an interval", () => {
         const tag = layerTag(
             tagged({
@@ -120,7 +157,11 @@ describe("layerTag", () => {
             tagged({
                 content: COMPONENT,
                 processing: {
-                    method: valueRef("m:pca", "PCA"),
+                    method: layerMethod(
+                        "Principal component analysis",
+                        "PCA",
+                        "m:pca",
+                    ),
                     index: 3,
                     inputs: null,
                 },
@@ -128,6 +169,21 @@ describe("layerTag", () => {
         );
         expect(tag?.family).toBe("component:m:pca:3");
         expect(tag?.parts.index).toBe(3);
+        expect(tag?.parts.method).toBe("PCA");
+    });
+
+    it("falls back to the method's label when it has no symbol", () => {
+        const tag = layerTag(
+            tagged({
+                content: COMPONENT,
+                processing: {
+                    method: layerMethod("Deconvolution", null, "m:dec"),
+                    index: 1,
+                    inputs: null,
+                },
+            }),
+        );
+        expect(tag?.parts.method).toBe("Deconvolution");
     });
 
     it("marks an unknown method with a question mark", () => {
@@ -138,6 +194,7 @@ describe("layerTag", () => {
             }),
         );
         expect(tag?.family).toBe("component:?:2");
+        expect(tag?.parts.method).toBeNull();
     });
 
     it("gives a content alone a key and no family", () => {

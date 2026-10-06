@@ -113,7 +113,8 @@ function analysisOf(canvas: string, maps: readonly MapLine[]): string | null {
     );
 }
 
-function layerById(
+/** The layer a canvas id names and the map line it belongs to, null when the Selection holds none. */
+export function layerById(
     canvas: string,
     maps: readonly MapLine[],
 ): { layer: FileLayer; line: MapLine } | null {

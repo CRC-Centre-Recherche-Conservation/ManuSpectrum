@@ -15,9 +15,14 @@ import {
     analysisHit,
     imagingEntry,
     layerOf,
+    layerMethod,
+    layerUnit,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
-import { stubIiifLayer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import {
+    drawnExtent,
+    stubIiifLayer,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
 import {
     AN1,
     startLinkedSelection,
@@ -258,6 +263,157 @@ describe("the curtain", () => {
     });
 });
 
+describe("the scale of the two sides", () => {
+    const SMALLER = { w: 600, h: 1202 };
+    const LARGER = { w: 1529, h: 2405 };
+
+    function extentOf(side: number): { w: number; h: number } {
+        return drawnExtent(iiif.mock.results[side].value as L.Layer);
+    }
+
+    it("draws sides of different power-of-two buckets in the ratio of their pixels", async () => {
+        iiif = stubIiifLayer({
+            size: (url) => (url.includes("2-0") ? LARGER : SMALLER),
+        });
+        await mountCurtain();
+        expect(extentOf(1).w / extentOf(0).w).toBeCloseTo(
+            LARGER.w / SMALLER.w,
+            6,
+        );
+        expect(extentOf(1).h / extentOf(0).h).toBeCloseTo(
+            LARGER.h / SMALLER.h,
+            6,
+        );
+    });
+
+    it("keeps the ratio whichever side is the larger", async () => {
+        iiif = stubIiifLayer({
+            size: (url) => (url.includes("1-0") ? LARGER : SMALLER),
+        });
+        await mountCurtain();
+        expect(extentOf(0).w / extentOf(1).w).toBeCloseTo(
+            LARGER.w / SMALLER.w,
+            6,
+        );
+    });
+
+    it("keeps the ratio when a side is changed for one of another bucket", async () => {
+        iiif = stubIiifLayer({
+            size: (url) => (url.includes("2-1") ? LARGER : SMALLER),
+        });
+        const view = await mountCurtain();
+        await view.setProps({ canvasB: "c2-1" });
+        await flushPromises();
+        expect(extentOf(2).w / extentOf(0).w).toBeCloseTo(
+            LARGER.w / SMALLER.w,
+            6,
+        );
+    });
+});
+
+describe("a side without an image service", () => {
+    class FakeImage {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        naturalWidth = 600;
+        naturalHeight = 1000;
+        set src(_value: string) {
+            queueMicrotask(() => this.onload?.());
+        }
+    }
+
+    function bareLines(): MapLine[] {
+        const bare = line(2);
+        bare.file.layers[0].image = {
+            service: null,
+            url: "https://img.example/b.png",
+            width: 0,
+            height: 0,
+        };
+        return [line(1), bare];
+    }
+
+    beforeEach(() => {
+        vi.stubGlobal("Image", FakeImage);
+    });
+
+    it("lays the image as an overlay in the side's pane, which the divider clips", async () => {
+        const view = await mountCurtain({ maps: bareLines() });
+        expect(iiif).toHaveBeenCalledTimes(1);
+        const overlay = control().setRightLayers.mock.calls.at(-1)?.[0] as
+            | (L.ImageOverlay & { getContainer: () => HTMLElement })
+            | undefined;
+        expect(overlay).toBeInstanceOf(L.ImageOverlay);
+        const pane = leafletMap(view).getPane(
+            overlay?.options.pane as string,
+        ) as HTMLElement;
+        expect(overlay?.getContainer()).toBe(pane);
+        expect(pane).not.toBe(paneOf(view, 0));
+        expect(view.emitted("size-read")).toContainEqual([
+            { canvas: "c2-0", size: { w: 600, h: 1000 } },
+        ]);
+        expect(view.text()).not.toContain("Map unavailable");
+    });
+
+    it("draws it in the ratio of its pixels to those of the other side", async () => {
+        await mountCurtain({ maps: bareLines() });
+        const overlay = control().setRightLayers.mock.calls.at(-1)?.[0];
+        const bare = drawnExtent(overlay as L.Layer);
+        const served = drawnExtent(iiif.mock.results[0].value as L.Layer);
+        expect(bare.w / served.w).toBeCloseTo(600 / SIZE.w, 6);
+        expect(bare.h / served.h).toBeCloseTo(1000 / SIZE.h, 6);
+    });
+
+    it("says a side without service or URL is unavailable", async () => {
+        const maps = bareLines();
+        maps[1].file.layers[0].image = {
+            service: null,
+            url: null,
+            width: 0,
+            height: 0,
+        };
+        const view = await mountCurtain({ maps });
+        expect(view.text()).toContain("Map unavailable (image server)");
+    });
+});
+
+describe("the tag text of the chips", () => {
+    function tagOf(overrides: Partial<FileLayer>): Promise<VueWrapper> {
+        return mountCurtain({ maps: [line(1, [overrides, {}]), line(2)] });
+    }
+
+    it("writes a component with its method, else as a component, and a lone bound as a limit", async () => {
+        const pca = await tagOf({
+            content: valueRef("http://example.org/c", "Component"),
+            processing: {
+                method: layerMethod(),
+                index: 3,
+                inputs: null,
+            },
+        });
+        expect(pca.find('.chip[data-pane="a"] .tag').text()).toBe("PCA 3");
+        pca.unmount();
+        const bare = await tagOf({
+            content: valueRef("http://example.org/c", "Component"),
+            processing: { method: null, index: 3, inputs: null },
+        });
+        expect(bare.find('.chip[data-pane="a"] .tag').text()).toBe(
+            "Component 3",
+        );
+        bare.unmount();
+        const limit = await tagOf({
+            content: valueRef("http://example.org/c", "Band"),
+            band: {
+                value: null,
+                lower: 400,
+                upper: null,
+                unit: layerUnit("Nanometre", "nm"),
+            },
+        });
+        expect(limit.find('.chip[data-pane="a"] .tag').text()).toBe("≥ 400 nm");
+    });
+});
+
 describe("the scale badge", () => {
     const note = {
         canvas: "c2-0",
@@ -288,6 +444,45 @@ describe("the scale badge", () => {
         expect(announce).toHaveBeenCalledWith(
             "Curtain: side B is not at the same scale as side A (600 × 1000 px against 2000 × 3000 px)",
         );
+    });
+
+    const SAID = "Curtain: side B is not at the same scale";
+
+    function said(announce: ReturnType<typeof vi.fn>): number {
+        return announce.mock.calls.filter(([text]) =>
+            String(text).startsWith(SAID),
+        ).length;
+    }
+
+    it("says it once while the sizes are the same, whatever else changes", async () => {
+        const announce = vi.fn();
+        const view = await mountCurtain({
+            scaleNote: note,
+            provide: { [ANNOUNCE_KEY as symbol]: announce },
+        });
+        expect(said(announce)).toBe(1);
+        await view.setProps({ scaleNote: note });
+        await view.setProps({ scaleNote: { ...note } });
+        await view.setProps({
+            filtersB: { ...NEUTRAL_FILTERS, brightness: 150 },
+            scaleNote: { ...note, size: { ...note.size } },
+        });
+        expect(said(announce)).toBe(1);
+        await view.setProps({ scaleNote: null });
+        await view.setProps({ scaleNote: { ...note } });
+        expect(said(announce)).toBe(2);
+    });
+
+    it("says it again when a size of the note changes", async () => {
+        const announce = vi.fn();
+        const view = await mountCurtain({
+            provide: { [ANNOUNCE_KEY as symbol]: announce },
+        });
+        await view.setProps({ scaleNote: note });
+        await view.setProps({
+            scaleNote: { ...note, size: { w: 500, h: 900 } },
+        });
+        expect(said(announce)).toBe(2);
     });
 });
 

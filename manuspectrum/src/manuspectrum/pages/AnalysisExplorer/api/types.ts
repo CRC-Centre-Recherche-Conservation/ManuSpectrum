@@ -245,17 +245,27 @@ export interface LayerElement {
     symbol: string | null;
 }
 
+/** The unit of a layer's band; `symbol` is the altLabel of its list item (`nm`), null when it has none. */
+export interface LayerUnit extends ValueRef {
+    symbol: string | null;
+}
+
+/** The processing method of a layer; `symbol` is the altLabel of its list item (`PCA`), null when it has none. */
+export interface LayerMethod extends ValueRef {
+    symbol: string | null;
+}
+
 /** The spectral band of a layer: a value, or its bounds, and the unit. */
 export interface LayerBand {
     value: number | null;
     lower: number | null;
     upper: number | null;
-    unit: ValueRef | null;
+    unit: LayerUnit | null;
 }
 
 /** How a layer was derived: the method, its component number and the inputs as stored. */
 export interface LayerProcessing {
-    method: ValueRef | null;
+    method: LayerMethod | null;
     index: number | null;
     inputs: string | null;
 }
@@ -590,6 +600,18 @@ export const SHAPE_KEYS = {
         keyof LayerElement,
         true
     >,
+    LayerUnit: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerUnit, true>,
+    LayerMethod: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerMethod, true>,
     LayerBand: {
         value: true,
         lower: true,

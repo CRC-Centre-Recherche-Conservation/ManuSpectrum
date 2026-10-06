@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-    computed,
-    inject,
-    onBeforeUnmount,
-    provide,
-    ref,
-    shallowRef,
-    watch,
-} from "vue";
+import { computed, inject, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import CurtainPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue";
@@ -18,7 +10,6 @@ import LayerStack from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
     ANNOUNCE_KEY,
-    LIGHT_TABLE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_FRAME_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -98,7 +89,8 @@ const DEFAULT_FRAME: TableFrame = {
  * the right in L and enlarged. The table keeps its layout in the browser
  * (`table-memory.ts`, `writeImaging`) after a pause and on closing, and
  * follows the Selection (`reconcile`). Zoom and pan of the panes of one
- * analysis (or of all, `linkAll`) are relayed here from the pane moved; the
+ * analysis (or of all, `linkAll`) are relayed here from the pane moved, and a
+ * relayed view is dropped when its pane changes canvas; the
  * sizes the panes are served at give the scale notes. The focus only
  * styles; « Follow the focus », off until the reader turns it on and never
  * stored, moves the panes onto the layer of an element newly pinned.
@@ -191,14 +183,6 @@ const linkTitle = computed(() =>
 );
 const persisted = computed(() => JSON.stringify(storedOf(state.value)));
 
-provide(LIGHT_TABLE_KEY, {
-    state,
-    maps: computed(() => props.maps),
-    byCanvas,
-    sizes,
-    place: (canvas, pane) => apply(place(state.value, canvas, pane)),
-});
-
 useWindowActions(() => [
     {
         id: "gallery",
@@ -225,6 +209,17 @@ watch(
     () => props.maps,
     (maps) => {
         state.value = reconcile(state.value, maps);
+    },
+);
+watch(
+    () => state.value.panes,
+    (now, before) => {
+        if (now.every((canvas, pane) => canvas === before[pane])) return;
+        const next = [...views.value];
+        now.forEach((canvas, pane) => {
+            if (canvas !== before[pane]) next[pane] = null;
+        });
+        views.value = next;
     },
 );
 watch(persisted, () => {

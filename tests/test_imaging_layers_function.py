@@ -88,12 +88,14 @@ class FunctionCase(base.RuleCase):
         self.addCleanup(validate.stop)
         self.resource = self.analyses["on_document"]
 
-    def save_manifest(self, *labels, user=None, tile_id=None, context=None):
+    def save_manifest(
+        self, *labels, user=None, tile_id=None, context=None, url=base.MANIFEST_URL
+    ):
         tile = Tile(
             tileid=tile_id or uuid.uuid4(),
             resourceinstance_id=self.resource.pk,
             nodegroup_id=self.nodegroup,
-            data={self.manifest_node: {"url": base.MANIFEST_URL}},
+            data={self.manifest_node: {"url": url}},
         )
         with mock.patch.object(
             rule, "manifest_json", return_value=base.manifest(*labels)
@@ -157,7 +159,7 @@ class SaveTests(FunctionCase):
         self.assertTrue(TileModel.objects.filter(pk=tile.pk).exists())
         self.assertEqual(self.children(tile).count(), 0)
 
-    def test_a_failing_write_leaves_neither_the_children_nor_the_manifest(self):
+    def test_a_failing_write_leaves_no_child_and_keeps_the_manifest(self):
         real = Tile.save
         calls = []
 
@@ -172,10 +174,49 @@ class SaveTests(FunctionCase):
 
         tile_id = uuid.uuid4()
         with mock.patch.object(Tile, "save", autospec=True, side_effect=flaky):
-            with self.assertRaises(RuntimeError):
+            with self.assertLogs(LOGGER, "WARNING") as logged:
                 self.save_manifest("Pb", "Cu", tile_id=tile_id)
-        self.assertFalse(TileModel.objects.filter(pk=tile_id).exists())
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(TileModel.objects.filter(pk=tile_id).exists())
         self.assertFalse(TileModel.objects.filter(parenttile_id=tile_id).exists())
+        self.assertIsNotNone(logged.records[0].exc_info)
+
+    def test_a_provisional_edit_of_an_existing_tile_proposes_nothing(self):
+        tile = self.save_manifest("Pb", user=self.reviewer)
+        self.assertEqual(self.children(tile).count(), 1)
+        self.save_manifest(
+            "Pb",
+            "Cu",
+            user=self.editor,
+            tile_id=tile.pk,
+            url=f"{base.MANIFEST_URL}-edited",
+        )
+        stored = TileModel.objects.get(pk=tile.pk)
+        self.assertIsNotNone(stored.provisionaledits)
+        self.assertEqual(stored.data[self.manifest_node], {"url": base.MANIFEST_URL})
+        self.assertEqual(self.children(tile).count(), 1)
+
+    def test_a_layer_deleted_on_purpose_stays_deleted_when_the_manifest_is_saved_again(
+        self,
+    ):
+        tile = self.save_manifest("Pb", "Cu", user=self.reviewer)
+        self.children(tile).first().delete()
+        self.save_manifest("Pb", "Cu", user=self.reviewer, tile_id=tile.pk)
+        self.assertEqual(self.children(tile).count(), 1)
+
+    def test_changing_the_manifest_url_proposes_for_the_new_canvases(self):
+        tile = self.save_manifest("Pb", user=self.reviewer)
+        self.save_manifest(
+            "Pb",
+            "Cu",
+            user=self.reviewer,
+            tile_id=tile.pk,
+            url=f"{base.MANIFEST_URL}-other",
+        )
+        canvases = [
+            child.data[self.layer_node("canvas")] for child in self.children(tile)
+        ]
+        self.assertEqual(sorted(canvases), [f"{base.CANVAS_BASE}{n}" for n in (0, 1)])
 
     def test_on_import_does_nothing(self):
         with self.assertRaises(NotImplementedError):

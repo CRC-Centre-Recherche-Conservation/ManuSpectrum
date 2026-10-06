@@ -12,12 +12,19 @@
         <p>
             <strong>{% trans "An existing layer is never modified." %}</strong>
             {% blocktrans %}Canvases whose label is not recognised are left
-            without a layer. Nothing is proposed for an edit awaiting review,
-            and a manifest that cannot be read is logged and skipped.{% endblocktrans %}
+            without a layer. Layers are proposed only when a manifest is first
+            saved or its URL changes, so a layer deleted afterwards stays
+            deleted. Nothing is proposed for an edit awaiting review, and a
+            failure is logged without blocking the save.{% endblocktrans %}
         </p>
         <p class="text-muted">
             {% blocktrans %}Layers of analyses recorded before this function
             existed are filled once by a maintenance script.{% endblocktrans %}
+        </p>
+        <p class="text-muted">
+            {% blocktrans %}A resource imported from Arches JSON with its layer
+            tiles may receive duplicate layers: the manifest tile is saved
+            before its layers, and the function cannot see them.{% endblocktrans %}
         </p>
     </div>
 

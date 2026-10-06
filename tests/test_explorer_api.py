@@ -1165,7 +1165,9 @@ class ItemsRouteTests(CorpusCase):
             imaging_layer_elements=lead,
             imaging_layer_emission_line=self.ref("https://example.org/l/la", "Lα"),
             imaging_layer_processing_method=self.ref(
-                "https://example.org/m/deconv", "Deconvolution / fitting"
+                "https://example.org/m/pca",
+                "Principal component analysis",
+                alt="PCA",
             ),
             imaging_layer_component_index=2,
             imaging_layer_processing_inputs="  a, b ",
@@ -1205,19 +1207,55 @@ class ItemsRouteTests(CorpusCase):
                 pb["processing"]["index"],
                 pb["processing"]["inputs"],
             ),
-            ("Deconvolution / fitting", 2, "a, b"),
+            ("Principal component analysis", 2, "a, b"),
         )
+        assert_shape(self, pb["processing"]["method"], "LayerMethod")
+        self.assertEqual(pb["processing"]["method"]["symbol"], "PCA")
         self.assertEqual(pb["note"], "A note")
         assert_shape(self, band["band"], "LayerBand")
         self.assertEqual(
             (band["band"]["value"], band["band"]["lower"], band["band"]["upper"]),
             (650, 640, 660),
         )
+        assert_shape(self, band["band"]["unit"], "LayerUnit")
         self.assertEqual(band["band"]["unit"]["label"]["value"], "Nanometre")
+        self.assertEqual(band["band"]["unit"]["symbol"], "nm")
         self.assertEqual(
             (band["elements"], band["emissionLine"], band["processing"], band["note"]),
             ([], None, None, None),
         )
+
+    def test_a_band_unit_without_alternative_label_has_no_symbol(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["650"],
+            imaging_layer_content=self.ref("https://example.org/c/band", "Band"),
+            imaging_layer_band_value=650,
+            imaging_layer_band_unit=self.ref("https://example.org/u/nm", "Nanometre"),
+        )
+
+        _, band = self.layer_files()
+
+        assert_shape(self, band["band"]["unit"], "LayerUnit")
+        self.assertEqual(band["band"]["unit"]["label"]["value"], "Nanometre")
+        self.assertIsNone(band["band"]["unit"]["symbol"])
+
+    def test_a_processing_method_without_alternative_label_has_no_symbol(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["pb"],
+            imaging_layer_content=self.ref("https://example.org/c/comp", "Component"),
+            imaging_layer_processing_method=self.ref(
+                "https://example.org/m/deconv", "Deconvolution / fitting"
+            ),
+            imaging_layer_component_index=1,
+        )
+
+        pb, _ = self.layer_files()
+
+        assert_shape(self, pb["processing"]["method"], "LayerMethod")
+        self.assertEqual(
+            pb["processing"]["method"]["label"]["value"], "Deconvolution / fitting"
+        )
+        self.assertIsNone(pb["processing"]["method"]["symbol"])
 
     def test_all_layers_unclassified_when_no_tile_exists(self):
         layers = self.layer_files()

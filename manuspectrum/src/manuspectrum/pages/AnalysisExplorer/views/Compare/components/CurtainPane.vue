@@ -21,19 +21,27 @@ import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
-import { layServed } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import {
+    createScaleGroup,
+    layImage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     ANNOUNCE_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
+import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
+import { layerById } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
 import { fitZoomOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 import { sameSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
 
-import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import type {
+    LaidImage,
+    ScaleGroup,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { PaneFilters as PaneFiltersValue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type {
     ScaleNote,
@@ -47,9 +55,8 @@ type Side = 0 | 1;
 interface SideState {
     /** The name of the side's map pane, once the map exists. */
     pane: string;
-    page: PageLayer | null;
+    page: LaidImage | null;
     size: ServedSize | null;
-    nativeZoom: number;
     generation: number;
 }
 
@@ -63,15 +70,20 @@ const SIDE_B: Side = 1;
 
 /**
  * The curtain of the light table: one Leaflet map (`CRS.Simple`) holding
- * two leaflet-iiif layers, side A on the left and side B on the right of
- * the divider of Arches' `L.control.sideBySide`. The two canvases may come
- * from any two analyses; each layer is laid by `layServed` in a pane of its
- * own, at the size its service serves and anchored at the origin, so each
- * side has its own CSS filter and is never stretched to the other. The
- * pane tells the size each side is served at (`size-read`); `scaleNote` is
- * the note of side B (the table computes it with `scaleNotes`) and shows
- * the badge on that side. The focus only sets `data-rel` on the chips:
- * nothing is laid or moved.
+ * two layers, side A on the left and side B on the right of the divider of
+ * Arches' `L.control.sideBySide`. The two canvases may come from any two
+ * analyses; each is laid by `layImage` in a pane of its own (so each side
+ * has its own CSS filter), anchored at the origin, as a leaflet-iiif layer
+ * at the size its image service serves, or, without a service, as an image
+ * overlay at the natural size of its URL; the layer answers `getContainer()`
+ * with its pane so the divider clips it. The two sides share one pixel
+ * scale (`createScaleGroup`): an image pixel is the same size on screen
+ * on both sides, so two canvases of different sizes are drawn at their
+ * different sizes, never stretched to each other. The pane tells the size
+ * each side is served at (`size-read`); `scaleNote` is the note of side B
+ * (the table computes it with `scaleNotes`) and shows the badge on that
+ * side, announced once per change of the sizes it names. The focus only sets
+ * `data-rel` on the chips: nothing is laid or moved.
  */
 const props = defineProps<{
     canvasA: string | null;
@@ -108,11 +120,11 @@ const filtersOpen = reactive<boolean[]>([false, false]);
 let map: L.Map | null = null;
 let curtain: L.SideBySide | null = null;
 let fitted: ServedSize | null = null;
+let scale: ScaleGroup | null = null;
 const sides: SideState[] = SIDES.map(() => ({
     pane: "",
     page: null,
     size: null,
-    nativeZoom: 0,
     generation: 0,
 }));
 
@@ -121,14 +133,14 @@ const filters = computed(() => [props.filtersA, props.filtersB]);
 const views = computed(() =>
     SIDES.map((side) => {
         const canvas = canvases.value[side];
-        const found = canvas ? foundOf(canvas) : null;
+        const found = canvas ? layerById(canvas, props.maps) : null;
         const parts = found ? layerTag(found.layer)?.parts : null;
         return {
             side,
             letter: LETTERS[side],
             canvas,
             label: found?.layer.label || canvas || "",
-            tag: parts ? tagText(parts) : "",
+            tag: parts ? tagText(parts, { $gettext, interpolate }) : "",
             analysis: found?.line.analysis.name ?? null,
             record: found ? analysisNode(found.line.analysis.id) : null,
             status: status.value[side],
@@ -155,10 +167,19 @@ watch(
     () => paintFilters(),
     { deep: true },
 );
+/** What the badge says, as one primitive: a note rebuilt with the same canvas and sizes is not news. */
+const noteKey = computed(() => {
+    const note = props.scaleNote;
+    return note
+        ? `${note.canvas}|${note.size.w}x${note.size.h}|${note.againstSize.w}x${note.againstSize.h}`
+        : null;
+});
+
 watch(
-    () => props.scaleNote,
-    (note) => {
-        if (!note) return;
+    noteKey,
+    (key) => {
+        const note = props.scaleNote;
+        if (!key || !note) return;
         announce(
             interpolate(
                 $gettext(
@@ -171,6 +192,7 @@ watch(
             ),
         );
     },
+    { immediate: true },
 );
 watch(
     () => resized?.value,
@@ -194,6 +216,7 @@ onMounted(() => {
             `curtain-${LETTERS[side].toLowerCase()}`,
         );
     }
+    scale = createScaleGroup(() => refit());
     curtain = L.control.sideBySide([], []).addTo(map);
     (curtain as L.SideBySide & { _range?: HTMLElement })._range?.setAttribute(
         "aria-label",
@@ -204,6 +227,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    scale = null;
     for (const side of sides) {
         side.generation += 1;
         side.page?.remove();
@@ -217,40 +241,6 @@ onBeforeUnmount(() => {
 
 function leafletMap(): L.Map | null {
     return map;
-}
-
-function foundOf(canvas: string): {
-    line: MapLine;
-    layer: MapLine["file"]["layers"][number];
-} | null {
-    for (const line of props.maps) {
-        const layer = line.file.layers.find((entry) => entry.id === canvas);
-        if (layer) return { line, layer };
-    }
-    return null;
-}
-
-/** The short text of a layer's tag: « Cu Lα », « 650 nm », « PC3 », « Photo ». */
-function tagText(
-    parts: NonNullable<ReturnType<typeof layerTag>>["parts"],
-): string {
-    if (parts.symbols.length) {
-        const symbols = parts.symbols.join("+");
-        return parts.line ? `${symbols} ${parts.line.value}` : symbols;
-    }
-    if (parts.band) {
-        const range =
-            parts.band.value !== null
-                ? String(Number(parts.band.value))
-                : `${parts.band.lower}–${parts.band.upper}`;
-        return parts.unit ? `${range} ${parts.unit}` : range;
-    }
-    if (parts.index !== null) {
-        return interpolate($gettext("PC%{index}"), {
-            index: String(parts.index),
-        });
-    }
-    return parts.contentLabel.value;
 }
 
 function paintFilters(): void {
@@ -269,32 +259,27 @@ function setLayer(side: Side, layer: L.Layer | null): void {
 function drawSide(side: Side): void {
     if (!map) return;
     const state = sides[side];
+    state.size = null;
     state.page?.remove();
     state.page = null;
-    state.size = null;
     state.generation += 1;
     setLayer(side, null);
     const canvas = canvases.value[side];
-    const layer = canvas ? foundOf(canvas)?.layer : null;
+    const layer = canvas ? layerById(canvas, props.maps)?.layer : null;
     if (!canvas || !layer) {
         status.value[side] = "empty";
         return;
     }
-    const service = layer.image.service;
-    if (!service) {
-        status.value[side] = "failed";
-        return;
-    }
     status.value[side] = "loading";
     const attempt = state.generation;
-    state.page = layServed(
+    state.page = layImage(
         map,
-        service,
+        layer.image,
         {
-            read: (size, zoom) => {
+            read: (size, _zoom, laidLayer) => {
                 if (attempt !== state.generation || !map) return;
                 state.size = size;
-                state.nativeZoom = zoom;
+                setLayer(side, laidLayer);
                 status.value[side] = "ready";
                 fitOnce();
                 emit("size-read", { canvas, size });
@@ -318,9 +303,8 @@ function drawSide(side: Side): void {
                 );
             },
         },
-        { pane: state.pane },
+        { pane: state.pane, scale: scale ?? undefined, curtain: true },
     );
-    setLayer(side, state.page.layer);
 }
 
 /** The side the view is fitted on: A, else B. */
@@ -340,15 +324,22 @@ function fitOnce(): void {
 function fit(): void {
     const state = reference();
     if (!map || !state?.size) return;
-    const target = { map, size: state.size, nativeZoom: state.nativeZoom };
-    const zoom = fitZoomOf(target);
+    const nativeZoom = scale?.zoom() ?? 0;
+    const zoom = fitZoomOf({ map, size: state.size, nativeZoom });
     if (zoom === null) return;
     map.setMinZoom(zoom - ZOOM_OUT_BELOW_FIT);
     map.setView(
-        map.unproject([state.size.w / 2, state.size.h / 2], state.nativeZoom),
+        map.unproject([state.size.w / 2, state.size.h / 2], nativeZoom),
         zoom,
         { animate: false },
     );
+}
+
+/** The common pixel scale moved (a layer joined or left): the picture is a different size, so it is fitted again. */
+function refit(): void {
+    if (!scale) return;
+    fitted = null;
+    fitOnce();
 }
 
 function zoom(direction: 1 | -1): void {
@@ -368,7 +359,7 @@ function dividerX(): number {
 
 function onDrop(event: DragEvent): void {
     const id = event.dataTransfer?.getData(LAYER_DRAG_TYPE) ?? "";
-    if (!id || !foundOf(id)) return;
+    if (!id || !layerById(id, props.maps)) return;
     const left = host.value?.getBoundingClientRect().left ?? 0;
     const side: Side = event.clientX - left < dividerX() ? 0 : SIDE_B;
     emit("place", { pane: side, canvas: id });

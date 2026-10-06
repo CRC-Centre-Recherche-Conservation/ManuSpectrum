@@ -5,7 +5,7 @@ import type {
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-/** What a tag is made of; the short text (« Cu Lα », « 650 nm ») is composed by the component. */
+/** What a tag is made of; `tagText` composes the short text (« Cu Lα », « 650 nm », « PCA 3 »). */
 export interface TagParts {
     symbols: string[];
     line: Label | null;
@@ -14,7 +14,10 @@ export interface TagParts {
         lower: number | null;
         upper: number | null;
     } | null;
+    /** The unit as shown: its symbol (« nm »), else its label. */
     unit: string | null;
+    /** The processing method as shown: its symbol (« PCA »), else its label; and the component's index. */
+    method: string | null;
     index: number | null;
     contentLabel: Label;
 }
@@ -35,20 +38,31 @@ function symbolOf(layer: FileLayer): string[] {
         .sort();
 }
 
-function bandKey(band: NonNullable<FileLayer["band"]>): string | null {
-    const unit = band.unit ? unitSymbol(band.unit) : "";
-    if (band.value !== null) return `band:${Number(band.value)}:${unit}`;
-    if (band.lower !== null && band.upper !== null) {
-        return `band:${Number(band.lower)}-${Number(band.upper)}:${unit}`;
-    }
-    return null;
+/** A band number read once: `650.0` and `650` are the same wavelength. */
+function normalised(value: number | null): number | null {
+    return value === null ? null : Number(value);
 }
 
-/** The unit's symbol: the server sends it as the label of the unit value (« nm »). */
-function unitSymbol(
-    unit: NonNullable<NonNullable<FileLayer["band"]>["unit"]>,
-): string {
-    return unit.label.value;
+type BandUnit = NonNullable<NonNullable<FileLayer["band"]>["unit"]>;
+
+/** The unit as shown: the symbol the server reads off the unit's alternative label (« nm »), else its label. */
+function unitSymbol(unit: BandUnit): string {
+    return unit.symbol ?? unit.label.value;
+}
+
+/** The unit in a family key: its symbol, never a localized word (the unit's id when it has no symbol). */
+function unitKey(unit: BandUnit | null): string {
+    return unit ? unit.symbol ?? unit.id : "";
+}
+
+function bandKey(band: NonNullable<FileLayer["band"]>): string | null {
+    const unit = unitKey(band.unit);
+    const { value, lower, upper } = band;
+    if (value !== null) return `band:${normalised(value)}:${unit}`;
+    if (lower !== null && upper !== null) {
+        return `band:${normalised(lower)}-${normalised(upper)}:${unit}`;
+    }
+    return null;
 }
 
 /**
@@ -66,12 +80,16 @@ export function layerTag(layer: FileLayer): LayerTag {
         line: layer.emissionLine?.label ?? null,
         band: layer.band
             ? {
-                  value: layer.band.value,
-                  lower: layer.band.lower,
-                  upper: layer.band.upper,
+                  value: normalised(layer.band.value),
+                  lower: normalised(layer.band.lower),
+                  upper: normalised(layer.band.upper),
               }
             : null,
         unit: layer.band?.unit ? unitSymbol(layer.band.unit) : null,
+        method: layer.processing?.method
+            ? layer.processing.method.symbol ??
+              layer.processing.method.label.value
+            : null,
         index: layer.processing?.index ?? null,
         contentLabel: content.label,
     };

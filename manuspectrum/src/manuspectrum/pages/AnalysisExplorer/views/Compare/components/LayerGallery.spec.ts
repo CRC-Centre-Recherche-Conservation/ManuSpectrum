@@ -9,6 +9,7 @@ import {
     analysisHit,
     imagingEntry,
     layerOf,
+    layerUnit,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { startLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
@@ -50,7 +51,7 @@ function band(value: number, label: string): Partial<FileLayer> {
             value,
             lower: null,
             upper: null,
-            unit: valueRef("http://example.org/nm", "nm"),
+            unit: layerUnit("Nanometre", "nm"),
         },
     };
 }

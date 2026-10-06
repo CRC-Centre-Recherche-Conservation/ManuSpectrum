@@ -12,6 +12,8 @@ import type {
     FileEntry,
     FileLayer,
     HomeResponse,
+    LayerMethod,
+    LayerUnit,
     ProductLink,
     SampleSummary,
     SearchResponse,
@@ -279,6 +281,28 @@ export function technique(
 
 export function valueRef(uri: string, text: string): ValueRef {
     return { id: uri, uri, label: label(text) };
+}
+
+/** A band unit as the server sends it: the item's label (« Nanometre ») and its symbol, the alternative label (« nm »). */
+export function layerUnit(
+    text = "Nanometre",
+    symbol: string | null = "nm",
+    lang = "en",
+): LayerUnit {
+    return {
+        ...valueRef("http://example.org/unit-nm", text),
+        label: { value: text, lang },
+        symbol,
+    };
+}
+
+/** A processing method as the server sends it: the item's label (« Principal component analysis ») and its symbol, the alternative label (« PCA »). */
+export function layerMethod(
+    text = "Principal component analysis",
+    symbol: string | null = "PCA",
+    uri = "http://example.org/pca",
+): LayerMethod {
+    return { ...valueRef(uri, text), symbol };
 }
 
 export function annotation(

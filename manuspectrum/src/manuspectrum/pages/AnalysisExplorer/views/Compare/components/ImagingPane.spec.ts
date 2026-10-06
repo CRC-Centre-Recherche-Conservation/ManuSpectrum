@@ -15,6 +15,8 @@ import {
     analysisHit,
     imagingEntry,
     layerOf,
+    layerMethod,
+    layerUnit,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { stubIiifLayer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
@@ -211,8 +213,14 @@ describe("the image", () => {
         expect(leafletMap(view).getZoom()).toBe(zoomed);
         await view.setProps({ canvas: "c1-2" });
         await flushPromises();
-        expect(leafletMap(view).getZoom()).toBeGreaterThan(zoomed - 1);
-        expect(leafletMap(view).getZoom()).not.toBe(zoomed);
+        const fresh = await mountPane({
+            maps: [line(1, [{}, {}, {}])],
+            canvas: "c1-2",
+        });
+        const fitted = leafletMap(fresh).getZoom();
+        expect(fitted).not.toBe(zoomed);
+        expect(leafletMap(view).getZoom()).toBe(fitted);
+        view.unmount();
     });
 
     it("tells that the map is unavailable when the info.json cannot be read, and tries again on request", async () => {
@@ -343,6 +351,50 @@ describe("the chip", () => {
             maps: [line(1, [cu("Cu Lα map")])],
         });
         expect(view.find(".tag").text()).toBe("Cu");
+    });
+
+    async function tagOf(overrides: Partial<FileLayer>): Promise<string> {
+        const view = await mountPane({ maps: [line(1, [overrides])] });
+        const text = view.find(".tag").text();
+        view.unmount();
+        return text;
+    }
+
+    it("writes a component with its method, else as a component", async () => {
+        const content = valueRef("http://example.org/c", "Component");
+        expect(
+            await tagOf({
+                content,
+                processing: {
+                    method: layerMethod(),
+                    index: 3,
+                    inputs: null,
+                },
+            }),
+        ).toBe("PCA 3");
+        expect(
+            await tagOf({
+                content,
+                processing: { method: null, index: 3, inputs: null },
+            }),
+        ).toBe("Component 3");
+    });
+
+    it("writes a band with its symbol, and a lone bound as a limit", async () => {
+        const content = valueRef("http://example.org/b", "Band");
+        const unit = layerUnit("Nanometre", "nm");
+        expect(
+            await tagOf({
+                content,
+                band: { value: 650, lower: null, upper: null, unit },
+            }),
+        ).toBe("650 nm");
+        expect(
+            await tagOf({
+                content,
+                band: { value: null, lower: null, upper: 700, unit },
+            }),
+        ).toBe("≤ 700 nm");
     });
 });
 

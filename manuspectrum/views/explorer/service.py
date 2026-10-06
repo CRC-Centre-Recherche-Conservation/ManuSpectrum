@@ -163,21 +163,52 @@ def _tile_order(row):
     return (sortorder is None, sortorder or 0, tileid)
 
 
+LAYER_KEYS = (
+    "layer_canvas",
+    "layer_label",
+    "layer_content",
+    "layer_elements",
+    "layer_line",
+    "layer_band_value",
+    "layer_band_lower",
+    "layer_band_upper",
+    "layer_band_unit",
+    "layer_method",
+    "layer_component_index",
+    "layer_inputs",
+    "layer_note",
+)
+_unresolved_optional_warned = False
+
+
 class Values:
     """Tile values of *resource_ids* for the roles *keys*, from readable nodegroups only.
 
     ``get`` flattens list values except references, whose list is one value;
     ``tiles`` keeps each tile's data for the roles read tile by tile
     (statements, material with its certainty), reduced to the nodes of the
-    roles asked for. A role whose node is not resolved logs a warning and
-    reads as empty.
+    roles asked for. A role whose node is not resolved reads as empty and logs
+    a warning; the layer roles are optional (a graph published before the
+    imaging layers lacks them), so all of them together warn once per process.
     """
 
     def __init__(self, resource_ids, keys, user):
         nodes = {key: role_node(*ROLES[key]) for key in keys}
+        optional = []
         for key, node in nodes.items():
-            if node is None:
+            if node is not None:
+                continue
+            if key in LAYER_KEYS:
+                optional.append(key)
+            else:
                 logger.warning("explorer: role %s.%s is not resolved", *ROLES[key])
+        global _unresolved_optional_warned
+        if optional and not _unresolved_optional_warned:
+            _unresolved_optional_warned = True
+            logger.warning(
+                "explorer: imaging layer roles are not resolved: %s",
+                ", ".join(".".join(ROLES[key]) for key in optional),
+            )
         self._nodes = {key: node for key, node in nodes.items() if node is not None}
         readable = readable_nodegroup_ids(user)
         by_group = defaultdict(list)
@@ -1891,21 +1922,6 @@ def document_payload(document_id, user, language, ticket=None):
     }
 
 
-LAYER_KEYS = (
-    "layer_canvas",
-    "layer_label",
-    "layer_content",
-    "layer_elements",
-    "layer_line",
-    "layer_band_value",
-    "layer_band_lower",
-    "layer_band_upper",
-    "layer_band_unit",
-    "layer_method",
-    "layer_component_index",
-    "layer_inputs",
-    "layer_note",
-)
 FILE_KEYS = ("files", "micro", "imaging", *LAYER_KEYS)
 
 
@@ -1958,14 +1974,22 @@ def layer_of(index, text, image, canvas_id="", fields=None, language="en"):
     """
     fields = fields or {}
     elements = fields.get("layer_elements")
+    unit = _only(value_refs(fields.get("layer_band_unit"), language))
+    method = _only(value_refs(fields.get("layer_method"), language))
     band = {
         "value": _number(fields.get("layer_band_value")),
         "lower": _number(fields.get("layer_band_lower")),
         "upper": _number(fields.get("layer_band_upper")),
-        "unit": _only(value_refs(fields.get("layer_band_unit"), language)),
+        "unit": (
+            {**unit, "symbol": acronym(fields.get("layer_band_unit"))} if unit else None
+        ),
     }
     processing = {
-        "method": _only(value_refs(fields.get("layer_method"), language)),
+        "method": (
+            {**method, "symbol": acronym(fields.get("layer_method"))}
+            if method
+            else None
+        ),
         "index": _number(fields.get("layer_component_index")),
         "inputs": _text(fields.get("layer_inputs")),
     }

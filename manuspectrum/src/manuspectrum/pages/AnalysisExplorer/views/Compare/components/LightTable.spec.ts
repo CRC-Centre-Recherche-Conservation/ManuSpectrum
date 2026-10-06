@@ -9,7 +9,6 @@ import LightTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import {
     ANNOUNCE_KEY,
-    LIGHT_TABLE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_ACTIONS_KEY,
     WINDOW_FRAME_KEY,
@@ -34,7 +33,6 @@ import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/p
 import type { VueWrapper } from "@vue/test-utils";
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { WindowAction } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
-import type { LightTableContext } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { StoredImaging } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type { TableFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
@@ -186,13 +184,20 @@ async function mountTable(
     return wrapper;
 }
 
-function storedLayout(view: VueWrapper): string {
-    const provided = (
-        view.vm.$ as unknown as {
-            provides: Record<symbol, LightTableContext>;
+/** The table's state, read off its setup state. */
+function tableState(view: VueWrapper): {
+    layout: string;
+    panes: (string | null)[];
+} {
+    return (
+        view.vm as unknown as {
+            state: { layout: string; panes: (string | null)[] };
         }
-    ).provides[LIGHT_TABLE_KEY as symbol];
-    return provided.state.value.layout;
+    ).state;
+}
+
+function storedLayout(view: VueWrapper): string {
+    return tableState(view).layout;
 }
 
 function panes(view: VueWrapper): VueWrapper[] {
@@ -386,9 +391,54 @@ describe("without layer tiles", () => {
             await flushPromises();
             expect(viewOf(panes(view)[1])).toEqual(VIEW);
         });
+
+        it("drops the view relayed to a pane when its canvas changes, so a stale view of another pane is not applied", async () => {
+            const view = await mountTable(PLAIN_ONE);
+            await click(view, '[data-layout="grid2"]');
+            const other = { ...VIEW, cx: 0.8, origin: "c1-1" };
+            panes(view)[0].vm.$emit("view-changed", VIEW);
+            panes(view)[1].vm.$emit("view-changed", other);
+            await flushPromises();
+            expect(viewOf(panes(view)[0])).toEqual(other);
+            expect(viewOf(panes(view)[1])).toEqual(VIEW);
+            panes(view)[1].vm.$emit("step", 1);
+            await flushPromises();
+            expect(paneLabels(view)[1]).toBe("L1.2");
+            expect(viewOf(panes(view)[1])).toBeNull();
+            expect(viewOf(panes(view)[0])).toEqual(other);
+        });
+
+        it("drops the view of a pane that is given a canvas of another analysis", async () => {
+            const view = await mountTable(PLAIN_TWO);
+            await click(view, '[data-action="link-all"]');
+            panes(view)[0].vm.$emit("view-changed", VIEW);
+            await flushPromises();
+            expect(viewOf(panes(view)[1])).toEqual(VIEW);
+            panes(view)[1].vm.$emit("place", "c1-2");
+            await flushPromises();
+            expect(paneLabels(view)[1]).toBe("L1.2");
+            expect(viewOf(panes(view)[1])).toBeNull();
+        });
     });
 
     describe("what it says about scales", () => {
+        it("does not say again that the curtain sides differ when only the filters change", async () => {
+            iiif = stubIiifLayer({
+                size: (url) => (url.includes("/2-0") ? SMALL : SIZE),
+            });
+            const view = await mountTable(PLAIN_TWO);
+            await click(view, '[data-layout="curtain"]');
+            const said = (): number =>
+                announced.filter((text) =>
+                    text.startsWith("Curtain: side B is not at the same scale"),
+                ).length;
+            expect(said()).toBe(1);
+            await click(view, '[data-action="filters"]');
+            await view.find('input[type="range"]').setValue(150);
+            await flushPromises();
+            expect(said()).toBe(1);
+        });
+
         it("notes the pane served at another size than the one it is linked to", async () => {
             iiif = stubIiifLayer({
                 size: (url) => (url.includes("/1-1/") ? SMALL : SIZE),
@@ -614,13 +664,8 @@ describe("the size of the window", () => {
     it("draws two panes instead of four in M and keeps the four in the state", async () => {
         const view = await mountTable(PLAIN_FIVE, { frame: M_FRAME });
         expect(panes(view)).toHaveLength(2);
-        const provided = (
-            view.vm.$ as unknown as {
-                provides: Record<symbol, LightTableContext>;
-            }
-        ).provides[LIGHT_TABLE_KEY as symbol];
-        expect(provided.state.value.layout).toBe("grid4");
-        expect(provided.state.value.panes).toEqual([
+        expect(tableState(view).layout).toBe("grid4");
+        expect(tableState(view).panes).toEqual([
             "c1-0",
             "c2-0",
             "c3-0",
@@ -766,22 +811,5 @@ describe("the focus", () => {
         const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY) ?? "";
         expect(raw).toContain("single");
         expect(raw).not.toContain("follow");
-    });
-});
-
-describe("what it provides", () => {
-    it("gives its parts the state, the canvases and the sizes read", async () => {
-        const view = await mountTable(PLAIN_TWO);
-        const provided = (
-            view.vm.$ as unknown as {
-                provides: Record<symbol, LightTableContext>;
-            }
-        ).provides[LIGHT_TABLE_KEY as symbol];
-        expect(provided.state.value.layout).toBe("grid2");
-        expect(provided.byCanvas.value.get("c2-1")?.layer.label).toBe("L2.1");
-        expect(provided.sizes.value.get("c1-0")).toEqual(SIZE);
-        provided.place("c1-2", 1);
-        await flushPromises();
-        expect(paneLabels(view)[1]).toBe("L1.2");
     });
 });

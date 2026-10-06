@@ -68,11 +68,6 @@ msgstr "Manifeste introuvable"
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
 
-#: functions/imaging_layers_proposal.py:66
-#, python-format
-msgid "Imaging layers not proposed for tile %(tile)s: %(error)s"
-msgstr "Couches d'imagerie non proposées pour la tuile %(tile)s : %(error)s"
-
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
 msgstr "Indéfini"
@@ -2799,13 +2794,18 @@ msgstr "Une couche existante n'est jamais modifiée."
 #: templates/views/components/functions/imaging-layers-proposal.htm:14
 msgid ""
 "Canvases whose label is not recognised are left\n"
-"            without a layer. Nothing is proposed for an edit awaiting "
-"review,\n"
-"            and a manifest that cannot be read is logged and skipped."
+"            without a layer. Layers are proposed only when a manifest is "
+"first\n"
+"            saved or its URL changes, so a layer deleted afterwards stays\n"
+"            deleted. Nothing is proposed for an edit awaiting review, and a\n"
+"            failure is logged without blocking the save."
 msgstr ""
-"Les canvas dont le libellé n'est pas reconnu restent sans couche. Rien "
-"n'est proposé pour une modification en attente de relecture, et un "
-"manifeste illisible est consigné dans le journal puis ignoré."
+"Les canvas dont le libellé n'est pas reconnu restent sans couche. Des "
+"couches ne sont proposées que lorsqu'un manifeste est enregistré pour la "
+"première fois ou que son URL change : une couche supprimée ensuite reste "
+"supprimée. Rien n'est proposé pour une modification en attente de "
+"relecture, et un échec est consigné dans le journal sans bloquer "
+"l'enregistrement."
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:19
 msgid ""
@@ -2814,6 +2814,16 @@ msgid ""
 msgstr ""
 "Les couches des analyses enregistrées avant cette fonction sont remplies "
 "une fois par un script de maintenance."
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:24
+msgid ""
+"A resource imported from Arches JSON with its layer\n"
+"            tiles may receive duplicate layers: the manifest tile is saved\n"
+"            before its layers, and the function cannot see them."
+msgstr ""
+"Une ressource importée depuis un JSON Arches avec ses couches peut "
+"recevoir des couches en double : la tuile du manifeste est enregistrée "
+"avant ses couches, et la fonction ne peut pas les voir."
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:26
 #: templates/views/components/functions/xy-technique-config.htm:26

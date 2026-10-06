@@ -20,14 +20,24 @@ import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
-import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
-import { layServed } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import {
+    overlayPane,
+    paneKey,
+    removeOverlayPane,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import {
+    createScaleGroup,
+    layImage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     ANNOUNCE_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
-import { canStack } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
+import {
+    canStack,
+    layerById,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
 import { fitZoomOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
@@ -42,8 +52,10 @@ import {
     tintFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/stack-tints.ts";
 
-import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import type {
+    LaidImage,
+    ScaleGroup,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type {
     PaneFilters as PaneFiltersValue,
     StackLayer,
@@ -58,10 +70,9 @@ import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compar
 type Status = "loading" | "ready" | "failed";
 
 interface Laid {
-    page: PageLayer | null;
+    page: LaidImage | null;
     pane: string;
     size: ServedSize | null;
-    nativeZoom: number;
     generation: number;
 }
 
@@ -75,18 +86,24 @@ const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**
  * The false-colour stack of the light table, for the layers of one
- * analysis: one Leaflet map (`CRS.Simple`) holding one leaflet-iiif layer
- * per layer of the stack, each laid by `layServed` in a pane of its own at
- * the size its service serves, anchored at the origin and never stretched
- * or fitted to another (`folio/laid-layers.ts` is not used). The panes
- * carry opacity, `mix-blend-mode: screen` (but the first layer shown), the
- * stack's CSS filter and the hue, an SVG `feColorMatrix` per hue
- * (`stack-panes.ts`, `stack-tints.ts`); the map is isolated so `screen`
- * blends the layers among themselves. The stack itself belongs to the
- * table: this component only emits what the reader does (`add`, `remove`,
- * `move`, `set-visible`, `set-opacity`, `set-tint`). `notes` are the
- * scale notes of the stack (`scaleNotes`), by canvas. The focus only sets
- * `data-rel` and CSS variables: nothing is laid or moved.
+ * analysis: one Leaflet map (`CRS.Simple`) holding one layer per layer of
+ * the stack, each laid by `layImage` in a pane of its own (named after a hash
+ * of the canvas id and taken off the map when the layer leaves the stack),
+ * anchored at the origin: a leaflet-iiif layer at the size its image service
+ * serves, or, without a service, an image overlay at the natural size of its
+ * URL (`folio/laid-layers.ts` is not used). The layers share one pixel scale
+ * (`createScaleGroup`): an image pixel is the same size on screen for every
+ * layer, so layers of different sizes keep their size relative to each other
+ * and none is stretched or fitted to another; the view is fitted on the first
+ * layer read, and again only when the common scale moves. The panes carry
+ * opacity, `mix-blend-mode: screen` (but the first layer shown), the stack's
+ * CSS filter and the hue, an SVG `feColorMatrix` per hue (`stack-panes.ts`,
+ * `stack-tints.ts`); the map is isolated so `screen` blends the layers among
+ * themselves. The stack itself belongs to the table: this component only
+ * emits what the reader does (`add`, `remove`, `move`, `set-visible`,
+ * `set-opacity`, `set-tint`). `notes` are the scale notes of the stack
+ * (`scaleNotes`), by canvas. The focus only sets `data-rel` and CSS
+ * variables: nothing is laid or moved.
  */
 const props = defineProps<{
     stack: { analysis: string | null; layers: readonly StackLayer[] };
@@ -126,6 +143,7 @@ const reducedMotion = ref(false);
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
 let fitted = false;
+let scale: ScaleGroup | null = null;
 let blinkTimer: number | null = null;
 let motionQuery: MediaQueryList | null = null;
 const laid = new Map<string, Laid>();
@@ -135,7 +153,7 @@ const record = computed(() =>
 );
 const rows = computed(() =>
     props.stack.layers.map((layer, rank) => {
-        const found = fileLayerOf(layer.canvas);
+        const found = layerById(layer.canvas, props.maps)?.layer ?? null;
         const tint = tintFor(layer, rank, found);
         return {
             layer,
@@ -200,10 +218,12 @@ onMounted(() => {
     });
     map.getContainer().style.setProperty("isolation", "isolate");
     map.setView([0, 0], 0);
+    scale = createScaleGroup(() => refit());
     sync();
 });
 
 onBeforeUnmount(() => {
+    scale = null;
     stopBlink();
     motionQuery?.removeEventListener?.("change", onMotionChange);
     for (const entry of laid.values()) {
@@ -219,14 +239,6 @@ function leafletMap(): L.Map | null {
     return map;
 }
 
-function fileLayerOf(canvas: string): FileLayer | null {
-    for (const line of props.maps) {
-        const layer = line.file.layers.find((entry) => entry.id === canvas);
-        if (layer) return layer;
-    }
-    return null;
-}
-
 function onMotionChange(event: MediaQueryListEvent): void {
     reducedMotion.value = event.matches;
     if (event.matches) stopBlink();
@@ -240,6 +252,7 @@ function sync(): void {
         if (wanted.has(canvas)) continue;
         entry.generation += 1;
         entry.page?.remove();
+        removeOverlayPane(map, entry.pane);
         laid.delete(canvas);
         delete statuses[canvas];
     }
@@ -256,29 +269,26 @@ function sync(): void {
 
 function lay(canvas: string): void {
     if (!map) return;
-    const found = fileLayerOf(canvas);
+    const found = layerById(canvas, props.maps)?.layer;
     const entry: Laid = {
         page: null,
-        pane: overlayPane(map, `stack-${canvas}`),
+        pane: overlayPane(map, `stack-${paneKey(canvas)}`),
         size: null,
-        nativeZoom: 0,
         generation: 0,
     };
     laid.set(canvas, entry);
-    const service = found?.image.service;
-    if (!found || !service) {
+    if (!found) {
         statuses[canvas] = "failed";
         return;
     }
     statuses[canvas] = "loading";
-    entry.page = layServed(
+    entry.page = layImage(
         map,
-        service,
+        found.image,
         {
-            read: (size, zoom) => {
+            read: (size) => {
                 if (laid.get(canvas) !== entry || !map) return;
                 entry.size = size;
-                entry.nativeZoom = zoom;
                 statuses[canvas] = "ready";
                 if (!fitted) fitOn(entry);
                 emit("size-read", { canvas, size });
@@ -293,26 +303,33 @@ function lay(canvas: string): void {
                 statuses[canvas] = "failed";
             },
         },
-        { pane: entry.pane },
+        { pane: entry.pane, scale: scale ?? undefined },
     );
 }
 
-/** Fits the first layer read, centred; later layers keep the reader's view. */
+/** Fits the layer given, centred, at the common pixel scale; later layers keep the reader's view. */
 function fitOn(entry: Laid): void {
     if (!map || !entry.size) return;
-    const zoom = fitZoomOf({
-        map,
-        size: entry.size,
-        nativeZoom: entry.nativeZoom,
-    });
+    const nativeZoom = scale?.zoom() ?? 0;
+    const zoom = fitZoomOf({ map, size: entry.size, nativeZoom });
     if (zoom === null) return;
     fitted = true;
     map.setMinZoom(zoom - ZOOM_OUT_BELOW_FIT);
     map.setView(
-        map.unproject([entry.size.w / 2, entry.size.h / 2], entry.nativeZoom),
+        map.unproject([entry.size.w / 2, entry.size.h / 2], nativeZoom),
         zoom,
         { animate: false },
     );
+}
+
+/** The common pixel scale moved (a layer joined or left): the picture is a different size, so it is fitted again. */
+function refit(): void {
+    if (!scale) return;
+    const first = props.stack.layers.find(
+        (layer) => layer.on && laid.get(layer.canvas)?.size,
+    );
+    const entry = first ? laid.get(first.canvas) : null;
+    if (entry) fitOn(entry);
 }
 
 function tintFilterId(tint: Tint): string {
@@ -355,7 +372,7 @@ function onFit(): void {
 
 function onDrop(event: DragEvent): void {
     const canvas = event.dataTransfer?.getData(LAYER_DRAG_TYPE) ?? "";
-    const found = canvas ? fileLayerOf(canvas) : null;
+    const found = canvas ? layerById(canvas, props.maps)?.layer : null;
     if (!found) return;
     if (props.stack.layers.some((layer) => layer.canvas === canvas)) return;
     if (!canStack(props, canvas, props.maps)) {

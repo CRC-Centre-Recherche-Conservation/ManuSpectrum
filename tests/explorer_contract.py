@@ -28,14 +28,20 @@ IMAGE_REF = {
 }
 
 LAYER_ELEMENT = {"value": "ValueRef", "symbol": (str, type(None))}
+LAYER_UNIT = {
+    "id": str,
+    "uri": str,
+    "label": "Label",
+    "symbol": (str, type(None)),
+}
 LAYER_BAND = {
     "value": (int, float, type(None)),
     "lower": (int, float, type(None)),
     "upper": (int, float, type(None)),
-    "unit": ("ValueRef", None),
+    "unit": ("LayerUnit", None),
 }
 LAYER_PROCESSING = {
-    "method": ("ValueRef", None),
+    "method": ("LayerMethod", None),
     "index": (int, float, type(None)),
     "inputs": (str, type(None)),
 }
@@ -61,6 +67,13 @@ SHAPES = {
     "FileLayer": FILE_LAYER,
     "LayerElement": LAYER_ELEMENT,
     "LayerBand": LAYER_BAND,
+    "LayerUnit": LAYER_UNIT,
+    "LayerMethod": {
+        "id": str,
+        "uri": str,
+        "label": "Label",
+        "symbol": (str, type(None)),
+    },
     "LayerProcessing": LAYER_PROCESSING,
     "NamedRef": NAMED_REF,
     "Citation": CITATION,

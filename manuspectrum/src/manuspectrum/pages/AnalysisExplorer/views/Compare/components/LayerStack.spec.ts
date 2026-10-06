@@ -18,6 +18,10 @@ import {
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
+    drawnExtent,
+    maxNativeZoomOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import {
     AN1,
     startLinkedSelection,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
@@ -49,7 +53,9 @@ const BLINK_MS = 700;
 
 type Fake = L.LayerGroup & {
     _imageSizes: { x: number; y: number }[];
-    options: { pane?: string };
+    maxNativeZoom: number;
+    _served: { w: number; h: number };
+    options: { pane?: string; zoomOffset?: number; maxNativeZoom?: number };
     setBounds: ReturnType<typeof vi.fn>;
     _fitBounds: ReturnType<typeof vi.fn>;
 };
@@ -122,10 +128,18 @@ beforeEach(() => {
     factory = vi.fn((infoUrl: string, options: { pane?: string }) => {
         const served = sizes(infoUrl);
         const layer = Object.assign(L.layerGroup(), {
-            options,
+            options: served
+                ? { ...options, maxNativeZoom: maxNativeZoomOf(served) }
+                : options,
             setBounds: vi.fn(),
             _fitBounds: vi.fn(),
-            ...(served ? { _imageSizes: [{ x: served.w, y: served.h }] } : {}),
+            ...(served
+                ? {
+                      _imageSizes: [{ x: served.w, y: served.h }],
+                      maxNativeZoom: maxNativeZoomOf(served),
+                      _served: served,
+                  }
+                : {}),
         }) as unknown as Fake;
         fakes.push(layer);
         return layer;
@@ -557,6 +571,162 @@ describe("the blink", () => {
         }));
         const view = await mountStack();
         expect(view.find('[data-action="blink"]').exists()).toBe(false);
+    });
+});
+
+describe("the scale of the layers in one map", () => {
+    const SMALLER = { w: 600, h: 1202 };
+    const LARGER = { w: 1529, h: 2405 };
+
+    function expectPixelRatio(first: Fake, second: Fake): void {
+        const a = drawnExtent(first);
+        const b = drawnExtent(second);
+        expect(b.w / a.w).toBeCloseTo(second._served.w / first._served.w, 6);
+        expect(b.h / a.h).toBeCloseTo(second._served.h / first._served.h, 6);
+    }
+
+    it("draws layers of different power-of-two buckets in the ratio of their pixels", async () => {
+        sizes = (url) => (url.includes("1-1") ? LARGER : SMALLER);
+        await mountStack();
+        expect([fakes[0].maxNativeZoom, fakes[1].maxNativeZoom]).toEqual([
+            3, 4,
+        ]);
+        expectPixelRatio(fakes[0], fakes[1]);
+    });
+
+    it("keeps the ratio whichever of the two is laid first", async () => {
+        sizes = (url) => (url.includes("1-0") ? LARGER : SMALLER);
+        await mountStack();
+        expectPixelRatio(fakes[0], fakes[1]);
+    });
+
+    it("keeps the ratio when a smaller layer is added to the stack later", async () => {
+        sizes = (url) => (url.includes("1-1") ? SMALLER : LARGER);
+        const view = await mountStack({ layers: [stacked("c1-0")] });
+        await view.setProps({
+            stack: {
+                analysis: analysisHit(1).id,
+                layers: [stacked("c1-0"), stacked("c1-1")],
+            },
+        });
+        await flushPromises();
+        expectPixelRatio(fakes[1], fakes[0]);
+    });
+});
+
+describe("the layers without an image service", () => {
+    class FakeImage {
+        static sizes: Record<string, { w: number; h: number }> = {};
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        naturalWidth = 0;
+        naturalHeight = 0;
+        set src(value: string) {
+            const size = FakeImage.sizes[value];
+            if (!size) {
+                queueMicrotask(() => this.onerror?.());
+                return;
+            }
+            this.naturalWidth = size.w;
+            this.naturalHeight = size.h;
+            queueMicrotask(() => this.onload?.());
+        }
+    }
+
+    function bareLine(): MapLine {
+        const base = line(1, [{}, {}]);
+        base.file.layers[0].image = {
+            service: null,
+            url: "https://img.example/a.png",
+            width: 0,
+            height: 0,
+        };
+        return base;
+    }
+
+    beforeEach(() => {
+        FakeImage.sizes = { "https://img.example/a.png": SMALL };
+        vi.stubGlobal("Image", FakeImage);
+    });
+
+    it("lays a layer given by URL as an image overlay at its natural size, in its own pane", async () => {
+        const view = await mountStack({ maps: [bareLine()] });
+        const map = leafletMap(view);
+        const overlays: L.ImageOverlay[] = [];
+        map.eachLayer((layer) => {
+            if (layer instanceof L.ImageOverlay) overlays.push(layer);
+        });
+        expect(overlays).toHaveLength(1);
+        expect(overlays[0].options.pane).toMatch(/^folio-overlay-stack-/);
+        expect(view.emitted("size-read")).toContainEqual([
+            { canvas: "c1-0", size: SMALL },
+        ]);
+        expect(view.find(".layers li").text()).not.toContain("unavailable");
+    });
+
+    it("draws it in the ratio of its pixels to those of a layer served by a service", async () => {
+        const view = await mountStack({ maps: [bareLine()] });
+        const map = leafletMap(view);
+        let overlay: L.ImageOverlay | null = null;
+        map.eachLayer((layer) => {
+            if (layer instanceof L.ImageOverlay) overlay = layer;
+        });
+        const bare = drawnExtent(overlay as unknown as L.ImageOverlay);
+        const served = drawnExtent(fakes[0]);
+        expect(bare.w / served.w).toBeCloseTo(SMALL.w / SIZE.w, 6);
+        expect(bare.h / served.h).toBeCloseTo(SMALL.h / SIZE.h, 6);
+    });
+
+    it("says a layer without service or URL is unavailable", async () => {
+        const maps = [bareLine()];
+        maps[0].file.layers[0].image = {
+            service: null,
+            url: null,
+            width: 0,
+            height: 0,
+        };
+        const view = await mountStack({ maps });
+        expect(view.findAll(".layers li")[0].text()).toContain(
+            "Map unavailable",
+        );
+    });
+});
+
+describe("the panes of the layers", () => {
+    function twinLine(): MapLine {
+        const base = line(1, [{}, {}]);
+        base.file.layers[0].id = "https://x/c_1";
+        base.file.layers[1].id = "https://x/c-1";
+        return base;
+    }
+
+    it("gives two canvas ids that differ only by a punctuation character two panes", async () => {
+        const view = await mountStack({
+            maps: [twinLine()],
+            layers: [stacked("https://x/c_1"), stacked("https://x/c-1")],
+        });
+        expect(fakes[0].options.pane).not.toBe(fakes[1].options.pane);
+        expect(paneOf(view, 0)).not.toBe(paneOf(view, 1));
+        expect(paneOf(view, 0)).toBeTruthy();
+        expect(paneOf(view, 1)).toBeTruthy();
+    });
+
+    it("takes the pane of a layer off the map when the layer leaves the stack", async () => {
+        const view = await mountStack({
+            maps: [twinLine()],
+            layers: [stacked("https://x/c_1"), stacked("https://x/c-1")],
+        });
+        const gone = fakes[1].options.pane as string;
+        const kept = fakes[0].options.pane as string;
+        await view.setProps({
+            stack: {
+                analysis: analysisHit(1).id,
+                layers: [stacked("https://x/c_1")],
+            },
+        });
+        await flushPromises();
+        expect(leafletMap(view).getPane(gone)).toBeUndefined();
+        expect(leafletMap(view).getPane(kept)).toBeDefined();
     });
 });
 

@@ -18,15 +18,18 @@ import PaneFilters from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import ScaleBadge from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
-import { layerImageChain } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
-import { layServed } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import { layImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     ANNOUNCE_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
+import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
-import { pairsOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
+import {
+    layerById,
+    pairsOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
 import {
@@ -36,8 +39,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 import { sameSize } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
 
-import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import type { LaidImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { PaneFilters as PaneFiltersValue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type {
     NormalisedView,
@@ -60,11 +62,11 @@ const ZOOM_SNAP = 0.25;
 /**
  * One pane of the light table: a Leaflet map (`CRS.Simple`) showing one
  * imaging canvas at the size its image service serves, anchored at the
- * origin and never stretched. The page is laid by `layServed`
- * (`folio/page-layer.ts`, which reads the info.json); an image given by URL
- * is read through `layerImageChain`. Moves of the reader are emitted as a
- * normalised view (`pane-sync.ts`) and a `view` of another pane is followed;
- * the pane tells the size it is served at (`size-read`) so the table can
+ * origin and never stretched. The image is laid by `layImage`
+ * (`folio/page-layer.ts`): through its IIIF service, whose info.json gives
+ * the size, else through its URL (`layerImageChain`) at its natural size.
+ * Moves of the reader are emitted as a normalised view (`pane-sync.ts`) and a
+ * `view` of another pane is followed; the pane tells the size it is served at (`size-read`) so the table can
  * say when two panes are not at the same scale. The focus only sets
  * `data-rel` and CSS variables on the pane: nothing is laid or moved.
  */
@@ -102,22 +104,15 @@ const status = ref<Status>("empty");
 const filtersOpen = ref(false);
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
-let page: PageLayer | null = null;
-let overlay: L.ImageOverlay | null = null;
+let page: LaidImage | null = null;
 let served: ServedSize | null = null;
 let nativeZoom = 0;
 let generation = 0;
 let watcher: PaneWatcher | null = null;
 
-const found = computed(() => {
-    for (const line of props.maps) {
-        const layer = line.file.layers.find(
-            (entry) => entry.id === props.canvas,
-        );
-        if (layer) return { line, layer };
-    }
-    return null;
-});
+const found = computed(() =>
+    props.canvas ? layerById(props.canvas, props.maps) : null,
+);
 const record = computed(() =>
     found.value ? analysisNode(found.value.line.analysis.id) : null,
 );
@@ -125,7 +120,7 @@ const label = computed(() => found.value?.layer.label || props.canvas || "");
 const analysisName = computed(() => found.value?.line.analysis.name ?? null);
 const tag = computed(() => {
     const parts = found.value ? layerTag(found.value.layer)?.parts : null;
-    return parts ? tagText(parts) : "";
+    return parts ? tagText(parts, { $gettext, interpolate }) : "";
 });
 const neighbours = computed(() => {
     const layers = found.value?.line.file.layers ?? [];
@@ -145,7 +140,7 @@ const pair = computed(() => {
     return line && parts
         ? {
               canvas: first.id,
-              tag: tagText(parts),
+              tag: tagText(parts, { $gettext, interpolate }),
               analysis: line.analysis.name,
           }
         : null;
@@ -215,29 +210,6 @@ function target(): SyncTarget | null {
     return map && served ? { map, size: served, nativeZoom } : null;
 }
 
-/** The short text of a layer's tag: « Cu Lα », « 650 nm », « PC3 », « Photo ». */
-function tagText(
-    parts: NonNullable<ReturnType<typeof layerTag>>["parts"],
-): string {
-    if (parts.symbols.length) {
-        const symbols = parts.symbols.join("+");
-        return parts.line ? `${symbols} ${parts.line.value}` : symbols;
-    }
-    if (parts.band) {
-        const range =
-            parts.band.value !== null
-                ? String(Number(parts.band.value))
-                : `${parts.band.lower}–${parts.band.upper}`;
-        return parts.unit ? `${range} ${parts.unit}` : range;
-    }
-    if (parts.index !== null) {
-        return interpolate($gettext("PC%{index}"), {
-            index: String(parts.index),
-        });
-    }
-    return parts.contentLabel.value;
-}
-
 function paintFilters(): void {
     if (!map) return;
     const filter = filterCss(props.filters);
@@ -250,8 +222,6 @@ function paintFilters(): void {
 function clearImage(): void {
     page?.remove();
     page = null;
-    overlay?.remove();
-    overlay = null;
 }
 
 function drawCanvas(): void {
@@ -298,50 +268,7 @@ function drawCanvas(): void {
             ),
         );
     }
-    if (layer.image.service) layService(layer.image.service, loaded, failed);
-    else layUrl(layer, loaded, failed);
-}
-
-function layService(
-    service: string,
-    loaded: (size: ServedSize, zoom: number) => void,
-    failed: () => void,
-): void {
-    if (!map) return;
-    page = layServed(map, service, { read: loaded, failed });
-}
-
-function layUrl(
-    layer: FileLayer,
-    loaded: (size: ServedSize, zoom: number) => void,
-    failed: () => void,
-): void {
-    const urls = layerImageChain(layer.image);
-    const attempt = generation;
-    function next(): void {
-        const url = urls.shift();
-        if (attempt !== generation) return;
-        if (!url) {
-            failed();
-            return;
-        }
-        const image = new Image();
-        image.onload = () => {
-            if (attempt !== generation || !map) return;
-            const size = { w: image.naturalWidth, h: image.naturalHeight };
-            overlay = L.imageOverlay(
-                url,
-                L.latLngBounds(
-                    map.unproject([0, size.h], 0),
-                    map.unproject([size.w, 0], 0),
-                ),
-            ).addTo(map);
-            loaded(size, 0);
-        };
-        image.onerror = next;
-        image.src = url;
-    }
-    next();
+    page = layImage(map, layer.image, { read: loaded, failed });
 }
 
 /** Fits the whole image in the pane, centred; the pane's own move, never the reader's. */

@@ -150,15 +150,36 @@ export function overlayPane(map: L.Map, key: string): string {
     return name;
 }
 
+const HASH_OFFSET = 0x811c9dc5;
+const HASH_PRIME = 0x01000193;
+const HASH_RADIX = 36;
+
+/**
+ * A short stable key of any text (32-bit FNV-1a in base 36), for a pane
+ * named after an id that `overlayPane` would otherwise sanitise: `…/c_1` and
+ * `…/c-1` give different keys.
+ */
+export function paneKey(text: string): string {
+    let hash = HASH_OFFSET;
+    for (let index = 0; index < text.length; index += 1) {
+        hash = Math.imul(hash ^ text.charCodeAt(index), HASH_PRIME);
+    }
+    return (hash >>> 0).toString(HASH_RADIX);
+}
+
+/** Takes a pane made by `overlayPane` off the map; nothing when it has none of that name. */
+export function removeOverlayPane(map: L.Map, name: string): void {
+    const pane = map.getPane(name);
+    if (!pane) return;
+    pane.remove();
+    delete (map as unknown as { _panes: Record<string, HTMLElement> })._panes[
+        name
+    ];
+}
+
 /** leaflet-side-by-side clips `layer.getContainer()`: a laid layer answers with its own pane. */
-export function curtainable(
-    layer: L.ImageOverlay,
-    pane: HTMLElement,
-): L.ImageOverlay {
-    (
-        layer as L.ImageOverlay & {
-            getContainer?: () => HTMLElement;
-        }
-    ).getContainer = () => pane;
+export function curtainable<T extends L.Layer>(layer: T, pane: HTMLElement): T {
+    (layer as T & { getContainer?: () => HTMLElement }).getContainer = () =>
+        pane;
     return layer;
 }

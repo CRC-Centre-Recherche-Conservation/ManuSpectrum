@@ -70,11 +70,6 @@ msgstr "Manifest not found"
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
 
-#: functions/imaging_layers_proposal.py:66
-#, python-format
-msgid "Imaging layers not proposed for tile %(tile)s: %(error)s"
-msgstr ""
-
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
 msgstr "Undefined"
@@ -2710,15 +2705,24 @@ msgstr ""
 #: templates/views/components/functions/imaging-layers-proposal.htm:14
 msgid ""
 "Canvases whose label is not recognised are left\n"
-"            without a layer. Nothing is proposed for an edit awaiting "
-"review,\n"
-"            and a manifest that cannot be read is logged and skipped."
+"            without a layer. Layers are proposed only when a manifest is "
+"first\n"
+"            saved or its URL changes, so a layer deleted afterwards stays\n"
+"            deleted. Nothing is proposed for an edit awaiting review, and a\n"
+"            failure is logged without blocking the save."
 msgstr ""
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:19
 msgid ""
 "Layers of analyses recorded before this function\n"
 "            existed are filled once by a maintenance script."
+msgstr ""
+
+#: templates/views/components/functions/imaging-layers-proposal.htm:24
+msgid ""
+"A resource imported from Arches JSON with its layer\n"
+"            tiles may receive duplicate layers: the manifest tile is saved\n"
+"            before its layers, and the function cannot see them."
 msgstr ""
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:26

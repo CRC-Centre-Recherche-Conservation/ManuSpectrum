@@ -159,7 +159,8 @@ class ListResolver:
         return self._find("layer_elements", "altLabel", symbol)
 
 
-def _manifest_url(value):
+def manifest_url(value):
+    """The URL a manifest value stores (a string, a ``{"url"}`` dict or a list of one), None when empty."""
     if isinstance(value, list):
         value = value[0] if value else None
     if isinstance(value, dict):
@@ -174,7 +175,7 @@ def canvases(manifest_value):
     raw: the tile stores them as the manifest writes them, and the Explorer
     rewrites legacy hosts when it reads.
     """
-    url = _manifest_url(manifest_value)
+    url = manifest_url(manifest_value)
     manifest = manifest_json(rewrite_legacy_url(url)) if url else None
     if not isinstance(manifest, dict):
         raise ManifestUnreadableError(f"manifest {url!r} cannot be read")

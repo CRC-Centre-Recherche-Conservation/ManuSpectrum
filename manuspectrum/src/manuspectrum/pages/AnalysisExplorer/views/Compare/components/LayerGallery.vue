@@ -13,6 +13,7 @@ import {
     compareFamilies,
     layerTag,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
+import { PANES_SHOWN } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import {
     analysisNode,
     elementNode,
@@ -28,13 +29,6 @@ import type {
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 const PANE_LETTERS = ["A", "B", "C", "D"] as const;
-const PANES_SHOWN: Readonly<Record<TableState["layout"], number>> = {
-    single: 1,
-    curtain: 2,
-    grid2: 2,
-    grid4: 4,
-    stack: 0,
-};
 const GROUP_PLACE_MAX = 4;
 const ROVING_KEYS = new Set([
     "ArrowLeft",
@@ -104,7 +98,9 @@ const entries = computed<Entry[]>(() =>
                     layer,
                     line,
                     tag,
-                    text: tag ? tagText(tag.parts) : "",
+                    text: tag
+                        ? tagText(tag.parts, { $gettext, interpolate })
+                        : "",
                     nodes: layer.elements.flatMap((item) =>
                         item.symbol ? [elementNode(item.symbol)] : [],
                     ),
