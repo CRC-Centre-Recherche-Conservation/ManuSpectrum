@@ -5,7 +5,10 @@ import { nextTick } from "vue";
 
 import ComponentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue";
 
-import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    analysisKey,
+    characterizationKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentComponent,
@@ -14,7 +17,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import type { DocumentComponent } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { ComponentAnalysis } from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
+import type {
+    ComponentAnalysis,
+    ComponentMaterial,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
 
 function entry(
     n: number,
@@ -31,14 +37,30 @@ function entry(
     };
 }
 
+function material(
+    n: number,
+    overrides: Partial<ComponentMaterial> = {},
+): ComponentMaterial {
+    return {
+        id: uuid(500 + n),
+        name: label(`Vermilion ${n}`),
+        swatch: "#c00",
+        certainty: label("Reliable"),
+        unpublished: false,
+        match: true,
+        ...overrides,
+    };
+}
+
 function mountCard(
     component: DocumentComponent = documentComponent(1),
     analyses: ComponentAnalysis[] = [entry(1), entry(2), entry(3)],
+    materials: ComponentMaterial[] = [],
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
     const wrapper = mount(ComponentCard, {
-        props: { component, analyses },
+        props: { component, analyses, materials },
         global: { plugins: [pinia] },
     });
     return { wrapper, store: useExplorerStore() };
@@ -188,5 +210,121 @@ describe("ComponentCard", () => {
         });
         expect(wrapper.find("button.close").exists()).toBe(false);
         expect(wrapper.find("h3").attributes("id")).toBe("card-heading");
+    });
+
+    describe("identified materials", () => {
+        const withMaterials = () =>
+            mountCard(
+                documentComponent(1),
+                [entry(1), entry(2)],
+                [
+                    material(1),
+                    material(2, {
+                        swatch: null,
+                        certainty: null,
+                        match: false,
+                    }),
+                ],
+            );
+
+        it("lists them under the analyses with the swatch, the certainty and a Selection checkbox", () => {
+            const { wrapper } = withMaterials();
+            expect(wrapper.find(".materials h4").text()).toBe(
+                "Identified materials (2)",
+            );
+            const rows = wrapper.findAll(".materials li");
+            expect(rows).toHaveLength(2);
+            expect(rows[0].find("[data-focus]").text()).toBe("Vermilion 1");
+            expect(rows[0].find(".swatch").attributes("style")).toContain(
+                "background",
+            );
+            expect(rows[0].find(".certainty").text()).toBe("Reliable");
+            expect(
+                rows[0].find("input[type=checkbox]").attributes("aria-label"),
+            ).toBe("Add Vermilion 1 to the Selection");
+            expect(rows[1].find(".swatch").exists()).toBe(false);
+            expect(rows[1].find(".certainty").exists()).toBe(false);
+            expect(rows[1].classes()).toContain("is-dimmed");
+        });
+
+        it("has no materials section without a material", () => {
+            expect(mountCard().wrapper.find(".materials").exists()).toBe(false);
+        });
+
+        it("ticks one material by its ch: key", async () => {
+            const { wrapper, store } = withMaterials();
+            await wrapper
+                .findAll(".materials li input[type=checkbox]")[0]
+                .setValue(true);
+            expect(store.basket.map((item) => item.key)).toEqual([
+                characterizationKey(uuid(501)),
+            ]);
+        });
+
+        it("opens the Characterization card from the name", async () => {
+            const { wrapper, store } = withMaterials();
+            store.openDocument(uuid(1));
+            await wrapper
+                .findAll(".materials [data-focus]")[1]
+                .trigger("click");
+            expect(store.focus).toEqual({
+                kind: "characterization",
+                id: uuid(502),
+            });
+        });
+
+        it("offers the analyses and materials together, or the analyses alone", async () => {
+            const { wrapper, store } = withMaterials();
+            const buttons = wrapper.findAll(".selection-actions button");
+            expect(buttons[0].text()).toBe(
+                "With its 2 analyses and 2 materials",
+            );
+            expect(buttons[1].text()).toBe("The analyses alone");
+            await buttons[0].trigger("click");
+            expect(store.basket.map((item) => item.key)).toEqual([
+                analysisKey(uuid(101)),
+                analysisKey(uuid(102)),
+                characterizationKey(uuid(501)),
+                characterizationKey(uuid(502)),
+            ]);
+        });
+
+        it("adds the analyses alone without the materials", async () => {
+            const { wrapper, store } = withMaterials();
+            await wrapper
+                .findAll(".selection-actions button")[1]
+                .trigger("click");
+            expect(store.basket.map((item) => item.key)).toEqual([
+                analysisKey(uuid(101)),
+                analysisKey(uuid(102)),
+            ]);
+        });
+
+        it("refuses the whole group when it does not fit, and says why, while the analyses alone still fit", async () => {
+            const { wrapper, store } = withMaterials();
+            for (let n = 0; n < 27; n += 1) {
+                store.addToBasket(analysisKey(uuid(900 + n)));
+            }
+            await nextTick();
+            const buttons = wrapper.findAll(".selection-actions button");
+            expect(buttons[0].attributes("disabled")).toBeDefined();
+            expect(buttons[1].attributes("disabled")).toBeUndefined();
+            expect(wrapper.find(".selection-actions .reason").text()).toContain(
+                "4 items",
+            );
+        });
+
+        it("offers its materials alone when no analysis observes the component", async () => {
+            const { wrapper, store } = mountCard(
+                documentComponent(1),
+                [],
+                [material(1), material(2)],
+            );
+            const buttons = wrapper.findAll(".selection-actions button");
+            expect(buttons).toHaveLength(1);
+            expect(buttons[0].text()).toBe("With its 2 materials");
+            await buttons[0].trigger("click");
+            expect(store.basket).toHaveLength(2);
+        });
     });
 });

@@ -21,6 +21,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import type {
     CertaintyScale,
     CharacterizationSummary,
+    DocumentComponent,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -34,7 +35,8 @@ type Source = CharacterizationSummary["sources"][number];
  * false` hides « Close » where the container has its own. `analysisStyles`
  * holds the technique style of the document's analyses by id: an evidence
  * analysis found there carries its technique code in its family colour, as
- * on the folio.
+ * on the folio. `components` are the document's Components it is linked to
+ * (`characterizationComponents`), each a link to its card.
  */
 const props = withDefaults(
     defineProps<{
@@ -43,8 +45,10 @@ const props = withDefaults(
         headingId?: string;
         closable?: boolean;
         analysisStyles?: ReadonlyMap<string, TechniqueStyle>;
+        components?: DocumentComponent[];
     }>(),
     {
+        components: () => [],
         headingId: undefined,
         closable: true,
         analysisStyles: () => new Map<string, TechniqueStyle>(),
@@ -169,6 +173,10 @@ function sourceText(source: Source): string {
     return source.title?.value ?? source.ref?.name.value ?? source.url ?? "";
 }
 
+function openComponent(id: string): void {
+    store.focusOn({ kind: "component", id });
+}
+
 function openAnalysis(id: string): void {
     store.focusOn({ kind: "analysis", id });
 }
@@ -253,6 +261,28 @@ function focusHeading(): void {
         </section>
 
         <dl class="details">
+            <template v-if="props.components.length > 0">
+                <dt>
+                    <span>{{ $gettext("Component") }}</span>
+                </dt>
+                <dd>
+                    <ul class="component-links">
+                        <li
+                            v-for="component in props.components"
+                            :key="component.id"
+                        >
+                            <button
+                                type="button"
+                                class="component-link"
+                                :lang="component.name.lang"
+                                @click="openComponent(component.id)"
+                            >
+                                <span>{{ component.name.value }}</span>
+                            </button>
+                        </li>
+                    </ul>
+                </dd>
+            </template>
             <template v-if="props.summary.colours.length > 0">
                 <dt>
                     <span>{{ $gettext("Colour") }}</span>
@@ -523,6 +553,17 @@ function focusHeading(): void {
     background: var(--surface);
     color: var(--ink);
     font: inherit;
+    cursor: pointer;
+}
+
+.characterization-card .component-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--blue-text);
+    font: inherit;
+    text-align: start;
+    text-decoration: underline;
     cursor: pointer;
 }
 

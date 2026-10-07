@@ -8,18 +8,26 @@ import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/
 import SelectionActions from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionActions.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
-import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    analysisKey,
+    characterizationKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type { DocumentComponent } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { ComponentAnalysis } from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
+import type {
+    ComponentAnalysis,
+    ComponentMaterial,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 /**
- * A Component of the document and the analyses made on it here. Each
- * analysis has its Selection checkbox, the list a « select all », and one
- * button adds them all or none (`an:` keys only: a Component is never in the
- * Selection itself). `headingId` names the heading (a drawer is labelled by
+ * A Component of the document, the analyses made on it here and the
+ * identified materials linked to it (`componentMaterials`). Each has its
+ * Selection checkbox and opens its own card; the analyses have a « select
+ * all ». The primary button adds the analyses and the materials, the
+ * secondary one the analyses alone, each all or none (`an:` and `ch:` keys: a
+ * Component is never in the Selection itself). `headingId` names the heading (a drawer is labelled by
  * it); `closable: false` hides « Close the card » where the container has its
  * own.
  */
@@ -27,10 +35,11 @@ const props = withDefaults(
     defineProps<{
         component: DocumentComponent;
         analyses: ComponentAnalysis[];
+        materials?: ComponentMaterial[];
         headingId?: string;
         closable?: boolean;
     }>(),
-    { headingId: undefined, closable: true },
+    { materials: () => [], headingId: undefined, closable: true },
 );
 
 const emit = defineEmits<{ close: [] }>();
@@ -60,6 +69,31 @@ const hints = computed(
             ]),
         ),
 );
+const materialKeys = computed(() =>
+    props.materials.map((entry) => characterizationKey(entry.id)),
+);
+const allKeys = computed(() => [...keys.value, ...materialKeys.value]);
+const allHints = computed(() => {
+    const merged = new Map(hints.value);
+    for (const entry of props.materials) {
+        merged.set(characterizationKey(entry.id), {
+            title: entry.name,
+            kind: interpolate(
+                $gettext("identified material of component %{name}"),
+                { name: props.component.name.value },
+                true,
+            ),
+        });
+    }
+    return merged;
+});
+const materialsTitle = computed(() =>
+    interpolate(
+        $gettext("Identified materials (%{n})"),
+        { n: props.materials.length },
+        true,
+    ),
+);
 const analysesTitle = computed(() =>
     interpolate(
         $gettext("Analyses on this component (%{n})"),
@@ -88,17 +122,50 @@ const zonesText = computed(() => {
         true,
     );
 });
-const addAllLabel = computed(() =>
+const analysesCount = computed(() =>
     interpolate(
-        $ngettext(
-            "With its %{n} analysis",
-            "With its %{n} analyses",
-            props.analyses.length,
-        ),
+        $ngettext("%{n} analysis", "%{n} analyses", props.analyses.length),
         { n: props.analyses.length },
         true,
     ),
 );
+const materialsCount = computed(() =>
+    interpolate(
+        $ngettext("%{n} material", "%{n} materials", props.materials.length),
+        { n: props.materials.length },
+        true,
+    ),
+);
+const addAllLabel = computed(() => {
+    const { analyses, materials } = props;
+    if (materials.length === 0) {
+        return interpolate(
+            $ngettext(
+                "With its %{n} analysis",
+                "With its %{n} analyses",
+                analyses.length,
+            ),
+            { n: analyses.length },
+            true,
+        );
+    }
+    if (analyses.length === 0) {
+        return interpolate(
+            $ngettext(
+                "With its %{n} material",
+                "With its %{n} materials",
+                materials.length,
+            ),
+            { n: materials.length },
+            true,
+        );
+    }
+    return interpolate(
+        $gettext("With its %{analyses} and %{materials}"),
+        { analyses: analysesCount.value, materials: materialsCount.value },
+        true,
+    );
+});
 const selectAllLabel = computed(() =>
     interpolate(
         $gettext("Select all (%{n} shown)"),
@@ -126,6 +193,10 @@ function removeLabel(name: string): string {
 
 function openAnalysis(id: string): void {
     store.focusOn({ kind: "analysis", id });
+}
+
+function openMaterial(id: string): void {
+    store.focusOn({ kind: "characterization", id });
 }
 
 function close(): void {
@@ -170,9 +241,22 @@ function focusHeading(): void {
         </header>
 
         <SelectionActions
-            v-if="props.analyses.length > 0"
+            v-if="props.analyses.length > 0 || props.materials.length > 0"
             :title="$gettext('Add to the Selection')"
-            :primary="{ keys, label: addAllLabel, hints }"
+            :primary="{
+                keys: allKeys,
+                label: addAllLabel,
+                hints: allHints,
+            }"
+            :secondary="
+                props.analyses.length > 0 && props.materials.length > 0
+                    ? {
+                          keys,
+                          label: $gettext('The analyses alone'),
+                          hints,
+                      }
+                    : null
+            "
         />
 
         <section
@@ -229,6 +313,65 @@ function focusHeading(): void {
                             {{ outsideText }}
                         </span>
                     </button>
+                    <span
+                        v-if="entry.unpublished"
+                        class="badge draft"
+                    >
+                        {{ $gettext("Draft") }}
+                    </span>
+                </li>
+            </ul>
+        </section>
+
+        <section
+            v-if="props.materials.length > 0"
+            class="materials"
+            :aria-labelledby="`${sectionId}-materials`"
+        >
+            <h4 :id="`${sectionId}-materials`">
+                <span>{{ materialsTitle }}</span>
+            </h4>
+            <ul>
+                <li
+                    v-for="entry in props.materials"
+                    :key="entry.id"
+                    :class="{ 'is-dimmed': !entry.match }"
+                >
+                    <SelectionCheckbox
+                        :item-key="characterizationKey(entry.id)"
+                        :label="addLabel(entry.name.value)"
+                        :held-label="removeLabel(entry.name.value)"
+                        :hint="allHints.get(characterizationKey(entry.id))"
+                    />
+                    <button
+                        type="button"
+                        :data-focus="`characterization:${entry.id}`"
+                        :title="entry.name.value"
+                        @click="openMaterial(entry.id)"
+                    >
+                        <span
+                            v-if="entry.swatch"
+                            class="swatch"
+                            aria-hidden="true"
+                            :style="{ background: entry.swatch }"
+                        ></span>
+                        <span :lang="entry.name.lang || undefined">{{
+                            entry.name.value
+                        }}</span>
+                        <span
+                            v-if="!entry.match"
+                            class="visually-hidden"
+                        >
+                            {{ outsideText }}
+                        </span>
+                    </button>
+                    <span
+                        v-if="entry.certainty"
+                        class="badge certainty"
+                        :lang="entry.certainty.lang"
+                    >
+                        {{ entry.certainty.value }}
+                    </span>
                     <span
                         v-if="entry.unpublished"
                         class="badge draft"
@@ -317,6 +460,15 @@ function focusHeading(): void {
     block-size: 0.5rem;
     margin-inline-end: 0.5rem;
     border: 0.0625rem solid var(--ink-muted);
+    border-radius: 50%;
+}
+
+.component-card .swatch {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    margin-inline-end: 0.5rem;
+    border: 0.0625rem solid var(--border-hover);
     border-radius: 50%;
 }
 

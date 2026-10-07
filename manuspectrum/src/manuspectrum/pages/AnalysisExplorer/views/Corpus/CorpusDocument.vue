@@ -42,7 +42,11 @@ import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/compos
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
-import { componentAnalyses } from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
+import {
+    characterizationComponents,
+    componentAnalyses,
+    componentMaterials,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -432,6 +436,18 @@ const openComponent = computed(() => {
 const openComponentAnalyses = computed(() =>
     data.value && openComponent.value
         ? componentAnalyses(data.value, openComponent.value.id, styles.value)
+        : [],
+);
+/** The identified materials linked to the open Component. */
+const openComponentMaterials = computed(() =>
+    data.value && openComponent.value
+        ? componentMaterials(data.value, openComponent.value.id)
+        : [],
+);
+/** The Components the open identified material is linked to. */
+const openCharacterizationComponents = computed(() =>
+    data.value && openCharacterization.value
+        ? characterizationComponents(data.value, openCharacterization.value)
         : [],
 );
 const cardOpen = computed(
@@ -1028,6 +1044,7 @@ function goHome(): void {
                         :summary="openCharacterization"
                         :scale="certaintyScale"
                         :analysis-styles="analysisStyles"
+                        :components="openCharacterizationComponents"
                         :heading-id="CARD_HEADING_ID"
                         @close="closeCard"
                     />
@@ -1044,6 +1061,7 @@ function goHome(): void {
                         ref="card"
                         :component="openComponent"
                         :analyses="openComponentAnalyses"
+                        :materials="openComponentMaterials"
                         :heading-id="CARD_HEADING_ID"
                         @close="closeCard"
                     />
@@ -1096,6 +1114,7 @@ function goHome(): void {
                     :summary="openCharacterization"
                     :scale="certaintyScale"
                     :analysis-styles="analysisStyles"
+                    :components="openCharacterizationComponents"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
                     @close="closeCard"
@@ -1112,6 +1131,7 @@ function goHome(): void {
                     v-else-if="openComponent"
                     :component="openComponent"
                     :analyses="openComponentAnalyses"
+                    :materials="openComponentMaterials"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
                     @close="closeCard"

@@ -8,6 +8,7 @@ import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Co
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     characterization,
+    documentComponent,
     label,
     uuid,
     valueRef,
@@ -290,5 +291,32 @@ describe("CharacterizationCard", () => {
         expect(buttons.map((button) => button.text())).toEqual([
             "Add the material",
         ]);
+    });
+
+    it("links to the components it is linked to, each opening its card", async () => {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        const wrapper = mount(CharacterizationCard, {
+            props: {
+                summary: characterization(1),
+                scale: SCALE,
+                components: [documentComponent(1), documentComponent(2)],
+            },
+            global: { plugins: [pinia] },
+        });
+        const store = useExplorerStore();
+        store.openDocument(uuid(1));
+        const links = wrapper.findAll("button.component-link");
+        expect(links.map((link) => link.text())).toEqual([
+            "Component 1",
+            "Component 2",
+        ]);
+        await links[1].trigger("click");
+        expect(store.focus).toEqual({ kind: "component", id: uuid(702) });
+    });
+
+    it("shows no component line without a linked component", () => {
+        const { wrapper } = mountCard([]);
+        expect(wrapper.find("button.component-link").exists()).toBe(false);
     });
 });

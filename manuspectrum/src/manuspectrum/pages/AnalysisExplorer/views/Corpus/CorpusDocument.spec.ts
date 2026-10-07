@@ -97,6 +97,8 @@ function cardStub(name: string): Component {
             sample: { type: Object, default: null },
             component: { type: Object, default: null },
             analyses: { type: Array, default: null },
+            materials: { type: Array, default: null },
+            components: { type: Array, default: null },
             analysisNames: { type: Map, default: null },
             headingId: { type: String, default: undefined },
             closable: { type: Boolean, default: true },
@@ -771,6 +773,45 @@ describe("CorpusDocument", () => {
             expect(store.focus).toBeNull();
             expect(document.activeElement).toBe(wrapper.find(selector).element);
             wrapper.unmount();
+        });
+
+        it("hands the card the materials linked to the component, and the material card its components", async () => {
+            const observing = characterization(1, {
+                objects: [
+                    {
+                        id: uuid(701),
+                        model: "component",
+                        name: label("Component 1"),
+                    },
+                ],
+            });
+            const citing = characterization(2, {
+                evidence: [{ id: uuid(101), name: label("MS1_f12_XRF_01") }],
+            });
+            stubFetch({
+                ...withComponents(),
+                characterizations: [observing, citing, characterization(3)],
+            });
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "component", id: OBSERVED });
+            await flushPromises();
+            expect(
+                (
+                    wrapper
+                        .findComponent({ name: "ComponentCard" })
+                        .props("materials") as { id: string }[]
+                ).map((entry) => entry.id),
+            ).toEqual([citing.id]);
+            store.focusOn({ kind: "characterization", id: citing.id });
+            await flushPromises();
+            expect(
+                (
+                    wrapper
+                        .findComponent({ name: "CharacterizationCard" })
+                        .props("components") as { id: string }[]
+                ).map((entry) => entry.id),
+            ).toEqual([OBSERVED]);
         });
 
         it("opens the card when the folio selects an outline", async () => {

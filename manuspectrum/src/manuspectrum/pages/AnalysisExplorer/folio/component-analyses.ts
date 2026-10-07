@@ -1,7 +1,9 @@
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 
 import type {
+    CharacterizationSummary,
     DataKind,
+    DocumentComponent,
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { DocumentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
@@ -45,4 +47,81 @@ export function componentAnalyses(
         });
     }
     return entries;
+}
+
+/** An identified material linked to one Component, as its card lists it. */
+export interface ComponentMaterial {
+    id: string;
+    name: Label;
+    /** The first colour of the material that has a display colour. */
+    swatch: string | null;
+    /** The label of the highest certainty level any of its materials states. */
+    certainty: Label | null;
+    unpublished: boolean;
+    /** Whether the Corpus filters keep the identified material. */
+    match: boolean;
+}
+
+/** Ids of the analyses of `view` that observe `componentId`. */
+function analysesOf(view: DocumentView, componentId: string): Set<string> {
+    const ids = new Set<string>();
+    for (const entry of [...view.annotations, ...view.unlocated]) {
+        if (entry.component === componentId) ids.add(entry.analysis);
+    }
+    return ids;
+}
+
+/** Whether `summary` observes `componentId` or cites one of `analyses` as evidence. */
+function isLinked(
+    summary: CharacterizationSummary,
+    componentId: string,
+    analyses: ReadonlySet<string>,
+): boolean {
+    return (
+        summary.objects.some((entry) => entry.id === componentId) ||
+        summary.evidence.some((entry) => analyses.has(entry.id))
+    );
+}
+
+/**
+ * The identified materials of `view` linked to `componentId`, in the order of
+ * the payload: those that observe the Component (`object_observed`) or cite
+ * one of its analyses as evidence.
+ */
+export function componentMaterials(
+    view: DocumentView,
+    componentId: string,
+): ComponentMaterial[] {
+    const analyses = analysesOf(view, componentId);
+    return view.characterizations
+        .filter((summary) => isLinked(summary, componentId, analyses))
+        .map((summary) => {
+            const levels = summary.materials
+                .map((entry) => entry.confidence)
+                .filter((level) => level !== null);
+            levels.sort((first, second) => first.rank - second.rank);
+            return {
+                id: summary.id,
+                name: summary.name,
+                swatch:
+                    summary.colours.find((colour) => colour.swatch)?.swatch ??
+                    null,
+                certainty: levels[0]?.label ?? null,
+                unpublished: summary.unpublished,
+                match: view.keptCharacterizations.has(summary.id),
+            };
+        });
+}
+
+/**
+ * The Components of `view` that `summary` is linked to, by the rule of
+ * `componentMaterials`, in the order of the payload.
+ */
+export function characterizationComponents(
+    view: DocumentView,
+    summary: CharacterizationSummary,
+): DocumentComponent[] {
+    return view.components.filter((component) =>
+        isLinked(summary, component.id, analysesOf(view, component.id)),
+    );
 }
