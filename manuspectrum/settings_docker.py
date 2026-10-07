@@ -18,6 +18,7 @@ pointed at its instance in place; KEY_PREFIX and the other entries are kept.
 
 import os
 import sys
+from urllib.parse import urlparse
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -104,6 +105,17 @@ if not PUBLIC_SERVER_ADDRESS.startswith("https://"):
 # Compose appends `iiifserver` to this value without a separator.
 if not PUBLIC_SERVER_ADDRESS.endswith("/"):
     raise ImproperlyConfigured("PUBLIC_SERVER_ADDRESS must end with a slash")
+# Compose gives the nginx container this name as a network alias, so that web can
+# fetch the public image-service URLs; it must be the host of PUBLIC_SERVER_ADDRESS.
+PUBLIC_HOST = get_optional_env_variable("PUBLIC_HOST", "")
+if PUBLIC_HOST and urlparse(PUBLIC_SERVER_ADDRESS).hostname != PUBLIC_HOST:
+    raise ImproperlyConfigured(
+        "PUBLIC_HOST must be the host name of PUBLIC_SERVER_ADDRESS"
+    )
+if urlparse(PUBLIC_SERVER_ADDRESS).hostname not in DOMAIN_NAMES:
+    raise ImproperlyConfigured(
+        "The host of PUBLIC_SERVER_ADDRESS must be in DOMAIN_NAMES"
+    )
 ARCHES_NAMESPACE_FOR_DATA_EXPORT = PUBLIC_SERVER_ADDRESS
 EXTRA_EMAIL_CONTEXT = {
     **EXTRA_EMAIL_CONTEXT,
@@ -195,9 +207,14 @@ READYZ_REDIS_URLS = {
 }
 READYZ_CANTALOUPE = env_bool("READYZ_CANTALOUPE", True)
 
-CANTALOUPE_HTTP_ENDPOINT = "http://{}:{}/".format(
+# Where this process reaches Cantaloupe directly (the readiness probe only).
+CANTALOUPE_INTERNAL_ENDPOINT = "http://{}:{}/".format(
     get_env_variable("CANTALOUPE_HOST"), get_env_variable("CANTALOUPE_PORT")
 )
+# Arches writes this into the canvas, sequence and annotation ids of the manifests
+# it mints, and where it fetches info.json: nginx serves /iiifserver/ on the public
+# name, which web reaches through the nginx network alias.
+CANTALOUPE_HTTP_ENDPOINT = PUBLIC_SERVER_ADDRESS + "iiifserver/"
 
 MEDIA_ROOT = "/srv/media"
 CANTALOUPE_DIR = os.path.join(MEDIA_ROOT, UPLOADED_FILES_DIR)

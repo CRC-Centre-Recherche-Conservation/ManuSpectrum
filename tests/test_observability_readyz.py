@@ -10,6 +10,7 @@ from tests.observability_helpers import sample
 
 REAL_ELASTICSEARCH = health.probe_elasticsearch
 REAL_BROKER = health.probe_broker
+REAL_CANTALOUPE = health.probe_cantaloupe
 ON = override_settings(
     READYZ_ENABLED=True,
     READYZ_TIMEOUT=0.5,
@@ -210,6 +211,18 @@ class ReadyzTests(TestCase):
             self.get()
             self.get()
         self.assertEqual(len(calls), 2)
+
+    def test_cantaloupe_probe_uses_the_internal_endpoint(self):
+        response = MagicMock(status_code=200)
+        with (
+            override_settings(
+                CANTALOUPE_HTTP_ENDPOINT="https://manuspectrum.test/iiifserver/",
+                CANTALOUPE_INTERNAL_ENDPOINT="http://cantaloupe:8182/",
+            ),
+            patch("requests.get", return_value=response) as get,
+        ):
+            REAL_CANTALOUPE(1)
+        self.assertEqual(get.call_args.args[0], "http://cantaloupe:8182/iiif/3")
 
     def test_cantaloupe_is_optional(self):
         with override_settings(READYZ_CANTALOUPE=False):

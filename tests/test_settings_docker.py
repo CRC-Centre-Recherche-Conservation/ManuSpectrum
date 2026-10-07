@@ -72,6 +72,7 @@ NAMES = [
     "CACHES",
     "CACHE_CODE_VERSION",
     "CANTALOUPE_HTTP_ENDPOINT",
+    "CANTALOUPE_INTERNAL_ENDPOINT",
     "CONTACT_EMAIL",
     "DEFAULT_FROM_EMAIL",
     "EMAIL_HOST",
@@ -210,6 +211,19 @@ class SettingsDockerTests(SimpleTestCase):
             "PGPASSWORD_FILE",
         )
 
+    def test_public_host_must_be_the_host_of_the_public_address(self):
+        self.assertRefused(
+            dict(BASE_ENV, PUBLIC_HOST="www.manuspectrum.test"), "PUBLIC_HOST"
+        )
+        values = load(dict(BASE_ENV, PUBLIC_HOST="manuspectrum.test"))
+        self.assertNotIn("error", values)
+
+    def test_public_address_host_must_be_a_domain_name(self):
+        self.assertRefused(
+            dict(BASE_ENV, PUBLIC_SERVER_ADDRESS="https://other.test/"),
+            "DOMAIN_NAMES",
+        )
+
     def test_plain_http_public_address_is_refused(self):
         self.assertRefused(
             dict(BASE_ENV, PUBLIC_SERVER_ADDRESS="http://manuspectrum.test/"),
@@ -302,7 +316,16 @@ class SettingsDockerTests(SimpleTestCase):
         )
         self.assertEqual(values["ELASTICSEARCH_HTTP_PORT"], "9200")
         self.assertEqual(values["ELASTICSEARCH_PREFIX"], "manuspectrum")
-        self.assertEqual(values["CANTALOUPE_HTTP_ENDPOINT"], "http://cantaloupe:8182/")
+        self.assertEqual(
+            values["CANTALOUPE_INTERNAL_ENDPOINT"], "http://cantaloupe:8182/"
+        )
+
+    def test_cantaloupe_endpoint_mints_public_canvas_ids(self):
+        values = load(BASE_ENV)
+        self.assertEqual(
+            values["CANTALOUPE_HTTP_ENDPOINT"],
+            "https://manuspectrum.test/iiifserver/",
+        )
 
     def test_mail_defaults_suit_a_relay_without_tls_or_authentication(self):
         values = load(BASE_ENV)
