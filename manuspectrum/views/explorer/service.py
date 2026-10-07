@@ -1675,7 +1675,7 @@ def facet_payload(key, query, user, language, ticket=None):
     for that document. ``find`` narrows the values to those whose folded
     label holds its folded text, the selected ones kept; ``total`` stays the
     number of values without it. ``find`` on ``place`` keeps the ancestors of
-    the matches as well. The key ``period`` answers the ``RangeFacet`` (``find``
+    the matches and of the selected places as well. The key ``period`` answers the ``RangeFacet`` (``find``
     ignored). A key outside ``FACET_KEYS`` and ``period``, a facet the search
     or the match would not show (no value), or a ``document`` that is not a
     UUID or not visible, is None.
@@ -1722,7 +1722,7 @@ def facet_payload(key, query, user, language, ticket=None):
             if needle in fold(value["label"]["value"])
         }
         if key == "place":
-            matching |= place_ancestors(matching, bundle.places)
+            matching |= place_ancestors(matching | selected, bundle.places)
         facet["values"] = [
             value
             for value in facet["values"]

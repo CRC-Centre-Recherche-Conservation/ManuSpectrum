@@ -45,6 +45,7 @@ import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare
 export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
 export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
+    "place",
     "partType",
     "technique",
     "part",
@@ -79,7 +80,7 @@ export function emptyFilters(): Filters {
         project: [],
         operator: [],
         year: [],
-        place: null,
+        place: [],
         period: null,
         eventType: [],
     };
@@ -123,7 +124,6 @@ function countCorpusFilters(filters: Filters): number {
         listed +
         filters.year.length +
         (filters.q ? 1 : 0) +
-        (filters.place ? 1 : 0) +
         (filters.period ? 1 : 0)
     );
 }

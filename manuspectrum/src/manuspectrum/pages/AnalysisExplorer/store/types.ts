@@ -15,6 +15,7 @@ export type BasketKind =
     | "imaging"
     | "characterization";
 export type ListFilterKey =
+    | "place"
     | "partType"
     | "technique"
     | "part"
@@ -46,8 +47,7 @@ export interface Filters {
     project: string[];
     operator: string[];
     year: number[];
-    // ignored by search: the Map & timeline view is not built yet
-    place: string | null;
+    place: string[];
     // ignored by search: the Map & timeline view is not built yet
     period: [number, number] | null;
     // Map only; never filters Corpus

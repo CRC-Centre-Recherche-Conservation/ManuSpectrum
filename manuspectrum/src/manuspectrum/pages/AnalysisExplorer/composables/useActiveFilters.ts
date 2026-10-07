@@ -89,13 +89,6 @@ export function useActiveFilters(): {
                 clear: () => store.clearFilter("year", year),
             });
         }
-        if (filters.place) {
-            entries.push({
-                id: "place",
-                label: named($gettext("Place"), filters.place),
-                clear: () => store.clearFilter("place"),
-            });
-        }
         if (filters.period) {
             entries.push({
                 id: "period",

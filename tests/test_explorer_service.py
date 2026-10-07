@@ -1630,7 +1630,7 @@ class PlaceFilterTests(ServiceCase):
         )
         self.assertEqual(facet["total"], 4)
 
-    def test_find_on_place_keeps_the_selected_ones(self):
+    def test_find_on_place_keeps_the_selected_ones_with_their_ancestors(self):
         facet = facet_payload(
             "place",
             self.query(f"find=lyon&place={self.place('paris')}"),
@@ -1640,8 +1640,23 @@ class PlaceFilterTests(ServiceCase):
 
         self.assertEqual(
             {v["id"] for v in facet["values"]},
-            {self.place("lyon"), self.place("paris")},
+            {
+                self.place("lyon"),
+                self.place("paris"),
+                self.place("france"),
+                self.place("europe"),
+            },
         )
+
+    def test_find_on_a_technique_keeps_only_the_selected_ones_besides_the_matches(self):
+        facet = facet_payload(
+            "technique",
+            self.query(f"find=zzz&technique={FORS}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual({v["id"] for v in facet["values"]}, {FORS})
 
     def test_a_match_applies_the_place_rule_of_the_search(self):
         payload = match_payload(

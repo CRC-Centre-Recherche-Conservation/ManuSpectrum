@@ -136,7 +136,6 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
         query.append("year", String(year));
     if (filters.colourScope !== "all")
         query.set("colourScope", filters.colourScope);
-    if (filters.place) query.set("place", filters.place);
     if (filters.period)
         query.set("period", `${filters.period[0]},${filters.period[1]}`);
     for (const type of [...filters.eventType].sort())
@@ -170,8 +169,6 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         COLOUR_SCOPES.find((scope) => scope === query.get("colourScope")) ??
         "all";
     filters.year = yearsOf(query);
-    const place = (query.get("place") ?? "").trim();
-    filters.place = place && place.length <= MAX_VALUE ? place : null;
     filters.period = periodOf(query.get("period"));
     filters.eventType = listOf(query, "eventType").filter(
         (type): type is EventType => EVENT_TYPES.includes(type as EventType),

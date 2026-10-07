@@ -62,6 +62,18 @@ describe("filters", () => {
         store.setFilter("eventType", ["production"]);
         expect(store.activeFilterCount).toBe(2);
     });
+
+    it("holds the places as a sorted list and counts each of them", () => {
+        const store = useExplorerStore();
+        expect(store.filters.place).toEqual([]);
+        store.setFilter("place", ["b", "a", "b"]);
+        expect(store.filters.place).toEqual(["a", "b"]);
+        expect(store.activeFilterCount).toBe(2);
+        store.clearFilter("place", "a");
+        expect(store.filters.place).toEqual(["b"]);
+        store.clearFilters();
+        expect(store.filters.place).toEqual([]);
+    });
 });
 
 describe("colour filters", () => {

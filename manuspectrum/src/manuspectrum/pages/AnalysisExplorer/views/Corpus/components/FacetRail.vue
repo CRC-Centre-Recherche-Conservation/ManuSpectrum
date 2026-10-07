@@ -6,8 +6,14 @@ import InputText from "primevue/inputtext";
 import Tooltip from "primevue/tooltip";
 
 import ColourScopeOption from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/ColourScopeOption.vue";
+import FacetTree from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue";
 import FacetValues from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue";
 
+import {
+    buildTree,
+    flatten,
+    SEARCH_THRESHOLD,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 import { useFacetValues } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetValues.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -22,27 +28,34 @@ import type { FacetLookup } from "@/manuspectrum/pages/AnalysisExplorer/composab
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 
 const PREVIEW_SIZE = 6;
-const SEARCH_THRESHOLD = 8;
-const GROUPS: readonly FacetGroup[] = ["part", "analysis", "characterization"];
-/** The facets of each group in rail order; the document group waits for its place tree and period slider. */
+const GROUPS: readonly FacetGroup[] = [
+    "document",
+    "part",
+    "analysis",
+    "characterization",
+];
+/** The facets of each group in rail order; the period slider joins the document group later. */
 const GROUP_KEYS: Readonly<Record<FacetGroup, readonly FacetKey[]>> = {
-    document: [],
+    document: ["place"],
     part: ["partType", "part"],
     analysis: ["project", "technique", "operator", "year"],
     characterization: ["material", "colour", "layer", "element"],
 };
 const RAIL_KEYS: readonly FacetKey[] = [
+    ...GROUP_KEYS.document,
     ...GROUP_KEYS.part,
     ...GROUP_KEYS.analysis,
     ...GROUP_KEYS.characterization,
 ];
 /** Facets that list every value, in the order served, with no search box nor « Show all ». */
 const FIXED_LIST_KEYS: readonly FacetKey[] = ["colour"];
+/** Facets drawn as a tree by `FacetTree`: they always hold every value (a tree needs the parents), searched, never cut to a preview. */
+const TREE_KEYS: readonly FacetKey[] = ["place"];
 
 /**
- * The facets of a Corpus screen, in three groups (studied component,
- * analysis, identified material), each folding to its heading (state in the
- * store). The Colour facet lists every colour in the order served (a colour
+ * The facets of a Corpus screen, in four groups (document, studied
+ * component, analysis, identified material), each folding to its heading
+ * (state in the store). The place is a tree (`FacetTree`). The Colour facet lists every colour in the order served (a colour
  * with no hit greyed, never dropped); under it, a folded option says where the
  * colour is recorded (`filters.colourScope`).
  * What is ticked comes from `selected` (the filters in force), never from the
@@ -99,6 +112,10 @@ function isFixedList(key: FacetKey): boolean {
     return FIXED_LIST_KEYS.includes(key);
 }
 
+function isTree(key: FacetKey): boolean {
+    return TREE_KEYS.includes(key);
+}
+
 function isCollapsed(group: FacetGroup): boolean {
     return store.collapsedGroups.includes(group);
 }
@@ -135,7 +152,8 @@ function lookupFor(key: FacetKey): FacetLookup | null {
     const facet = byKey.value.get(key);
     if (props.facetQuery === null || !facet) return null;
     const find = queryOf(key);
-    if (!find && !(expanded.value.has(key) && isCut(facet))) return null;
+    const wantsAll = (expanded.value.has(key) || isTree(key)) && isCut(facet);
+    if (!find && !wantsAll) return null;
     return { filters: props.facetQuery, find };
 }
 
@@ -197,16 +215,16 @@ function visibleValues(facet: Facet): FacetValue[] {
 }
 
 function hasNoMatch(facet: Facet): boolean {
-    return (
-        queryOf(facet.key) !== "" &&
-        !isLoading(facet.key) &&
-        visibleValues(facet).length === 0
-    );
+    if (queryOf(facet.key) === "" || isLoading(facet.key)) return false;
+    return isTree(facet.key)
+        ? flatten(buildTree(valuesOf(facet)), queryOf(facet.key)).length === 0
+        : visibleValues(facet).length === 0;
 }
 
 function showsMore(facet: Facet): boolean {
     return (
         !isFixedList(facet.key) &&
+        !isTree(facet.key) &&
         facet.total > PREVIEW_SIZE &&
         queryOf(facet.key) === ""
     );
@@ -234,7 +252,8 @@ function searchLabel(key: FacetKey): string {
 
 /** The labels of the ticked values of a facet, by the labels its values carry. */
 function tickedLabels(key: FacetKey): string[] {
-    const values = byKey.value.get(key)?.values ?? [];
+    const facet = byKey.value.get(key);
+    const values = facet ? valuesOf(facet) : [];
     return (props.selected[key] ?? []).map(
         (id) => values.find((value) => value.id === id)?.label.value ?? id,
     );
@@ -254,6 +273,10 @@ function selectionSummary(facet: Facet): string {
 
 function summaryId(key: FacetKey): string {
     return `${baseId}-${key}-summary`;
+}
+
+function onTreeChange(facet: Facet, ids: string[]): void {
+    emit("change", facet.key, ids);
 }
 
 function onChange(facet: Facet, id: string, checked: boolean): void {
@@ -336,7 +359,18 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                         :aria-label="searchLabel(facet.key)"
                         @update:model-value="setQuery(facet.key, $event)"
                     />
+                    <FacetTree
+                        v-if="isTree(facet.key)"
+                        :facet="facet"
+                        :values="valuesOf(facet)"
+                        :selected="props.selected[facet.key] ?? []"
+                        :count-hint="props.countHint"
+                        :query="queryOf(facet.key)"
+                        :busy="isLoading(facet.key)"
+                        @change="(ids) => onTreeChange(facet, ids)"
+                    />
                     <FacetValues
+                        v-else
                         :facet="facet"
                         :values="visibleValues(facet)"
                         :selected="props.selected[facet.key] ?? []"

@@ -46,7 +46,7 @@ describe("searchQuery", () => {
         );
     });
 
-    it("sends text, facets, years, the page size and the page, never place, period or eventType", () => {
+    it("sends text, places, facets, years, the page size and the page, never period or eventType", () => {
         const query = searchQuery(
             {
                 ...emptyFilters(),
@@ -55,14 +55,14 @@ describe("searchQuery", () => {
                 size: 25,
                 part: ["p2", "p1"],
                 year: [2023, 2021],
-                place: "x",
+                place: ["x2", "x1"],
                 period: [1000, 1100],
                 eventType: ["production"],
             },
             3,
         );
         expect(query.toString()).toBe(
-            "q=lead&grain=analyses&size=25&part=p1&part=p2&year=2021&year=2023&page=3",
+            "q=lead&grain=analyses&size=25&place=x1&place=x2&part=p1&part=p2&year=2021&year=2023&page=3",
         );
     });
 

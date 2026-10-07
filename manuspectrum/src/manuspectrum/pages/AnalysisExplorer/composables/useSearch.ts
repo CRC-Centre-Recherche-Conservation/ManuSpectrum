@@ -23,8 +23,8 @@ export interface SearchScope {
 /**
  * Build the search query string for `filters`.
  *
- * `place`, `period` and `eventType` are never sent: the Map & timeline view
- * that reads them is not built yet, and `eventType` filters Map only.
+ * `period` and `eventType` are never sent: the period filter is not wired
+ * yet, and `eventType` filters Map only.
  * `colourScope` is sent unless it is `all`, the server's default. The
  * default page size (10) is not sent; documents without analyses are asked
  * for in the documents grain only.

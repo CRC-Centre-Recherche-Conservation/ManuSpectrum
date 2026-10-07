@@ -319,3 +319,24 @@ describe("store round trip", () => {
         expect(chosen.folioView).toBe("analyses");
     });
 });
+
+describe("place in the address", () => {
+    it("reads place as a list, an old single value as a list of one", () => {
+        expect(
+            fromQuery(new URLSearchParams("place=p1")).filters.place,
+        ).toEqual(["p1"]);
+        const several = fromQuery(
+            new URLSearchParams("place=p2&place=p1&place=p2"),
+        );
+        expect(several.filters.place).toEqual(["p1", "p2"]);
+        expect(several.corpusScreen).toBe("results");
+    });
+
+    it("writes one place parameter per place, sorted, and nothing without any", () => {
+        const snapshot = fromQuery(new URLSearchParams("place=p2&place=p1"));
+        expect(toQuery(snapshot).toString()).toBe(
+            "screen=results&place=p1&place=p2",
+        );
+        expect(toQuery(fromQuery(new URLSearchParams(""))).toString()).toBe("");
+    });
+});
