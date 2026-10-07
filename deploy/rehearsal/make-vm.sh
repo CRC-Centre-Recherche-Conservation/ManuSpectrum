@@ -282,7 +282,10 @@ vi_args=(
 )
 
 if have virt-install; then
-  xml="$(virt-install "${vi_args[@]}" --print-xml --dry-run)" || {
+  # A dry run must not depend on the free space of the pool (disk_size check).
+  check_args=()
+  if [ "$DRY_RUN" = 1 ]; then check_args=(--check disk_size=off); fi
+  xml="$(virt-install "${vi_args[@]}" "${check_args[@]}" --print-xml --dry-run)" || {
     echo "virt-install --print-xml failed." >&2
     exit 1
   }
@@ -347,8 +350,8 @@ seed_copy=""
 
 cat <<NEXT
 
-VM installed, snapshot "installed" taken. Next:
+VM installed, snapshot "installed" taken. Next (paths from any directory):
   ssh-keygen -R ${VM_IP}   # if an earlier VM had this address
-  scp host-baseline.sh verify-baseline.sh rehearsal.env ${ADMIN_USER}@${VM_IP}:
+  scp ${HERE}/host-baseline.sh ${HERE}/verify-baseline.sh ${env_file} ${ADMIN_USER}@${VM_IP}:
   ssh -t ${ADMIN_USER}@${VM_IP} 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'
 NEXT

@@ -19,7 +19,7 @@ cat >"$TMP/bin/python" <<STUB
 if [ "\$1" = - ] && [ -n "\$ENVDUMP" ]; then env >"\$ENVDUMP"; fi
 if [ "\$1" = manage.py ]; then
   echo "noise from django"
-  echo 'MSSNAP {"host": "localhost", "port": "5432", "name": "ms", "user": "u", "password": "$SECRET", "media_root": "$TMP/media", "uploads": "uploadedfiles", "arches": "8.1.4", "resources": 5, "tiles": 12, "migrations": {"arches": "0001", "manuspectrum": "0005"}}'
+  echo 'MSSNAP {"host": "localhost", "port": "5432", "name": "ms", "user": "u", "password": "$SECRET", "media_root": "$TMP/media", "uploads": "uploadedfiles", "arches": "8.1.4", "resources": 5, "tiles": 12, "migrations": {"arches": "0001", "manuspectrum": "0005"}, "migrations_ahead_of_code": '"\${AHEAD:-[]}"'}'
   exit 0
 fi
 exec python3 "\$@"
@@ -90,6 +90,15 @@ assert "manifest keys and checksums are right" $?
 
 grep -q 'scp -r' "$TMP/out" && grep -qi 'user accounts and research data' "$TMP/out" && grep -q 'Never put it' "$TMP/out"
 assert "final message gives the copy command and the data warning" $?
+
+! grep -q "ahead of the checked-out code" "$TMP/out" && python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["migrations_ahead_of_code"] != [])' "$TMP/snap/manifest.json"
+assert "a database in step with the code gives no warning and an empty list in the manifest" $?
+
+AHEAD='["manuspectrum.0007_x", "arches.0099_y"]' run_snap --out "$TMP/snap-ahead" && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'WARNING: the database is ahead of the checked-out code: manuspectrum.0007_x, arches.0099_y' "$TMP/out" \
+  && grep -q 'refused by an image built from this commit' "$TMP/out" \
+  && python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["migrations_ahead_of_code"] != ["manuspectrum.0007_x", "arches.0099_y"])' "$TMP/snap-ahead/manifest.json"
+assert "migrations ahead of the code are warned about and recorded, the snapshot is still written" $?
 
 bash "$SNAP" -h | grep -q -- '--out DIR'
 assert "-h prints the usage" $?

@@ -243,3 +243,9 @@ MIDDLEWARE = [
     *MIDDLEWARE,
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
+
+# collectstatic ran at build time and the image ships no node_modules.
+SILENCED_SYSTEM_CHECKS = [
+    *globals().get("SILENCED_SYSTEM_CHECKS", []),
+    "staticfiles.W004",
+]

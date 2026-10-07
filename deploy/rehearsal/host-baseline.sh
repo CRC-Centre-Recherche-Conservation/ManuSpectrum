@@ -172,7 +172,6 @@ Signed-By: /etc/apt/keyrings/docker.asc
 DOCKER
 apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
-usermod -aG docker "$ADMIN_USER"
 
 echo "== Accounts"
 if id "$ADMIN2_USER" >/dev/null 2>&1; then
@@ -203,6 +202,15 @@ else
   usermod -aG docker manuspectrum
   echo "added: manuspectrum to docker"
 fi
+# Membership of docker is root-equivalent without the sudo password: only the service account has it.
+for admin in "$ADMIN_USER" "$ADMIN2_USER"; do
+  if id -nG "$admin" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+    gpasswd -d "$admin" docker >/dev/null
+    echo "removed: ${admin} from docker"
+  else
+    echo "already done: ${admin} not in docker"
+  fi
+done
 
 echo "== /data (NFS)"
 mkdir -p /data
@@ -291,5 +299,5 @@ cat <<DONE
 Baseline en place.
 - vm.max_map_count and /etc/docker/daemon.json: left to Ansible, as in production.
 - Password of ${ADMIN2_USER}: set it by hand (sudo passwd ${ADMIN2_USER}).
-- Log out and back in so that ${ADMIN_USER} picks up the docker group.
+- Docker is for the service account only: admins use sudo -iu manuspectrum.
 DONE

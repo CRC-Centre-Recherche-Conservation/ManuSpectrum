@@ -79,6 +79,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 - [ ] `sudo deploy/rehearsal/host-nfs.sh` then `sudo exportfs -v` → one line
   `/srv/ms-rehearsal-data 192.168.123.10/32(...)` with the options from `rehearsal.env`.
 - [ ] Re-run `sudo deploy/rehearsal/host-nfs.sh` → "already done".
+- [ ] `grep -A3 '^\[mountd\]' /etc/nfs.conf` → shows `manage-gids=n`: the server honours the
+  client's supplementary groups, as the production one does (Cantaloupe reads the uploads
+  through `group_add: APP_GID`).
 
 ### 1.4 Automatic installation (host)
 
@@ -100,7 +103,8 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 - [ ] `lsblk` → `/boot` on partition 1 (2 G); `vg0-root` of size `ROOT_LV_SIZE` on `/`.
 - [ ] `[ -d /sys/firmware/efi ] && echo UEFI || echo BIOS` → `BIOS`.
 - [ ] `localectl status` → the `LOCALE` locale and the `KEYBOARD` keyboard from `rehearsal.env`.
-- [ ] `cloud-init status` → `status: done`.
+- [ ] `cloud-init status` → `status: done` or `status: disabled` (both mean the installer
+  finished; the Ubuntu 26.04 autoinstall disables cloud-init for later boots).
 
 ### 1.6 Host baseline (rehearsal VM)
 
@@ -118,8 +122,10 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   (`no_root_squash`: `1000`; `root_squash`: the `chown` fails).
 - [ ] `sudo -iu manuspectrum docker ps` → empty list without error (the service account
   talks to Docker); `sudo -l -U manuspectrum` → no sudo rights.
-- [ ] From the host: `ssh manuspectrum@192.168.123.10` → refused (the service
-  account has no SSH login).
+- [ ] From the host: `ssh -o BatchMode=yes -o PreferredAuthentications=publickey manuspectrum@192.168.123.10 true`
+  → refused at once (the service account has no SSH login). Every refusal counts for fail2ban:
+  repeated attempts get the host banned for 10 minutes, which also blocks the `nmap` check below
+  (wait it out; the ban proves fail2ban works).
 - [ ] From the host: `nmap -Pn -p 1-65535 192.168.123.10` → only 22, 80, 443
   appear (80/443 "closed" while no service runs: this is normal).
 
@@ -160,7 +166,7 @@ runs on every pull request touching the stack: `check-stack.sh` (2.1), the image
 A runner has no NFS media, no 22 GB / 8 vCPU sizing, no unattended reboot and no
 service account. So here the rehearsal VM is what proves: the real service account and
 media directory (2.2), the memory limits and the measured memory of a full reindex
-(2.5, 2.9), the host reboot (2.8), and everything the CI also runs, replayed on the
+(2.5, 2.10), the host reboot (2.8), and everything the CI also runs, replayed on the
 production-shaped VM. Rows marked **(CI too)** repeat a CI check on purpose.
 
 In this step, `dc` means:
@@ -168,6 +174,8 @@ In this step, `dc` means:
 (`alias dc='…'` once per terminal). Commands marked *(service account)* run after
 `sudo -iu manuspectrum` and `cd ~/manuspectrum`. Host-specific values (accounts, paths,
 names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
+Only the service account is in the `docker` group (root-equivalent): the admin accounts run no
+`docker`, `dc`, `make -C deploy` or `smoke.sh` command, except through `sudo`.
 
 ### 2.1 The kit is sound (host or CI)
 
@@ -184,12 +192,14 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
 
 ### 2.2 Service account, media directory, `.env` and secrets (rehearsal VM)
 
-- [ ] `command -v make git` → two paths. Otherwise `sudo apt-get install -y make git` and
-  record it (Ansible installs them from PP-8).
-- [ ] `docker compose version` and `docker info --format '{{.LoggingDriver}}'` →
+- [ ] `command -v make git` → two paths. A fresh baseline has no `make`: it mirrors what the
+  hosting provider delivers, and Ansible installs it from PP-8. Until then the admin installs it
+  by hand with sudo (`sudo apt-get install -y make git`); record that it was needed.
+- [ ] *(service account)* `docker compose version` and `docker info --format '{{.LoggingDriver}}'` →
   Compose v2 and `json-file`.
 - [ ] `sudo install -d -o manuspectrum -g manuspectrum -m 0750 /data/manuspectrum /data/manuspectrum/media /data/manuspectrum/media/uploadedfiles`
-  (paths and account from `rehearsal.env`), then `ls -ldn /data/manuspectrum/media` →
+  (paths and account from `rehearsal.env`), then `sudo ls -ldn /data/manuspectrum/media` (the directory is `0750`, owned by the service
+  account: without `sudo` the admin cannot list it; or run it as the service account) →
   owner and group = `id -u manuspectrum`, `id -g manuspectrum`. Directories `0750`, files
   `0640`, owned by the account: Cantaloupe is not that account, it reads the uploads through
   `group_add: APP_GID`. Files that web or worker write later get `0644` (umask 022).
@@ -278,48 +288,50 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
     `Host: web` and the `DOMAIN_NAMES` only.
   - On failure: the `FAIL:` line names the check and the value found;
     `dc logs --tail=100 <service>`.
-- [ ] Same Host rule by hand: `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' http://127.0.0.1:8000/healthz`
+- [ ] *(service account)* Same Host rule by hand: `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' http://127.0.0.1:8000/healthz`
   → `200`; with `-H 'Host: localhost'` → `400`.
 
 ### 2.5 Resources and restart policy (D-H6)
 
-- [ ] `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
-  elasticsearch 4GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
+- [ ] *(service account)* `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
+  elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
   redis-broker 256MiB, redis-cache 768MiB, beat 256MiB. Record the idle usage of each.
-  Expected idle (capacity review §2.11): elasticsearch 2.3-2.5 GiB, postgres 0.8-1.2,
-  web 2.5-3.0, worker 0.4-0.6, cantaloupe 0.3 (1.3 warm).
-- [ ] `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' $(dc ps -q)`
+  Expected idle: elasticsearch about 2.7 GiB on an empty database, about 3.4 GiB with data
+  loaded (heap 2 GiB; the rest is direct memory, metaspace, threads and page cache). The
+  postgres, web and worker figures depend on the load: measured 0.1 / 0.9 / 0.3 GiB on an empty
+  database and 0.36 / 0.62 / 0.29 GiB with data loaded and no traffic; cantaloupe 0.3 (1.3 warm).
+- [ ] *(service account)* `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' $(dc ps -q)`
   → eight lines where the two figures are equal (a container never swaps).
   - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
     applied: the `-f` list or `make` was bypassed.
-- [ ] `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
+- [ ] *(service account)* `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
   each worker runs 4 threads: 20 concurrent requests, `GUNICORN_WORKERS`/`GUNICORN_THREADS`).
-- [ ] `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
-- [ ] `docker inspect -f '{{.Config.StopTimeout}}' manuspectrum-web-1` → `310` (above gunicorn's
+- [ ] *(service account)* `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
+- [ ] *(service account)* `docker inspect -f '{{.Config.StopTimeout}}' manuspectrum-web-1` → `310` (above gunicorn's
   `graceful_timeout` of 300 s, which bounds a stop and a `max_requests` recycle because
   `timeout` is 330 s, at least `graceful_timeout`: a download in progress survives both).
-- [ ] `dc exec -T web python manage.py shell -c "from django.db import connection as c; k=c.cursor(); k.execute('SHOW statement_timeout'); print(k.fetchone()[0])"`
+- [ ] *(service account)* `dc exec -T web python manage.py shell -c "from django.db import connection as c; k=c.cursor(); k.execute('SHOW statement_timeout'); print(k.fetchone()[0])"`
   → `1min`; the same command with `worker` instead of `web` → `0`.
-- [ ] `dc exec -T cantaloupe id` → the groups list contains `APP_GID`.
-- [ ] `dc exec elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/_local/stats/jvm?filter_path=**.heap_max_in_bytes"'`
+- [ ] *(service account)* `dc exec -T cantaloupe id` → the groups list contains `APP_GID`.
+- [ ] *(service account)* `dc exec elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/_local/stats/jvm?filter_path=**.heap_max_in_bytes"'`
   → `2147483648`.
-- [ ] `dc exec elasticsearch sh -c 'stat -c %a /tmp/elastic_password; stat -c %a /run/secrets/elastic_password'`
+- [ ] *(service account)* `dc exec elasticsearch sh -c 'stat -c %a /tmp/elastic_password; stat -c %a /run/secrets/elastic_password'`
   → `600` then `444` (Elasticsearch reads its own `0600` copy; the host file stays shared).
-- [ ] `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' $(dc ps -q)` → eight lines
+- [ ] *(service account)* `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' $(dc ps -q)` → eight lines
   `unless-stopped`.
-- [ ] No published port: `docker ps --format '{{.Ports}}'` → no `0.0.0.0:` nor `:::` entry
+- [ ] *(service account)* No published port: `docker ps --format '{{.Ports}}'` → no `0.0.0.0:` nor `:::` entry
   (the reverse proxy comes with the nginx and TLS step).
 
 ### 2.6 Logs and rotation
 
-- [ ] `for c in $(dc ps -q); do docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $c; done`
+- [ ] *(service account)* `for c in $(dc ps -q); do docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $c; done`
   → eight lines ending `{json-file map[max-file:5 max-size:10m]}`.
   - On failure: `logging` is missing for that service in `compose.yaml`.
-- [ ] `sudo ls -lh $(docker inspect -f '{{.LogPath}}' manuspectrum-web-1)*` → `*-json.log`,
+- [ ] *(admin)* `sudo ls -lh $(sudo docker inspect -f '{{.LogPath}}' manuspectrum-web-1)*` → `*-json.log`,
   no file above 10 MB. To see rotation itself, write about 12 MB:
   `docker exec manuspectrum-web-1 sh -c 'yes ms-log-test | head -c 12000000 >/proc/1/fd/1'`,
   then the same `ls` → a second file `*-json.log.1`, none larger than 10 MB, at most five.
-- [ ] `docker logs --tail=5 manuspectrum-web-1` still answers (rotation does not break it).
+- [ ] *(service account)* `docker logs --tail=5 manuspectrum-web-1` still answers (rotation does not break it).
 
 ### 2.7 Data survives (rehearsal VM only)
 
@@ -344,7 +356,7 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
 - [ ] *(service account)* `deploy/compose/smoke.sh static-swap` → only `ok:` (a stale
   `current` is replaced on restart, the previous release kept once, pruned at the next
   restart). **(CI too)**
-- [ ] After a new image: `docker exec manuspectrum-web-1 cat /app/static/.build-id` → note
+- [ ] *(service account)* After a new image: `docker exec manuspectrum-web-1 cat /app/static/.build-id` → note
   `<id1>`. Build the next commit (`git checkout <next commit>`,
   `make -C deploy build IMAGE=manuspectrum:next`), set `MANUSPECTRUM_IMAGE=manuspectrum:next`
   in `.env`, `make -C deploy up`. Then
@@ -360,36 +372,7 @@ names) come from `deploy/rehearsal/rehearsal.env` and `deploy/compose/.env`.
   - On failure: `systemctl is-enabled docker` → `enabled`; `findmnt /data` still mounted
     before Docker starts; `dc ps -a`; `dc logs --tail=100 <service>` of the one not back.
 
-### 2.9 Memory under a full reindex (feeds the capacity review)
-
-- [ ] *(service account)* In a second terminal, sample every 10 s:
-  `while sleep 10; do date +%T; docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}'; done | tee ~/reindex-stats.txt`
-- [ ] *(service account)* In the first: `time dc exec -T web python manage.py es reindex_database`
-  → exits 0. Stop the sampling. Record: the duration, the peak `MemUsage` of
-  `elasticsearch`, `postgres`, `web`, `worker`, and any container at its limit.
-  - Expected: no container at its limit, `docker inspect -f '{{.State.OOMKilled}}' $(dc ps -q)`
-    → eight `false`, `sudo dmesg | grep -ci 'out of memory'` → `0`.
-  - On failure: record the peak and the killed service; the limits in `compose.prod.yaml`
-    are starting values until this figure is in.
-- [ ] `make -C deploy smoke` → only `ok:` after the reindex.
-
-### 2.10 Clean up
-
-The markers of 2.7 stay in place until here: 2.8 reuses them.
-
-- [ ] *(service account)* `deploy/compose/smoke.sh clean` → `ok: markers removed`.
-- [ ] (host) optional snapshot of the installed stack:
-  `virsh shutdown ms-rehearsal`, wait for `shut off`,
-  `virsh snapshot-create-as ms-rehearsal stack-step2`, `virsh start ms-rehearsal`.
-
-### 2.11 What cannot be tested in this step
-
-nginx, TLS and the public ports, hence any check in a browser (step « nginx and TLS »:
-an XY chart in the editor and in a report, the model page, Compare, a French page),
-secrets under sops, `/readyz` and the JSON logs, backups, the real SMTP relay, and
-pyramidal TIFFs for Cantaloupe (a separate change).
-
-### 2.12 Load the dev snapshot (rehearsal VM only)
+### 2.9 Load the dev snapshot (rehearsal VM only)
 
 A snapshot made on the development machine with `deploy/rehearsal/make-dev-snapshot.sh`
 (see `deploy/rehearsal/README.md`) is copied to the VM. It holds user accounts and
@@ -400,8 +383,8 @@ research data: never in Git, never in a public place.
   `host-baseline.sh` when `rehearsal.env` sets `REHEARSAL_HOST=yes`, checked by `verify-baseline.sh` then).
   - On failure: the command needs both guards. A production host has `production` and no marker
     file, and the command is refused there whatever `.env` says.
-- [ ] `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
-- [ ] `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → fourteen `load-snapshot: step n/14`
+- [ ] *(service account)* `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
+- [ ] *(service account)* `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → fourteen `load-snapshot: step n/14`
   lines, `checksums match`, `preflight: ok`, counts `equal to the manifest` (or a `WARNING` naming
   the difference a migration explains), `done: the snapshot is loaded`.
   - A snapshot holding a migration of an installed app that the image does not know is refused before
@@ -411,7 +394,7 @@ research data: never in Git, never in a public place.
   - On failure: a `sha256 mismatch` means the copy is damaged, copy it again; a `pg_restore failed`
     names the first errors, the database is incomplete, run the command again (it recreates it);
     a failing step stops the run, fix it and run the command again.
-- [ ] `make -C deploy smoke` → only `ok:` lines; `ls -d /data/manuspectrum/media/previous-*` →
+- [ ] *(service account)* `make -C deploy smoke` → only `ok:` lines; `ls -d /data/manuspectrum/media/previous-*` →
   the previous uploads and `rehearsal-before.dump` (the database as it was), kept; only the last
   two complete such directories are kept (a directory without `.complete`, left by a failed run, is
   never removed). The command logs the aside path when it creates it.
@@ -419,8 +402,45 @@ research data: never in Git, never in a public place.
   → the same fourteen steps, restoring `rehearsal-before.dump` and a copy of `uploadedfiles/`
   from that directory (the migration check and the counts are skipped, there is no manifest);
   refused when `rehearsal-before.dump` is missing; `smoke` is `ok:` afterwards.
-- [ ] The dev admin password does not survive: `deploy/compose/smoke.sh check` is `ok:` and logging in as
+- [ ] *(service account)* The dev admin password does not survive: `deploy/compose/smoke.sh check` is `ok:` and logging in as
   `admin` with the development password fails; with the `admin_password` secret it succeeds.
+
+### 2.10 Memory under a full reindex (feeds the capacity review)
+
+Measured on the data loaded in 2.9: on an empty database a reindex measures nothing, and the
+idle figures of 2.5 are only a baseline. `load-snapshot` already runs a full reindex (one of its
+steps).
+
+- [ ] *(service account)* Record the idle memory again now that the snapshot is loaded:
+  `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'`.
+- [ ] *(service account)* In a second terminal, sample every 10 s (start it before the load of 2.9,
+  or before the command below):
+  `while sleep 10; do date +%T; docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}'; done | tee ~/reindex-stats.txt`
+- [ ] *(service account)* In the first, either the reindex step of a `make -C deploy load-snapshot ... CONFIRM=yes`
+  run (2.9) or a separate `time dc exec -T web python manage.py es reindex_database` on the loaded
+  data → exits 0. Stop the sampling. Record: the duration, the peak `MemUsage` of
+  `elasticsearch`, `postgres`, `web`, `worker`, and any container at its limit.
+  - Expected: no container at its limit, `docker inspect -f '{{.State.OOMKilled}}' $(dc ps -q)`
+    → eight `false`, `sudo dmesg | grep -ci 'out of memory'` → `0`.
+  - On failure: record the peak and the killed service; the limits in `compose.prod.yaml`
+    are starting values until this figure is in.
+- [ ] *(service account)* `make -C deploy smoke` → only `ok:` after the reindex.
+
+### 2.11 Clean up
+
+The markers of 2.7 stay in place until here: 2.8 reuses them.
+
+- [ ] *(service account)* `deploy/compose/smoke.sh clean` → `ok: markers removed`.
+- [ ] (host) optional snapshot of the installed stack:
+  `virsh shutdown ms-rehearsal`, wait for `shut off`,
+  `virsh snapshot-create-as ms-rehearsal stack-step2`, `virsh start ms-rehearsal`.
+
+### 2.12 What cannot be tested in this step
+
+nginx, TLS and the public ports, hence any check in a browser (step « nginx and TLS »:
+an XY chart in the editor and in a report, the model page, Compare, a French page),
+secrets under sops, `/readyz` and the JSON logs, backups, the real SMTP relay, and
+pyramidal TIFFs for Cantaloupe (a separate change).
 
 ---
 
@@ -437,55 +457,55 @@ stack and adds what a runner cannot show: five gunicorn workers aggregated, a wo
 
 ### 3.1 Probes
 
-- [ ] `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/readyz | python3 -m json.tool`
+- [ ] *(service account)* `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/readyz | python3 -m json.tool`
   - Expected: `"status": "ready"`, six components `postgres`, `elasticsearch`,
     `celery-broker`, `redis-broker`, `redis-cache`, `cantaloupe`, each `"status": "up"` with
     `seconds` below 2.
   - On failure: the component named `down` or `timeout` is the one to look at
     (`dc ps`, `dc logs --tail 50 <service>`); `error` gives the exception class only, the
     detail is in `dc logs web | grep readiness`.
-- [ ] *(CI too)* `deploy/compose/smoke.sh readiness`
+- [ ] *(service account)* *(CI too)* `deploy/compose/smoke.sh readiness`
   - Expected: `ok: /readyz with Elasticsearch stopped`, `ok: /readyz names Elasticsearch`,
     `ok: every service is healthy`, `ok: /readyz after Elasticsearch restarted`.
   - On failure: if the 503 never comes, `/readyz` is not reading Elasticsearch (check
     `READYZ_ENABLED` in the image); if the 200 never comes back, `dc logs elasticsearch`.
-- [ ] `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' -H 'X-Forwarded-For: 1.2.3.4' http://127.0.0.1:8000/metrics`
+- [ ] *(service account)* `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' -H 'X-Forwarded-For: 1.2.3.4' http://127.0.0.1:8000/metrics`
   - Expected: `404` (a proxied request never reads the probes).
   - On failure: `observability/views.relayed()` is bypassed; do not go on to PP-3.
 
 ### 3.2 Metrics
 
-- [ ] *(CI too)* `deploy/compose/smoke.sh observability` → only `ok:` lines.
+- [ ] *(service account)* *(CI too)* `deploy/compose/smoke.sh observability` → only `ok:` lines.
   - On failure: the failing line names the piece (readyz, metrics, request id, JSON log,
     access log, worker metrics, task propagation).
-- [ ] Five workers are summed: `for i in $(seq 50); do dc exec -T web curl -s -o /dev/null -H 'Host: web' http://127.0.0.1:8000/healthz; done; dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep 'view="healthz"' | grep requests_total_by_view`
+- [ ] *(service account)* Five workers are summed: `for i in $(seq 50); do dc exec -T web curl -s -o /dev/null -H 'Host: web' http://127.0.0.1:8000/healthz; done; dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep 'view="healthz"' | grep requests_total_by_view`
   - Expected: one line, value ≥ 50 (not five lines, not a value near 10).
   - On failure: `PROMETHEUS_MULTIPROC_DIR` is not set in the web container
     (`dc exec web env | grep PROMETHEUS`).
-- [ ] `dc exec web sh -c 'stat -f -c %T /run/prometheus; ls /run/prometheus | head'`
+- [ ] *(service account)* `dc exec web sh -c 'stat -f -c %T /run/prometheus; ls /run/prometheus | head'`
   - Expected: `tmpfs`, then files `counter_<pid>.db`, `histogram_<pid>.db`, `gauge_livesum_<pid>.db`.
   - On failure: the tmpfs is missing in `compose.yaml`.
-- [ ] Replaced workers leave no live gauge: `dc kill -s HUP web` (gunicorn replaces every
+- [ ] *(service account)* Replaced workers leave no live gauge: `dc kill -s HUP web` (gunicorn replaces every
   worker gracefully), wait 20 s, then
   `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep '^manuspectrum_inflight_requests '`.
   - Expected: `manuspectrum_inflight_requests 1.0` (the scrape itself), not more.
   - On failure: `child_exit` is not called (`dc exec web grep -A3 child_exit /app/gunicorn.conf.py`).
-- [ ] Worker: `dc exec -T worker curl -s http://127.0.0.1:9808/metrics | grep -c '^manuspectrum_'`
+- [ ] *(service account)* Worker: `dc exec -T worker curl -s http://127.0.0.1:9808/metrics | grep -c '^manuspectrum_'`
   - Expected: a number above 0. `dc port worker 9808` → nothing (not published).
   - On failure: `dc exec worker env | grep -E 'MS_CELERY_METRICS_PORT|PROMETHEUS'`.
 
 ### 3.3 Logs
 
-- [ ] `dc logs --no-log-prefix --since 10m web worker | grep '^{' | tail -n 3 | python3 -c 'import json,sys; [print(sorted(json.loads(l))) for l in sys.stdin]'`
+- [ ] *(service account)* `dc logs --no-log-prefix --since 10m web worker | grep '^{' | tail -n 3 | python3 -c 'import json,sys; [print(sorted(json.loads(l))) for l in sys.stdin]'`
   - Expected: each list holds `environment`, `hostname`, `level`, `logger`, `message`,
     `request_id`, `service`, `timestamp`, `trace_id`, `version`; `environment` is `rehearsal`.
   - On failure: `MS_LOG_FORMAT` overridden in `.env`, or the image predates PP-5.
-- [ ] `dc logs --no-log-prefix --since 1h web worker | grep -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|msiiif1\.|password=[^[]' | wc -l`
+- [ ] *(service account)* `dc logs --no-log-prefix --since 1h web worker | grep -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|msiiif1\.|password=[^[]' | wc -l`
   after logging in once and using the Biblissima import once
   - Expected: `0`.
   - On failure: a logger writes personal data the redaction does not cover; record the
     line (redacted by hand) and open an issue before production.
-- [ ] `dc logs --no-log-prefix --since 10m web | grep -c '"GET /'`
+- [ ] *(service account)* `dc logs --no-log-prefix --since 10m web | grep -c '"GET /'`
   - Expected: `0` (gunicorn writes no access log; nginx will, PP-3).
 
 ### 3.4 What cannot be tested in this step

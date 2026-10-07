@@ -27,7 +27,7 @@ EXTERNAL_VOLUMES = {
 MIB = 1024**2
 GIB = 1024**3
 PROD_LIMITS = {
-    "elasticsearch": 4 * GIB,
+    "elasticsearch": 5 * GIB,
     "postgres": 3 * GIB,
     "web": 4 * GIB,
     "worker": 2 * GIB,
