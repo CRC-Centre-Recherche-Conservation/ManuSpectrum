@@ -102,6 +102,11 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `/silk/`, `/metrics` and `/readyz` are refused at the edge. The 404, 429 and
   50x pages are nginx's own; the 50x page is the site's
   `manuspectrum/templates/errors/500.htm`.
+- Trust boundary: gunicorn's `forwarded_allow_ips="*"` and the client address
+  Django reads from `X-Real-IP` (`utils/client_ip.py`) are safe only because
+  nothing but nginx reaches `web:8000` (the port is not published and the
+  network is internal). Never publish that port or attach another service
+  that can send requests to it: both headers become spoofable.
 - Rate limits and timeouts live in nginx (`snippets/ratelimit.conf`,
   `edge-rules.conf`); the client IP read by Django comes from nginx.
 - The access log is JSON, one line per request with the request id, no query
@@ -109,13 +114,24 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   (owned by the service account), rotated daily and kept thirty days by the
   host `logrotate` file (`logrotate/manuspectrum-nginx.in`, installed by PP-8;
   nginx reopens its files on `USR1`, no restart). Container stdout stays bounded
-  by `json-file` (10 MB x 5).
-- Certificates are files in `CERTS_DIR` (`fullchain.pem`, `privkey.pem`).
-  `CERT_MODE` chooses who writes them (details: `certs/README.md`):
+  by `json-file` (10 MB x 5). `error.log` is not redacted: upstream-error lines
+  carry the raw request line (query string and reset token included). It is
+  rotated with the access log (thirty days) and readable by the service account
+  and root only; rate-limit lines are logged at `notice`, below the `warn`
+  level of `error_log`, so they never reach it.
+- Certificates are files under `CERTS_DIR`, in separate directories so that each
+  container sees only what it needs: `live/` (`fullchain.pem`, `privkey.pem`, the
+  only certificate directory nginx mounts, read-only), `acme-webroot/` (nginx,
+  read-only, and certbot), `letsencrypt/` (certbot state, never in nginx) and
+  `ca/` (`ca.crt`, `ca.key`, local mode; only `ca.crt` is ever mounted, into web
+  and worker). `CERT_MODE` chooses who writes them (details: `certs/README.md`):
   `local` (`make certs-local`: a CA of the rehearsal; web and worker trust it
   through `LOCAL_CA_CERT`), `acme` (certbot and Let's Encrypt: `make cert-init`,
   then `make cert-renew` twice a day from the systemd timer; staging first) and
   `provided` (the operator drops the two files and reloads nginx).
+- Concept images (`/files/concepts/...`) are not served: only `/files/<uuid>`
+  goes through `FileView`, and nginx never reads `uploadedfiles/` directly. This
+  is a decision (pre-existing, issue #71), not an oversight.
 - web and worker reach the public name through the `PUBLIC_HOST` network alias
   of nginx, so `PUBLIC_SERVER_ADDRESS` (https, trailing slash) and `PUBLIC_HOST`
   must name the same host; `CANTALOUPE_HTTP_ENDPOINT` is
@@ -133,10 +149,10 @@ Set in `compose/.env` (`compose/.env.example` documents each one):
 | Variable | Role |
 | --- | --- |
 | `CERT_MODE` | `local`, `acme` or `provided` |
-| `CERTS_DIR` | Host directory of `fullchain.pem`, `privkey.pem`, `acme-webroot/`, and `ca.crt` in local mode |
+| `CERTS_DIR` | Host directory with `live/` (`fullchain.pem`, `privkey.pem`), `acme-webroot/`, `letsencrypt/` (acme) and `ca/` (`ca.crt`, `ca.key`, local mode) |
 | `NGINX_LOG_HOST_DIR` | Host directory of the nginx access and error logs |
 | `HSTS_MAX_AGE` | Seconds; 3600 the first week, then 31536000 |
-| `LOCAL_CA_CERT` | Local mode only: path of `ca.crt`, trusted by web and worker (never a private key) |
+| `LOCAL_CA_CERT` | Local mode only: path of `ca/ca.crt`, trusted by web and worker (never a private key) |
 | `HTTP_PORT`, `HTTPS_PORT` | Host ports published by nginx |
 | `ACME_EMAIL`, `ACME_SERVER` | certbot contact and directory (staging by default) |
 | `DOMAIN_NAMES` | Names nginx answers to and the certificate covers |

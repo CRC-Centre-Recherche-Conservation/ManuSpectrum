@@ -50,6 +50,10 @@ if timeout < graceful_timeout:
 keepalive = 5
 max_requests = 1000
 max_requests_jitter = 100
+# Trust boundary: gunicorn honours X-Forwarded-* from any peer, and
+# utils/client_ip.py trusts X-Real-IP, only because nothing but nginx can reach
+# web:8000 (no published port, internal network). A new path to this port
+# makes both spoofable.
 forwarded_allow_ips = os.environ.get("GUNICORN_FORWARDED_ALLOW_IPS", "*")
 accesslog = None
 errorlog = "-"

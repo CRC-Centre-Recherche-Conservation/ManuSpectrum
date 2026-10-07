@@ -213,7 +213,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`.
   Also set the nginx values (4.1): `CERT_MODE=local`, `CERTS_DIR`, `NGINX_LOG_HOST_DIR`,
   `PUBLIC_HOST` (the host name of `PUBLIC_SERVER_ADDRESS`, no port) and
-  `LOCAL_CA_CERT=<CERTS_DIR>/ca.crt` as a literal path. Create the log directory as the
+  `LOCAL_CA_CERT=<CERTS_DIR>/ca/ca.crt` as a literal path. Create the log directory as the
   service account (`install -d -m 0750 <NGINX_LOG_HOST_DIR>`); `make -C deploy certs-local`
   (4.1) creates the certificates.
 - [ ] *(service account, rehearsal VM only)* the template ships `DEPLOY_ENVIRONMENT=production`;
@@ -542,19 +542,22 @@ Rows marked **(CI too)** repeat a CI check on purpose.
 
 ### 4.1 Certificates (local CA)
 
-- [ ] *(service account)* `make -C deploy certs-local` then `ls -l $CERTS_DIR`
-  - Expected: `ca.crt` (`0644`), `ca.key` (`0600`), `fullchain.pem` and `privkey.pem` (`0640`),
-    an empty `acme-webroot/`; `openssl verify -CAfile $CERTS_DIR/ca.crt $CERTS_DIR/fullchain.pem` → `OK`;
-    `openssl x509 -in $CERTS_DIR/fullchain.pem -noout -ext subjectAltName` lists every name of `DOMAIN_NAMES`.
+- [ ] *(service account)* `make -C deploy certs-local` then `ls -l $CERTS_DIR/ca $CERTS_DIR/live`
+  - Expected: `ca/` holds `ca.crt` (`0644`) and `ca.key` (`0600`); `live/` holds `fullchain.pem` and
+    `privkey.pem` (`0640`); an empty `acme-webroot/`; `openssl verify -CAfile $CERTS_DIR/ca/ca.crt $CERTS_DIR/live/fullchain.pem` → `OK`;
+    `openssl x509 -in $CERTS_DIR/live/fullchain.pem -noout -ext subjectAltName` lists every name of `DOMAIN_NAMES`.
+    After 4.2, `dc exec nginx ls /etc/nginx/certs` → exactly `fullchain.pem privkey.pem` (no `ca.key`).
   - On failure: the script refuses a name that is neither a host name nor an IPv4 address; the
     host needs `openssl` 3.0 or later. `ca.key` never leaves the VM.
-- [ ] *(service account)* `make -C deploy up`, then `dc exec -T web python -c "import ssl,os; print(os.environ['REQUESTS_CA_BUNDLE'])"` and
-  `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' https://$PUBLIC/healthz`
-  - Expected: a bundle path, then `200`: web and worker trust `LOCAL_CA_CERT` and reach the public
+- [ ] *(service account)* `make -C deploy up`, then `dc exec -T web test -s /tmp/ca-bundle.pem && echo bundle` and
+  `dc exec -T web curl -s --cacert /tmp/ca-bundle.pem -o /dev/null -w '%{http_code}\n' https://$PUBLIC/healthz`
+  (`dc exec` does not see the variables the entrypoint exports, so the bundle it builds is named
+  explicitly; `smoke.sh edge` does the same)
+  - Expected: `bundle`, then `200`: web and worker trust `LOCAL_CA_CERT` and reach the public
     name through the nginx network alias (`PUBLIC_HOST`).
   - On failure: `LOCAL_CA_CERT` is empty or not a literal path in `.env`, or `PUBLIC_HOST` differs
     from the host name of `PUBLIC_SERVER_ADDRESS`.
-- [ ] (workstation, the laptop with the browser) Copy `ca.crt` only (`scp`, never `ca.key`), trust it
+- [ ] (workstation, the laptop with the browser) Copy `ca/ca.crt` only (`scp`, never `ca/ca.key`), trust it
   (`deploy/certs/README.md`, « Trusting the CA on a workstation »: system store, Firefox or NSS
   store), and add `<vm> manuspectrum.test` to `/etc/hosts`.
   - Expected: `curl -sI https://manuspectrum.test/` with no `-k` → `HTTP/2 200` or a redirect to the
@@ -598,6 +601,11 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   - On failure: the rule is missing from `edge-rules.conf` (a bare `/en/` prefix missing, an
     `(en|fr)` alternation not updated). `/metrics` and `/readyz` must have an empty body.
 - [ ] `curl -s https://manuspectrum.test/healthz` → `ok`, `200` (liveness stays public for the probe).
+- [ ] Per-address connection limit: `limit_conn perip 20` counts HTTP/2 concurrent streams, and every
+  workstation behind one NAT address shares it. Measure on the real network: open the heaviest
+  viewer page (4.5, Mirador on a large manuscript) from two workstations behind the same address and
+  `grep -cE '"status":(429|503)' $LOG/access.log` → `0`. Record the peak; a figure near 20 means the
+  value must be raised before production.
 - [ ] Bypass attempts are refused: `/en//api/resource/x` with `--path-as-is` and `/en/api/%72esource/x` → `404`.
 - [ ] Core routes the project keeps stay reachable: `/en/api/tiles/<uuid>` is answered by Django (has
   `X-Request-ID`), `/en/api/relatable-resources/<g>/<n>` too.
@@ -635,8 +643,9 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
 
 - [ ] A file download goes through `FileView`: take the link of a file-list card in the browser (`/files/<uuid>`).
   `curl -sL -o /tmp/f -w '%{http_code} %{size_download}\n' https://manuspectrum.test/files/<uuid>`
-  → `200` and the size of the file on disk; the same uuid with a user who may not read it, or an
-  unknown uuid → `404`/`403` from Django, never the bytes.
+  → `200` and the size of the file on disk; the same uuid with a user who may not read it → `404`/`403`
+  from Django, never the bytes. An unknown uuid → `500`: Arches' `FileView` raises
+  (`SearchExportHistory.DoesNotExist`), and nginx serves its 50x page, never the bytes.
   - On failure: the 302 is returned to the client instead of being followed inside nginx
     (`@media` in `media.conf`).
 - [ ] One Arches manifest, every id on the public https host:
@@ -700,6 +709,11 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   → `0`; the same grep, without the e-mail alternative, on `dc logs --no-log-prefix --since 1h nginx` → `0`.
   - On failure: record the line (redacted by hand) and open an issue before production.
 - [ ] `dc logs --no-log-prefix --since 10m web | grep -c '"GET /'` → `0` (the access log is nginx's).
+- [ ] *(service account or root)* `error.log` is not redacted: rate-limit lines are at `notice` and do not
+  reach it (`grep -c 'limiting' $LOG/error.log` → `0` after 4.3's burst), but upstream-error lines
+  (for instance after `dc stop web`, 4.4) still carry the raw request line, query string and reset
+  token included. Check `ls -l $LOG/error.log` → readable by the service account and root only
+  (no `o+r`), rotated thirty days with the access log (4.9).
 
 ### 4.9 Rotation
 
