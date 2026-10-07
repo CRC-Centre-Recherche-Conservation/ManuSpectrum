@@ -190,7 +190,7 @@ function focusHeading(): void {
             v-if="props.summary.zone?.source === 'component'"
             class="note-line"
         >
-            <span>{{ $gettext("Zone of the observed part.") }}</span>
+            <span>{{ $gettext("Zone of the observed component.") }}</span>
         </p>
 
         <section

@@ -489,7 +489,7 @@ function focusHeading(): void {
                 </template>
                 <template v-if="analysis.component">
                     <dt>
-                        <span>{{ $gettext("Studied area") }}</span>
+                        <span>{{ $gettext("Studied component") }}</span>
                     </dt>
                     <dd :lang="analysis.component.name.lang">
                         <span>{{ analysis.component.name.value }}</span>

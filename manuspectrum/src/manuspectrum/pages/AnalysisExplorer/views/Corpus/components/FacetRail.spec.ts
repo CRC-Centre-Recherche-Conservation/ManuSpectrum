@@ -152,7 +152,7 @@ describe("FacetRail", () => {
         });
         const titles = wrapper.findAll(".group-title button");
         expect(titles.map((title) => title.text())).toEqual([
-            "▾Studied part",
+            "▾Studied component",
             "▾Analysis",
             "▾Identified material",
         ]);
@@ -182,7 +182,7 @@ describe("FacetRail", () => {
             `#${levels[0].attributes("aria-describedby")}`,
         );
         expect(hint.text()).toBe(
-            "Colours described on the studied part, even without analysis",
+            "Colours described on the studied component, even without analysis",
         );
 
         await levels[0].trigger("click");

@@ -34,7 +34,7 @@ export function useVocabulary(): {
             case "technique":
                 return $gettext("Technique");
             case "part":
-                return $gettext("Area");
+                return $gettext("Component");
             case "material":
                 return $gettext("Material");
             case "element":
@@ -46,7 +46,7 @@ export function useVocabulary(): {
             case "operator":
                 return $gettext("Operator");
             case "year":
-                return $gettext("Year");
+                return $gettext("Analysis year");
         }
     }
 
@@ -58,7 +58,7 @@ export function useVocabulary(): {
             case "colour":
                 return $gettext("Colour (identified)");
             case "part":
-                return $gettext("Studied area");
+                return $gettext("Studied component");
             case "material":
                 return $gettext("Identified material");
             default:
@@ -69,7 +69,7 @@ export function useVocabulary(): {
     function groupTitle(group: FacetGroup): string {
         switch (group) {
             case "part":
-                return $gettext("Studied part");
+                return $gettext("Studied component");
             case "analysis":
                 return $gettext("Analysis");
             case "characterization":
@@ -91,10 +91,10 @@ export function useVocabulary(): {
     function levelHint(level: ColourLevel): string {
         return level === "partColour"
             ? $gettext(
-                  "Colours described on the studied part, even without analysis",
+                  "Colours described on the studied component, even without analysis",
               )
             : $gettext(
-                  "Colour of the area where a material was identified from the analyses",
+                  "Colour of the zone where a material was identified from the analyses",
               );
     }
 

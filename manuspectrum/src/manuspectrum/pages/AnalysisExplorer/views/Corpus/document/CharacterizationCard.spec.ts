@@ -64,6 +64,18 @@ function mountCard(
 afterEach(() => vi.unstubAllGlobals());
 
 describe("CharacterizationCard", () => {
+    it("says the zone is the observed component's when it is not the material's own", () => {
+        const zone = (source: "own" | "component") => ({
+            canvas: "c1",
+            shape: { type: "rect" as const, x: 0, y: 0, w: 1, h: 1 },
+            source,
+        });
+        const { wrapper } = mountCard([], { zone: zone("component") });
+        expect(wrapper.text()).toContain("Zone of the observed component.");
+        const own = mountCard([], { zone: zone("own") });
+        expect(own.wrapper.text()).not.toContain("observed component");
+    });
+
     it("writes each material with its degree of certainty in words", async () => {
         const { wrapper } = mountCard([]);
         expect(wrapper.find(".materials").text()).toContain("Vermilion");
