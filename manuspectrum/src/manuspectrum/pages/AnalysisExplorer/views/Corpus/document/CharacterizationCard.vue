@@ -2,6 +2,8 @@
 import { computed, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
+
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
@@ -165,14 +167,14 @@ function focusHeading(): void {
             >
                 <span>{{ props.summary.name.value }}</span>
             </h3>
-            <button
+            <IconButton
                 v-if="props.closable"
-                type="button"
                 class="close"
+                icon="times"
+                :label="$gettext('Close the card')"
+                :description="$gettext('Escape')"
                 @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
+            />
             <p class="meta">
                 <span>{{ $gettext("Identified material") }}</span>
                 <span
@@ -418,7 +420,7 @@ function focusHeading(): void {
     font-weight: 600;
 }
 
-.characterization-card .card-head .close {
+.characterization-card .card-head .icon-button {
     grid-column: 2;
     grid-row: 1;
 }
@@ -487,7 +489,6 @@ function focusHeading(): void {
     color: var(--blue-text);
 }
 
-.characterization-card .card-head .close,
 .characterization-card .evidence button {
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);

@@ -289,15 +289,30 @@ describe("AnalysisCard", () => {
         expect(record.text()).toContain("(new tab)");
     });
 
+    it("closes through an icon button named « Close the card », described by Escape", async () => {
+        const { wrapper } = mountCard(analysisPayload());
+        const button = wrapper.find("button.close");
+        const named = (attribute: string) =>
+            wrapper.find(`[id="${button.attributes(attribute)}"]`).text();
+
+        expect(button.text()).toBe("");
+        expect(named("aria-labelledby")).toBe("Close the card");
+        expect(named("aria-describedby")).toBe("Escape");
+        await button.trigger("click");
+        expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
     it("asks to be closed", async () => {
         const { wrapper } = mountCard(analysisPayload());
-        await wrapper.find(".card-head .close").trigger("click");
+        await wrapper.find(".card-head button.close").trigger("click");
         expect(wrapper.emitted("close")).toHaveLength(1);
     });
 
     it("puts Close right after the heading, whatever the header holds", () => {
         const { wrapper } = mountCard(analysisPayload());
-        expect(wrapper.find(".card-head .name + .close").exists()).toBe(true);
+        expect(wrapper.find(".card-head .name + .icon-button").exists()).toBe(
+            true,
+        );
     });
 
     it("marks a draft analysis", () => {
@@ -440,9 +455,10 @@ describe("AnalysisCard", () => {
         expect(description.text()).toBe(IIIF_HELP);
         expect(description.attributes("hidden")).toBeDefined();
         expect(description.attributes("role")).toBe("tooltip");
-        expect(document.body.querySelectorAll('[role="tooltip"]')).toHaveLength(
-            1,
-        );
+        const copies = [
+            ...document.body.querySelectorAll('[role="tooltip"]'),
+        ].filter((tooltip) => tooltip.textContent === IIIF_HELP);
+        expect(copies).toHaveLength(1);
     });
 
     describe("IIIF link help", () => {

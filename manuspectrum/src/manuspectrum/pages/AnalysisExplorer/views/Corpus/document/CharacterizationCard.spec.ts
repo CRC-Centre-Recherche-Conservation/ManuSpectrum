@@ -184,15 +184,30 @@ describe("CharacterizationCard", () => {
         expect(wrapper.find(".sources").text()).toContain("Trap");
     });
 
+    it("closes through an icon button named « Close the card », described by Escape", async () => {
+        const { wrapper } = mountCard([]);
+        const button = wrapper.find("button.close");
+        const named = (attribute: string) =>
+            wrapper.find(`[id="${button.attributes(attribute)}"]`).text();
+
+        expect(button.text()).toBe("");
+        expect(named("aria-labelledby")).toBe("Close the card");
+        expect(named("aria-describedby")).toBe("Escape");
+        await button.trigger("click");
+        expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
     it("asks to be closed", async () => {
         const { wrapper } = mountCard([]);
-        await wrapper.find(".card-head .close").trigger("click");
+        await wrapper.find(".card-head button.close").trigger("click");
         expect(wrapper.emitted("close")).toHaveLength(1);
     });
 
     it("puts Close right after the heading, whatever the header holds", () => {
         const { wrapper } = mountCard([]);
-        expect(wrapper.find(".card-head .name + .close").exists()).toBe(true);
+        expect(wrapper.find(".card-head .name + .icon-button").exists()).toBe(
+            true,
+        );
     });
 
     it("offers the evidence of the material it shows, not the previous one's", async () => {

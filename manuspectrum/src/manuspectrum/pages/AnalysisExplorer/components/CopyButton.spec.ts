@@ -2,6 +2,9 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
+
+import { ICONS } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
@@ -96,21 +99,52 @@ describe("CopyButton", () => {
         wrapper.unmount();
     });
 
-    it("as an icon, is named by its label and shows a check once copied", async () => {
-        document.execCommand = vi.fn(() => true);
+    function drawn(wrapper: ReturnType<typeof mountButton>["wrapper"]) {
+        return wrapper
+            .findAll("button svg path")
+            .map((path) => path.attributes("d"));
+    }
+
+    it("as an icon, is an IconButton named by its label, with no title", () => {
         const { wrapper } = mountButton("@dataset{x}", vi.fn(), true);
         const button = wrapper.find("button");
+        const name = wrapper.find(
+            `[id="${button.attributes("aria-labelledby")}"]`,
+        );
 
-        expect(button.attributes("aria-label")).toBe("Copy BibTeX");
-        expect(button.attributes("title")).toBe("Copy BibTeX");
+        expect(wrapper.findComponent(IconButton).exists()).toBe(true);
+        expect(name.text()).toBe("Copy BibTeX");
+        expect(button.attributes("title")).toBeUndefined();
+        expect(button.attributes("aria-label")).toBeUndefined();
         expect(button.text()).toBe("");
-        expect(button.find("svg.copy").exists()).toBe(true);
+        expect(drawn(wrapper)).toEqual([...ICONS.clone]);
+        wrapper.unmount();
+    });
 
-        await button.trigger("click");
+    it("as an icon, shows a check once copied, then the copy icon again", async () => {
+        vi.useFakeTimers();
+        document.execCommand = vi.fn(() => true);
+        const { wrapper } = mountButton("@dataset{x}", vi.fn(), true);
+
+        await wrapper.find("button").trigger("click");
         await flushPromises();
+        expect(drawn(wrapper)).toEqual([...ICONS.check]);
 
-        expect(button.find("svg.check").exists()).toBe(true);
-        expect(button.find("svg.copy").exists()).toBe(false);
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(drawn(wrapper)).toEqual([...ICONS.clone]);
+        vi.useRealTimers();
+        wrapper.unmount();
+    });
+
+    it("as an icon without text, is aria-disabled and copies nothing", async () => {
+        const { wrapper, announce } = mountButton("", vi.fn(), true);
+        const button = wrapper.find("button");
+
+        expect(button.attributes("aria-disabled")).toBe("true");
+        expect(button.attributes("disabled")).toBeUndefined();
+        await button.trigger("click");
+        expect(announce).not.toHaveBeenCalled();
+        expect(drawn(wrapper)).toEqual([...ICONS.clone]);
         wrapper.unmount();
     });
 });

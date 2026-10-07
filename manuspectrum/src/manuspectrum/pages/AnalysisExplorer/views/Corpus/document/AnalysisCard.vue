@@ -11,6 +11,7 @@ import { useGettext } from "vue3-gettext";
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
@@ -272,14 +273,14 @@ function focusHeading(): void {
                     <span>{{ $gettext("Loading the analysis…") }}</span>
                 </span>
             </h3>
-            <button
+            <IconButton
                 v-if="props.closable"
-                type="button"
                 class="close"
+                icon="times"
+                :label="$gettext('Close the card')"
+                :description="$gettext('Escape')"
                 @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
+            />
             <template v-if="analysis">
                 <p class="meta">
                     <span
@@ -707,7 +708,7 @@ function focusHeading(): void {
     font-weight: 600;
 }
 
-.analysis-card .card-head .close {
+.analysis-card .card-head .icon-button {
     grid-column: 2;
     grid-row: 1;
 }
@@ -799,7 +800,6 @@ function focusHeading(): void {
     color: var(--blue-text);
 }
 
-.analysis-card .card-head .close,
 .analysis-card .evidence-of button {
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
