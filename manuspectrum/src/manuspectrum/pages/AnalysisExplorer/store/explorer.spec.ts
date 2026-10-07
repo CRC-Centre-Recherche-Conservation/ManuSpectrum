@@ -247,6 +247,80 @@ describe("Selection", () => {
         ).toBe(0);
     });
 
+    it("removes several keys in one assignment, keeps the holes and returns the removed items with their slots", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 5; n += 1) store.addToBasket(characterization(n));
+        const before = store.basket;
+        const removed = store.removeManyFromBasket([
+            characterization(1),
+            characterization(3),
+            characterization(99),
+        ]);
+        expect(removed.map((item) => [item.key, item.slot])).toEqual([
+            [characterization(1), 1],
+            [characterization(3), 3],
+        ]);
+        expect(store.basket.map((item) => item.slot)).toEqual([0, 2, 4]);
+        expect(store.basket).not.toBe(before);
+    });
+
+    it("leaves the basket object alone when no key is held", () => {
+        const store = useExplorerStore();
+        store.addToBasket(characterization(1));
+        const before = store.basket;
+        expect(store.removeManyFromBasket([characterization(9)])).toEqual([]);
+        expect(store.basket).toBe(before);
+    });
+
+    it("restores removed items at their own slots", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 5; n += 1) store.addToBasket(characterization(n));
+        const removed = store.removeManyFromBasket([
+            characterization(1),
+            characterization(3),
+        ]);
+        const result = store.restoreBasketItems(removed);
+        expect(result).toEqual({
+            kept: [characterization(1), characterization(3)],
+            truncated: 0,
+        });
+        expect(
+            store.basket.map((item) => [item.key, item.slot]).sort(),
+        ).toEqual([0, 1, 2, 3, 4].map((n) => [characterization(n), n]).sort());
+    });
+
+    it("restores into the lowest hole when the slot was taken meanwhile", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 3; n += 1) store.addToBasket(characterization(n));
+        const removed = store.removeManyFromBasket([characterization(0)]);
+        store.addToBasket(characterization(50));
+        expect(
+            store.basket.find((item) => item.key === characterization(50))
+                ?.slot,
+        ).toBe(0);
+        store.restoreBasketItems(removed);
+        expect(
+            store.basket.find((item) => item.key === characterization(0))?.slot,
+        ).toBe(3);
+    });
+
+    it("skips items already held when restoring and truncates beyond 30", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 29; n += 1) store.addToBasket(characterization(n));
+        const removed = store.removeManyFromBasket([characterization(5)]);
+        store.addToBasket(characterization(60));
+        const result = store.restoreBasketItems([
+            ...removed,
+            { key: characterization(70), kind: "characterization", slot: 31 },
+            { key: characterization(60), kind: "characterization", slot: 0 },
+        ]);
+        expect(result).toEqual({
+            kept: [characterization(5)],
+            truncated: 1,
+        });
+        expect(store.basket).toHaveLength(30);
+    });
+
     it("clears the Selection", () => {
         const store = useExplorerStore();
         store.addToBasket(characterization(1));

@@ -397,6 +397,56 @@ export const useExplorerStore = defineStore("explorer", () => {
         basket.value = basket.value.filter((item) => item.key !== key);
     }
 
+    /** Removes the held keys in one assignment, leaving their slots as holes; returns the removed items with their slots. */
+    function removeManyFromBasket(keys: readonly string[]): BasketItem[] {
+        const wanted = new Set(keys);
+        const removed = basket.value.filter((item) => wanted.has(item.key));
+        if (removed.length > 0) {
+            basket.value = basket.value.filter((item) => !wanted.has(item.key));
+        }
+        return removed;
+    }
+
+    /**
+     * Puts removed items back in one assignment, each at its own slot when
+     * that slot is free, else in the lowest hole; items already held are
+     * skipped and what exceeds the 30 places is dropped.
+     */
+    function restoreBasketItems(
+        items: readonly BasketItem[],
+    ): BasketLoadResult {
+        const present = new Set(basket.value.map((item) => item.key));
+        const fresh = items.filter((item, index) => {
+            if (present.has(item.key)) return false;
+            return items.findIndex((other) => other.key === item.key) === index;
+        });
+        const kept = fresh.slice(0, basketFree.value);
+        const next = [...basket.value];
+        const taken = new Set(next.map((item) => item.slot));
+        const pending: BasketItem[] = [];
+        for (const item of kept) {
+            if (
+                taken.has(item.slot) ||
+                item.slot < 0 ||
+                item.slot >= BASKET_LIMIT
+            ) {
+                pending.push(item);
+            } else {
+                taken.add(item.slot);
+                next.push({ ...item });
+            }
+        }
+        const holes = freeSlots(next, pending.length);
+        pending.forEach((item, index) => {
+            next.push({ ...item, slot: holes[index] });
+        });
+        if (kept.length > 0) basket.value = next;
+        return {
+            kept: kept.map((item) => item.key),
+            truncated: fresh.length - kept.length,
+        };
+    }
+
     function clearBasket(): void {
         basket.value = [];
     }
@@ -545,6 +595,8 @@ export const useExplorerStore = defineStore("explorer", () => {
         addToBasket,
         addManyToBasket,
         removeFromBasket,
+        removeManyFromBasket,
+        restoreBasketItems,
         clearBasket,
         replaceBasket,
         mergeBasket,

@@ -23,6 +23,7 @@ body.ms-page--app {
     --explorer-radius: 0.625rem;
     --explorer-target: 2rem;
     --explorer-busy-opacity: 0.55;
+    --selection-tint: color-mix(in srgb, var(--blue-text) 8%, var(--surface));
 
     @media (pointer: coarse) {
         --explorer-target: 2.75rem;
