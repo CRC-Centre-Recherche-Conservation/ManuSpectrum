@@ -497,20 +497,15 @@ describe("CorpusResults", () => {
             expect(wrapper.find(".select-all-checkbox").exists()).toBe(false);
         });
 
-        it("adds every analysis of the page at once and says how many are held", async () => {
+        it("adds every analysis of the page at once", async () => {
             const { wrapper, hits } = await mountAnalyses(3);
             const store = useExplorerStore();
-            expect(wrapper.get(".selection-bar .held-count").text()).toBe(
-                "0 / 3 in the Selection",
-            );
+            expect(wrapper.find(".held-count").exists()).toBe(false);
             await wrapper
                 .get(".selection-bar .select-all-checkbox input")
                 .setValue(true);
             expect(store.basket.map((item) => item.key)).toEqual(
                 hits.map((hit) => analysisKey(hit.id)),
-            );
-            expect(wrapper.get(".selection-bar .held-count").text()).toBe(
-                "3 / 3 in the Selection",
             );
             expect(wrapper.get(".bulk-status-line").text()).toContain(
                 "3 analyses added",
@@ -535,9 +530,6 @@ describe("CorpusResults", () => {
                 ];
             });
             await flushPromises();
-            expect(wrapper.get(".selection-bar .held-count").text()).toBe(
-                "1 / 3 in the Selection",
-            );
             const rows = wrapper.findAll(".analysis-row");
             expect(rows[0].classes()).toContain("held");
             expect(rows[1].classes()).not.toContain("held");

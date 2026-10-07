@@ -92,6 +92,20 @@ describe("SelectionActions", () => {
         expect(document.activeElement).toBe(wrapper.get(".held").element);
     });
 
+    it("says the Selection is full when no place is left", async () => {
+        const { wrapper, store } = mountActions();
+        store.addManyToBasket(
+            Array.from({ length: 30 }, (_, n) => analysisKey(uuid(100 + n))),
+        );
+        await wrapper.vm.$nextTick();
+        const reasonId = wrapper
+            .get("button.primary")
+            .attributes("aria-describedby")!;
+        expect(wrapper.get(`#${reasonId}`).text()).toBe(
+            "Selection full (30/30): remove items to add more.",
+        );
+    });
+
     it("disables all or nothing, with the reason, when the keys do not fit", async () => {
         const { wrapper, store } = mountActions();
         store.addManyToBasket(

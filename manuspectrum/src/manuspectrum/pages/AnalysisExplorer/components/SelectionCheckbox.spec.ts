@@ -100,7 +100,7 @@ describe("SelectionCheckbox", () => {
         const reasonId = input.attributes("aria-describedby");
         expect(reasonId).toBeTruthy();
         expect(wrapper.get(`#${reasonId}`).text()).toBe(
-            "1 analysis to add, 0 places left",
+            "Selection full (30/30): remove items to add more.",
         );
         await input.trigger("click");
         expect(store.basket).toHaveLength(30);

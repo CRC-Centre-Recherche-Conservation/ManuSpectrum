@@ -55,26 +55,6 @@ describe("useActiveFilters", () => {
         expect(store.filters.place).toEqual(["p2"]);
     });
 
-    it("has no chip for a scope of everywhere", () => {
-        expect(entries()).toEqual([]);
-    });
-
-    it("shows where the colour is recorded only when it is not everywhere, and clearing it restores everywhere", () => {
-        const store = useExplorerStore();
-        store.setFilter("colourScope", "part");
-        let chips = entries();
-        expect(chips.map((entry) => entry.label)).toEqual([
-            "Colour recorded: Studied component",
-        ]);
-        chips[0].clear();
-        expect(store.filters.colourScope).toBe("all");
-        store.setFilter("colourScope", "material");
-        chips = entries();
-        expect(chips.map((entry) => entry.label)).toEqual([
-            "Colour recorded: Identified material",
-        ]);
-    });
-
     it("names the period, with its rule and the undated as suffixes, and clearing it restores them", () => {
         const store = useExplorerStore();
         store.setFilter("period", [1300, 1400]);

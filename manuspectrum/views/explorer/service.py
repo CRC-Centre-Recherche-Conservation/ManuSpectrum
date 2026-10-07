@@ -104,7 +104,6 @@ REF_FACETS = {
     "element": ("elements",),
     "layer": ("layers",),
 }
-COLOUR_KEY = {"all": "colour", "part": "colourPart", "material": "colourOwn"}
 CHARACTERIZATION_ROLES = {
     "material": "material",
     "colour": "colour",
@@ -632,8 +631,7 @@ def row_entries(cited, part):
     """The ``characterizations`` of a row: *cited* (``value_sets`` of the identified materials it cites) with the *part* colours of its component, plus an entry without material when *part* is set and nothing is cited."""
     entries = [
         {
-            **values,
-            "colourPart": part,
+            **{key: v for key, v in values.items() if key != "colourOwn"},
             "colour": values["colourOwn"] | part,
         }
         for values in cited
@@ -644,8 +642,6 @@ def row_entries(cited, part):
                 "material": set(),
                 "layer": set(),
                 "element": set(),
-                "colourOwn": set(),
-                "colourPart": part,
                 "colour": part,
             }
         )
@@ -664,11 +660,11 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
 
     A row's ``characterizations`` hold one entry per identified material it
     cites, plus one without material when its component has a colour and
-    nothing cites it; each carries ``colourOwn`` (``color_aspect`` of the
-    material), ``colourPart`` (``color_features`` of the row's component) and
-    their union ``colour``. A material's own values (*values*) take the
-    colours of the visible components it observes (*objects_of*, read when
-    omitted) as ``colourPart``.
+    nothing cites it; each carries ``colour``, the union of the
+    ``color_aspect`` of the material and the ``color_features`` of the row's
+    component. A material's own values (*values*) hold ``colourOwn`` (its
+    ``color_aspect``) and ``colour``, the union with the colours of the
+    visible components it observes (*objects_of*, read when omitted).
     """
     memo = _BuildMemo(language)
     if objects_of is None:
@@ -767,7 +763,7 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
         }
         own = value_sets[c].pop("colour")
         part = set().union(*(colours_of(k) for k in observed[c]))
-        value_sets[c].update(colourOwn=own, colourPart=part, colour=own | part)
+        value_sets[c].update(colourOwn=own, colour=own | part)
     cited_by = defaultdict(list)
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
@@ -1141,8 +1137,7 @@ def parse_filters(query):
     ``size`` is one of ``PAGE_SIZES``, else the first; ``empty`` asks for the
     documents without analyses. ``colour`` is the union of the ``colour`` and
     ``partColour`` values: ``partColour`` is the alias of the two colour facets
-    merged in 2026-10, still read for one release. ``colourScope`` is ``part``
-    or ``material``, else ``all``. ``period`` is ``(low, high)`` from
+    merged in 2026-10, still read for one release. ``period`` is ``(low, high)`` from
     ``YYYY,YYYY`` (whole years, low <= high), else None; ``periodMatch`` is
     ``within``, else ``overlap``; ``periodEvent`` is ``modification``, else
     ``production``; ``undated`` asks to keep the rows without a date for the
@@ -1167,9 +1162,6 @@ def parse_filters(query):
             for v in raw.split(",")
             if v.strip()
         }
-    )
-    filters["colourScope"] = (
-        query.get("colourScope") if query.get("colourScope") in COLOUR_KEY else "all"
     )
     filters["period"] = parse_period(query.get("period", ""))
     filters["periodMatch"] = (
@@ -1269,13 +1261,10 @@ def facet_universe(rows):
     }
 
 
-def characterization_wanted(active, skip=None, scope="all"):
-    """``[(key read, selected uris)]`` of the active facets of the characterization group, *skip* left out.
-
-    The key read is the facet key, except for ``colour``: ``COLOUR_KEY[scope]``.
-    """
+def characterization_wanted(active, skip=None):
+    """``[(facet key, selected uris)]`` of the active facets of the characterization group, *skip* left out."""
     return [
-        (COLOUR_KEY[scope] if key == "colour" else key, set(active[key]))
+        (key, set(active[key]))
         for key in CHARACTERIZATION_KEYS
         if key != skip and active[key]
     ]
@@ -1327,10 +1316,8 @@ def row_filter(rows, query, universe=None):
     }
     needle = fold(filters["q"])
 
-    scope = filters["colourScope"]
-
     def meeting(row, skip):
-        wanted = characterization_wanted(active, skip, scope)
+        wanted = characterization_wanted(active, skip)
         if not wanted:
             return None
         return [c for c in row["characterizations"] if meets(c, wanted)]
@@ -1355,13 +1342,12 @@ def row_filter(rows, query, universe=None):
             return set()
         if key not in CHARACTERIZATION_KEYS:
             return set(_facet_values(row, key))
-        read = COLOUR_KEY[scope] if key == "colour" else key
         found = meeting(row, key)
         if found is None and key != "colour":
             return set(_facet_values(row, key))
         if found is None:
             found = row["characterizations"]
-        return set().union(*(c[read] for c in found))
+        return set().union(*(c[key] for c in found))
 
     return keep, active, filters, page, needle, universe, carried
 
@@ -1773,7 +1759,7 @@ def match_payload(document_id, query, user, language, ticket=None):
     kept = sorted(row["id"] for row in rows if keep(row))
     filtered = bool(needle) or any(active.values()) or bool(filters["period"])
     event = filters["periodEvent"]
-    wanted = characterization_wanted(active, scope=filters["colourScope"])
+    wanted = characterization_wanted(active)
     return {
         "facets": facets,
         "kept": {

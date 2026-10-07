@@ -208,25 +208,12 @@ describe("FacetRail", () => {
         expect(wrapper.find(".more").exists()).toBe(true);
     });
 
-    it("folds where the colour is recorded under the colour list, and writes the choice to the filters", async () => {
+    it("draws no colour scope option under the colour list", () => {
         const wrapper = mountRail({
             facets: [facet("material", 2), facet("colour", 3)],
             selected: {},
         });
-        expect(wrapper.findAll(".colour-scope")).toHaveLength(1);
-        expect(wrapper.find(".facet .colour-scope").exists()).toBe(true);
-        const button = wrapper.find(".colour-scope .disclosure");
-        expect(button.attributes("aria-expanded")).toBe("false");
-        await button.trigger("click");
-        await wrapper
-            .findAll(".colour-scope input[type=radio]")[1]
-            .setValue(true);
-        expect(useExplorerStore().filters.colourScope).toBe("part");
-        expect(
-            wrapper
-                .findAll<HTMLInputElement>(".colour-scope input[type=radio]")
-                .map((radio) => radio.element.checked),
-        ).toEqual([false, true, false]);
+        expect(wrapper.find(".colour-scope").exists()).toBe(false);
     });
 
     it("names the ticked values on the facet title, without any colour level", () => {

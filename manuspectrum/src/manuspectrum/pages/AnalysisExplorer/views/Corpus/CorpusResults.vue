@@ -255,20 +255,10 @@ const showBar = computed(
         search.status.value !== "error" &&
         search.status.value !== "unavailable",
 );
-const heldCount = computed(
-    () => shownKeys.value.filter((key) => toggle.isHeld(key)).length,
-);
 const selectAllLabel = computed(() =>
     interpolate(
         $gettext("Select all (%{n} shown)"),
         { n: shownKeys.value.length },
-        true,
-    ),
-);
-const heldText = computed(() =>
-    interpolate(
-        $gettext("%{held} / %{n} in the Selection"),
-        { held: heldCount.value, n: shownKeys.value.length },
         true,
     ),
 );
@@ -452,7 +442,6 @@ function goHome(): void {
                     :label="selectAllLabel"
                     :hints="shownHints"
                 />
-                <span class="held-count">{{ heldText }}</span>
                 <BulkStatusLine
                     class="bulk"
                     :status="toggle.lastBulk.value"
@@ -623,12 +612,6 @@ function goHome(): void {
     padding-block: 0.25rem;
     border-block-end: 0.0625rem solid var(--border);
     background: var(--surface);
-}
-
-.corpus-results .selection-bar .held-count {
-    color: var(--ink-muted);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
 }
 
 .corpus-results .selection-bar .bulk {

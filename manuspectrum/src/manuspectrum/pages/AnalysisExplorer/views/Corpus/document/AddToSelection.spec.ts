@@ -51,6 +51,21 @@ describe("AddToSelection", () => {
         });
     });
 
+    it("says the Selection is full when no place is left", async () => {
+        const { wrapper, store } = mountButton([KEY]);
+        store.addManyToBasket(
+            Array.from(
+                { length: 30 },
+                (_, n) => `af:${uuid(100 + n)}:${uuid(200 + n)}`,
+            ),
+        );
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find("button").attributes("disabled")).toBeDefined();
+        expect(wrapper.find(".reason").text()).toBe(
+            "Selection full (30/30): remove items to add more.",
+        );
+    });
+
     it("points the disabled button at its own reason", async () => {
         const { wrapper, store } = mountButton([
             KEY,

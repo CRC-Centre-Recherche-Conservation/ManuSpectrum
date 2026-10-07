@@ -76,7 +76,6 @@ export function emptyFilters(): Filters {
         part: [],
         material: [],
         colour: [],
-        colourScope: "all",
         element: [],
         layer: [],
         project: [],

@@ -30,22 +30,6 @@ describe("useVocabulary", () => {
         expect(filterTitle("colour")).toBe("Colour");
     });
 
-    it("names where the colour is recorded, and explains each choice in terms of components and zones", () => {
-        const { colourScopeLabel, colourScopeHint } = useVocabulary();
-        expect(colourScopeLabel("all")).toBe("Everywhere (default)");
-        expect(colourScopeLabel("part")).toBe("Studied component");
-        expect(colourScopeLabel("material")).toBe("Identified material");
-        expect(colourScopeHint("all")).toBe(
-            "Colour of the component or of an identified material",
-        );
-        expect(colourScopeHint("part")).toBe(
-            "Colours described on the studied component, even without analysis",
-        );
-        expect(colourScopeHint("material")).toBe(
-            "Colour of the zone where a material was identified from the analyses",
-        );
-    });
-
     it("carries the French wording in the compiled catalogue", () => {
         expect(catalogue["Studied component"]).toBe("Composant étudié");
         expect(catalogue["Component"]).toBe("Composant");
@@ -53,10 +37,5 @@ describe("useVocabulary", () => {
         expect(catalogue["Zone of the observed component."]).toBe(
             "Zone du composant observé.",
         );
-        expect(
-            catalogue[
-                "Colours described on the studied component, even without analysis"
-            ],
-        ).toBe("Couleurs décrites sur le composant étudié, même sans analyse");
     });
 });

@@ -1,5 +1,4 @@
 import type {
-    ColourScope,
     EventType,
     PeriodEvent,
     PeriodMatch,
@@ -42,8 +41,6 @@ export interface Filters {
     part: string[];
     material: string[];
     colour: string[];
-    // where the colour is read: the component, an identified material, or either
-    colourScope: ColourScope;
     element: string[];
     layer: string[];
     project: string[];

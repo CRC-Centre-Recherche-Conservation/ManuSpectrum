@@ -1794,31 +1794,19 @@ class RevalidationTests(CorpusCase):
 
             self.assertEqual(len(etags), 1, route)
 
-    def test_colour_scope_enters_the_etag(self):
+    def test_colour_scope_is_ignored_with_the_same_body_and_etag(self):
         for route in (
             "/en/api/explorer/search?colour=http://vocab/blue",
             "/en/api/explorer/facet/technique?colour=http://vocab/blue",
             "/en/api/explorer/document/{document}/match?colour=http://vocab/blue",
         ):
             url = route.format(document=self.documents["open"].pk)
-            etag = self.client.get(url)["ETag"]
-            scoped = self.client.get(url + "&colourScope=part")["ETag"]
-            with (
-                mock.patch.object(
-                    explorer_service, "build_bundle", side_effect=AssertionError
-                ),
-                mock.patch.object(
-                    explorer_service.explorer_memo,
-                    "remember",
-                    side_effect=AssertionError,
-                ),
-            ):
-                again = self.client.get(
-                    url + "&colourScope=part", HTTP_IF_NONE_MATCH=scoped
-                )
+            plain = self.client.get(url)
+            scoped = self.client.get(url + "&colourScope=part")
 
-            self.assertNotEqual(etag, scoped, url)
-            self.assertEqual(again.status_code, 304, url)
+            self.assertEqual(scoped.status_code, 200, url)
+            self.assertEqual(scoped["ETag"], plain["ETag"], url)
+            self.assertEqual(scoped.content, plain.content, url)
 
     def test_period_place_and_their_options_enter_the_etag(self):
         paris = self.places["paris"].pk

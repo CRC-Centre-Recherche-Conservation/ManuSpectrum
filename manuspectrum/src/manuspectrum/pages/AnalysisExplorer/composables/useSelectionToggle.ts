@@ -33,7 +33,7 @@ export interface SelectionToggle {
         keys: readonly string[],
         hints?: ReadonlyMap<string, SelectionHint> | null,
     ) => void;
-    /** Why the keys cannot all be added (« 48 analyses to add, 26 places left »), else null. */
+    /** Why the keys cannot all be added (« 48 analyses to add, 26 places left », or « Selection full » with no place left), else null. */
     blockedReason: (keys: readonly string[]) => string | null;
     /** Empties the Selection; `undo()` puts every item back at its slot. */
     clearAll: () => void;
@@ -89,6 +89,15 @@ export function useSelectionToggle(): SelectionToggle {
     function blockedReason(keys: readonly string[]): string | null {
         const plan = planToggleAll(keys, heldKeys(), store.basketFree);
         if (plan.action !== "refused") return null;
+        if (plan.free < 1) {
+            return interpolate(
+                $gettext(
+                    "Selection full (%{limit}/%{limit}): remove items to add more.",
+                ),
+                { limit: BASKET_LIMIT },
+                true,
+            );
+        }
         return [
             interpolate(
                 $ngettext(

@@ -126,7 +126,6 @@ def _token(route, ticket, *parts):
 FILTER_KEYS = (
     *FACET_KEYS,
     "q",
-    "colourScope",
     "period",
     "periodMatch",
     "periodEvent",

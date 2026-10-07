@@ -77,9 +77,9 @@ describe("filters", () => {
 });
 
 describe("colour filters", () => {
-    it("holds one colour list, a scope defaulting to everywhere, and no part colour", () => {
+    it("holds one colour list, no scope and no part colour", () => {
         const store = useExplorerStore();
-        expect(store.filters.colourScope).toBe("all");
+        expect("colourScope" in store.filters).toBe(false);
         expect("partColour" in store.filters).toBe(false);
         expect(LIST_FILTER_KEYS).not.toContain("partColour");
         expect(LIST_FILTER_KEYS).toContain("colour");
@@ -87,26 +87,19 @@ describe("colour filters", () => {
         expect("setColourLevel" in store).toBe(false);
     });
 
-    it("does not count the scope as a filter, and resets it with the others", () => {
+    it("counts each ticked colour as a filter, and resets them with the others", () => {
         const store = useExplorerStore();
-        store.setFilter("colourScope", "part");
         expect(store.activeFilterCount).toBe(0);
-        expect(hasActiveFilters(store.filters)).toBe(false);
         store.setFilter("colour", ["c1"]);
         expect(store.activeFilterCount).toBe(1);
         store.clearFilters();
-        expect(store.filters.colourScope).toBe("all");
-        store.setFilter("colourScope", "material");
-        store.clearFilter("colourScope");
-        expect(store.filters.colourScope).toBe("all");
+        expect(store.filters.colour).toEqual([]);
     });
 
-    it("keeps the scope from the facet ticks, which only set the colour list", () => {
+    it("keeps the colour list sorted from the facet ticks", () => {
         const store = useExplorerStore();
-        store.setFilter("colourScope", "part");
         store.setFacet("colour", ["c2", "c1"]);
         expect(store.filters.colour).toEqual(["c1", "c2"]);
-        expect(store.filters.colourScope).toBe("part");
     });
 });
 

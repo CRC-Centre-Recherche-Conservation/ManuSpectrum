@@ -10,7 +10,6 @@ import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/reg
 
 import type { HistoryMode } from "@/manuspectrum/public/useUrlState.ts";
 import type {
-    ColourScope,
     EventType,
     PeriodEvent,
     PeriodMatch,
@@ -54,7 +53,6 @@ const EVENT_TYPES: readonly EventType[] = [
     "analysis",
     "sampling",
 ];
-const COLOUR_SCOPES: readonly ColourScope[] = ["part", "material"];
 /** The list an older address named the colour of the studied component by; read as `colour`, never written. */
 const LEGACY_COLOUR_KEY = "partColour";
 const YEAR = /^\d{1,4}$/;
@@ -136,8 +134,6 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
     }
     for (const year of [...filters.year].sort((a, b) => a - b))
         query.append("year", String(year));
-    if (filters.colourScope !== "all")
-        query.set("colourScope", filters.colourScope);
     if (filters.period)
         query.set("period", `${filters.period[0]},${filters.period[1]}`);
     if (filters.periodMatch !== "overlap")
@@ -172,9 +168,6 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
     ]
         .sort()
         .slice(0, MAX_VALUES);
-    filters.colourScope =
-        COLOUR_SCOPES.find((scope) => scope === query.get("colourScope")) ??
-        "all";
     filters.year = yearsOf(query);
     filters.period = periodOf(query.get("period"));
     filters.periodMatch = (

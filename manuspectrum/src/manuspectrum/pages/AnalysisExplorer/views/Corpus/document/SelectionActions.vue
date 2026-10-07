@@ -69,6 +69,15 @@ function slotOf(key: string): string {
 function reasonOf(action: SelectionAction): string | null {
     const fresh = action.keys.filter((key) => !heldKeys.value.has(key));
     if (fresh.length <= store.basketFree) return null;
+    if (store.basketFree < 1) {
+        return interpolate(
+            $gettext(
+                "Selection full (%{limit}/%{limit}): remove items to add more.",
+            ),
+            { limit: BASKET_LIMIT },
+            true,
+        );
+    }
     return [
         interpolate(
             $ngettext("%{n} item", "%{n} items", fresh.length),

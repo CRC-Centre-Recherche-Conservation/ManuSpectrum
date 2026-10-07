@@ -38,7 +38,6 @@ export type EventType =
     | "alteration"
     | "analysis"
     | "sampling";
-export type ColourScope = "all" | "part" | "material";
 export type FacetKey =
     | "place"
     | "partType"

@@ -35,8 +35,7 @@ export function useActiveFilters(): {
         true,
     );
     const { $gettext, interpolate } = useGettext();
-    const { facetTitle, filterTitle, colourScopeLabel, periodTitle } =
-        useVocabulary();
+    const { facetTitle, filterTitle, periodTitle } = useVocabulary();
 
     function named(facet: string, value: string): string {
         return interpolate(
@@ -72,16 +71,6 @@ export function useActiveFilters(): {
                     clear: () => store.clearFilter(key, value),
                 });
             }
-        }
-        if (filters.colourScope !== "all") {
-            entries.push({
-                id: "colourScope",
-                label: named(
-                    $gettext("Colour recorded"),
-                    colourScopeLabel(filters.colourScope),
-                ),
-                clear: () => store.clearFilter("colourScope"),
-            });
         }
         for (const year of filters.year) {
             entries.push({

@@ -1,7 +1,6 @@
 import { useGettext } from "vue3-gettext";
 
 import type {
-    ColourScope,
     DataKind,
     FacetGroup,
     FacetKey,
@@ -14,8 +13,6 @@ export function useVocabulary(): {
     filterTitle: (key: FacetKey) => string;
     groupTitle: (group: FacetGroup) => string;
     periodTitle: () => string;
-    colourScopeLabel: (scope: ColourScope) => string;
-    colourScopeHint: (scope: ColourScope) => string;
     dataKindBadge: (kind: DataKind) => string;
     viewTitle: (view: ExplorerView) => string;
 } {
@@ -79,34 +76,6 @@ export function useVocabulary(): {
         }
     }
 
-    function colourScopeLabel(scope: ColourScope): string {
-        switch (scope) {
-            case "all":
-                return $gettext("Everywhere (default)");
-            case "part":
-                return $gettext("Studied component");
-            case "material":
-                return $gettext("Identified material");
-        }
-    }
-
-    function colourScopeHint(scope: ColourScope): string {
-        switch (scope) {
-            case "all":
-                return $gettext(
-                    "Colour of the component or of an identified material",
-                );
-            case "part":
-                return $gettext(
-                    "Colours described on the studied component, even without analysis",
-                );
-            case "material":
-                return $gettext(
-                    "Colour of the zone where a material was identified from the analyses",
-                );
-        }
-    }
-
     function dataKindBadge(kind: DataKind): string {
         switch (kind) {
             case "xy":
@@ -136,8 +105,6 @@ export function useVocabulary(): {
         filterTitle,
         groupTitle,
         periodTitle,
-        colourScopeLabel,
-        colourScopeHint,
         dataKindBadge,
         viewTitle,
     };

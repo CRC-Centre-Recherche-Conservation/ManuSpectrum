@@ -253,17 +253,13 @@ class RowFilterTests(SimpleTestCase):
         self.assertEqual([keep(r) for r in self.rows()], [False, True])
 
     def test_meets_holds_each_wanted_key_and_nothing_else(self):
-        values = {"material": {"a"}, "colour": {"x", "y"}, "colourPart": set()}
+        values = {"material": {"a"}, "colour": {"x", "y"}, "layer": set()}
 
         self.assertTrue(meets(values, []))
         self.assertTrue(meets(values, [("colour", {"y", "z"})]))
         self.assertTrue(meets(values, [("material", {"a"}), ("colour", {"x"})]))
-        self.assertFalse(meets(values, [("colourPart", {"x"})]))
+        self.assertFalse(meets(values, [("layer", {"x"})]))
         self.assertFalse(meets(values, [("material", {"b"}), ("colour", {"x"})]))
-
-    def test_a_row_without_characterization_entries_reads_no_colour_scope(self):
-        keep, *_ = row_filter(self.rows(), QueryDict("colourScope=part"))
-        self.assertEqual([keep(r) for r in self.rows()], [True, True])
 
 
 class DocumentMatchTests(ServiceCase):
@@ -673,43 +669,16 @@ class ColourTests(LevelCase):
 
         self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
 
-    def test_colour_scope_part_reads_the_component_only(self):
-        self.assertEqual(self.ids(self.search(f"colour={RED}&colourScope=part")), set())
-        self.assertEqual(
-            self.ids(self.search(f"colour={BLUE}&colourScope=part")), set()
-        )
-        payload = self.search(
-            f"colour={PART_BLUE}&material={LEAD_WHITE}&colourScope=part"
-        )
+    def test_a_colour_scope_parameter_is_ignored(self):
+        for text in (f"colour={PART_BLUE}", f"colour={RED}&material={AZURITE}", ""):
+            self.assertEqual(
+                self.search(f"{text}&colourScope=part"), self.search(text), text
+            )
+            self.assertEqual(
+                self.search(f"{text}&colourScope=material"), self.search(text), text
+            )
 
-        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
-        self.assertEqual(
-            self.ids(
-                self.search(f"colour={PART_BLUE}&material={AZURITE}&colourScope=part")
-            ),
-            {str(self.analyses["open"].pk)},
-        )
-
-    def test_colour_scope_material_reads_color_aspect_only(self):
-        self.assertEqual(
-            self.ids(self.search(f"colour={PART_BLUE}&colourScope=material")), set()
-        )
-        self.assertEqual(
-            self.ids(self.search(f"colour={RED}&colourScope=material")),
-            {str(self.analyses["open"].pk)},
-        )
-        self.assertEqual(
-            self.ids(self.search(f"colour={BLUE}&colourScope=material")),
-            {str(self.analyses["open"].pk), str(self.analyses["on_document"].pk)},
-        )
-
-    def test_an_unknown_colour_scope_reads_all(self):
-        self.assertEqual(
-            self.ids(self.search(f"colour={PART_BLUE}&colourScope=everything")),
-            self.ids(self.search(f"colour={PART_BLUE}")),
-        )
-
-    def test_counts_of_material_under_a_colour_follow_the_scope(self):
+    def test_counts_of_material_under_a_colour_follow_the_other_filters(self):
         def counts(text):
             return {
                 uri: value["count"]
@@ -718,27 +687,19 @@ class ColourTests(LevelCase):
 
         self.assertEqual(counts(f"colour={BLUE}"), {AZURITE: 2})
         self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 1, LEAD_WHITE: 1})
-        self.assertEqual(counts(f"colour={BLUE}&colourScope=part"), {})
 
-    def test_counts_of_colour_are_per_scope_values_of_the_kept_entries(self):
+    def test_counts_of_colour_are_values_of_the_kept_entries(self):
         colours = self.facet(self.search(""), "colour")
 
         self.assertEqual(
             {uri: colours[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
             {BLUE: 2, RED: 1, PART_BLUE: 2},
         )
-        part = self.facet(self.search("colourScope=part"), "colour")
-        self.assertEqual(
-            {uri: part[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
-            {BLUE: 0, RED: 0, PART_BLUE: 2},
-        )
 
     def test_kept_characterizations_extend_the_part_colour(self):
         azurite, lead_white = str(self.characterization.pk), str(self.second.pk)
 
         self.assertEqual(self.kept(f"colour={PART_BLUE}"), {azurite, lead_white})
-        self.assertEqual(self.kept(f"colour={PART_BLUE}&colourScope=material"), set())
-        self.assertEqual(self.kept(f"colour={RED}&colourScope=part"), set())
         self.assertEqual(self.kept(f"colour={PART_BLUE}&material={AZURITE}"), {azurite})
 
 

@@ -226,30 +226,22 @@ describe("colour in the address", () => {
         );
     });
 
-    it("reads colourScope, writes it only when it is not everywhere", () => {
-        const part = fromQuery(new URLSearchParams("colourScope=part"));
-        expect(part.filters.colourScope).toBe("part");
-        expect(toQuery(part).toString()).toBe("colourScope=part");
-        const material = fromQuery(new URLSearchParams("colourScope=material"));
-        expect(material.filters.colourScope).toBe("material");
-        for (const raw of ["colourScope=all", "colourScope=bogus", ""]) {
+    it("ignores an old colourScope and drops it from the canonical address", () => {
+        for (const raw of [
+            "colourScope=part",
+            "colourScope=material",
+            "colourScope=all",
+        ]) {
             const snapshot = fromQuery(new URLSearchParams(raw));
-            expect(snapshot.filters.colourScope).toBe("all");
+            expect("colourScope" in snapshot.filters).toBe(false);
+            expect(snapshot.corpusScreen).toBe("home");
             expect(toQuery(snapshot).toString()).toBe("");
+            expect(documentHref(snapshot, DOC)).toBe(`?doc=${DOC}`);
         }
-    });
-
-    it("keeps the home screen when only the scope is set", () => {
-        expect(
-            fromQuery(new URLSearchParams("colourScope=part")).corpusScreen,
-        ).toBe("home");
-    });
-
-    it("builds a document link that keeps the scope", () => {
-        const snapshot = fromQuery(new URLSearchParams("colourScope=material"));
-        expect(documentHref(snapshot, DOC)).toBe(
-            `?doc=${DOC}&colourScope=material`,
+        const coloured = fromQuery(
+            new URLSearchParams("colour=a&colourScope=part"),
         );
+        expect(toQuery(coloured).toString()).toBe("screen=results&colour=a");
     });
 });
 

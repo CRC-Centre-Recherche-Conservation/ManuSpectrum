@@ -154,7 +154,7 @@ describe("useSelectionToggle", () => {
         toggle.toggleAll(Array.from({ length: 30 }, (_, n) => key(n + 1)));
         expect(toggle.blockedReason([key(1), key(2)])).toBeNull();
         expect(toggle.blockedReason([key(200)])).toBe(
-            "1 analysis to add, 0 places left",
+            "Selection full (30/30): remove items to add more.",
         );
     });
 

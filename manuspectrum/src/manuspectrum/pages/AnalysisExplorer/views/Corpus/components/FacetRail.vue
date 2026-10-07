@@ -5,7 +5,6 @@ import { useGettext } from "vue3-gettext";
 import InputText from "primevue/inputtext";
 import Tooltip from "primevue/tooltip";
 
-import ColourScopeOption from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/ColourScopeOption.vue";
 import FacetTree from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue";
 import FacetValues from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue";
 import PeriodFacet from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
@@ -59,8 +58,7 @@ const TREE_KEYS: readonly FacetKey[] = ["place"];
  * The facets of a Corpus screen, in four groups (document, studied
  * component, analysis, identified material), each folding to its heading
  * (state in the store). The place is a tree (`FacetTree`). The Colour facet lists every colour in the order served (a colour
- * with no hit greyed, never dropped); under it, a folded option says where the
- * colour is recorded (`filters.colourScope`).
+ * with no hit greyed, never dropped).
  * What is ticked comes from `selected` (the filters in force), never from the
  * payload's `selected`, which lags behind while the next search loads.
  * The period (`period`, the `RangeFacet` of the payload) closes the Document
@@ -410,11 +408,6 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                     >
                         <span>{{ moreLabel(facet) }}</span>
                     </button>
-                    <ColourScopeOption
-                        v-if="facet.key === 'colour'"
-                        :scope="store.filters.colourScope"
-                        @change="store.setFilter('colourScope', $event)"
-                    />
                 </fieldset>
                 <fieldset
                     v-if="section.hasPeriod && props.period"

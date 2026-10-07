@@ -24,7 +24,7 @@ export interface SearchScope {
  * Build the search query string for `filters`.
  *
  * `eventType` is never sent: it filters Map only.
- * `colourScope`, `periodMatch` (`overlap`), `periodEvent` (`production`) and
+ * `periodMatch` (`overlap`), `periodEvent` (`production`) and
  * `undated` (false) are sent unless they are the server's default. The
  * default page size (10) is not sent; documents without analyses are asked
  * for in the documents grain only.
@@ -45,9 +45,6 @@ export function searchQuery(
     }
     for (const year of [...filters.year].sort((a, b) => a - b)) {
         query.append("year", String(year));
-    }
-    if (filters.colourScope !== "all") {
-        query.set("colourScope", filters.colourScope);
     }
     if (filters.period) {
         query.set("period", `${filters.period[0]},${filters.period[1]}`);
