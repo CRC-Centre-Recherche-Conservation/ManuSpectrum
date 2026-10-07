@@ -100,8 +100,6 @@ docker compose version >/dev/null 2>&1
 check "docker: compose plugin" "$?"
 docker buildx version >/dev/null 2>&1
 check "docker: buildx plugin" "$?"
-id -nG "$ADMIN_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker
-check "${ADMIN_USER} in the docker group" "$?"
 
 id -nG "$ADMIN_USER" 2>/dev/null | tr ' ' '\n' | grep -qx sudo
 check "${ADMIN_USER} in the sudo group" "$?"
@@ -113,6 +111,10 @@ getent passwd manuspectrum >/dev/null
 check "account manuspectrum" "$?"
 id -nG manuspectrum 2>/dev/null | tr ' ' '\n' | grep -qx docker
 check "manuspectrum in the docker group" "$?"
+for admin in "$ADMIN_USER" "$ADMIN2_USER"; do
+  ! id -nG "$admin" 2>/dev/null | tr ' ' '\n' | grep -qx docker
+  check "${admin} not in the docker group" "$?"
+done
 ! sudo -n -l -U manuspectrum true >/dev/null 2>&1
 check "manuspectrum without sudo rights" "$?"
 rc=0; [ "$(passwd -S manuspectrum 2>/dev/null | awk '{print $2}')" = "L" ] || rc=1
