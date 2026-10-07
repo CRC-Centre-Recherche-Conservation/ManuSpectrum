@@ -1,34 +1,154 @@
 <!DOCTYPE html>
-<!-- Edge page of nginx. Same design as manuspectrum/templates/errors/500.htm
-     (self-contained: inline styles, bilingual text hardcoded). -->
+<!-- Edge page of nginx, served when nginx itself refuses a request (404).
+     Static mirror of manuspectrum/templates/errors/404.htm (extends ms_base.htm):
+     same tokens, header, footer and layout, inlined so the page needs neither
+     the application nor its hashed assets. The site fonts are served under
+     hashed paths, so the font stacks fall back to Georgia and system sans.
+     Bilingual (EN then FR) because nginx cannot negotiate a language. No
+     JavaScript; the style block is the documented exception to the
+     no-inline-style rule for standalone error pages (as 500.htm). -->
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
-    <title>Page not found — ManuSpectrum</title>
+    <title>Page not found / Page introuvable &#8212; ManuSpectrum</title>
     <style>
-        body { margin: 0; font-family: Georgia, 'Times New Roman', serif; background: #faf9f7; color: #1a1a2e;
-               display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; }
-        .box { padding: 40px 24px; max-width: 620px; }
-        .brand { font-size: 1.05rem; letter-spacing: 0.24em; text-transform: uppercase; }
-        .bar { height: 3px; width: 120px; margin: 22px auto; border-radius: 2px;
-               background: linear-gradient(90deg, #dc3545, #e67e22, #f0b429, #10b981, #3b82f6, #8b5cf6); }
-        .code { font-size: 5.5rem; line-height: 1; margin: 0.2em 0; }
-        h1 { font-size: 1.5rem; font-weight: 400; margin: 0 0 6px; }
-        p { color: #55556b; line-height: 1.6; margin: 8px 0; }
-        a { color: #1a1a2e; }
+        :root {
+            --bg: #faf9f7; --bg-alt: #f0ede8; --border: rgba(26, 26, 46, 0.07);
+            --ink: #1a1a2e; --ink-muted: #4a4a5e; --ink-dim: #6b6b7c; --ink-soft: #4a4a63;
+            --blue-text: #1d4ed8; --spectral-5: #3b82f6;
+            --font-display: 'Cormorant Garamond', Georgia, serif;
+            --font-body: 'Sora', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Sora', monospace;
+        }
+        * { box-sizing: border-box; }
+        html { font-size: 16px; }
+        body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg);
+               color: var(--ink); font-family: var(--font-body); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+        a { color: var(--ink); }
+        .ms-header { padding: 0.7rem 0; background: rgba(250, 249, 247, 0.88);
+                     box-shadow: 0 1px 0 var(--border), 0 1px 3px rgba(26, 26, 46, 0.04); }
+        .ms-header-inner { max-width: 1400px; margin: 0 auto; padding: 0 2rem; }
+        .ms-header-logo { display: inline-flex; align-items: center; gap: 0.75rem; text-decoration: none; }
+        .ms-header-logo-mark { width: 28px; height: 3px; border-radius: 2px;
+                               background: linear-gradient(90deg, #dc3545, #f0b429, #3b82f6); }
+        .ms-header-logo-text { font-family: var(--font-display); font-size: 1.35rem; letter-spacing: 0.08em; color: var(--ink); }
+        main { flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: 4rem 2rem 3rem; }
+        .ms-error { text-align: center; padding: 2.5rem 0 3rem; }
+        .ms-error + .ms-error { border-top: 1px solid var(--border); }
+        .ms-error-eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.18em;
+                            text-transform: uppercase; color: var(--blue-text); }
+        .ms-error-spectrum { display: block; width: 100%; max-width: 560px; height: auto; margin: 8px auto 4px; }
+        .ms-error-scan { animation: ms-error-scan 5.5s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+        @keyframes ms-error-scan { to { transform: translateX(538px); } }
+        .ms-error-title { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.6rem, 3vw, 2.2rem);
+                          line-height: 1.2; margin: 10px 0 14px; }
+        .ms-error-lead { max-width: 560px; margin: 0 auto; color: var(--ink-soft); }
+        .ms-error-actions { display: flex; gap: 18px; justify-content: center; align-items: center;
+                            flex-wrap: wrap; margin-top: 30px; }
+        .ms-error-link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+        .ms-btn { display: inline-flex; align-items: center; padding: 0.85rem 2rem; font-family: var(--font-body);
+                  font-size: 0.88rem; font-weight: 500; letter-spacing: 0.02em; border-radius: 8px; text-decoration: none;
+                  background: var(--ink); color: #fff; transition: background 0.35s, transform 0.35s, box-shadow 0.35s; }
+        .ms-btn:hover { background: var(--spectral-5); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(59, 130, 246, 0.2); }
+        .ms-footer { background: var(--bg-alt); padding: 3rem 0 2rem; }
+        .ms-footer-inner { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
+        .spectral-line { height: 2px; border-radius: 1px; margin-bottom: 2rem;
+                         background: linear-gradient(90deg, #dc3545, #e67e22, #f0b429, #10b981, #3b82f6, #8b5cf6); }
+        .ms-footer-brand-name { font-family: var(--font-display); font-size: 1.2rem; letter-spacing: 0.06em; margin-bottom: 0.5rem; }
+        .ms-footer-brand-desc { margin: 0; max-width: 320px; font-size: 0.82rem; font-weight: 300; color: var(--ink-dim); }
+        @media (max-width: 768px) {
+            .ms-header-inner, main, .ms-footer-inner { padding-left: 1.2rem; padding-right: 1.2rem; }
+            .ms-btn { width: 100%; justify-content: center; max-width: 280px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .ms-error-scan { animation: none; }
+            .ms-btn { transition: none; }
+            .ms-btn:hover { transform: none; }
+        }
     </style>
 </head>
 <body>
-    <div class="box">
-        <div class="brand">ManuSpectrum</div>
-        <div class="bar"></div>
-        <div class="code" aria-hidden="true">404</div>
-        <h1>Page not found / Page introuvable</h1>
-        <p>The page you asked for does not exist.</p>
-        <p>La page demandée n'existe pas.</p>
-        <p><a href="/">Back to the homepage / Retour à l'accueil</a></p>
-    </div>
+    <header class="ms-header">
+        <div class="ms-header-inner">
+            <a href="/" class="ms-header-logo" aria-label="ManuSpectrum">
+                <span class="ms-header-logo-mark"></span>
+                <span class="ms-header-logo-text">ManuSpectrum</span>
+            </a>
+        </div>
+    </header>
+    <main>
+    <section class="ms-error">
+        <div class="ms-error-eyebrow">Spectral analysis report</div>
+        <svg class="ms-error-spectrum" viewBox="0 0 600 190" role="img" aria-label="Reflectance spectrum with no signal at 404 nanometres">
+            <defs>
+                <linearGradient id="ms-err-spectral-en" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#8b5cf6"/><stop offset="20%" stop-color="#3b82f6"/>
+                    <stop offset="45%" stop-color="#10b981"/><stop offset="65%" stop-color="#f0b429"/>
+                    <stop offset="82%" stop-color="#e67e22"/><stop offset="100%" stop-color="#dc3545"/>
+                </linearGradient>
+            </defs>
+            <line x1="40" y1="150" x2="580" y2="150" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+            <line x1="40" y1="150" x2="40" y2="20" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+            <text x="40" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">380</text>
+            <text x="310" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">580</text>
+            <text x="580" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">780 nm</text>
+            <path d="M40,142 C48,138 54,132 58,128 L62,146" fill="none" stroke="url(#ms-err-spectral-en)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M62,148 L88,148" fill="none" stroke="#dc3545" stroke-width="1.6" stroke-dasharray="3 4" stroke-linecap="round" opacity="0.7"/>
+            <path d="M88,146 C110,140 130,80 150,66 C168,54 184,90 200,98 C224,110 240,52 260,44 C282,36 300,88 320,96 C348,107 368,60 390,52 C414,44 434,96 458,104 C486,113 520,84 552,74 L580,68" fill="none" stroke="url(#ms-err-spectral-en)" stroke-width="2" stroke-linecap="round"/>
+            <line x1="74" y1="26" x2="74" y2="150" stroke="#dc3545" stroke-width="1" stroke-dasharray="4 4" opacity="0.55"/>
+            <text x="80" y="34" fill="#dc3545" font-size="11" font-family="monospace" opacity="0.9">&#955; = 404 nm</text>
+            <text x="80" y="48" fill="#1a1a2e" font-size="9.5" font-family="monospace" opacity="0.55">no signal detected</text>
+            <rect class="ms-error-scan" x="40" y="20" width="1.5" height="130" fill="#1a1a2e" opacity="0.35"/>
+        </svg>
+        <h1 class="ms-error-title">No signal at &#955; = 404 nm</h1>
+        <p class="ms-error-lead">We scanned the whole spectrum: the page you asked for does not absorb, reflect or fluoresce anywhere on this server. It may have moved &#8212; or never existed.</p>
+        <div class="ms-error-actions">
+            <a class="ms-btn" href="/en/">Back to the homepage</a>
+            <a class="ms-error-link" href="/en/search">Search the data</a>
+            <a class="ms-error-link" href="/en/about/contact">Contact the team</a>
+        </div>
+    </section>
+    <section class="ms-error" lang="fr">
+        <div class="ms-error-eyebrow">Rapport d&#8217;analyse spectrale</div>
+        <svg class="ms-error-spectrum" viewBox="0 0 600 190" role="img" aria-label="Spectre de r&#233;flectance sans signal &#224; 404 nanom&#232;tres">
+            <defs>
+                <linearGradient id="ms-err-spectral-fr" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#8b5cf6"/><stop offset="20%" stop-color="#3b82f6"/>
+                    <stop offset="45%" stop-color="#10b981"/><stop offset="65%" stop-color="#f0b429"/>
+                    <stop offset="82%" stop-color="#e67e22"/><stop offset="100%" stop-color="#dc3545"/>
+                </linearGradient>
+            </defs>
+            <line x1="40" y1="150" x2="580" y2="150" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+            <line x1="40" y1="150" x2="40" y2="20" stroke="#1a1a2e" stroke-width="0.8" opacity="0.25"/>
+            <text x="40" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">380</text>
+            <text x="310" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">580</text>
+            <text x="580" y="166" text-anchor="middle" fill="#1a1a2e" font-size="9" opacity="0.35" font-family="monospace">780 nm</text>
+            <path d="M40,142 C48,138 54,132 58,128 L62,146" fill="none" stroke="url(#ms-err-spectral-fr)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M62,148 L88,148" fill="none" stroke="#dc3545" stroke-width="1.6" stroke-dasharray="3 4" stroke-linecap="round" opacity="0.7"/>
+            <path d="M88,146 C110,140 130,80 150,66 C168,54 184,90 200,98 C224,110 240,52 260,44 C282,36 300,88 320,96 C348,107 368,60 390,52 C414,44 434,96 458,104 C486,113 520,84 552,74 L580,68" fill="none" stroke="url(#ms-err-spectral-fr)" stroke-width="2" stroke-linecap="round"/>
+            <line x1="74" y1="26" x2="74" y2="150" stroke="#dc3545" stroke-width="1" stroke-dasharray="4 4" opacity="0.55"/>
+            <text x="80" y="34" fill="#dc3545" font-size="11" font-family="monospace" opacity="0.9">&#955; = 404 nm</text>
+            <text x="80" y="48" fill="#1a1a2e" font-size="9.5" font-family="monospace" opacity="0.55">aucun signal d&#233;tect&#233;</text>
+            <rect class="ms-error-scan" x="40" y="20" width="1.5" height="130" fill="#1a1a2e" opacity="0.35"/>
+        </svg>
+        <h1 class="ms-error-title">Aucun signal &#224; &#955; = 404 nm</h1>
+        <p class="ms-error-lead">Nous avons balay&#233; tout le spectre&#160;: la page demand&#233;e n&#8217;absorbe, ne r&#233;fl&#233;chit ni ne fluoresce nulle part sur ce serveur. Elle a peut-&#234;tre &#233;t&#233; d&#233;plac&#233;e, ou n&#8217;a jamais exist&#233;.</p>
+        <div class="ms-error-actions">
+            <a class="ms-btn" href="/fr/">Retour &#224; l&#8217;accueil</a>
+            <a class="ms-error-link" href="/fr/search">Rechercher dans les donn&#233;es</a>
+            <a class="ms-error-link" href="/fr/about/contact">Contacter l&#8217;&#233;quipe</a>
+        </div>
+    </section>
+    </main>
+    <footer class="ms-footer">
+        <div class="ms-footer-inner">
+            <div class="spectral-line"></div>
+            <div class="ms-footer-brand-name">ManuSpectrum</div>
+            <p class="ms-footer-brand-desc">Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project.</p>
+            <p class="ms-footer-brand-desc" lang="fr">Base de donn&#233;es interop&#233;rable pour l&#8217;analyse physico-chimique des mat&#233;riaux du patrimoine culturel &#233;crit. Un projet du cluster Biblissima+.</p>
+        </div>
+    </footer>
 </body>
 </html>
