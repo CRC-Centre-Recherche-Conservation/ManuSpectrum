@@ -22,10 +22,12 @@ import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
+import { useHome } from "@/manuspectrum/pages/AnalysisExplorer/composables/useHome.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
     CITE_OPEN_KEY,
+    CORPUS_COUNT_KEY,
     FACET_LABELS_KEY,
     MIRADOR_URL_KEY,
     RESULTS_MEMO_KEY,
@@ -38,6 +40,7 @@ import {
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { localDay } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
 import { loadCompareView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
@@ -108,6 +111,22 @@ const screen = computed(() => {
     return store.corpusScreen === "results" ? "results" : "home";
 });
 
+/**
+ * The size of the whole corpus, read from the home payload (the tab memo the
+ * home screen shares); asked only once a screen other than the home is shown,
+ * where « See the whole corpus » needs it.
+ */
+const home = useHome(() =>
+    screen.value === "results" || screen.value === "document"
+        ? localDay(new Date())
+        : null,
+);
+const corpusCount = computed(() => {
+    const count = home.data.value?.documentCount;
+    return typeof count === "number" ? count : null;
+});
+
+provide(CORPUS_COUNT_KEY, corpusCount);
 provide(FACET_LABELS_KEY, facetLabels);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
 provide(RESULTS_MEMO_KEY, resultsMemo);

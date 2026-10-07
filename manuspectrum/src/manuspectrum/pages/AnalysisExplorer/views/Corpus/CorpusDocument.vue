@@ -13,8 +13,10 @@ import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
 
 import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
+import Breadcrumb from "@/manuspectrum/pages/AnalysisExplorer/components/Breadcrumb.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
+import ReturnPill from "@/manuspectrum/pages/AnalysisExplorer/components/ReturnPill.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
@@ -128,7 +130,7 @@ const analysis = useAnalysis(() => focusedAnalysis.value);
 const narrow = useMediaQuery(NARROW_QUERY);
 const phone = useMediaQuery(PHONE_QUERY);
 const heading = useTemplateRef<HTMLElement>("heading");
-const backButton = useTemplateRef<HTMLElement>("back-button");
+const backPill = useTemplateRef<{ element: HTMLElement | null }>("back-pill");
 const folio = useTemplateRef<{
     focusTarget: (id: string) => void;
     focusCurrent: () => void;
@@ -555,27 +557,37 @@ const folioCaption = computed(() => {
     );
     return [data.value.name.value, canvas.label, position].join(" · ");
 });
-/** « Results », with their number when the results left are known. */
-const backLabel = computed(() => {
-    if (store.documentOrigin !== "results") {
-        return $gettext("Back to the explorer home");
-    }
+/** « Results · n documents » when the results left are known, « Results » when not, « Explorer home » from the home. */
+const resultsLabel = computed(() => {
     const shown = resultsMemo.value;
     if (!shown) return $gettext("Results");
     const text =
         shown.grain === "analyses"
             ? $ngettext(
-                  "Results (%{n} analysis)",
-                  "Results (%{n} analyses)",
+                  "Results · %{n} analysis",
+                  "Results · %{n} analyses",
                   shown.total,
               )
             : $ngettext(
-                  "Results (%{n} document)",
-                  "Results (%{n} documents)",
+                  "Results · %{n} document",
+                  "Results · %{n} documents",
                   shown.total,
               );
     return interpolate(text, { n: shown.total }, true);
 });
+const backLabel = computed(() =>
+    store.documentOrigin === "results"
+        ? resultsLabel.value
+        : $gettext("Explorer home"),
+);
+/** The trail shown above the document; the results level only when the document was opened from them. */
+const trail = computed(() => [
+    { id: "corpus", label: $gettext("Whole corpus") },
+    ...(store.documentOrigin === "results"
+        ? [{ id: "results", label: resultsLabel.value }]
+        : []),
+    { id: "document", label: data.value?.name.value ?? "" },
+]);
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -587,7 +599,9 @@ provide(CURTAIN_KEY, curtain);
 provide(FOLIO_ZONES_KEY, zones);
 
 useScreenHeading(
-    () => heading.value ?? (isUnavailable.value ? backButton.value : null),
+    () =>
+        heading.value ??
+        (isUnavailable.value ? backPill.value?.element ?? null : null),
 );
 
 /**
@@ -789,6 +803,10 @@ function back(): void {
     store.setCorpusScreen(store.documentOrigin);
 }
 
+function goTo(step: string): void {
+    store.setCorpusScreen(step === "results" ? "results" : "home");
+}
+
 function goHome(): void {
     store.setCorpusScreen("home");
 }
@@ -831,14 +849,16 @@ function goHome(): void {
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"
         >
-            <button
-                ref="back-button"
-                type="button"
-                class="explorer-back"
+            <ReturnPill
+                ref="back-pill"
+                :label="backLabel"
                 @click="back"
-            >
-                <span>{{ backLabel }}</span>
-            </button>
+            />
+            <Breadcrumb
+                v-if="data && !narrow"
+                :items="trail"
+                @go="goTo"
+            />
         </Teleport>
         <UnavailableState
             v-if="isUnavailable"
@@ -972,6 +992,7 @@ function goHome(): void {
                             :overlays="overlays"
                             :curtain="curtain"
                             :caption="folioCaption"
+                            stage="soft"
                             @select="onSelect"
                         />
                         <FolioLegend
@@ -1139,33 +1160,6 @@ function goHome(): void {
     color: var(--ink);
     font: inherit;
     font-weight: 600;
-}
-
-.explorer-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    min-block-size: var(--explorer-target);
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--blue-text);
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-}
-
-.explorer-back::before {
-    content: "←" / "";
-}
-
-.explorer-back:hover {
-    text-decoration: underline;
-}
-
-.explorer-back:focus-visible {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
 }
 
 .corpus-document .document-bar {

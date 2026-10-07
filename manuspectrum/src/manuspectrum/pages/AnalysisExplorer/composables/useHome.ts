@@ -15,8 +15,8 @@ export function homeRequest(day: string): JsonRequestOptions {
     return { query: new URLSearchParams([["day", day]]) };
 }
 
-/** The explorer home of `day`: the overview doors and the document of the day, in one request. */
-export function useHome(day: () => string): RequestHandle<HomeResponse> {
+/** The explorer home of `day`: the overview doors and the document of the day, in one request; no day, no request. */
+export function useHome(day: () => string | null): RequestHandle<HomeResponse> {
     return useRequest(
         day,
         (current, signal, reload) =>

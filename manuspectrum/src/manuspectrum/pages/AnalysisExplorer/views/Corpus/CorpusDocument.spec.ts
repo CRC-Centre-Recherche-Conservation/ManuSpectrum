@@ -76,6 +76,7 @@ const FolioStub = defineComponent({
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
         caption: { type: String, default: "" },
+        stage: { type: String, default: "dark" },
     },
     emits: ["select"],
     setup(_props, { expose }) {
@@ -983,8 +984,9 @@ describe("CorpusDocument", () => {
         await flushPromises();
         const homeLabels = wrapper
             .findAll("button")
-            .filter((button) => button.text() === "Back to the explorer home");
+            .filter((button) => button.text() === "Explorer home");
         expect(homeLabels).toHaveLength(1);
+        expect(wrapper.text()).not.toContain("Back to the explorer home");
     });
 
     it("goes back to the results it was opened from", async () => {
@@ -995,7 +997,7 @@ describe("CorpusDocument", () => {
             store.openDocument(uuid(1));
         });
         await flushPromises();
-        const back = wrapper.find(".explorer-back");
+        const back = wrapper.find(".return-pill");
         expect(back.text()).toBe("Results");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("results");
@@ -1022,9 +1024,98 @@ describe("CorpusDocument", () => {
             { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
         );
         await flushPromises();
-        expect(wrapper.find(".explorer-back").text()).toBe(
-            "Results (30 documents)",
+        expect(wrapper.find(".return-pill").text()).toBe(
+            "Results · 30 documents",
         );
+    });
+
+    it("counts analyses when the results left list analyses", async () => {
+        stubFetch();
+        const memo = ref<ResultsMemo>({
+            query: "grain=analyses",
+            filterKey: "grain=analyses",
+            page: 1,
+            total: 1,
+            grain: "analyses",
+            scroll: 0,
+            opened: uuid(1),
+        });
+        const { wrapper } = mountScreen(
+            (store) => {
+                store.setCorpusScreen("results");
+                store.openDocument(uuid(1));
+            },
+            { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
+        );
+        await flushPromises();
+        expect(wrapper.find(".return-pill").text()).toBe(
+            "Results · 1 analysis",
+        );
+    });
+
+    describe("breadcrumb", () => {
+        const TRAIL_LABEL = "Manuscript 1";
+
+        it("runs from the whole corpus through the results to the document, and goes back where a step says", async () => {
+            stubFetch();
+            const memo = ref<ResultsMemo>({
+                query: "grain=documents",
+                filterKey: "grain=documents",
+                page: 1,
+                total: 3,
+                grain: "documents",
+                scroll: 0,
+                opened: uuid(1),
+            });
+            const { wrapper, store } = mountScreen(
+                (store) => {
+                    store.setFilter("technique", ["http://x/xrf"]);
+                    store.setCorpusScreen("results");
+                    store.openDocument(uuid(1));
+                },
+                { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
+            );
+            await flushPromises();
+            const trail = wrapper.get("nav.breadcrumb");
+            expect(trail.findAll("li").map((item) => item.text())).toEqual([
+                "Whole corpus",
+                "Results · 3 documents",
+                TRAIL_LABEL,
+            ]);
+            expect(trail.get("[aria-current='page']").text()).toBe(TRAIL_LABEL);
+            await trail.findAll("button")[1].trigger("click");
+            expect(store.corpusScreen).toBe("results");
+            expect(store.document).toBeNull();
+        });
+
+        it("goes from the whole corpus to the document when opened from the home, and its first step goes to the home", async () => {
+            stubFetch();
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            const trail = wrapper.get("nav.breadcrumb");
+            expect(trail.findAll("li").map((item) => item.text())).toEqual([
+                "Whole corpus",
+                TRAIL_LABEL,
+            ]);
+            await trail.get("button").trigger("click");
+            expect(store.corpusScreen).toBe("home");
+        });
+
+        it("is hidden below 48 rem and leaves the pill", async () => {
+            narrow = true;
+            stubFetch();
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(wrapper.find("nav.breadcrumb").exists()).toBe(false);
+            expect(wrapper.find(".return-pill").exists()).toBe(true);
+        });
+    });
+
+    it("gives the folio the soft stage", async () => {
+        stubFetch();
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.findComponent(FolioStub).props("stage")).toBe("soft");
     });
 
     it("counts its filters in this document only", async () => {
@@ -1077,8 +1168,8 @@ describe("CorpusDocument", () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
         await flushPromises();
-        const back = wrapper.find(".explorer-back");
-        expect(back.text()).toBe("Back to the explorer home");
+        const back = wrapper.find(".return-pill");
+        expect(back.text()).toBe("Explorer home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
     });

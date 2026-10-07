@@ -25,6 +25,10 @@ export interface ResultsMemo {
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
     Symbol("facet-labels");
 
+/** Number of documents of the whole corpus, or null while it is unknown; provided by the shell from the home payload. */
+export const CORPUS_COUNT_KEY: InjectionKey<Ref<number | null>> =
+    Symbol("corpus-count");
+
 /** Set when the heading of the screen or view shown next should take the focus; cleared by the heading that takes it. */
 export const SCREEN_FOCUS_KEY: InjectionKey<Ref<boolean>> =
     Symbol("screen-focus");
