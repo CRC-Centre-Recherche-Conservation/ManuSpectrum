@@ -180,6 +180,44 @@ describe("toQuery / fromQuery", () => {
     });
 });
 
+describe("colour in the address", () => {
+    it("reads the legacy partColour into colour and never writes it back", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams("partColour=b&colour=a&partColour=a"),
+        );
+        expect(snapshot.filters.colour).toEqual(["a", "b"]);
+        expect(toQuery(snapshot).toString()).toBe(
+            "screen=results&colour=a&colour=b",
+        );
+    });
+
+    it("reads colourScope, writes it only when it is not everywhere", () => {
+        const part = fromQuery(new URLSearchParams("colourScope=part"));
+        expect(part.filters.colourScope).toBe("part");
+        expect(toQuery(part).toString()).toBe("colourScope=part");
+        const material = fromQuery(new URLSearchParams("colourScope=material"));
+        expect(material.filters.colourScope).toBe("material");
+        for (const raw of ["colourScope=all", "colourScope=bogus", ""]) {
+            const snapshot = fromQuery(new URLSearchParams(raw));
+            expect(snapshot.filters.colourScope).toBe("all");
+            expect(toQuery(snapshot).toString()).toBe("");
+        }
+    });
+
+    it("keeps the home screen when only the scope is set", () => {
+        expect(
+            fromQuery(new URLSearchParams("colourScope=part")).corpusScreen,
+        ).toBe("home");
+    });
+
+    it("builds a document link that keeps the scope", () => {
+        const snapshot = fromQuery(new URLSearchParams("colourScope=material"));
+        expect(documentHref(snapshot, DOC)).toBe(
+            `?doc=${DOC}&colourScope=material`,
+        );
+    });
+});
+
 describe("historyMode", () => {
     it("historyMode pushes on screen, view, document and first focus, replaces otherwise", () => {
         const start = home();

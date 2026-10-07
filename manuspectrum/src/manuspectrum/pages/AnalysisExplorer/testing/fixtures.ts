@@ -81,7 +81,6 @@ export function analysisHit(
 const GROUP_OF: Record<Facet["key"], Facet["group"]> = {
     place: "document",
     partType: "part",
-    partColour: "part",
     part: "part",
     project: "analysis",
     technique: "analysis",

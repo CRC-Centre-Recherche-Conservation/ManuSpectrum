@@ -5,6 +5,7 @@ import { BASKET_LIMIT } from "@/manuspectrum/pages/AnalysisExplorer/store/basket
 import {
     emptyFilters,
     hasActiveFilters,
+    LIST_FILTER_KEYS,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
@@ -60,6 +61,40 @@ describe("filters", () => {
         store.setFilter("technique", ["a", "b"]);
         store.setFilter("eventType", ["production"]);
         expect(store.activeFilterCount).toBe(2);
+    });
+});
+
+describe("colour filters", () => {
+    it("holds one colour list, a scope defaulting to everywhere, and no part colour", () => {
+        const store = useExplorerStore();
+        expect(store.filters.colourScope).toBe("all");
+        expect("partColour" in store.filters).toBe(false);
+        expect(LIST_FILTER_KEYS).not.toContain("partColour");
+        expect(LIST_FILTER_KEYS).toContain("colour");
+        expect("colourLevel" in store).toBe(false);
+        expect("setColourLevel" in store).toBe(false);
+    });
+
+    it("does not count the scope as a filter, and resets it with the others", () => {
+        const store = useExplorerStore();
+        store.setFilter("colourScope", "part");
+        expect(store.activeFilterCount).toBe(0);
+        expect(hasActiveFilters(store.filters)).toBe(false);
+        store.setFilter("colour", ["c1"]);
+        expect(store.activeFilterCount).toBe(1);
+        store.clearFilters();
+        expect(store.filters.colourScope).toBe("all");
+        store.setFilter("colourScope", "material");
+        store.clearFilter("colourScope");
+        expect(store.filters.colourScope).toBe("all");
+    });
+
+    it("keeps the scope from the facet ticks, which only set the colour list", () => {
+        const store = useExplorerStore();
+        store.setFilter("colourScope", "part");
+        store.setFacet("colour", ["c2", "c1"]);
+        expect(store.filters.colour).toEqual(["c1", "c2"]);
+        expect(store.filters.colourScope).toBe("part");
     });
 });
 

@@ -1,36 +1,33 @@
 import { useGettext } from "vue3-gettext";
 
 import type {
+    ColourScope,
     DataKind,
     FacetGroup,
     FacetKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type {
-    ColourLevel,
-    ExplorerView,
-} from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { ExplorerView } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-/** Translated names of facets, facet groups, colour levels, data kinds and explorer views. */
+/** Translated names of facets, facet groups, colour scopes, data kinds and explorer views. */
 export function useVocabulary(): {
     facetTitle: (key: FacetKey) => string;
     filterTitle: (key: FacetKey) => string;
     groupTitle: (group: FacetGroup) => string;
-    levelLabel: (level: ColourLevel) => string;
-    levelOption: (level: ColourLevel) => string;
-    levelHint: (level: ColourLevel) => string;
+    periodTitle: () => string;
+    colourScopeLabel: (scope: ColourScope) => string;
+    colourScopeHint: (scope: ColourScope) => string;
     dataKindBadge: (kind: DataKind) => string;
     viewTitle: (view: ExplorerView) => string;
 } {
     const { $gettext } = useGettext();
 
-    /** The title of a facet in the rail; both colour facets are « Colour » there, told apart by the toggle. */
+    /** The title of a facet in the rail. */
     function facetTitle(key: FacetKey): string {
         switch (key) {
             case "place":
-                return $gettext("Place");
+                return $gettext("Place of production");
             case "partType":
                 return $gettext("Type");
-            case "partColour":
             case "colour":
                 return $gettext("Colour");
             case "technique":
@@ -52,13 +49,9 @@ export function useVocabulary(): {
         }
     }
 
-    /** The name of a facet outside the rail (active filters): a colour facet names its level. */
+    /** The name of a facet outside the rail (active filters). */
     function filterTitle(key: FacetKey): string {
         switch (key) {
-            case "partColour":
-                return $gettext("Colour (part)");
-            case "colour":
-                return $gettext("Colour (identified)");
             case "part":
                 return $gettext("Studied component");
             case "material":
@@ -68,8 +61,15 @@ export function useVocabulary(): {
         }
     }
 
+    /** The title of the production-date facet, which has no `FacetKey`. */
+    function periodTitle(): string {
+        return $gettext("Date of production");
+    }
+
     function groupTitle(group: FacetGroup): string {
         switch (group) {
+            case "document":
+                return $gettext("Document");
             case "part":
                 return $gettext("Studied component");
             case "analysis":
@@ -79,25 +79,32 @@ export function useVocabulary(): {
         }
     }
 
-    function levelLabel(level: ColourLevel): string {
-        return level === "partColour"
-            ? $gettext("Seen on the part")
-            : $gettext("Identified by analysis");
+    function colourScopeLabel(scope: ColourScope): string {
+        switch (scope) {
+            case "all":
+                return $gettext("Everywhere (default)");
+            case "part":
+                return $gettext("Studied component");
+            case "material":
+                return $gettext("Identified material");
+        }
     }
 
-    /** The short name of a colour level on its toggle option; `levelHint` explains it. */
-    function levelOption(level: ColourLevel): string {
-        return level === "partColour" ? $gettext("Part") : $gettext("Analysis");
-    }
-
-    function levelHint(level: ColourLevel): string {
-        return level === "partColour"
-            ? $gettext(
-                  "Colours described on the studied component, even without analysis",
-              )
-            : $gettext(
-                  "Colour of the zone where a material was identified from the analyses",
-              );
+    function colourScopeHint(scope: ColourScope): string {
+        switch (scope) {
+            case "all":
+                return $gettext(
+                    "Colour of the component or of an identified material",
+                );
+            case "part":
+                return $gettext(
+                    "Colours described on the studied component, even without analysis",
+                );
+            case "material":
+                return $gettext(
+                    "Colour of the zone where a material was identified from the analyses",
+                );
+        }
     }
 
     function dataKindBadge(kind: DataKind): string {
@@ -128,9 +135,9 @@ export function useVocabulary(): {
         facetTitle,
         filterTitle,
         groupTitle,
-        levelLabel,
-        levelOption,
-        levelHint,
+        periodTitle,
+        colourScopeLabel,
+        colourScopeHint,
         dataKindBadge,
         viewTitle,
     };

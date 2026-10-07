@@ -32,7 +32,6 @@ import type {
     FolioView,
     ItemKey,
     LayerToggles,
-    ColourLevel,
     ListFilterKey,
     MaterialsGrouping,
     Overlay,
@@ -47,7 +46,6 @@ export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
 export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
     "partType",
-    "partColour",
     "technique",
     "part",
     "material",
@@ -71,11 +69,11 @@ export function emptyFilters(): Filters {
         empty: false,
         size: PAGE_SIZES[0],
         partType: [],
-        partColour: [],
         technique: [],
         part: [],
         material: [],
         colour: [],
+        colourScope: "all",
         element: [],
         layer: [],
         project: [],
@@ -180,8 +178,6 @@ export const useExplorerStore = defineStore("explorer", () => {
     });
     /** Rail groups folded to their heading; not in the address. */
     const collapsedGroups = ref<FacetGroup[]>([]);
-    /** Which colour facet the rail's Colour toggle shows; not in the address. */
-    const colourLevel = ref<ColourLevel>("colour");
     /** How the Materials window of Compare groups its rows; for the tab only, not in the address. */
     const materialsGrouping = ref<MaterialsGrouping>("record");
     /**
@@ -301,10 +297,6 @@ export const useExplorerStore = defineStore("explorer", () => {
         collapsedGroups.value = collapsedGroups.value.includes(group)
             ? collapsedGroups.value.filter((entry) => entry !== group)
             : [...collapsedGroups.value, group];
-    }
-
-    function setColourLevel(level: ColourLevel): void {
-        colourLevel.value = level;
     }
 
     function setMaterialsGrouping(grouping: MaterialsGrouping): void {
@@ -568,7 +560,6 @@ export const useExplorerStore = defineStore("explorer", () => {
         basket,
         compare,
         collapsedGroups,
-        colourLevel,
         materialsGrouping,
         hiddenCurves,
         legendOpen,
@@ -586,7 +577,6 @@ export const useExplorerStore = defineStore("explorer", () => {
         setFolioView,
         setLayer,
         toggleGroup,
-        setColourLevel,
         setMaterialsGrouping,
         toggleCurveVisibility,
         showAllCurves,

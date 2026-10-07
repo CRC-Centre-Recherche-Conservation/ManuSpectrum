@@ -17,12 +17,31 @@ describe("useVocabulary", () => {
         expect(useVocabulary().facetTitle("year")).toBe("Analysis year");
     });
 
-    it("explains the colour levels in terms of components and zones", () => {
-        const { levelHint } = useVocabulary();
-        expect(levelHint("partColour")).toBe(
+    it("names the place and the period by what they date and locate", () => {
+        const { facetTitle, periodTitle, groupTitle } = useVocabulary();
+        expect(facetTitle("place")).toBe("Place of production");
+        expect(periodTitle()).toBe("Date of production");
+        expect(groupTitle("document")).toBe("Document");
+    });
+
+    it("has one Colour title, in the rail and in the active filters", () => {
+        const { facetTitle, filterTitle } = useVocabulary();
+        expect(facetTitle("colour")).toBe("Colour");
+        expect(filterTitle("colour")).toBe("Colour");
+    });
+
+    it("names where the colour is recorded, and explains each choice in terms of components and zones", () => {
+        const { colourScopeLabel, colourScopeHint } = useVocabulary();
+        expect(colourScopeLabel("all")).toBe("Everywhere (default)");
+        expect(colourScopeLabel("part")).toBe("Studied component");
+        expect(colourScopeLabel("material")).toBe("Identified material");
+        expect(colourScopeHint("all")).toBe(
+            "Colour of the component or of an identified material",
+        );
+        expect(colourScopeHint("part")).toBe(
             "Colours described on the studied component, even without analysis",
         );
-        expect(levelHint("colour")).toBe(
+        expect(colourScopeHint("material")).toBe(
             "Colour of the zone where a material was identified from the analyses",
         );
     });

@@ -232,6 +232,29 @@ describe("AnalysisExplorer", () => {
         expect(wrapper.find(".active-filters").exists()).toBe(true);
     });
 
+    it("rewrites an inherited partColour address to the canonical colour once, and leaves a canonical address alone", async () => {
+        window.history.replaceState(null, "", "/en/discover?partColour=c1");
+        const rewrite = vi.spyOn(window.history, "replaceState");
+        const inherited = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        expect(useExplorerStore().filters.colour).toEqual(["c1"]);
+        expect(rewrite).toHaveBeenCalledTimes(1);
+        expect(window.location.search).toBe("?screen=results&colour=c1");
+        inherited.unmount();
+
+        rewrite.mockClear();
+        setActivePinia((pinia = createPinia()));
+        const canonical = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        expect(rewrite).not.toHaveBeenCalled();
+        canonical.unmount();
+        rewrite.mockRestore();
+    });
+
     it("leaves the Corpus filters bar to Corpus, the filters kept for its return", async () => {
         window.history.replaceState(null, "", "/en/discover?q=gold");
         const wrapper = mount(AnalysisExplorer, {

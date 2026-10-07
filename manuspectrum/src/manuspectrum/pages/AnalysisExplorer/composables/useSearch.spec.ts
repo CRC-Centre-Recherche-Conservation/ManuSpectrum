@@ -66,6 +66,25 @@ describe("searchQuery", () => {
         );
     });
 
+    it("sends the colour scope only when it is not everywhere, and keeps it in the filters alone", () => {
+        const everywhere = searchQuery(emptyFilters(), 1).toString();
+        expect(everywhere).toBe("grain=documents");
+        const scoped = searchQuery(
+            { ...emptyFilters(), colour: ["c1"], colourScope: "part" },
+            1,
+        );
+        expect(scoped.toString()).toBe(
+            "grain=documents&colour=c1&colourScope=part",
+        );
+        expect(filtersOf(scoped.toString())).toBe("colour=c1&colourScope=part");
+        expect(
+            filterQuery({
+                ...emptyFilters(),
+                colourScope: "material",
+            }).toString(),
+        ).toBe("colourScope=material");
+    });
+
     it("asks for the documents without analyses only in the documents grain", () => {
         const filters = { ...emptyFilters(), empty: true };
         expect(searchQuery(filters, 1).toString()).toBe(

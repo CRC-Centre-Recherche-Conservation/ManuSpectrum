@@ -42,7 +42,6 @@ export type ColourScope = "all" | "part" | "material";
 export type FacetKey =
     | "place"
     | "partType"
-    | "partColour"
     | "part"
     | "technique"
     | "operator"
@@ -52,10 +51,8 @@ export type FacetKey =
     | "element"
     | "layer"
     | "project";
-/** Level of the chain a facet filters: the studied component, the analysis, the identified material. */
-export type FacetGroup = "part" | "analysis" | "characterization";
-/** The group of the place facet and of the period range facet. */
-export type DocumentFacetGroup = "document";
+/** Level of the chain a facet filters: the document, the studied component, the analysis, the identified material. */
+export type FacetGroup = "document" | "part" | "analysis" | "characterization";
 export type PeriodMatch = "overlap" | "within";
 export type PeriodEvent = "production" | "modification";
 export type DateRange = { start: string | null; end: string | null };
@@ -83,7 +80,7 @@ export interface FacetValue {
 /** Century histogram of the `period` filter, counted open to the other selections. */
 export interface RangeFacet {
     key: "period";
-    group: DocumentFacetGroup;
+    group: "document";
     /** The event counted (`periodEvent` of the query). */
     event: PeriodEvent;
     /** Lowest start year and highest end year of the dated rows. */
@@ -103,7 +100,7 @@ export interface RangeFacet {
  */
 export interface Facet {
     key: FacetKey;
-    group: FacetGroup | DocumentFacetGroup;
+    group: FacetGroup;
     values: FacetValue[];
     total: number;
 }

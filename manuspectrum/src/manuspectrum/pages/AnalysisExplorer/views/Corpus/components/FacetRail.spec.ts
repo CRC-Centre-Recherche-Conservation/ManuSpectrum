@@ -164,55 +164,90 @@ describe("FacetRail", () => {
         expect(body.isVisible()).toBe(false);
     });
 
-    it("shows one Colour facet whose toggle picks the level the ticks apply to", async () => {
+    it("shows one Colour facet of every colour in the order served, with no level toggle", async () => {
+        const colour = facet("colour", 15);
         const wrapper = mountRail({
-            facets: [facet("partColour", 2), facet("colour", 3)],
-            selected: { partColour: ["partColour-1"] },
+            facets: [colour],
+            selected: { colour: ["colour-3"] },
+            facetQuery: "",
         });
         expect(wrapper.findAll(".facet")).toHaveLength(1);
         expect(wrapper.find(".facet legend").text()).toBe("Colour");
-        const levels = wrapper.findAll(".level-button");
+        expect(wrapper.find(".levels").exists()).toBe(false);
+        expect(wrapper.find(".level-button").exists()).toBe(false);
         expect(
-            levels.map((level) => level.find(".level-label").text()),
-        ).toEqual(["Part", "Analysis"]);
-        expect(levels[1].attributes("aria-pressed")).toBe("true");
-        expect(wrapper.findAll(".value")).toHaveLength(3);
-        expect(levels[0].find(".ticks").text()).toBe("1");
-        const hint = wrapper.find(
-            `#${levels[0].attributes("aria-describedby")}`,
-        );
-        expect(hint.text()).toBe(
-            "Colours described on the studied component, even without analysis",
-        );
-
-        await levels[0].trigger("click");
-
-        expect(useExplorerStore().colourLevel).toBe("partColour");
-        expect(wrapper.findAll(".value")).toHaveLength(2);
-        expect(
-            wrapper.findAll<HTMLInputElement>(".value input")[1].element
-                .checked,
-        ).toBe(true);
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(colour.values.map((value) => value.label.value));
+        expect(wrapper.find(".more").exists()).toBe(false);
+        expect(wrapper.find("input[type=search]").exists()).toBe(false);
+        expect(checkedIds(wrapper)).toEqual(["colour-3"]);
         await wrapper.findAll(".value input")[0].setValue(true);
         expect(wrapper.emitted("change")?.[0]).toEqual([
-            "partColour",
-            ["partColour-1", "partColour-0"],
+            "colour",
+            ["colour-3", "colour-0"],
         ]);
     });
 
-    it("names the ticked values and their colour level on the facet title", () => {
+    it("greys a colour the corpus does not hold without dropping it", () => {
+        const colour = facet("colour", 3);
+        colour.values[1] = { ...colour.values[1], count: 0 };
+        const wrapper = mountRail({ facets: [colour], selected: {} });
+        const rows = wrapper.findAll(".value");
+        expect(rows).toHaveLength(3);
+        expect(rows[1].classes()).toContain("zero");
+    });
+
+    it("keeps the other facets searchable and cut to a preview", () => {
         const wrapper = mountRail({
-            facets: [facet("partColour", 2), facet("colour", 2)],
-            selected: { partColour: ["partColour-0"], colour: ["colour-1"] },
+            facets: [facet("material", 12)],
+            selected: {},
+            facetQuery: "",
+        });
+        expect(wrapper.find("input[type=search]").exists()).toBe(true);
+        expect(wrapper.find(".more").exists()).toBe(true);
+    });
+
+    it("folds where the colour is recorded under the colour list, and writes the choice to the filters", async () => {
+        const wrapper = mountRail({
+            facets: [facet("material", 2), facet("colour", 3)],
+            selected: {},
+        });
+        expect(wrapper.findAll(".colour-scope")).toHaveLength(1);
+        expect(wrapper.find(".facet .colour-scope").exists()).toBe(true);
+        const button = wrapper.find(".colour-scope .disclosure");
+        expect(button.attributes("aria-expanded")).toBe("false");
+        await button.trigger("click");
+        await wrapper
+            .findAll(".colour-scope input[type=radio]")[1]
+            .setValue(true);
+        expect(useExplorerStore().filters.colourScope).toBe("part");
+        expect(
+            wrapper
+                .findAll<HTMLInputElement>(".colour-scope input[type=radio]")
+                .map((radio) => radio.element.checked),
+        ).toEqual([false, true, false]);
+    });
+
+    it("names the ticked values on the facet title, without any colour level", () => {
+        const wrapper = mountRail({
+            facets: [facet("colour", 3)],
+            selected: { colour: ["colour-0", "colour-2"] },
         });
         const fieldset = wrapper.find(".facet");
         const summary = wrapper.find(
             `#${fieldset.attributes("aria-describedby")}`,
         );
-        expect(summary.text()).toBe(
-            "Selection: partColour 0 (seen on the part) · colour 1 (identified by analysis)",
-        );
+        expect(summary.text()).toBe("Selection: colour 0, colour 2");
         expect(fieldset.find(".title-text").attributes("tabindex")).toBe("0");
+    });
+
+    it("draws no group of its own for the document facets until their tree exists", () => {
+        const wrapper = mountRail({
+            facets: [facet("place", 2), facet("technique", 1)],
+            selected: {},
+        });
+        expect(wrapper.findAll(".group-title button")).toHaveLength(1);
+        expect(wrapper.text()).not.toContain("place 0");
     });
 
     it("keeps the whole label for a label cut on screen", () => {

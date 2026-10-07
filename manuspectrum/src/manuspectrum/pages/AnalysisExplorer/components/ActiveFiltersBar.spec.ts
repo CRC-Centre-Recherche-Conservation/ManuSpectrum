@@ -70,6 +70,17 @@ describe("ActiveFiltersBar", () => {
         expect(store.filters.year).toEqual([]);
     });
 
+    it("shows where the colour is recorded as a chip only off « everywhere », and removing it goes back to everywhere", async () => {
+        const store = useExplorerStore();
+        store.setFilter("colourScope", "material");
+        const wrapper = mountBar();
+        const chip = wrapper.find(".active-filters .chip");
+        expect(chip.text()).toBe("Colour recorded: Identified material×");
+        await chip.trigger("click");
+        expect(store.filters.colourScope).toBe("all");
+        expect(wrapper.find(".active-filters").exists()).toBe(false);
+    });
+
     it("hides event types outside the map", () => {
         const store = useExplorerStore();
         store.setFilter("eventType", ["production"]);

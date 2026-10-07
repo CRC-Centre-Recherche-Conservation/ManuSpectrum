@@ -9,7 +9,10 @@ import {
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type { HistoryMode } from "@/manuspectrum/public/useUrlState.ts";
-import type { EventType } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    ColourScope,
+    EventType,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type {
     CorpusScreen,
@@ -49,6 +52,9 @@ const EVENT_TYPES: readonly EventType[] = [
     "analysis",
     "sampling",
 ];
+const COLOUR_SCOPES: readonly ColourScope[] = ["part", "material"];
+/** The list an older address named the colour of the studied component by; read as `colour`, never written. */
+const LEGACY_COLOUR_KEY = "partColour";
 const YEAR = /^\d{1,4}$/;
 const MAX_TEXT = 200;
 const MAX_VALUE = 2048;
@@ -128,6 +134,8 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
     }
     for (const year of [...filters.year].sort((a, b) => a - b))
         query.append("year", String(year));
+    if (filters.colourScope !== "all")
+        query.set("colourScope", filters.colourScope);
     if (filters.place) query.set("place", filters.place);
     if (filters.period)
         query.set("period", `${filters.period[0]},${filters.period[1]}`);
@@ -150,6 +158,17 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
     for (const key of LIST_FILTER_KEYS) {
         filters[key] = listOf(query, key);
     }
+    filters.colour = [
+        ...new Set([
+            ...listOf(query, "colour"),
+            ...listOf(query, LEGACY_COLOUR_KEY),
+        ]),
+    ]
+        .sort()
+        .slice(0, MAX_VALUES);
+    filters.colourScope =
+        COLOUR_SCOPES.find((scope) => scope === query.get("colourScope")) ??
+        "all";
     filters.year = yearsOf(query);
     const place = (query.get("place") ?? "").trim();
     filters.place = place && place.length <= MAX_VALUE ? place : null;
