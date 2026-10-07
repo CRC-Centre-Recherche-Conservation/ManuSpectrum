@@ -9,6 +9,7 @@ import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/tec
 import {
     annotation,
     characterization,
+    documentComponent,
     documentPayload,
     label,
     sample,
@@ -392,6 +393,95 @@ describe("FolioMap", () => {
             expect(wrapper.emitted("select")?.at(-1)).toEqual([
                 { kind: "sample", id: uuid(602) },
             ]);
+            wrapper.unmount();
+        });
+    });
+
+    describe("component outlines", () => {
+        const zone = documentComponent(1).zones[0];
+        function outlined() {
+            return [
+                documentComponent(1, {
+                    zones: [zone, { ...zone, feature: uuid(960) }],
+                }),
+                documentComponent(2, {
+                    zones: [
+                        {
+                            ...zone,
+                            shape: { type: "point" as const, x: 5, y: 5 },
+                        },
+                    ],
+                }),
+                documentComponent(3, { zones: [] }),
+            ];
+        }
+
+        it("draws a dashed outline per area zone of the components, none for a point or a component without a zone", async () => {
+            const wrapper = mountFolio({ components: outlined() });
+            await flushPromises();
+            expect(wrapper.findAll("path.folio-component-zone")).toHaveLength(
+                2,
+            );
+            expect(
+                wrapper
+                    .get("path.folio-component-zone")
+                    .attributes("stroke-dasharray"),
+            ).toBeDefined();
+            wrapper.unmount();
+        });
+
+        it("opens the component on a click of its outline", async () => {
+            const wrapper = mountFolio({ components: outlined() });
+            await flushPromises();
+            await wrapper.get("path.folio-component-zone").trigger("click");
+            expect(wrapper.emitted("select")?.at(-1)).toEqual([
+                { kind: "component", id: uuid(701) },
+            ]);
+            wrapper.unmount();
+        });
+
+        it("names the component on its outline", async () => {
+            const wrapper = mountFolio({ components: outlined() });
+            await flushPromises();
+            expect(
+                wrapper
+                    .get("path.folio-component-zone")
+                    .attributes("aria-label"),
+            ).toBe("Component 1");
+            wrapper.unmount();
+        });
+
+        it("draws no outline, and so offers no click, when the zones layer is off", async () => {
+            const wrapper = mountFolio({
+                components: outlined(),
+                layers: { ...LAYERS, zones: false },
+            });
+            await flushPromises();
+            expect(wrapper.find("path.folio-component-zone").exists()).toBe(
+                false,
+            );
+            await wrapper.setProps({ layers: LAYERS });
+            expect(wrapper.findAll("path.folio-component-zone")).toHaveLength(
+                2,
+            );
+            wrapper.unmount();
+        });
+
+        it("keeps its outlines and map when the focus moves to a component", async () => {
+            const wrapper = mountFolio({ components: outlined() });
+            await flushPromises();
+            const before = wrapper.findAll("path.folio-component-zone");
+            const created = vi.spyOn(L, "map");
+            const drawn = vi.spyOn(L, "geoJSON");
+            await wrapper.setProps({
+                focus: { kind: "component", id: uuid(701) },
+            });
+            await flushPromises();
+            const after = wrapper.findAll("path.folio-component-zone");
+            expect(after).toHaveLength(2);
+            expect(after[0].element).toBe(before[0].element);
+            expect(created).not.toHaveBeenCalled();
+            expect(drawn).not.toHaveBeenCalled();
             wrapper.unmount();
         });
     });

@@ -239,6 +239,8 @@ describe("document screen", () => {
         store.focusOn({ kind: "file", id: uuid(5) });
         store.focusOn(null);
         expect(store.folioView).toBe("characterizations");
+        store.focusOn({ kind: "component", id: uuid(6) });
+        expect(store.folioView).toBe("analyses");
     });
 
     it("shows the analyses outside the filters by default and keeps the choice from one document to the next", () => {

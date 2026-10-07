@@ -39,6 +39,7 @@ const VIEWS: readonly ExplorerView[] = ["corpus", "map", "compare"];
 const FOCUS_KINDS: readonly Focus["kind"][] = [
     "analysis",
     "characterization",
+    "component",
     "file",
     "sample",
 ];

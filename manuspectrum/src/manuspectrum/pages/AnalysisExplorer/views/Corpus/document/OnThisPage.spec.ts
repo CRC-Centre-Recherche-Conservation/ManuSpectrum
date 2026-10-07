@@ -10,6 +10,7 @@ import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/tec
 import {
     annotation,
     characterization,
+    documentComponent,
     label,
     sample,
     technique,
@@ -30,6 +31,7 @@ function unlocatedEntry(n: number, match = true) {
         technique: null,
         dataKind: "xy",
         unpublished: false,
+        component: null,
         match,
     };
 }
@@ -55,6 +57,48 @@ function mountList(props: Record<string, unknown>) {
 }
 
 describe("OnThisPage", () => {
+    it("lists the components of the page in the analyses view and opens one", async () => {
+        const wrapper = mountList({
+            annotations: [annotation(1)],
+            components: [
+                documentComponent(1),
+                documentComponent(2, { unpublished: true, zones: [] }),
+            ],
+        });
+        const block = wrapper.get(".components");
+        expect(block.get("h4").text()).toBe("Components on this page");
+        expect(
+            block
+                .findAll("button")
+                .map((button) => button.attributes("data-focus")),
+        ).toEqual([`component:${uuid(701)}`, `component:${uuid(702)}`]);
+        expect(block.text()).toContain("Component 2");
+        expect(block.findAll(".draft")).toHaveLength(1);
+        expect(block.find("input").exists()).toBe(false);
+        await block.findAll("button")[1].trigger("click");
+        expect(wrapper.emitted("select")?.at(-1)).toEqual([
+            { kind: "component", id: uuid(702) },
+        ]);
+    });
+
+    it("lists no component block without a component or outside the analyses view", () => {
+        expect(
+            mountList({ annotations: [annotation(1)] })
+                .find(".components")
+                .exists(),
+        ).toBe(false);
+        expect(
+            mountList({
+                annotations: [annotation(1)],
+                components: [documentComponent(1)],
+                samples: [sample(1)],
+                view: "samples",
+            })
+                .find(".components")
+                .exists(),
+        ).toBe(false);
+    });
+
     it("groups the analyses of the page by technique", () => {
         const annotations = [
             annotation(1),

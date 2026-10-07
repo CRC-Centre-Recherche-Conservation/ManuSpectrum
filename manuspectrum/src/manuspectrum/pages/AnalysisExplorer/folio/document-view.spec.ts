@@ -24,7 +24,7 @@ function payload() {
                 technique: XRF.uri,
                 dataKind: "xy",
                 unpublished: false,
-                component: null,
+                component: uuid(701),
                 zones: [
                     {
                         canvas: 0,
@@ -53,6 +53,15 @@ function payload() {
 }
 
 describe("documentView", () => {
+    it("carries the component each analysis observes onto its zones and its place in the unlocated list", () => {
+        const view = documentView(payload(), null);
+        expect(view.annotations.map((entry) => entry.component)).toEqual([
+            uuid(701),
+            uuid(701),
+        ]);
+        expect(view.unlocated.map((entry) => entry.component)).toEqual([null]);
+    });
+
     it("spreads each analysis over its zones on the canvases their positions name", () => {
         const view = documentView(payload(), null);
 
@@ -83,6 +92,7 @@ describe("documentView", () => {
                 technique: null,
                 dataKind: "file",
                 unpublished: true,
+                component: null,
                 match: true,
             },
         ]);

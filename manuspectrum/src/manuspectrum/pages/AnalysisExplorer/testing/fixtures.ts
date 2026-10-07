@@ -4,6 +4,7 @@ import type {
     CharacterizationSummary,
     ContentStateLink,
     DocumentAnalysis,
+    DocumentComponent,
     DocumentHit,
     DocumentMatch,
     DocumentPayload,
@@ -269,7 +270,7 @@ export function documentResponses({
                 technique: entry.technique?.uri ?? null,
                 dataKind: entry.dataKind,
                 unpublished: entry.unpublished,
-                component: null,
+                component: entry.component,
                 zones: [],
             });
         }
@@ -350,7 +351,27 @@ export function annotation(
         name: label(`MS1_f12_XRF_0${n}`),
         dataKind: "xy",
         unpublished: false,
+        component: null,
         match: true,
+        ...overrides,
+    };
+}
+
+export function documentComponent(
+    n: number,
+    overrides: Partial<DocumentComponent> = {},
+): DocumentComponent {
+    return {
+        id: uuid(700 + n),
+        name: label(`Component ${n}`),
+        zones: [
+            {
+                canvas: 0,
+                shape: { type: "rect", x: 30 * n, y: 40 * n, w: 50, h: 60 },
+                feature: uuid(950 + n),
+            },
+        ],
+        unpublished: false,
         ...overrides,
     };
 }

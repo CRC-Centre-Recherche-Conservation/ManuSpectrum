@@ -70,7 +70,7 @@ export interface DocumentState {
 export type FolioView = "analyses" | "characterizations" | "samples";
 
 export interface Focus {
-    kind: "analysis" | "characterization" | "file" | "sample";
+    kind: "analysis" | "characterization" | "component" | "file" | "sample";
     id: string;
 }
 

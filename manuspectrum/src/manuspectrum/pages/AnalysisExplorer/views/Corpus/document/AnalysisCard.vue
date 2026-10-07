@@ -256,6 +256,10 @@ function openCharacterization(id: string): void {
     store.focusOn({ kind: "characterization", id });
 }
 
+function openComponent(id: string): void {
+    store.focusOn({ kind: "component", id });
+}
+
 function focusHeading(): void {
     heading.value?.focus();
 }
@@ -509,7 +513,13 @@ function focusHeading(): void {
                         <span>{{ $gettext("Studied component") }}</span>
                     </dt>
                     <dd :lang="analysis.component.name.lang">
-                        <span>{{ analysis.component.name.value }}</span>
+                        <button
+                            type="button"
+                            class="component-link"
+                            @click="openComponent(analysis.component.id)"
+                        >
+                            <span>{{ analysis.component.name.value }}</span>
+                        </button>
                     </dd>
                 </template>
                 <template v-if="analysis.sample">
@@ -817,6 +827,17 @@ function focusHeading(): void {
 
 .analysis-card a {
     color: var(--blue-text);
+}
+
+.analysis-card .component-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--blue-text);
+    font: inherit;
+    text-align: start;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .analysis-card .evidence-of button {

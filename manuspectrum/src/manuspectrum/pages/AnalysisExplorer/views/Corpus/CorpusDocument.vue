@@ -20,6 +20,7 @@ import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/compon
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue";
 import CanvasStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue";
+import ComponentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue";
 import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue";
 import FolioLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
@@ -39,6 +40,7 @@ import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/compos
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import { componentAnalyses } from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -296,6 +298,31 @@ const listedSamples = computed(() =>
         (entry) => !entry.zone || entry.zone.canvas === currentCanvas.value?.id,
     ),
 );
+/** The index of the page shown among the document's pages, -1 without one. */
+const currentCanvasIndex = computed(() =>
+    currentCanvas.value ? canvases.value.indexOf(currentCanvas.value) : -1,
+);
+/** The Components with a zone on this page, each reduced to its zones here: what the folio outlines. */
+const pageComponents = computed(() =>
+    (data.value?.components ?? []).flatMap((entry) => {
+        const zones = entry.zones.filter(
+            (zone) => zone.canvas === currentCanvasIndex.value,
+        );
+        return zones.length > 0 ? [{ ...entry, zones }] : [];
+    }),
+);
+/** The Components of this page and those observed by one of its analyses (or an analysis without a position), in the payload's order. */
+const listedComponents = computed(() => {
+    const observed = new Set(
+        [...pageAnnotations.value, ...(data.value?.unlocated ?? [])].flatMap(
+            (entry) => (entry.component ? [entry.component] : []),
+        ),
+    );
+    const placed = new Set(pageComponents.value.map((entry) => entry.id));
+    return (data.value?.components ?? []).filter(
+        (entry) => placed.has(entry.id) || observed.has(entry.id),
+    );
+});
 /** The folio views that have something on this page, in the order of the switch. */
 const availableViews = computed(() => {
     const views: FolioView[] = [];
@@ -392,11 +419,25 @@ const openSample = computed(() => {
     if (focus?.kind !== "sample") return null;
     return data.value?.samples.find((entry) => entry.id === focus.id) ?? null;
 });
+const openComponent = computed(() => {
+    const focus = store.focus;
+    if (focus?.kind !== "component") return null;
+    return (
+        data.value?.components.find((entry) => entry.id === focus.id) ?? null
+    );
+});
+/** The analyses of the open Component that this document holds. */
+const openComponentAnalyses = computed(() =>
+    data.value && openComponent.value
+        ? componentAnalyses(data.value, openComponent.value.id, styles.value)
+        : [],
+);
 const cardOpen = computed(
     () =>
         focusedAnalysis.value !== null ||
         openCharacterization.value !== null ||
-        openSample.value !== null,
+        openSample.value !== null ||
+        openComponent.value !== null,
 );
 const lit = computed(() =>
     openCharacterization.value
@@ -652,9 +693,14 @@ function followFocus(): void {
             ? current.annotations
                   .filter((entry) => entry.analysis === focus.id)
                   .map((entry) => entry.canvas)
-            : [
-                  zoned.find((entry) => entry.id === focus.id)?.zone?.canvas,
-              ].filter((canvas): canvas is string => Boolean(canvas));
+            : focus.kind === "component"
+              ? (
+                    current.components.find((entry) => entry.id === focus.id)
+                        ?.zones ?? []
+                ).flatMap((zone) => current.canvases[zone.canvas]?.id ?? [])
+              : [
+                    zoned.find((entry) => entry.id === focus.id)?.zone?.canvas,
+                ].filter((canvas): canvas is string => Boolean(canvas));
     const here = currentCanvas.value?.id;
     if (pages.length > 0 && !pages.some((canvas) => canvas === here)) {
         store.setCanvas(pages[0]);
@@ -922,6 +968,7 @@ function goHome(): void {
                             :layers="store.layers"
                             :view="folioView"
                             :samples="pageSamples"
+                            :components="pageComponents"
                             :overlays="overlays"
                             :curtain="curtain"
                             :caption="folioCaption"
@@ -971,6 +1018,14 @@ function goHome(): void {
                         :heading-id="CARD_HEADING_ID"
                         @close="closeCard"
                     />
+                    <ComponentCard
+                        v-else-if="!narrow && openComponent"
+                        ref="card"
+                        :component="openComponent"
+                        :analyses="openComponentAnalyses"
+                        :heading-id="CARD_HEADING_ID"
+                        @close="closeCard"
+                    />
                     <OnThisPage
                         v-else
                         :annotations="shownAnnotations"
@@ -978,6 +1033,7 @@ function goHome(): void {
                         :hidden-count="hiddenCount"
                         :characterizations="listedCharacterizations"
                         :samples="listedSamples"
+                        :components="listedComponents"
                         :styles="styles"
                         :view="folioView"
                         :page-label="currentCanvas?.label ?? ''"
@@ -1027,6 +1083,14 @@ function goHome(): void {
                     v-else-if="openSample"
                     :sample="openSample"
                     :analysis-names="analysisNames"
+                    :heading-id="CARD_HEADING_ID"
+                    :closable="false"
+                    @close="closeCard"
+                />
+                <ComponentCard
+                    v-else-if="openComponent"
+                    :component="openComponent"
+                    :analyses="openComponentAnalyses"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
                     @close="closeCard"

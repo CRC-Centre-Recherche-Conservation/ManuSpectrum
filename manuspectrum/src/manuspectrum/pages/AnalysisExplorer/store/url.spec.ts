@@ -378,6 +378,15 @@ describe("store round trip", () => {
         expect(material.folioView).toBe("characterizations");
         expect(chosen.folioView).toBe("analyses");
     });
+
+    it("reads and writes a focused component, which opens the analyses view", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(`doc=${DOC}&focus=component:${ANALYSIS}`),
+        );
+        expect(snapshot.focus).toEqual({ kind: "component", id: ANALYSIS });
+        expect(snapshot.folioView).toBe("analyses");
+        expect(toQuery(snapshot).get("focus")).toBe(`component:${ANALYSIS}`);
+    });
 });
 
 describe("place in the address", () => {

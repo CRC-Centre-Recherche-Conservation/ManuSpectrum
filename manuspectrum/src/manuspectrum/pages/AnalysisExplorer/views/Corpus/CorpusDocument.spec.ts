@@ -19,6 +19,7 @@ import {
     analysisPayload,
     annotation,
     characterization,
+    documentComponent,
     documentPayload,
     documentResponses,
     facet,
@@ -71,6 +72,7 @@ const FolioStub = defineComponent({
         layers: { type: Object as PropType<LayerToggles>, required: true },
         view: { type: String, required: true },
         samples: { type: Array, default: () => [] },
+        components: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
         caption: { type: String, default: "" },
@@ -92,6 +94,8 @@ function cardStub(name: string): Component {
             summary: { type: Object, default: null },
             scale: { type: Object, default: null },
             sample: { type: Object, default: null },
+            component: { type: Object, default: null },
+            analyses: { type: Array, default: null },
             analysisNames: { type: Map, default: null },
             headingId: { type: String, default: undefined },
             closable: { type: Boolean, default: true },
@@ -195,6 +199,7 @@ function mountScreen(
                 AnalysisCard: cardStub("AnalysisCard"),
                 CharacterizationCard: cardStub("CharacterizationCard"),
                 SampleCard: cardStub("SampleCard"),
+                ComponentCard: cardStub("ComponentCard"),
                 ...options.stubs,
             },
         },
@@ -407,6 +412,7 @@ describe("CorpusDocument", () => {
                         technique: null,
                         dataKind: "xy",
                         unpublished: false,
+                        component: null,
                         match: false,
                     },
                 ],
@@ -701,6 +707,142 @@ describe("CorpusDocument", () => {
         });
     });
 
+    describe("components", () => {
+        const OBSERVED = uuid(703);
+        function withComponents() {
+            return {
+                annotations: [
+                    annotation(1, { component: OBSERVED }),
+                    annotation(2, { canvas: "https://iiif.example/c2" }),
+                ],
+                components: [
+                    documentComponent(1),
+                    documentComponent(2, {
+                        zones: [
+                            { ...documentComponent(2).zones[0], canvas: 1 },
+                        ],
+                    }),
+                    documentComponent(3, { zones: [], unpublished: true }),
+                ],
+            };
+        }
+
+        it("lists the components of the page, placed or observed by one of its analyses, and hands the folio their zones on the page", async () => {
+            stubFetch(withComponents());
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll(".on-this-page .components button")
+                    .map((button) => button.attributes("data-focus")),
+            ).toEqual([`component:${uuid(701)}`, `component:${OBSERVED}`]);
+            expect(
+                (
+                    wrapper.findComponent(FolioStub).props("components") as {
+                        id: string;
+                    }[]
+                ).map((entry) => entry.id),
+            ).toEqual([uuid(701)]);
+        });
+
+        it("opens the card of a component from the list with the analyses that observe it, and gives the focus back to the entry on close", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            const selector = `.on-this-page [data-focus="component:${OBSERVED}"]`;
+            const entry = wrapper.find(selector);
+            (entry.element as HTMLButtonElement).focus();
+            await entry.trigger("click");
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "component", id: OBSERVED });
+            const card = wrapper.findComponent({ name: "ComponentCard" });
+            expect(card.props("component")).toMatchObject({ id: OBSERVED });
+            expect(
+                (card.props("analyses") as { id: string }[]).map(
+                    (item) => item.id,
+                ),
+            ).toEqual([uuid(101)]);
+            expect(wrapper.find(".on-this-page").exists()).toBe(false);
+            card.vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(document.activeElement).toBe(wrapper.find(selector).element);
+            wrapper.unmount();
+        });
+
+        it("opens the card when the folio selects an outline", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "component", id: uuid(701) });
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "component", id: uuid(701) });
+            expect(
+                wrapper
+                    .findComponent({ name: "ComponentCard" })
+                    .props("component"),
+            ).toMatchObject({ id: uuid(701) });
+        });
+
+        it("gives the focus to the document name when an outline opened the card", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "component", id: uuid(701) });
+            await flushPromises();
+            wrapper.findComponent({ name: "ComponentCard" }).vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(document.activeElement).toBe(
+                wrapper.find(".document-bar h2").element,
+            );
+            wrapper.unmount();
+        });
+
+        it("follows a component to the page of its first zone", async () => {
+            stubFetch(withComponents());
+            const { store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "component", id: uuid(702) });
+            await flushPromises();
+            expect(store.document?.canvas).toBe("https://iiif.example/c2");
+        });
+
+        it("keeps a component card for a component the document does not hold closed", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "component", id: uuid(799) });
+            await flushPromises();
+            expect(
+                wrapper.findComponent({ name: "ComponentCard" }).exists(),
+            ).toBe(false);
+        });
+
+        it("shows the component card in the drawer on a narrow screen", async () => {
+            narrow = true;
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen(undefined, {
+                stubs: { transition: false },
+            });
+            await flushPromises();
+            store.focusOn({ kind: "component", id: uuid(701) });
+            await flushPromises();
+            const card = wrapper.findComponent({ name: "ComponentCard" });
+            expect(card.exists()).toBe(true);
+            expect(card.props("closable")).toBe(false);
+            wrapper.unmount();
+        });
+    });
+
     it("opens the analysis card when the folio selects an analysis", async () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
@@ -750,6 +892,7 @@ describe("CorpusDocument", () => {
                     technique: null,
                     dataKind: "xy" as const,
                     unpublished: false,
+                    component: null,
                     match: true,
                 },
             ],
@@ -799,6 +942,7 @@ describe("CorpusDocument", () => {
                 technique: null,
                 dataKind: "xy" as const,
                 unpublished: false,
+                component: null,
                 match: true,
             },
         ];

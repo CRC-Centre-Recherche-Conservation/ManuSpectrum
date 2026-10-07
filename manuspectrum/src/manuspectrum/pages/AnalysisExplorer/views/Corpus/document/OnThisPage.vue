@@ -12,6 +12,7 @@ import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techni
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type {
     CharacterizationSummary,
+    DocumentComponent,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
@@ -35,7 +36,9 @@ const SEPARATOR = /\s+[—–-]\s+/;
  * Each analysis has its Selection checkbox; a « select all » covers the
  * page, each technique group and the analyses without a position, counting
  * only the rows listed. `hiddenCount` is how many analyses outside the
- * filters the screen leaves out of the lists.
+ * filters the screen leaves out of the lists. `components` are the
+ * Components placed on the page or observed by one of its analyses: the
+ * analyses view lists them under the analyses, each one opening its card.
  */
 const props = withDefaults(
     defineProps<{
@@ -48,8 +51,14 @@ const props = withDefaults(
         pageLabel?: string;
         documentName?: string;
         hiddenCount?: number;
+        components?: DocumentComponent[];
     }>(),
-    { pageLabel: "", documentName: "", hiddenCount: 0 },
+    {
+        pageLabel: "",
+        documentName: "",
+        hiddenCount: 0,
+        components: () => [],
+    },
 );
 const emit = defineEmits<{ select: [focus: Focus] }>();
 
@@ -339,6 +348,36 @@ function select(focus: Focus): void {
                         type="button"
                         :data-focus="`sample:${entry.id}`"
                         @click="select({ kind: 'sample', id: entry.id })"
+                    >
+                        <span :lang="entry.name.lang">{{
+                            entry.name.value
+                        }}</span>
+                    </button>
+                    <span
+                        v-if="entry.unpublished"
+                        class="draft"
+                    >
+                        {{ $gettext("Draft") }}
+                    </span>
+                </li>
+            </ul>
+        </section>
+        <section
+            v-if="props.view === 'analyses' && props.components.length > 0"
+            class="components"
+        >
+            <h4>
+                <span>{{ $gettext("Components on this page") }}</span>
+            </h4>
+            <ul>
+                <li
+                    v-for="entry in props.components"
+                    :key="entry.id"
+                >
+                    <button
+                        type="button"
+                        :data-focus="`component:${entry.id}`"
+                        @click="select({ kind: 'component', id: entry.id })"
                     >
                         <span :lang="entry.name.lang">{{
                             entry.name.value

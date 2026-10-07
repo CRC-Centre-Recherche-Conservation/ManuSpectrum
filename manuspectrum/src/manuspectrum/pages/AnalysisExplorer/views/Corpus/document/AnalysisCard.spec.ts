@@ -73,6 +73,29 @@ function mountCard(
 }
 
 describe("AnalysisCard", () => {
+    it("opens the Component card from the studied component line", async () => {
+        const { wrapper, store } = mountCard(
+            analysisPayload({
+                component: {
+                    id: uuid(701),
+                    model: "component",
+                    name: label("f. 1v — initial"),
+                },
+            }),
+        );
+        store.openDocument(uuid(1));
+        const button = wrapper.get(".details dd button.component-link");
+        expect(button.text()).toBe("f. 1v — initial");
+        await button.trigger("click");
+        expect(store.focus).toEqual({ kind: "component", id: uuid(701) });
+        expect(store.folioView).toBe("analyses");
+    });
+
+    it("shows no component line without a component", () => {
+        const { wrapper } = mountCard(analysisPayload({ component: null }));
+        expect(wrapper.find("button.component-link").exists()).toBe(false);
+    });
+
     it("shows the readable file with its raw pair beside it", () => {
         const readable = fileEntry({ id: uuid(8), pairedWith: uuid(9) });
         const raw = fileEntry({

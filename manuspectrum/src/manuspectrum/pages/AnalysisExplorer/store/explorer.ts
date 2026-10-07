@@ -63,6 +63,7 @@ const FOLIO_VIEW_OF: Partial<Record<Focus["kind"], FolioView>> = {
     analysis: "analyses",
     characterization: "characterizations",
     sample: "samples",
+    component: "analyses",
 };
 
 export function emptyFilters(): Filters {
