@@ -107,7 +107,7 @@ cmd_check() {
     || fail "Cantaloupe admin endpoint answers"
   ok "Cantaloupe admin endpoint closed"
   compose exec -T cantaloupe sh -c 'test -x /imageroot && ls -A /imageroot >/dev/null' \
-    || fail "Cantaloupe cannot list /imageroot"
+    || fail "Cantaloupe cannot list /imageroot (on NFS the server must honour supplementary groups: no manage-gids in the mountd settings)"
   ok "Cantaloupe lists /imageroot"
 
   # The script is read from stdin and prints a verdict, never a hash or a password.
