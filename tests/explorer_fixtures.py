@@ -27,6 +27,7 @@ from arches.app.models.models import (
     TileModel,
 )
 from arches.app.utils.permission_backend import assign_perm
+from manuspectrum.views.explorer import memo as explorer_memo
 
 LIFECYCLE = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
 DRAFT = "9375c9a7-dad2-4f14-a5c1-d7e329fdde4f"
@@ -382,7 +383,11 @@ class ExplorerCase(TestCase):
         }
 
     def setUp(self):
-        """Clear the caches and give the test its own ``MEDIA_ROOT``.
+        """Clear the caches, give the test its own rebuild guard and ``MEDIA_ROOT``.
+
+        The guard set of ``memo`` is process-wide: a test that mocks
+        ``memo.spawn`` leaves its slot taken, and every later rebuild in the
+        process is skipped, so readers are answered from a stale bundle.
 
         The media override is enabled before a method-level
         ``override_settings`` and disabled after it: the two nest, and each
@@ -392,6 +397,9 @@ class ExplorerCase(TestCase):
         caches["user_permission"].clear()
         self.addCleanup(cache.clear)
         self.addCleanup(caches["user_permission"].clear)
+        guard = mock.patch.object(explorer_memo, "_rebuilding", set())
+        guard.start()
+        self.addCleanup(guard.stop)
         self._media_root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._media_root, True)
         media = override_settings(MEDIA_ROOT=self._media_root)
