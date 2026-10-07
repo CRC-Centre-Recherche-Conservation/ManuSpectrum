@@ -78,6 +78,8 @@ class SearchRouteTests(ServiceCase):
         self.assertTrue(results)
         for hit in results:
             assert_shape(self, hit, "DocumentHit")
+            if hit["dates"]:
+                assert_shape(self, hit["dates"], "ProductionDates")
             self.assertTrue(
                 hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
             )
@@ -272,6 +274,24 @@ class ReadRightsCase(CorpusCase):
 
 
 class ReadRightsTests(ReadRightsCase):
+    def test_a_restricted_production_nodegroup_leaves_dates_and_places_out(self):
+        document = str(self.documents["open"].pk)
+        shown = self.document(self.documents["open"].pk)
+        self.assertEqual(len(shown["history"]), 1)
+
+        self.deny(("document", "production_at_place"))
+
+        hit = next(
+            r
+            for r in self.client.get("/en/api/explorer/search?grain=documents").json()[
+                "results"
+            ]
+            if r["id"] == document
+        )
+        self.assertIsNone(hit["dates"])
+        self.assertEqual(self.document(self.documents["open"].pk)["history"], [])
+        self.assertNotIn("Paris", str(self.document(self.documents["open"].pk)))
+
     def test_a_value_nodegroup_the_visitor_cannot_read_leaves_its_values_out(self):
         self.deny(("analysis", "analysis_technique_used"))
 
@@ -387,6 +407,11 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         assert_shape(self, payload, "DocumentPayload")
+        self.assertEqual(len(payload["history"]), 1)
+        for line in payload["history"]:
+            assert_shape(self, line, "HistoryLine")
+            for place in line["places"]:
+                assert_shape(self, place, "NamedRef")
         self.assertEqual(
             payload["canvases"][0]["image"]["service"],
             "https://example.org/iiif/image/f1v",

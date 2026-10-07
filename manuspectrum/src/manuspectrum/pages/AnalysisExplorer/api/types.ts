@@ -54,6 +54,12 @@ export type FacetKey =
 /** Level of the chain a facet filters: the studied component, the analysis, the identified material. */
 export type FacetGroup = "part" | "analysis" | "characterization";
 export type DateRange = { start: string | null; end: string | null };
+/** Production bounds as stored (YYYY, YYYY-MM or YYYY-MM-DD) and whether the date is approximate. */
+export interface ProductionDates {
+    start: string | null;
+    end: string | null;
+    approximate: boolean;
+}
 
 export interface FacetValue {
     id: string;
@@ -87,7 +93,7 @@ export interface DocumentHit {
     thumbnail: string | null;
     unpublished: boolean;
     shelfmark: Label | null;
-    dates: DateRange | null;
+    dates: ProductionDates | null;
     /** Plain text, cut on a word at about 220 characters with « … ». */
     description: Label | null;
     documentType: Label | null;
@@ -184,8 +190,8 @@ export interface SampleSummary {
 
 export interface HistoryLine {
     type: EventType;
-    place: Label | null;
-    date: DateRange;
+    places: NamedRef[];
+    date: ProductionDates;
 }
 
 export interface CharacterizationSummary {
@@ -587,6 +593,16 @@ export const SHAPE_KEYS = {
         rank: true,
     } satisfies Record<keyof RankedValue, true>,
     NamedRef: { id: true, name: true } satisfies Record<keyof NamedRef, true>,
+    ProductionDates: {
+        start: true,
+        end: true,
+        approximate: true,
+    } satisfies Record<keyof ProductionDates, true>,
+    HistoryLine: {
+        type: true,
+        places: true,
+        date: true,
+    } satisfies Record<keyof HistoryLine, true>,
     ImageRef: {
         service: true,
         url: true,

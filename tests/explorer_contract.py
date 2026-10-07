@@ -25,6 +25,11 @@ TECHNIQUE = {
 TECHNIQUE_MARK = {"code": str, "colour": (int, type(None)), "family": str}
 RANKED_VALUE = {"id": str, "uri": str, "label": "Label", "rank": int}
 NAMED_REF = {"id": str, "name": "Label"}
+PRODUCTION_DATES = {
+    "start": (str, type(None)),
+    "end": (str, type(None)),
+    "approximate": bool,
+}
 CITATION = {"text": str, "bibtex": str}
 IMAGE_REF = {
     "service": (str, type(None)),
@@ -83,6 +88,8 @@ SHAPES = {
     },
     "LayerProcessing": LAYER_PROCESSING,
     "NamedRef": NAMED_REF,
+    "ProductionDates": PRODUCTION_DATES,
+    "HistoryLine": {"type": str, "places": list, "date": "ProductionDates"},
     "Citation": CITATION,
     "Technique": TECHNIQUE,
     "TechniqueMark": TECHNIQUE_MARK,
@@ -118,7 +125,7 @@ SHAPES = {
         "thumbnail": (str, type(None)),
         "unpublished": bool,
         "shelfmark": ("Label", None),
-        "dates": (dict, type(None)),
+        "dates": ("ProductionDates", None),
         "description": ("Label", None),
         "documentType": ("Label", None),
     },

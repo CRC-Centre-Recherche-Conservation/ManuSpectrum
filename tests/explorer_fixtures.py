@@ -40,6 +40,7 @@ GRAPHS = {
     "sample": "7a5eda79-6b48-49d0-826d-931d5681e84e",
     "characterization": "af6eed4f-04a3-40d8-baef-1ad37b86c4dd",
     "person": "5bf45c85-84cd-4a76-b64a-3ffe86eea1b8",
+    "place": "3f2b036a-b65d-474d-b692-0b21903655c5",
     "group": "0f6a1c52-3d8e-4b7a-9c14-6e2b8a5d7f31",
 }
 
@@ -117,6 +118,14 @@ ROLE_NODES = [
     ("document", "type_of_identifier", "reference", "doc_identifier"),
     ("document", "date_start_of_production_time", "date", "doc_production"),
     ("document", "date_end_of_production_time", "date", "doc_production"),
+    ("document", "production_at_place", "resource-instance-list", "doc_production"),
+    ("document", "type_of_production_time", "boolean", "doc_production"),
+    ("component", "date_start_of_production_time", "date", "comp_production"),
+    ("component", "date_end_of_production_time", "date", "comp_production"),
+    ("component", "type_of_production_time", "boolean", "comp_production"),
+    ("component", "production_at_place", "resource-instance-list", "comp_production"),
+    ("place", "label_of_name", "string", "place_name"),
+    ("place", "part_of_places", "resource-instance-list", "place_parent"),
     ("document", "content_of_statement", "string", "doc_statement"),
     ("document", "type", "reference", "doc_type"),
 ]
@@ -133,7 +142,13 @@ XY_CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a01"
 
 
 class ExplorerCase(TestCase):
-    """Two Documents with a Component each, four Analyses, two Projects, a Sample and one identified material."""
+    """Two Documents with a Component each, four Analyses, two Projects, a Sample and one identified material.
+
+    The open Document is produced in Paris from 1401-01 to 1500-12
+    (approximate); its Component in Lyon, undated. Paris falls within France
+    (a Draft), which falls within Europe; ``places["hidden"]`` is linked to
+    nothing until a test restricts it.
+    """
 
     @classmethod
     def setUpTestData(cls):
@@ -195,6 +210,13 @@ class ExplorerCase(TestCase):
         cls.samples = {"s1": new("sample", "S1")}
         cls.operator = new("person", "Robinet, L.")
         cls.group = new("group", "CNRS, CRC")
+        cls.places = {
+            "paris": new("place", "Paris"),
+            "france": new("place", "France", state=DRAFT),
+            "europe": new("place", "Europe"),
+            "lyon": new("place", "Lyon"),
+            "hidden": new("place", "Hidden place"),
+        }
         cls.analyses = {
             "open": new("analysis", "X01 — f. 1v"),
             "on_document": new("analysis", "FORS_009 — f. 1v"),
@@ -204,6 +226,21 @@ class ExplorerCase(TestCase):
         cls.characterization = new("characterization", "Azurite, blue ground")
 
         tile = cls.tile
+        tile(cls.places["paris"], "part_of_places", cls.refs(cls.places["france"]))
+        tile(cls.places["france"], "part_of_places", cls.refs(cls.places["europe"]))
+        cls.tile_values(
+            cls.documents["open"],
+            "document",
+            date_start_of_production_time="1401-01",
+            date_end_of_production_time="1500-12",
+            type_of_production_time=True,
+            production_at_place=cls.refs(cls.places["paris"]),
+        )
+        cls.tile_values(
+            cls.components["open"],
+            "component",
+            production_at_place=cls.refs(cls.places["lyon"]),
+        )
         tile(
             cls.components["open"],
             "item_visual_is_part_of_document",

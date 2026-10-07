@@ -7,7 +7,7 @@ import {
     markImageFailed,
 } from "@/manuspectrum/pages/AnalysisExplorer/failed-images.ts";
 import {
-    formatDateRange,
+    formatProductionDate,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
@@ -27,7 +27,8 @@ import type {
 const props = defineProps<{ hit: DocumentHit; href: string }>();
 const emit = defineEmits<{ open: [id: string] }>();
 
-const { $gettext, $ngettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, $ngettext, interpolate } = gettext;
 
 const thumbnail = computed(() => safeHref(props.hit.thumbnail));
 const thumbnailFailed = ref(
@@ -44,7 +45,14 @@ const countText = computed(() =>
     ),
 );
 const dates = computed(() =>
-    props.hit.dates ? formatDateRange(props.hit.dates) : "",
+    props.hit.dates
+        ? formatProductionDate(
+              props.hit.dates,
+              $gettext,
+              interpolate,
+              gettext.current,
+          )
+        : "",
 );
 /** Holding and type, each in its own language. */
 const facts = computed(() =>

@@ -51,6 +51,7 @@ from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
     readable_graph_ids,
     readable_nodegroup_ids,
+    unpublished_resource_ids,
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
@@ -113,6 +114,7 @@ TECHNIQUE_PALETTE = 10
 SWATCH_FACETS = ("colour",)
 LAZY_FACETS = ("part",)
 PREVIEW_SIZE = 6
+PLACE_DEPTH = 16
 _EMPTY = (None, "", [], {})
 PAGE_SIZES = (10, 25, 50)
 DESCRIPTION_LENGTH = 220
@@ -371,6 +373,104 @@ def ancestor_terms(item_ids, chains=None):
 _links = readable_links
 
 
+def place_closure(own_ids, user):
+    """``(reach, parents)`` of the places *own_ids* and their ancestors.
+
+    ``reach`` maps each own place the reader may see to the frozenset of
+    itself and its visible ancestors along ``part_of_places``, at most
+    ``PLACE_DEPTH`` levels up; a cycle is walked once. A place outside
+    ``linkable`` (hidden, or of an unreadable model) is dropped and cuts the
+    chain: what lies above it is not reached through it. ``parents`` maps
+    every place of ``reach`` to its visible parent, the smallest id when
+    there are several, or None. An unreadable ``part_of_places`` nodegroup
+    reads as no parent. A Draft place stays visible (D50).
+    """
+    own = {str(i) for i in own_ids if i}
+    if not own:
+        return {}, {}
+    parent_of = _links(*ROLES["place_parent"], readable_nodegroup_ids(user))
+    seen, frontier = set(own), set(own)
+    for _ in range(PLACE_DEPTH):
+        frontier = {p for i in frontier for p in parent_of.get(i, ())} - seen
+        if not frontier:
+            break
+        seen |= frontier
+    shown = set(linkable(seen, user))
+    reach = {}
+    for place in sorted(own & shown):
+        found, frontier = {place}, {place}
+        for _ in range(PLACE_DEPTH):
+            frontier = {
+                p for i in frontier for p in parent_of.get(i, ()) if p in shown
+            } - found
+            if not frontier:
+                break
+            found |= frontier
+        reach[place] = frozenset(found)
+    reached = set().union(*reach.values())
+    parents = {}
+    for place in reached:
+        above = sorted(p for p in parent_of.get(place, ()) if p in reached)
+        parents[place] = above[0] if above else None
+    return reach, parents
+
+
+def _bound_year(value):
+    return int(value[:4]) if isinstance(value, str) and value[:4].isdigit() else None
+
+
+def production_tile(values, rid, prefix):
+    """``(start, end, approximate)`` of the first Production tile of *rid* holding a bound, as stored, or None.
+
+    *prefix* is ``doc`` or ``comp``; *values* read its ``_start``, ``_end``
+    and ``_approx`` roles. ``type_of_production_time`` true means
+    approximate, and is read from the tile that holds the bounds.
+    """
+    start_node, end_node = values.node(f"{prefix}_start"), values.node(f"{prefix}_end")
+    approx_node = values.node(f"{prefix}_approx")
+    for data in values.tiles(rid, f"{prefix}_start") or values.tiles(
+        rid, f"{prefix}_end"
+    ):
+        start = data.get(start_node.nodeid) if start_node else None
+        end = data.get(end_node.nodeid) if end_node else None
+        if start or end:
+            approximate = data.get(approx_node.nodeid) if approx_node else None
+            return start, end, approximate is True
+    return None
+
+
+def _production_of(values, rid, prefix):
+    """``(start year, end year, approximate)`` of the Production of *rid*, or None.
+
+    A bound that does not start with a year is ignored; a single known
+    bound stands for both.
+    """
+    found = production_tile(values, rid, prefix)
+    if found is None:
+        return None
+    start, end = _bound_year(found[0]), _bound_year(found[1])
+    if start is None and end is None:
+        return None
+    return (
+        start if start is not None else end,
+        end if end is not None else start,
+        found[2],
+    )
+
+
+def production_dates(values, rid):
+    """``ProductionDates`` of the document *rid* (``doc_*`` roles), or None without a bound."""
+    found = production_tile(values, rid, "doc")
+    if found is None:
+        return None
+    start, end, approximate = found
+    return {
+        "start": _date(start) if isinstance(start, str) else None,
+        "end": _date(end) if isinstance(end, str) else None,
+        "approximate": approximate,
+    }
+
+
 def structure(visible, user, part_of=None):
     """``{analysis id: (document id, component id or None)}`` along the first visible chain, sorted.
 
@@ -550,8 +650,14 @@ def row_entries(cited, part):
 
 
 def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
-    """``(rows, values)``: the ``corpus_rows`` and, per visible identified
-    material, ``{key: set of uris}`` of the characterization facets.
+    """``(rows, values, parents)``: the ``corpus_rows``, per visible identified
+    material ``{key: set of uris}`` of the characterization facets, and the
+    ``place_closure`` parents of the places the rows carry.
+
+    A row's ``places`` are the production places of its component and of its
+    document with their visible ancestors (sorted ids); its ``periods`` hold
+    the production bounds in years, the component's when it has one, else the
+    document's.
 
     A row's ``characterizations`` hold one entry per identified material it
     cites, plus one without material when its component has a colour and
@@ -594,6 +700,50 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
         ["comp_type", "comp_colour"],
         user,
     )
+
+    documents = {d for d, _ in chains.values()}
+    components = {c for _, c in chains.values() if c}
+    produced = {
+        "doc": Values(
+            documents,
+            ["doc_start", "doc_end", "doc_approx", "doc_place"],
+            user,
+        ),
+        "comp": Values(
+            components,
+            ["comp_start", "comp_end", "comp_approx", "comp_place"],
+            user,
+        ),
+    }
+    own_places = {
+        rid: _ordered_refs(produced[prefix].get(rid, f"{prefix}_place"))
+        for prefix, ids in (("doc", documents), ("comp", components))
+        for rid in ids
+    }
+    reach, place_parents = place_closure(
+        {p for found in own_places.values() for p in found}, user
+    )
+
+    produced_by_chain = {}
+
+    def production_of(document, component):
+        """``(places, periods)`` of a chain, one object shared by its rows."""
+        key = (document, component)
+        if key not in produced_by_chain:
+            places = set()
+            for own in (own_places[document], own_places.get(component, ())):
+                for place in own:
+                    places |= reach.get(place, set())
+            period = (
+                _production_of(produced["comp"], component, "comp")
+                if component
+                else None
+            ) or _production_of(produced["doc"], document, "doc")
+            produced_by_chain[key] = (
+                sorted(places),
+                {"production": period, "modification": None},
+            )
+        return produced_by_chain[key]
 
     def colours_of(component):
         return {
@@ -743,9 +893,11 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "dataKinds": kinds,
                 "unpublished": a in visible.unpublished,
                 "text": " ".join(memo.fold(t) for t in texts),
+                "places": production_of(document, component)[0],
+                "periods": production_of(document, component)[1],
             }
         )
-    return rows, value_sets
+    return rows, value_sets, place_parents
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -763,7 +915,10 @@ class CorpusBundle:
     ``characterization_values`` holds, per visible identified material, the
     uris it carries for each facet of the characterization group.
     ``colour_items`` is ``[(uri, rank)]`` of the items of the colour list, in
-    the order the colour facet shows them.
+    the order the colour facet shows them. ``places`` maps every place the rows
+    carry, ancestors included, to ``{"parent": id or None, "unpublished":
+    bool}``; ``period_bounds`` holds per event the ``(min start, max end)``
+    years of the dated rows, or None.
     """
 
     visible: VisibleSet
@@ -782,6 +937,8 @@ class CorpusBundle:
     order: dict
     characterization_values: dict
     colour_items: list
+    places: dict
+    period_bounds: dict
 
     @property
     def colour_ranks(self):
@@ -814,7 +971,7 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows, characterization_values = _corpus_rows(
+    rows, characterization_values, place_parents = _corpus_rows(
         user, language, visible, chains, links["projects"], links["objects"]
     )
     colour_items, colour_labels, colour_swatches = colour_list(language)
@@ -843,6 +1000,9 @@ def build_bundle(user, language, visible):
         return folds[text]
 
     names_folded = {d: folded(label_of[d]["value"]) for d in documents}
+    placed = {place for row in rows for place in row["places"]}
+    drafts = unpublished_resource_ids(placed)
+    produced = [r["periods"]["production"] for r in rows if r["periods"]["production"]]
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -877,6 +1037,18 @@ def build_bundle(user, language, visible):
         },
         characterization_values=characterization_values,
         colour_items=colour_items,
+        places={
+            place: {"parent": place_parents.get(place), "unpublished": place in drafts}
+            for place in sorted(placed)
+        },
+        period_bounds={
+            "production": (
+                (min(p[0] for p in produced), max(p[1] for p in produced))
+                if produced
+                else None
+            ),
+            "modification": None,
+        },
     )
 
 
@@ -1560,6 +1732,7 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
             "doc_identifier_type",
             "doc_start",
             "doc_end",
+            "doc_approx",
             "doc_description",
             "doc_type",
         ],
@@ -1578,19 +1751,9 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
     owner_names = names({o for v in owner_of.values() for o in v}, language, user)
     identifier_node = values.node("doc_identifier")
     type_node = values.node("doc_identifier_type")
-    start_node, end_node = values.node("doc_start"), values.node("doc_end")
     hits = []
     for d in document_ids:
-        dates = None
-        for data in values.tiles(d, "doc_start") or values.tiles(d, "doc_end"):
-            start = data.get(start_node.nodeid) if start_node else None
-            end = data.get(end_node.nodeid) if end_node else None
-            if start or end:
-                dates = {
-                    "start": _date(start) if isinstance(start, str) else None,
-                    "end": _date(end) if isinstance(end, str) else None,
-                }
-                break
+        dates = production_dates(values, d)
         description = next(
             (
                 found
@@ -1923,6 +2086,24 @@ def component_zones(document_id, bundle, dims, position, readable):
     return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
 
 
+def history_of(values, document_id, places, label_of):
+    """The ``HistoryLine`` list of a document: its Production, or none without a bound or a place.
+
+    *places* are the production places a reference may show, in stored
+    order; *label_of* names them.
+    """
+    dates = production_dates(values, document_id)
+    if dates is None and not places:
+        return []
+    return [
+        {
+            "type": "production",
+            "places": [{"id": p, "name": label_of[p]} for p in places if p in label_of],
+            "date": dates or {"start": None, "end": None, "approximate": False},
+        }
+    ]
+
+
 def document_payload(document_id, user, language, ticket=None):
     """``DocumentPayload`` of a visible document, the same whatever the filters; None when it is unknown or not visible.
 
@@ -1932,9 +2113,9 @@ def document_payload(document_id, user, language, ticket=None):
     A zone on a canvas the manifest does not list is left out; an analysis
     without zones is not located on a page. ``components`` lists the visible
     Components placed on its pages (``component_zones``), by first page then
-    name. ``document_match`` says what the filters keep. ``history`` (the
-    document's dated and placed events, spec §5) is empty until the map and
-    timeline API fills it.
+    name. ``document_match`` says what the filters keep. ``history`` holds
+    the document's Production line when it has a bound or a place a linked
+    reference may show (a Draft place included, a hidden one left out).
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible
@@ -1943,7 +2124,19 @@ def document_payload(document_id, user, language, ticket=None):
         return None
     rows = bundle.by_document.get(document_id, [])
     readable = readable_nodegroup_ids(user)
-    values = Values([document_id], ["doc_name", "doc_manifest", "doc_owner"], user)
+    values = Values(
+        [document_id],
+        [
+            "doc_name",
+            "doc_manifest",
+            "doc_owner",
+            "doc_start",
+            "doc_end",
+            "doc_approx",
+            "doc_place",
+        ],
+        user,
+    )
     manifest_url = (
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
     )
@@ -1990,7 +2183,12 @@ def document_payload(document_id, user, language, ticket=None):
         for v in values.get(document_id, "doc_owner")
         if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    label_of = names({document_id} | set(owners[:1]) | set(placed), language, user)
+    produced = _ordered_refs(values.get(document_id, "doc_place"))
+    shown_places = set(linkable(produced, user))
+    produced_at = [p for p in produced if p in shown_places]
+    label_of = names(
+        {document_id} | set(owners[:1]) | set(placed) | set(produced_at), language, user
+    )
     components = sorted(
         (c for c in placed if c in label_of),
         key=lambda c: (placed[c][0]["canvas"], fold(label_of[c]["value"]), c),
@@ -2020,7 +2218,7 @@ def document_payload(document_id, user, language, ticket=None):
             {"id": c, "name": label_of[c], "zones": placed[c]} for c in components
         ],
         "characterizations": summaries,
-        "history": [],
+        "history": history_of(values, document_id, produced_at, label_of),
         "unpublishedCount": sum(1 for row in rows if row["unpublished"])
         + sum(1 for s in summaries if s["unpublished"]),
         "unpublished": document_id in visible.unpublished,
