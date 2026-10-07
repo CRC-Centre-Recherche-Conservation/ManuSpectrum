@@ -368,7 +368,7 @@ BIBLISSIMA_DOCUMENT_TYPE_LABELS = {
 _ARK_RE = re.compile(r"ark:/43093/(\w+)")
 
 # A Wikibase item id.
-_QID_RE = re.compile(r"Q\d+")
+_QID_RE = re.compile(r"Q[1-9]\d*")
 
 # The type prefixes Biblissima puts in front of its 40-hex hashes.
 BIBLISSIMA_HASH_PREFIXES = ("mdata", "pdata", "oedata", "cdata", "ldata", "ifdata")

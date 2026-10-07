@@ -376,7 +376,7 @@ const viewModel = function(params) {
         ajax: {
             url: arches.urls.search_terms,
             dataType: 'json',
-            quietMillis: 250,
+            delay: 250,
             data: (requestParams) => {
                 const term = requestParams.term || '';
                 return { q: term };

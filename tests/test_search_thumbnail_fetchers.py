@@ -197,7 +197,9 @@ class ManifestFetcherRetrieveTests(SimpleTestCase):
         )
         fetch_manifest.assert_called_once_with(TILE_MANIFEST_URL)
         safe_fetch.assert_called_once_with(
-            "https://img.example.org/thumb.png", headers=IMAGE_HEADERS
+            "https://img.example.org/thumb.png",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_the_content_type_comes_from_the_signature_when_the_header_is_absent(
@@ -212,7 +214,9 @@ class ManifestFetcherRetrieveTests(SimpleTestCase):
         self.assertEqual(
             self.fetcher.get_thumbnail(retrieve=True), (JPEG_BYTES, "image/jpeg")
         )
-        safe_fetch.assert_called_once_with(DERIVED_THUMBNAIL, headers=IMAGE_HEADERS)
+        safe_fetch.assert_called_once_with(
+            DERIVED_THUMBNAIL, headers=IMAGE_HEADERS, purpose="thumbnail"
+        )
 
     def test_the_first_tile_value_naming_a_manifest_is_the_one_fetched(
         self, tile_model, fetch_manifest, safe_fetch
@@ -365,6 +369,7 @@ class ComponentFetcherRetrieveTests(SimpleTestCase):
         safe_fetch.assert_called_once_with(
             f"{CANVAS_SERVICE}/{POLYGON_REGION}/full/0/default.jpg",
             headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_a_declared_png_serving_jpeg_bytes_is_served_as_jpeg(
@@ -388,7 +393,9 @@ class ComponentFetcherRetrieveTests(SimpleTestCase):
         self.fetcher.get_thumbnail(retrieve=True)
 
         safe_fetch.assert_called_once_with(
-            f"{CANVAS_SERVICE}/22,22,38,38/full/0/default.jpg", headers=IMAGE_HEADERS
+            f"{CANVAS_SERVICE}/22,22,38,38/full/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_an_unmatched_canvas_falls_back_to_1000_by_1000(
@@ -407,6 +414,7 @@ class ComponentFetcherRetrieveTests(SimpleTestCase):
         safe_fetch.assert_called_once_with(
             f"{CANVAS_SERVICE}/{FAR_POLYGON_DEFAULT_CANVAS_REGION}/full/0/default.jpg",
             headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_returns_none_when_the_resource_has_no_annotation(
@@ -611,7 +619,9 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
 
         self.assertEqual(result, (PNG_BYTES, "image/png"))
         safe_fetch.assert_called_once_with(
-            "https://img.example.org/thumb.png", headers=IMAGE_HEADERS
+            "https://img.example.org/thumb.png",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
         vw_annotation.objects.filter.assert_not_called()
 
@@ -625,7 +635,9 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         self.assertEqual(
             self.fetcher.get_thumbnail(retrieve=True), (JPEG_BYTES, "image/jpeg")
         )
-        safe_fetch.assert_called_once_with(DERIVED_THUMBNAIL, headers=IMAGE_HEADERS)
+        safe_fetch.assert_called_once_with(
+            DERIVED_THUMBNAIL, headers=IMAGE_HEADERS, purpose="thumbnail"
+        )
 
     def test_a_failed_manifest_fetch_falls_back_to_the_annotation(
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
@@ -645,6 +657,7 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         safe_fetch.assert_called_once_with(
             f"{CANVAS_SERVICE}/{POLYGON_REGION}/full/0/default.jpg",
             headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_a_manifest_without_a_thumbnail_url_falls_back_to_the_annotation(
@@ -661,6 +674,7 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         safe_fetch.assert_called_once_with(
             f"{CANVAS_SERVICE}/{POLYGON_REGION}/full/0/default.jpg",
             headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_a_non_200_manifest_thumbnail_falls_back_to_the_annotation(
@@ -711,7 +725,9 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
 
         self.assertEqual(result, (POINT_REGION_BYTES, "image/jpeg"))
         safe_fetch.assert_called_once_with(
-            f"{CANVAS_SERVICE}/{POINT_REGION}/full/0/default.jpg", headers=IMAGE_HEADERS
+            f"{CANVAS_SERVICE}/{POINT_REGION}/full/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_the_annotation_radius_property_sizes_the_point_region(
@@ -727,7 +743,9 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         self.fetcher.get_thumbnail(retrieve=True)
 
         safe_fetch.assert_called_once_with(
-            f"{CANVAS_SERVICE}/28,44,40,40/full/0/default.jpg", headers=IMAGE_HEADERS
+            f"{CANVAS_SERVICE}/28,44,40,40/full/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_requests_the_iiif_region_of_an_annotated_polygon(
@@ -744,6 +762,7 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         safe_fetch.assert_called_once_with(
             f"{CANVAS_SERVICE}/{POLYGON_REGION}/full/0/default.jpg",
             headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_a_v3_manifest_supplies_the_canvas_dimensions(
@@ -757,7 +776,9 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         self.fetcher.get_thumbnail(retrieve=True)
 
         safe_fetch.assert_called_once_with(
-            f"{CANVAS_SERVICE}/22,22,38,38/full/0/default.jpg", headers=IMAGE_HEADERS
+            f"{CANVAS_SERVICE}/22,22,38,38/full/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
         )
 
     def test_returns_none_when_there_is_neither_manifest_nor_annotation(

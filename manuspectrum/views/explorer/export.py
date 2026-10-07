@@ -34,6 +34,7 @@ from zipstream import ZIP_STORED, ZipStream
 
 from manuspectrum.iiif.sources import canvas_index, canvases_of
 from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.observability import metrics
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.views.explorer.api import _not_found
 from manuspectrum.views.explorer.citations import (
@@ -945,6 +946,7 @@ class ExplorerExportView(View):
                 return _too_large()
             crate = ro_crate(scope, members, exported_at, content)
         length, body = stream(members, crate)
+        metrics.EXPLORER_EXPORT_BYTES.observe(length)
         response = StreamingHttpResponse(body, content_type="application/zip")
         response["Content-Length"] = str(length)
         response["Content-Disposition"] = content_disposition_header(

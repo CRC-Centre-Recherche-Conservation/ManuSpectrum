@@ -8,7 +8,6 @@ import arches from 'arches';
 import ko from 'knockout';
 import afsReaderTemplate from 'templates/views/components/cards/file-renderers/xy-reader.htm';
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
-import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
 import {
     TRANSFORM_ANNOTATION_KEYS,
@@ -21,7 +20,7 @@ import {
     seriesRoles,
 } from 'utils/xy-transforms';
 import dispose from 'utils/dispose';
-import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
+import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
 import 'views/components/plugins/importer-configuration';
 
@@ -60,12 +59,7 @@ export default ko.components.register('xy-reader', {
     viewModel: function (params) {
         const self = this;
         this.alert = params?.pageVm?.alert;
-        this.showConfigAdd = ko.observable(false);
-        this.configName = ko.observable();
-        this.delimiterCharacter = ko.observable();
         this.invalidDelimiter = ko.observable(false);
-        this.headerDelimiter = ko.observable();
-        this.headerFixedLines = ko.observable();
         this.selectedConfig = params.selectedConfig || ko.observable();
         this.selectedFile = params.selectedFile || ko.observable();
         this.selectedConfiguration = undefined;
@@ -721,49 +715,6 @@ export default ko.components.register('xy-reader', {
                 applyDisplayConfig();
                 self.render();
             }
-        };
-
-        this.disposables.push(this.delimiterCharacter.subscribe(() => {
-            try {
-                if (this.delimiterCharacter().length < 2) {
-                    new RegExp(`[${this.delimiterCharacter()}\\s]+`);
-                } else {
-                    new RegExp(`${this.delimiterCharacter()}`);
-                }
-                this.invalidDelimiter(false);
-            } catch {
-                this.invalidDelimiter(true);
-            }
-        }));
-
-        this.addConfiguration = () => {
-            self.showConfigAdd(true);
-        };
-
-        this.saveConfiguration = async () => {
-            const newConfiguration = {
-                name: self.configName(),
-                headerDelimiter: self.headerDelimiter(),
-                headerFixedLines: self.headerFixedLines(),
-                delimiterCharacter: self.delimiterCharacter(),
-                rendererId: self.renderer,
-            };
-            const configSaveResponse = await fetch(
-                arches.urls.renderer_config,
-                {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: JSON.stringify(newConfiguration),
-                    headers: {
-                        'X-CSRFToken': Cookies.get('csrftoken'),
-                    },
-                }
-            );
-            if (configSaveResponse.ok) {
-                invalidate(self.renderer);
-                rendererConfigRefresh();
-            }
-            self.showConfigAdd(false);
         };
 
         // Track computed observables for disposal

@@ -26,6 +26,7 @@ class ConcurrencyTestCase(TestCase):
         self.addCleanup(cache.clear)
         self._start(patch.dict(bp._biblissima_stats))
         self._start(patch.object(bp, "_biblissima_session", None))
+        self._start(patch.object(bp, "_besteffort_session", None))
 
     def _start(self, patcher):
         mock = patcher.start()
@@ -94,6 +95,51 @@ class SlotTimeoutTests(ConcurrencyTestCase):
         self.assertEqual(json.loads(response.content)["error"], "busy")
         self.assertEqual(response["Retry-After"], str(bp._BIBLISSIMA_SLOT_TIMEOUT))
 
+    def test_a_given_wait_replaces_the_setting(self):
+        self.semaphore.acquire()
+        self._start(patch.object(bp, "_BIBLISSIMA_SLOT_TIMEOUT", 30))
+
+        started = time.monotonic()
+        with self.assertRaises(bp.BiblissimaBusy):
+            with bp._biblissima_slot(timeout=0.05):
+                self.fail("the block ran without a slot")
+
+        self.assertLess(time.monotonic() - started, 5)
+
+
+class BibRequestDeadlineTests(ConcurrencyTestCase):
+    URL = "https://data.example/w/api.php"
+
+    def test_the_timeouts_are_what_is_left_once_the_slot_is_held(self):
+        semaphore = threading.BoundedSemaphore(1)
+        self._start(patch.object(bp, "_biblissima_semaphore", semaphore))
+        fetch = self._start(
+            patch.object(bp, "safe_fetch", return_value=MagicMock(status_code=200))
+        )
+        semaphore.acquire()
+        release = threading.Timer(0.3, semaphore.release)
+        self.addCleanup(release.join)
+        self.addCleanup(release.cancel)
+        release.start()
+
+        bp._bib_request(
+            MagicMock(), self.URL, guarded=True, deadline=time.monotonic() + 1.0
+        )
+
+        connect, read = fetch.call_args.kwargs["timeout"]
+        self.assertTrue(0 < connect <= 0.8)
+        self.assertTrue(0 < read <= 0.8)
+
+    def test_a_spent_deadline_starts_no_call(self):
+        fetch = self._start(patch.object(bp, "safe_fetch"))
+
+        with self.assertRaises(bp.BiblissimaBudgetSpent):
+            bp._bib_request(
+                MagicMock(), self.URL, guarded=True, deadline=time.monotonic() - 0.01
+            )
+
+        fetch.assert_not_called()
+
 
 class BusyResponseTests(ConcurrencyTestCase):
     def test_busy_maps_to_503_with_retry_after(self):
@@ -122,7 +168,7 @@ class EnrichmentCacheTests(ConcurrencyTestCase):
         )
 
     def _search_finds_q1(self):
-        response = MagicMock()
+        response = MagicMock(headers={})
         response.json.return_value = {"query": {"search": [{"title": "Item:Q1"}]}}
         self._start(patch.object(bp, "_bib_request", return_value=response))
 
@@ -186,7 +232,7 @@ class EnrichmentCacheTests(ConcurrencyTestCase):
         self.assertIsNone(self._cached_record())
 
     def test_a_candidate_missing_after_the_match_does_not_block_caching(self):
-        response = MagicMock()
+        response = MagicMock(headers={})
         response.json.return_value = {
             "query": {"search": [{"title": "Item:Q1"}, {"title": "Item:Q2"}]}
         }
@@ -244,7 +290,7 @@ class SharedSessionTests(ConcurrencyTestCase):
             patch.object(
                 bp,
                 "_build_biblissima_session",
-                return_value=MagicMock(name="shared-session"),
+                side_effect=lambda retry=None: MagicMock(name="built-session"),
             )
         )
         self._start(patch.object(bp, "_fetch_biblissima_canvases", side_effect=fetch))
@@ -258,7 +304,7 @@ class SharedSessionTests(ConcurrencyTestCase):
 
         self.assertEqual(len(seen), 2)
         self.assertIs(seen[0], seen[1])
-        self.assertIs(seen[0], bp._get_biblissima_session())
+        self.assertIs(seen[0], bp._get_besteffort_session())
         seen[0].close.assert_not_called()
 
 
@@ -277,7 +323,7 @@ class EnrichmentPoolSessionTests(ConcurrencyTestCase):
             time.sleep(0.05)
             with used_lock:
                 used.append((threading.get_ident(), session))
-            response = MagicMock()
+            response = MagicMock(headers={})
             response.json.return_value = {"query": {"search": []}}
             return response
 

@@ -8,3 +8,40 @@ updates:
       - dependencies
       - javascript
     versioning-strategy: "increase"
+  # Base image digests of deploy/docker/Dockerfile: a rebuilt python or node
+  # image carries the Debian security updates.
+  - package-ecosystem: "docker"
+    directory: "/deploy/docker"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - docker
+    target-branch: "dev"
+  # Compose service images, pinned by digest.
+  - package-ecosystem: "docker"
+    directory: "/deploy/compose"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - docker
+    target-branch: "dev"
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - python
+    target-branch: "dev"
+    ignore:
+      # Arches minor upgrades are manual (updateproject rebuilds webpack/).
+      - dependency-name: "arches*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "django"
+        update-types: ["version-update:semver-major"]
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

@@ -13,11 +13,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
 
 vi.mock('arches', () => ({
-    default: { translations: {}, urls: {}, activeLanguage: 'en' },
+    default: {
+        translations: { biblissimaConceptInputTooLong: 'Query too long ({n} characters max)' },
+        urls: {},
+        activeLanguage: 'en',
+    },
 }));
 vi.mock('nouislider', () => ({ default: { create: vi.fn() } }));
 
+const { SUGGEST_URL, generateArchesURL } = vi.hoisted(() => {
+    const url = '/mocked/biblissima-suggest';
+    return { SUGGEST_URL: url, generateArchesURL: vi.fn(() => url) };
+});
+
+vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
+
 import viewModel from './biblissima-search-step.js';
+import { SUGGEST_MAX_INPUT_LENGTH } from '../../widgets/biblissima-concept-utils.js';
 
 const build = (overrides = {}) => {
     const params = {
@@ -94,5 +106,33 @@ describe('biblissima-search-step dispose', () => {
         vm.cart.removeAll();
 
         expect(complete()).toBe(true);
+    });
+});
+
+describe('biblissima-search-step suggest selects', () => {
+    it('send the same normalised query as the concept widget', () => {
+        const { vm } = build();
+        expect(vm.descriptorSelectConfig.ajax.data({ term: ' saint   jero ' }))
+            .toEqual({ q: 'saint jero', type: 'descriptor', lang: 'fr' });
+        expect(vm.manuscriptComponentSelectConfig.ajax.data({ term: 'latin ' }))
+            .toEqual({ q: 'latin', type: 'manuscript', lang: 'fr', limit: 15 });
+    });
+
+    it('reach the suggest endpoint through its route name', () => {
+        generateArchesURL.mockClear();
+        const { vm } = build();
+        expect(generateArchesURL).toHaveBeenCalledWith('manuspectrum:biblissima-suggest');
+        expect(vm.descriptorSelectConfig.ajax.url).toBe(SUGGEST_URL);
+        expect(vm.manuscriptComponentSelectConfig.ajax.url).toBe(SUGGEST_URL);
+    });
+
+    it('stop at the suggest endpoint length limit and say why', () => {
+        const { vm } = build();
+        expect(SUGGEST_MAX_INPUT_LENGTH).toBe(100);
+        [vm.descriptorSelectConfig, vm.manuscriptComponentSelectConfig].forEach((config) => {
+            expect(config.maximumInputLength).toBe(SUGGEST_MAX_INPUT_LENGTH);
+            expect(config.language.inputTooLong({ maximum: SUGGEST_MAX_INPUT_LENGTH }))
+                .toBe('Query too long (100 characters max)');
+        });
     });
 });

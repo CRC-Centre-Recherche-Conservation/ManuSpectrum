@@ -5,7 +5,9 @@
 #################################
 
 
+import json
 import logging
+import uuid
 from django.utils.decorators import method_decorator
 from arches.app.utils.decorators import group_required
 from arches.app.views.api import APIBase
@@ -21,7 +23,7 @@ from arches.app.utils.response import JSONResponse
 from django.http import HttpResponseNotFound
 from django.db.models import Q
 from django.utils.translation import gettext as _
-from arches.app.utils.betterJSONSerializer import JSONSerializer, JSONDeserializer
+from arches.app.utils.betterJSONSerializer import JSONSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,29 @@ def configuration_is_in_use(config_id):
     return models.TileModel.objects.filter(in_use_query(config_id, file_nodes)).exists()
 
 
+def parse_save_body(raw):
+    """Return the POST body as a dict, or None when it is not a valid one.
+
+    Valid: a JSON object whose ``rendererId`` is a UUID and whose ``name`` is a
+    string holding more than whitespace. Undecodable bytes count as invalid
+    JSON.
+    """
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    name = body.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    try:
+        uuid.UUID(str(body.get("rendererId")))
+    except ValueError:
+        return None
+    return body
+
+
 class RendererConfigView(APIBase):
     def get(self, request, renderer_config_id=None):
         if renderer_config_id is None:
@@ -106,7 +131,27 @@ class RendererConfigView(APIBase):
 
     @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def post(self, request, renderer_config_id=None):
-        body = JSONDeserializer().deserialize(request.body)
+        """Create a configuration, or update ``renderer_config_id``.
+
+        Refusals answer ``{"saved": false, "reason", "message"}``: 400
+        ``invalid`` for a body ``parse_save_body`` rejects (checked before
+        anything else), 403 ``protected`` for a seeded preset edited by a
+        non-superuser, 404 ``not_found`` for an unknown id. A save answers the
+        stored row as an object.
+        """
+        body = parse_save_body(request.body)
+        if body is None:
+            return JSONResponse(
+                {
+                    "saved": False,
+                    "reason": "invalid",
+                    "message": _(
+                        "The configuration must be a JSON object with a "
+                        "renderer and a name."
+                    ),
+                },
+                status=400,
+            )
         # These three are columns, not configuration. Popped once for both
         # branches so `body` is exactly what belongs in `config`, and so the two
         # cannot disagree about which keys are envelope. `description` defaults
@@ -133,7 +178,19 @@ class RendererConfigView(APIBase):
                     },
                     status=403,
                 )
-            renderer_config = RendererConfig.objects.get(configid=renderer_config_id)
+            try:
+                renderer_config = RendererConfig.objects.get(
+                    configid=renderer_config_id
+                )
+            except RendererConfig.DoesNotExist:
+                return JSONResponse(
+                    {
+                        "saved": False,
+                        "reason": "not_found",
+                        "message": _("This configuration no longer exists."),
+                    },
+                    status=404,
+                )
             renderer_config.rendererid = rendererid
             renderer_config.name = name
             renderer_config.description = description
@@ -147,12 +204,17 @@ class RendererConfigView(APIBase):
                 config=body,
             )
 
-        response_dict = JSONSerializer().serialize(renderer_config)
-
-        return JSONResponse(response_dict)
+        return JSONResponse(JSONSerializer().serializeToPython(renderer_config))
 
     @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
     def delete(self, request, renderer_config_id):
+        """Delete a configuration no stored file points at.
+
+        Answers ``{"deleted": true, "config"}`` on success. Refusals answer
+        ``deleted: false`` with a ``reason``: 403 ``protected`` for a seeded
+        preset, 404 ``not_found`` for an unknown id (checked before the in-use
+        lookup), 200 ``in_use`` while a file still points at it.
+        """
         # Not even for a superuser. A seeded configuration is the shared
         # baseline every file of its technique points at, and deleting it
         # orphans all of them at once — the reference survives in tile data
@@ -176,12 +238,20 @@ class RendererConfigView(APIBase):
                 status=403,
             )
 
-        renderer_config = RendererConfig.objects.get(configid=renderer_config_id)
-        renderer_used = configuration_is_in_use(renderer_config_id)
-        if not renderer_used:
-            renderer_config.delete()
-            response_dict = {"deleted": JSONSerializer().serialize(renderer_config)}
-        else:
-            response_dict = {"deleted": False}
+        try:
+            renderer_config = RendererConfig.objects.get(configid=renderer_config_id)
+        except RendererConfig.DoesNotExist:
+            return JSONResponse(
+                {
+                    "deleted": False,
+                    "reason": "not_found",
+                    "message": _("This configuration no longer exists."),
+                },
+                status=404,
+            )
+        if configuration_is_in_use(renderer_config_id):
+            return JSONResponse({"deleted": False, "reason": "in_use"})
 
-        return JSONResponse(response_dict)
+        deleted = JSONSerializer().serializeToPython(renderer_config)
+        renderer_config.delete()
+        return JSONResponse({"deleted": True, "config": deleted})

@@ -215,7 +215,7 @@ class ConfigurationSaveBodyTests(SimpleTestCase):
             ) as serializer,
         ):
             # The response is not what these tests read; it only has to render.
-            serializer.return_value.serialize.return_value = "{}"
+            serializer.return_value.serializeToPython.return_value = {}
             model.objects.get.return_value.config = {}
             RendererConfigView().post(request, renderer_config_id=renderer_config_id)
             return model

@@ -16,7 +16,7 @@ except ImportError:
     pass
 
 APP_NAME = "manuspectrum"
-APP_VERSION = semantic_version.Version(major=0, minor=0, patch=0)
+APP_VERSION = semantic_version.Version(major=1, minor=0, patch=0, prerelease=("alpha",))
 APP_ROOT = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 WEBPACK_LOADER = {
@@ -238,6 +238,7 @@ INSTALLED_APPS = (
 INSTALLED_APPS += ("arches.app", "django.contrib.admin")
 
 MIDDLEWARE = [
+    "manuspectrum.observability.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -567,7 +568,7 @@ RESTRICT_MEDIA_ACCESS = False
 # By setting RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER to True, if the user is attempting
 # to export search results above the SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD
 # value and is not signed in with a user account then the request will not be allowed.
-RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = False
+RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
@@ -698,6 +699,12 @@ SSRF_MAX_REDIRECTS = 5
 SSRF_MAX_RESPONSE_BYTES = 25 * 1024 * 1024
 SSRF_ALLOW_PRIVATE = False
 
+# Longest sleep, in seconds, honouring a remote IIIF server's Retry-After on a
+# 429/503. The session retries up to 3 times, so one fetch waits at most
+# 3 x this value on top of its backoff. Under gthread no gunicorn timeout kills
+# a request thread asleep in a retry.
+IIIF_RETRY_AFTER_MAX = 10
+
 # How long a fetched IIIF manifest stays in the cache. Manifests are versioned
 # documents that change when a library re-digitises a codex; a day of staleness
 # costs nothing next to re-fetching one per search result.
@@ -743,19 +750,61 @@ BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
 # generous for large-but-reachable manifests, but a DEAD IIIF host must fail
 # in seconds — otherwise the illumination-detail request blocks for minutes
 # (a 45 s connect timeout x connect retries once held a gunicorn worker for
-# ~138 s when api.irht.cnrs.fr was unreachable).
+# ~138 s when api.irht.cnrs.fr was unreachable). Also the connect cap of every
+# call made under a request budget (BIBLISSIMA_VIEW_DEADLINE).
 BIBLISSIMA_IIIF_CONNECT_TIMEOUT = 5
 
-# Maximum concurrent outbound HTTP calls to Biblissima per worker process
-# (each gunicorn worker holds its own limit).
-BIBLISSIMA_CONCURRENCY_LIMIT = 12
+# Maximum concurrent outbound HTTP calls to Biblissima per worker PROCESS: the
+# semaphore is shared by every thread of the process (request threads and the
+# parent-resolver pool alike), so Biblissima sees at most this many calls per
+# process, times the number of gunicorn workers. Under the sync worker a process
+# never carried more than one request, hence at most the pool's 6 calls, and the
+# limit never bound. Under gthread (several request threads per process) it
+# does: 8 lets one request's pool run in full while two other requests each
+# make a call, and keeps 5 workers at 40 calls at most, where the old 12 would
+# have allowed 60.
+BIBLISSIMA_CONCURRENCY_LIMIT = 8
 
 # Whole seconds a request waits for a Biblissima concurrency slot before
 # answering 503; also sent as Retry-After.
 BIBLISSIMA_SLOT_TIMEOUT = 15
 
-# 24h Django-cache TTL for resolved Wikibase entities and manuscript
-# enrichment results.
+# Whole-request budget, in seconds, of one /api/biblissima/suggest miss. Each
+# upstream call's slot wait, connect and read are capped by what is left of it,
+# and no call starts once it is spent: the answer then carries the results
+# already in hand. Calls on this path are never retried.
+BIBLISSIMA_SUGGEST_DEADLINE = 4
+
+# Backstop, in seconds, of the Biblissima calls one interactive view makes
+# (entity, searches, illuminations). Under it calls never retry, connect within
+# BIBLISSIMA_IIIF_CONNECT_TIMEOUT and read within their own timeout, both capped
+# by what is left; no call starts once it is spent, and a host found down is not
+# called again in the same request. Kept under the 60 s abort of the create
+# step's client; the raw-memo waits (10 s) and each read's overshoot come on
+# top of it, so gunicorn --timeout must stay >= 60 s under the sync worker.
+#
+# Under the gthread worker that flag no longer bounds a request at all: the
+# worker heartbeats from its main thread, so a request thread stuck in a
+# network call is never killed. This deadline, the SSRF_* budgets and
+# SUMMARY_ES_TIMEOUT are then the only guards, which is why every outbound
+# call in the project carries a timeout (prod checklist).
+BIBLISSIMA_VIEW_DEADLINE = 30
+
+# Budget, in seconds, of EACH item the Biblissima create views write
+# (create-resource and every item of create-all): manifest import, Wikibase
+# claims. Same mechanism as BIBLISSIMA_VIEW_DEADLINE (utils.budget): no call
+# starts once it is spent, each call's connect and read timeouts are capped by
+# what is left, the body read and the per-host throttle wait stop with it, and
+# the IIIF fetches of the item are not retried. An item that
+# runs out is reported failed (504 for a single create) and the batch goes on;
+# nothing of it is committed. This is the guard of the write path under the
+# gthread worker, where no gunicorn timeout kills a request thread stuck in a
+# network call. A create-all POST carries at most 5 items, so one request
+# holds its thread at most 5 x this value (300 s, the gunicorn graceful_timeout).
+BIBLISSIMA_WRITE_ITEM_DEADLINE = 60
+
+# 24h Django-cache TTL for resolved Wikibase entities, manuscript enrichment
+# results and complete suggest prefix entries.
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
 
 # Parsed search canvases, scraped illumination lists and manifest canvas
@@ -806,6 +855,32 @@ EXPLORER_BUNDLE_TTL = 2 * 60 * 60
 # Rebuild a corpus bundle after a data change in a background thread, readers
 # answered from the previous bundle meanwhile; False rebuilds in the request.
 EXPLORER_BACKGROUND_REBUILD = True
+
+# Observability (manuspectrum/observability/README.md). Off on the development VM;
+# settings_docker turns them on.
+METRICS_ENABLED = False
+READYZ_ENABLED = False
+# Seconds each /readyz probe may take; the probes run concurrently.
+READYZ_TIMEOUT = 2.0
+# Redis instances /readyz pings, by component name.
+READYZ_REDIS_URLS = {}
+READYZ_CANTALOUPE = False
+# django-prometheus request latency buckets, aligned on the search SLO (2 s).
+PROMETHEUS_LATENCY_BUCKETS = (
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1,
+    1.5,
+    2,
+    3,
+    5,
+    8,
+    13,
+    float("inf"),
+)
 # Seconds no background rebuild of a language starts after one failed.
 EXPLORER_REBUILD_RETRY_AFTER = 60
 # Seconds no background rebuild of a language starts after one stored its

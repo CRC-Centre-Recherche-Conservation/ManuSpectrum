@@ -19,6 +19,7 @@ from arches.app.models.models import File
 
 from tests.test_explorer_export_package import BY, EXPORTED, fetch
 from tests.test_explorer_api import FETCH, CorpusCase
+from tests.observability_helpers import headers_without_request_id
 
 from manuspectrum.views.explorer.export import package
 from manuspectrum.views.explorer.scopes import resolve_scope
@@ -284,7 +285,8 @@ class VisibilityTests(ExportCase):
         self.assert_bodyless(unknown, 404)
         self.assert_bodyless(embargoed, 404)
         self.assertEqual(
-            sorted(unknown.headers.items()), sorted(embargoed.headers.items())
+            headers_without_request_id(unknown),
+            headers_without_request_id(embargoed),
         )
 
     def test_no_scope_is_a_bad_request_without_body(self):

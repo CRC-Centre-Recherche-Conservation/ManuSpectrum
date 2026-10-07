@@ -19,6 +19,8 @@ from django.conf import settings as django_settings
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from manuspectrum.observability import metrics
+from manuspectrum.utils.budget import BudgetSpent, capped_timeout, current_budget
 from manuspectrum.utils.contact import publishable_contact_email
 
 # Public page an external operator should land on when they look us up: it
@@ -118,8 +120,13 @@ class UnsafeURLError(Exception):
     Either the scheme/host/port is malformed or disallowed, DNS resolution
     fails, or the host resolves to a non-public address (loopback / private /
     link-local / reserved — including the cloud-metadata endpoint
-    169.254.169.254).
+    169.254.169.254). ``reason`` names the rule that refused it
+    (``metrics.SSRF_REASONS``).
     """
+
+    def __init__(self, message, reason="other"):
+        super().__init__(message)
+        self.reason = reason
 
 
 class ResponseTooLargeError(Exception):
@@ -171,11 +178,11 @@ def _canonical_url(url):
     try:
         prepared.prepare_url(url, None)
     except Exception as exc:
-        raise UnsafeURLError(f"Malformed URL {url!r}") from exc
+        raise UnsafeURLError(f"Malformed URL {url!r}", reason="malformed") from exc
     return prepared.url
 
 
-def assert_url_is_safe(url, *, allow_private=None):
+def _assert_url_is_safe(url, *, allow_private=None):
     """Validate an outbound URL against SSRF before fetching it.
 
     Checks the scheme is http(s), the host is present and the port is a web
@@ -199,12 +206,14 @@ def assert_url_is_safe(url, *, allow_private=None):
 
     parsed = urlparse(url)
     if parsed.scheme not in _ALLOWED_URL_SCHEMES:
-        raise UnsafeURLError(f"Disallowed URL scheme: {parsed.scheme!r}")
+        raise UnsafeURLError(
+            f"Disallowed URL scheme: {parsed.scheme!r}", reason="scheme"
+        )
 
     parsed = urlparse(_canonical_url(url))
     host = parsed.hostname
     if not host:
-        raise UnsafeURLError("URL has no host")
+        raise UnsafeURLError("URL has no host", reason="host")
 
     if allow_private:
         return parsed
@@ -213,22 +222,41 @@ def assert_url_is_safe(url, *, allow_private=None):
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
     except ValueError as exc:
         # urlparse defers the port syntax check to attribute access.
-        raise UnsafeURLError(f"Malformed port in {url!r}") from exc
+        raise UnsafeURLError(f"Malformed port in {url!r}", reason="malformed") from exc
     if port not in _ALLOWED_PORTS:
-        raise UnsafeURLError(f"Disallowed port {port} for host {host!r}")
+        raise UnsafeURLError(f"Disallowed port {port} for host {host!r}", reason="port")
 
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
-        raise UnsafeURLError(f"DNS resolution failed for {host!r}") from exc
+        raise UnsafeURLError(
+            f"DNS resolution failed for {host!r}", reason="dns"
+        ) from exc
 
     resolved = {info[4][0] for info in infos}
     if not resolved:
-        raise UnsafeURLError(f"No addresses resolved for {host!r}")
+        raise UnsafeURLError(f"No addresses resolved for {host!r}", reason="dns")
     for ip_str in resolved:
         if not _address_is_public(ip_str):
-            raise UnsafeURLError(f"{host!r} resolves to non-public address {ip_str}")
+            raise UnsafeURLError(
+                f"{host!r} resolves to non-public address {ip_str}", reason="private"
+            )
     return parsed
+
+
+def assert_url_is_safe(url, *, allow_private=None):
+    """Validate an outbound URL against SSRF before fetching it.
+
+    See :func:`_assert_url_is_safe` for the rules. A refusal is counted in
+    ``manuspectrum_ssrf_rejections_total``.
+    """
+    try:
+        return _assert_url_is_safe(url, allow_private=allow_private)
+    except UnsafeURLError as error:
+        metrics.SSRF_REJECTIONS.labels(
+            reason=metrics.bounded(error.reason, metrics.SSRF_REASONS)
+        ).inc()
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -276,8 +304,11 @@ def _rate_key_and_interval(host):
     return host or "default", limits.get("default", 0)
 
 
-def throttle_for_host(url):
+def throttle_for_host(url, budget=None):
     """Block until the per-host minimum interval has elapsed before a request.
+
+    With a *budget* (``utils.budget``), raises ``BudgetSpent`` instead of
+    waiting past its deadline, for the host lock as well as for the interval.
 
     Enforces e.g. 1 request / 3 s for *.bnf.fr so a bulk import does not trip
     Gallica/BnF's (undocumented, discretionary) abuse blocking. No-op when the
@@ -289,11 +320,19 @@ def throttle_for_host(url):
         return
     with _host_rate_guard:
         lock = _host_rate_locks.setdefault(key, threading.Lock())
-    with lock:
+    if budget is None:
+        lock.acquire()
+    elif budget.left() <= 0 or not lock.acquire(timeout=budget.left()):
+        raise BudgetSpent()
+    try:
         wait = _host_rate_last.get(key, 0.0) + interval - time.monotonic()
         if wait > 0:
+            if budget is not None and wait >= budget.left():
+                raise BudgetSpent()
             time.sleep(wait)
         _host_rate_last[key] = time.monotonic()
+    finally:
+        lock.release()
 
 
 # ---------------------------------------------------------------------------
@@ -304,11 +343,26 @@ _iiif_session = None
 _iiif_session_guard = threading.Lock()
 
 
-def _build_iiif_session():
+class CappedRetry(Retry):
+    """``Retry`` whose ``Retry-After`` sleep never exceeds ``IIIF_RETRY_AFTER_MAX``.
+
+    The cap is read from settings at each sleep, not stored on the instance, so
+    the copies urllib3 makes with ``new()`` on every attempt keep it.
+    Written against urllib3 1.26 (``get_retry_after``).
+    """
+
+    def get_retry_after(self, response):
+        retry_after = super().get_retry_after(response)
+        if retry_after is None:
+            return None
+        return min(retry_after, django_settings.IIIF_RETRY_AFTER_MAX)
+
+
+def _build_iiif_session(retry=None):
     session = requests.Session()
     # Carries our User-Agent (get_user_agent) + JSON-LD Accept on every request.
     session.headers.update(get_json_request_headers())
-    retry = Retry(
+    retry = retry or CappedRetry(
         total=3,
         connect=2,
         read=2,
@@ -338,6 +392,23 @@ def get_iiif_session():
             if _iiif_session is None:
                 _iiif_session = _build_iiif_session()
     return _iiif_session
+
+
+_iiif_budget_session = None
+
+
+def _get_iiif_budget_session():
+    """Process-wide session without retries, for fetches made under a budget
+    (``utils.budget``): a retry loop inside urllib3 cannot be stopped when the
+    deadline passes."""
+    global _iiif_budget_session
+    if _iiif_budget_session is None:
+        with _iiif_session_guard:
+            if _iiif_budget_session is None:
+                _iiif_budget_session = _build_iiif_session(
+                    retry=Retry(total=0, raise_on_status=False)
+                )
+    return _iiif_budget_session
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +469,7 @@ def _max_bytes(explicit=None):
     return getattr(django_settings, "SSRF_MAX_RESPONSE_BYTES", _DEFAULT_MAX_BYTES)
 
 
-def _read_capped(response, max_bytes):
+def _read_capped(response, max_bytes, budget=None):
     """Read at most *max_bytes* of a streamed response, decompressed.
 
     ``iter_content`` decodes the transfer encoding as it goes, so the count is
@@ -406,6 +477,9 @@ def _read_capped(response, max_bytes):
     to, not the size it was sent as. Stacked codings ("gzip, gzip") are refused
     outright: they are the shape of the urllib3 1.x decompression CVEs that
     Arches' pin leaves unfixed, and no IIIF server emits them.
+
+    With a *budget*, raises ``BudgetSpent`` between chunks once it is spent: a
+    socket read timeout bounds one read, not a body sent a few bytes at a time.
     """
     codings = [
         c.strip()
@@ -430,6 +504,8 @@ def _read_capped(response, max_bytes):
     chunks = []
     total = 0
     for chunk in response.iter_content(_READ_CHUNK):
+        if budget is not None and budget.spent():
+            raise BudgetSpent()
         total += len(chunk)
         if total > max_bytes:
             raise ResponseTooLargeError(
@@ -439,7 +515,7 @@ def _read_capped(response, max_bytes):
     return b"".join(chunks)
 
 
-def safe_fetch(
+def _safe_fetch(
     url,
     *,
     session=None,
@@ -461,11 +537,20 @@ def safe_fetch(
     its own outbound rate (the Biblissima proxy holds a concurrency semaphore
     for the whole call).
 
+    Inside a budget (``utils.budget``) no hop starts once it is spent, the
+    throttle never waits past it, each hop's connect and read timeouts are
+    capped by what is left, and a caller that gave no *session* gets one
+    without retries. Outside one nothing changes.
+
     Raises ``UnsafeURLError`` for a rejected URL or redirect chain,
-    ``ResponseTooLargeError`` past the cap, and whatever ``requests`` raises
-    for a transport failure.
+    ``ResponseTooLargeError`` past the cap, ``BudgetSpent`` when the budget
+    ran out, and whatever ``requests`` raises for a transport failure.
     """
-    session = session or get_iiif_session()
+    budget = current_budget()
+    if session is None:
+        session = (
+            _get_iiif_budget_session() if budget is not None else get_iiif_session()
+        )
     if timeout is None:
         timeout = (_ssrf_timeout(), _ssrf_timeout())
     cap = _max_bytes(max_bytes)
@@ -476,25 +561,66 @@ def safe_fetch(
         # The guard hands back the canonical form; sending anything else would
         # reopen the parser gap it just closed.
         target = assert_url_is_safe(target, allow_private=allow_private).geturl()
+        hop_timeout = timeout
+        if budget is not None:
+            if budget.spent():
+                raise BudgetSpent()
         if throttle:
-            throttle_for_host(target)
+            throttle_for_host(target, budget)
+        if budget is not None:
+            left = budget.left()
+            if left <= 0:
+                raise BudgetSpent()
+            hop_timeout = capped_timeout(timeout, left)
         response = session.get(
             target,
             headers=headers,
-            timeout=timeout,
+            timeout=hop_timeout,
             allow_redirects=False,
             stream=True,
         )
         location = response.headers.get("Location") if response.is_redirect else None
         if not location:
             try:
-                body = _read_capped(response, cap)
+                body = _read_capped(response, cap, budget)
             finally:
                 response.close()
             return FetchedResponse(target, response.status_code, response.headers, body)
         response.close()
         target = urljoin(target, location)
-    raise UnsafeURLError(f"More than {hops} redirects from {url}")
+    metrics.SSRF_REJECTIONS.labels(reason="redirects").inc()
+    raise UnsafeURLError(f"More than {hops} redirects from {url}", reason="redirects")
+
+
+def safe_fetch(url, *, purpose="other", **kwargs):
+    """``_safe_fetch`` counted in ``manuspectrum_outbound_fetches_total`` and timed in
+    ``manuspectrum_outbound_fetch_seconds`` under *purpose* (``metrics.FETCH_PURPOSES``).
+
+    Same keywords, same return value, same exceptions as ``_safe_fetch``.
+    """
+    purpose = metrics.bounded(purpose, metrics.FETCH_PURPOSES)
+    started, outcome = time.monotonic(), "error"
+    try:
+        response = _safe_fetch(url, **kwargs)
+        outcome = "ok" if response.status_code < 400 else "http_error"
+        return response
+    except UnsafeURLError:
+        outcome = "unsafe"
+        raise
+    except ResponseTooLargeError:
+        outcome = "too_large"
+        raise
+    except BudgetSpent:
+        outcome = "budget"
+        raise
+    except requests.exceptions.Timeout:
+        outcome = "timeout"
+        raise
+    finally:
+        metrics.OUTBOUND_FETCHES.labels(purpose=purpose, outcome=outcome).inc()
+        metrics.OUTBOUND_FETCH_SECONDS.labels(purpose=purpose).observe(
+            time.monotonic() - started
+        )
 
 
 def fetch_iiif_manifest(url, *, session=None, timeout=None, allow_private=None):
@@ -508,6 +634,7 @@ def fetch_iiif_manifest(url, *, session=None, timeout=None, allow_private=None):
         timeout = (_ssrf_timeout(), _MANIFEST_READ_TIMEOUT)
     return safe_fetch(
         url,
+        purpose="manifest",
         session=session,
         timeout=timeout,
         allow_private=allow_private,

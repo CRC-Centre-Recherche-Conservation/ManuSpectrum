@@ -118,7 +118,10 @@ class GetPlaceGeoTests(TestCase):
 
     def _serve(self, payload):
         response = SimpleNamespace(
-            status_code=200, raise_for_status=lambda: None, json=lambda: payload
+            status_code=200,
+            headers={},
+            raise_for_status=lambda: None,
+            json=lambda: payload,
         )
         patcher = patch.object(bp, "_bib_request", return_value=response)
         self.addCleanup(patcher.stop)

@@ -1,0 +1,36 @@
+# Allowlist: the build context holds only what the Dockerfile copies.
+*
+!manage.py
+!pyproject.toml
+!uv.lock
+!package.json
+!package-lock.json
+!.babelrc
+!.browserslistrc
+!tsconfig.json
+!eslint.config.mjs
+!.prettierrc
+!.stylelintrc.json
+!gettext.config.js
+!webpack.project.js
+!webpack/
+!manuspectrum/
+!deploy/docker/
+
+# Development and runtime leftovers inside the allowed directories.
+**/__pycache__
+**/*.pyc
+**/node_modules
+manuspectrum/settings_local.py
+manuspectrum/arches.log
+manuspectrum/logs
+manuspectrum/uploadedfiles
+manuspectrum/archestemp
+manuspectrum/export_deliverables
+manuspectrum/cantaloupe
+manuspectrum/staticfiles
+manuspectrum/media/build
+manuspectrum/media/packages
+manuspectrum/docs_claude
+webpack/webpack-stats.json
+deploy/docker/tests

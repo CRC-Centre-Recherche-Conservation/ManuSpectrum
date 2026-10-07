@@ -38,7 +38,7 @@ def read_sql(filename, **tokens):
     sql = (SQL_DIR / filename).read_text(encoding="utf-8")
     for name, value in tokens.items():
         sql = sql.replace(f"@@{name}@@", str(value))
-    leftover = re.search(r"@@[A-Z0-9_]+@@", sql)
+    leftover = re.search(r"@@[A-Za-z0-9_]+@@", sql)
     if leftover:
         raise ValueError(f"{filename} still holds {leftover.group()}")
     return sql

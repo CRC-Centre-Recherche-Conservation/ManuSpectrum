@@ -26,6 +26,8 @@ from django.utils.cache import patch_cache_control
 from arches.app.utils.permission_backend import user_can_read_resource
 from arches.app.views.thumbnail import ThumbnailView
 
+from manuspectrum.observability import metrics
+
 
 class CachedThumbnailView(ThumbnailView):
     """``ThumbnailView`` with an ETag and a Cache-Control lifetime.
@@ -36,11 +38,13 @@ class CachedThumbnailView(ThumbnailView):
 
     def head(self, request, resource_id):
         if not user_can_read_resource(request.user, resourceid=resource_id):
+            metrics.READ_REFUSALS.labels(surface="thumbnail").inc()
             return HttpResponseNotFound()
         return self._with_lifetime(super().head(request, resource_id))
 
     def get(self, request, resource_id):
         if not user_can_read_resource(request.user, resourceid=resource_id):
+            metrics.READ_REFUSALS.labels(surface="thumbnail").inc()
             return HttpResponseNotFound()
         response = super().get(request, resource_id)
         if response.status_code != 200:

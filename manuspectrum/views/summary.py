@@ -29,6 +29,7 @@ from arches.app.models.models import ResourceInstance
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.functions.resource_summary import config_stamp
+from manuspectrum.observability import metrics
 from manuspectrum.utils.cache import etag_already_held, get_or_build, stable_cache_key
 from manuspectrum.views.summary_service import (
     DEGRADED_TTL,
@@ -79,6 +80,7 @@ class SummaryView(View):
 
     def get(self, request, resourceid):
         if not user_can_read_resource(request.user, resourceid=resourceid):
+            metrics.READ_REFUSALS.labels(surface="summary").inc()
             return _private({"error": "forbidden"}, 403)
         language = translation.get_language() or settings.LANGUAGE_CODE
         scope = perm_scope(request.user)

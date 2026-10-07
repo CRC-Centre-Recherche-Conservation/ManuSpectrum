@@ -3,11 +3,15 @@ import ko from 'knockout';
 import arches from 'arches';
 import WidgetViewModel from 'viewmodels/widget';
 import 'bindings/select2-query';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
 import {
     mapSuggestItemToValue,
     renderSuggestItem,
     isReferentialUrl,
     isPortalArk,
+    suggestAjaxOptions,
+    suggestInputTooLong,
+    SUGGEST_MAX_INPUT_LENGTH,
 } from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaConceptWidgetTemplate from 'templates/views/components/widgets/biblissima-concept-widget.htm';
 
@@ -122,13 +126,11 @@ const viewModel = function(params) {
         closeOnSelect: true,
         allowClear: false,
         minimumInputLength: 2,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
         placeholder: ko.unwrap(self.placeholder) || arches.translations.biblissimaConceptPlaceholder,
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300, // selectWoo option — NOT the ignored v3 quietMillis
-            data: (requestParams) => ({
-                q: requestParams.term || '',
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
                 type: entityType,
                 lang: arches.activeLanguage,
             }),
@@ -152,6 +154,7 @@ const viewModel = function(params) {
             searching: () => arches.translations.biblissimaConceptSearching,
             errorLoading: () => arches.translations.biblissimaConceptUnavailable,
             inputTooShort: () => arches.translations.biblissimaConceptInputTooShort,
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
             noResults: () => (self.searchDegraded()
                 ? arches.translations.biblissimaConceptUnavailable
                 : arches.translations.biblissimaConceptNoResults),
