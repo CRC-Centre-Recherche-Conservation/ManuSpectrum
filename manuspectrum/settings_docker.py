@@ -207,7 +207,8 @@ READYZ_REDIS_URLS = {
 }
 READYZ_CANTALOUPE = env_bool("READYZ_CANTALOUPE", True)
 
-# Where this process reaches Cantaloupe directly (the readiness probe only).
+# Where this process reaches Cantaloupe directly: the readiness probe, and the
+# own image service fetches of utils/iiif_tools.own_cantaloupe_target.
 CANTALOUPE_INTERNAL_ENDPOINT = "http://{}:{}/".format(
     get_env_variable("CANTALOUPE_HOST"), get_env_variable("CANTALOUPE_PORT")
 )

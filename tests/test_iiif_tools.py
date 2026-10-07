@@ -23,10 +23,14 @@ Usage:
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from manuspectrum.utils.http import UnsafeURLError
-from manuspectrum.utils.iiif_tools import BBoxCalculator, CanvasIIIF
+from manuspectrum.utils.iiif_tools import (
+    BBoxCalculator,
+    CanvasIIIF,
+    own_cantaloupe_target,
+)
 
 V2_CONTEXT = "http://iiif.io/api/presentation/2/context.json"
 V3_CONTEXT = "http://iiif.io/api/presentation/3/context.json"
@@ -766,3 +770,54 @@ class GeometryToXywhTests(SimpleTestCase):
         geometry = {"type": "Point", "coordinates": [1.0]}
 
         self.assertIsNone(BBoxCalculator.geometry_to_xywh(geometry, 1000, 1000))
+
+
+OWN_SETTINGS = dict(
+    PUBLIC_SERVER_ADDRESS="https://manuspectrum.test/",
+    CANTALOUPE_INTERNAL_ENDPOINT="http://cantaloupe:8182/",
+)
+
+
+@override_settings(**OWN_SETTINGS)
+class OwnImageServiceTests(SimpleTestCase):
+    OWN = "https://manuspectrum.test/iiifserver/iiif/2/abc.tif"
+
+    @patch("manuspectrum.utils.iiif_tools.safe_fetch")
+    def test_own_image_service_is_read_from_the_internal_endpoint(self, mock_get):
+        mock_get.return_value = MagicMock(
+            status_code=200, **{"json.return_value": {"width": 4096, "height": 2731}}
+        )
+
+        result = CanvasIIIF.get_image_service_dimensions(self.OWN)
+
+        self.assertEqual(result, (4096, 2731))
+        mock_get.assert_called_once_with(
+            "http://cantaloupe:8182/iiif/2/abc.tif/info.json",
+            purpose="image_info",
+            allow_private=True,
+        )
+
+    @patch("manuspectrum.utils.iiif_tools.safe_fetch")
+    def test_a_foreign_private_url_stays_under_the_guard(self, mock_get):
+        for url in (
+            "http://10.0.0.5/iiifserver/iiif/2/abc.tif",
+            "https://manuspectrum.test.evil.example/iiifserver/iiif/2/x",
+            "https://manuspectrum.test@evil.example/iiifserver/iiif/2/x",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(own_cantaloupe_target(url), (url, {}))
+
+    def test_own_prefix_outside_the_image_api_is_not_rewritten(self):
+        for path in (
+            "iiifserver/admin",
+            "iiifserver/iiif/4/x",
+            "iiifserver/iiif/2/../../admin",
+            "iiifserver/iiif/2/x?a=b",
+        ):
+            url = f"https://manuspectrum.test/{path}"
+            with self.subTest(path=path):
+                self.assertEqual(own_cantaloupe_target(url), (url, {}))
+
+    @override_settings(CANTALOUPE_INTERNAL_ENDPOINT="")
+    def test_without_an_internal_endpoint_nothing_is_rewritten(self):
+        self.assertEqual(own_cantaloupe_target(self.OWN), (self.OWN, {}))

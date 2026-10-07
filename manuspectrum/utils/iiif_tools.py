@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 
 from django.conf import settings
 from django.core.cache import cache
@@ -9,6 +10,32 @@ from manuspectrum.utils.http import fetch_iiif_manifest, safe_fetch
 logger = logging.getLogger(__name__)
 
 _MANIFEST_CACHE_KEY = "manuspectrum:iiif-manifest:{digest}"
+
+_OWN_IIIF_PATH = re.compile(r"^iiif/[23]/[^?#\\]*$")
+
+
+def own_cantaloupe_target(url):
+    """Return ``(url, extra_kwargs)`` for fetching *url* through ``safe_fetch``.
+
+    A URL under ``<PUBLIC_SERVER_ADDRESS>iiifserver/iiif/2|3/`` names this
+    server's own image service. Behind the edge proxy its host resolves to a
+    private address the SSRF guard refuses, so it is fetched from
+    ``CANTALOUPE_INTERNAL_ENDPOINT`` instead, the address operators set in the
+    settings, with ``allow_private`` for that one call. Any other URL, and
+    every URL when either setting is absent, is returned unchanged with no
+    extra keyword and stays under the guard.
+    """
+    public = getattr(settings, "PUBLIC_SERVER_ADDRESS", "") or ""
+    internal = getattr(settings, "CANTALOUPE_INTERNAL_ENDPOINT", "") or ""
+    if not (public and internal and isinstance(url, str)):
+        return url, {}
+    prefix = f"{public.rstrip('/')}/iiifserver/"
+    if not url.startswith(prefix):
+        return url, {}
+    rest = url[len(prefix) :]
+    if not _OWN_IIIF_PATH.match(rest) or ".." in rest:
+        return url, {}
+    return f"{internal.rstrip('/')}/{rest}", {"allow_private": True}
 
 
 # -------------------------------
@@ -331,7 +358,8 @@ class CanvasIIIF:
     def get_image_service_dimensions(image_service_url):
         try:
             info_url = f"{image_service_url}/info.json"
-            response = safe_fetch(info_url, purpose="image_info")
+            target, extra = own_cantaloupe_target(info_url)
+            response = safe_fetch(target, purpose="image_info", **extra)
 
             if response.status_code == 200:
                 info_data = response.json()
