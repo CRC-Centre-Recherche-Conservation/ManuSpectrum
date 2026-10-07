@@ -40,6 +40,7 @@ GRAPHS = {
     "sample": "7a5eda79-6b48-49d0-826d-931d5681e84e",
     "characterization": "af6eed4f-04a3-40d8-baef-1ad37b86c4dd",
     "person": "5bf45c85-84cd-4a76-b64a-3ffe86eea1b8",
+    "group": "0f6a1c52-3d8e-4b7a-9c14-6e2b8a5d7f31",
 }
 
 # (slug, alias, datatype, nodegroup key): nodes sharing a key share a nodegroup.
@@ -70,6 +71,7 @@ ROLE_NODES = [
     ("sample", "label_of_name", "string", "sample_name"),
     ("sample", "location_in_object_of_sampling_taking", "annotation", "sample_zone"),
     ("person", "label_of_name", "string", "person_name"),
+    ("group", "label_of_name", "string", "group_name"),
     ("characterization", "label_of_name", "string", "char_name"),
     ("characterization", "object_observed", "resource-instance-list", "char_object"),
     (
@@ -192,6 +194,7 @@ class ExplorerCase(TestCase):
         }
         cls.samples = {"s1": new("sample", "S1")}
         cls.operator = new("person", "Robinet, L.")
+        cls.group = new("group", "CNRS, CRC")
         cls.analyses = {
             "open": new("analysis", "X01 — f. 1v"),
             "on_document": new("analysis", "FORS_009 — f. 1v"),

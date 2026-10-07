@@ -111,6 +111,22 @@ const withEvidenceLabel = computed(() =>
         true,
     ),
 );
+const authors = computed(() =>
+    props.summary.authors.map((author) => {
+        if (author.model === "group") {
+            return interpolate($gettext("%{name} (group)"), {
+                name: author.name.value,
+            });
+        }
+        if (author.model === "project") {
+            return interpolate($gettext("%{name} (project)"), {
+                name: author.name.value,
+            });
+        }
+        return author.name.value;
+    }),
+);
+
 const date = computed(() => formatDateRange(props.summary.date));
 /** Each evidence analysis with its technique style, null outside `analysisStyles`. */
 const evidence = computed(() =>
@@ -269,13 +285,7 @@ function focusHeading(): void {
                     <span>{{ $gettext("Authors of the identification") }}</span>
                 </dt>
                 <dd>
-                    <span>
-                        {{
-                            props.summary.authors
-                                .map((author) => author.name.value)
-                                .join(", ")
-                        }}
-                    </span>
+                    <span>{{ authors.join(", ") }}</span>
                 </dd>
             </template>
             <template v-if="date">

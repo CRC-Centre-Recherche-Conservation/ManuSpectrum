@@ -179,6 +179,20 @@ describe("CharacterizationCard", () => {
         expect(unknown.find(".code").exists()).toBe(false);
     });
 
+    it("names the type of an author that is not a person", () => {
+        const { wrapper } = mountCard([], {
+            authors: [
+                { id: uuid(1), model: "project", name: label("EMMA") },
+                { id: uuid(2), model: "group", name: label("CNRS, CRC") },
+                { id: uuid(3), model: "person", name: label("Robinet, L.") },
+            ],
+        });
+
+        expect(wrapper.text()).toContain(
+            "EMMA (project), CNRS, CRC (group), Robinet, L.",
+        );
+    });
+
     it("links a web source and writes an unsafe one as plain text", () => {
         const { wrapper } = mountCard([], {
             sources: [

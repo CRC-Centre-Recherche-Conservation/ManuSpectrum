@@ -19,8 +19,10 @@ from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
     TECHNIQUE_PALETTE,
+    analysis_payload,
     ancestor_terms,
     build_bundle,
+    cited_analysis,
     corpus_rows,
     document_payload,
     family_colours,
@@ -948,3 +950,84 @@ class UnresolvedRoleWarningTests(SimpleTestCase):
             self.values(["files"])
             self.values(["files"])
         self.assertEqual(len(logged.records), 2)
+
+
+class AuthorTests(ServiceCase):
+    def authors_of_summary(self, *authors):
+        self.tile(self.characterization, "authors_of_inference", self.refs(*authors))
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+        summary = next(
+            s
+            for s in payload["characterizations"]
+            if s["id"] == str(self.characterization.pk)
+        )
+        return [(a["id"], a["model"], a["name"]["value"]) for a in summary["authors"]]
+
+    def test_authors_keep_the_stored_order_and_their_model(self):
+        project, group, person = self.projects["main"], self.group, self.operator
+
+        authors = self.authors_of_summary(project, group, person)
+
+        self.assertEqual(
+            authors,
+            [
+                (str(project.pk), "project", "EMMA"),
+                (str(group.pk), "group", "CNRS, CRC"),
+                (str(person.pk), "person", "Robinet, L."),
+            ],
+        )
+
+    def test_a_project_author_is_listed_with_its_model(self):
+        authors = self.authors_of_summary(self.projects["side"])
+
+        self.assertEqual(
+            authors, [(str(self.projects["side"].pk), "project", "Side project")]
+        )
+
+    def test_a_group_author_with_a_comma_is_cited_literally(self):
+        row = {
+            "id": str(self.analyses["open"].pk),
+            "name": {"value": "X01"},
+            "date": "2024-05-14",
+        }
+        label_of = {
+            str(self.group.pk): {"value": "CNRS, CRC"},
+            str(self.operator.pk): {"value": "Robinet, L."},
+        }
+        slug_of = {str(self.group.pk): "group", str(self.operator.pk): "person"}
+
+        cited = cited_analysis(
+            row,
+            None,
+            label_of,
+            [str(self.group.pk), str(self.operator.pk)],
+            [],
+            slug_of,
+        )
+
+        self.assertEqual(
+            cited.authors,
+            ({"literal": "CNRS, CRC"}, {"family": "Robinet", "given": "L."}),
+        )
+
+    def test_operators_keep_the_stored_order(self):
+        self.tile(
+            self.analyses["on_document"],
+            "performed_by_actor",
+            self.refs(self.projects["main"], self.group, self.operator),
+        )
+
+        rows = {r["id"]: r for r in corpus_rows(self.anonymous, "en")}
+
+        self.assertEqual(
+            rows[str(self.analyses["on_document"].pk)]["operators"],
+            [str(self.projects["main"].pk), str(self.group.pk), str(self.operator.pk)],
+        )
+
+    def test_the_analysis_cites_a_group_operator_literally(self):
+        self.tile(self.analyses["open"], "performed_by_actor", self.refs(self.group))
+
+        payload = analysis_payload(self.analyses["open"].pk, self.anonymous, "en")
+
+        self.assertIn("CNRS, CRC", payload["citation"]["text"])
+        self.assertIn("{CNRS, CRC}", payload["citation"]["bibtex"])

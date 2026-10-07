@@ -300,6 +300,17 @@ def _resource_refs(values):
     }
 
 
+def _ordered_refs(values):
+    """The resource ids of *values* in the order stored, each once."""
+    return list(
+        dict.fromkeys(
+            str(v.get("resourceId"))
+            for v in values
+            if isinstance(v, dict) and v.get("resourceId")
+        )
+    )
+
+
 def model_of(resource_ids):
     """``{id: model slug}``."""
     return {
@@ -549,7 +560,7 @@ def _corpus_rows(user, language, visible, chains, projects_of):
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
             cited_by[analysis].append(characterization)
-    operators_of = {a: _resource_refs(values.get(a, "operators")) for a in analyses}
+    operators_of = {a: _ordered_refs(values.get(a, "operators")) for a in analyses}
     shown_operators = set(
         linkable({o for ops in operators_of.values() for o in ops}, user)
     )
@@ -635,7 +646,7 @@ def _corpus_rows(user, language, visible, chains, projects_of):
                 "projects": sorted(
                     p for p in projects_of.get(a, ()) if p in visible.projects
                 ),
-                "operators": sorted(operators_of[a] & shown_operators),
+                "operators": [o for o in operators_of[a] if o in shown_operators],
                 "materials": _unique(materials),
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
@@ -1565,9 +1576,9 @@ def characterization_summaries(
         )
         for c in ids
     }
-    authors_of = {c: _resource_refs(values.get(c, "ch_authors")) for c in ids}
+    authors_of = {c: _ordered_refs(values.get(c, "ch_authors")) for c in ids}
     shown_authors = set(linkable({a for v in authors_of.values() for a in v}, user))
-    authors = {c: sorted(authors_of[c] & shown_authors) for c in ids}
+    authors = {c: [a for a in authors_of[c] if a in shown_authors] for c in ids}
     rows = analysis_rows or {}
     cited = {a for c in ids for a in visible.evidence.get(c, ())}
     label_of = names(
@@ -2076,8 +2087,13 @@ def product_link(route, query, language):
     return {"url": f"{settings.PUBLIC_SERVER_ADDRESS}{path.lstrip('/')}", "path": path}
 
 
-def cited_analysis(row, end, label_of, operators, projects):
-    """``CitedAnalysis`` of a corpus *row*; *operators* and *projects* are the ids the citation may name."""
+def cited_analysis(row, end, label_of, operators, projects, slug_of):
+    """``CitedAnalysis`` of a corpus *row*; *operators* and *projects* are the ids the citation may name.
+
+    Operators are cited in the order given. Only a Person (*slug_of* model
+    ``person``) is split into family and given name at its comma; a Group or a
+    Project name is cited literally.
+    """
     return CitedAnalysis(
         id=row["id"],
         name=row["name"]["value"],
@@ -2085,7 +2101,13 @@ def cited_analysis(row, end, label_of, operators, projects):
         start=row["date"],
         end=end,
         authors=tuple(
-            person_name(label_of[o]["value"]) for o in operators if o in label_of
+            (
+                person_name(label_of[o]["value"])
+                if slug_of.get(o) == "person"
+                else {"literal": label_of[o]["value"].strip()}
+            )
+            for o in operators
+            if o in label_of
         ),
         projects=tuple(label_of[p]["value"] for p in projects if p in label_of),
     )
@@ -2215,7 +2237,7 @@ def analysis_payload(analysis_id, user, language):
     dataset = dataset_of(values.first(analysis_id, "dataset"))
     citation = citation_entry(
         dataset,
-        [cited_analysis(row, end, label_of, row["operators"], projects)],
+        [cited_analysis(row, end, label_of, row["operators"], projects, slug_of)],
         licences=licence_labels(files),
         language=language,
         accessed=datetime.date.today(),
