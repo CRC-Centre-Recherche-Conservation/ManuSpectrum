@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
-# publish-static, entrypoint guard and load-snapshot tests, the Compose rules, actionlint,
-# uv.lock freshness and gitleaks. Builds nothing and starts no service: safe on the development VM.
+# publish-static, entrypoint guard, load-snapshot, local CA, nginx edge and
+# logrotate tests, the Compose rules, actionlint, uv.lock freshness and
+# gitleaks. Builds no image and starts no stack (the tests run small stub
+# containers; logrotate needs the network once): safe on the development VM.
+# The ACME flow against Pebble (deploy/certs/tests/test_acme_pebble.sh) runs in CI only.
 # Stops at the first failure.
 set -euo pipefail
 
@@ -18,9 +21,11 @@ step() { echo; echo "== $1"; }
 cd "$ROOT"
 
 step "shellcheck"
-docker run --rm -v "$ROOT:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" \
+docker run --rm -v "$ROOT:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" -x \
   deploy/check-stack.sh deploy/docker/*.sh deploy/docker/tests/*.sh deploy/compose/*.sh \
-  deploy/scripts/*.sh deploy/scripts/tests/*.sh
+  deploy/compose/certbot/*.sh deploy/compose/nginx/tests/*.sh \
+  deploy/scripts/*.sh deploy/scripts/tests/*.sh \
+  deploy/certs/*.sh deploy/certs/tests/*.sh deploy/logrotate/tests/*.sh
 echo "shellcheck: no warning"
 
 step "hadolint"
@@ -35,6 +40,15 @@ bash deploy/docker/tests/test_entrypoint_guard.sh
 
 step "load-snapshot tests"
 bash deploy/scripts/tests/test_load_snapshot.sh
+
+step "local CA tests"
+bash deploy/certs/tests/test_make_local_ca.sh
+
+step "nginx edge tests"
+bash deploy/compose/nginx/tests/test_edge.sh
+
+step "logrotate tests"
+bash deploy/logrotate/tests/test_logrotate.sh
 
 step "Compose rules"
 python3 -m unittest discover -s deploy/compose/tests -p 'test_*.py'

@@ -267,7 +267,7 @@ group_forwarded() {
   equals "X-Forwarded-Proto is https" https "$(jget headers x-forwarded-proto <<<"$out")"
   local header
   for header in x-forwarded-ssl x-forwarded-protocol forwarded x-forwarded-host x-forwarded-port; do
-    equals "forged $header is dropped" "<absent>" "$(jget headers $header <<<"$out")"
+    equals "forged $header is dropped" "<absent>" "$(jget headers "$header" <<<"$out")"
   done
   check "X-Request-ID is nginx's own 32 hex characters" \
     bash -c '[[ "$1" =~ ^[0-9a-f]{32}$ ]]' _ "$(jget headers x-request-id <<<"$out")"
@@ -436,7 +436,7 @@ group_iiifserver() {
     -H 'X-Forwarded-Proto: http' -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Port: 80' -H 'Forwarded: for=6.6.6.6')"
   local header
   for header in x-forwarded-for x-real-ip x-forwarded-proto x-forwarded-host x-forwarded-port forwarded; do
-    equals "iiifserver: $header never reaches the image server" "<absent>" "$(jget headers $header <<<"$out")"
+    equals "iiifserver: $header never reaches the image server" "<absent>" "$(jget headers "$header" <<<"$out")"
   done
   equals "no other route carries CORS (a proxied page)" 0 "$(header_count Access-Control-Allow-Origin <<<"$(headers /page -H 'Origin: https://viewer.example')")"
   equals "no other route carries CORS (the Explorer API)" 0 \
