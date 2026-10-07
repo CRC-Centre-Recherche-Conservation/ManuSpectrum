@@ -78,7 +78,7 @@ function yearOf(bound: string | null): number | null {
 }
 
 /** « XVe » in French, « 15th » elsewhere. */
-function ordinal(n: number, lang: string): string {
+export function ordinal(n: number, lang: string): string {
     if (lang.startsWith("fr")) return `${toRoman(n)}${n === 1 ? "er" : "e"}`;
     const suffixes: Record<string, string> = {
         one: "st",

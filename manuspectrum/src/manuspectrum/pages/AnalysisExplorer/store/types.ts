@@ -1,6 +1,8 @@
 import type {
     ColourScope,
     EventType,
+    PeriodEvent,
+    PeriodMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 // 'an:<analysisId>:-' | 'af:<analysisId>:<fileId>' | 'im:<analysisId>:<mapIndex>' | 'ch:<characterizationId>:-'
@@ -48,8 +50,14 @@ export interface Filters {
     operator: string[];
     year: number[];
     place: string[];
-    // ignored by search: the Map & timeline view is not built yet
+    // whole years, both included; null = no period
     period: [number, number] | null;
+    // overlap the period, or lie entirely within it
+    periodMatch: PeriodMatch;
+    // the dated event the period bears on
+    periodEvent: PeriodEvent;
+    // with a period: also keep the rows without a date for the event
+    undated: boolean;
     // Map only; never filters Corpus
     eventType: EventType[];
 }

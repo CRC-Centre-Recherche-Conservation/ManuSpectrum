@@ -12,6 +12,8 @@ import type { HistoryMode } from "@/manuspectrum/public/useUrlState.ts";
 import type {
     ColourScope,
     EventType,
+    PeriodEvent,
+    PeriodMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type {
@@ -138,6 +140,11 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
         query.set("colourScope", filters.colourScope);
     if (filters.period)
         query.set("period", `${filters.period[0]},${filters.period[1]}`);
+    if (filters.periodMatch !== "overlap")
+        query.set("periodMatch", filters.periodMatch);
+    if (filters.periodEvent !== "production")
+        query.set("periodEvent", filters.periodEvent);
+    if (filters.undated) query.set("undated", "1");
     for (const type of [...filters.eventType].sort())
         query.append("eventType", type);
     return query;
@@ -170,6 +177,17 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         "all";
     filters.year = yearsOf(query);
     filters.period = periodOf(query.get("period"));
+    filters.periodMatch = (
+        query.get("periodMatch") === "within" ? "within" : "overlap"
+    ) satisfies PeriodMatch;
+    filters.periodEvent = (
+        query.get("periodEvent") === "modification"
+            ? "modification"
+            : "production"
+    ) satisfies PeriodEvent;
+    filters.undated = ["1", "true", "yes"].includes(
+        (query.get("undated") ?? "").toLowerCase(),
+    );
     filters.eventType = listOf(query, "eventType").filter(
         (type): type is EventType => EVENT_TYPES.includes(type as EventType),
     );

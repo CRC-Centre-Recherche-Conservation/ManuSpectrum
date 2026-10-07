@@ -56,6 +56,41 @@ describe("toQuery / fromQuery", () => {
         expect(fromQuery(query)).toEqual(snapshot);
     });
 
+    it("reads the period options, writes them only when they are not the defaults", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(
+                "period=1300,1400&periodMatch=within&periodEvent=modification&undated=1",
+            ),
+        );
+        expect(snapshot.filters).toMatchObject({
+            period: [1300, 1400],
+            periodMatch: "within",
+            periodEvent: "modification",
+            undated: true,
+        });
+        expect(toQuery(snapshot).toString()).toBe(
+            "screen=results&period=1300%2C1400&periodMatch=within&periodEvent=modification&undated=1",
+        );
+        for (const raw of [
+            "periodMatch=overlap&periodEvent=production&undated=0",
+            "periodMatch=bogus&periodEvent=bogus&undated=no",
+            "",
+        ]) {
+            const plain = fromQuery(new URLSearchParams(raw));
+            expect(plain.filters).toMatchObject({
+                periodMatch: "overlap",
+                periodEvent: "production",
+                undated: false,
+            });
+            expect(toQuery(plain).toString()).not.toMatch(
+                /periodMatch|periodEvent|undated/,
+            );
+        }
+        expect(
+            fromQuery(new URLSearchParams("undated=true")).filters.undated,
+        ).toBe(true);
+    });
+
     it("reads only a page size the search offers, 10 by default", () => {
         expect(fromQuery(new URLSearchParams("size=50")).filters.size).toBe(50);
         expect(fromQuery(new URLSearchParams("size=7")).filters.size).toBe(10);

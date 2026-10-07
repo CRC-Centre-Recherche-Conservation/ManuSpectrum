@@ -46,7 +46,7 @@ describe("searchQuery", () => {
         );
     });
 
-    it("sends text, places, facets, years, the page size and the page, never period or eventType", () => {
+    it("sends text, places, facets, years, the period, the page size and the page, never eventType", () => {
         const query = searchQuery(
             {
                 ...emptyFilters(),
@@ -62,8 +62,36 @@ describe("searchQuery", () => {
             3,
         );
         expect(query.toString()).toBe(
-            "q=lead&grain=analyses&size=25&place=x1&place=x2&part=p1&part=p2&year=2021&year=2023&page=3",
+            "q=lead&grain=analyses&size=25&place=x1&place=x2&part=p1&part=p2&year=2021&year=2023&period=1000%2C1100&page=3",
         );
+    });
+
+    it("sends the period options only when they are not the defaults, and keeps them in the filters", () => {
+        expect(
+            searchQuery(
+                { ...emptyFilters(), period: [1300, 1400] },
+                1,
+            ).toString(),
+        ).toBe("grain=documents&period=1300%2C1400");
+        const options = searchQuery(
+            {
+                ...emptyFilters(),
+                period: [1300, 1400],
+                periodMatch: "within",
+                periodEvent: "modification",
+                undated: true,
+            },
+            1,
+        );
+        expect(options.toString()).toBe(
+            "grain=documents&period=1300%2C1400&periodMatch=within&periodEvent=modification&undated=1",
+        );
+        expect(filtersOf(options.toString())).toBe(
+            "period=1300%2C1400&periodMatch=within&periodEvent=modification&undated=1",
+        );
+        expect(
+            filterQuery({ ...emptyFilters(), undated: true }).toString(),
+        ).toBe("undated=1");
     });
 
     it("sends the colour scope only when it is not everywhere, and keeps it in the filters alone", () => {

@@ -20,6 +20,7 @@ import {
     documentHit,
     facet,
     facetValue,
+    rangeFacet,
     searchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -238,6 +239,49 @@ describe("CorpusResults", () => {
         expect(store.filters.technique).toEqual(["technique-1"]);
         await yearSet.findAll("input")[2].setValue(true);
         expect(store.filters.year).toEqual([2021]);
+    });
+
+    it("shows the period facet of the payload, keeps it on a page answered without it, and sends a period change after the debounce", async () => {
+        fetchMock.mockImplementation(async (url: string) =>
+            jsonResponse(
+                searchResponse({
+                    total: 30,
+                    page: { number: 1, size: 10, count: 2 },
+                    facets:
+                        queryOf([url]).get("facets") === "0"
+                            ? null
+                            : [facet("technique", 2)],
+                    period:
+                        queryOf([url]).get("facets") === "0"
+                            ? null
+                            : rangeFacet(),
+                }),
+            ),
+        );
+        const store = useExplorerStore();
+        const wrapper = mountResults();
+        await flushPromises();
+        expect(wrapper.find(".period-facet").exists()).toBe(true);
+        await wrapper.find(".pagination .next").trigger("click");
+        await flushPromises();
+        expect(wrapper.find(".pagination").text()).toContain("Page 2 of 3");
+        expect(wrapper.find(".period-facet").exists()).toBe(true);
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const callsBefore = fetchMock.mock.calls.length;
+        await wrapper.findAll("button.century")[3].trigger("click");
+        expect(store.filters).toMatchObject({
+            period: [1301, 1400],
+            periodMatch: "overlap",
+            undated: false,
+        });
+        await flushPromises();
+        expect(fetchMock.mock.calls.length).toBe(callsBefore);
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(queryOf(fetchMock.mock.calls[callsBefore]).get("period")).toBe(
+            "1301,1400",
+        );
+        vi.useRealTimers();
     });
 
     it("opens a document from its card", async () => {

@@ -11,6 +11,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     facet,
     facetValue,
+    rangeFacet,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -549,5 +550,71 @@ describe("FacetRail with a place tree the server cut short", () => {
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
         await flushPromises();
         expect(wrapper.find(".no-match").exists()).toBe(true);
+    });
+});
+
+describe("FacetRail with the period facet", () => {
+    const place: Facet = {
+        key: "place",
+        group: "document",
+        total: 1,
+        values: [facetValue("paris", "Paris", { count: 3 })],
+    };
+
+    it("puts the period under the place, in the Document group, titled by the date of production", () => {
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        const legends = wrapper.findAll("legend.title");
+        expect(legends.map((legend) => legend.text())).toEqual([
+            "Place of production",
+            "Date of production",
+        ]);
+        expect(wrapper.findAll(".group")).toHaveLength(1);
+        expect(wrapper.find(".period-facet").exists()).toBe(true);
+    });
+
+    it("shows the group for a period alone, and nothing without one", () => {
+        expect(
+            mountRail({ facets: [], selected: {}, period: rangeFacet() })
+                .find(".period-facet")
+                .exists(),
+        ).toBe(true);
+        const none = mountRail({ facets: [place], selected: {}, period: null });
+        expect(none.find(".period-facet").exists()).toBe(false);
+        expect(
+            mountRail({ facets: [place], selected: {} })
+                .find(".period-facet")
+                .exists(),
+        ).toBe(false);
+    });
+
+    it("reads the period options from the filters and emits what the facet changes", async () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1201, 1400]);
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        expect(
+            wrapper.find<HTMLInputElement>("input.field-from").element.value,
+        ).toBe("1201");
+        expect(
+            wrapper.find<HTMLInputElement>("input.undated").element.checked,
+        ).toBe(true);
+        await wrapper.find("input.undated").setValue(false);
+        expect(wrapper.emitted("period-change")?.[0]).toEqual([
+            {
+                period: [1201, 1400],
+                match: "within",
+                event: "production",
+                undated: false,
+            },
+        ]);
     });
 });

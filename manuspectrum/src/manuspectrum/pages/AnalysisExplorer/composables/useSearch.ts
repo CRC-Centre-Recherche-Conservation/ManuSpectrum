@@ -23,9 +23,9 @@ export interface SearchScope {
 /**
  * Build the search query string for `filters`.
  *
- * `period` and `eventType` are never sent: the period filter is not wired
- * yet, and `eventType` filters Map only.
- * `colourScope` is sent unless it is `all`, the server's default. The
+ * `eventType` is never sent: it filters Map only.
+ * `colourScope`, `periodMatch` (`overlap`), `periodEvent` (`production`) and
+ * `undated` (false) are sent unless they are the server's default. The
  * default page size (10) is not sent; documents without analyses are asked
  * for in the documents grain only.
  */
@@ -49,6 +49,16 @@ export function searchQuery(
     if (filters.colourScope !== "all") {
         query.set("colourScope", filters.colourScope);
     }
+    if (filters.period) {
+        query.set("period", `${filters.period[0]},${filters.period[1]}`);
+    }
+    if (filters.periodMatch !== "overlap") {
+        query.set("periodMatch", filters.periodMatch);
+    }
+    if (filters.periodEvent !== "production") {
+        query.set("periodEvent", filters.periodEvent);
+    }
+    if (filters.undated) query.set("undated", "1");
     if (page > 1) query.set("page", String(page));
     return query;
 }

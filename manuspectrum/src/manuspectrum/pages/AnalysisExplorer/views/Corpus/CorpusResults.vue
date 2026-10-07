@@ -53,6 +53,7 @@ import type {
     DocumentHit,
     Facet,
     FacetKey,
+    RangeFacet,
     SearchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -96,9 +97,11 @@ const page = computed(() =>
 );
 
 /** The facets last received, with the filters (`filtersOf`) they count; at first, those of the first page the tab holds. */
-const heldFacets = shallowRef<{ filters: string; facets: Facet[] } | null>(
-    heldFirstPage(),
-);
+const heldFacets = shallowRef<{
+    filters: string;
+    facets: Facet[];
+    period: RangeFacet | null;
+} | null>(heldFirstPage());
 
 useScreenHeading(() => (restoring.value ? null : heading.value));
 const search = useSearch(() => searchQuery(store.filters, page.value), {
@@ -118,6 +121,14 @@ const facets = computed<Facet[]>(() => {
         : [];
 });
 useFacetLabels(() => facets.value);
+/** The period facet follows the facets: the payload's when it carries them, else the one held for these filters. */
+const period = computed<RangeFacet | null>(() => {
+    const payload = search.data.value;
+    if (payload?.facets) return payload.period;
+    return heldFacets.value?.filters === shownFilters.value
+        ? heldFacets.value.period
+        : null;
+});
 
 const total = computed(() => search.data.value?.total ?? 0);
 const pageCount = computed(() => {
@@ -183,6 +194,7 @@ watch(
             heldFacets.value = {
                 filters: filtersOf(query),
                 facets: payload.facets,
+                period: payload.period,
             };
         }
         memo.value = {
@@ -265,12 +277,22 @@ function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
 }
 
-function heldFirstPage(): { filters: string; facets: Facet[] } | null {
+function heldFirstPage(): {
+    filters: string;
+    facets: Facet[];
+    period: RangeFacet | null;
+} | null {
     const query = searchQuery(store.filters, 1);
-    const facets = peekJson<SearchResponse>("manuspectrum:explorer-search", {
+    const held = peekJson<SearchResponse>("manuspectrum:explorer-search", {
         query,
-    })?.facets;
-    return facets ? { filters: filtersOf(query.toString()), facets } : null;
+    });
+    return held?.facets
+        ? {
+              filters: filtersOf(query.toString()),
+              facets: held.facets,
+              period: held.period,
+          }
+        : null;
 }
 
 function documentOf(hit: DocumentHit | AnalysisHit): string {
@@ -339,7 +361,9 @@ function goHome(): void {
                 :facets="facets"
                 :selected="selectedFacets(store.filters)"
                 :facet-query="shownFilters"
+                :period="period"
                 @change="onFacetChange"
+                @period-change="store.setPeriod"
             />
         </RailPanel>
         <section

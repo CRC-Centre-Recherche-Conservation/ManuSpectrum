@@ -110,6 +110,67 @@ describe("colour filters", () => {
     });
 });
 
+describe("period filter", () => {
+    it("holds the options of the period, none of which counts as a filter", () => {
+        const store = useExplorerStore();
+        expect(store.filters).toMatchObject({
+            period: null,
+            periodMatch: "overlap",
+            periodEvent: "production",
+            undated: false,
+        });
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        store.setFilter("periodEvent", "modification");
+        expect(store.activeFilterCount).toBe(0);
+        store.setFilter("period", [1300, 1400]);
+        expect(store.activeFilterCount).toBe(1);
+        expect(hasActiveFilters(store.filters)).toBe(true);
+    });
+
+    it("clearing the period restores its match and its undated option, and keeps the event", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 1400]);
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        store.setFilter("periodEvent", "modification");
+        store.clearFilter("period");
+        expect(store.filters).toMatchObject({
+            period: null,
+            periodMatch: "overlap",
+            undated: false,
+            periodEvent: "modification",
+        });
+        store.clearFilters();
+        expect(store.filters.periodEvent).toBe("production");
+    });
+});
+
+describe("setPeriod", () => {
+    it("sets the period and its three options at once", () => {
+        const store = useExplorerStore();
+        store.setPeriod({
+            period: [1300, 1400],
+            match: "within",
+            event: "production",
+            undated: true,
+        });
+        expect(store.filters).toMatchObject({
+            period: [1300, 1400],
+            periodMatch: "within",
+            periodEvent: "production",
+            undated: true,
+        });
+        store.setPeriod({
+            period: null,
+            match: "overlap",
+            event: "production",
+            undated: false,
+        });
+        expect(store.filters.period).toBeNull();
+    });
+});
+
 describe("navigation", () => {
     it("ignores a view that is not available yet", () => {
         const store = useExplorerStore();

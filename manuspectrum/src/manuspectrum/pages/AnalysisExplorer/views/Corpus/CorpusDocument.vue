@@ -37,6 +37,7 @@ import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composable
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
     firstMatchingPage,
@@ -89,7 +90,8 @@ const CARD_HEADING_ID = "explorer-card-heading";
 const props = defineProps<{ documentId: string }>();
 
 const store = useExplorerStore();
-const { $gettext, $ngettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, $ngettext, interpolate } = gettext;
 const payload = useDocument(() => props.documentId);
 const match = useDocumentMatch(
     () => props.documentId,
@@ -383,6 +385,24 @@ const pageCount = computed(() => {
         { n: [...matches.values()].filter(Boolean).length, total },
         true,
     );
+});
+/** « Production: 15th century · Le Mont-Saint-Michel »: the date and the places of the production line, either one alone; empty without a line. */
+const production = computed(() => {
+    const line = data.value?.history.find(
+        (entry) => entry.type === "production",
+    );
+    if (!line) return "";
+    const date = formatProductionDate(
+        line.date,
+        $gettext,
+        interpolate,
+        gettext.current,
+    );
+    const places = line.places.map((place) => place.name.value).join(", ");
+    const text = [date, places].filter((part) => part !== "").join(" · ");
+    return text
+        ? interpolate($gettext("Production: %{text}"), { text }, true)
+        : "";
 });
 const counts = computed(() => {
     const analyses = new Set([
@@ -754,6 +774,11 @@ function goHome(): void {
                 <p class="chips">
                     <span class="chip counts">{{ counts }}</span>
                     <span
+                        v-if="production"
+                        class="chip production"
+                        >{{ production }}</span
+                    >
+                    <span
                         v-if="currentCanvas"
                         class="chip page"
                         >{{ currentCanvas.label }}</span
@@ -783,7 +808,9 @@ function goHome(): void {
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
                         :facet-query="facetQuery"
+                        :period="currentMatch?.period ?? null"
                         @change="onFacetChange"
+                        @period-change="store.setPeriod"
                     />
                     <p
                         v-if="store.activeFilterCount > 0"

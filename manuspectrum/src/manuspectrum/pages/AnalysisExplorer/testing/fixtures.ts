@@ -15,6 +15,7 @@ import type {
     LayerMethod,
     LayerUnit,
     ProductLink,
+    RangeFacet,
     SampleSummary,
     SearchResponse,
     SharePayload,
@@ -145,6 +146,26 @@ export function homeResponse(
     };
 }
 
+/** The century histogram of 1030–1465: five centuries, three rows without a date. */
+export function rangeFacet(overrides: Partial<RangeFacet> = {}): RangeFacet {
+    return {
+        key: "period",
+        group: "document",
+        event: "production",
+        min: 1030,
+        max: 1465,
+        buckets: [
+            { from: 1001, to: 1100, count: 2 },
+            { from: 1101, to: 1200, count: 0 },
+            { from: 1201, to: 1300, count: 1 },
+            { from: 1301, to: 1400, count: 4 },
+            { from: 1401, to: 1500, count: 7 },
+        ],
+        undated: 3,
+        ...overrides,
+    };
+}
+
 export function searchResponse(
     overrides: Partial<SearchResponse> = {},
 ): SearchResponse {
@@ -217,6 +238,8 @@ export interface DocumentShown extends Partial<DocumentPayload> {
     /** Identified materials the filters do not keep. */
     dimmed?: string[];
     facets?: Facet[];
+    /** The range facet of the document's analyses. */
+    period?: RangeFacet | null;
 }
 
 /**
@@ -229,6 +252,7 @@ export function documentResponses({
     unlocated = [],
     dimmed = [],
     facets = [],
+    period = null,
     ...overrides
 }: DocumentShown = {}): { payload: DocumentPayload; match: DocumentMatch } {
     const payload = documentPayload(overrides);
@@ -263,6 +287,7 @@ export function documentResponses({
         payload: { ...payload, techniques, analyses: [...analyses.values()] },
         match: documentMatch({
             facets,
+            period,
             kept: {
                 analyses: [...kept],
                 characterizations: payload.characterizations

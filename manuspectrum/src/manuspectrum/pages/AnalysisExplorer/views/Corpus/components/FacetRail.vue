@@ -8,6 +8,7 @@ import Tooltip from "primevue/tooltip";
 import ColourScopeOption from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/ColourScopeOption.vue";
 import FacetTree from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue";
 import FacetValues from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue";
+import PeriodFacet from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
 
 import {
     buildTree,
@@ -23,7 +24,9 @@ import type {
     FacetGroup,
     FacetKey,
     FacetValue,
+    RangeFacet,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { PeriodChange } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
 import type { FacetLookup } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetValues.ts";
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 
@@ -34,7 +37,7 @@ const GROUPS: readonly FacetGroup[] = [
     "analysis",
     "characterization",
 ];
-/** The facets of each group in rail order; the period slider joins the document group later. */
+/** The facets of each group in rail order; the period facet closes the document group (`period` prop). */
 const GROUP_KEYS: Readonly<Record<FacetGroup, readonly FacetKey[]>> = {
     document: ["place"],
     part: ["partType", "part"],
@@ -60,7 +63,9 @@ const TREE_KEYS: readonly FacetKey[] = ["place"];
  * colour is recorded (`filters.colourScope`).
  * What is ticked comes from `selected` (the filters in force), never from the
  * payload's `selected`, which lags behind while the next search loads.
- * `countHint`, a translated text with `%{n}`, says what a count counts
+ * The period (`period`, the `RangeFacet` of the payload) closes the Document
+ * group; its state is read from the filters and every edit is emitted whole
+ * as `period-change`. `countHint`, a translated text with `%{n}`, says what a count counts
  * (« %{n} in this document »). Under `facetQuery`, the query of the facet
  * route (the filters, `filtersOf`, and `document=` on a document's rail),
  * a facet longer than `SEARCH_THRESHOLD` has a search box: the values shown
@@ -76,15 +81,19 @@ const props = withDefaults(
         selected: Partial<Record<FacetKey, readonly string[]>>;
         countHint?: string;
         facetQuery?: string | null;
+        period?: RangeFacet | null;
     }>(),
-    { countHint: "", facetQuery: null },
+    { countHint: "", facetQuery: null, period: null },
 );
-const emit = defineEmits<{ change: [key: FacetKey, ids: string[]] }>();
+const emit = defineEmits<{
+    change: [key: FacetKey, ids: string[]];
+    "period-change": [payload: PeriodChange];
+}>();
 
 const vTooltip = Tooltip;
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
-const { facetTitle, groupTitle } = useVocabulary();
+const { facetTitle, groupTitle, periodTitle } = useVocabulary();
 const baseId = useId();
 
 const expanded = ref<Set<FacetKey>>(new Set());
@@ -100,7 +109,8 @@ const sections = computed(() =>
             const facet = byKey.value.get(key);
             return facet ? [facet] : [];
         }),
-    })).filter((section) => section.facets.length > 0),
+        hasPeriod: group === "document" && props.period !== null,
+    })).filter((section) => section.facets.length > 0 || section.hasPeriod),
 );
 
 /** The full values of each facet the server cut short, asked for once unfolded or searched. */
@@ -275,6 +285,10 @@ function summaryId(key: FacetKey): string {
     return `${baseId}-${key}-summary`;
 }
 
+function onPeriodChange(payload: PeriodChange): void {
+    emit("period-change", payload);
+}
+
 function onTreeChange(facet: Facet, ids: string[]): void {
     emit("change", facet.key, ids);
 }
@@ -400,6 +414,22 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                         v-if="facet.key === 'colour'"
                         :scope="store.filters.colourScope"
                         @change="store.setFilter('colourScope', $event)"
+                    />
+                </fieldset>
+                <fieldset
+                    v-if="section.hasPeriod && props.period"
+                    class="facet"
+                >
+                    <legend class="title">
+                        <span>{{ periodTitle() }}</span>
+                    </legend>
+                    <PeriodFacet
+                        :facet="props.period"
+                        :period="store.filters.period"
+                        :match="store.filters.periodMatch"
+                        :event="store.filters.periodEvent"
+                        :undated="store.filters.undated"
+                        @change="onPeriodChange"
                     />
                 </fieldset>
             </div>

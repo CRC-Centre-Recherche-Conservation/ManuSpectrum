@@ -24,6 +24,7 @@ import {
     facet,
     facetValue,
     label,
+    rangeFacet,
     sample,
     technique,
     uuid,
@@ -272,6 +273,77 @@ describe("CorpusDocument", () => {
         expect(wrapper.find(".document-bar .counts").text()).toBe(
             "2 analyses · 1 identified material",
         );
+    });
+
+    it("shows the production date and places of the document in its header", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            history: [
+                {
+                    type: "production",
+                    places: [
+                        { id: uuid(500), name: label("Le Mont-Saint-Michel") },
+                        { id: uuid(501), name: label("Avranches") },
+                    ],
+                    date: { start: "1401", end: "1500", approximate: false },
+                },
+            ],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").text()).toBe(
+            "Production: 15th century · Le Mont-Saint-Michel, Avranches",
+        );
+    });
+
+    it("shows a date without a place", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            history: [
+                {
+                    type: "production",
+                    places: [],
+                    date: { start: "1464", end: "1464", approximate: true },
+                },
+            ],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").text()).toBe(
+            "Production: c. 1464",
+        );
+    });
+
+    it("shows a place without a date", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            history: [
+                {
+                    type: "production",
+                    places: [{ id: uuid(500), name: label("Avranches") }],
+                    date: { start: null, end: null, approximate: false },
+                },
+            ],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").text()).toBe(
+            "Production: Avranches",
+        );
+    });
+
+    it("shows no production chip without a production line", async () => {
+        stubFetch({ annotations: [annotation(1)] });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").exists()).toBe(false);
+    });
+
+    it("shows the period facet of the document's analyses in its rail", async () => {
+        stubFetch({ annotations: [annotation(1)], period: rangeFacet() });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".rail .period-facet").exists()).toBe(true);
     });
 
     it("shows the first analysed page and changes page from the strip", async () => {

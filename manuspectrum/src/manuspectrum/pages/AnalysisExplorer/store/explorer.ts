@@ -17,6 +17,8 @@ import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/reg
 import type {
     FacetGroup,
     FacetKey,
+    PeriodEvent,
+    PeriodMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketAddResult,
@@ -82,6 +84,9 @@ export function emptyFilters(): Filters {
         year: [],
         place: [],
         period: null,
+        periodMatch: "overlap",
+        periodEvent: "production",
+        undated: false,
         eventType: [],
     };
 }
@@ -201,6 +206,19 @@ export const useExplorerStore = defineStore("explorer", () => {
         filters.value = { ...filters.value, [key]: normalized(key, value) };
     }
 
+    /** Sets the period and its rule, event and undated option as the period facet reports them. */
+    function setPeriod(change: {
+        period: [number, number] | null;
+        match: PeriodMatch;
+        event: PeriodEvent;
+        undated: boolean;
+    }): void {
+        setFilter("period", change.period);
+        setFilter("periodMatch", change.match);
+        setFilter("periodEvent", change.event);
+        setFilter("undated", change.undated);
+    }
+
     function clearFilter(key: FilterKey, value?: string | number): void {
         const current = filters.value[key];
         if (value !== undefined && Array.isArray(current)) {
@@ -210,7 +228,14 @@ export const useExplorerStore = defineStore("explorer", () => {
             filters.value = { ...filters.value, [key]: remaining };
             return;
         }
-        filters.value = { ...filters.value, [key]: emptyFilters()[key] };
+        const reset = emptyFilters();
+        filters.value = {
+            ...filters.value,
+            [key]: reset[key],
+            ...(key === "period"
+                ? { periodMatch: reset.periodMatch, undated: reset.undated }
+                : {}),
+        };
     }
 
     function clearFilters(): void {
@@ -566,6 +591,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         basketFree,
         activeFilterCount,
         setFilter,
+        setPeriod,
         setFacet,
         clearFilter,
         clearFilters,

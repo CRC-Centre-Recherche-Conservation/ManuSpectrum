@@ -74,4 +74,22 @@ describe("useActiveFilters", () => {
             "Colour recorded: Identified material",
         ]);
     });
+
+    it("names the period, with its rule and the undated as suffixes, and clearing it restores them", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 1400]);
+        expect(entries().map((entry) => entry.label)).toEqual([
+            "Date of production: 1300–1400",
+        ]);
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        const chips = entries();
+        expect(chips.map((entry) => entry.label)).toEqual([
+            "Date of production: 1300–1400 · entirely within · with undated",
+        ]);
+        chips[0].clear();
+        expect(store.filters.period).toBeNull();
+        expect(store.filters.periodMatch).toBe("overlap");
+        expect(store.filters.undated).toBe(false);
+    });
 });

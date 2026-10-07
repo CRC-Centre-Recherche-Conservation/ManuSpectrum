@@ -35,7 +35,8 @@ export function useActiveFilters(): {
         true,
     );
     const { $gettext, interpolate } = useGettext();
-    const { facetTitle, filterTitle, colourScopeLabel } = useVocabulary();
+    const { facetTitle, filterTitle, colourScopeLabel, periodTitle } =
+        useVocabulary();
 
     function named(facet: string, value: string): string {
         return interpolate(
@@ -90,16 +91,20 @@ export function useActiveFilters(): {
             });
         }
         if (filters.period) {
+            const suffixes = [
+                ...(filters.periodMatch === "within"
+                    ? [$gettext("entirely within")]
+                    : []),
+                ...(filters.undated ? [$gettext("with undated")] : []),
+            ];
+            const range = interpolate(
+                $gettext("%{start}–%{end}"),
+                { start: filters.period[0], end: filters.period[1] },
+                true,
+            );
             entries.push({
                 id: "period",
-                label: interpolate(
-                    $gettext("Period: %{start}–%{end}"),
-                    {
-                        start: filters.period[0],
-                        end: filters.period[1],
-                    },
-                    true,
-                ),
+                label: named(periodTitle(), [range, ...suffixes].join(" · ")),
                 clear: () => store.clearFilter("period"),
             });
         }
