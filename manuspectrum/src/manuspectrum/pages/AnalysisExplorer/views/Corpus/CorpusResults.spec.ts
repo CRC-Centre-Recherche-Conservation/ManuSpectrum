@@ -521,6 +521,45 @@ describe("CorpusResults", () => {
             expect(useExplorerStore().basket).toEqual([]);
         });
 
+        it("drops the status line when the page, the filters or the grain change", async () => {
+            const hits = [analysisHit(1), analysisHit(2)];
+            fetchMock.mockResolvedValue(
+                jsonResponse(
+                    searchResponse({
+                        results: hits,
+                        total: 120,
+                        page: { number: 1, size: 50, count: 2 },
+                    }),
+                ),
+            );
+            const store = useExplorerStore();
+            store.setFilter("grain", "analyses");
+            const wrapper = mountResults();
+            await flushPromises();
+            async function addPage(): Promise<void> {
+                store.$patch((state) => {
+                    state.basket = [];
+                });
+                await flushPromises();
+                await wrapper
+                    .get(".selection-bar .select-all-checkbox input")
+                    .setValue(true);
+                expect(wrapper.find(".bulk-status-line").exists()).toBe(true);
+            }
+            await addPage();
+            await wrapper.find(".pagination .next").trigger("click");
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+            await addPage();
+            store.setFilter("colour", ["c1"]);
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+            await addPage();
+            store.setFilter("grain", "documents");
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+        });
+
         it("follows a Selection changed elsewhere (another tab's storage event)", async () => {
             const { wrapper, hits } = await mountAnalyses(3);
             const store = useExplorerStore();

@@ -214,6 +214,7 @@ async function add(action: SelectionAction): Promise<void> {
 .selection-actions {
     display: grid;
     gap: 0.375rem;
+    container-type: inline-size;
 }
 
 .selection-actions .group-title {
@@ -223,15 +224,17 @@ async function add(action: SelectionAction): Promise<void> {
 }
 
 .selection-actions .buttons {
-    display: inline-flex;
-    flex-wrap: wrap;
-    justify-self: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.375rem;
 }
 
 .selection-actions button {
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--blue-text);
+    border-radius: 0.25rem;
     background: var(--surface);
     color: var(--blue-text);
     font: inherit;
@@ -240,24 +243,29 @@ async function add(action: SelectionAction): Promise<void> {
 }
 
 .selection-actions .primary {
-    border-start-start-radius: 0.25rem;
-    border-end-start-radius: 0.25rem;
     background: var(--blue-text);
     color: var(--surface);
 }
 
-.selection-actions .primary:only-child {
-    border-radius: 0.25rem;
-}
+/* Wide enough for both labels on one line: the two buttons join as one split control; narrower, they stack, each whole. */
+@container (min-inline-size: 24rem) {
+    .selection-actions .buttons {
+        flex-direction: row;
+        gap: 0;
+        justify-self: start;
+    }
 
-.selection-actions .primary:not(:only-child) {
-    border-inline-end-color: var(--surface);
-}
+    .selection-actions .primary:not(:only-child) {
+        border-start-end-radius: 0;
+        border-end-end-radius: 0;
+        border-inline-end-color: var(--surface);
+    }
 
-.selection-actions .secondary {
-    border-start-end-radius: 0.25rem;
-    border-end-end-radius: 0.25rem;
-    border-inline-start-width: 0;
+    .selection-actions .secondary {
+        border-start-start-radius: 0;
+        border-end-start-radius: 0;
+        border-inline-start-width: 0;
+    }
 }
 
 .selection-actions button:disabled {

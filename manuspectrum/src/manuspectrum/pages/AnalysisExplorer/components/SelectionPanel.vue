@@ -422,9 +422,15 @@ function removeLabel(slot: number): string {
 }
 
 .selection-panel .actions {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    padding-block: 0.5rem;
+    border-block-start: 0.0625rem solid var(--border-hover);
+    background: var(--surface);
 }
 
 .selection-panel .clear,

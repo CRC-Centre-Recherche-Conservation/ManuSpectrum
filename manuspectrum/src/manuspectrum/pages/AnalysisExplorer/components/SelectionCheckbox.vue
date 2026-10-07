@@ -87,6 +87,7 @@ function onChange(): void {
 <style scoped>
 .selection-checkbox {
     display: inline-flex;
+    flex: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;

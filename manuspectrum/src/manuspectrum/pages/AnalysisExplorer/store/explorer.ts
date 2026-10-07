@@ -142,6 +142,13 @@ function normalized<K extends FilterKey>(
             (a, b) => a - b,
         ) as Filters[K];
     }
+    if (key === "period") {
+        const bounds = value as [number, number] | null;
+        if (!bounds || !bounds.every((year) => Number.isFinite(year))) {
+            return null as Filters[K];
+        }
+        return [Math.min(...bounds), Math.max(...bounds)] as Filters[K];
+    }
     if (Array.isArray(value)) {
         return [...new Set(value as string[])].sort() as Filters[K];
     }

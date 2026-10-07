@@ -242,11 +242,16 @@ function select(focus: Focus): void {
                         :code="group.style.code"
                         :colour="group.style.colour"
                     />
-                    <span :lang="group.style.label.lang || undefined">
+                    <span
+                        class="group-title"
+                        :lang="group.style.label.lang || undefined"
+                        :title="group.style.label.value"
+                    >
                         {{ group.style.label.value }}
                     </span>
                     <SelectAllCheckbox
                         class="group-select"
+                        :compact="true"
                         :keys="groupKeys(group.items)"
                         :label="
                             groupSelectLabel(
@@ -408,6 +413,7 @@ function select(focus: Focus): void {
                 <SelectAllCheckbox
                     v-if="unlocatedOpen"
                     class="group-select"
+                    :compact="true"
                     :keys="unlocatedKeys"
                     :label="selectAllLabel(unlocatedKeys.length)"
                     :hints="hints"
@@ -484,8 +490,10 @@ function select(focus: Focus): void {
 
 .on-this-page h4 {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.5rem;
+    min-inline-size: 0;
     font-size: 0.8125rem;
     font-weight: 600;
 }
@@ -499,9 +507,13 @@ function select(focus: Focus): void {
 
 .on-this-page li {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-wrap: nowrap;
+    align-items: flex-start;
     gap: 0.5rem;
+}
+
+.on-this-page li > button {
+    overflow-wrap: anywhere;
 }
 
 .on-this-page li.is-dimmed {
@@ -536,16 +548,27 @@ function select(focus: Focus): void {
     font-size: 0.75rem;
 }
 
+.on-this-page .group-title {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .on-this-page .group-select {
+    flex: none;
+    flex-wrap: nowrap;
     margin-inline-start: auto;
     font-weight: 400;
 }
 
 .on-this-page button {
     display: inline-flex;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     align-items: center;
     justify-content: flex-start;
+    min-inline-size: 0;
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.5rem;
     border: none;
@@ -568,6 +591,12 @@ function select(focus: Focus): void {
 
 .on-this-page .fold {
     font-weight: 600;
+}
+
+.on-this-page .fold > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .on-this-page .fold::before {

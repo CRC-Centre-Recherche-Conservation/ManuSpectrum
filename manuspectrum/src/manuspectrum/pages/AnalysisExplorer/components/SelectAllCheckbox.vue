@@ -12,15 +12,18 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * line can undo it). When the missing keys do not fit, nothing is added: the
  * box is `aria-disabled` (focusable) and says why. The focus stays on the
  * box after every action. `label` names it (« Select all (6 shown) »);
- * `hints` tell the Selection what the added keys are.
+ * `hints` tell the Selection what the added keys are. `compact` keeps the
+ * label for assistive technology and the tooltip only, where a column is too
+ * narrow to print it.
  */
 const props = withDefaults(
     defineProps<{
         keys: string[];
         label: string;
         hints?: ReadonlyMap<string, SelectionHint> | null;
+        compact?: boolean;
     }>(),
-    { hints: null },
+    { hints: null, compact: false },
 );
 
 const toggle = useSelectionToggle();
@@ -53,7 +56,10 @@ function onChange(): void {
 </script>
 
 <template>
-    <label class="select-all-checkbox">
+    <label
+        class="select-all-checkbox"
+        :title="props.compact ? props.label : undefined"
+    >
         <input
             ref="input"
             type="checkbox"
@@ -62,7 +68,11 @@ function onChange(): void {
             @click="onClick"
             @change="onChange"
         />
-        <span class="text">{{ props.label }}</span>
+        <span
+            class="text"
+            :class="{ 'visually-hidden': props.compact }"
+            >{{ props.label }}</span
+        >
         <span
             v-if="reason"
             :id="reasonId"
@@ -99,6 +109,15 @@ function onChange(): void {
 .select-all-checkbox input:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+.select-all-checkbox .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .select-all-checkbox .reason {

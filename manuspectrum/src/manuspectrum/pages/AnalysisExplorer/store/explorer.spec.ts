@@ -139,6 +139,29 @@ describe("period filter", () => {
     });
 });
 
+describe("period normalisation", () => {
+    it("orders the bounds numerically, not as text", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 801]);
+        expect(store.filters.period).toEqual([801, 1300]);
+    });
+
+    it("keeps a one-year period", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1000, 1000]);
+        expect(store.filters.period).toEqual([1000, 1000]);
+    });
+
+    it("drops a period with a bound that is not a finite number", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 1400]);
+        store.setFilter("period", [Number.NaN, 1300]);
+        expect(store.filters.period).toBeNull();
+        store.setFilter("period", [1300, Number.POSITIVE_INFINITY]);
+        expect(store.filters.period).toBeNull();
+    });
+});
+
 describe("setPeriod", () => {
     it("sets the period and its three options at once", () => {
         const store = useExplorerStore();

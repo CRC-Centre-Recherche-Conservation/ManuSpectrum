@@ -109,6 +109,10 @@ const search = useSearch(() => searchQuery(store.filters, page.value), {
     debounceFilters: true,
 });
 const toggle = useSelectionToggle();
+/** A grouped change speaks of the page it was made on: another page, filter set or grain dismisses it (an emptied Selection keeps its Undo). */
+watch([page, filterKey], () => {
+    if (toggle.lastBulk.value?.kind !== "emptied") toggle.dismiss();
+});
 const prefetch = useDocumentPrefetch(() => filterQuery(store.filters));
 
 /** The filters of the payload shown, and of the rail. */
@@ -603,7 +607,7 @@ function goHome(): void {
 
 .corpus-results .selection-bar {
     position: sticky;
-    inset-block-start: 0;
+    inset-block-start: var(--explorer-top, 0);
     z-index: 1;
     display: flex;
     flex-wrap: wrap;

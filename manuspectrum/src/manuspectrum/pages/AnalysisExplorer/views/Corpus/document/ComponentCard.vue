@@ -443,8 +443,8 @@ function focusHeading(): void {
 
 .component-card li {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-wrap: nowrap;
+    align-items: flex-start;
     gap: 0.5rem;
 }
 
@@ -482,10 +482,12 @@ function focusHeading(): void {
 }
 
 .component-card li > button {
+    overflow-wrap: anywhere;
     display: inline-flex;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     align-items: center;
     justify-content: flex-start;
+    min-inline-size: 0;
     min-block-size: var(--explorer-target, 2.75rem);
     padding-inline: 0.5rem;
     border: none;
