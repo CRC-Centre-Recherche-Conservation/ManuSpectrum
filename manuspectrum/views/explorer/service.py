@@ -2266,9 +2266,11 @@ def document_payload(document_id, user, language, ticket=None):
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases`` and named by its ``feature`` id.
     A zone on a canvas the manifest does not list is left out; an analysis
-    without zones is not located on a page. ``components`` lists the visible
-    Components placed on its pages (``component_zones``), by first page then
-    name. ``document_match`` says what the filters keep. ``history`` holds
+    without zones is not located on a page and names the Component it
+    observed (``component``, None on the document). ``components`` lists the
+    visible Components placed on its pages (``component_zones``) or observed
+    by one of its analyses, the placed ones by first page then name, the
+    others by name after them. ``document_match`` says what the filters keep. ``history`` holds
     the document's Production line when it has a bound or a place a linked
     reference may show (a Draft place included, a hidden one left out).
     """
@@ -2321,6 +2323,7 @@ def document_payload(document_id, user, language, ticket=None):
                 "dataKind": (row["dataKinds"] or ["file"])[0],
                 "unpublished": row["unpublished"],
                 "zones": zones.get(row["id"], []),
+                "component": row["component"],
             }
         )
     summaries = characterization_summaries(
@@ -2341,12 +2344,19 @@ def document_payload(document_id, user, language, ticket=None):
     produced = _ordered_refs(values.get(document_id, "doc_place"))
     shown_places = set(linkable(produced, user))
     produced_at = [p for p in produced if p in shown_places]
+    observed = {row["component"] for row in rows if row["component"]}
     label_of = names(
-        {document_id} | set(owners[:1]) | set(placed) | set(produced_at), language, user
+        {document_id} | set(owners[:1]) | set(placed) | observed | set(produced_at),
+        language,
+        user,
     )
     components = sorted(
-        (c for c in placed if c in label_of),
-        key=lambda c: (placed[c][0]["canvas"], fold(label_of[c]["value"]), c),
+        (c for c in set(placed) | observed if c in label_of),
+        key=lambda c: (
+            (0, placed[c][0]["canvas"]) if c in placed else (1, 0),
+            fold(label_of[c]["value"]),
+            c,
+        ),
     )
     per_canvas = Counter(
         zone["canvas"]
@@ -2370,7 +2380,13 @@ def document_payload(document_id, user, language, ticket=None):
         "techniques": techniques,
         "analyses": analyses,
         "components": [
-            {"id": c, "name": label_of[c], "zones": placed[c]} for c in components
+            {
+                "id": c,
+                "name": label_of[c],
+                "zones": placed.get(c, []),
+                "unpublished": c in visible.unpublished,
+            }
+            for c in components
         ],
         "characterizations": summaries,
         "history": history_of(values, document_id, produced_at, label_of),

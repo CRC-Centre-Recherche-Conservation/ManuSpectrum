@@ -182,13 +182,16 @@ export interface DocumentAnalysis {
     dataKind: DataKind;
     unpublished: boolean;
     zones: AnalysisZone[];
+    /** Id of the Component the analysis observed (a key of `DocumentPayload.components`); null on the document itself. */
+    component: string | null;
 }
 
-/** A visible Component of a document placed on its pages: its own zones, by page then feature id. */
+/** A visible Component of a document, placed on its pages (own zones, by page then feature id) or observed by one of its analyses (no zone). */
 export interface DocumentComponent {
     id: string;
     name: Label;
     zones: AnalysisZone[];
+    unpublished: boolean;
 }
 
 export interface MatchKept {
@@ -777,15 +780,18 @@ export const SHAPE_KEYS = {
         dataKind: true,
         unpublished: true,
         zones: true,
+        component: true,
     } satisfies Record<keyof DocumentAnalysis, true>,
     AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
         keyof AnalysisZone,
         true
     >,
-    DocumentComponent: { id: true, name: true, zones: true } satisfies Record<
-        keyof DocumentComponent,
-        true
-    >,
+    DocumentComponent: {
+        id: true,
+        name: true,
+        zones: true,
+        unpublished: true,
+    } satisfies Record<keyof DocumentComponent, true>,
     ContentStateLink: {
         feature: true,
         url: true,

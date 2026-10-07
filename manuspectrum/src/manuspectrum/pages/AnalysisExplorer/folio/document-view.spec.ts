@@ -24,6 +24,7 @@ function payload() {
                 technique: XRF.uri,
                 dataKind: "xy",
                 unpublished: false,
+                component: null,
                 zones: [
                     {
                         canvas: 0,
@@ -43,6 +44,7 @@ function payload() {
                 technique: null,
                 dataKind: "file",
                 unpublished: true,
+                component: null,
                 zones: [],
             },
         ],

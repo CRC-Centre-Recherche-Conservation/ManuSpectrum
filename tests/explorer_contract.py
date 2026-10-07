@@ -177,9 +177,15 @@ SHAPES = {
         "dataKind": str,
         "unpublished": bool,
         "zones": list,
+        "component": (str, type(None)),
     },
     "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
-    "DocumentComponent": {"id": str, "name": "Label", "zones": list},
+    "DocumentComponent": {
+        "id": str,
+        "name": "Label",
+        "zones": list,
+        "unpublished": bool,
+    },
     "ContentStateLink": {"feature": str, "url": str},
     "DocumentMatch": {
         "facets": list,

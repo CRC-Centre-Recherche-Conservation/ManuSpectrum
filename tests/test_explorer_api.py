@@ -438,6 +438,19 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual([z["canvas"] for z in mine["zones"]], [0])
         self.assertEqual(mine["zones"][0]["shape"]["type"], "point")
 
+    def test_an_analysis_names_its_component(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        by_id = self.by_id(payload)
+        self.assertEqual(
+            by_id[str(self.analyses["open"].pk)]["component"],
+            str(self.components["open"].pk),
+        )
+        self.assertIsNone(by_id[str(self.analyses["on_document"].pk)]["component"])
+        self.assertIn(
+            str(self.components["open"].pk), [c["id"] for c in payload["components"]]
+        )
+
     def test_zones_carry_their_feature(self):
         payload = self.get(self.documents["open"].pk).json()
 
@@ -686,10 +699,57 @@ class DocumentComponentsTests(IIIFCase):
         payload = self.payload().json()
 
         self.assertEqual(
-            [c["id"] for c in payload["components"]], [str(sooner.pk), str(later.pk)]
+            [c["id"] for c in payload["components"]],
+            [str(sooner.pk), str(later.pk), str(self.components["open"].pk)],
         )
 
-    def test_a_component_without_a_zone_on_the_pages_is_left_out(self):
+    def test_a_component_observed_without_a_zone_is_listed_with_no_zones(self):
+        placed = self.component(
+            "Zzz placed",
+            [("0b0b0b0b-0000-4000-8000-00000000000b", CANVAS_3, POINT)],
+        )
+
+        payload = self.payload().json()
+
+        listed = payload["components"]
+        self.assertEqual(
+            [c["id"] for c in listed],
+            [str(placed.pk), str(self.components["open"].pk)],
+        )
+        self.assertEqual(listed[1]["zones"], [])
+        self.assertIs(listed[1]["unpublished"], False)
+        for component in listed:
+            assert_shape(self, component, "DocumentComponent")
+
+    def test_observed_components_without_zone_follow_those_with_one_by_name(self):
+        second = self.component("Bbb observed", [])
+        first = self.component("Aaa observed", [])
+        for found in (second, first):
+            analysis = self.new_resource("analysis", f"obs {found.pk}")
+            self.tile(analysis, "component_observed", self.refs(found))
+            self.tile(analysis, "analysis_by_project", self.refs(self.projects["main"]))
+
+        listed = [c["id"] for c in self.payload().json()["components"]]
+
+        self.assertEqual(
+            listed,
+            [str(first.pk), str(second.pk), str(self.components["open"].pk)],
+        )
+
+    def test_a_draft_component_is_listed_unpublished(self):
+        draft = self.component(
+            "Draft part", [("0b0b0b0b-0000-4000-8000-00000000000c", CANVAS, POINT)]
+        )
+        self.make_draft(draft)
+
+        marked = {
+            c["id"]: c["unpublished"] for c in self.payload().json()["components"]
+        }
+
+        self.assertIs(marked[str(draft.pk)], True)
+        self.assertIs(marked[str(self.components["open"].pk)], False)
+
+    def test_a_component_neither_placed_nor_observed_is_left_out(self):
         self.component("f. 5r — no zone", [])
         self.component(
             "Elsewhere",
@@ -702,7 +762,10 @@ class DocumentComponentsTests(IIIFCase):
             ],
         )
 
-        self.assertEqual(self.payload().json()["components"], [])
+        self.assertEqual(
+            [c["name"]["value"] for c in self.payload().json()["components"]],
+            ["f. 1v — initial"],
+        )
 
     def test_a_component_of_another_document_is_not_listed(self):
         self.zone(
@@ -711,7 +774,10 @@ class DocumentComponentsTests(IIIFCase):
             alias=self.COMPONENT_ZONE,
         )
 
-        self.assertEqual(self.payload().json()["components"], [])
+        self.assertEqual(
+            [c["id"] for c in self.payload().json()["components"]],
+            [str(self.components["open"].pk)],
+        )
 
     def test_a_restricted_component_is_never_listed(self):
         self.zone(
@@ -738,7 +804,9 @@ class DocumentComponentsTests(IIIFCase):
         with self.captureOnCommitCallbacks(execute=True):
             assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
 
-        self.assertEqual(self.payload().json()["components"], [])
+        listed = self.payload().json()["components"]
+        self.assertEqual([c["id"] for c in listed], [str(self.components["open"].pk)])
+        self.assertEqual(listed[0]["zones"], [])
 
     def test_the_query_count_does_not_grow_with_the_components(self):
         def queries():
@@ -765,7 +833,7 @@ class DocumentComponentsTests(IIIFCase):
             )
         many = queries()
 
-        self.assertEqual(len(self.payload().json()["components"]), 4)
+        self.assertEqual(len(self.payload().json()["components"]), 5)
         self.assertEqual(many, one)
 
 

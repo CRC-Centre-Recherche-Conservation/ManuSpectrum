@@ -246,6 +246,7 @@ export function documentResponses({
                 technique: entry.technique?.uri ?? null,
                 dataKind: entry.dataKind,
                 unpublished: entry.unpublished,
+                component: null,
                 zones: [],
             });
         }

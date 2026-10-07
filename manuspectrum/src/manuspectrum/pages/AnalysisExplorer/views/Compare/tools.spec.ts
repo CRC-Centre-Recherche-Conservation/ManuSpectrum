@@ -245,6 +245,7 @@ describe("folioMarks", () => {
                 technique: XRF_URI,
                 dataKind: "xy",
                 unpublished: false,
+                component: null,
                 zones: [
                     {
                         canvas: 0,
@@ -264,6 +265,7 @@ describe("folioMarks", () => {
                 technique: null,
                 dataKind: "xy",
                 unpublished: false,
+                component: null,
                 zones: [
                     {
                         canvas: 0,
