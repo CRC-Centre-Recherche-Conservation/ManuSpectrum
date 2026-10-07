@@ -84,6 +84,7 @@ NAMES = [
     "LOGGING",
     "BIBLISSIMA_ASYNC_INDEXING",
     "CELERY_WORKER_HIJACK_ROOT_LOGGER",
+    "SILENCED_SYSTEM_CHECKS",
 ]
 
 PROBE = textwrap.dedent("""
@@ -228,6 +229,10 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertEqual(values["CORS_ALLOWED_ORIGINS"], [])
         self.assertFalse([app for app in values["INSTALLED_APPS"] if "silk" in app])
         self.assertFalse([m for m in values["MIDDLEWARE"] if "silk" in m])
+
+    def test_missing_node_modules_directory_check_is_silenced(self):
+        values = load(BASE_ENV)
+        self.assertIn("staticfiles.W004", values["SILENCED_SYSTEM_CHECKS"])
 
     def test_hosts_origins_and_public_address_come_from_the_environment(self):
         values = load(BASE_ENV)
