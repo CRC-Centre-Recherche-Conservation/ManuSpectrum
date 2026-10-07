@@ -2,7 +2,9 @@
 # review (docs/superpowers/specs/2026-10-05-capacity-and-observability-review.md,
 # §2.11), measured again on the rehearsal VM (docker stats during a full
 # reindex) before it is trusted. The limits are ceilings, not allocations:
-# they sum to 16 GB and the expected resident set is 9 to 10 GB.
+# they sum to 17 GB and the expected resident set is 10 to 11 GB.
+# Elasticsearch: heap 2g, about 3.4 GiB resident with 12k resources loaded
+# (direct memory, metaspace, threads, page cache), hence a 5g limit.
 # memswap_limit equals the memory limit everywhere: a container never swaps, a
 # leaking one is killed and restarted instead of crawling.
 services:
@@ -25,8 +27,8 @@ services:
     environment:
       ES_JAVA_OPTS: "-Xms2g -Xmx2g"
       xpack.ml.enabled: "false"
-    deploy: {resources: {limits: {memory: 4g}}}
-    memswap_limit: 4g
+    deploy: {resources: {limits: {memory: 5g}}}
+    memswap_limit: 5g
 
   redis-broker:
     deploy: {resources: {limits: {memory: 256m}}}
