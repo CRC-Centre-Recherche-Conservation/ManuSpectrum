@@ -87,6 +87,7 @@ const chevron = computed(
 <style scoped>
 .collapsible-section {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
 }
 
@@ -130,10 +131,12 @@ const chevron = computed(
 }
 
 .collapsible-section .title {
+    flex: none;
     font-weight: 600;
 }
 
 .collapsible-section .summary {
+    flex: 0 1 auto;
     min-inline-size: 0;
     overflow: hidden;
     color: var(--ink-muted);

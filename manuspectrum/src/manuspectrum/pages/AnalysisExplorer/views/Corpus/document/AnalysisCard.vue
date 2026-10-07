@@ -171,9 +171,11 @@ const date = computed(() =>
     analysis.value ? formatDateRange(analysis.value.date) : "",
 );
 const datasetHref = computed(() => safeHref(analysis.value?.dataset?.url));
-const licence = computed(
-    () => previewed.value[0]?.license ?? files.value[0]?.license ?? null,
-);
+/** The licence the file states; none stated (the project default) shows nothing. */
+const licence = computed(() => {
+    const stated = previewed.value[0]?.license ?? files.value[0]?.license;
+    return stated && !stated.isDefault ? stated : null;
+});
 const licenceHref = computed(() => safeHref(licence.value?.url));
 const attribution = computed(() => {
     const text = licence.value?.attribution;
@@ -646,12 +648,6 @@ function focusHeading(): void {
                     {{ licence.label.value }}
                 </span>
                 <span
-                    v-if="licence.isDefault"
-                    class="badge default"
-                >
-                    {{ $gettext("Project licence (not stated for this file)") }}
-                </span>
-                <span
                     v-if="attribution"
                     class="attribution"
                 >
@@ -705,6 +701,7 @@ function focusHeading(): void {
 <style scoped>
 .analysis-card {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     container-type: inline-size;
 }

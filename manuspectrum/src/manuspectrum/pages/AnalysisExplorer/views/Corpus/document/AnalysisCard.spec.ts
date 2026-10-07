@@ -176,13 +176,12 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".conditions").text()).toContain("Not provided");
     });
 
-    it("says the project's licence applies when the file states none", () => {
+    it("shows no licence when the file states none", () => {
         const file = fileEntry();
         file.license = { ...file.license, isDefault: true };
         const { wrapper } = mountCard(analysisPayload({ files: [file] }));
-        expect(wrapper.find(".licence").text()).toContain(
-            "Project licence (not stated for this file)",
-        );
+        expect(wrapper.find(".licence").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("Project licence");
     });
 
     it("credits the rights holder and writes a licence without a safe address as plain text", () => {
