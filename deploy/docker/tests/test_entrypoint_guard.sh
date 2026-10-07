@@ -168,4 +168,35 @@ out="$(PROMETHEUS_MULTIPROC_DIR="$TMP/missing" run_web 0 0)" && status=0 || stat
   && ! grep -q 'STUB gunicorn' <<<"$out"
 assert "web: a missing metrics directory stops the start" $?
 
+# Local CA: an empty or missing file changes nothing; a non-empty one yields a
+# bundle = certifi + that CA, exported for requests and ssl.
+CA_STUBS="$TMP/ca-stubs"; mkdir -p "$CA_STUBS"
+printf 'CERTIFI-BUNDLE\n' >"$TMP/certifi.pem"
+cat >"$CA_STUBS/python" <<SH
+#!/bin/sh
+case "\$1" in
+  -c) echo "$TMP/certifi.pem" ;;
+  *) echo "ENV REQUESTS_CA_BUNDLE=\${REQUESTS_CA_BUNDLE:-unset} SSL_CERT_FILE=\${SSL_CERT_FILE:-unset}" ;;
+esac
+SH
+chmod +x "$CA_STUBS/python"
+run_ca() { # run_ca CA-FILE
+  PATH="$CA_STUBS:$PATH" CA_CERT_FILE="$1" CA_BUNDLE_FILE="$TMP/bundle.pem" \
+    bash "$ENTRYPOINT" manage check 2>&1
+}
+rm -f "$TMP/bundle.pem"
+: >"$TMP/empty-ca.crt"
+out="$(run_ca "$TMP/empty-ca.crt")"
+[ "$out" = "ENV REQUESTS_CA_BUNDLE=unset SSL_CERT_FILE=unset" ] && [ ! -e "$TMP/bundle.pem" ] && ok=0 || ok=1
+assert "local CA: an empty file adds nothing" "$ok"
+out="$(run_ca "$TMP/missing-ca.crt")"
+[ "$out" = "ENV REQUESTS_CA_BUNDLE=unset SSL_CERT_FILE=unset" ] && ok=0 || ok=1
+assert "local CA: a missing file adds nothing" "$ok"
+printf 'LOCAL-CA\n' >"$TMP/ca.crt"
+out="$(run_ca "$TMP/ca.crt")"
+grep -q "ENV REQUESTS_CA_BUNDLE=$TMP/bundle.pem SSL_CERT_FILE=$TMP/bundle.pem" <<<"$out"
+assert "local CA: a file exports the bundle for requests and ssl" $?
+grep -q CERTIFI-BUNDLE "$TMP/bundle.pem" && grep -q LOCAL-CA "$TMP/bundle.pem"
+assert "local CA: the bundle is certifi plus the CA" $?
+
 exit "$failed"
