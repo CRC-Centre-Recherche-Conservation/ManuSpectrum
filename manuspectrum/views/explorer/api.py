@@ -123,10 +123,13 @@ def _token(route, ticket, *parts):
     ).hexdigest()
 
 
+FILTER_KEYS = (*FACET_KEYS, "q", "colourScope")
+
+
 def _filters(query):
     """The filters of *query* as ``row_filter`` reads them, without grain, page and size."""
     filters, _ = parse_filters(query)
-    return {key: filters[key] for key in (*FACET_KEYS, "q")}
+    return {key: filters[key] for key in FILTER_KEYS}
 
 
 def _ticket(reader):

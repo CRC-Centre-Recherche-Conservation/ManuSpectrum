@@ -79,11 +79,16 @@ from manuspectrum.views.explorer.values import (
     string_texts,
     value_refs,
 )
-from manuspectrum.views.explorer.swatches import colour_refs, colour_swatch
+from manuspectrum.views.explorer.swatches import (
+    SWATCH_ORDER,
+    colour_rank,
+    colour_refs,
+    colour_swatch,
+)
 from manuspectrum.views.summary_service import GraphIndex, _date
 
 FACET_GROUPS = (
-    ("part", ("partType", "partColour", "part")),
+    ("part", ("partType", "part")),
     ("analysis", ("project", "technique", "operator", "year")),
     ("characterization", ("material", "colour", "layer", "element")),
 )
@@ -91,13 +96,13 @@ FACET_KEYS = tuple(key for _, keys in FACET_GROUPS for key in keys)
 GROUP_OF = {key: group for group, keys in FACET_GROUPS for key in keys}
 CHARACTERIZATION_KEYS = dict(FACET_GROUPS)["characterization"]
 REF_FACETS = {
-    "partType": "partTypes",
-    "partColour": "partColours",
-    "material": "materials",
-    "colour": "colours",
-    "element": "elements",
-    "layer": "layers",
+    "partType": ("partTypes",),
+    "material": ("materials",),
+    "colour": ("colours", "partColours"),
+    "element": ("elements",),
+    "layer": ("layers",),
 }
+COLOUR_KEY = {"all": "colour", "part": "colourPart", "material": "colourOwn"}
 CHARACTERIZATION_ROLES = {
     "material": "material",
     "colour": "colour",
@@ -105,7 +110,7 @@ CHARACTERIZATION_ROLES = {
     "element": "elements",
 }
 TECHNIQUE_PALETTE = 10
-SWATCH_FACETS = ("colour", "partColour")
+SWATCH_FACETS = ("colour",)
 LAZY_FACETS = ("part",)
 PREVIEW_SIZE = 6
 _EMPTY = (None, "", [], {})
@@ -520,10 +525,47 @@ def corpus_rows(user, language, chains=None):
     return _corpus_rows(user, language, visible, chains, projects_of)[0]
 
 
-def _corpus_rows(user, language, visible, chains, projects_of):
+def row_entries(cited, part):
+    """The ``characterizations`` of a row: *cited* (``value_sets`` of the identified materials it cites) with the *part* colours of its component, plus an entry without material when *part* is set and nothing is cited."""
+    entries = [
+        {
+            **values,
+            "colourPart": part,
+            "colour": values["colourOwn"] | part,
+        }
+        for values in cited
+    ]
+    if part and not entries:
+        entries.append(
+            {
+                "material": set(),
+                "layer": set(),
+                "element": set(),
+                "colourOwn": set(),
+                "colourPart": part,
+                "colour": part,
+            }
+        )
+    return entries
+
+
+def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
     """``(rows, values)``: the ``corpus_rows`` and, per visible identified
-    material, ``{facet key: set of uris}`` of the characterization facets."""
+    material, ``{key: set of uris}`` of the characterization facets.
+
+    A row's ``characterizations`` hold one entry per identified material it
+    cites, plus one without material when its component has a colour and
+    nothing cites it; each carries ``colourOwn`` (``color_aspect`` of the
+    material), ``colourPart`` (``color_features`` of the row's component) and
+    their union ``colour``. A material's own values (*values*) take the
+    colours of the visible components it observes (*objects_of*, read when
+    omitted) as ``colourPart``.
+    """
     memo = _BuildMemo(language)
+    if objects_of is None:
+        objects_of = _links(
+            "characterization", "object_observed", readable_nodegroup_ids(user)
+        )
     analyses = sorted(chains)
     values = Values(
         analyses,
@@ -542,8 +584,27 @@ def _corpus_rows(user, language, visible, chains, projects_of):
     characterizations = Values(
         visible.characterizations, ["material", "colour", "layer", "elements"], user
     )
-    value_sets = {
-        c: {
+    observed = {
+        c: frozenset(objects_of.get(c, ())) & visible.components
+        for c in visible.characterizations
+    }
+    parts = Values(
+        {c for _, c in chains.values() if c}
+        | {k for components in observed.values() for k in components},
+        ["comp_type", "comp_colour"],
+        user,
+    )
+
+    def colours_of(component):
+        return {
+            ref["uri"]
+            for v in (parts.get(component, "comp_colour") if component else [])
+            for ref in memo.refs(v)
+        }
+
+    value_sets = {}
+    for c in visible.characterizations:
+        value_sets[c] = {
             key: {
                 ref["uri"]
                 for v in characterizations.get(c, role)
@@ -551,11 +612,9 @@ def _corpus_rows(user, language, visible, chains, projects_of):
             }
             for key, role in CHARACTERIZATION_ROLES.items()
         }
-        for c in visible.characterizations
-    }
-    parts = Values(
-        {c for _, c in chains.values() if c}, ["comp_type", "comp_colour"], user
-    )
+        own = value_sets[c].pop("colour")
+        part = set().union(*(colours_of(k) for k in observed[c]))
+        value_sets[c].update(colourOwn=own, colourPart=part, colour=own | part)
     cited_by = defaultdict(list)
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
@@ -651,7 +710,9 @@ def _corpus_rows(user, language, visible, chains, projects_of):
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
                 "elements": _unique(refs_of("elements")),
-                "characterizations": [value_sets[c] for c in cited],
+                "characterizations": row_entries(
+                    [value_sets[c] for c in cited], colours_of(component)
+                ),
                 "partTypes": _unique(
                     [
                         r
@@ -701,6 +762,8 @@ class CorpusBundle:
     ``links`` holds the role maps the payloads follow, keyed by source id.
     ``characterization_values`` holds, per visible identified material, the
     uris it carries for each facet of the characterization group.
+    ``colour_items`` is ``[(uri, rank)]`` of the items of the colour list, in
+    the order the colour facet shows them.
     """
 
     visible: VisibleSet
@@ -718,6 +781,12 @@ class CorpusBundle:
     documents: list
     order: dict
     characterization_values: dict
+    colour_items: list
+
+    @property
+    def colour_ranks(self):
+        """``{uri: rank}`` of ``colour_items``."""
+        return dict(self.colour_items)
 
 
 LINK_ROLES = {
@@ -746,8 +815,9 @@ def build_bundle(user, language, visible):
     }
     chains = structure(visible, user, part_of=links["part_of"])
     rows, characterization_values = _corpus_rows(
-        user, language, visible, chains, links["projects"]
+        user, language, visible, chains, links["projects"], links["objects"]
     )
+    colour_items, colour_labels, colour_swatches = colour_list(language)
     label_of = names(
         {r["document"] for r in rows}
         | {r["component"] for r in rows if r["component"]}
@@ -781,10 +851,7 @@ def build_bundle(user, language, visible):
         by_id={row["id"]: row for row in rows},
         by_document=dict(by_document),
         universe=facet_universe(rows),
-        labels={
-            key: dict(values)
-            for key, values in _facet_labels(rows, language, user).items()
-        },
+        labels=_with_colour_labels(_facet_labels(rows, language, user), colour_labels),
         marks={
             row["technique"]["uri"]: {
                 k: row["technique"][k] for k in ("code", "colour", "family")
@@ -793,7 +860,8 @@ def build_bundle(user, language, visible):
             if row["technique"]
         },
         swatches={
-            uri: swatch for row in rows for uri, swatch in row["swatches"].items()
+            **colour_swatches,
+            **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
         },
         label_of=label_of,
         folded=names_folded,
@@ -808,7 +876,62 @@ def build_bundle(user, language, visible):
             for row in rows
         },
         characterization_values=characterization_values,
+        colour_items=colour_items,
     )
+
+
+def _with_colour_labels(labels, colour_labels):
+    """*labels* as plain dicts, the ``colour`` one completed with the labels of the list items no row carries."""
+    labels = {key: dict(values) for key, values in labels.items()}
+    for uri, text in colour_labels.items():
+        labels.setdefault("colour", {}).setdefault(uri, text)
+    return labels
+
+
+def colour_list(language):
+    """``(items, labels, swatches)`` of the colour list of the ``color_aspect`` node.
+
+    *items* is ``[(uri, rank)]`` in display order: the concepts of
+    ``SWATCH_ORDER`` first, then the others by the list's ``sortorder``;
+    *labels* and *swatches* are by uri. All empty when the node has no list.
+    """
+    index = GraphIndex.for_slug("characterization")
+    list_id = index.lists.get("color_aspect") if index else None
+    if not list_id:
+        return [], {}, {}
+    items = list(
+        ListItem.objects.filter(list_id=list_id).values_list("id", "uri", "sortorder")
+    )
+    entries = defaultdict(list)
+    for item, valuetype, lang, value in ListItemValue.objects.filter(
+        list_item_id__in=[i for i, _, _ in items]
+    ).values_list("list_item_id", "valuetype_id", "language_id", "value"):
+        entries[item].append(
+            {"value": value, "valuetype_id": valuetype, "language_id": lang}
+        )
+    known = sorted(
+        (colour_rank(uri), uri) for _, uri, _ in items if colour_rank(uri) is not None
+    )
+    other = sorted(
+        (order or 0, uri) for _, uri, order in items if colour_rank(uri) is None and uri
+    )
+    ranked = [(uri, rank) for rank, uri in known] + [
+        (uri, len(SWATCH_ORDER) + position) for position, (_, uri) in enumerate(other)
+    ]
+    labels, swatches = {}, {}
+    for item, uri, _ in items:
+        if not uri:
+            continue
+        prefs = {
+            e["language_id"]: e["value"]
+            for e in entries[item]
+            if e["valuetype_id"] == "prefLabel" and e["value"]
+        }
+        labels[uri] = label(prefs, language) or {"value": uri, "lang": language}
+        swatch = colour_swatch({"uri": uri, "labels": entries[item]})
+        if swatch:
+            swatches[uri] = swatch
+    return ranked, labels, swatches
 
 
 def corpus_bundle(user, language, ticket=None):
@@ -832,7 +955,10 @@ def parse_filters(query):
     """Filters and page number of a search query; lists come as repeated or comma-separated parameters.
 
     ``size`` is one of ``PAGE_SIZES``, else the first; ``empty`` asks for the
-    documents without analyses.
+    documents without analyses. ``colour`` is the union of the ``colour`` and
+    ``partColour`` values: ``partColour`` is the alias of the two colour facets
+    merged in 2026-10, still read for one release. ``colourScope`` is ``part``
+    or ``material``, else ``all``.
     """
     filters = {
         key: sorted(
@@ -845,6 +971,18 @@ def parse_filters(query):
         )
         for key in FACET_KEYS
     }
+    filters["colour"] = sorted(
+        set(filters["colour"])
+        | {
+            v.strip()
+            for raw in query.getlist("partColour")
+            for v in raw.split(",")
+            if v.strip()
+        }
+    )
+    filters["colourScope"] = (
+        query.get("colourScope") if query.get("colourScope") in COLOUR_KEY else "all"
+    )
     filters["q"] = query.get("q", "").strip()
     filters["grain"] = "documents" if query.get("grain") == "documents" else "analyses"
     filters["empty"] = query.get("empty", "").lower() in ("1", "true", "yes")
@@ -869,7 +1007,9 @@ def _facet_values(row, key):
         return [str(row["year"])] if row["year"] else []
     if key in ("project", "operator"):
         return row[f"{key}s"]
-    return [ref["uri"] for ref in row[REF_FACETS[key]]]
+    return list(
+        dict.fromkeys(ref["uri"] for field in REF_FACETS[key] for ref in row[field])
+    )
 
 
 def _facet_labels(rows, language, user):
@@ -877,9 +1017,10 @@ def _facet_labels(rows, language, user):
     for row in rows:
         if row["technique"]:
             labels["technique"][row["technique"]["uri"]] = row["technique"]["label"]
-        for key, plural in REF_FACETS.items():
-            for ref in row[plural]:
-                labels[key][ref["uri"]] = ref["label"]
+        for key, fields in REF_FACETS.items():
+            for field in fields:
+                for ref in row[field]:
+                    labels[key][ref["uri"]] = ref["label"]
         if row["year"]:
             labels["year"][str(row["year"])] = {
                 "value": str(row["year"]),
@@ -928,10 +1069,13 @@ def facet_universe(rows):
     }
 
 
-def characterization_wanted(active, skip=None):
-    """``[(facet key, selected uris)]`` of the active facets of the characterization group, *skip* left out."""
+def characterization_wanted(active, skip=None, scope="all"):
+    """``[(key read, selected uris)]`` of the active facets of the characterization group, *skip* left out.
+
+    The key read is the facet key, except for ``colour``: ``COLOUR_KEY[scope]``.
+    """
     return [
-        (key, set(active[key]))
+        (COLOUR_KEY[scope] if key == "colour" else key, set(active[key]))
         for key in CHARACTERIZATION_KEYS
         if key != skip and active[key]
     ]
@@ -964,8 +1108,10 @@ def row_filter(rows, query, universe=None):
     }
     needle = fold(filters["q"])
 
+    scope = filters["colourScope"]
+
     def meeting(row, skip):
-        wanted = characterization_wanted(active, skip)
+        wanted = characterization_wanted(active, skip, scope)
         if not wanted:
             return None
         return [c for c in row["characterizations"] if meets(c, wanted)]
@@ -986,21 +1132,39 @@ def row_filter(rows, query, universe=None):
     def carried(row, key):
         if not keep(row, key):
             return set()
-        found = meeting(row, key) if key in CHARACTERIZATION_KEYS else None
-        if found is None:
+        if key not in CHARACTERIZATION_KEYS:
             return set(_facet_values(row, key))
-        return set().union(*(c[key] for c in found))
+        read = COLOUR_KEY[scope] if key == "colour" else key
+        found = meeting(row, key)
+        if found is None and key != "colour":
+            return set(_facet_values(row, key))
+        if found is None:
+            found = row["characterizations"]
+        return set().union(*(c[read] for c in found))
 
     return keep, active, filters, page, needle, universe, carried
 
 
-def facet_entry(key, rows, active, counted, labels, marks, swatches, offered):
+def facet_entry(
+    key,
+    rows,
+    active,
+    counted,
+    labels,
+    marks,
+    swatches,
+    offered,
+    ranks=None,
+    complete=False,
+):
     """One ``Facet`` over *rows*: the values of *offered* with a count and the selected ones.
 
     Counts are "open to the other selections" (``counted``, the ``carried`` of
     ``row_filter``). A selected value is listed at count 0 when no row counts
     for it. Values are in label order, years in numeric order; ``total`` is
-    the number of values.
+    the number of values. ``colour`` is in the fixed order of ``colour_order``
+    (*ranks*); with *complete*, every offered value is listed, at count 0 when
+    no row counts for it.
     """
     counts = Counter(v for row in rows for v in counted(row, key))
     values = [
@@ -1012,16 +1176,32 @@ def facet_entry(key, rows, active, counted, labels, marks, swatches, offered):
             "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
         }
         for v in offered | set(active[key])
-        if counts[v] > 0 or v in active[key]
+        if complete or counts[v] > 0 or v in active[key]
     ]
-    values.sort(
-        key=(
-            (lambda item: item["id"])
-            if key == "year"
-            else (lambda item: (fold(item["label"]["value"]), item["id"]))
+    if key == "colour":
+        order = colour_order(ranks or {})
+        values.sort(key=lambda item: order(item["id"], item["label"]["value"]))
+    else:
+        values.sort(
+            key=(
+                (lambda item: item["id"])
+                if key == "year"
+                else (lambda item: (fold(item["label"]["value"]), item["id"]))
+            )
         )
-    )
     return {"key": key, "group": GROUP_OF[key], "values": values, "total": len(values)}
+
+
+def colour_order(ranks):
+    """Sort key ``(uri, label) -> tuple`` of the colour facet: the colours of the list by *ranks*, else by ``SWATCH_ORDER``, the rest by label."""
+
+    def order(uri, text):
+        rank = ranks.get(uri)
+        if rank is None:
+            rank = colour_rank(uri)
+        return (0, rank, "", uri) if rank is not None else (1, 0, fold(text), uri)
+
+    return order
 
 
 def preview(facet, active):
@@ -1035,6 +1215,13 @@ def preview(facet, active):
             if index < PREVIEW_SIZE or value["id"] in selected
         ],
     }
+
+
+def offered_values(bundle, key):
+    """The values a corpus facet offers: the universe, and for ``colour`` every item of its list as well."""
+    if key == "colour":
+        return bundle.universe[key] | set(bundle.colour_ranks)
+    return bundle.universe[key]
 
 
 def corpus_facets(bundle, rows, active, counted):
@@ -1051,7 +1238,9 @@ def corpus_facets(bundle, rows, active, counted):
             bundle.labels,
             bundle.marks,
             bundle.swatches,
-            bundle.universe[key],
+            offered_values(bundle, key),
+            bundle.colour_ranks,
+            complete=key == "colour",
         )
         facets.append(preview(facet, active) if key in LAZY_FACETS else facet)
     return facets
@@ -1161,6 +1350,7 @@ def document_facet(key, bundle, rows, active, counted):
         bundle.marks,
         bundle.swatches,
         {v for row in rows for v in _facet_values(row, key)},
+        bundle.colour_ranks,
     )
     return facet if facet["values"] else None
 
@@ -1202,7 +1392,9 @@ def facet_payload(key, query, user, language, ticket=None):
             bundle.labels,
             bundle.marks,
             bundle.swatches,
-            bundle.universe[key],
+            offered_values(bundle, key),
+            bundle.colour_ranks,
+            complete=key == "colour",
         )
     needle = fold(query.get("find", "").strip())
     if needle:
@@ -1245,7 +1437,7 @@ def match_payload(document_id, query, user, language, ticket=None):
     rows = document_rows(bundle, document_id)
     if rows is None:
         return None
-    keep, active, _, _, needle, _, counted = row_filter(
+    keep, active, filters, _, needle, _, counted = row_filter(
         rows, query, universe=bundle.universe
     )
     facets = [
@@ -1255,7 +1447,7 @@ def match_payload(document_id, query, user, language, ticket=None):
     ]
     kept = sorted(row["id"] for row in rows if keep(row))
     filtered = bool(needle) or any(active.values())
-    wanted = characterization_wanted(active)
+    wanted = characterization_wanted(active, scope=filters["colourScope"])
     return {
         "facets": facets,
         "kept": {

@@ -1616,6 +1616,42 @@ class RevalidationTests(CorpusCase):
             self.assertEqual(again.status_code, 304, url)
             self.assertEqual(again["ETag"], etag, url)
 
+    def test_part_colour_is_an_alias_of_colour_with_the_same_etag(self):
+        uri = "http://vocab/part-blue"
+        for route in ("search", "facet/technique"):
+            etags = {
+                self.client.get(f"/en/api/explorer/{route}?{query}")["ETag"]
+                for query in (f"colour={uri}", f"partColour={uri}")
+            }
+
+            self.assertEqual(len(etags), 1, route)
+
+    def test_colour_scope_enters_the_etag(self):
+        for route in (
+            "/en/api/explorer/search?colour=http://vocab/blue",
+            "/en/api/explorer/facet/technique?colour=http://vocab/blue",
+            "/en/api/explorer/document/{document}/match?colour=http://vocab/blue",
+        ):
+            url = route.format(document=self.documents["open"].pk)
+            etag = self.client.get(url)["ETag"]
+            scoped = self.client.get(url + "&colourScope=part")["ETag"]
+            with (
+                mock.patch.object(
+                    explorer_service, "build_bundle", side_effect=AssertionError
+                ),
+                mock.patch.object(
+                    explorer_service.explorer_memo,
+                    "remember",
+                    side_effect=AssertionError,
+                ),
+            ):
+                again = self.client.get(
+                    url + "&colourScope=part", HTTP_IF_NONE_MATCH=scoped
+                )
+
+            self.assertNotEqual(etag, scoped, url)
+            self.assertEqual(again.status_code, 304, url)
+
     def test_the_etag_changes_when_the_data_changes(self):
         for url in self.urls():
             before = self.client.get(url)["ETag"]

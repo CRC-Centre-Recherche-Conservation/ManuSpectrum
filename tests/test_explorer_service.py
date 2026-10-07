@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.http import QueryDict
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from arches.app.models.models import IIIFManifest
+from arches.app.models.models import IIIFManifest, Node
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
@@ -29,11 +29,13 @@ from manuspectrum.views.explorer.service import (
     fold,
     manifest_json,
     match_payload,
+    meets,
     row_filter,
     search_payload,
 )
 from tests.explorer_fixtures import ExplorerCase
 
+INHA = "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/"
 INHA_BLUE = (
     "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/"
     "d549884f-ed29-4a28-87c8-07311d9a14ad"
@@ -241,6 +243,19 @@ class RowFilterTests(SimpleTestCase):
     def test_matches_the_folded_text(self):
         keep, *_ = row_filter(self.rows(), QueryDict("q=FORS"))
         self.assertEqual([keep(r) for r in self.rows()], [False, True])
+
+    def test_meets_holds_each_wanted_key_and_nothing_else(self):
+        values = {"material": {"a"}, "colour": {"x", "y"}, "colourPart": set()}
+
+        self.assertTrue(meets(values, []))
+        self.assertTrue(meets(values, [("colour", {"y", "z"})]))
+        self.assertTrue(meets(values, [("material", {"a"}), ("colour", {"x"})]))
+        self.assertFalse(meets(values, [("colourPart", {"x"})]))
+        self.assertFalse(meets(values, [("material", {"b"}), ("colour", {"x"})]))
+
+    def test_a_row_without_characterization_entries_reads_no_colour_scope(self):
+        keep, *_ = row_filter(self.rows(), QueryDict("colourScope=part"))
+        self.assertEqual([keep(r) for r in self.rows()], [True, True])
 
 
 class DocumentMatchTests(ServiceCase):
@@ -615,6 +630,205 @@ class CharacterizationLevelTests(LevelCase):
         self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
 
 
+class ColourTests(LevelCase):
+    """One colour facet: the part's colour extends to its identified materials, in OR."""
+
+    def kept(self, text):
+        return set(
+            match_payload(
+                self.documents["open"].pk, self.query(text), self.anonymous, "en"
+            )["kept"]["characterizations"]
+        )
+
+    def test_a_part_colour_alone_keeps_the_row(self):
+        payload = self.search(f"colour={PART_BLUE}")
+
+        self.assertEqual(
+            self.ids(payload),
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+        )
+
+    def test_an_identified_colour_alone_keeps_the_row(self):
+        payload = self.search(f"colour={RED}")
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+
+    def test_colour_and_material_hold_on_the_same_identified_material_with_the_part_colour_extended(
+        self,
+    ):
+        self.assertEqual(
+            self.ids(self.search(f"material={LEAD_WHITE}&colour={BLUE}")), set()
+        )
+        self.tile(
+            self.components["open"],
+            "color_features",
+            self.reference_value(BLUE, "Blue", "Bleu"),
+        )
+
+        payload = self.search(f"material={LEAD_WHITE}&colour={BLUE}")
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+
+    def test_colour_scope_part_reads_the_component_only(self):
+        self.assertEqual(self.ids(self.search(f"colour={RED}&colourScope=part")), set())
+        self.assertEqual(
+            self.ids(self.search(f"colour={BLUE}&colourScope=part")), set()
+        )
+        payload = self.search(
+            f"colour={PART_BLUE}&material={LEAD_WHITE}&colourScope=part"
+        )
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+        self.assertEqual(
+            self.ids(
+                self.search(f"colour={PART_BLUE}&material={AZURITE}&colourScope=part")
+            ),
+            {str(self.analyses["open"].pk)},
+        )
+
+    def test_colour_scope_material_reads_color_aspect_only(self):
+        self.assertEqual(
+            self.ids(self.search(f"colour={PART_BLUE}&colourScope=material")), set()
+        )
+        self.assertEqual(
+            self.ids(self.search(f"colour={RED}&colourScope=material")),
+            {str(self.analyses["open"].pk)},
+        )
+        self.assertEqual(
+            self.ids(self.search(f"colour={BLUE}&colourScope=material")),
+            {str(self.analyses["open"].pk), str(self.analyses["on_document"].pk)},
+        )
+
+    def test_an_unknown_colour_scope_reads_all(self):
+        self.assertEqual(
+            self.ids(self.search(f"colour={PART_BLUE}&colourScope=everything")),
+            self.ids(self.search(f"colour={PART_BLUE}")),
+        )
+
+    def test_counts_of_material_under_a_colour_follow_the_scope(self):
+        def counts(text):
+            return {
+                uri: value["count"]
+                for uri, value in self.facet(self.search(text), "material").items()
+            }
+
+        self.assertEqual(counts(f"colour={BLUE}"), {AZURITE: 2})
+        self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 1, LEAD_WHITE: 1})
+        self.assertEqual(counts(f"colour={BLUE}&colourScope=part"), {})
+
+    def test_counts_of_colour_are_per_scope_values_of_the_kept_entries(self):
+        colours = self.facet(self.search(""), "colour")
+
+        self.assertEqual(
+            {uri: colours[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
+            {BLUE: 2, RED: 1, PART_BLUE: 2},
+        )
+        part = self.facet(self.search("colourScope=part"), "colour")
+        self.assertEqual(
+            {uri: part[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
+            {BLUE: 0, RED: 0, PART_BLUE: 2},
+        )
+
+    def test_kept_characterizations_extend_the_part_colour(self):
+        azurite, lead_white = str(self.characterization.pk), str(self.second.pk)
+
+        self.assertEqual(self.kept(f"colour={PART_BLUE}"), {azurite, lead_white})
+        self.assertEqual(self.kept(f"colour={PART_BLUE}&colourScope=material"), set())
+        self.assertEqual(self.kept(f"colour={RED}&colourScope=part"), set())
+        self.assertEqual(self.kept(f"colour={PART_BLUE}&material={AZURITE}"), {azurite})
+
+
+class ColourListTests(LevelCase):
+    """The colour facet lists every item of the color_aspect list, in a fixed order."""
+
+    WHITE = INHA + "2259f089-935b-46ec-af76-cdb5156ee311"
+    GOLD = INHA + "c1e1850f-9eb1-48f4-b8b8-6154a3a1623c"
+    ODD = "http://vocab/odd"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        controlled = List.objects.create(name="colours")
+        for order, (uri, en, fr) in enumerate(
+            (
+                (cls.ODD, "Odd", "Bizarre"),
+                (INHA_BLUE, "Blue", "Bleu"),
+                (cls.GOLD, "Gold", "Doré"),
+                (cls.WHITE, "White", "Blanc"),
+            )
+        ):
+            item = ListItem.objects.create(list=controlled, uri=uri, sortorder=order)
+            for language, value in (("en", en), ("fr", fr)):
+                ListItemValue.objects.create(
+                    list_item=item,
+                    valuetype_id="prefLabel",
+                    language_id=language,
+                    value=value,
+                )
+        Node.objects.filter(
+            pk=cls.nodes[("characterization", "color_aspect")].pk
+        ).update(config={"controlledList": str(controlled.pk)})
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def order(self, language):
+        payload = search_payload(self.query(), self.anonymous, language)
+        return [
+            v["id"]
+            for f in payload["facets"]
+            if f["key"] == "colour"
+            for v in f["values"]
+        ]
+
+    def test_the_colour_facet_lists_every_item_in_swatch_order_with_zero_counts(self):
+        payload = search_payload(self.query(), self.anonymous, "en")
+        colour = self.facet(payload, "colour")
+
+        expected = [self.WHITE, INHA_BLUE, self.GOLD, self.ODD, BLUE, PART_BLUE, RED]
+        self.assertEqual(self.order("en"), expected)
+        self.assertEqual(self.order("fr"), expected)
+        self.assertEqual(
+            [colour[u]["count"] for u in (self.WHITE, INHA_BLUE, self.GOLD, self.ODD)],
+            [0, 0, 0, 0],
+        )
+        self.assertEqual(colour[self.WHITE]["label"]["value"], "White")
+        self.assertEqual(colour[self.WHITE]["swatch"], "#f5f0e4")
+        self.assertEqual(colour[INHA_BLUE]["swatch"], "#2f55a4")
+        self.assertIsNone(colour[self.ODD]["swatch"])
+
+    def test_a_selection_keeps_every_item_listed(self):
+        payload = search_payload(self.query(f"colour={RED}"), self.anonymous, "en")
+
+        self.assertEqual(
+            {
+                v["id"]
+                for f in payload["facets"]
+                if f["key"] == "colour"
+                for v in f["values"]
+            },
+            {self.WHITE, INHA_BLUE, self.GOLD, self.ODD, BLUE, PART_BLUE, RED},
+        )
+
+    def test_the_facet_route_lists_the_same_items_and_a_document_lists_what_it_carries(
+        self,
+    ):
+        from manuspectrum.views.explorer.service import facet_payload
+
+        whole = facet_payload("colour", self.query(), self.anonymous, "en")
+        document = facet_payload(
+            "colour",
+            self.query(f"document={self.documents['open'].pk}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(len(whole["values"]), 7)
+        self.assertEqual([v["id"] for v in document["values"]], [BLUE, PART_BLUE, RED])
+
+
 class PartLevelTests(LevelCase):
     def test_part_type_and_part_colour_filter_the_analyses_of_the_part(self):
         payload = self.search(f"partType={ILLUMINATION}&partColour={PART_BLUE}")
@@ -627,10 +841,13 @@ class PartLevelTests(LevelCase):
         self.assertEqual(types[ILLUMINATION]["count"], 2)
         self.assertEqual(types[ILLUMINATION]["label"]["value"], "Illumination")
 
-    def test_part_colour_and_identified_colour_are_two_facets(self):
+    def test_part_colour_and_identified_colour_are_one_facet(self):
         payload = self.search(f"partColour={PART_BLUE}&colour={RED}")
 
-        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+        self.assertEqual(
+            self.ids(payload),
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+        )
 
     def test_each_facet_names_its_group_in_rail_order(self):
         payload = self.search("")
@@ -639,7 +856,6 @@ class PartLevelTests(LevelCase):
             [(f["key"], f["group"]) for f in payload["facets"]],
             [
                 ("partType", "part"),
-                ("partColour", "part"),
                 ("part", "part"),
                 ("project", "analysis"),
                 ("technique", "analysis"),
@@ -670,7 +886,7 @@ class PartLevelTests(LevelCase):
         swatches = {
             language: {
                 key: {v: facet[v]["swatch"] for v in facet}
-                for key in ("colour", "partColour", "material")
+                for key in ("colour", "material")
                 for facet in [
                     self.facet(
                         search_payload(self.query(), self.anonymous, language), key
@@ -684,8 +900,7 @@ class PartLevelTests(LevelCase):
         self.assertEqual(swatches["en"]["colour"][gilded], "goldenrod")
         self.assertEqual(swatches["en"]["colour"][BLUE], "royalblue")
         self.assertEqual(swatches["en"]["colour"][INHA_BLUE], "#2f55a4")
-        self.assertEqual(swatches["en"]["partColour"][INHA_BLUE], "#2f55a4")
-        self.assertEqual(swatches["en"]["partColour"][PART_BLUE], "royalblue")
+        self.assertEqual(swatches["en"]["colour"][PART_BLUE], "royalblue")
         self.assertEqual(set(swatches["en"]["material"].values()), {None})
 
     def test_the_french_label_of_a_part_type(self):
