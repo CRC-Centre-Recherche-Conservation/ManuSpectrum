@@ -63,6 +63,27 @@ cat >"$TMP/bin/mkdir" <<'STUB'
 exec /bin/mkdir "$@"
 STUB
 printf '#!/bin/sh\nexit 0\n' >"$TMP/bin/exportfs"
+# make-vm.sh DRY_RUN reaches virsh, virt-install and osinfo-query: fakes first on PATH keep the
+# tests off libvirt (no pool created, no free-space check). virt-install records its arguments.
+cat >"$TMP/bin/virsh" <<'STUB'
+#!/bin/sh
+case "$*" in
+  *" uri"*) echo qemu:///system ;;
+  *dominfo*) exit 1 ;;
+  *net-list*) echo ms-rehearsal ;;
+esac
+exit 0
+STUB
+cat >"$TMP/bin/virt-install" <<'STUB'
+#!/bin/sh
+if [ "$1" = --version ]; then echo 4.1.0; exit 0; fi
+echo "$*" >"$VI_ARGS"
+echo "<domain type='kvm'><name>stub</name><os><type machine='pc'>hvm</type></os></domain>"
+STUB
+cat >"$TMP/bin/osinfo-query" <<'STUB'
+#!/bin/sh
+echo " ubuntu26.04 | Ubuntu 26.04"
+STUB
 chmod +x "$TMP/bin"/*
 
 n=0 failed=0
@@ -75,7 +96,7 @@ assert() {
 vm() { # vm ENV_FILE [VAR=value...]; DRY_RUN make-vm.sh, output in $TMP/out
   local envf="$1"
   shift
-  env PATH="$TMP/bin:$PATH" DRY_RUN=1 ISO="$TMP/ubuntu.iso" SSH_PUBKEY="$TMP/key.pub" "$@" \
+  env PATH="$TMP/bin:$PATH" VI_ARGS="$TMP/vi.args" DRY_RUN=1 ISO="$TMP/ubuntu.iso" SSH_PUBKEY="$TMP/key.pub" "$@" \
     bash "$KIT/make-vm.sh" --env "$envf" >"$TMP/out" 2>&1
 }
 nfs() { # nfs ENV_FILE [VAR=value...]
@@ -85,6 +106,11 @@ nfs() { # nfs ENV_FILE [VAR=value...]
 }
 
 echo "IMAGES_DIR=$TMP/images" >"$TMP/images.env"
+
+vm "$TMP/images.env" && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'XML checked' "$TMP/out" && grep -q -- '--check disk_size=off' "$TMP/vi.args" \
+  && grep -q -- '--print-xml' "$TMP/vi.args"
+assert "DRY_RUN asks virt-install to skip the disk size check and the XML guard runs" $?
 
 vm "$TMP/empty.env" IMAGES_DIR= STUB_FS=ext2/ext3 || true
 grep -q '/var/lib/libvirt/images/ms-rehearsal.qcow2' "$TMP/out"
