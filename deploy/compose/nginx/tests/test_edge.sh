@@ -74,7 +74,7 @@ equals() { # equals DESCRIPTION EXPECTED ACTUAL
 # ---- helpers -----------------------------------------------------------
 
 get() { # get PATH [curl args]
-  curl -sS --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca.crt" \
+  curl -sS --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
     "https://$HOST:$HTTPS_PORT$1" "${@:2}"
 }
 code() { get "$1" -o /dev/null -w '%{http_code}' "${@:2}"; }
@@ -118,7 +118,7 @@ nginx_run_args() {
     -v "$NGINX_DIR/errors:/etc/nginx/errors:ro" \
     -v "$REPO/manuspectrum/templates/errors/500.htm:/etc/nginx/site-errors/500.htm:ro" \
     -v "$NGINX_DIR/ffdhe2048.pem:/etc/nginx/ffdhe2048.pem:ro" \
-    -v "$CERTS:/etc/nginx/certs:ro" \
+    -v "$CERTS/live:/etc/nginx/certs:ro" \
     -v "$WEBROOT:/var/www/acme:ro" \
     -v "$MEDIA:/srv/media:ro" \
     -v "$STATIC:/srv/static:ro" \
@@ -148,13 +148,13 @@ wait_for() { # wait_for SECONDS CMD... : true as soon as CMD succeeds
 stub_answers() { [ "$(code /ping)" = 200 ]; }
 
 setup() {
-  mkdir -p "$CERTS" "$LOGS" "$WEBROOT/.well-known/acme-challenge" \
+  mkdir -p "$CERTS/ca" "$CERTS/live" "$LOGS" "$WEBROOT/.well-known/acme-challenge" \
     "$MEDIA/uploadedfiles" "$MEDIA/export_deliverables" "$MEDIA/archestemp" \
     "$STATIC/releases/aaaaaaaaaaaaaaaa" "$STATIC/releases/bbbbbbbbbbbbbbbb"
   chmod 0777 "$LOGS"
-  bash "$REPO/deploy/certs/make-local-ca.sh" "$CERTS" "$HOST" >/dev/null || return 1
-  chmod 0755 "$CERTS"
-  chmod 0644 "$CERTS"/*.pem "$CERTS"/ca.crt
+  CA_DIR="$CERTS/ca" bash "$REPO/deploy/certs/make-local-ca.sh" "$CERTS/live" "$HOST" >/dev/null || return 1
+  chmod 0755 "$CERTS/live"
+  chmod 0644 "$CERTS"/live/*.pem "$CERTS/ca/ca.crt"
 
   echo "acme token" >"$WEBROOT/.well-known/acme-challenge/t"
   printf 'smoke,é\n' >"$MEDIA/uploadedfiles/smoke file é.csv"
@@ -220,9 +220,11 @@ group_tls() {
   out="$(openssl s_client -tls1_1 -cipher 'ALL:@SECLEVEL=0' -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
   check "TLS 1.1 is refused by the server (protocol version alert)" \
     bash -c 'grep -qi "alert protocol version\|no protocols available\|wrong version number\|unsupported protocol" <<<"$1" && ! grep -q "Cipher is [A-Z]" <<<"$1"' _ "$out"
-  out="$(openssl s_client -tls1_2 -CAfile "$CERTS/ca.crt" -verify_hostname "$HOST" -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
+  equals "the certificate directory nginx sees holds only the served pair" \
+    "fullchain.pem privkey.pem" "$(docker exec "$NGINX" ls /etc/nginx/certs | tr '\n' ' ' | sed 's/ $//')"
+  out="$(openssl s_client -tls1_2 -CAfile "$CERTS/ca/ca.crt" -verify_hostname "$HOST" -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
   check "TLS 1.2 is accepted and the certificate verifies" bash -c 'grep -q "New, TLSv1.2," <<<"$1" && grep -q "Verification: OK" <<<"$1"' _ "$out"
-  out="$(openssl s_client -tls1_3 -CAfile "$CERTS/ca.crt" -verify_hostname "$HOST" -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
+  out="$(openssl s_client -tls1_3 -CAfile "$CERTS/ca/ca.crt" -verify_hostname "$HOST" -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
   check "TLS 1.3 is accepted" bash -c 'grep -q "New, TLSv1.3," <<<"$1"' _ "$out"
   out="$(docker exec "$NGINX" nginx -T 2>&1)"
   check "no ssl_stapling directive" bash -c '! grep -q "^[[:space:]]*ssl_stapling" <<<"$1"' _ "$out"
@@ -396,7 +398,7 @@ codes() { # codes COUNT PATH [curl args] : the status of COUNT requests in a row
 get_many() { # get_many COUNT PATH : the statuses of COUNT concurrent requests
   local urls=() i
   for ((i = 0; i < $1; i++)); do urls+=("https://$HOST:$HTTPS_PORT$2"); done
-  curl -sS -Z --parallel-max 40 --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca.crt" \
+  curl -sS -Z --parallel-max 40 --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
     -o /dev/null -w '%{http_code}\n' "${urls[@]}"
 }
 # location_block FILE-SECTION PATTERN < nginx -T : the text of one location

@@ -712,8 +712,9 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
 - [ ] *(service account or root)* `error.log` is not redacted: rate-limit lines are at `notice` and do not
   reach it (`grep -c 'limiting' $LOG/error.log` → `0` after 4.3's burst), but upstream-error lines
   (for instance after `dc stop web`, 4.4) still carry the raw request line, query string and reset
-  token included. Check `ls -l $LOG/error.log` → readable by the service account and root only
-  (no `o+r`), rotated thirty days with the access log (4.9).
+  token included. The protection is the directory mode, not the
+  file's (nginx creates its logs `0644`; only rotated files are `0640`): `stat -c %a <NGINX_LOG_HOST_DIR>`
+  → `750`. Rotated thirty days with the access log (4.9).
 
 ### 4.9 Rotation
 
