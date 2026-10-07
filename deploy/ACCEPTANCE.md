@@ -211,6 +211,11 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   `APP_UID`, `APP_GID` (`id -u`, `id -g`), `MEDIA_HOST_DIR`, `DOMAIN_NAMES` and
   `PUBLIC_SERVER_ADDRESS` to the rehearsal values; leave `MANUSPECTRUM_IMAGE=manuspectrum:local`.
   Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`.
+  Also set the nginx values (4.1): `CERT_MODE=local`, `CERTS_DIR`, `NGINX_LOG_HOST_DIR`,
+  `PUBLIC_HOST` (the host name of `PUBLIC_SERVER_ADDRESS`, no port) and
+  `LOCAL_CA_CERT=<CERTS_DIR>/ca.crt` as a literal path. Create the log directory as the
+  service account (`install -d -m 0750 <NGINX_LOG_HOST_DIR>`); `make -C deploy certs-local`
+  (4.1) creates the certificates.
 - [ ] *(service account, rehearsal VM only)* the template ships `DEPLOY_ENVIRONMENT=production`;
   the rehearsal VM sets it explicitly: `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`.
   Check: `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
@@ -270,12 +275,13 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   `refusing: database <PGDBNAME> exists and setup_db would drop it`, and the data is intact
   (`deploy/compose/smoke.sh init-guard` → four `ok:` lines: `init`, `manage setup_db`,
   `manage packages ... -db`, `manage packages -o setup`). **(CI too)**
-- [ ] *(service account)* `make -C deploy up` → returns without error (it waits for every
+- [ ] *(service account)* `make -C deploy certs-local` (4.1), then `make -C deploy up` → returns without error (it waits for every
   service but `beat`, then starts `beat`); up to 15 minutes on a first start.
+  The `nginx` service needs `CERTS_DIR` and `NGINX_LOG_HOST_DIR` to exist: `up` fails otherwise.
   - On failure: `make -C deploy status`, then `dc logs --tail=100 <service>` of the one
     that is not healthy.
-- [ ] *(service account)* `make -C deploy status` → eight services: `postgres`,
-  `elasticsearch`, `redis-broker`, `redis-cache`, `cantaloupe`, `web`, `worker` as
+- [ ] *(service account)* `make -C deploy status` → nine services: `postgres`,
+  `elasticsearch`, `redis-broker`, `redis-cache`, `cantaloupe`, `web`, `worker`, `nginx` as
   `healthy`, `beat` as `running` (it has no health check on purpose).
 - [ ] *(service account)* `make -C deploy smoke` (= `deploy/compose/smoke.sh check`) →
   only `ok:` lines, exit 0. **(CI too)** Among them, the three that fail most
@@ -295,13 +301,13 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 
 - [ ] *(service account)* `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
   elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
-  redis-broker 256MiB, redis-cache 768MiB, beat 256MiB. Record the idle usage of each.
+  redis-broker 256MiB, redis-cache 768MiB, beat 256MiB, nginx without a limit of its own. Record the idle usage of each.
   Expected idle: elasticsearch about 2.7 GiB on an empty database, about 3.4 GiB with data
   loaded (heap 2 GiB; the rest is direct memory, metaspace, threads and page cache). The
   postgres, web and worker figures depend on the load: measured 0.1 / 0.9 / 0.3 GiB on an empty
   database and 0.36 / 0.62 / 0.29 GiB with data loaded and no traffic; cantaloupe 0.3 (1.3 warm).
 - [ ] *(service account)* `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' $(dc ps -q)`
-  → eight lines where the two figures are equal (a container never swaps).
+  → nine lines where the two figures are equal (a container never swaps).
   - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
     applied: the `-f` list or `make` was bypassed.
 - [ ] *(service account)* `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
@@ -317,15 +323,16 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   → `2147483648`.
 - [ ] *(service account)* `dc exec elasticsearch sh -c 'stat -c %a /tmp/elastic_password; stat -c %a /run/secrets/elastic_password'`
   → `600` then `444` (Elasticsearch reads its own `0600` copy; the host file stays shared).
-- [ ] *(service account)* `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' $(dc ps -q)` → eight lines
+- [ ] *(service account)* `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' $(dc ps -q)` → nine lines
   `unless-stopped`.
-- [ ] *(service account)* No published port: `docker ps --format '{{.Ports}}'` → no `0.0.0.0:` nor `:::` entry
-  (the reverse proxy comes with the nginx and TLS step).
+- [ ] *(service account)* Only nginx publishes ports: `docker ps --format '{{.Names}} {{.Ports}}'` → the
+  `nginx` line holds `0.0.0.0:80->80/tcp` and `0.0.0.0:443->443/tcp`, every other line no `0.0.0.0:` nor `:::` entry
+  (step 4.2).
 
 ### 2.6 Logs and rotation
 
 - [ ] *(service account)* `for c in $(dc ps -q); do docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $c; done`
-  → eight lines ending `{json-file map[max-file:5 max-size:10m]}`.
+  → nine lines ending `{json-file map[max-file:5 max-size:10m]}`.
   - On failure: `logging` is missing for that service in `compose.yaml`.
 - [ ] *(admin)* `sudo ls -lh $(sudo docker inspect -f '{{.LogPath}}' manuspectrum-web-1)*` → `*-json.log`,
   no file above 10 MB. To see rotation itself, write about 12 MB:
@@ -421,7 +428,7 @@ steps).
   data → exits 0. Stop the sampling. Record: the duration, the peak `MemUsage` of
   `elasticsearch`, `postgres`, `web`, `worker`, and any container at its limit.
   - Expected: no container at its limit, `docker inspect -f '{{.State.OOMKilled}}' $(dc ps -q)`
-    → eight `false`, `sudo dmesg | grep -ci 'out of memory'` → `0`.
+    → nine `false`, `sudo dmesg | grep -ci 'out of memory'` → `0`.
   - On failure: record the peak and the killed service; the limits in `compose.prod.yaml`
     are starting values until this figure is in.
 - [ ] *(service account)* `make -C deploy smoke` → only `ok:` after the reindex.
@@ -437,8 +444,8 @@ The markers of 2.7 stay in place until here: 2.8 reuses them.
 
 ### 2.12 What cannot be tested in this step
 
-nginx, TLS and the public ports, hence any check in a browser (step « nginx and TLS »:
-an XY chart in the editor and in a report, the model page, Compare, a French page),
+the checks that need nginx, TLS and a browser (an XY chart in the editor and in a report,
+the model page, Compare, a French page) are step 4;
 secrets under sops, `/readyz` and the JSON logs, backups, the real SMTP relay, and
 pyramidal TIFFs for Cantaloupe (a separate change).
 
@@ -471,7 +478,7 @@ stack and adds what a runner cannot show: five gunicorn workers aggregated, a wo
     `READYZ_ENABLED` in the image); if the 200 never comes back, `dc logs elasticsearch`.
 - [ ] *(service account)* `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' -H 'X-Forwarded-For: 1.2.3.4' http://127.0.0.1:8000/metrics`
   - Expected: `404` (a proxied request never reads the probes).
-  - On failure: `observability/views.relayed()` is bypassed; do not go on to PP-3.
+  - On failure: `observability/views.relayed()` is bypassed; do not go on to step 4.
 
 ### 3.2 Metrics
 
@@ -506,18 +513,253 @@ stack and adds what a runner cannot show: five gunicorn workers aggregated, a wo
   - On failure: a logger writes personal data the redaction does not cover; record the
     line (redacted by hand) and open an issue before production.
 - [ ] *(service account)* `dc logs --no-log-prefix --since 10m web | grep -c '"GET /'`
-  - Expected: `0` (gunicorn writes no access log; nginx will, PP-3).
+  - Expected: `0` (gunicorn writes no access log; nginx writes it, step 4.8).
 
 ### 3.4 What cannot be tested in this step
 
 Prometheus scraping, alert rules, dashboards and the e-mail route (PP-6); the edge rules that
-deny `/metrics` and `/readyz` (PP-3).
+deny `/metrics` and `/readyz` (step 4.3), and the check that no personal data reaches
+the logs after a login and a Biblissima import (step 4.8).
+
+---
+
+## Step 4 — nginx and TLS (`deploy/compose/nginx/`, `deploy/certs/`)
+
+The only service that publishes ports: TLS in three modes, the edge rules of issue #45,
+the rate limits, the JSON access log and the public image URLs. Uses the `dc` alias of step 2;
+the stack is up (2.4) and the data of 2.9 is loaded. In this step `<vm>` is the address of the
+rehearsal VM, `$PUBLIC` the first name of `DOMAIN_NAMES` (`manuspectrum.test` in the rehearsal),
+`$LOG` the `NGINX_LOG_HOST_DIR` of `.env`, and `<dev origin>` an origin the loaded snapshot
+was made under (`http://<host>:<port>`, never written in this repository).
+
+**What CI already proves, and what only the rehearsal VM can.** `test_edge.sh` (inside
+`check-stack.sh`, 2.1) runs every edge rule against a real nginx and a stub upstream;
+`tests/test_edge_contract.py` pins those rules to the Django URLconf and the languages;
+`test_acme_pebble.sh` runs the ACME flow against Pebble; the stack job runs
+`smoke.sh edge` on a runner. The rehearsal VM adds what a runner cannot: TLS seen from
+another machine, the browser, a real snapshot, the host log rotation and a reboot.
+Rows marked **(CI too)** repeat a CI check on purpose.
+
+### 4.1 Certificates (local CA)
+
+- [ ] *(service account)* `make -C deploy certs-local` then `ls -l $CERTS_DIR`
+  - Expected: `ca.crt` (`0644`), `ca.key` (`0600`), `fullchain.pem` and `privkey.pem` (`0640`),
+    an empty `acme-webroot/`; `openssl verify -CAfile $CERTS_DIR/ca.crt $CERTS_DIR/fullchain.pem` → `OK`;
+    `openssl x509 -in $CERTS_DIR/fullchain.pem -noout -ext subjectAltName` lists every name of `DOMAIN_NAMES`.
+  - On failure: the script refuses a name that is neither a host name nor an IPv4 address; the
+    host needs `openssl` 3.0 or later. `ca.key` never leaves the VM.
+- [ ] *(service account)* `make -C deploy up`, then `dc exec -T web python -c "import ssl,os; print(os.environ['REQUESTS_CA_BUNDLE'])"` and
+  `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' https://$PUBLIC/healthz`
+  - Expected: a bundle path, then `200`: web and worker trust `LOCAL_CA_CERT` and reach the public
+    name through the nginx network alias (`PUBLIC_HOST`).
+  - On failure: `LOCAL_CA_CERT` is empty or not a literal path in `.env`, or `PUBLIC_HOST` differs
+    from the host name of `PUBLIC_SERVER_ADDRESS`.
+- [ ] (workstation, the laptop with the browser) Copy `ca.crt` only (`scp`, never `ca.key`), trust it
+  (`deploy/certs/README.md`, « Trusting the CA on a workstation »: system store, Firefox or NSS
+  store), and add `<vm> manuspectrum.test` to `/etc/hosts`.
+  - Expected: `curl -sI https://manuspectrum.test/` with no `-k` → `HTTP/2 200` or a redirect to the
+    language page; the browser shows no warning and the padlock names the local CA.
+  - On failure: `curl` complaining about the issuer = the CA is not trusted on this workstation;
+    a name mismatch = the name in `/etc/hosts` is not in `DOMAIN_NAMES` (run `certs-local` again).
+
+### 4.2 Ports and TLS
+
+- [ ] (host) `nmap -p 1-65535 <vm>` → only `22/tcp`, `80/tcp` and `443/tcp` open.
+  *(service account)* `docker ps --format '{{.Names}} {{.Ports}}'` → only the `nginx` line shows ports.
+  - On failure: a service publishes a port in `compose.yaml`; remove it, the stack has one door.
+- [ ] (workstation) `curl -sI http://manuspectrum.test/` → `301` with `Location: https://manuspectrum.test/`.
+- [ ] (workstation) Unknown names are refused: `curl -sk -o /dev/null -w '%{http_code}\n' https://<vm>/`
+  (an address is not in `DOMAIN_NAMES`) → `000` (handshake refused) and
+  `curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: other.example' http://<vm>/` → `000` (empty reply, 444).
+  - On failure: the default servers of `manuspectrum.conf.template` are missing.
+- [ ] (workstation) `curl -sI https://manuspectrum.test/en/ | grep -ci '^strict-transport-security'` → `1`
+  and the value is `max-age=3600`; the same count with `x-content-type-options` and
+  `referrer-policy` → `1` each, `x-frame-options` → `1` (SAMEORIGIN), `permissions-policy` → `1`,
+  `content-security-policy-report-only` → `1`.
+  - On failure: two lines for one header = a header set both by nginx and Django (Django owns
+    X-Frame-Options, nosniff and Referrer-Policy; nginx owns the others); fix the snippet.
+- [ ] (workstation) `openssl s_client -connect <vm>:443 -servername manuspectrum.test -tls1_1 </dev/null` fails
+  (`no protocols available` or a handshake failure); `-tls1_2` and `-tls1_3` succeed and show
+  `Verify return code: 0 (ok)` with `-CAfile ca.crt`. Optional, more complete:
+  `docker run --rm -ti drwetter/testssl.sh --add-ca ca.crt manuspectrum.test` from a machine with
+  Docker (no external checker reaches a private network): no protocol below TLS 1.2, no weak
+  cipher, HSTS present.
+- [ ] *(service account)* *(CI too)* `deploy/compose/smoke.sh edge` → only `ok:` lines.
+  - On failure: the failing line names the rule (publishers, redirect, headers, querysets, files,
+    IIIF, rate, forged headers, access log, timeouts).
+
+### 4.3 Edge rules (#45)
+
+All from the workstation, name resolved to the VM. Codes are the whole expectation.
+
+- [ ] Denied at the edge, bodyless or with the site 404 page, never proxied (no `X-Request-ID` header):
+  `for p in /en/api/resource/x /fr/api/tile/x /en/api/tile-list-create/x /fr/api/tile-new-resource/x /en/silk/ /metrics /readyz; do printf '%s ' $p; curl -s -o /dev/null -w '%{http_code}\n' https://manuspectrum.test$p; done`
+  → every line `404`.
+  - On failure: the rule is missing from `edge-rules.conf` (a bare `/en/` prefix missing, an
+    `(en|fr)` alternation not updated). `/metrics` and `/readyz` must have an empty body.
+- [ ] `curl -s https://manuspectrum.test/healthz` → `ok`, `200` (liveness stays public for the probe).
+- [ ] Bypass attempts are refused: `/en//api/resource/x` with `--path-as-is` and `/en/api/%72esource/x` → `404`.
+- [ ] Core routes the project keeps stay reachable: `/en/api/tiles/<uuid>` is answered by Django (has
+  `X-Request-ID`), `/en/api/relatable-resources/<g>/<n>` too.
+- [ ] Search exports: `/fr/api/search/export_results?format=tilecsv` → `404`, without `format` → `404`,
+  `?format=geojson&format=tilecsv` → `404`, `?format=geojson&form%61t=shp` → `404`,
+  `?format=tilecsv&format=geojson` → `404`; `?format=geojson` → answered by Django.
+  `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://manuspectrum.test/fr/temp_file` → `404`
+  (a GET reaches Django).
+- [ ] `/files/uploadedfiles/<any stored name>` direct → `404` (bytes only follow `FileView`, 4.5).
+- [ ] 429 after a burst on the sign-in: `for i in $(seq 7); do curl -s -o /dev/null -w '%{http_code} ' -X POST https://manuspectrum.test/en/auth/; done`
+  → the first six answered by Django (any code but 429, CSRF refusals included), the seventh `429`
+  with the nginx page and a `Retry-After: 60` header. Seven `GET` of the same page never give 429.
+  - On failure: no 429 = `$binary_remote_addr` is the Docker bridge address for everybody
+    (check `remote_addr` in the access log is the client's, 4.8) or the `auth` zone is not applied.
+- [ ] *(service account)* The slowest synchronous export, measured on the loaded snapshot:
+  `time curl -s -o /dev/null -b <session cookie> 'https://manuspectrum.test/fr/search/export_results?format=tilecsv&total=1'`
+  - Expected: under 120 s. Record the figure; above it, open an issue to lower `SEARCH_EXPORT_LIMIT`.
+- [ ] One Biblissima import of 25 items, from the browser as an editor, runs with no `429`:
+  `grep -c '"status":429' $LOG/access.log` → `0` before and after it (spec §4.2).
+  One `create-all` of 5 items completes: its `request_time` in the access log may exceed 90 s only
+  when the upstream was slow, and there is no `504`.
+- [ ] Mirador on one large manuscript (4.5): `grep -c '"status":429' $LOG/access.log` → `0` after the visit.
+
+### 4.4 Error pages
+
+- [ ] `curl -s https://manuspectrum.test/en/this-page-does-not-exist | grep -c '<html'` → `1` and the
+  design is the site's (the 404 comes from Django here); `curl -s https://manuspectrum.test/en/api/resource/x`
+  → nginx's own 404 page.
+- [ ] *(service account)* `dc stop web`, then `curl -s -o /dev/null -w '%{http_code}\n' https://manuspectrum.test/en/` → `502` or
+  `503` with the site's 500 page (`manuspectrum/templates/errors/500.htm`, self-contained), then
+  `dc start web` → the site answers again with no nginx restart.
+  - On failure: the bind of `500.htm` in `compose.yaml` is missing (`nginx -t` fails to start nginx).
+
+### 4.5 Files and images
+
+- [ ] A file download goes through `FileView`: take the link of a file-list card in the browser (`/files/<uuid>`).
+  `curl -sL -o /tmp/f -w '%{http_code} %{size_download}\n' https://manuspectrum.test/files/<uuid>`
+  → `200` and the size of the file on disk; the same uuid with a user who may not read it, or an
+  unknown uuid → `404`/`403` from Django, never the bytes.
+  - On failure: the 302 is returned to the client instead of being followed inside nginx
+    (`@media` in `media.conf`).
+- [ ] One Arches manifest, every id on the public https host:
+  `curl -s https://manuspectrum.test/en/manifest/<uuid> | jq -r '.. | objects | (."@id"?, .id?) | strings' | grep -v '^https://manuspectrum.test/'`
+  → empty or only external rights and homepage URLs, to be read one by one; and the same pipe ending
+  `| grep -Ec '^http://|:8000|localhost|<dev origin>'` → `0`.
+  - On failure: the manifest was stored before 4.10, or `CANTALOUPE_HTTP_ENDPOINT` is not
+    `<PUBLIC_SERVER_ADDRESS>iiifserver/` in the web container
+    (`dc exec web printenv CANTALOUPE_HTTP_ENDPOINT`): new uploads would mint dev ids.
+- [ ] Image service URLs of that manifest: `… | grep '/iiifserver/' | grep -v '^https://manuspectrum.test/iiifserver/iiif/'` → empty.
+- [ ] One project document: `curl -s https://manuspectrum.test/iiif/v3/annotation-collection/<doc uuid> | jq -r '.. | objects | .id? | strings' | grep -v '^https://manuspectrum.test/'`
+  → only the canvas ids of the source manifests.
+- [ ] One `info.json` and one tile: `curl -sI -H 'Origin: https://example.org' https://manuspectrum.test/iiifserver/iiif/2/<name>/info.json`
+  → `200` and exactly one `Access-Control-Allow-Origin: *` (`grep -ci '^access-control-allow-origin'` → `1`);
+  `curl -s … | jq -r '."@id"'` → `https://manuspectrum.test/iiifserver/iiif/2/<name>`;
+  `…/full/!300,300/0/default.jpg` → `200`, `image/jpeg`, the same single header.
+  - On failure: two `Access-Control-Allow-Origin` lines = Cantaloupe's header is not hidden in `iiifserver.conf`.
+- [ ] Application routes do not get the wildcard: `curl -sI -H 'Origin: https://example.org' https://manuspectrum.test/fr/api/explorer/search | grep -i access-control` → empty.
+- [ ] (browser) Open the manifest in the project viewer and in one external Mirador: the images display
+  (no mixed-content or certificate error in the console).
+
+### 4.6 The browser visit
+
+(workstation, CA trusted). Each item is ticked or recorded with a screenshot.
+
+- [ ] an XY chart in the resource editor and in a report (the bytes come through `/files/<uuid>`);
+- [ ] a file download from a file-list card;
+- [ ] the model page;
+- [ ] Discover, then Compare with three spectra;
+- [ ] one French page (`/fr/…`) and the language switch;
+- [ ] the login page and a login;
+- [ ] a Biblissima import of one item as an editor (the Biblissima workflow);
+- [ ] the Network tab shows no request outside the domain (spec §6.2) and no 4xx or 5xx except the
+  expected ones; the console lists the CSP Report-Only violations: copy them into the issue for F5.
+
+### 4.7 Restart paths
+
+- [ ] *(service account)* `make -C deploy down up`, then `systemctl restart docker` (admin, `sudo`) and
+  `dc up -d --force-recreate web`: after each, the site answers again at `https://manuspectrum.test/healthz`
+  within a few minutes and `dc ps nginx` shows nginx without restart of its own for the last case
+  (dynamic `resolve` of `web` and `cantaloupe`).
+- [ ] After a host reboot (2.8): nginx is back and `make -C deploy smoke` and `smoke.sh edge` give only `ok:`.
+
+### 4.8 Logs
+
+- [ ] (host or VM, admin with read rights on `$LOG`, or the service account) The access log is JSON,
+  one object per line: `tail -n 3 $LOG/access.log | python3 -c 'import json,sys; [print(sorted(json.loads(l))) for l in sys.stdin]'`
+  → each list holds `bytes`, `host`, `method`, `protocol`, `referer`, `remote_addr`, `request_id`,
+  `request_time`, `status`, `time`, `tls`, `upstream_status`, `upstream_time`, `uri`, `user_agent`;
+  `remote_addr` is the workstation's address, not the bridge.
+- [ ] No query string, no personal data: `grep -cE '\?|password|token=|@[A-Za-z0-9.-]+\.[a-z]{2,}' $LOG/access.log` → `0`.
+  - On failure: `$uri` and `$log_uri` in `logging.conf`; a log line must never carry `$request` or `$args`.
+- [ ] Reset token redacted: visit one password-reset link, then
+  `grep -c '/reset/\[redacted\]' $LOG/access.log` → at least `1` and the token appears nowhere
+  in the file.
+- [ ] The request id joins the logs: take the `X-Request-ID` of `curl -sI https://manuspectrum.test/en/`, then
+  `grep <id> $LOG/access.log` → one line, and `dc logs --no-log-prefix web | grep <id>` → the
+  application line of that request.
+- [ ] Deferred check 3.3: after one login and one Biblissima import,
+  `dc logs --no-log-prefix --since 1h web worker | grep -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|msiiif1\.|password=[^[]' | wc -l`
+  → `0`; the same grep, without the e-mail alternative, on `dc logs --no-log-prefix --since 1h nginx` → `0`.
+  - On failure: record the line (redacted by hand) and open an issue before production.
+- [ ] `dc logs --no-log-prefix --since 10m web | grep -c '"GET /'` → `0` (the access log is nginx's).
+
+### 4.9 Rotation
+
+- [ ] (admin) Render the host file by hand until PP-8 installs it: replace `@NGINX_LOG_HOST_DIR@`,
+  `@APP_USER@`, `@APP_GROUP@` in `deploy/logrotate/manuspectrum-nginx.in`, then
+  `sudo logrotate -f -s /tmp/state <rendered file>`.
+  - Expected: dated, then compressed (next run) files appear in `$LOG`, a new `access.log` is
+    created `0640` for the service account, and nginx keeps writing to it with no restart
+    (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 30`: thirty days.
+  - On failure: `su` line missing (logrotate refuses a directory not owned by root), or the
+    `USR1` signal did not reach the container (`docker ps --filter label=com.docker.compose.service=nginx`).
+- [ ] *(service account)* `docker inspect -f '{{.HostConfig.LogConfig}}' $(dc ps -q nginx)`
+  → `{json-file map[max-file:5 max-size:10m]}` (nginx's own stdout stays bounded).
+
+### 4.10 Data steps after loading a snapshot
+
+The snapshot holds the origins of the development hosts in concept identifiers, controlled-list
+URIs, IIIF manifests and the tiles that reference them. Run once, before the site is shown.
+Commands run as the service account (no admin account runs `docker`).
+
+- [ ] *(service account)* Dry run, one `--from` per origin the snapshot was made under (up to four
+  development origins):
+  `make -C deploy manage ARGS="rewrite_dev_origin --dry-run --from <dev origin 1> --from <dev origin 2> --from <dev origin 3> --from <dev origin 4>"`
+  - Expected: a count per family (concepts, lists, manifests, tiles), nothing written, a
+    line `anomaly: N blob: URL(s)…`. The blob URLs are dead browser object URLs, counted and never
+    rewritten: record N, it is not an error.
+  - On failure: all counts `0` = the origins are mistyped (scheme, port, trailing slash).
+- [ ] *(service account)* The same command without `--dry-run`, then again with `--dry-run` → every count `0`.
+- [ ] *(service account)* Elasticsearch holds copies: `make -C deploy manage ARGS="es reindex_database"`
+  (duration and memory: 2.10), then `make -C deploy smoke` → only `ok:`.
+- [ ] *(service account)* No origin of development is left: `dc exec -T postgres sh -c 'psql -U "$POSTGRES_USER" <PGDBNAME> -Atc "select count(*) from iiif_manifests where manifest::text like '"'"'%<dev origin 1>%'"'"'"'` → `0` (repeat per origin).
+  Re-run 4.5: the manifest checks now give an empty list on a manifest stored in the snapshot.
+- [ ] *(service account)* Anonymous notifications of a database that ran with
+  `RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER=False` (#45):
+  `make -C deploy manage ARGS="shell -c \"from arches.app.models.models import UserXNotification as N; print(N.objects.filter(recipient__username='anonymous').count())\""` → `0`.
+  Otherwise record the count, delete them with the same shell and `.delete()`, and re-run.
+
+### 4.11 What cannot be tested in rehearsal
+
+ACME against Let's Encrypt: the domain must resolve publicly, so the first real run is at go-live,
+staging first (`ACME_SERVER` default) then production; Pebble covers the flow in CI
+(`test_acme_pebble.sh`). A certificate trusted by every browser without a local CA, public DNS,
+the external probe (PP-9), fail2ban (PP-8), the Grafana location (PP-6), and the installation of
+the host logrotate and certificate-renewal units (PP-8; their content is checked by the tests
+above).
+
+### 4.12 Before production (nginx and TLS)
+
+- [ ] `CERT_MODE=acme`, `ACME_EMAIL` set, `ACME_SERVER` still on staging: `make -C deploy cert-init` succeeds
+  (staging certificate), then the production directory and `make -C deploy cert-init CERTBOT_ARGS=--force-renewal`.
+- [ ] `LOCAL_CA_CERT` empty, `PUBLIC_SERVER_ADDRESS` and `PUBLIC_HOST` set to the real name,
+  `CANTALOUPE_HTTP_ENDPOINT` follows (`<PUBLIC_SERVER_ADDRESS>iiifserver/`, set by Compose).
+- [ ] Raise `HSTS_MAX_AGE` to `31536000` after one stable week.
+- [ ] 4.10 run on the production database, with the origins of the snapshot as `--from`.
+- [ ] The host logrotate file and the renewal timer are installed (PP-8) and `systemctl list-timers` shows the timer.
 
 ---
 
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): nginx and TLS,
-secrets, backups, deployed observability, accounts, Ansible, delivery, then
+what to do on failure): secrets, backups, deployed observability, accounts, Ansible, delivery, then
 "Before production".

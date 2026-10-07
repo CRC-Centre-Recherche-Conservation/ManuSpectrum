@@ -18,6 +18,11 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README) |
 | `compose/postgres/init/` | Creates `template_postgis` the way Arches does |
+| `compose/nginx/` | nginx configuration: `nginx.conf`, the server template (names, HSTS), `snippets/` (TLS, headers, edge rules, rate limits, media, IIIF image server, logs), error pages, `tests/test_edge.sh` |
+| `compose/certbot/` | Deploy hook of the `certbot` service (`CERT_MODE=acme`) |
+| `certs/` | `make-local-ca.sh` (rehearsal CA, self-signed placeholder), `README.md` (modes, trust), tests |
+| `logrotate/` | Host `logrotate` template for the nginx logs (thirty days) |
+| `systemd/` | Certificate renewal service and timer templates |
 | `compose/smoke.sh` | Checks of a running stack |
 | `compose/tests/` | Rules of the rendered Compose files (no container is started) |
 | `Makefile` | Operator commands |
@@ -41,7 +46,12 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `restart` | Restart `web`, `worker` and `beat` |
 | `status` | Containers and their health |
 | `logs` | Follow the last 200 lines of every service |
-| `smoke` | Read-only checks of the running stack |
+| `smoke` | Read-only checks of the running stack (`smoke.sh edge` checks nginx over HTTPS) |
+| `nginx-test` | `nginx -t` in the running container |
+| `nginx-reload` | Check, then reload nginx (new certificate or configuration) |
+| `certs-local` | `CERT_MODE=local`: make the rehearsal CA and the certificate for `DOMAIN_NAMES` in `CERTS_DIR` |
+| `cert-init` | `CERT_MODE=acme`: placeholder certificate, nginx up, first certificate, reload (`CERTBOT_ARGS=--force-renewal` to replace one) |
+| `cert-renew` | `CERT_MODE=acme`: renew when due, reload nginx only if the certificate changed |
 | `secrets` | Create the secrets directory (`0700`) and the missing secret files |
 
 ## Rules
@@ -75,7 +85,62 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `GUNICORN_THREADS` threads each; production sets 5 x 4, a ceiling of 20
   concurrent requests.
 - The development VM never builds the image nor starts the stack.
-- No service publishes a port; the reverse proxy comes later.
+- Only `nginx` publishes ports (`HTTP_PORT` and `HTTPS_PORT`, 80 and 443 by
+  default); it listens on 80 and 443 inside its container, as the service account.
+  No other service publishes a port.
+- nginx never serves `MEDIA_ROOT` or `/files/` directly: the bytes of an uploaded
+  file leave nginx only after Arches' `FileView` has answered for that file id
+  and nginx has followed its 302 internally.
+- `/iiifserver/` goes straight to Cantaloupe, with its own rate limit; nginx
+  hides Cantaloupe's CORS headers and sets one `Access-Control-Allow-Origin: *`.
+- Every rule above the language boundary carries `(en|fr)`; a new language
+  edits every alternation. `tests/test_edge_contract.py` fails otherwise, and
+  `compose/nginx/tests/test_edge.sh` runs every rule against a real nginx and a
+  stub upstream (also inside `check-stack.sh`).
+- nginx owns HSTS (`HSTS_MAX_AGE`), Permissions-Policy and the Report-Only CSP;
+  Django owns X-Frame-Options, nosniff and Referrer-Policy. The querysets API,
+  `/silk/`, `/metrics` and `/readyz` are refused at the edge. The 404, 429 and
+  50x pages are nginx's own; the 50x page is the site's
+  `manuspectrum/templates/errors/500.htm`.
+- Rate limits and timeouts live in nginx (`snippets/ratelimit.conf`,
+  `edge-rules.conf`); the client IP read by Django comes from nginx.
+- The access log is JSON, one line per request with the request id, no query
+  string and the reset token redacted. It is written to `NGINX_LOG_HOST_DIR`
+  (owned by the service account), rotated daily and kept thirty days by the
+  host `logrotate` file (`logrotate/manuspectrum-nginx.in`, installed by PP-8;
+  nginx reopens its files on `USR1`, no restart). Container stdout stays bounded
+  by `json-file` (10 MB x 5).
+- Certificates are files in `CERTS_DIR` (`fullchain.pem`, `privkey.pem`).
+  `CERT_MODE` chooses who writes them (details: `certs/README.md`):
+  `local` (`make certs-local`: a CA of the rehearsal; web and worker trust it
+  through `LOCAL_CA_CERT`), `acme` (certbot and Let's Encrypt: `make cert-init`,
+  then `make cert-renew` twice a day from the systemd timer; staging first) and
+  `provided` (the operator drops the two files and reloads nginx).
+- web and worker reach the public name through the `PUBLIC_HOST` network alias
+  of nginx, so `PUBLIC_SERVER_ADDRESS` (https, trailing slash) and `PUBLIC_HOST`
+  must name the same host; `CANTALOUPE_HTTP_ENDPOINT` is
+  `<PUBLIC_SERVER_ADDRESS>iiifserver/`, so canvas and image ids are public.
+- After loading a snapshot taken on a development host, run
+  `make -C deploy manage ARGS="rewrite_dev_origin --dry-run --from <dev origin> …"`
+  (one `--from` per origin), then without `--dry-run`, then
+  `make -C deploy manage ARGS="es reindex_database"`. Steps and expected counts:
+  `ACCEPTANCE.md`, 4.10.
+
+## Environment variables of the edge
+
+Set in `compose/.env` (`compose/.env.example` documents each one):
+
+| Variable | Role |
+| --- | --- |
+| `CERT_MODE` | `local`, `acme` or `provided` |
+| `CERTS_DIR` | Host directory of `fullchain.pem`, `privkey.pem`, `acme-webroot/`, and `ca.crt` in local mode |
+| `NGINX_LOG_HOST_DIR` | Host directory of the nginx access and error logs |
+| `HSTS_MAX_AGE` | Seconds; 3600 the first week, then 31536000 |
+| `LOCAL_CA_CERT` | Local mode only: path of `ca.crt`, trusted by web and worker (never a private key) |
+| `HTTP_PORT`, `HTTPS_PORT` | Host ports published by nginx |
+| `ACME_EMAIL`, `ACME_SERVER` | certbot contact and directory (staging by default) |
+| `DOMAIN_NAMES` | Names nginx answers to and the certificate covers |
+| `PUBLIC_SERVER_ADDRESS`, `PUBLIC_HOST` | Public https address (trailing slash) and its host name, the nginx network alias |
 
 ## Checks
 
@@ -86,7 +151,6 @@ with `compose/smoke.sh`.
 ## What comes next
 
 - PP-2: secrets managed with sops instead of manual files.
-- PP-3: nginx and TLS, the only published ports.
 - PP-5: `/readyz` and JSON logs.
 - PP-7: backups.
 - PP-8: Ansible writes `.env` and creates the volumes.
