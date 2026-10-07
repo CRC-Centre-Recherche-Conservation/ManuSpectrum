@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import re
+from urllib.parse import unquote
 
 from django.conf import settings
 from django.core.cache import cache
@@ -17,23 +18,27 @@ _OWN_IIIF_PATH = re.compile(r"^iiif/[23]/[^?#\\]*$")
 def own_cantaloupe_target(url):
     """Return ``(url, extra_kwargs)`` for fetching *url* through ``safe_fetch``.
 
-    A URL under ``<PUBLIC_SERVER_ADDRESS>iiifserver/iiif/2|3/`` names this
-    server's own image service. Behind the edge proxy its host resolves to a
-    private address the SSRF guard refuses, so it is fetched from
-    ``CANTALOUPE_INTERNAL_ENDPOINT`` instead, the address operators set in the
-    settings, with ``allow_private`` for that one call. Any other URL, and
-    every URL when either setting is absent, is returned unchanged with no
-    extra keyword and stays under the guard.
+    A URL under ``<CANTALOUPE_HTTP_ENDPOINT>iiif/2|3/`` names this server's own
+    image service (``CANTALOUPE_HTTP_ENDPOINT`` is the public
+    ``<PUBLIC_SERVER_ADDRESS>iiifserver/`` in the Docker settings). Behind the
+    edge proxy its host resolves to a private address the SSRF guard refuses,
+    so it is fetched from ``CANTALOUPE_INTERNAL_ENDPOINT`` instead, the address
+    operators set in the settings, with ``allow_private`` for that one call.
+    Paths holding a dot segment, literal or percent-encoded, are never
+    rewritten. Any other URL, and every URL when either setting is absent, is
+    returned unchanged with no extra keyword and stays under the guard.
     """
-    public = getattr(settings, "PUBLIC_SERVER_ADDRESS", "") or ""
+    public = getattr(settings, "CANTALOUPE_HTTP_ENDPOINT", "") or ""
     internal = getattr(settings, "CANTALOUPE_INTERNAL_ENDPOINT", "") or ""
     if not (public and internal and isinstance(url, str)):
         return url, {}
-    prefix = f"{public.rstrip('/')}/iiifserver/"
+    prefix = f"{public.rstrip('/')}/"
     if not url.startswith(prefix):
         return url, {}
     rest = url[len(prefix) :]
     if not _OWN_IIIF_PATH.match(rest) or ".." in rest:
+        return url, {}
+    if any(unquote(seg) in (".", "..") for seg in rest.split("/")):
         return url, {}
     return f"{internal.rstrip('/')}/{rest}", {"allow_private": True}
 

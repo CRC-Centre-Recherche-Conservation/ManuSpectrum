@@ -773,7 +773,7 @@ class GeometryToXywhTests(SimpleTestCase):
 
 
 OWN_SETTINGS = dict(
-    PUBLIC_SERVER_ADDRESS="https://manuspectrum.test/",
+    CANTALOUPE_HTTP_ENDPOINT="https://manuspectrum.test/iiifserver/",
     CANTALOUPE_INTERNAL_ENDPOINT="http://cantaloupe:8182/",
 )
 
@@ -812,6 +812,8 @@ class OwnImageServiceTests(SimpleTestCase):
             "iiifserver/admin",
             "iiifserver/iiif/4/x",
             "iiifserver/iiif/2/../../admin",
+            "iiifserver/iiif/2/%2e%2e/admin",
+            "iiifserver/iiif/2/%2E%2E/admin",
             "iiifserver/iiif/2/x?a=b",
         ):
             url = f"https://manuspectrum.test/{path}"

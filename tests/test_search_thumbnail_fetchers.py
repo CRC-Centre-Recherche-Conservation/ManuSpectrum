@@ -203,7 +203,7 @@ class ManifestFetcherRetrieveTests(SimpleTestCase):
         )
 
     @override_settings(
-        PUBLIC_SERVER_ADDRESS="https://manuspectrum.test/",
+        CANTALOUPE_HTTP_ENDPOINT="https://manuspectrum.test/iiifserver/",
         CANTALOUPE_INTERNAL_ENDPOINT="http://cantaloupe:8182/",
     )
     def test_a_thumbnail_of_the_own_image_service_is_read_internally(
