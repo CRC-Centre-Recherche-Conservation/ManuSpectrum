@@ -272,6 +272,23 @@ class TileTests(Base):
         self.assertEqual((data["file"], data["html"]), (blob, html))
         self.assertIn("2 blob", output)
 
+    def test_pending_edit_copies_of_tile_data_are_rewritten(self):
+        tile = self.tile({"a": EXTERNAL})
+        pending = {
+            "user-1": {
+                "action": "update",
+                "value": {"a": f"{CANTALOUPE}/iiif/manifest/canvas/1.json"},
+            }
+        }
+        TileModel.objects.filter(pk=tile.pk).update(provisionaledits=pending)
+        run(*FROM, "--to", NEW)
+        stored = TileModel.objects.get(pk=tile.pk).provisionaledits
+        self.assertEqual(
+            stored["user-1"]["value"]["a"],
+            f"{NEW}iiifserver/iiif/manifest/canvas/1.json",
+        )
+        self.assertEqual(stored["user-1"]["action"], "update")
+
     def test_update_does_not_call_save(self):
         tile = self.tile({"a": f"{WEB}/x"})
         with patch.object(TileModel, "save", side_effect=AssertionError("save")):

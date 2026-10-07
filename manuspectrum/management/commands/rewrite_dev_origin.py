@@ -30,9 +30,12 @@ Families (``--family``, repeatable, default all):
 ``manifests``
     every string of ``IIIFManifest.manifest``.
 ``tiles``
-    every string of ``tiles.tiledata``: list item URIs and canvas ids that
-    annotation and imaging layer tiles reference. A canvas id becomes the
-    same string in a manifest and in a tile, so references keep resolving.
+    every string of ``tiles.tiledata`` and of ``tiles.provisionaledits``
+    (pending edits keep copies of the tile data, rewritten with the same
+    mapping): list item URIs and canvas ids that annotation and imaging layer
+    tiles reference. A canvas id becomes the same string in a manifest and in
+    a tile, so references keep resolving. The reported row count adds the
+    rows of the two columns.
 
 History and staging tables, views and strings that are not at the start of
 a value are not read. ``blob:<origin>/...`` URLs in tiles (anywhere in a
@@ -40,8 +43,14 @@ string) are dead browser object URLs: they are counted as an anomaly and
 never rewritten.
 
 Rows are written with ``QuerySet.update`` in one transaction: no ``save()``,
-no Arches function and no signal runs. ``--dry-run`` reports and writes
-nothing. A second run changes nothing. The output holds counts only.
+no Arches function and no signal runs. The database triggers do run on every
+``tiles`` row written: ``ms_xy_stamp_file_config`` (BEFORE) and
+``ms_xy_reapply_on_technique`` (AFTER) on the file and technique nodegroups,
+Arches' ``__arches_trg_update_spatial_attributes`` (deferred, one run per row,
+at commit) and the ``ms_data_change`` statement triggers. On a database with
+about 16 000 tiles the final commit is long (minutes, not seconds) and holds
+the transaction open: run it when nothing else writes. ``--dry-run`` reports
+and writes nothing. A second run changes nothing. The output holds counts only.
 
 Elasticsearch keeps copies of tiles and concepts, and the command does not
 touch it: after a real run, ``python manage.py es reindex_database``.
@@ -245,4 +254,10 @@ class Command(BaseCommand):
 
     def do_tiles(self):
         self.mapping.blobs = 0
-        return self.update_json(self.containing_origin(TileModel, "data"), "data")
+        rows, strings = self.update_json(
+            self.containing_origin(TileModel, "data"), "data"
+        )
+        pending_rows, pending_strings = self.update_json(
+            self.containing_origin(TileModel, "provisionaledits"), "provisionaledits"
+        )
+        return rows + pending_rows, strings + pending_strings
