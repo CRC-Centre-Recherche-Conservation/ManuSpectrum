@@ -62,7 +62,6 @@ PREFIXED = [
         "two-factor-authentication-reset",
     ),
     ("snippets/edge-rules.conf", "api/explorer/share", "explorer-share"),
-    ("snippets/edge-rules.conf", "silk/", "silk:summary"),
     ("snippets/media.conf", f"files/{UUID}", "file_access"),
 ]
 BARE = [
@@ -206,6 +205,10 @@ class EdgeContractTests(SimpleTestCase):
                 path = f"/{code}/{rest}"
                 self.assertView(path, view_name)
                 self.assertNamed(relative, path, token_for(rest))
+
+    def test_silk_is_named_in_every_language_without_requiring_the_app(self):
+        for code, _ in settings.LANGUAGES:
+            self.assertNamed("snippets/edge-rules.conf", f"/{code}/silk/", "silk")
 
     def test_temp_file_download_resolves(self):
         for code, _ in settings.LANGUAGES:
