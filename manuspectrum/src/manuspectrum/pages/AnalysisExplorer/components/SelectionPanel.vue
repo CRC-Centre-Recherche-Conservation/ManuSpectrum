@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import {
+    computed,
+    inject,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+    useTemplateRef,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import {
     SCREEN_FOCUS_KEY,
     SELECTION_HINTS_KEY,
@@ -33,7 +42,8 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * what the card that added it knew (`SELECTION_HINTS_KEY`). « Compare »
  * opens the Compare view, asks for its heading to take the focus
  * (`SCREEN_FOCUS_KEY`) and emits `compare`, so a drawer holding the panel
- * closes. When the reading of the Selection fails, the rows not read lose
+ * closes. « Empty… » empties the Selection at once and leaves a status
+ * line with « Undo » that puts every item back at its slot. When the reading of the Selection fails, the rows not read lose
  * their placeholder and the panel offers Retry.
  */
 const emit = defineEmits<{ (event: "compare"): void }>();
@@ -51,12 +61,24 @@ const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
 
 const { byKey, missing, status, retry } = selectionItems();
+const { clearAll, lastBulk, undo, dismiss } = useSelectionToggle();
+const panel = useTemplateRef<HTMLElement>("panel");
 
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
 const failed = computed(
     () => status.value === "error" || status.value === "unavailable",
 );
 const canCompare = computed(() => isViewAvailable("compare"));
+const emptied = computed(() =>
+    lastBulk.value?.kind === "emptied" ? lastBulk.value : null,
+);
+const compareLabel = computed(() =>
+    interpolate($gettext("Compare (%{n})"), { n: store.basket.length }, true),
+);
+
+onBeforeUnmount(() => {
+    if (emptied.value) dismiss();
+});
 
 /** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */
 function holdingsText(item: AnalysisItem): string {
@@ -123,6 +145,13 @@ function compare(): void {
     emit("compare");
 }
 
+/** Empties the Selection; the buttons go, so the keyboard focus moves to « Undo ». */
+async function empty(): Promise<void> {
+    clearAll();
+    await nextTick();
+    panel.value?.querySelector<HTMLElement>('[data-action="undo"]')?.focus();
+}
+
 function removeLabel(slot: number): string {
     return interpolate(
         $gettext("Remove %{slot}"),
@@ -134,6 +163,7 @@ function removeLabel(slot: number): string {
 
 <template>
     <section
+        ref="panel"
         class="selection-panel"
         aria-labelledby="selection-title"
     >
@@ -241,21 +271,26 @@ function removeLabel(slot: number): string {
             class="actions"
         >
             <button
-                type="button"
-                class="clear"
-                @click="store.clearBasket()"
-            >
-                <span>{{ $gettext("Empty the Selection") }}</span>
-            </button>
-            <button
                 v-if="canCompare"
                 type="button"
-                class="compare"
+                class="compare primary"
                 @click="compare"
             >
-                <span>{{ $gettext("Compare") }}</span>
+                <span>{{ compareLabel }}</span>
+            </button>
+            <button
+                type="button"
+                class="clear secondary"
+                @click="empty"
+            >
+                <span>{{ $gettext("Empty…") }}</span>
             </button>
         </div>
+        <BulkStatusLine
+            :status="emptied"
+            @undo="undo"
+            @dismiss="dismiss"
+        />
     </section>
 </template>
 
@@ -368,5 +403,18 @@ function removeLabel(slot: number): string {
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+}
+
+.selection-panel .compare.primary {
+    border-color: var(--blue-text);
+    background: var(--blue-text);
+    color: var(--surface);
+    font-weight: 600;
+}
+
+.selection-panel .clear.secondary {
+    border-color: transparent;
+    background: transparent;
+    color: var(--blue-text);
 }
 </style>

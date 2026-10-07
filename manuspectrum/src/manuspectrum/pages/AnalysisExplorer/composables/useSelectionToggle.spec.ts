@@ -22,6 +22,10 @@ function key(n: number): string {
     return analysisKey(uuid(n));
 }
 
+function removeKey(item: string): void {
+    useExplorerStore().removeFromBasket(item);
+}
+
 function hint(name: string): SelectionHint {
     return { title: label(name), kind: "analysis" };
 }
@@ -165,5 +169,32 @@ describe("useSelectionToggle", () => {
         toggle.toggleAll([key(1), key(2)]);
         toggle.dismiss();
         expect(toggle.lastBulk.value).toBeNull();
+    });
+
+    it("empties the Selection in one step and undoes it at the same slots", () => {
+        toggle.toggleAll([key(1), key(2), key(3)]);
+        removeKey(key(2));
+        toggle.clearAll();
+        const store = useExplorerStore();
+        expect(store.basket).toEqual([]);
+        expect(toggle.lastBulk.value).toMatchObject({
+            kind: "emptied",
+            keys: [key(1), key(3)],
+            slots: ["A1", "A3"],
+            total: 0,
+        });
+        expect(announce).toHaveBeenLastCalledWith("Selection emptied (2).");
+        toggle.undo();
+        expect(store.basket.map((item) => [item.key, item.slot])).toEqual([
+            [key(1), 0],
+            [key(3), 2],
+        ]);
+        expect(toggle.lastBulk.value).toBeNull();
+    });
+
+    it("does nothing to empty an empty Selection", () => {
+        toggle.clearAll();
+        expect(toggle.lastBulk.value).toBeNull();
+        expect(announce).not.toHaveBeenCalled();
     });
 });

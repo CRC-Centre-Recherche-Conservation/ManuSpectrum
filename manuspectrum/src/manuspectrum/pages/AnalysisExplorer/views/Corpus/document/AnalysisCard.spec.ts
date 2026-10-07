@@ -4,11 +4,16 @@ import PrimeVue from "primevue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
+import type { Ref } from "vue";
+
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue";
 
-import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    CITE_OPEN_KEY,
+    MIRADOR_URL_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -35,13 +40,14 @@ interface CardExtras {
     feature?: string | null;
     mirador?: string;
     attach?: boolean;
+    citeOpen?: Ref<boolean>;
 }
 
 function mountCard(
     payload: AnalysisPayload | null,
     status: RequestStatus = "ready",
     analysisId: string = payload?.id ?? uuid(101),
-    { feature = null, mirador = "", attach = false }: CardExtras = {},
+    { feature = null, mirador = "", attach = false, citeOpen }: CardExtras = {},
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -57,7 +63,10 @@ function mountCard(
         global: {
             plugins: [pinia, PrimeVue],
             stubs: { SpectrumPreview: true },
-            provide: { [MIRADOR_URL_KEY as symbol]: mirador },
+            provide: {
+                [MIRADOR_URL_KEY as symbol]: mirador,
+                ...(citeOpen ? { [CITE_OPEN_KEY as symbol]: citeOpen } : {}),
+            },
         },
     });
     return { wrapper, store: useExplorerStore() };
@@ -599,5 +608,41 @@ describe("AnalysisCard", () => {
         );
         expect(dataset.exists()).toBe(true);
         expect(wrapper.findComponent(CitationBlock).exists()).toBe(true);
+    });
+
+    it("folds the citation by default and keeps its copy button in view", () => {
+        const payload = analysisPayload();
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            attach: true,
+        });
+        const toggle = wrapper.get(".cite button.toggle");
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(wrapper.get(".cite .content").isVisible()).toBe(false);
+        const copy = wrapper.get(".cite .head").findComponent(CopyButton);
+        expect(copy.props("text")).toBe(payload.citation.text);
+        expect(copy.isVisible()).toBe(true);
+    });
+
+    it("unfolds the citation and records it in the state the shell keeps", async () => {
+        const payload = analysisPayload();
+        const citeOpen = ref(false);
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            attach: true,
+            citeOpen,
+        });
+        await wrapper.get(".cite button.toggle").trigger("click");
+        expect(citeOpen.value).toBe(true);
+        expect(wrapper.get(".cite .content").isVisible()).toBe(true);
+    });
+
+    it("opens the citation when the shell says so", () => {
+        const payload = analysisPayload();
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            attach: true,
+            citeOpen: ref(true),
+        });
+        expect(
+            wrapper.get(".cite button.toggle").attributes("aria-expanded"),
+        ).toBe("true");
     });
 });

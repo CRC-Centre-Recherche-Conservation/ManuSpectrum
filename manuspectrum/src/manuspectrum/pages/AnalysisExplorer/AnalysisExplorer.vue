@@ -25,6 +25,7 @@ import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
+    CITE_OPEN_KEY,
     FACET_LABELS_KEY,
     MIRADOR_URL_KEY,
     RESULTS_MEMO_KEY,
@@ -90,6 +91,8 @@ const facetLabels = ref(new Map<string, Label>());
 const screenFocusPending = ref(false);
 const resultsMemo = ref<ResultsMemo | null>(null);
 const selectionHints = ref(new Map<string, SelectionHint>());
+/** Whether the « Cite » block of the Analysis card is unfolded: memory only, for the life of the tab. */
+const citeOpen = ref(false);
 /** The Compare view once its chunk has arrived. */
 const compareView = shallowRef<Component>();
 /** Its chunk is on its way, or could not be fetched (Retry fetches it again). */
@@ -111,6 +114,7 @@ provide(RESULTS_MEMO_KEY, resultsMemo);
 provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
+provide(CITE_OPEN_KEY, citeOpen);
 provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
 
 /**

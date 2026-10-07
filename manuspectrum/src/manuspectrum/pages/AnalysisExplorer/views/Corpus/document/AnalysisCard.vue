@@ -3,12 +3,14 @@ import {
     computed,
     defineAsyncComponent,
     inject,
+    ref,
     useId,
     useTemplateRef,
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
+import CollapsibleSection from "@/manuspectrum/pages/AnalysisExplorer/components/CollapsibleSection.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
@@ -23,7 +25,10 @@ import {
     formatSize,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    CITE_OPEN_KEY,
+    MIRADOR_URL_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
     contentStateLink,
@@ -76,6 +81,7 @@ const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const miradorUrl = inject(MIRADOR_URL_KEY, "");
+const citeOpen = inject(CITE_OPEN_KEY, () => ref(false), true);
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
@@ -227,6 +233,10 @@ function rawLabel(file: FileEntry): string {
 
 function names(refs: { name: Label }[]): string {
     return refs.map((ref) => ref.name.value).join(", ");
+}
+
+function setCiteOpen(open: boolean): void {
+    citeOpen.value = open;
 }
 
 function close(): void {
@@ -546,13 +556,20 @@ function focusHeading(): void {
                 </template>
             </dl>
 
-            <section
+            <CollapsibleSection
                 class="cite"
-                :aria-labelledby="`${sectionId}-cite`"
+                :title="$gettext('Cite')"
+                :open="citeOpen"
+                :summary="analysis.citation.text"
+                @toggle="setCiteOpen"
             >
-                <h4 :id="`${sectionId}-cite`">
-                    <span>{{ $gettext("Cite") }}</span>
-                </h4>
+                <template #actions>
+                    <CopyButton
+                        :text="analysis.citation.text"
+                        :label="$gettext('Copy the citation')"
+                        :icon-only="true"
+                    />
+                </template>
                 <CitationBlock :citation="analysis.citation" />
                 <CopyButton
                     class="availability"
@@ -606,7 +623,7 @@ function focusHeading(): void {
                         >
                     </a>
                 </div>
-            </section>
+            </CollapsibleSection>
 
             <p
                 v-if="licence"

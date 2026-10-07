@@ -35,6 +35,8 @@ export interface SelectionToggle {
     ) => void;
     /** Why the keys cannot all be added (« 48 analyses to add, 26 places left »), else null. */
     blockedReason: (keys: readonly string[]) => string | null;
+    /** Empties the Selection; `undo()` puts every item back at its slot. */
+    clearAll: () => void;
     lastBulk: Ref<BulkStatus | null>;
     undo: () => void;
     dismiss: () => void;
@@ -198,6 +200,26 @@ export function useSelectionToggle(): SelectionToggle {
         announceAdded(slots);
     }
 
+    function clearAll(): void {
+        if (store.basket.length === 0) return;
+        removedItems = store.removeManyFromBasket(
+            store.basket.map((item) => item.key),
+        );
+        lastBulk.value = {
+            kind: "emptied",
+            keys: removedItems.map((item) => item.key),
+            slots: removedItems.map((item) => slotLabel(item.slot)),
+            total: 0,
+        };
+        announce(
+            interpolate(
+                $gettext("Selection emptied (%{n})."),
+                { n: removedItems.length },
+                true,
+            ),
+        );
+    }
+
     function undo(): void {
         const status = lastBulk.value;
         if (status === null) return;
@@ -225,6 +247,7 @@ export function useSelectionToggle(): SelectionToggle {
         stateOf,
         toggleAll,
         blockedReason,
+        clearAll,
         lastBulk,
         undo,
         dismiss,

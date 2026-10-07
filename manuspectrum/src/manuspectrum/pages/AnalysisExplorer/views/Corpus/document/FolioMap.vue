@@ -84,8 +84,10 @@ const props = withDefaults(
         curtain?: string | null;
         /** The line under the page: document, page, position. */
         caption?: string;
+        /** `soft` lightens the stage (`--stage-soft`), for the Corpus; the light table and Compare keep `dark`. */
+        stage?: "dark" | "soft";
     }>(),
-    { overlays: () => [], curtain: null, caption: "" },
+    { overlays: () => [], curtain: null, caption: "", stage: "dark" },
 );
 const emit = defineEmits<{ select: [focus: Focus] }>();
 defineExpose({ focusTarget, focusCurrent });
@@ -764,6 +766,7 @@ function wholePage(): void {
     <div
         ref="host"
         class="folio"
+        :class="{ soft: props.stage === 'soft' }"
         role="group"
         tabindex="-1"
         :aria-label="$gettext('Page and its analyses')"
@@ -871,6 +874,19 @@ function wholePage(): void {
     background: var(--stage);
     border-radius: var(--explorer-radius, 0.625rem);
     overflow: hidden;
+}
+
+.folio.soft,
+.folio.soft .surface {
+    background: var(--stage-soft);
+}
+
+.folio.soft {
+    --stage: var(--stage-soft);
+}
+
+.folio.soft .caption {
+    background: color-mix(in srgb, var(--stage-soft) 85%, black);
 }
 
 .folio:focus-visible {

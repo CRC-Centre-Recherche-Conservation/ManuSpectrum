@@ -125,7 +125,7 @@ describe("CharacterizationCard", () => {
     it("adds the material and every evidence analysis in one step, those without data too", async () => {
         const { wrapper, store, summary } = mountCard([uuid(101), uuid(102)]);
         await flushPromises();
-        await wrapper.find(".with-evidence button").trigger("click");
+        await wrapper.find("button.primary").trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([
             `ch:${summary.id}:-`,
             `an:${uuid(101)}:-`,
@@ -141,7 +141,7 @@ describe("CharacterizationCard", () => {
         );
         await flushPromises();
         expect(
-            wrapper.find(".with-evidence button").attributes("disabled"),
+            wrapper.find("button.primary").attributes("disabled"),
         ).toBeDefined();
         expect(store.basket).toHaveLength(29);
     });
@@ -231,7 +231,7 @@ describe("CharacterizationCard", () => {
         });
         expect(wrapper.find(".evidence").text()).not.toContain("Analysis 101");
         expect(wrapper.find(".evidence").text()).toContain("Analysis 102");
-        await wrapper.find(".with-evidence button").trigger("click");
+        await wrapper.find("button.primary").trigger("click");
         expect(store.basket.map((item) => item.key)).toContain(
             `an:${uuid(102)}:-`,
         );
@@ -258,5 +258,23 @@ describe("CharacterizationCard", () => {
         expect(ids[0]).toBeTruthy();
         expect(ids[0]).not.toBe(ids[1]);
         expect(sections[0].attributes("aria-labelledby")).toBe(ids[0]);
+    });
+
+    it("groups the add buttons: with its analyses first, the material alone second", () => {
+        const { wrapper } = mountCard([uuid(801), uuid(802)]);
+        const group = wrapper.get('[role="group"]');
+        expect(group.attributes("aria-labelledby")).toBeTruthy();
+        expect(group.findAll("button").map((button) => button.text())).toEqual([
+            "With its 2 analyses",
+            "The material alone",
+        ]);
+    });
+
+    it("offers one button when the material cites no analysis", () => {
+        const { wrapper } = mountCard([]);
+        const buttons = wrapper.get('[role="group"]').findAll("button");
+        expect(buttons.map((button) => button.text())).toEqual([
+            "Add the material",
+        ]);
     });
 });

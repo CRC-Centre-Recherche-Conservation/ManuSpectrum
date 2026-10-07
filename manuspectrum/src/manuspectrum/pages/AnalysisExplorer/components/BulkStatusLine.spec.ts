@@ -72,4 +72,22 @@ describe("BulkStatusLine", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
         expect(wrapper.find('[role="status"]').exists()).toBe(true);
     });
+
+    it("says the Selection was emptied and offers no Compare", () => {
+        const wrapper = mount(BulkStatusLine, {
+            props: {
+                status: {
+                    kind: "emptied",
+                    keys: ["an:1", "an:2", "an:3"],
+                    slots: ["A1", "A2", "A3"],
+                    total: 0,
+                },
+            },
+        });
+        expect(wrapper.get('[role="status"]').text()).toContain(
+            "Selection emptied (3).",
+        );
+        expect(wrapper.find('[data-action="compare"]').exists()).toBe(false);
+        expect(wrapper.find('[data-action="undo"]').exists()).toBe(true);
+    });
 });

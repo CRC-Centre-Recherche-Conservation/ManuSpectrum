@@ -4,8 +4,8 @@ import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 
-import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
+import SelectionActions from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionActions.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
 import {
@@ -55,7 +55,7 @@ const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
 
@@ -100,6 +100,17 @@ const withEvidenceHints = computed(() => {
     }
     return hints;
 });
+const withEvidenceLabel = computed(() =>
+    interpolate(
+        $ngettext(
+            "With its %{n} analysis",
+            "With its %{n} analyses",
+            props.summary.evidence.length,
+        ),
+        { n: props.summary.evidence.length },
+        true,
+    ),
+);
 const date = computed(() => formatDateRange(props.summary.date));
 /** Each evidence analysis with its technique style, null outside `analysisStyles`. */
 const evidence = computed(() =>
@@ -377,23 +388,29 @@ function focusHeading(): void {
             </ul>
         </section>
 
-        <div class="alone">
-            <AddToSelection
-                :keys="[ownKey]"
-                :label="$gettext('+ Selection (the material alone)')"
-                :hints="ownHints"
-            />
-        </div>
-        <div
+        <SelectionActions
             v-if="props.summary.evidence.length > 0"
-            class="with-evidence"
-        >
-            <AddToSelection
-                :keys="withEvidenceKeys"
-                :label="$gettext('+ Selection with its supporting analyses')"
-                :hints="withEvidenceHints"
-            />
-        </div>
+            :title="$gettext('Add to the Selection')"
+            :primary="{
+                keys: withEvidenceKeys,
+                label: withEvidenceLabel,
+                hints: withEvidenceHints,
+            }"
+            :secondary="{
+                keys: [ownKey],
+                label: $gettext('The material alone'),
+                hints: ownHints,
+            }"
+        />
+        <SelectionActions
+            v-else
+            :title="$gettext('Add to the Selection')"
+            :primary="{
+                keys: [ownKey],
+                label: $gettext('Add the material'),
+                hints: ownHints,
+            }"
+        />
     </article>
 </template>
 

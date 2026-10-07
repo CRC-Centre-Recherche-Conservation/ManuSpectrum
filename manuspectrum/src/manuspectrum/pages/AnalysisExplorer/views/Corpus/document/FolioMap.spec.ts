@@ -806,4 +806,13 @@ describe("FolioMap", () => {
         expect(fitBounds).toHaveBeenCalledTimes(1);
         wrapper.unmount();
     });
+
+    it("wears the soft stage only when asked to", () => {
+        const dark = mountFolio();
+        expect(dark.get(".folio").classes()).not.toContain("soft");
+        dark.unmount();
+        const soft = mountFolio({ stage: "soft" });
+        expect(soft.get(".folio").classes()).toContain("soft");
+        soft.unmount();
+    });
 });

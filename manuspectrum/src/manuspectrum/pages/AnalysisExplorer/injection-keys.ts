@@ -74,6 +74,9 @@ export const SELECTION_HINTS_KEY: InjectionKey<
     Ref<Map<string, SelectionHint>>
 > = Symbol("selection-hints");
 
+/** Whether the « Cite » block of the Analysis card is unfolded; kept by the shell for the tab (memory only), provided by the shell. */
+export const CITE_OPEN_KEY: InjectionKey<Ref<boolean>> = Symbol("cite-open");
+
 /** Address of the Mirador viewer the IIIF products open in (`EXPLORER_MIRADOR_URL`); empty: no viewer. */
 export const MIRADOR_URL_KEY: InjectionKey<string> = Symbol("mirador-url");
 

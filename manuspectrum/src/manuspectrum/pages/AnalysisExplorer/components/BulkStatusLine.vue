@@ -38,6 +38,13 @@ const message = computed(() => {
     const status = props.status;
     if (status === null) return "";
     const count = status.keys.length;
+    if (status.kind === "emptied") {
+        return interpolate(
+            $gettext("Selection emptied (%{n})."),
+            { n: count },
+            true,
+        );
+    }
     if (status.kind === "removed") {
         return interpolate(
             $ngettext(
@@ -91,7 +98,7 @@ function compare(): void {
             <span>{{ $gettext("Undo") }}</span>
         </button>
         <button
-            v-if="canCompare"
+            v-if="canCompare && props.status.kind !== 'emptied'"
             type="button"
             data-action="compare"
             @click="compare"

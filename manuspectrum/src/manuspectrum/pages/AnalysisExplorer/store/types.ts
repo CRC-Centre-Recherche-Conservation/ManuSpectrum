@@ -113,7 +113,7 @@ export interface BasketLoadResult {
 
 /** The last grouped change of the Selection, kept for the status line and its undo. */
 export interface BulkStatus {
-    kind: "added" | "removed";
+    kind: "added" | "removed" | "emptied";
     keys: ItemKey[];
     /** Slot labels (« A3 ») of the keys, in the order of `keys`. */
     slots: string[];
