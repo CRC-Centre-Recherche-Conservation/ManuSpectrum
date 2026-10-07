@@ -8,7 +8,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
 SHELLCHECK_IMAGE="koalaman/shellcheck:v0.10.0"
-GITLEAKS_IMAGE="zricethezav/gitleaks:v8.30.1"
 # autoinstall-schema.json of canonical/subiquity, commit of 2026-03-03.
 SCHEMA_COMMIT="48bade6d7bbcc7d72a72e74a92c220f76d9017f2"
 SCHEMA_URL="https://raw.githubusercontent.com/canonical/subiquity/${SCHEMA_COMMIT}/autoinstall-schema.json"
@@ -108,7 +107,7 @@ fi
 
 step "gitleaks"
 if command -v docker >/dev/null 2>&1; then
-  docker run --rm -v "$ROOT:/repo:ro" "$GITLEAKS_IMAGE" dir /repo/deploy --config /repo/.gitleaks.toml --no-banner
+  (cd "$ROOT" && bash deploy/scripts/gitleaks.sh tree)
 else
   skip "docker missing"
 fi
