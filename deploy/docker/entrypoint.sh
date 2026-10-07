@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Entrypoint of the ManuSpectrum image. Commands:
-#   web            wait for PostgreSQL and Elasticsearch, migrate, publish the
+#   web            Django's deployment checks (any warning stops the start),
+#                  wait for PostgreSQL and Elasticsearch, migrate, publish the
 #                  static files, then run gunicorn
 #   worker         wait for PostgreSQL and Elasticsearch, then the Celery worker
 #   beat           wait for PostgreSQL, then Celery beat
-#   init           first installation: Arches setup_db, then the admin
+#   init           deployment checks as for web; first installation: Arches
+#                  setup_db, then the admin
 #                  password from the admin_password secret; refused when the
 #                  database already exists (setup_db drops and recreates it)
 #   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
@@ -37,6 +39,14 @@ reset_metrics_dir() {
 # Every Python process that runs before the server is a one-off: it must not write
 # metric files into PROMETHEUS_MULTIPROC_DIR (observability/README.md).
 oneoff() { env -u PROMETHEUS_MULTIPROC_DIR "$@"; }
+
+# Django's deployment checks, run first by web and init so that a misconfigured
+# host fails at once. `--tag security` as in the Arches deployment checks; every
+# silenced check is listed with its reason in settings_docker.py.
+deploy_checks() {
+  oneoff python manage.py check --deploy --tag security --fail-level WARNING \
+    || { log "Django's deployment checks failed (above); not starting"; exit 1; }
+}
 
 wait_for() { # wait_for NAME COMMAND...
   local name="$1" deadline=$((SECONDS + WAIT_SECONDS)) output
@@ -178,6 +188,7 @@ trust_local_ca() {
 command="${1:-web}"
 case "$command" in
   web)
+    deploy_checks
     wait_for PostgreSQL postgres_ready
     wait_for Elasticsearch elasticsearch_ready
     database_exists && status=0 || status=$?
@@ -235,6 +246,7 @@ case "$command" in
       log "refusing: setup_db connects to the database named after PGUSERNAME and cannot drop it; use a PGDBNAME different from PGUSERNAME"
       exit 1
     fi
+    deploy_checks
     wait_for PostgreSQL postgres_ready
     wait_for Elasticsearch elasticsearch_ready
     database_exists && status=0 || status=$?
