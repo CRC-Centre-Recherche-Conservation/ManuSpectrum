@@ -22,9 +22,14 @@ NGINX_DIR="${NGINX_DIR:-$(cd "$HERE/.." && pwd)}" # a mutated copy of the config
 NGINX_IMAGE="nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:15c994d10d6d78658721c3bcafff14cb281fba2a4bdf9d5ba92c416a472516e3"
 PYTHON_IMAGE="python:3.13-slim-trixie@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b"
 HOST="manuspectrum.test"
+FILE_A="00000000-0000-4000-8000-00000000000a"
+FILE_B="00000000-0000-4000-8000-00000000000b"
+FILE_C="00000000-0000-4000-8000-00000000000c"
+FILE_D="00000000-0000-4000-8000-00000000000d"
+FILE_E="00000000-0000-4000-8000-00000000000e"
 STATIC_SWAP_WAIT="${STATIC_SWAP_WAIT:-32}"
 
-GROUPS_ALL=(config tls default_servers redirect forwarded headers static log gzip loopback upstream_down)
+GROUPS_ALL=(config tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate upstream_down)
 
 RUN="msedge-$$"
 NET="$RUN-net"
@@ -345,6 +350,171 @@ group_loopback() {
     docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/files/export_deliverables/e.zip
   check "archestemp is not served" bash -c '! docker exec "$1" wget -q -O /dev/null http://127.0.0.1:8081/files/archestemp/x.zip' _ "$NGINX"
   check "the loopback port is not published" bash -c '! docker port "$1" | grep -q 8081' _ "$NGINX"
+}
+
+# What a request reaches: the stub's name, or "-" when nginx answered itself
+# (the stub echoes X-Request-ID, nginx's own answers carry none).
+reaches() { # reaches PATH [curl args] : web, cantaloupe or -
+  local out
+  out="$(headers "$@")"
+  if [ -n "$(header_value x-request-id <<<"$out")" ]; then echo web; else echo -; fi
+}
+codes() { # codes COUNT PATH [curl args] : the status of COUNT requests in a row
+  local count="$1" i out=""
+  shift
+  for ((i = 0; i < count; i++)); do out+="$(code "$@") "; done
+  echo "$out"
+}
+# location_block FILE-SECTION PATTERN < nginx -T : the text of one location
+location_block() {
+  python3 -I -c '
+import sys
+lines = sys.stdin.read().splitlines()
+start = next(i for i, l in enumerate(lines) if l.startswith("location") and sys.argv[1] in l)
+end = next(i for i in range(start, len(lines)) if lines[i] == "}")
+print("\n".join(lines[start:end + 1]))' "$1"
+}
+
+group_media() {
+  local out
+  out="$(headers "/en/files/$FILE_A")"
+  equals "files/<A>: 200" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "files/<A>: the bytes of the stored file" "$(printf 'smoke,é\n')" "$(get "/en/files/$FILE_A")"
+  check "files/<A>: attachment" grep -qi '^Content-Disposition: attachment' <<<"$out"
+  check "files/<A>: sandbox CSP" grep -qi "^Content-Security-Policy: default-src 'none'; sandbox" <<<"$out"
+  assert_one_of_each "files/<A>" "$out"
+  equals "files/<A>: exactly one nosniff" 1 "$(header_count X-Content-Type-Options <<<"$out")"
+  equals "files/<E> (export deliverable): 200" 200 "$(code "/fr/files/$FILE_E")"
+  equals "files/<E>: the bytes of the export" "zip bytes" "$(get "/fr/files/$FILE_E")"
+  equals "files/<B>: the 403 of Django passes through" 403 "$(code "/en/files/$FILE_B")"
+  equals "files/<C> (archestemp): 404" 404 "$(code "/en/files/$FILE_C")"
+  equals "files/<D> (encoded slashes): 404" 404 "$(code "/en/files/$FILE_D")"
+  out="$(get '/files/uploadedfiles/smoke%20file%20%C3%A9.csv')"
+  equals "a direct /files/uploadedfiles/<name> reaches Django, not the disk" web "$(jget name <<<"$out")"
+  equals "an unprefixed /files/<uuid> reaches Django (its language redirect)" web "$(jget name <<<"$(get "/files/$FILE_A")")"
+  equals "a non-uuid under files/ reaches Django" web "$(jget name <<<"$(get /en/files/not-a-uuid)")"
+  check "127.0.0.1:8081 is not published" bash -c '! docker port "$1" | grep -q 8081' _ "$NGINX"
+}
+
+group_iiifserver() {
+  local out
+  out="$(get '/iiifserver/iiif/3/a%2Fb%20c%C3%A9.tif/info.json')"
+  equals "iiifserver: the image server is reached" cantaloupe "$(jget name <<<"$out")"
+  equals "iiifserver: %2F, %20 and %C3%A9 arrive byte for byte" \
+    '/iiif/3/a%2Fb%20c%C3%A9.tif/info.json' "$(jget path <<<"$out")"
+  out="$(get '/fr/iiifserver/iiif/2/x/info.json?a=b%20c')"
+  equals "iiifserver: the language prefix is dropped, the query kept" \
+    '/iiif/2/x/info.json?a=b%20c' "$(jget path <<<"$out")"
+  equals "iiifserver: // after the mount point is 404" 404 "$(code '/iiifserver//iiif/3/x' --path-as-is)"
+  equals "iiifserver: /admin is 404" 404 "$(code /iiifserver/admin)"
+  equals "iiifserver: a path outside /iiif/2|3/ is 404" 404 "$(code /iiifserver/iiif/4/x)"
+  equals "iiifserver: the bare mount point is 404" 404 "$(code /iiifserver/)"
+  out="$(headers /iiifserver/iiif/3/x/info.json -H 'Origin: https://viewer.example')"
+  equals "iiifserver: one Access-Control-Allow-Origin" 1 "$(header_count Access-Control-Allow-Origin <<<"$out")"
+  equals "iiifserver: it is *" "*" "$(header_value access-control-allow-origin <<<"$out")"
+  equals "iiifserver: one Access-Control-Allow-Methods" 1 "$(header_count Access-Control-Allow-Methods <<<"$out")"
+  assert_one_of_each "iiifserver" "$out"
+  out="$(headers /iiifserver/iiif/3/x/info.json -X OPTIONS -H 'Origin: https://viewer.example' -H 'Access-Control-Request-Method: GET')"
+  equals "iiifserver: OPTIONS is 204" 204 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "iiifserver: OPTIONS lists the methods" "GET, HEAD, OPTIONS" "$(header_value access-control-allow-methods <<<"$out")"
+  equals "iiifserver: OPTIONS carries one Access-Control-Allow-Origin" 1 "$(header_count Access-Control-Allow-Origin <<<"$out")"
+  out="$(get /iiifserver/iiif/3/x/info.json -H 'X-Forwarded-For: 6.6.6.6' -H 'X-Real-IP: 6.6.6.6' \
+    -H 'X-Forwarded-Proto: http' -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Port: 80' -H 'Forwarded: for=6.6.6.6')"
+  local header
+  for header in x-forwarded-for x-real-ip x-forwarded-proto x-forwarded-host x-forwarded-port forwarded; do
+    equals "iiifserver: $header never reaches the image server" "<absent>" "$(jget headers $header <<<"$out")"
+  done
+  equals "no other route carries CORS (a proxied page)" 0 "$(header_count Access-Control-Allow-Origin <<<"$(headers /page -H 'Origin: https://viewer.example')")"
+  equals "no other route carries CORS (the Explorer API)" 0 \
+    "$(header_count Access-Control-Allow-Origin <<<"$(headers /fr/api/explorer/search -H 'Origin: https://viewer.example')")"
+  equals "/iiif/ keeps the CORS header of Django (one)" 1 \
+    "$(header_count Access-Control-Allow-Origin <<<"$(headers /iiif/v3/annotation/x -H 'Origin: https://viewer.example')")"
+}
+
+group_acl() {
+  local lang path out
+  for lang in en fr; do
+    for path in api/resource/x api/tile/g/n "api/tile-list-create/g/n/$FILE_A" api/tile-new-resource/g/n; do
+      equals "/$lang/$path: 404 from nginx" "404 -" "$(code "/$lang/$path") $(reaches "/$lang/$path")"
+    done
+  done
+  equals "/en//api/resource/x: 404 from nginx" "404 -" "$(code /en//api/resource/x --path-as-is) $(reaches /en//api/resource/x --path-as-is)"
+  equals "/en/api/%72esource/x: 404 from nginx" "404 -" "$(code /en/api/%72esource/x) $(reaches /en/api/%72esource/x)"
+  equals "/fr/api/tiles/x (core, plural) reaches Django" web "$(jget name <<<"$(get /fr/api/tiles/x)")"
+  equals "/en/api/relatable-resources/g/n reaches Django" web "$(jget name <<<"$(get /en/api/relatable-resources/g/n)")"
+  equals "/fr/silk/ is 404 from nginx" "404 -" "$(code /fr/silk/) $(reaches /fr/silk/)"
+  equals "/en/silk/requests/ is 404 from nginx" "404 -" "$(code /en/silk/requests/) $(reaches /en/silk/requests/)"
+  equals "/metrics is 404 from nginx" "404 -" "$(code /metrics) $(reaches /metrics)"
+  equals "/readyz is 404 from nginx" "404 -" "$(code /readyz) $(reaches /readyz)"
+  equals "/metrics and /readyz have an empty body" "0 0" "$(get /metrics -o /dev/null -w '%{size_download}') $(get /readyz -o /dev/null -w '%{size_download}')"
+  equals "/healthz reaches Django" web "$(jget name <<<"$(get /healthz)")"
+  assert_one_of_each "the edge 404 of a denied route" "$(headers /en/api/resource/x)"
+}
+
+group_search_export() {
+  local base=/fr/api/search/export_results
+  equals "api export format=tilecsv: 404" 404 "$(code "$base?format=tilecsv")"
+  equals "api export without a format: 404" 404 "$(code "$base")"
+  equals "api export format=geojson&format=tilecsv: 404" 404 "$(code "$base?format=geojson&format=tilecsv")"
+  equals "api export format=geojson&form%61t=shp: 404" 404 "$(code "$base?format=geojson&form%61t=shp")"
+  equals "api export format=tilecsv&format=geojson: 404" 404 "$(code "$base?format=tilecsv&format=geojson")"
+  equals "api export format=geojson: reaches Django" web "$(jget name <<<"$(get "$base?format=geojson")")"
+  equals "POST /fr/temp_file: 404" 404 "$(code /fr/temp_file -X POST)"
+  equals "GET /fr/temp_file/<uuid> reaches Django" web "$(jget name <<<"$(get "/fr/temp_file/$FILE_A")")"
+  equals "GET /fr/temp_file reaches Django" web "$(jget name <<<"$(get /fr/temp_file)")"
+  local out
+  out="$(codes 12 '/fr/search/export_results?format=tilecsv&total=1')"
+  check "12 rapid search exports: some answer 429" grep -q 429 <<<"$out"
+  check "12 rapid search exports: the first ones pass" grep -q '^200' <<<"$out"
+}
+
+group_rate() {
+  local out i
+  out="$(codes 7 /en/auth/ -X POST)"
+  equals "7 POSTs to /en/auth/: the first 6 pass, the 7th is 429" "200 200 200 200 200 200 429 " "$out"
+  out="$(headers /en/auth/ -X POST)"
+  equals "the 429 page carries Retry-After" 60 "$(header_value retry-after <<<"$out")"
+  check "the 429 body is the nginx page" grep -q 'Too many requests' <<<"$(get /en/auth/ -X POST)"
+  assert_one_of_each "the 429 page" "$out"
+  out="$(codes 7 /en/auth/)"
+  check "7 GETs to /en/auth/ are never limited" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  out="$(codes 15 "/api/spectrum-preview/$FILE_A?n=full")"
+  check "15 requests for ?n=full: some are 429" grep -q 429 <<<"$out"
+  sleep 4
+  out="$(codes 15 "/api/spectrum-preview/$FILE_A")"
+  check "15 requests without n: none is 429" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
+  out="$(codes 12 "/api/spectrum-preview/$FILE_A?n=200")"
+  check "12 requests with n=200 are not counted as full" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
+  out="$(codes 10 /en/api/explorer/share)"
+  check "the share route is limited (heavy)" grep -q 429 <<<"$out"
+}
+
+group_timeout_config() {
+  local dump block
+  dump="$(docker exec "$NGINX" nginx -T 2>&1)"
+  block="$(location_block 'create-(all|resource)' <<<"$dump")"
+  check "create-all and create-resource: proxy_read_timeout 340s" grep -q 'proxy_read_timeout 340s;' <<<"$block"
+  check "create-all and create-resource: proxy_next_upstream off" grep -q 'proxy_next_upstream off;' <<<"$block"
+  block="$(location_block 'explorer/(export|series' <<<"$dump")"
+  check "export and series.csv: proxy_buffering off" grep -q 'proxy_buffering off;' <<<"$block"
+  check "export and series.csv: gzip off" grep -q 'gzip off;' <<<"$block"
+  check "export and series.csv: proxy_read_timeout 300s" grep -q 'proxy_read_timeout 300s;' <<<"$block"
+  block="$(location_block 'api/search/export_results' <<<"$dump")"
+  check "search export: proxy_read_timeout 120s" grep -q 'proxy_read_timeout 120s;' <<<"$block"
+  check "gzip_types holds application/ld+json and no csv or zip" \
+    bash -c 'l="$(grep "gzip_types" -A2 <<<"$1")"; grep -q "application/ld+json" <<<"$l" && ! grep -Eq "text/csv|application/zip" <<<"$l"' _ "$dump"
+}
+
+group_stream() {
+  local start first
+  start="$(date +%s.%N)"
+  first="$(get /api/explorer/series.csv -N 2>/dev/null | { read -r _; date +%s.%N; })"
+  check "series.csv: the first chunk arrives within 1.5 s, not with the last one" \
+    python3 -I -c 'import sys; start, first = map(float, sys.argv[1:]); sys.exit(0 if first - start < 1.5 else 1)' "$start" "$first"
+  equals "series.csv: three chunks, in order" "chunk 0 chunk 1 chunk 2" "$(get /api/explorer/series.csv -N | tr '\n' ' ' | sed 's/ $//')"
+  equals "series.csv: not gzipped" "" "$(header_value content-encoding <<<"$(headers /api/explorer/series.csv -H 'Accept-Encoding: gzip')")"
 }
 
 # Stops the web stub: keep this group last, it restores the stub when it is done.

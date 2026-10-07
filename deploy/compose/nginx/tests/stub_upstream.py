@@ -12,7 +12,8 @@ header Django would not, to prove that nginx keeps one owner per header.
 Special routes:
   /en/files/<uuid>        FileView stand-ins (see FILE_REDIRECTS): 302 or 403
   /api/explorer/series.csv  three chunks, two seconds apart
-  paths under /iiif/        (Cantaloupe) add Access-Control-Allow-Origin: *
+  paths under /iiif/        add Access-Control-Allow-Origin: *
+  X-Request-ID              echoed on every web answer, as Django does
   /big.csv                  2 KB of text/csv
 """
 
@@ -76,12 +77,13 @@ class Handler(BaseHTTPRequestHandler):
             "path": self.path,
             "headers": headers,
         }
-        django = [] if self.name == "cantaloupe" else DJANGO_HEADERS.items()
-        self.reply(
-            200,
-            json.dumps(payload).encode(),
-            extra=list(django) + list(extra),
-        )
+        django = []
+        if self.name != "cantaloupe":
+            django = list(DJANGO_HEADERS.items())
+            # Django's RequestIdMiddleware echoes the id: a response without it
+            # was answered by nginx.
+            django.append(("X-Request-ID", headers.get("x-request-id", "")))
+        self.reply(200, json.dumps(payload).encode(), extra=django + list(extra))
 
     def stream_csv(self):
         self.send_response(200)

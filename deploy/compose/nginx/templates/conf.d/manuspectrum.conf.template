@@ -84,6 +84,8 @@ server {
 
     location / {
         include snippets/proxy-web.conf;
+        limit_req zone=site burst=60 nodelay;
+        limit_conn perip 20;
         proxy_pass http://web_up;
     }
 }
