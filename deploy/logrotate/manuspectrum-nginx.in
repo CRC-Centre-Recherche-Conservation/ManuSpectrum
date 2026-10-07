@@ -1,0 +1,32 @@
+# Host logrotate rule for the nginx logs of ManuSpectrum.
+#
+# Template: PP-8 renders it to /etc/logrotate.d/manuspectrum-nginx, replacing
+#   @NGINX_LOG_HOST_DIR@  the host directory bound to /var/log/manuspectrum
+#   @APP_USER@ @APP_GROUP@  the service account that owns that directory
+#
+# Enforces the 30-day retention of access and error logs (spec §6.2): both
+# carry client IP addresses. `su` is required because the directory is owned
+# by the service account, not by root, and logrotate refuses to rotate in it
+# otherwise. After rotation nginx reopens its files on USR1, without restart.
+@NGINX_LOG_HOST_DIR@/access.log @NGINX_LOG_HOST_DIR@/error.log {
+    su @APP_USER@ @APP_GROUP@
+    daily
+    rotate 30
+    maxage 30
+    compress
+    delaycompress
+    dateext
+    missingok
+    notifempty
+    create 0640 @APP_USER@ @APP_GROUP@
+    sharedscripts
+    postrotate
+        ids="$(docker ps --quiet \
+            --filter label=com.docker.compose.project=manuspectrum \
+            --filter label=com.docker.compose.service=nginx)"
+        if [ -n "$ids" ]; then
+            # shellcheck disable=SC2086 # one id per line, word splitting intended
+            docker kill --signal USR1 $ids
+        fi
+    endscript
+}
