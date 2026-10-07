@@ -440,14 +440,13 @@ describe("FolioMap", () => {
             wrapper.unmount();
         });
 
-        it("names the component on its outline", async () => {
+        it("leaves the keyboard to the list: its outline is no button and is hidden from assistive technology", async () => {
             const wrapper = mountFolio({ components: outlined() });
             await flushPromises();
-            expect(
-                wrapper
-                    .get("path.folio-component-zone")
-                    .attributes("aria-label"),
-            ).toBe("Component 1");
+            const outline = wrapper.get("path.folio-component-zone");
+            expect(outline.attributes("role")).toBeUndefined();
+            expect(outline.attributes("tabindex")).toBeUndefined();
+            expect(outline.attributes("aria-hidden")).toBe("true");
             wrapper.unmount();
         });
 

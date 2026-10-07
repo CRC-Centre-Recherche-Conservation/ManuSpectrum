@@ -141,6 +141,36 @@ describe("PeriodFacet bounds", () => {
     });
 });
 
+describe("PeriodFacet period equal to the bounds", () => {
+    it("clears the period when the slider ends on the bounds", () => {
+        const wrapper = mountFacet({ period: [1201, 1400] });
+        wrapper
+            .findComponent({ name: "RangeSlider" })
+            .vm.$emit("change", [1030, 1465]);
+        expect(wrapper.emitted("change")?.[0][0]).toMatchObject({
+            period: null,
+        });
+    });
+
+    it("clears the period when the fields are typed back to the bounds", async () => {
+        const wrapper = mountFacet({ period: [1201, 1400] });
+        await type(wrapper, "from", "1030");
+        await type(wrapper, "to", "1465");
+        await field(wrapper, "to").trigger("change");
+        expect(wrapper.emitted("change")?.[0][0]).toMatchObject({
+            period: null,
+        });
+    });
+
+    it("sends nothing when the fields are typed to the bounds with no period held", async () => {
+        const wrapper = mountFacet();
+        await type(wrapper, "from", "1030");
+        await type(wrapper, "to", "1465");
+        await field(wrapper, "to").trigger("change");
+        expect(wrapper.emitted("change")).toBeUndefined();
+    });
+});
+
 describe("PeriodFacet fields", () => {
     it("waits 300 ms after a typed year, then emits the period with the other bound at its end", async () => {
         const wrapper = mountFacet();

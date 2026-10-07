@@ -329,6 +329,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [],
                 canvases: [],
+                components: [],
             },
         ]);
         expect(view.find(".citing").exists()).toBe(false);
@@ -411,6 +412,7 @@ describe("MaterialsTable", () => {
                 selected: n === 1,
                 cites: [],
                 canvases: [],
+                components: [BORDER],
             };
         };
         const loose = characterization(3, { objects: [] });
@@ -423,6 +425,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [],
                 canvases: [],
+                components: [],
             },
         ]);
         expect(names(view)).toEqual(["Border", "Vermilion"]);
@@ -466,6 +469,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [],
                 canvases: [],
+                components: [BORDER],
             },
         ]);
         const group = view.find("tbody tr.group");
@@ -526,6 +530,7 @@ describe("MaterialsTable", () => {
                 selected: false,
                 cites: [],
                 canvases: [],
+                components: [],
             },
         ]);
         const copper = view
@@ -570,6 +575,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [AN1],
                 canvases: [],
+                components: [],
             },
         ]);
         await view.find(".expander").trigger("click");
@@ -608,6 +614,7 @@ describe("MaterialsTable", () => {
                 selected: false,
                 cites: [],
                 canvases: ["c9"],
+                components: [],
             },
         ]);
         expect(view.find("tbody .rest .draft").text()).toBe("Draft");
@@ -627,6 +634,7 @@ describe("MaterialsTable", () => {
                         selected: true,
                         cites: [],
                         canvases: ["c1", "c2"],
+                        components: [],
                     },
                 ],
                 pairs: [],
@@ -652,6 +660,7 @@ describe("MaterialsTable", () => {
                         selected: true,
                         cites: [],
                         canvases,
+                        components: [],
                     },
                 ],
                 pairs: [],

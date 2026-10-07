@@ -19,7 +19,6 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     bestConfidence,
-    componentsOf,
     groupByComponent,
     groupByPair,
     materialCounts,
@@ -229,7 +228,7 @@ function recordRow(
         unpublished: summary.unpublished,
         certainty: bestConfidence([record]),
         colours: summary.colours,
-        components: componentsOf(summary),
+        components: [...record.components],
         materials: "",
         folios: foliosOf(record.canvases),
         levels: unionLevels([record]),

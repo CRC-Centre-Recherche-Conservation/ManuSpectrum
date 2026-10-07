@@ -627,31 +627,30 @@ def corpus_rows(user, language, chains=None):
     return _corpus_rows(user, language, visible, chains, projects_of)[0]
 
 
-def row_entries(cited, part):
-    """The ``characterizations`` of a row: *cited* (``value_sets`` of the identified materials it cites) with the *part* colours of its component, plus an entry without material when *part* is set and nothing is cited."""
-    entries = [
-        {
-            **{key: v for key, v in values.items() if key != "colourOwn"},
-            "colour": values["colourOwn"] | part,
-        }
-        for values in cited
-    ]
-    if part and not entries:
-        entries.append(
-            {
-                "material": set(),
-                "layer": set(),
-                "element": set(),
-                "colour": part,
-            }
-        )
-    return entries
+def material_components(visible, chains, objects_of):
+    """``{identified material: sorted ids of the visible components linked to it}``.
+
+    A material is linked to a component it observes (``object_observed``) or
+    that is observed by a visible analysis it cites as evidence. Every
+    surface that relates a material to a component reads this one rule: the
+    colours of rows and kept materials, the ``components`` of the payload.
+    """
+    found = {}
+    for c in visible.characterizations:
+        linked = set(objects_of.get(c, ())) & visible.components
+        for analysis in visible.evidence.get(c, ()):
+            component = chains.get(analysis, (None, None))[1]
+            if component in visible.components:
+                linked.add(component)
+        found[c] = tuple(sorted(linked))
+    return found
 
 
 def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
-    """``(rows, values, parents)``: the ``corpus_rows``, per visible identified
-    material ``{key: set of uris}`` of the characterization facets, and the
-    ``place_closure`` parents of the places the rows carry.
+    """``(rows, values, parents, linked)``: the ``corpus_rows``, per visible
+    identified material ``{key: set of uris}`` of the characterization facets,
+    the ``place_closure`` parents of the places the rows carry and the
+    ``material_components``.
 
     A row's ``places`` are the production places of its component and of its
     document with their visible ancestors (sorted ids); its ``periods`` hold
@@ -660,11 +659,12 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
 
     A row's ``characterizations`` hold one entry per identified material it
     cites, plus one without material when its component has a colour and
-    nothing cites it; each carries ``colour``, the union of the
-    ``color_aspect`` of the material and the ``color_features`` of the row's
-    component. A material's own values (*values*) hold ``colourOwn`` (its
-    ``color_aspect``) and ``colour``, the union with the colours of the
-    visible components it observes (*objects_of*, read when omitted).
+    nothing cites it. A material's values hold ``colour``, the union of its
+    ``color_aspect`` and the ``color_features`` of the components linked to it
+    (``material_components``, with *objects_of* read when omitted); a row
+    shares the values of the material it cites, extended with the colours of
+    its own component when they are not already there, one object per
+    (material, component).
     """
     memo = _BuildMemo(language)
     if objects_of is None:
@@ -689,13 +689,10 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
     characterizations = Values(
         visible.characterizations, ["material", "colour", "layer", "elements"], user
     )
-    observed = {
-        c: frozenset(objects_of.get(c, ())) & visible.components
-        for c in visible.characterizations
-    }
+    linked = material_components(visible, chains, objects_of)
     parts = Values(
         {c for _, c in chains.values() if c}
-        | {k for components in observed.values() for k in components},
+        | {k for components in linked.values() for k in components},
         ["comp_type", "comp_colour"],
         user,
     )
@@ -744,12 +741,17 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
             )
         return produced_by_chain[key]
 
+    colours_memo = {}
+
     def colours_of(component):
-        return {
-            ref["uri"]
-            for v in (parts.get(component, "comp_colour") if component else [])
-            for ref in memo.refs(v)
-        }
+        """The ``color_features`` uris of *component*, one frozenset per component."""
+        if component not in colours_memo:
+            colours_memo[component] = frozenset(
+                ref["uri"]
+                for v in (parts.get(component, "comp_colour") if component else [])
+                for ref in memo.refs(v)
+            )
+        return colours_memo[component]
 
     value_sets = {}
     for c in visible.characterizations:
@@ -761,9 +763,34 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
             }
             for key, role in CHARACTERIZATION_ROLES.items()
         }
-        own = value_sets[c].pop("colour")
-        part = set().union(*(colours_of(k) for k in observed[c]))
-        value_sets[c].update(colourOwn=own, colour=own | part)
+        value_sets[c]["colour"] |= set().union(*(colours_of(k) for k in linked[c]))
+    entries = {}
+
+    def entry_of(material, component):
+        """The values of *material* as a row on *component* carries them."""
+        key = (material, component)
+        if key not in entries:
+            own, part = value_sets[material], colours_of(component)
+            entries[key] = (
+                own
+                if part <= own["colour"]
+                else {**own, "colour": own["colour"] | part}
+            )
+        return entries[key]
+
+    part_only = {}
+
+    def part_entry(component):
+        """The entry of a row that cites no material, shared by the rows of *component*."""
+        if component not in part_only:
+            part_only[component] = {
+                "material": set(),
+                "layer": set(),
+                "element": set(),
+                "colour": colours_of(component),
+            }
+        return part_only[component]
+
     cited_by = defaultdict(list)
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
@@ -859,8 +886,9 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
                 "elements": _unique(refs_of("elements")),
-                "characterizations": row_entries(
-                    [value_sets[c] for c in cited], colours_of(component)
+                "characterizations": (
+                    [entry_of(c, component) for c in cited]
+                    or ([part_entry(component)] if colours_of(component) else [])
                 ),
                 "partTypes": _unique(
                     [
@@ -896,7 +924,7 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "periods": production_of(document, component)[1],
             }
         )
-    return rows, value_sets, place_parents
+    return rows, value_sets, place_parents, linked
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -912,7 +940,9 @@ class CorpusBundle:
     in name order. ``order`` is the analyses-grain sort key of each row.
     ``links`` holds the role maps the payloads follow, keyed by source id.
     ``characterization_values`` holds, per visible identified material, the
-    uris it carries for each facet of the characterization group.
+    uris it carries for each facet of the characterization group;
+    ``material_components`` the sorted ids of the visible components linked to
+    each (``material_components``).
     ``colour_items`` is ``[(uri, rank)]`` of the items of the colour list, in
     the order the colour facet shows them. ``places`` maps every place the rows
     carry, ancestors included, to ``{"parent": id or None, "unpublished":
@@ -935,6 +965,7 @@ class CorpusBundle:
     documents: list
     order: dict
     characterization_values: dict
+    material_components: dict
     colour_items: list
     places: dict
     period_bounds: dict
@@ -970,7 +1001,7 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows, characterization_values, place_parents = _corpus_rows(
+    rows, characterization_values, place_parents, linked = _corpus_rows(
         user, language, visible, chains, links["projects"], links["objects"]
     )
     colour_items, colour_labels, colour_swatches = colour_list(language)
@@ -1035,6 +1066,7 @@ def build_bundle(user, language, visible):
             for row in rows
         },
         characterization_values=characterization_values,
+        material_components=linked,
         colour_items=colour_items,
         places={
             place: {"parent": place_parents.get(place), "unpublished": place in drafts}
@@ -1315,21 +1347,29 @@ def row_filter(rows, query, universe=None):
         key: [v for v in filters[key] if v in universe[key]] for key in FACET_KEYS
     }
     needle = fold(filters["q"])
+    selected = {key: set(values) for key, values in active.items()}
+    plain = [
+        key for key in FACET_KEYS if key not in CHARACTERIZATION_KEYS and active[key]
+    ]
+    wanted_of = {
+        skip: characterization_wanted(active, skip)
+        for skip in (None, *CHARACTERIZATION_KEYS)
+    }
+    meetings = {}
 
     def meeting(row, skip):
-        wanted = characterization_wanted(active, skip)
+        skip = skip if skip in CHARACTERIZATION_KEYS else None
+        wanted = wanted_of[skip]
         if not wanted:
             return None
-        return [c for c in row["characterizations"] if meets(c, wanted)]
+        key = (row["id"], skip)
+        if key not in meetings:
+            meetings[key] = [c for c in row["characterizations"] if meets(c, wanted)]
+        return meetings[key]
 
     def keep(row, skip=None):
-        for key in FACET_KEYS:
-            if (
-                key != skip
-                and key not in CHARACTERIZATION_KEYS
-                and active[key]
-                and not set(_facet_values(row, key)) & set(active[key])
-            ):
+        for key in plain:
+            if key != skip and not set(_facet_values(row, key)) & selected[key]:
                 return False
         if meeting(row, skip) == []:
             return False
@@ -2033,7 +2073,14 @@ def qualified_values(values, ids, language):
 
 
 def characterization_summaries(
-    ids, visible, user, language, source=None, objects_of=None, analysis_rows=None
+    ids,
+    visible,
+    user,
+    language,
+    components_of,
+    source=None,
+    objects_of=None,
+    analysis_rows=None,
 ):
     """``CharacterizationSummary`` of the visible identified materials among *ids*.
 
@@ -2043,6 +2090,8 @@ def characterization_summaries(
     ``evidence`` names each visible analysis cited, in id order. *objects_of*
     is the characterization → objects observed map the caller already holds,
     *analysis_rows* the corpus rows by analysis id, whose names it reuses.
+    ``components`` is the material's entry of *components_of*
+    (``CorpusBundle.material_components``).
     """
     ids = sorted(i for i in ids if i in visible.characterizations)
     if not ids:
@@ -2124,6 +2173,7 @@ def characterization_summaries(
                     {"id": o, "model": slug_of.get(o, ""), "name": label_of[o]}
                     for o in objects[c]
                 ],
+                "components": list(components_of.get(c, ())),
                 "materials": materials,
                 "colours": _unique(
                     [
@@ -2317,7 +2367,8 @@ def document_payload(document_id, user, language, ticket=None):
         visible,
         user,
         language,
-        listed_source(manifest_url or "", canvases),
+        components_of=bundle.material_components,
+        source=listed_source(manifest_url or "", canvases),
         objects_of=bundle.links["objects"],
         analysis_rows=bundle.by_id,
     )
@@ -2877,6 +2928,7 @@ def items_payload(keys, user, language):
             visible,
             user,
             language,
+            components_of=bundle.material_components,
             objects_of=bundle.links["objects"],
             analysis_rows=rows,
         )

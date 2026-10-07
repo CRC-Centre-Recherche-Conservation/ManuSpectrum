@@ -62,39 +62,17 @@ export interface ComponentMaterial {
     match: boolean;
 }
 
-/** Ids of the analyses of `view` that observe `componentId`. */
-function analysesOf(view: DocumentView, componentId: string): Set<string> {
-    const ids = new Set<string>();
-    for (const entry of [...view.annotations, ...view.unlocated]) {
-        if (entry.component === componentId) ids.add(entry.analysis);
-    }
-    return ids;
-}
-
-/** Whether `summary` observes `componentId` or cites one of `analyses` as evidence. */
-function isLinked(
-    summary: CharacterizationSummary,
-    componentId: string,
-    analyses: ReadonlySet<string>,
-): boolean {
-    return (
-        summary.objects.some((entry) => entry.id === componentId) ||
-        summary.evidence.some((entry) => analyses.has(entry.id))
-    );
-}
-
 /**
  * The identified materials of `view` linked to `componentId`, in the order of
- * the payload: those that observe the Component (`object_observed`) or cite
- * one of its analyses as evidence.
+ * the payload: those whose `components` (the server's rule: they observe it
+ * or cite one of its analyses) name it.
  */
 export function componentMaterials(
     view: DocumentView,
     componentId: string,
 ): ComponentMaterial[] {
-    const analyses = analysesOf(view, componentId);
     return view.characterizations
-        .filter((summary) => isLinked(summary, componentId, analyses))
+        .filter((summary) => summary.components.includes(componentId))
         .map((summary) => {
             const levels = summary.materials
                 .map((entry) => entry.confidence)
@@ -114,14 +92,14 @@ export function componentMaterials(
 }
 
 /**
- * The Components of `view` that `summary` is linked to, by the rule of
- * `componentMaterials`, in the order of the payload.
+ * The Components of `view` that `summary` is linked to (its `components`),
+ * in the order of the payload.
  */
 export function characterizationComponents(
     view: DocumentView,
     summary: CharacterizationSummary,
 ): DocumentComponent[] {
     return view.components.filter((component) =>
-        isLinked(summary, component.id, analysesOf(view, component.id)),
+        summary.components.includes(component.id),
     );
 }

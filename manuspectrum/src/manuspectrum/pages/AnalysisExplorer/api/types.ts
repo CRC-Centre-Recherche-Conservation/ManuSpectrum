@@ -225,6 +225,8 @@ export interface CharacterizationSummary {
     id: string;
     name: Label;
     objects: Ref[];
+    /** Ids of the visible components linked to it, sorted: those it observes and those of the analyses it cites. */
+    components: string[];
     materials: {
         value: ValueRef;
         confidence: RankedValue | null;
@@ -813,6 +815,7 @@ export const SHAPE_KEYS = {
         id: true,
         name: true,
         objects: true,
+        components: true,
         materials: true,
         colours: true,
         layers: true,

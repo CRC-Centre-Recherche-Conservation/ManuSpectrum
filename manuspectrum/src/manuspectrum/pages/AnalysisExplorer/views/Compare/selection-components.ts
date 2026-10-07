@@ -1,7 +1,10 @@
+import { componentRefs } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
+
 import type {
     CharacterizationSummary,
     Item,
     Label,
+    Ref,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { BasketItem } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -45,12 +48,14 @@ function gather(
 
 function gatherMaterial(
     found: Map<string, Gathered>,
+    refs: ReadonlyMap<string, Ref>,
     summary: CharacterizationSummary,
     canvases: readonly string[],
 ): void {
-    for (const object of summary.objects) {
-        if (object.model !== "component") continue;
-        const entry = gather(found, object.id, object.name);
+    for (const id of summary.components) {
+        const ref = refs.get(id);
+        if (!ref) continue;
+        const entry = gather(found, id, ref.name);
         entry.materials.add(summary.id);
         for (const canvas of canvases) entry.canvases.add(canvas);
     }
@@ -58,9 +63,9 @@ function gatherMaterial(
 
 /**
  * The components of the Selection: those its analyses observe
- * (`AnalysisHit.component`) and those its identified materials observe
- * (`objects` of model component), the materials of the synthesis
- * included. Their folios are the coverage rows counting them and the
+ * (`AnalysisHit.component`) and those its identified materials are linked
+ * to (`components`), the materials of the synthesis included; a linked
+ * component no payload names is left out. Their folios are the coverage rows counting them and the
  * canvases of the materials observing them. In the server's order of the
  * coverage rows, then by name in `locale` (accents and case aside), then id.
  */
@@ -71,11 +76,22 @@ export function selectionComponents(
     locale: string | undefined = undefined,
 ): SelectionComponent[] {
     const found = new Map<string, Gathered>();
-    for (const { key } of basket) {
-        const item = byKey.get(key);
-        if (!item) continue;
+    const items = basket.flatMap(({ key }) => byKey.get(key) ?? []);
+    const refs = componentRefs(
+        [
+            ...items.flatMap((item) =>
+                item.kind === "characterization" ? [item.characterization] : [],
+            ),
+            ...(synthesis?.materials ?? []).map((material) => material.summary),
+        ],
+        synthesis,
+        items.map((item) =>
+            item.kind === "characterization" ? null : item.analysis.component,
+        ),
+    );
+    for (const item of items) {
         if (item.kind === "characterization") {
-            gatherMaterial(found, item.characterization, []);
+            gatherMaterial(found, refs, item.characterization, []);
             continue;
         }
         const component = item.analysis.component;
@@ -96,7 +112,7 @@ export function selectionComponents(
         }
     }
     for (const material of synthesis?.materials ?? []) {
-        gatherMaterial(found, material.summary, material.canvases);
+        gatherMaterial(found, refs, material.summary, material.canvases);
     }
     const labels = new Map(
         (synthesis?.canvases ?? []).map((entry) => [entry.canvas, entry.label]),

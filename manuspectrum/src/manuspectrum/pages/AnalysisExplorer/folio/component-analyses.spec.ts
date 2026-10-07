@@ -129,14 +129,19 @@ describe("componentMaterials and characterizationComponents", () => {
         name: target.name,
     });
 
-    it("links a material that observes the component, or cites one of its analyses", () => {
-        const observing = characterization(1, { objects: [ref(component)] });
+    it("links the materials whose components name it, whatever their objects and evidence say", () => {
+        const observing = characterization(1, {
+            objects: [ref(component)],
+            components: [component.id],
+        });
         const citing = characterization(2, {
             evidence: [{ id: uuid(101), name: label("X01") }],
+            components: [component.id],
         });
         const elsewhere = characterization(3, {
-            objects: [ref(other)],
-            evidence: [{ id: uuid(102), name: label("X02") }],
+            objects: [ref(component)],
+            evidence: [{ id: uuid(101), name: label("X01") }],
+            components: [other.id],
         });
         const view = shown([observing, citing, elsewhere]);
         expect(
@@ -147,7 +152,7 @@ describe("componentMaterials and characterizationComponents", () => {
 
     it("carries the name, the first colour swatch, the best certainty, the draft mark and the match", () => {
         const summary = characterization(1, {
-            objects: [ref(component)],
+            components: [component.id],
             unpublished: true,
             colours: [
                 { ...valueRef("c:none", "None"), swatch: null },
@@ -177,10 +182,9 @@ describe("componentMaterials and characterizationComponents", () => {
         });
     });
 
-    it("gives the components a material is linked to, by the same rule", () => {
+    it("gives the components a material is linked to, by its components", () => {
         const summary = characterization(1, {
-            objects: [ref(component)],
-            evidence: [{ id: uuid(102), name: label("X02") }],
+            components: [component.id, other.id],
         });
         const view = shown([summary]);
         expect(

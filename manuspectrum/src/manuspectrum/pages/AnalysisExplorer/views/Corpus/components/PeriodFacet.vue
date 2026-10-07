@@ -102,9 +102,15 @@ function onSliderInput(value: Bounds): void {
     draft.value = value;
 }
 
+/** `value`, or null when it spans the whole bounds: no period then. */
+function periodOf(value: Bounds): Bounds | null {
+    const [min, max] = bounds.value;
+    return value[0] <= min && value[1] >= max ? null : value;
+}
+
 function onSliderChange(value: Bounds): void {
     draft.value = null;
-    send({ period: value });
+    send({ period: periodOf(value) });
 }
 
 function onCentury(from: number, to: number): void {
@@ -113,7 +119,7 @@ function onCentury(from: number, to: number): void {
         Math.min(to, props.facet.max),
     ];
     const same = props.period?.[0] === next[0] && props.period?.[1] === next[1];
-    send({ period: same ? null : next });
+    send({ period: same ? null : periodOf(next) });
 }
 
 function sideName(side: Side): string {
@@ -162,9 +168,11 @@ function commitFields(side: Side): void {
     }
     low = Math.min(low, high);
     texts.value = { from: String(low), to: String(high) };
-    if (current?.[0] !== low || current?.[1] !== high) {
-        send({ period: [low, high] });
-    }
+    const next = periodOf([low, high]);
+    const unchanged = next
+        ? current?.[0] === low && current?.[1] === high
+        : current === null;
+    if (!unchanged) send({ period: next });
 }
 
 function resetTexts(): void {

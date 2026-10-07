@@ -273,6 +273,7 @@ export const SYNTHESIS_WITH_COMPONENT: SynthesisResponse = {
                   summary: {
                       ...material.summary,
                       objects: [DOCUMENT, COMPONENT],
+                      components: [COMPONENT.id],
                   },
               }
             : material,

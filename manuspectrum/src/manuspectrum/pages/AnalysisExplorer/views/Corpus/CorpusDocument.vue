@@ -237,6 +237,23 @@ const excludedAnalyses = computed(
         ),
 );
 const excludedCount = computed(() => excludedAnalyses.value.size);
+/** The identified materials of this page and without a zone that the filters leave out. */
+const excludedMaterialsCount = computed(
+    () =>
+        (data.value?.characterizations ?? []).filter(
+            (summary) =>
+                (!summary.zone ||
+                    summary.zone.canvas === currentCanvas.value?.id) &&
+                !(data.value?.keptCharacterizations.has(summary.id) ?? true),
+        ).length,
+);
+/** Whether the switch is offered: something is left out, or the outside is hidden (it must stay reachable). */
+const outsideSwitchShown = computed(
+    () =>
+        (filtered.value &&
+            (excludedCount.value > 0 || excludedMaterialsCount.value > 0)) ||
+        !store.showOutside,
+);
 /** Whether an analysis is listed and drawn: kept by the filters, shown while outside ones are shown, or the one in focus. */
 function isShownAnalysis(entry: { analysis: string; match: boolean }): boolean {
     return (
@@ -978,9 +995,10 @@ function goHome(): void {
                             @change="onFolioView"
                         />
                         <OutsideFiltersToggle
-                            v-if="filtered && excludedCount > 0"
+                            v-if="outsideSwitchShown"
                             :shown="store.showOutside"
                             :hidden-count="excludedCount"
+                            :hidden-materials="excludedMaterialsCount"
                             @change="store.setShowOutside"
                         />
                         <p

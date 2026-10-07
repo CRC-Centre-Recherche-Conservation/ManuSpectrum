@@ -645,7 +645,11 @@ class ColourTests(LevelCase):
 
         self.assertEqual(
             self.ids(payload),
-            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+            {
+                str(self.analyses["open"].pk),
+                str(self.analyses["draft"].pk),
+                str(self.analyses["on_document"].pk),
+            },
         )
 
     def test_an_identified_colour_alone_keeps_the_row(self):
@@ -686,14 +690,14 @@ class ColourTests(LevelCase):
             }
 
         self.assertEqual(counts(f"colour={BLUE}"), {AZURITE: 2})
-        self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 1, LEAD_WHITE: 1})
+        self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 2, LEAD_WHITE: 1})
 
     def test_counts_of_colour_are_values_of_the_kept_entries(self):
         colours = self.facet(self.search(""), "colour")
 
         self.assertEqual(
             {uri: colours[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
-            {BLUE: 2, RED: 1, PART_BLUE: 2},
+            {BLUE: 2, RED: 1, PART_BLUE: 3},
         )
 
     def test_kept_characterizations_extend_the_part_colour(self):
@@ -701,6 +705,109 @@ class ColourTests(LevelCase):
 
         self.assertEqual(self.kept(f"colour={PART_BLUE}"), {azurite, lead_white})
         self.assertEqual(self.kept(f"colour={PART_BLUE}&material={AZURITE}"), {azurite})
+
+
+class MaterialComponentTests(ServiceCase):
+    """A material is linked to a component it observes or whose analysis it cites; rows, kept materials and payload agree."""
+
+    SHEET, TUBE = "http://vocab/sheet-pigment", "http://vocab/tube-pigment"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref, tile = cls.reference_value, cls.tile
+        document = cls.documents["open"]
+
+        def component(name, colour):
+            made = cls.new_resource("component", name)
+            tile(made, "item_visual_is_part_of_document", cls.refs(document))
+            tile(made, "color_features", ref(*colour))
+            return made
+
+        def analysis(name, observed):
+            made = cls.new_resource("analysis", name)
+            tile(made, "component_observed", cls.refs(observed))
+            return made
+
+        cls.blue_part = component("Blue part", (BLUE, "Blue", "Bleu"))
+        cls.red_part = component("Red part", (RED, "Red", "Rouge"))
+        cls.blue_analysis = analysis("A on blue", cls.blue_part)
+        cls.red_analysis = analysis("B on red", cls.red_part)
+        cls.cites_blue = cls.new_resource("characterization", "Sheet, cites blue")
+        tile(cls.cites_blue, "object_observed", cls.refs(document))
+        tile(cls.cites_blue, "evidence_analyses", cls.refs(cls.blue_analysis))
+        tile(cls.cites_blue, "identified_material", ref(cls.SHEET, "Sheet"))
+        cls.sees_blue = cls.new_resource("characterization", "Tube, sees blue")
+        tile(cls.sees_blue, "object_observed", cls.refs(cls.blue_part))
+        tile(cls.sees_blue, "evidence_analyses", cls.refs(cls.red_analysis))
+        tile(cls.sees_blue, "identified_material", ref(cls.TUBE, "Tube"))
+
+    def search_ids(self, text):
+        payload = search_payload(self.query(f"{text}&size=50"), self.anonymous, "en")
+        return {r["id"] for r in payload["results"]}
+
+    def match(self, text):
+        return match_payload(
+            self.documents["open"].pk, self.query(text), self.anonymous, "en"
+        )
+
+    def test_a_material_citing_an_analysis_takes_the_colour_of_its_component(self):
+        a, m = str(self.blue_analysis.pk), str(self.cites_blue.pk)
+
+        for text in (f"colour={BLUE}", f"colour={BLUE}&material={self.SHEET}"):
+            found = self.match(text)
+            self.assertIn(a, found["kept"]["analyses"], text)
+            self.assertIn(m, found["kept"]["characterizations"], text)
+            self.assertIn(a, self.search_ids(text), text)
+
+    def test_a_material_observing_a_blue_part_and_citing_a_red_one_carries_both(self):
+        b, m = str(self.red_analysis.pk), str(self.sees_blue.pk)
+
+        for text in (
+            f"colour={BLUE}&material={self.TUBE}",
+            f"colour={RED}&material={self.TUBE}",
+        ):
+            found = self.match(text)
+            self.assertIn(b, found["kept"]["analyses"], text)
+            self.assertIn(m, found["kept"]["characterizations"], text)
+            self.assertIn(b, self.search_ids(text), text)
+
+    def test_search_and_match_keep_the_same_analyses(self):
+        document = str(self.documents["open"].pk)
+        for text in (
+            f"colour={BLUE}",
+            f"colour={BLUE}&material={self.SHEET}",
+            f"colour={BLUE}&material={self.TUBE}",
+            f"colour={RED}&material={self.SHEET}",
+        ):
+            found = {
+                r["id"]
+                for r in search_payload(
+                    self.query(f"{text}&size=50"), self.anonymous, "en"
+                )["results"]
+                if r["document"]["id"] == document
+            }
+            self.assertEqual(set(self.match(text)["kept"]["analyses"]), found, text)
+
+    def test_the_payload_lists_the_linked_components(self):
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+        summaries = {s["id"]: s for s in payload["characterizations"]}
+
+        self.assertEqual(
+            summaries[str(self.cites_blue.pk)]["components"],
+            [str(self.blue_part.pk)],
+        )
+        self.assertEqual(
+            summaries[str(self.sees_blue.pk)]["components"],
+            sorted([str(self.blue_part.pk), str(self.red_part.pk)]),
+        )
+
+    def test_rows_of_one_material_and_component_share_one_entry(self):
+        rows = {r["id"]: r for r in corpus_rows(self.anonymous, "en")}
+        entry = rows[str(self.blue_analysis.pk)]["characterizations"][0]
+
+        self.assertEqual(entry["colour"], {BLUE})
+        self.assertNotIn("colourOwn", entry)
 
 
 class ColourListTests(LevelCase):
@@ -811,7 +918,11 @@ class PartLevelTests(LevelCase):
 
         self.assertEqual(
             self.ids(payload),
-            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+            {
+                str(self.analyses["open"].pk),
+                str(self.analyses["draft"].pk),
+                str(self.analyses["on_document"].pk),
+            },
         )
 
     def test_each_facet_names_its_group_in_rail_order(self):

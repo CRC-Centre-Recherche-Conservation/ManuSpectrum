@@ -11,24 +11,49 @@ const CHANGE_EVENT = "change" as const;
 
 /**
  * The switch of the document screen that shows (on) or hides (off) the
- * analyses the filters leave out. `hiddenCount` is how many the document
- * has; the screen shows the switch only when there are some.
+ * analyses and identified materials the filters leave out. `hiddenCount` and
+ * `hiddenMaterials` are how many of each the page has; the screen shows the
+ * switch when there are some, and whenever they are hidden.
  */
-const props = defineProps<{ shown: boolean; hiddenCount: number }>();
+const props = withDefaults(
+    defineProps<{
+        shown: boolean;
+        hiddenCount: number;
+        hiddenMaterials?: number;
+    }>(),
+    { hiddenMaterials: 0 },
+);
 
 const emit = defineEmits<{
     (event: typeof CHANGE_EVENT, shown: boolean): void;
 }>();
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 
-const label = computed(() =>
-    interpolate(
+const label = computed(() => {
+    const materials = interpolate(
+        $ngettext(
+            "%{n} identified material",
+            "%{n} identified materials",
+            props.hiddenMaterials,
+        ),
+        { n: props.hiddenMaterials },
+        true,
+    );
+    if (props.hiddenMaterials > 0 && props.hiddenCount === 0) {
+        return interpolate(
+            $gettext("Outside the filters: %{materials}"),
+            { materials },
+            true,
+        );
+    }
+    const analyses = interpolate(
         $gettext("Analyses outside the filters (%{n})"),
         { n: props.hiddenCount },
         true,
-    ),
-);
+    );
+    return props.hiddenMaterials > 0 ? `${analyses} · ${materials}` : analyses;
+});
 const paths = computed(() => ICONS[props.shown ? "eye" : "eye-slash"]);
 
 function onClick(): void {

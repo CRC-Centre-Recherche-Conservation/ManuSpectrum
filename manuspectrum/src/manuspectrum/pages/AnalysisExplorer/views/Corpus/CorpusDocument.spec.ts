@@ -442,6 +442,33 @@ describe("CorpusDocument", () => {
             expect(kept.wrapper.find("[role=switch]").exists()).toBe(false);
         });
 
+        it("offers the switch when only an identified material is left out", async () => {
+            stubFetch({
+                annotations: [annotation(1)],
+                characterizations: [characterization(1), characterization(2)],
+                dimmed: [uuid(502)],
+            });
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            expect(wrapper.find(".stage-head [role=switch]").text()).toContain(
+                "Outside the filters: 1 identified material",
+            );
+        });
+
+        it("keeps the switch while the outside is hidden, whatever the filters leave out", async () => {
+            stubFetch({ annotations: [annotation(1)] });
+            const { wrapper, store } = mountScreen((opened) => {
+                FILTERED(opened);
+                opened.setShowOutside(false);
+            });
+            await flushPromises();
+            const control = wrapper.find(".stage-head [role=switch]");
+            expect(control.exists()).toBe(true);
+            expect(control.attributes("aria-checked")).toBe("false");
+            await control.trigger("click");
+            expect(store.showOutside).toBe(true);
+        });
+
         it("offers the switch in the stage head with the number of analyses left out, on by default", async () => {
             stubFetch(shown());
             const { wrapper } = mountScreen(FILTERED);
@@ -784,9 +811,11 @@ describe("CorpusDocument", () => {
                         name: label("Component 1"),
                     },
                 ],
+                components: [uuid(701)],
             });
             const citing = characterization(2, {
                 evidence: [{ id: uuid(101), name: label("MS1_f12_XRF_01") }],
+                components: [OBSERVED],
             });
             stubFetch({
                 ...withComponents(),

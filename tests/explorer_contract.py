@@ -205,6 +205,7 @@ SHAPES = {
         "id": str,
         "name": "Label",
         "objects": list,
+        "components": list,
         "materials": list,
         "colours": list,
         "layers": list,

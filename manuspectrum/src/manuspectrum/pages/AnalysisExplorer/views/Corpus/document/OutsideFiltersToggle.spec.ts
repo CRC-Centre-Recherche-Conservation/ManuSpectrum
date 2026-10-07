@@ -15,6 +15,21 @@ describe("OutsideFiltersToggle", () => {
         expect(control.text()).toContain("Analyses outside the filters (4)");
     });
 
+    it("adds the identified materials outside the filters, alone when no analysis is", () => {
+        const both = mount(OutsideFiltersToggle, {
+            props: { shown: true, hiddenCount: 2, hiddenMaterials: 3 },
+        });
+        expect(both.find("button").text()).toContain(
+            "Analyses outside the filters (2) · 3 identified materials",
+        );
+        const alone = mount(OutsideFiltersToggle, {
+            props: { shown: true, hiddenCount: 0, hiddenMaterials: 1 },
+        });
+        expect(alone.find("button").text()).toContain(
+            "Outside the filters: 1 identified material",
+        );
+    });
+
     it("reports the state it shows", () => {
         expect(
             mountToggle(true).find("button").attributes("aria-checked"),

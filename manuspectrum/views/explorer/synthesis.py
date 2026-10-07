@@ -317,6 +317,7 @@ def _material_entries(scope, materials, evidence_of, canvases_of):
             bundle.visible,
             scope.reader,
             scope.language,
+            components_of=bundle.material_components,
             objects_of=objects_of,
             analysis_rows=bundle.by_id,
         )

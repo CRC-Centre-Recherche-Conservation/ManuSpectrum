@@ -38,6 +38,23 @@ describe("selectionComponents", () => {
         ]);
     });
 
+    it("counts a material linked to a component only through the analyses it cites", () => {
+        const synthesis = {
+            ...SYNTHESIS_WITH_COMPONENT,
+            materials: SYNTHESIS_WITH_COMPONENT.materials.map((material) => ({
+                ...material,
+                summary: { ...material.summary, objects: [], components: [K1] },
+            })),
+        };
+        const [entry] = selectionComponents(
+            BASKET,
+            BY_KEY_WITH_COMPONENT,
+            synthesis,
+        );
+        expect(entry.id).toBe(K1);
+        expect(entry.materials).toBe(synthesis.materials.length);
+    });
+
     it("reads the items alone while the synthesis is not there", () => {
         expect(
             selectionComponents(BASKET, BY_KEY_WITH_COMPONENT, null),
@@ -83,6 +100,7 @@ describe("selectionComponents", () => {
                               summary: {
                                   ...material.summary,
                                   objects: [alpha],
+                                  components: [alpha.id],
                               },
                           }
                         : material,
@@ -115,6 +133,7 @@ describe("selectionComponents", () => {
                             component(955, "Écu"),
                         ][index],
                     ],
+                    components: [[uuid(956), uuid(954), uuid(955)][index]],
                 },
             })),
         };

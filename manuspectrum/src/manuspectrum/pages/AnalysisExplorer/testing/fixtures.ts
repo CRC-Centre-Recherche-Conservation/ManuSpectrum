@@ -401,6 +401,7 @@ export function characterization(
         id: uuid(500 + n),
         name: label(`Characterization ${n}`),
         objects: [],
+        components: [],
         materials: [
             {
                 value: valueRef("http://example.org/vermilion", "Vermilion"),

@@ -447,12 +447,9 @@ function drawComponentZones(): L.GeoJSON {
             if (component) layer.bindTooltip(component.name.value);
             layer.on("click", () => emit("select", { kind: "component", id }));
             layer.on("add", () => {
-                const element = (layer as L.Path).getElement();
-                element?.setAttribute("role", "button");
-                element?.setAttribute(
-                    "aria-label",
-                    component?.name.value ?? "",
-                );
+                (layer as L.Path)
+                    .getElement()
+                    ?.setAttribute("aria-hidden", "true");
             });
         },
     });

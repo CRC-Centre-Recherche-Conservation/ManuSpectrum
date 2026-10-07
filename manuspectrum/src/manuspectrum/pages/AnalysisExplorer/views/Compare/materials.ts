@@ -38,6 +38,8 @@ export interface MaterialRecord {
     cites: readonly string[];
     /** Ids of the canvases it is placed on, in document then page order. */
     canvases: readonly string[];
+    /** The components of `summary.components` the response names, in that order. */
+    components: readonly Ref[];
 }
 
 /** Elements named at one level (null: none stated), each element once. */
@@ -84,6 +86,15 @@ export function materialRecords(
     synthesis: SynthesisResponse | null,
     analyses: ReadonlySet<string> | null = null,
 ): MaterialRecord[] {
+    const refs = componentRefs(
+        [
+            ...rows.map((row) => row.characterization),
+            ...(synthesis?.materials ?? []).map((material) => material.summary),
+        ],
+        synthesis,
+    );
+    const named = (summary: CharacterizationSummary): Ref[] =>
+        summary.components.flatMap((id) => refs.get(id) ?? []);
     const firstSlot = new Map<string, number>();
     for (const row of rows) {
         const id = row.characterization.id;
@@ -103,6 +114,7 @@ export function materialRecords(
             firstSlot.has(material.id),
         cites: material.evidence,
         canvases: material.canvases,
+        components: named(material.summary),
     }));
     const known = new Set(records.map((record) => record.id));
     for (const row of rows) {
@@ -115,6 +127,7 @@ export function materialRecords(
             selected: true,
             cites: [],
             canvases: summary.zone ? [summary.zone.canvas] : [],
+            components: named(summary),
         });
     }
     const order = (record: MaterialRecord): number =>
@@ -129,6 +142,31 @@ export function materialRecords(
                 left.index - right.index,
         )
         .map(({ record }) => record);
+}
+
+/**
+ * The components `summaries` link to (their `components` ids), named from
+ * what the response already holds: the component objects the summaries
+ * observe, the components of the coverage rows of `synthesis`, and `extra`.
+ * A linked component none of them names is absent.
+ */
+export function componentRefs(
+    summaries: Iterable<CharacterizationSummary>,
+    synthesis: SynthesisResponse | null,
+    extra: Iterable<Ref | null | undefined> = [],
+): Map<string, Ref> {
+    const refs = new Map<string, Ref>();
+    const add = (ref: Ref | null | undefined): void => {
+        if (ref && ref.model === "component" && !refs.has(ref.id)) {
+            refs.set(ref.id, ref);
+        }
+    };
+    for (const summary of summaries) summary.objects.forEach(add);
+    for (const row of synthesis?.coverage ?? []) {
+        for (const entry of row.components) add(entry.component);
+    }
+    for (const ref of extra) add(ref);
+    return refs;
 }
 
 export function materialCounts(
@@ -189,7 +227,7 @@ export function groupByComponent(
     const groups = new Map<string, MaterialGroup>();
     const rest: MaterialRecord[] = [];
     for (const record of records) {
-        const components = componentsOf(record.summary);
+        const components = record.components;
         if (components.length === 0) rest.push(record);
         for (const component of components) {
             const group = groups.get(component.id) ?? {
@@ -212,11 +250,6 @@ function sortedLike(
     return [...members].sort(
         (left, right) => order.indexOf(left) - order.indexOf(right),
     );
-}
-
-/** The components an identified material observes. */
-export function componentsOf(summary: CharacterizationSummary): Ref[] {
-    return summary.objects.filter((object) => object.model === "component");
 }
 
 /** Values of `lists` once each (by id), in first-seen order. */
@@ -242,9 +275,9 @@ export function unionEvidence(records: readonly MaterialRecord[]): NamedRef[] {
     return unionById(records.map((record) => record.summary.evidence));
 }
 
-/** The components `records` observe, once each. */
+/** The components `records` link to, once each. */
 export function unionComponents(records: readonly MaterialRecord[]): Ref[] {
-    return unionById(records.map((record) => componentsOf(record.summary)));
+    return unionById(records.map((record) => record.components));
 }
 
 /** The colours `records` carry, once each. */

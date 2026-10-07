@@ -8,7 +8,10 @@ import {
     ANNOUNCE_KEY,
     SELECTION_HINTS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    analysisKey,
+    characterizationKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     label,
@@ -20,6 +23,10 @@ import type { SelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/comp
 
 function key(n: number): string {
     return analysisKey(uuid(n));
+}
+
+function material(n: number): string {
+    return characterizationKey(uuid(500 + n));
 }
 
 function removeKey(item: string): void {
@@ -196,5 +203,77 @@ describe("useSelectionToggle", () => {
         toggle.clearAll();
         expect(toggle.lastBulk.value).toBeNull();
         expect(announce).not.toHaveBeenCalled();
+    });
+
+    describe("counts items by kind", () => {
+        it("says analyses, identified materials or items in the announcements", () => {
+            toggle.toggleAll([material(1), material(2)]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "2 identified materials added (A1 to A2). Selection: 2 / 30.",
+            );
+            toggle.toggleAll([material(1), material(2)]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "2 identified materials removed from the Selection.",
+            );
+            toggle.dismiss();
+            toggle.toggleAll([key(1), material(3)]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "2 items added (A1 to A2). Selection: 2 / 30.",
+            );
+            toggle.toggleAll([key(1), material(3)]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "2 items removed from the Selection.",
+            );
+        });
+
+        it("says one analysis, one identified material or one item", () => {
+            toggle.toggleAll([material(1), key(1)]);
+            toggle.dismiss();
+            toggle.toggleAll([material(1)]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "1 identified material removed from the Selection.",
+            );
+        });
+
+        it("names the kind in the blocked reason", () => {
+            toggle.toggleAll(Array.from({ length: 29 }, (_, n) => key(n + 1)));
+            expect(toggle.blockedReason([material(1), material(2)])).toBe(
+                "2 identified materials to add, 1 place left",
+            );
+            expect(toggle.blockedReason([key(100), material(2)])).toBe(
+                "2 items to add, 1 place left",
+            );
+        });
+
+        it("reports what an undo could not restore", () => {
+            const store = useExplorerStore();
+            toggle.toggleAll([key(1), key(2), key(3)]);
+            toggle.toggleAll([key(1), key(2), key(3)]);
+            store.addManyToBasket(
+                Array.from({ length: 29 }, (_, n) => key(n + 10)),
+            );
+            expect(store.basketFree).toBe(1);
+            announce.mockReset();
+            toggle.undo();
+            expect(announce).toHaveBeenCalledTimes(1);
+            expect(announce.mock.calls[0][0]).toContain(
+                "2 items could not be restored (Selection full).",
+            );
+            expect(store.basket).toHaveLength(30);
+        });
+
+        it("says one item could not be restored", () => {
+            const store = useExplorerStore();
+            toggle.toggleAll([key(1), key(2)]);
+            toggle.toggleAll([key(1), key(2)]);
+            store.addManyToBasket(
+                Array.from({ length: 29 }, (_, n) => key(n + 10)),
+            );
+            announce.mockReset();
+            toggle.undo();
+            expect(announce.mock.calls[0][0]).toContain(
+                "1 item could not be restored (Selection full).",
+            );
+        });
     });
 });
