@@ -57,6 +57,7 @@ import json
 from importlib.metadata import version
 from django.conf import settings
 from django.db import connection
+from django.db.migrations.loader import MigrationLoader
 
 db = settings.DATABASES["default"]
 with connection.cursor() as cursor:
@@ -66,12 +67,20 @@ with connection.cursor() as cursor:
     tiles = cursor.fetchone()[0]
     cursor.execute("SELECT DISTINCT ON (app) app, name FROM django_migrations ORDER BY app, id DESC")
     migrations = dict(cursor.fetchall())
+loader = MigrationLoader(connection)
+on_disk = set(loader.disk_migrations)
+apps_on_disk = {app for app, _ in on_disk}
+ahead = sorted(
+    f"{app}.{name}"
+    for app, name in loader.applied_migrations
+    if app in apps_on_disk and (app, name) not in on_disk
+)
 print("MSSNAP " + json.dumps({
     "host": db.get("HOST") or "", "port": str(db.get("PORT") or ""),
     "name": db["NAME"], "user": db["USER"], "password": db.get("PASSWORD") or "",
     "media_root": str(settings.MEDIA_ROOT), "uploads": settings.UPLOADED_FILES_DIR,
     "arches": version("arches"), "resources": resources, "tiles": tiles,
-    "migrations": migrations,
+    "migrations": migrations, "migrations_ahead_of_code": ahead,
 }))
 ' | sed -n 's/^MSSNAP //p' | tail -n 1)"
 [ -n "$info_line" ] || die "manage.py did not return the settings"
@@ -88,6 +97,11 @@ UPLOADS="$(field uploads)"
 # The password leaves the JSON here: later child processes (the manifest
 # writer) inherit INFO_LINE and must not see it.
 info_line="$(printf '%s' "$info_line" | "$PY" -c 'import json,sys; v=json.load(sys.stdin); v.pop("password", None); print(json.dumps(v))')"
+
+AHEAD="$(field migrations_ahead_of_code)"
+if [ "$AHEAD" != "[]" ]; then
+  log "WARNING: the database is ahead of the checked-out code: $(printf '%s' "$AHEAD" | "$PY" -c 'import json,sys; print(", ".join(json.load(sys.stdin)))'); the snapshot will be refused by an image built from this commit."
+fi
 
 [ -d "$MEDIA_ROOT/$UPLOADS" ] || die "no uploaded files directory: $MEDIA_ROOT/$UPLOADS"
 
@@ -125,6 +139,7 @@ manifest = {
     "pg_dump_version": os.environ["PG_DUMP_VERSION"],
     "counts": {"resource_instances": info["resources"], "tiles": info["tiles"]},
     "migrations": info["migrations"],
+    "migrations_ahead_of_code": info["migrations_ahead_of_code"],
     "files": {
         "db.dump": {"sha256": os.environ["DB_SHA"], "bytes": int(os.environ["DB_SIZE"])},
         "media.tar": {"sha256": os.environ["MEDIA_SHA"], "bytes": int(os.environ["MEDIA_SIZE"])},
