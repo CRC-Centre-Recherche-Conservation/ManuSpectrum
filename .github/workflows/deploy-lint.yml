@@ -47,7 +47,7 @@ jobs:
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
-          stack='deploy/(docker|compose|certs|logrotate|systemd)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|pyproject\.toml$|uv\.lock$'
+          stack='deploy/(docker|compose|certs|logrotate|systemd)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
           build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/rewrite_dev_origin\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
@@ -164,8 +164,8 @@ jobs:
           secrets="$RUNNER_TEMP/secrets"
           media="$RUNNER_TEMP/media"
           certs="$RUNNER_TEMP/certs"
-          install -d "$media/uploadedfiles" "$certs/acme-webroot" "$RUNNER_TEMP/nginx-logs"
-          bash deploy/certs/make-local-ca.sh "$certs" manuspectrum.test
+          install -d "$media/uploadedfiles" "$certs/acme-webroot" "$certs/live" "$RUNNER_TEMP/nginx-logs"
+          CA_DIR="$certs/ca" bash deploy/certs/make-local-ca.sh "$certs/live" manuspectrum.test
           make -C deploy secrets SECRETS_DIR="$secrets"
           sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
               -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
@@ -174,7 +174,7 @@ jobs:
               -e "s#^SECRETS_DIR=.*#SECRETS_DIR=$secrets#" \
               -e "s#^CERTS_DIR=.*#CERTS_DIR=$certs#" \
               -e "s#^NGINX_LOG_HOST_DIR=.*#NGINX_LOG_HOST_DIR=$RUNNER_TEMP/nginx-logs#" \
-              -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca.crt#" \
+              -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca/ca.crt#" \
               deploy/compose/.env.example > "$ENV_FILE"
 
       - name: First installation

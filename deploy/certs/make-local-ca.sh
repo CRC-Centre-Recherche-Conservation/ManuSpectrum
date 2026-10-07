@@ -4,13 +4,17 @@
 # the self-signed placeholder that lets nginx start before the first ACME run.
 #
 #   make-local-ca.sh DIR NAME [NAME...]
-#       Keeps DIR/ca.crt and DIR/ca.key when they exist (CA: RSA 4096, 10
+#       Keeps CA_DIR/ca.crt and CA_DIR/ca.key when they exist (CA: RSA 4096, 10
 #       years), else creates them. Always issues a new server certificate for
 #       every NAME (RSA 2048, 397 days, SAN = every NAME, CN = first NAME)
 #       into DIR/fullchain.pem (server certificate then CA) and
 #       DIR/privkey.pem.
 #   make-local-ca.sh --self-signed DIR NAME [NAME...]
 #       Writes only DIR/fullchain.pem and DIR/privkey.pem, self-signed, 30 days.
+#
+# CA_DIR (environment) defaults to DIR. The Makefile sets it apart from DIR
+# (CERTS_DIR/ca and CERTS_DIR/live) so that the directory nginx mounts never
+# holds the CA key.
 #
 # Needs openssl >= 3.0 on the PATH (x509 -copy_extensions). Exit 2: usage.
 set -euo pipefail
@@ -56,6 +60,7 @@ if [ "$major" -lt 3 ] 2>/dev/null; then
 fi
 
 umask 077
+CA_DIR="${CA_DIR:-$DIR}"
 mkdir -p "$DIR"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -82,23 +87,24 @@ if [ "$SELF_SIGNED" -eq 1 ]; then
   exit 0
 fi
 
-if [ -s "$DIR/ca.crt" ] && [ -s "$DIR/ca.key" ]; then
-  echo "keeping the existing CA in $DIR"
+if [ -s "$CA_DIR/ca.crt" ] && [ -s "$CA_DIR/ca.key" ]; then
+  echo "keeping the existing CA in $CA_DIR"
 else
   openssl req -x509 -newkey rsa:4096 -nodes -keyout "$WORK/ca.key" -out "$WORK/ca.crt" \
     -days 3650 -subj "/CN=ManuSpectrum local CA" \
     -addext "basicConstraints=critical,CA:TRUE" \
     -addext "keyUsage=critical,keyCertSign,cRLSign" \
     -addext "subjectKeyIdentifier=hash" 2>/dev/null
-  install -m 0600 "$WORK/ca.key" "$DIR/ca.key"
-  install -m 0644 "$WORK/ca.crt" "$DIR/ca.crt"
+  mkdir -p "$CA_DIR"
+  install -m 0600 "$WORK/ca.key" "$CA_DIR/ca.key"
+  install -m 0644 "$WORK/ca.crt" "$CA_DIR/ca.crt"
 fi
 
 new_csr "$WORK/key.pem" "$WORK/server.csr"
-openssl x509 -req -in "$WORK/server.csr" -CA "$DIR/ca.crt" -CAkey "$DIR/ca.key" \
+openssl x509 -req -in "$WORK/server.csr" -CA "$CA_DIR/ca.crt" -CAkey "$CA_DIR/ca.key" \
   -CAcreateserial -CAserial "$WORK/ca.srl" -days 397 -copy_extensions copy \
   -out "$WORK/server.crt" 2>/dev/null
-cat "$WORK/server.crt" "$DIR/ca.crt" >"$WORK/fullchain.pem"
-openssl verify -CAfile "$DIR/ca.crt" "$WORK/server.crt" >/dev/null
+cat "$WORK/server.crt" "$CA_DIR/ca.crt" >"$WORK/fullchain.pem"
+openssl verify -CAfile "$CA_DIR/ca.crt" "$WORK/server.crt" >/dev/null
 install_pair "$WORK/fullchain.pem" "$WORK/key.pem"
 echo "issued $DIR/fullchain.pem for: $*"

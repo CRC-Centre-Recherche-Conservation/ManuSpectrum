@@ -66,7 +66,8 @@ def render(*files, profiles=()):
         media = Path(tmp) / "media"
         (media / "uploadedfiles").mkdir(parents=True)
         certs = Path(tmp) / "certs"
-        (certs / "acme-webroot").mkdir(parents=True)
+        for sub in ("acme-webroot", "live", "ca", "letsencrypt"):
+            (certs / sub).mkdir(parents=True)
         logs = Path(tmp) / "nginx-logs"
         logs.mkdir()
         env = (COMPOSE_DIR / ".env.example").read_text()
@@ -149,9 +150,11 @@ class ComposeStackTests(unittest.TestCase):
                     self.assertTrue(mounts[target]["read_only"], target)
                 self.assertEqual(mounts["/srv/static"]["source"], "static")
                 self.assertTrue(mounts["/srv/media"]["source"].endswith("/media"))
+                certs = mounts["/etc/nginx/certs"]["source"]
+                self.assertTrue(certs.endswith("/certs/live"), certs)
                 self.assertEqual(
                     mounts["/var/www/acme"]["source"],
-                    mounts["/etc/nginx/certs"]["source"] + "/acme-webroot",
+                    certs[: -len("/live")] + "/acme-webroot",
                 )
                 logs = mounts["/var/log/manuspectrum"]
                 self.assertFalse(logs.get("read_only"))
@@ -194,6 +197,27 @@ class ComposeStackTests(unittest.TestCase):
         self.assertRegex(
             (COMPOSE_DIR / ".env.example").read_text(), r"(?m)^LOCAL_CA_CERT=$"
         )
+
+    def test_only_nginx_and_certbot_see_the_certificate_directories(self):
+        for label, stack in self.stacks.items():
+            for name, service in stack["services"].items():
+                for v in service.get("volumes", []):
+                    source = str(v.get("source", ""))
+                    with self.subTest(stack=label, service=name, source=source):
+                        if "/certs" not in source:
+                            continue
+                        self.assertIn(name, ("nginx", "certbot"))
+                        self.assertNotRegex(source, r"/certs(/ca)?$")
+                        self.assertNotIn("/ca", source.split("/certs", 1)[1])
+                        if source.endswith("/live"):
+                            self.assertEqual(
+                                v["target"],
+                                (
+                                    "/etc/nginx/certs"
+                                    if name == "nginx"
+                                    else "/certs/live"
+                                ),
+                            )
 
     def test_nginx_waits_for_a_healthy_web(self):
         depends = self.base["services"]["nginx"]["depends_on"]
@@ -337,7 +361,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 2 + 1)
+        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1)
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -508,12 +532,23 @@ class ComposeStackTests(unittest.TestCase):
         self.assertEqual(certbot["restart"], "no")
         self.assertEqual([t.split(":")[0] for t in certbot["tmpfs"]], ["/tmp"])
 
-    def test_certbot_mounts_the_certificates_writable_and_the_hook_read_only(self):
+    def test_certbot_mounts_three_certificate_directories_and_the_hook_read_only(self):
         certbot = self.acme["services"]["certbot"]
         mounts = {v["target"]: v for v in certbot["volumes"]}
-        self.assertEqual(set(mounts), {"/certs", "/hooks/deploy-hook.sh"})
-        self.assertFalse(mounts["/certs"].get("read_only"))
-        self.assertTrue(mounts["/certs"]["source"].endswith("certs"))
+        self.assertEqual(
+            set(mounts),
+            {
+                "/certs/live",
+                "/certs/letsencrypt",
+                "/certs/acme-webroot",
+                "/hooks/deploy-hook.sh",
+            },
+        )
+        for name in ("live", "letsencrypt", "acme-webroot"):
+            self.assertFalse(mounts[f"/certs/{name}"].get("read_only"))
+            self.assertTrue(
+                mounts[f"/certs/{name}"]["source"].endswith(f"/certs/{name}")
+            )
         self.assertTrue(mounts["/hooks/deploy-hook.sh"]["read_only"])
         self.assertIn("--config-dir=/certs/letsencrypt", certbot["entrypoint"])
         self.assertFalse(certbot.get("secrets"))
@@ -537,6 +572,43 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertRegex(makefile, r"(?m)^\t.*exec nginx nginx -s reload$")
         self.assertIn("certs/make-local-ca.sh", makefile)
         self.assertRegex(makefile, r"(?m)^certs-local:")
+
+    def test_cert_renew_reloads_on_a_change_and_exits_with_certbots_status(self):
+        cases = [
+            ("changed, certbot fails", "echo new > $$CERT; exit 3", True, False),
+            ("changed, certbot succeeds", "echo new > $$CERT", True, True),
+            ("unchanged, certbot succeeds", "true", False, True),
+            ("unchanged, certbot fails", "exit 3", False, False),
+        ]
+        for label, certbot, reloaded, succeeds in cases:
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                (tmp / "live").mkdir()
+                cert = tmp / "live" / "fullchain.pem"
+                cert.write_text("old\n")
+                env = (COMPOSE_DIR / ".env.example").read_text()
+                env = re.sub(r"(?m)^CERT_MODE=.*$", "CERT_MODE=acme", env)
+                env = re.sub(r"(?m)^CERTS_DIR=.*$", f"CERTS_DIR={tmp}", env)
+                (tmp / "env").write_text(env)
+                fake = tmp / "compose"
+                fake.write_text(f'#!/bin/sh\necho "$@" >> {tmp}/calls\n')
+                fake.chmod(0o755)
+                result = subprocess.run(
+                    [
+                        "make",
+                        "-C",
+                        str(DEPLOY_DIR),
+                        "cert-renew",
+                        f"ENV_FILE={tmp}/env",
+                        f"COMPOSE={fake}",
+                        f"CERTBOT=env CERT={cert} sh -c '{certbot}'",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                calls = (tmp / "calls").read_text() if (tmp / "calls").exists() else ""
+                self.assertEqual("nginx -s reload" in calls, reloaded, result.stderr)
+                self.assertEqual(result.returncode == 0, succeeds, result.stderr)
 
     def test_acme_targets_refuse_outside_acme_mode_or_without_a_contact(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text()

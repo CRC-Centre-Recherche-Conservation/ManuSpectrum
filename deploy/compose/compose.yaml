@@ -304,7 +304,7 @@ services:
       # The site's own error page, shared with Django (self-contained).
       - {type: bind, source: ../../manuspectrum/templates/errors/500.htm, target: /etc/nginx/site-errors/500.htm, read_only: true}
       - type: bind
-        source: ${CERTS_DIR:?set CERTS_DIR in .env}
+        source: ${CERTS_DIR:?set CERTS_DIR in .env}/live
         target: /etc/nginx/certs
         read_only: true
         bind:
@@ -343,9 +343,10 @@ services:
 
   # Issues and renews the Let's Encrypt certificate (CERT_MODE=acme). Never
   # started by `up`: `make cert-init` and `make cert-renew` run it once per
-  # call. State, logs and the issued files live in CERTS_DIR (webroot
-  # acme-webroot/, account and lineages letsencrypt/); the deploy hook copies
-  # the lineage to CERTS_DIR/fullchain.pem and privkey.pem, which nginx reads.
+  # call. It sees three subdirectories of CERTS_DIR and no more: the webroot
+  # acme-webroot/, the account and lineages letsencrypt/ (never mounted into
+  # nginx), and live/, where the deploy hook copies the lineage as
+  # fullchain.pem and privkey.pem, the only files nginx reads.
   certbot:
     <<: *service
     profiles: [acme]
@@ -365,8 +366,18 @@ services:
       - "/tmp:rw,nosuid,nodev,size=16m,mode=1777"
     volumes:
       - type: bind
-        source: ${CERTS_DIR:?set CERTS_DIR in .env}
-        target: /certs
+        source: ${CERTS_DIR:?set CERTS_DIR in .env}/live
+        target: /certs/live
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CERTS_DIR}/letsencrypt
+        target: /certs/letsencrypt
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CERTS_DIR}/acme-webroot
+        target: /certs/acme-webroot
         bind:
           create_host_path: false
       - {type: bind, source: ./certbot/deploy-hook.sh, target: /hooks/deploy-hook.sh, read_only: true}

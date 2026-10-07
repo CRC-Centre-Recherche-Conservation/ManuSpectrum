@@ -251,7 +251,7 @@ print(result.get(timeout=120))
   ok "request id followed the task into the worker"
 }
 
-# nginx over HTTPS, from the host: the published port, the CA of CERTS_DIR when
+# nginx over HTTPS, from the host: the published port, the CA of CERTS_DIR/ca when
 # it holds one (CERT_MODE=local) and the public name pinned to 127.0.0.1.
 edge_init() {
   PUBLIC="$(env_value DOMAIN_NAMES | cut -d' ' -f1)"
@@ -260,7 +260,7 @@ edge_init() {
   [ -n "$PUBLIC" ] || fail "DOMAIN_NAMES is empty in $ENV_FILE"
   EDGE_CURL_OPTS=(--max-time 60 --resolve "$PUBLIC:$HTTPS_PORT:127.0.0.1" --resolve "$PUBLIC:$HTTP_PORT:127.0.0.1")
   local ca
-  ca="$(env_value CERTS_DIR)/ca.crt"
+  ca="$(env_value CERTS_DIR)/ca/ca.crt"
   if [ -f "$ca" ]; then EDGE_CURL_OPTS+=(--cacert "$ca"); fi
 }
 edge_url() { printf 'https://%s:%s%s' "$PUBLIC" "$HTTPS_PORT" "$1"; }
@@ -363,8 +363,8 @@ print(",".join(sorted(found)))
   expect "the internal redirect is not exposed" 0 "$(header_count location "$headers")"
   expect "uploaded file direct path" 404 "$(edge_code '/files/uploadedfiles/smoke%20file%20%C3%A9.csv')"
 
-  headers="$(edge_headers /iiifserver/iiif/3 -H 'Origin: https://viewer.example')"
-  expect "/iiifserver/iiif/3" "HTTP/2 200" "$(status_line "$headers")"
+  headers="$(edge_headers "/iiifserver/iiif/3/$EDGE_IMAGE_NAME/info.json" -H 'Origin: https://viewer.example')"
+  expect "/iiifserver/ info.json" "HTTP/2 200" "$(status_line "$headers")"
   expect "one Access-Control-Allow-Origin on /iiifserver/" 1 "$(header_count access-control-allow-origin "$headers")"
   expect "Access-Control-Allow-Origin value" "*" "$(header_value access-control-allow-origin "$headers")"
   expect "/iiifserver/admin" 404 "$(edge_code /iiifserver/admin)"

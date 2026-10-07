@@ -33,7 +33,7 @@ assert() { # assert DESCRIPTION CONDITION-EXIT-CODE
 
 TMP="$(mktemp -d)"
 CERTS="$TMP/certs"
-mkdir -p "$CERTS"
+mkdir -p "$CERTS/live" "$CERTS/letsencrypt" "$CERTS/acme-webroot"
 cleanup() {
   docker rm -f "$RUN_ID-nginx" "$RUN_ID-pebble" >/dev/null 2>&1
   docker network rm "$RUN_ID" >/dev/null 2>&1
@@ -53,7 +53,8 @@ certbot() { # certbot ARGS... : the `certbot` service, pointed at Pebble
   docker run --rm --network "$RUN_ID" --user "$(id -u):$(id -g)" --read-only \
     --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,size=16m,mode=1777 \
     -e HOME=/tmp -e REQUESTS_CA_BUNDLE=/pebble-ca.pem \
-    -v "$CERTS:/certs" -v "$HOOK:/hooks/deploy-hook.sh:ro" \
+    -v "$CERTS/live:/certs/live" -v "$CERTS/letsencrypt:/certs/letsencrypt" \
+    -v "$CERTS/acme-webroot:/certs/acme-webroot" -v "$HOOK:/hooks/deploy-hook.sh:ro" \
     -v "$TMP/pebble-ca.pem:/pebble-ca.pem:ro" \
     --entrypoint certbot "$CERTBOT_IMAGE" \
     --config-dir=/certs/letsencrypt --logs-dir=/certs/letsencrypt/logs --work-dir=/tmp/certbot "$@"
@@ -67,9 +68,8 @@ docker start "$RUN_ID-pebble" >/dev/null
 assert "Pebble started" $?
 
 # Placeholder certificate, as `make cert-init` writes it.
-install -d -m 0755 "$CERTS/acme-webroot"
-"$HERE/../make-local-ca.sh" --self-signed "$CERTS" "$NAME" >/dev/null
-placeholder_sum="$(cksum <"$CERTS/fullchain.pem")"
+"$HERE/../make-local-ca.sh" --self-signed "$CERTS/live" "$NAME" >/dev/null
+placeholder_sum="$(cksum <"$CERTS/live/fullchain.pem")"
 
 cat >"$TMP/nginx.conf" <<'CONF'
 pid /tmp/nginx.pid;
@@ -97,9 +97,12 @@ http {
 CONF
 docker run -d --name "$RUN_ID-nginx" --network "$RUN_ID" --network-alias "$NAME" \
   --user "$(id -u):$(id -g)" --read-only --cap-drop ALL --tmpfs /tmp:rw,size=16m,mode=1777 \
-  -v "$TMP/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$CERTS:/etc/nginx/certs:ro" \
+  -v "$TMP/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$CERTS/live:/etc/nginx/certs:ro" \
   -v "$CERTS/acme-webroot:/var/www/acme:ro" "$NGINX_IMAGE" >/dev/null
 assert "nginx started with the placeholder certificate" $?
+[ "$(docker exec "$RUN_ID-nginx" ls /etc/nginx/certs | sort | tr '\n' ' ')" = 'fullchain.pem privkey.pem ' ] &&
+  ! docker exec "$RUN_ID-nginx" test -e /etc/nginx/certs/letsencrypt
+assert "nginx sees the served pair and nothing of the certbot state" $?
 sleep 2
 [[ "$(issuer_served)" == *"CN = $NAME"* || "$(issuer_served)" == *"CN=$NAME"* ]]
 assert "the placeholder is served before issuance" $?
@@ -110,17 +113,17 @@ out="$(certbot certonly --webroot -w /certs/acme-webroot --cert-name manuspectru
 rc=$?
 [ "$rc" -eq 0 ] || echo "$out" >&2
 assert "certbot certonly --webroot issues a certificate from Pebble" "$rc"
-[[ "$out" == *"installed /certs/letsencrypt/live/manuspectrum into /certs"* ]]
+[[ "$out" == *"installed /certs/letsencrypt/live/manuspectrum into /certs/live"* ]]
 assert "the deploy hook ran on issuance" $?
 
-[ "$(cksum <"$CERTS/fullchain.pem")" != "$placeholder_sum" ]
+[ "$(cksum <"$CERTS/live/fullchain.pem")" != "$placeholder_sum" ]
 assert "fullchain.pem was replaced by the hook" $?
-[ "$(stat -c %a "$CERTS/fullchain.pem" "$CERTS/privkey.pem" | sort -u)" = 640 ]
+[ "$(stat -c %a "$CERTS/live/fullchain.pem" "$CERTS/live/privkey.pem" | sort -u)" = 640 ]
 assert "fullchain.pem and privkey.pem are mode 0640" $?
-[ "$(openssl x509 -in "$CERTS/fullchain.pem" -noout -pubkey)" = \
-  "$(openssl pkey -in "$CERTS/privkey.pem" -pubout)" ]
+[ "$(openssl x509 -in "$CERTS/live/fullchain.pem" -noout -pubkey)" = \
+  "$(openssl pkey -in "$CERTS/live/privkey.pem" -pubout)" ]
 assert "the installed key matches the installed certificate" $?
-[ -z "$(find "$CERTS" -maxdepth 1 -name '.*.new')" ]
+[ -z "$(find "$CERTS/live" -maxdepth 1 -name '.*.new')" ]
 assert "the hook leaves no temporary file" $?
 
 docker exec "$RUN_ID-nginx" nginx -s reload 2>/dev/null
@@ -129,15 +132,15 @@ sleep 1
 [[ "$(issuer_served)" == *Pebble* ]]
 assert "after the reload nginx serves the certificate issued by Pebble" $?
 
-issued_sum="$(cksum <"$CERTS/fullchain.pem")"
+issued_sum="$(cksum <"$CERTS/live/fullchain.pem")"
 out="$(certbot renew --non-interactive 2>&1)"
-[ "$(cksum <"$CERTS/fullchain.pem")" = "$issued_sum" ] && [[ "$out" != *"installed /certs"* ]]
+[ "$(cksum <"$CERTS/live/fullchain.pem")" = "$issued_sum" ] && [[ "$out" != *"installed /certs/letsencrypt"* ]]
 assert "certbot renew leaves a certificate that is not due alone, hook not run" $?
 
 out="$(certbot renew --non-interactive --force-renewal 2>&1)"
 rc=$?
 [ "$rc" -eq 0 ] || echo "$out" >&2
-[[ "$out" == *"installed /certs/letsencrypt/live/manuspectrum into /certs"* ]] && [ "$(cksum <"$CERTS/fullchain.pem")" != "$issued_sum" ]
+[[ "$out" == *"installed /certs/letsencrypt/live/manuspectrum into /certs/live"* ]] && [ "$(cksum <"$CERTS/live/fullchain.pem")" != "$issued_sum" ]
 assert "certbot renew --force-renewal runs the hook again and replaces the files" $?
 
 # systemd units, placeholders substituted, checked by systemd-analyze.

@@ -63,5 +63,11 @@ check "--self-signed writes fullchain.pem and privkey.pem only" bash -c "[ \"\$(
 check "--self-signed privkey is 0640" mode_is 640 "$S/privkey.pem"
 check "--self-signed carries the SAN" bash -c "openssl x509 -in '$S/fullchain.pem' -noout -ext subjectAltName | grep -q 'DNS:manuspectrum.test'"
 
+L="$TMP/split"
+check "CA_DIR keeps the CA apart from the served pair" env CA_DIR="$L/ca" "$SCRIPT" "$L/live" manuspectrum.test
+check "split: live/ holds fullchain.pem and privkey.pem only" bash -c "[ \"\$(ls '$L/live' | sort | tr '\n' ' ')\" = 'fullchain.pem privkey.pem ' ]"
+check "split: ca/ holds ca.crt and ca.key only" bash -c "[ \"\$(ls '$L/ca' | sort | tr '\n' ' ')\" = 'ca.crt ca.key ' ]"
+check "split: the chain verifies against ca/ca.crt" openssl verify -CAfile "$L/ca/ca.crt" "$L/live/fullchain.pem"
+
 echo "1..$N"
 exit "$FAILED"
