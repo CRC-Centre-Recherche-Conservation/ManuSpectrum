@@ -268,7 +268,9 @@ edge_get() { curl -sS "${EDGE_CURL_OPTS[@]}" "${@:2}" "$(edge_url "$1")"; } # ed
 edge_code() { edge_get "$1" -o /dev/null -w '%{http_code}' "${@:2}"; }
 edge_headers() { edge_get "$1" -o /dev/null -D - "${@:2}" | tr -d '\r'; }
 header_count() { grep -ci "^$1:" <<<"$2" || true; } # header_count NAME HEADERS
-header_value() { sed -n "s/^$1: *//Ip" <<<"$2" | head -n 1; } # header_value NAME HEADERS
+header_value() { sed -n "s/^$1: *//Ip" <<<"$2" | head -n 1 | tr -d '\r' | sed 's/[[:space:]]*$//'; } # header_value NAME HEADERS
+# The status line without CR or trailing blanks (HTTP/2 has an empty reason: "HTTP/2 200 ").
+status_line() { head -n 1 <<<"$1" | tr -d '\r' | sed 's/[[:space:]]*$//'; }
 
 # Writes one uploaded file, one image and the File row of the file; EDGE_FILE_ID
 # is the row's id. cleanup_edge removes all three, also when a check fails.
@@ -330,7 +332,7 @@ print(",".join(sorted(found)))
   expect "/readyz through nginx" 404 "$(edge_code /readyz)"
 
   headers="$(edge_headers /en/)"
-  expect "/en/ through nginx" "HTTP/2 200" "$(head -n 1 <<<"$headers")"
+  expect "/en/ through nginx" "HTTP/2 200" "$(status_line "$headers")"
   for name in strict-transport-security permissions-policy content-security-policy-report-only \
     x-content-type-options x-frame-options referrer-policy; do
     expect "header $name sent once" 1 "$(header_count "$name" "$headers")"
@@ -340,7 +342,7 @@ print(",".join(sorted(found)))
   for name in /en/api/resource/x /en/api/tile/x/y /en/api/tile-list-create/x/y/z /en/api/tile-new-resource/x/y /en/silk/requests/; do
     headers="$(edge_headers "$name")"
     expect "$name denied by nginx" "404 0" \
-      "$(head -n 1 <<<"$headers" | cut -d' ' -f2) $(header_count x-request-id "$headers")"
+      "$(status_line "$headers" | cut -d' ' -f2) $(header_count x-request-id "$headers")"
   done
   uuid="$(python3 -c 'import uuid; print(uuid.uuid4())')"
   headers="$(edge_headers "/en/api/tiles/$uuid")"
@@ -357,12 +359,12 @@ print(",".join(sorted(found)))
   body="$(edge_get "/en/files/$EDGE_FILE_ID"; echo x)"
   expect "uploaded file through FileView and nginx" $'edge,smoke\n1,2\nx' "$body"
   headers="$(edge_headers "/en/files/$EDGE_FILE_ID")"
-  expect "uploaded file status" "HTTP/2 200" "$(head -n 1 <<<"$headers")"
+  expect "uploaded file status" "HTTP/2 200" "$(status_line "$headers")"
   expect "the internal redirect is not exposed" 0 "$(header_count location "$headers")"
   expect "uploaded file direct path" 404 "$(edge_code '/files/uploadedfiles/smoke%20file%20%C3%A9.csv')"
 
   headers="$(edge_headers /iiifserver/iiif/3 -H 'Origin: https://viewer.example')"
-  expect "/iiifserver/iiif/3" "HTTP/2 200" "$(head -n 1 <<<"$headers")"
+  expect "/iiifserver/iiif/3" "HTTP/2 200" "$(status_line "$headers")"
   expect "one Access-Control-Allow-Origin on /iiifserver/" 1 "$(header_count access-control-allow-origin "$headers")"
   expect "Access-Control-Allow-Origin value" "*" "$(header_value access-control-allow-origin "$headers")"
   expect "/iiifserver/admin" 404 "$(edge_code /iiifserver/admin)"
@@ -372,7 +374,7 @@ print(",".join(sorted(found)))
     "$(web_public_info "$PUBLIC" | tail -n 1)"
 
   headers="$(edge_headers /en/auth/ -H 'X-Forwarded-Ssl: on' -H 'X-Forwarded-Protocol: ssl')"
-  expect "forged scheme headers" "HTTP/2 200" "$(head -n 1 <<<"$headers")"
+  expect "forged scheme headers" "HTTP/2 200" "$(status_line "$headers")"
 
   rid="/en/smoke-edge-$RANDOM$RANDOM/"
   headers="$(edge_headers "$rid")"
