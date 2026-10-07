@@ -9,14 +9,11 @@ may read, links off the tiles by role (D6), and a resource outside
 """
 
 import datetime
-import functools
 import hashlib
 import html
 import logging
 import re
-import sys
 import textwrap
-import unicodedata
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -73,6 +70,7 @@ from manuspectrum.views.explorer.values import (
     dataset_of,
     element_symbols,
     file_entries,
+    fold,
     label,
     name_of,
     plots,
@@ -81,6 +79,7 @@ from manuspectrum.views.explorer.values import (
     string_texts,
     value_refs,
 )
+from manuspectrum.views.explorer.swatches import colour_refs, colour_swatch
 from manuspectrum.views.summary_service import GraphIndex, _date
 
 FACET_GROUPS = (
@@ -106,45 +105,6 @@ CHARACTERIZATION_ROLES = {
     "element": "elements",
 }
 TECHNIQUE_PALETTE = 10
-SWATCHES = {
-    "blue": "royalblue",
-    "bleu": "royalblue",
-    "azur": "royalblue",
-    "red": "firebrick",
-    "rouge": "firebrick",
-    "vermillon": "orangered",
-    "vermilion": "orangered",
-    "green": "forestgreen",
-    "vert": "forestgreen",
-    "gold": "goldenrod",
-    "golden": "goldenrod",
-    "or": "goldenrod",
-    "dore": "goldenrod",
-    "silver": "silver",
-    "argent": "silver",
-    "argente": "silver",
-    "white": "white",
-    "blanc": "white",
-    "black": "black",
-    "noir": "black",
-    "yellow": "gold",
-    "jaune": "gold",
-    "brown": "saddlebrown",
-    "brun": "saddlebrown",
-    "marron": "saddlebrown",
-    "beige": "beige",
-    "ochre": "peru",
-    "ocre": "peru",
-    "grey": "grey",
-    "gray": "grey",
-    "gris": "grey",
-    "purple": "purple",
-    "violet": "purple",
-    "pourpre": "purple",
-    "pink": "hotpink",
-    "rose": "hotpink",
-    "orange": "darkorange",
-}
 SWATCH_FACETS = ("colour", "partColour")
 LAZY_FACETS = ("part",)
 PREVIEW_SIZE = 6
@@ -275,26 +235,6 @@ class Values:
 
     def tiles(self, rid, key):
         return self._tiles[str(rid)][key]
-
-
-@functools.cache
-def _combining_marks():
-    return dict.fromkeys(
-        code for code in range(sys.maxunicode + 1) if unicodedata.combining(chr(code))
-    )
-
-
-def fold(text):
-    """*text* without accents, casefolded, for free-text matching.
-
-    The accents are the characters of non-zero canonical combining class
-    left by the NFKD decomposition.
-    """
-    text = text or ""
-    if text.isascii():
-        return text.casefold()
-    decomposed = unicodedata.normalize("NFKD", text)
-    return decomposed.translate(_combining_marks()).casefold()
 
 
 def names(resource_ids, language, user):
@@ -445,35 +385,6 @@ def _canvas_of(annotation):
         canvas = (feature.get("properties") or {}).get("canvas")
         if canvas:
             return canvas
-    return None
-
-
-def colour_swatch(value):
-    """Display colour of a colour concept (``SWATCHES``), the same in every language; None when no label names one.
-
-    Labels are tried in a fixed order whatever the request language: English
-    preferred label, other preferred labels by language, then alternative
-    labels by language; the first colour word found wins.
-    """
-    entries = [
-        entry
-        for item in (value if isinstance(value, list) else [value])
-        if isinstance(item, dict)
-        for entry in item.get("labels") or []
-        if isinstance(entry, dict) and isinstance(entry.get("value"), str)
-    ]
-    entries.sort(
-        key=lambda e: (
-            e.get("valuetype_id") != "prefLabel",
-            e.get("language_id") != FALLBACK_LANGUAGE,
-            e.get("language_id") or "",
-            e["value"],
-        )
-    )
-    for entry in entries:
-        for word in re.split(r"[^a-z]+", fold(entry["value"])):
-            if word in SWATCHES:
-                return SWATCHES[word]
     return None
 
 
@@ -1711,7 +1622,7 @@ def characterization_summaries(
                     [
                         r
                         for v in values.get(c, "colour")
-                        for r in value_refs(v, language)
+                        for r in colour_refs(v, language)
                     ]
                 ),
                 "layers": _unique(

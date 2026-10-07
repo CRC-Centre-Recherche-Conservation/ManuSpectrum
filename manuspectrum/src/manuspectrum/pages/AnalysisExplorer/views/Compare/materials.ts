@@ -5,6 +5,7 @@ import {
 
 import type {
     CharacterizationSummary,
+    ColourRef,
     Label,
     NamedRef,
     RankedValue,
@@ -50,7 +51,7 @@ export interface MaterialGroup {
     node: NodeId;
     name: Label;
     /** The pair's colour; null for a pair without colour and for a component. */
-    colour: ValueRef | null;
+    colour: ColourRef | null;
     records: MaterialRecord[];
 }
 
@@ -247,7 +248,7 @@ export function unionComponents(records: readonly MaterialRecord[]): Ref[] {
 }
 
 /** The colours `records` carry, once each. */
-export function unionColours(records: readonly MaterialRecord[]): ValueRef[] {
+export function unionColours(records: readonly MaterialRecord[]): ColourRef[] {
     return unionById(records.map((record) => record.summary.colours));
 }
 

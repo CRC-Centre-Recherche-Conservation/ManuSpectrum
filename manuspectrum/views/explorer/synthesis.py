@@ -39,7 +39,8 @@ from manuspectrum.views.explorer.service import (
     fold,
     qualified_values,
 )
-from manuspectrum.views.explorer.values import element_symbols, value_refs
+from manuspectrum.views.explorer.swatches import colour_refs
+from manuspectrum.views.explorer.values import element_symbols
 
 SYNTHESIS_ROLES = ["material", "confidence", "colour", "elements", "element_level"]
 
@@ -230,7 +231,7 @@ def _pairs_and_elements(materials, reader, language):
     for c in materials:
         colours = {}
         for stored in values.get(c, "colour"):
-            for ref in value_refs(stored, language):
+            for ref in colour_refs(stored, language):
                 colours.setdefault(ref["id"], ref)
         elements = {}
         for refs, stored, level in qualified[c]["elements"]:

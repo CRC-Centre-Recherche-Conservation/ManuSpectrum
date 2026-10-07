@@ -17,6 +17,7 @@ import {
 import type { EffectScope } from "vue";
 
 import type {
+    ColourRef,
     Item,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -39,7 +40,10 @@ export const C2 = "https://iiif.example/c2";
 export const D1 = uuid(1);
 export const XRF = technique("http://example.org/xrf", "XRF", 1, "xrf");
 export const RAMAN = technique("http://example.org/raman", "Raman", 2, "raman");
-export const BLUE = valueRef("http://example.org/blue", "Blue");
+export const BLUE: ColourRef = {
+    ...valueRef("http://example.org/blue", "Blue"),
+    swatch: null,
+};
 export const AZURITE = valueRef("http://example.org/azurite", "Azurite");
 export const CHALK = valueRef("http://example.org/chalk", "Chalk");
 

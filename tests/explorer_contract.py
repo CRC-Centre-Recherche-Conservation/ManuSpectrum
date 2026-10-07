@@ -8,6 +8,12 @@ payload and the TypeScript types cannot drift silently.
 LABEL = {"value": str, "lang": str}
 REF = {"id": str, "model": str, "name": "Label"}
 VALUE_REF = {"id": str, "uri": str, "label": "Label"}
+COLOUR_REF = {
+    "id": str,
+    "uri": str,
+    "label": "Label",
+    "swatch": (str, type(None)),
+}
 TECHNIQUE = {
     "id": str,
     "uri": str,
@@ -62,6 +68,7 @@ SHAPES = {
     "Label": LABEL,
     "Ref": REF,
     "ValueRef": VALUE_REF,
+    "ColourRef": COLOUR_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
     "FileLayer": FILE_LAYER,
@@ -275,7 +282,7 @@ SHAPES = {
         "materials": list,
     },
     "SynthesisPair": {
-        "colour": ("ValueRef", None),
+        "colour": ("ColourRef", None),
         "material": "ValueRef",
         "elements": list,
         "count": int,

@@ -355,7 +355,9 @@ export function characterization(
                 proportion: null,
             },
         ],
-        colours: [valueRef("http://example.org/red", "Red")],
+        colours: [
+            { ...valueRef("http://example.org/red", "Red"), swatch: null },
+        ],
         layers: [],
         elements: [],
         zone: null,

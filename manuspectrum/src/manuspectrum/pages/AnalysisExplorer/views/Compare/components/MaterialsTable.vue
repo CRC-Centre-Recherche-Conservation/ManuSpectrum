@@ -32,10 +32,10 @@ import {
     unionMaterials,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
 import { selectionSlots } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
-import { swatchOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/colour-swatches.ts";
 
 import type {
     AnalysisHit,
+    ColourRef,
     Label,
     NamedRef,
     RankedValue,
@@ -80,13 +80,13 @@ interface Row {
     open: boolean;
     name: Label;
     /** A pair group's colour and material, drawn apart in its name. */
-    pair: { colour: ValueRef; material: Label } | null;
+    pair: { colour: ColourRef; material: Label } | null;
     rest: string;
     /** A record's full name. */
     title: string | undefined;
     unpublished: boolean;
     certainty: RankedValue | null;
-    colours: ValueRef[];
+    colours: ColourRef[];
     components: Ref[];
     /** A component group's materials, in its Component column. */
     materials: string;
@@ -117,7 +117,7 @@ const FOLIOS_SHOWN = 3;
  * node stands to the focus and to the node previewed, and a mouse resting
  * on it previews that node. A record's name is its materials, its layers
  * and document under it, its full name in the title. A colour shows the
- * swatch of its concept (`swatchOf`), hatched when the list has none. A
+ * swatch the server serves (`colour.swatch`), hatched when the list has none. A
  * cell lists `FOLIOS_SHOWN` folios, a button unfolds the others.
  */
 const props = defineProps<{
@@ -418,9 +418,8 @@ function citingText(n: number): string {
 }
 
 /** The swatch style of a colour; none for a colour without one (hatched). */
-function swatchStyle(colour: ValueRef): Record<string, string> | undefined {
-    const swatch = swatchOf(colour.uri);
-    return swatch ? { "--swatch": swatch } : undefined;
+function swatchStyle(colour: ColourRef): Record<string, string> | undefined {
+    return colour.swatch ? { "--swatch": colour.swatch } : undefined;
 }
 
 function groupToggleLabel(row: Row): string {

@@ -4,6 +4,8 @@
 export type Label = { value: string; lang: string };
 export type Ref = { id: string; model: string; name: Label };
 export type ValueRef = { id: string; uri: string; label: Label };
+/** A colour concept with its display colour: a CSS colour or gradient, by INHA uri then by label word; null when neither names one. */
+export type ColourRef = ValueRef & { swatch: string | null };
 /** A resource named in the request language. */
 export type NamedRef = { id: string; name: Label };
 export type RankedValue = ValueRef & { rank: number };
@@ -48,7 +50,7 @@ export type FacetKey =
     | "element"
     | "layer"
     | "project";
-/** Level of the chain a facet filters: the studied part, the analysis, the identified material. */
+/** Level of the chain a facet filters: the studied component, the analysis, the identified material. */
 export type FacetGroup = "part" | "analysis" | "characterization";
 export type DateRange = { start: string | null; end: string | null };
 
@@ -194,7 +196,7 @@ export interface CharacterizationSummary {
         confidence: RankedValue | null;
         proportion: { value: number; unit: ValueRef | null } | null;
     }[];
-    colours: ValueRef[];
+    colours: ColourRef[];
     layers: ValueRef[];
     elements: { level: RankedValue | null; values: ValueRef[] }[];
     zone: { canvas: string; shape: Shape; source: "own" | "component" } | null;
@@ -495,7 +497,7 @@ export type SynthesisElementRef = ValueRef & { symbol: string | null };
 
 /** One colour × material value over the identified materials carrying both (colour null: none given). */
 export interface SynthesisPair {
-    colour: ValueRef | null;
+    colour: ColourRef | null;
     material: ValueRef;
     elements: SynthesisElementRef[];
     /** Number of identified materials. */
@@ -567,6 +569,12 @@ export const SHAPE_KEYS = {
         keyof Citation,
         true
     >,
+    ColourRef: {
+        id: true,
+        uri: true,
+        label: true,
+        swatch: true,
+    } satisfies Record<keyof ColourRef, true>,
     ValueRef: { id: true, uri: true, label: true } satisfies Record<
         keyof ValueRef,
         true

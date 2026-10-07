@@ -32,6 +32,10 @@ from manuspectrum.views.explorer.service import (
 )
 from tests.explorer_fixtures import ExplorerCase
 
+INHA_BLUE = (
+    "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/"
+    "d549884f-ed29-4a28-87c8-07311d9a14ad"
+)
 XRF, FORS, AZURITE, BLUE = (
     "http://vocab/pxrf",
     "http://vocab/fors",
@@ -651,6 +655,16 @@ class PartLevelTests(LevelCase):
             "color_aspect",
             self.reference_value(gilded, "Gilded", "Doré"),
         )
+        self.tile(
+            self.characterization,
+            "color_aspect",
+            self.reference_value(INHA_BLUE, "Bleu", "Bleu"),
+        )
+        self.tile(
+            self.components["open"],
+            "color_features",
+            self.reference_value(INHA_BLUE, "Bleu", "Bleu"),
+        )
         swatches = {
             language: {
                 key: {v: facet[v]["swatch"] for v in facet}
@@ -667,6 +681,8 @@ class PartLevelTests(LevelCase):
         self.assertEqual(swatches["en"], swatches["fr"])
         self.assertEqual(swatches["en"]["colour"][gilded], "goldenrod")
         self.assertEqual(swatches["en"]["colour"][BLUE], "royalblue")
+        self.assertEqual(swatches["en"]["colour"][INHA_BLUE], "#2f55a4")
+        self.assertEqual(swatches["en"]["partColour"][INHA_BLUE], "#2f55a4")
         self.assertEqual(swatches["en"]["partColour"][PART_BLUE], "royalblue")
         self.assertEqual(set(swatches["en"]["material"].values()), {None})
 
