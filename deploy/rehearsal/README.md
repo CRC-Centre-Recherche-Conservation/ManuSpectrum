@@ -27,7 +27,7 @@ production.
 | SSH: `PermitRootLogin no`; `PasswordAuthentication` per `rehearsal.env` | yes |
 | UFW: deny inbound, allow outbound, `limit 22/tcp`, `allow 80/tcp`, `allow 443/tcp` | yes |
 | fail2ban, `sshd` jail | yes |
-| Docker CE + buildx and compose plugins (official apt repository), first admin in `docker` | yes |
+| Docker CE + buildx and compose plugins (official apt repository); service account only in `docker` (root-equivalent), admins use `sudo -iu <service account>` | yes |
 | Second admin (sudo) and service account `manuspectrum` (no password, no key, in `docker`) | yes |
 | `/data` over NFS, options and version per `rehearsal.env` | yes |
 | unattended-upgrades and postfix | yes |
@@ -52,13 +52,13 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 ## 2. Network and NFS
 
 - [ ] `sudo ./host-network.sh`: the `ms-rehearsal` libvirt network (192.168.123.0/24) is active. The `default` network is never modified.
-- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you).
+- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you). The script also sets `manage-gids=n` in the `[mountd]` section of `/etc/nfs.conf` (and removes `--manage-gids` from `RPCMOUNTDOPTS` in `/etc/default/nfs-kernel-server`), then restarts the NFS server only if something changed: as in production, the server must honour the client's supplementary groups, or Cantaloupe (`group_add: APP_GID`) is refused.
 
 ## 3. Install the VM
 
 - [ ] `ISO=/path/ubuntu-26.04.1-live-server-amd64.iso ./make-vm.sh` (10 to 15 minutes). The script asks for the administrator account password twice; only its SHA-512 hash is written, in a temporary folder deleted afterwards.
 - [ ] Expected result: the VM answers over SSH on 192.168.123.10 and the `installed` snapshot exists (`virsh -c qemu:///system snapshot-list ms-rehearsal`).
-- [ ] To see what the script would do without creating anything: `DRY_RUN=1 ISO=… ./make-vm.sh`.
+- [ ] To see what the script would do without creating anything: `DRY_RUN=1 ISO=… ./make-vm.sh`. `virt-install` is run with `--print-xml` and `--check disk_size=off` (no free-space check), but libvirt still registers a directory storage pool for `IMAGES_DIR` (a real directory, harmless; `virsh pool-list --all`, `virsh pool-undefine <name>` to drop it).
 - [ ] If the installer fails, `virt-install` waits forever: follow the installation with `virsh -c qemu:///system console ms-rehearsal`.
 - [ ] If the VM already exists, the script refuses; to start over: `virsh -c qemu:///system undefine --remove-all-storage --snapshots-metadata ms-rehearsal`.
 
@@ -139,11 +139,17 @@ and again, from one snapshot directory.
 - [ ] On the development machine: `./make-dev-snapshot.sh --out ~/ms-snapshots/ms-snapshot-$(date -u +%F)`
   (options `--python`, `--repo`; `-h` for the usage). It writes `db.dump`
   (`pg_dump -Fc`, without the `silk_*` tables), `media.tar` and `manifest.json`
-  (git commit, Arches version, counts, last migration per app, sha256 of the files),
+  (git commit, Arches version, counts, last migration per app, the applied migrations the checked-out code
+  does not have under `migrations_ahead_of_code` (a warning is printed; the snapshot is still written but an
+  image built from this commit refuses it), sha256 of the files),
   directory `0700`, files `0600`. It refuses a non-empty directory and never prints the
   database password.
 - [ ] Copy it: `scp -r ~/ms-snapshots/ms-snapshot-<date> <admin>@192.168.123.10:`, then
-  move it where the service account reads it.
+  move it where the service account reads it (placeholders: `<service-account>`, `<date>`):
+  `sudo install -d -o <service-account> -g <service-account> -m 0700 /home/<service-account>/snapshots`,
+  `sudo cp -r ms-snapshot-<date> /home/<service-account>/snapshots/`,
+  `sudo chown -R <service-account>: /home/<service-account>/snapshots/ms-snapshot-<date>`
+  (a glob run by the admin cannot expand inside a directory it cannot read: use `sudo sh -c '…'`).
 - [ ] On the VM, as the service account, set the environment explicitly: the template
   `deploy/compose/.env.example` ships `DEPLOY_ENVIRONMENT=production`, so run
   `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`. The command
@@ -179,7 +185,7 @@ is over. The command refuses to run unless the stack declares itself a rehearsal
 
 ## Checks
 
-`bash check.sh`: shellcheck, seed render tests, dev snapshot and storage directory tests, validation of the seed against the
+`bash check.sh`: shellcheck, seed render tests, dev snapshot, storage directory and NFS settings tests, validation of the seed against the
 subiquity autoinstall schema (pinned), network XML, gitleaks. The last line is
 `check.sh: all green.`
 
