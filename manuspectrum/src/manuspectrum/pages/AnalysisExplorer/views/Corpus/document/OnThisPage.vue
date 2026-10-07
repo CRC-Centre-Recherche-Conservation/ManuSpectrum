@@ -2,10 +2,14 @@
 import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
+import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCheckbox.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type {
     CharacterizationSummary,
     SampleSummary,
@@ -26,7 +30,12 @@ const SEPARATOR = /\s+[—–-]\s+/;
  * What the page shows, listed. A row name drops the page label and the
  * document it ends with (`pageLabel`, `documentName`: the screen says them
  * already). The analyses without a position fold under their count when
- * the page has analyses of its own.
+ * the page has analyses of its own. A row outside the filters is muted with
+ * a hollow dot and keeps « (outside the filters) » in its accessible name.
+ * Each analysis has its Selection checkbox; a « select all » covers the
+ * page, each technique group and the analyses without a position, counting
+ * only the rows listed. `hiddenCount` is how many analyses outside the
+ * filters the screen leaves out of the lists.
  */
 const props = withDefaults(
     defineProps<{
@@ -38,12 +47,13 @@ const props = withDefaults(
         view: FolioView;
         pageLabel?: string;
         documentName?: string;
+        hiddenCount?: number;
     }>(),
-    { pageLabel: "", documentName: "" },
+    { pageLabel: "", documentName: "", hiddenCount: 0 },
 );
 const emit = defineEmits<{ select: [focus: Focus] }>();
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 
 const unlocatedOpen = ref(props.annotations.length === 0);
 
@@ -78,6 +88,69 @@ const emptyMessage = computed(() => {
         ? $gettext("No published analysis on this page.")
         : null;
 });
+
+const groupKeys = (items: { analysis: string }[]): string[] =>
+    items.map((item) => analysisKey(item.analysis));
+
+/** The Selection keys of the page: the analyses of the groups and, when the list is open, those without a position. */
+const pageKeys = computed(() => [
+    ...groups.value.flatMap((group) => groupKeys(group.items)),
+    ...(unlocatedOpen.value ? groupKeys(props.unlocated) : []),
+]);
+const unlocatedKeys = computed(() => groupKeys(props.unlocated));
+const hints = computed(
+    () =>
+        new Map<string, SelectionHint>(
+            [
+                ...groups.value.flatMap((group) => group.items),
+                ...props.unlocated,
+            ].map((item) => [
+                analysisKey(item.analysis),
+                { title: item.name, kind: $gettext("analysis") },
+            ]),
+        ),
+);
+const outsideText = computed(() => $gettext("(outside the filters)"));
+const pageSelectLabel = computed(() => selectAllLabel(pageKeys.value.length));
+const hiddenNote = computed(() =>
+    interpolate(
+        $ngettext(
+            "%{n} analysis outside the filters is hidden.",
+            "%{n} analyses outside the filters are hidden.",
+            props.hiddenCount,
+        ),
+        { n: props.hiddenCount },
+        true,
+    ),
+);
+
+function selectAllLabel(count: number): string {
+    return interpolate($gettext("Select all (%{n} shown)"), { n: count }, true);
+}
+
+function groupSelectLabel(name: string, count: number): string {
+    return interpolate(
+        $gettext("Select all: %{name} (%{n} shown)"),
+        { name, n: count },
+        true,
+    );
+}
+
+function addLabel(name: string): string {
+    return interpolate(
+        $gettext("Add %{name} to the Selection"),
+        { name },
+        true,
+    );
+}
+
+function removeLabel(name: string): string {
+    return interpolate(
+        $gettext("Remove %{name} from the Selection"),
+        { name },
+        true,
+    );
+}
 
 const unlocatedTitle = computed(() =>
     interpolate(
@@ -133,6 +206,22 @@ function select(focus: Focus): void {
         >
             <span>{{ emptyMessage }}</span>
         </p>
+        <p
+            v-if="props.view === 'analyses' && props.hiddenCount > 0"
+            class="hidden-note"
+        >
+            <span>{{ hiddenNote }}</span>
+        </p>
+        <div
+            v-if="props.view === 'analyses' && pageKeys.length > 0"
+            class="page-select"
+        >
+            <SelectAllCheckbox
+                :keys="pageKeys"
+                :label="pageSelectLabel"
+                :hints="hints"
+            />
+        </div>
         <template v-if="props.view === 'analyses'">
             <section
                 v-for="group in groups"
@@ -147,6 +236,17 @@ function select(focus: Focus): void {
                     <span :lang="group.style.label.lang || undefined">
                         {{ group.style.label.value }}
                     </span>
+                    <SelectAllCheckbox
+                        class="group-select"
+                        :keys="groupKeys(group.items)"
+                        :label="
+                            groupSelectLabel(
+                                group.style.label.value,
+                                group.items.length,
+                            )
+                        "
+                        :hints="hints"
+                    />
                 </h4>
                 <ul>
                     <li
@@ -154,6 +254,12 @@ function select(focus: Focus): void {
                         :key="item.analysis"
                         :class="{ 'is-dimmed': !item.match }"
                     >
+                        <SelectionCheckbox
+                            :item-key="analysisKey(item.analysis)"
+                            :label="addLabel(item.name.value)"
+                            :held-label="removeLabel(item.name.value)"
+                            :hint="hints.get(analysisKey(item.analysis))"
+                        />
                         <button
                             type="button"
                             :data-focus="`analysis:${item.analysis}`"
@@ -165,18 +271,18 @@ function select(focus: Focus): void {
                             <span :lang="item.name.lang">{{
                                 shortName(item.name.value)
                             }}</span>
+                            <span
+                                v-if="!item.match"
+                                class="visually-hidden"
+                            >
+                                {{ outsideText }}
+                            </span>
                         </button>
                         <span
                             v-if="item.unpublished"
                             class="draft"
                         >
                             {{ $gettext("Draft") }}
-                        </span>
-                        <span
-                            v-if="!item.match"
-                            class="outside"
-                        >
-                            {{ $gettext("outside the filters") }}
                         </span>
                     </li>
                 </ul>
@@ -260,6 +366,13 @@ function select(focus: Focus): void {
                 >
                     <span>{{ unlocatedTitle }}</span>
                 </button>
+                <SelectAllCheckbox
+                    v-if="unlocatedOpen"
+                    class="group-select"
+                    :keys="unlocatedKeys"
+                    :label="selectAllLabel(unlocatedKeys.length)"
+                    :hints="hints"
+                />
             </h4>
             <ul v-if="unlocatedOpen">
                 <li
@@ -267,6 +380,12 @@ function select(focus: Focus): void {
                     :key="item.analysis"
                     :class="{ 'is-dimmed': !item.match }"
                 >
+                    <SelectionCheckbox
+                        :item-key="analysisKey(item.analysis)"
+                        :label="addLabel(item.name.value)"
+                        :held-label="removeLabel(item.name.value)"
+                        :hint="hints.get(analysisKey(item.analysis))"
+                    />
                     <button
                         type="button"
                         :data-focus="`unlocated:${item.analysis}`"
@@ -276,18 +395,18 @@ function select(focus: Focus): void {
                         <span :lang="item.name.lang">{{
                             shortName(item.name.value)
                         }}</span>
+                        <span
+                            v-if="!item.match"
+                            class="visually-hidden"
+                        >
+                            {{ outsideText }}
+                        </span>
                     </button>
                     <span
                         v-if="item.unpublished"
                         class="draft"
                     >
                         {{ $gettext("Draft") }}
-                    </span>
-                    <span
-                        v-if="!item.match"
-                        class="outside"
-                    >
-                        {{ $gettext("outside the filters") }}
                     </span>
                 </li>
             </ul>
@@ -347,7 +466,40 @@ function select(focus: Focus): void {
 }
 
 .on-this-page li.is-dimmed {
-    opacity: 0.55;
+    color: var(--ink-muted);
+}
+
+.on-this-page li.is-dimmed > button {
+    color: var(--ink-muted);
+}
+
+.on-this-page li.is-dimmed > button::before {
+    content: "";
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    margin-inline-end: 0.5rem;
+    border: 0.0625rem solid var(--ink-muted);
+    border-radius: 50%;
+}
+
+.on-this-page .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.on-this-page .hidden-note {
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+}
+
+.on-this-page .group-select {
+    margin-inline-start: auto;
+    font-weight: 400;
 }
 
 .on-this-page button {
@@ -388,8 +540,7 @@ function select(focus: Focus): void {
     content: "▾" / "";
 }
 
-.on-this-page .draft,
-.on-this-page .outside {
+.on-this-page .draft {
     color: var(--ink-muted);
     font-size: 0.75rem;
 }

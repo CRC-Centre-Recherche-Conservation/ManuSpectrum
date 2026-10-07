@@ -241,6 +241,17 @@ describe("document screen", () => {
         expect(store.folioView).toBe("characterizations");
     });
 
+    it("shows the analyses outside the filters by default and keeps the choice from one document to the next", () => {
+        const store = useExplorerStore();
+        expect(store.showOutside).toBe(true);
+        store.openDocument(uuid(1));
+        store.setShowOutside(false);
+        store.openDocument(uuid(2));
+        expect(store.showOutside).toBe(false);
+        store.setShowOutside(true);
+        expect(store.showOutside).toBe(true);
+    });
+
     it("switches one folio layer", () => {
         const store = useExplorerStore();
         store.setLayer("zones", false);

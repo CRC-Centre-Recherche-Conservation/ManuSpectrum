@@ -807,6 +807,23 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("drops the markers of a shorter list without rebuilding the map or the page", async () => {
+        const wrapper = mountFolio();
+        await flushPromises();
+        const created = vi.spyOn(L, "map");
+        const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
+        const layers = pageLayers(wrapper);
+        expect(wrapper.find(`#folio-marker-${uuid(102)}`).exists()).toBe(true);
+        await wrapper.setProps({ annotations: [annotation(1)] });
+        await flushPromises();
+        expect(wrapper.find(`#folio-marker-${uuid(102)}`).exists()).toBe(false);
+        expect(wrapper.find(`#folio-marker-${uuid(101)}`).exists()).toBe(true);
+        expect(created).not.toHaveBeenCalled();
+        expect(fitBounds).not.toHaveBeenCalled();
+        expect(pageLayers(wrapper)).toBe(layers);
+        wrapper.unmount();
+    });
+
     it("wears the soft stage only when asked to", () => {
         const dark = mountFolio();
         expect(dark.get(".folio").classes()).not.toContain("soft");

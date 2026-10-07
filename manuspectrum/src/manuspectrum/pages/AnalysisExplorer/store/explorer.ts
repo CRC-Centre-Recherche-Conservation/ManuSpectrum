@@ -158,6 +158,8 @@ export const useExplorerStore = defineStore("explorer", () => {
     const documentOrigin = ref<DocumentOrigin>("home");
     const focus = ref<Focus | null>(null);
     const folioView = ref<FolioView>("analyses");
+    /** Whether a document screen draws and lists the analyses the filters leave out (dimmed); kept from one document to the next. */
+    const showOutside = ref(true);
     const layers = ref<LayerToggles>({
         points: true,
         zones: true,
@@ -303,6 +305,10 @@ export const useExplorerStore = defineStore("explorer", () => {
 
     function setFolioView(next: FolioView): void {
         folioView.value = next;
+    }
+
+    function setShowOutside(shown: boolean): void {
+        showOutside.value = shown;
     }
 
     /** A facet's selected values from the rail; year values are read as integers. */
@@ -579,6 +585,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         documentOrigin,
         focus,
         folioView,
+        showOutside,
         layers,
         overlays,
         basket,
@@ -600,6 +607,7 @@ export const useExplorerStore = defineStore("explorer", () => {
         setCanvas,
         focusOn,
         setFolioView,
+        setShowOutside,
         setLayer,
         toggleGroup,
         setMaterialsGrouping,

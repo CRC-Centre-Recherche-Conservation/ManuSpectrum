@@ -12,6 +12,7 @@ import { useMediaQuery } from "@vueuse/core";
 import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
@@ -23,6 +24,7 @@ import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Co
 import FolioLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
 import FolioViewSwitch from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue";
+import OutsideFiltersToggle from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OutsideFiltersToggle.vue";
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
 import SampleCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue";
 
@@ -33,6 +35,7 @@ import {
     facetQueryOf,
     useDocumentMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
@@ -70,6 +73,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
 import type {
+    CharacterizationSummary,
     DocumentCanvas,
     FacetKey,
     Label,
@@ -90,6 +94,7 @@ const CARD_HEADING_ID = "explorer-card-heading";
 const props = defineProps<{ documentId: string }>();
 
 const store = useExplorerStore();
+const toggle = useSelectionToggle();
 const gettext = useGettext();
 const { $gettext, $ngettext, interpolate } = gettext;
 const payload = useDocument(() => props.documentId);
@@ -212,13 +217,68 @@ const pageAnnotations = computed(() =>
         (entry) => entry.canvas === currentCanvas.value?.id,
     ),
 );
+/** Whether the analyses and identified materials the filters leave out are left out of the folio and the lists. */
+const hideOutside = computed(() => filtered.value && !store.showOutside);
+/** The analyses of this page and those without a position that the filters leave out, once each. */
+const excludedAnalyses = computed(
+    () =>
+        new Set(
+            [...pageAnnotations.value, ...(data.value?.unlocated ?? [])]
+                .filter((entry) => !entry.match)
+                .map((entry) => entry.analysis),
+        ),
+);
+const excludedCount = computed(() => excludedAnalyses.value.size);
+/** Whether an analysis is listed and drawn: kept by the filters, shown while outside ones are shown, or the one in focus. */
+function isShownAnalysis(entry: { analysis: string; match: boolean }): boolean {
+    return (
+        entry.match ||
+        !hideOutside.value ||
+        entry.analysis === focusedAnalysis.value
+    );
+}
+function isShownMaterial(summary: CharacterizationSummary): boolean {
+    return (
+        !hideOutside.value ||
+        (data.value?.keptCharacterizations.has(summary.id) ?? true) ||
+        (store.focus?.kind === "characterization" &&
+            store.focus.id === summary.id)
+    );
+}
+const shownAnnotations = computed(() =>
+    pageAnnotations.value.filter(isShownAnalysis),
+);
+const shownUnlocated = computed(() =>
+    (data.value?.unlocated ?? []).filter(isShownAnalysis),
+);
+/** How many analyses outside the filters the lists leave out. */
+const hiddenCount = computed(
+    () =>
+        [...excludedAnalyses.value].filter(
+            (id) =>
+                ![...shownAnnotations.value, ...shownUnlocated.value].some(
+                    (entry) => entry.analysis === id,
+                ),
+        ).length,
+);
 const pageCharacterizations = computed(() =>
     (data.value?.characterizations ?? []).filter(
-        (summary) => summary.zone?.canvas === currentCanvas.value?.id,
+        (summary) =>
+            summary.zone?.canvas === currentCanvas.value?.id &&
+            isShownMaterial(summary),
     ),
 );
 /** The identified materials drawn on this page and those without a zone. */
 const listedCharacterizations = computed(() =>
+    (data.value?.characterizations ?? []).filter(
+        (summary) =>
+            (!summary.zone ||
+                summary.zone.canvas === currentCanvas.value?.id) &&
+            isShownMaterial(summary),
+    ),
+);
+/** Every identified material of this page and without a zone, shown or not: what the views offered depend on. */
+const availableCharacterizations = computed(() =>
     (data.value?.characterizations ?? []).filter(
         (summary) =>
             !summary.zone || summary.zone.canvas === currentCanvas.value?.id,
@@ -244,7 +304,7 @@ const availableViews = computed(() => {
         (data.value?.unlocated ?? []).length > 0
     )
         views.push("analyses");
-    if (listedCharacterizations.value.length > 0)
+    if (availableCharacterizations.value.length > 0)
         views.push("characterizations");
     if (listedSamples.value.length > 0) views.push("samples");
     return views;
@@ -290,8 +350,8 @@ const analysisStyles = computed(() => {
 const pageLegend = computed<LegendEntry[]>(() => {
     const drawn =
         folioView.value === "analyses"
-            ? pageAnnotations.value
-            : pageAnnotations.value.filter(
+            ? shownAnnotations.value
+            : shownAnnotations.value.filter(
                   (entry) => lit.value?.has(entry.analysis) ?? false,
               );
     const analyses = new Map<string, Set<string>>();
@@ -835,6 +895,12 @@ function goHome(): void {
                             :available="availableViews"
                             @change="onFolioView"
                         />
+                        <OutsideFiltersToggle
+                            v-if="filtered && excludedCount > 0"
+                            :shown="store.showOutside"
+                            :hidden-count="excludedCount"
+                            @change="store.setShowOutside"
+                        />
                         <p
                             class="page-count"
                             aria-live="polite"
@@ -846,7 +912,7 @@ function goHome(): void {
                         <FolioMap
                             ref="folio"
                             :canvas="currentCanvas"
-                            :annotations="pageAnnotations"
+                            :annotations="shownAnnotations"
                             :characterizations="pageCharacterizations"
                             :styles="styles"
                             :focus="store.focus"
@@ -907,8 +973,9 @@ function goHome(): void {
                     />
                     <OnThisPage
                         v-else
-                        :annotations="pageAnnotations"
-                        :unlocated="data.unlocated"
+                        :annotations="shownAnnotations"
+                        :unlocated="shownUnlocated"
+                        :hidden-count="hiddenCount"
                         :characterizations="listedCharacterizations"
                         :samples="listedSamples"
                         :styles="styles"
@@ -916,6 +983,13 @@ function goHome(): void {
                         :page-label="currentCanvas?.label ?? ''"
                         :document-name="data.name.value"
                         @select="onSelect"
+                    />
+                    <BulkStatusLine
+                        v-if="!cardOpen || narrow"
+                        class="bulk"
+                        :status="toggle.lastBulk.value"
+                        @undo="toggle.undo"
+                        @dismiss="toggle.dismiss"
                     />
                 </aside>
             </div>

@@ -26,6 +26,7 @@ function home(): UrlSnapshot {
         document: null,
         focus: null,
         folioView: "analyses",
+        outside: true,
         filters: emptyFilters(),
     };
 }
@@ -147,6 +148,26 @@ describe("toQuery / fromQuery", () => {
         ).toBe("analyses");
         expect(fromQuery(new URLSearchParams("fview=samples")).folioView).toBe(
             "analyses",
+        );
+    });
+
+    it("writes outside=hide for a document and reads absent as shown", () => {
+        const hidden = fromQuery(
+            new URLSearchParams(`doc=${DOC}&outside=hide`),
+        );
+        expect(hidden.outside).toBe(false);
+        expect(toQuery(hidden).get("outside")).toBe("hide");
+        const shown = fromQuery(new URLSearchParams(`doc=${DOC}`));
+        expect(shown.outside).toBe(true);
+        expect(toQuery(shown).has("outside")).toBe(false);
+        expect(
+            fromQuery(new URLSearchParams(`doc=${DOC}&outside=show`)).outside,
+        ).toBe(true);
+        expect(fromQuery(new URLSearchParams("outside=hide")).outside).toBe(
+            true,
+        );
+        expect(toQuery({ ...home(), outside: false }).has("outside")).toBe(
+            false,
         );
     });
 
@@ -295,6 +316,18 @@ describe("store round trip", () => {
         expect(store.view).toBe("corpus");
         expect(store.document?.id).toBe(DOC);
         expect(snapshotOf(store)).toEqual({ ...snapshot, view: "corpus" });
+    });
+
+    it("applies and reads back the outside state", () => {
+        const store = useExplorerStore();
+        applySnapshot(
+            store,
+            fromQuery(new URLSearchParams(`doc=${DOC}&outside=hide`)),
+        );
+        expect(store.showOutside).toBe(false);
+        expect(snapshotOf(store).outside).toBe(false);
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.showOutside).toBe(true);
     });
 
     it("returning home from filtered results writes a URL that reads back as home, without filters", () => {

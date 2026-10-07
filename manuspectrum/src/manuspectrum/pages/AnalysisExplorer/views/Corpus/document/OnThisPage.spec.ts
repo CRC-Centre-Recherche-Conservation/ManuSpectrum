@@ -1,8 +1,11 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
 
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     annotation,
@@ -13,10 +16,29 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
+let pinia = createPinia();
+
+beforeEach(() => {
+    pinia = createPinia();
+    setActivePinia(pinia);
+});
+
+function unlocatedEntry(n: number, match = true) {
+    return {
+        analysis: uuid(150 + n),
+        name: label(`FORS_0${n}`),
+        technique: null,
+        dataKind: "xy",
+        unpublished: false,
+        match,
+    };
+}
+
 function mountList(props: Record<string, unknown>) {
     const annotations =
         (props.annotations as ReturnType<typeof annotation>[]) ?? [];
     return mount(OnThisPage, {
+        global: { plugins: [pinia] },
         props: {
             annotations,
             unlocated: [],
@@ -56,12 +78,104 @@ describe("OnThisPage", () => {
         ]);
     });
 
-    it("marks the analyses outside the filters", () => {
+    it("marks the analyses outside the filters without a visible label", () => {
         const wrapper = mountList({
             annotations: [annotation(1, { match: false })],
         });
-        expect(wrapper.find(".technique li").text()).toContain(
-            "outside the filters",
+        const row = wrapper.find(".technique li");
+        expect(row.classes()).toContain("is-dimmed");
+        expect(row.find(".outside").exists()).toBe(false);
+        const hidden = row.find("button .visually-hidden");
+        expect(hidden.text()).toBe("(outside the filters)");
+    });
+
+    it("gives a row inside the filters no extra accessible text", () => {
+        const wrapper = mountList({ annotations: [annotation(1)] });
+        expect(wrapper.find(".technique li .visually-hidden").exists()).toBe(
+            false,
+        );
+    });
+
+    it("puts a Selection checkbox on each analysis row", async () => {
+        const wrapper = mountList({ annotations: [annotation(1)] });
+        const box = wrapper.find(".technique li input[type=checkbox]");
+        expect(box.attributes("aria-label")).toContain("Add");
+        await box.setValue(true);
+        expect(useExplorerStore().basket.map((item) => item.key)).toEqual([
+            analysisKey(uuid(101)),
+        ]);
+    });
+
+    it("has a select-all per technique group that covers only the analyses listed", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountList({
+            annotations: [
+                annotation(1),
+                annotation(2),
+                annotation(3, { technique: technique("t:fors", "FORS", 2) }),
+            ],
+        });
+        const groups = wrapper.findAll(".technique");
+        const master = groups[1].find(".select-all-checkbox input");
+        expect(groups[1].find(".select-all-checkbox").text()).toContain(
+            "(2 shown)",
+        );
+        await master.setValue(true);
+        expect(store.basket.map((item) => item.key).sort()).toEqual(
+            [analysisKey(uuid(101)), analysisKey(uuid(102))].sort(),
+        );
+    });
+
+    it("has a select-all for the whole page over the analyses with and without a position", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountList({
+            annotations: [annotation(1)],
+            unlocated: [unlocatedEntry(1)],
+        });
+        await wrapper.find(".unlocated .fold").trigger("click");
+        const page = wrapper.find(".page-select .select-all-checkbox");
+        expect(page.text()).toContain("(2 shown)");
+        await page.find("input").setValue(true);
+        expect(store.basket).toHaveLength(2);
+    });
+
+    it("has a select-all for the analyses without a position when they are listed", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountList({
+            unlocated: [unlocatedEntry(1), unlocatedEntry(2)],
+        });
+        const master = wrapper.find(".unlocated .select-all-checkbox");
+        expect(master.text()).toContain("(2 shown)");
+        await master.find("input").setValue(true);
+        expect(store.basket.map((item) => item.key).sort()).toEqual(
+            [analysisKey(uuid(151)), analysisKey(uuid(152))].sort(),
+        );
+    });
+
+    it("counts only the displayed rows: no master for folded analyses without a position", () => {
+        const wrapper = mountList({
+            annotations: [annotation(1)],
+            unlocated: [unlocatedEntry(1)],
+        });
+        expect(wrapper.find(".unlocated .select-all-checkbox").exists()).toBe(
+            false,
+        );
+        expect(wrapper.find(".page-select").text()).toContain("(1 shown)");
+    });
+
+    it("says how many analyses outside the filters are hidden", () => {
+        const none = mountList({ annotations: [annotation(1)] });
+        expect(none.find(".hidden-note").exists()).toBe(false);
+        const some = mountList({
+            annotations: [annotation(1)],
+            hiddenCount: 3,
+        });
+        expect(some.find(".hidden-note").text()).toBe(
+            "3 analyses outside the filters are hidden.",
+        );
+        const one = mountList({ annotations: [annotation(1)], hiddenCount: 1 });
+        expect(one.find(".hidden-note").text()).toBe(
+            "1 analysis outside the filters is hidden.",
         );
     });
 

@@ -30,6 +30,8 @@ export interface UrlSnapshot {
     document: DocumentState | null;
     focus: Focus | null;
     folioView: FolioView;
+    /** False when a document screen hides the analyses outside the filters (`outside=hide`). */
+    outside: boolean;
     filters: Filters;
 }
 
@@ -106,6 +108,7 @@ export function snapshotOf(store: ExplorerStore): UrlSnapshot {
             document: store.document,
             focus: store.focus,
             folioView: store.folioView,
+            outside: store.showOutside,
             filters: store.filters,
         }),
     ) as UrlSnapshot;
@@ -125,6 +128,7 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
         query.set("focus", `${snapshot.focus.kind}:${snapshot.focus.id}`);
     if (snapshot.document && snapshot.folioView !== "analyses")
         query.set("fview", snapshot.folioView);
+    if (snapshot.document && !snapshot.outside) query.set("outside", "hide");
     if (filters.q) query.set("q", filters.q);
     if (filters.grain !== "documents") query.set("grain", filters.grain);
     if (filters.size !== PAGE_SIZES[0]) query.set("size", String(filters.size));
@@ -213,6 +217,7 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         document,
         focus,
         folioView: document ? folioView : "analyses",
+        outside: !(document && query.get("outside") === "hide"),
         filters,
     };
 }
@@ -261,6 +266,7 @@ export function applySnapshot(
         state.document = snapshot.document;
         state.focus = snapshot.focus;
         state.folioView = snapshot.folioView;
+        state.showOutside = snapshot.outside;
         state.filters = snapshot.filters;
     });
 }

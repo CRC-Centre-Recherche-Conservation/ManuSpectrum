@@ -391,6 +391,180 @@ describe("CorpusDocument", () => {
         );
     });
 
+    describe("analyses outside the filters", () => {
+        const FILTERED = (store: ExplorerStore) => {
+            store.setFilter("technique", ["http://example.org/xrf"]);
+            store.openDocument(uuid(1));
+        };
+
+        function shown(extra: DocumentShown = {}): DocumentShown {
+            return {
+                annotations: [annotation(1), annotation(2, { match: false })],
+                unlocated: [
+                    {
+                        analysis: uuid(150),
+                        name: label("FORS_014"),
+                        technique: null,
+                        dataKind: "xy",
+                        unpublished: false,
+                        match: false,
+                    },
+                ],
+                ...extra,
+            };
+        }
+
+        const names = (wrapper: ReturnType<typeof mountScreen>["wrapper"]) =>
+            (
+                wrapper.findComponent(FolioStub).props("annotations") as {
+                    analysis: string;
+                }[]
+            ).map((entry) => entry.analysis);
+
+        it("has no switch without filters or without an excluded analysis", async () => {
+            stubFetch(shown());
+            const open = mountScreen();
+            await flushPromises();
+            expect(open.wrapper.find("[role=switch]").exists()).toBe(false);
+            forgetPayloads();
+            stubFetch({ annotations: [annotation(1)] });
+            const kept = mountScreen(FILTERED);
+            await flushPromises();
+            expect(kept.wrapper.find("[role=switch]").exists()).toBe(false);
+        });
+
+        it("offers the switch in the stage head with the number of analyses left out, on by default", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            const control = wrapper.find(".stage-head [role=switch]");
+            expect(control.text()).toContain(
+                "Analyses outside the filters (2)",
+            );
+            expect(control.attributes("aria-checked")).toBe("true");
+            expect(names(wrapper)).toEqual([uuid(101), uuid(102)]);
+        });
+
+        it("hides them from the folio and the list, keeps the page count, and writes the state in the store", async () => {
+            stubFetch(shown());
+            const { wrapper, store } = mountScreen(FILTERED);
+            await flushPromises();
+            await wrapper.find("[role=switch]").trigger("click");
+            expect(store.showOutside).toBe(false);
+            expect(names(wrapper)).toEqual([uuid(101)]);
+            const list = wrapper.findComponent({ name: "OnThisPage" });
+            expect(list.props("annotations")).toHaveLength(1);
+            expect(list.props("unlocated")).toHaveLength(0);
+            expect(list.props("hiddenCount")).toBe(2);
+            expect(wrapper.find(".page-count").text()).toBe(
+                "1 / 2 analyses on this page",
+            );
+            expect(
+                wrapper.find("[role=switch]").attributes("aria-checked"),
+            ).toBe("false");
+        });
+
+        it("starts hidden when the address says outside=hide", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen((store) => {
+                FILTERED(store);
+                store.setShowOutside(false);
+            });
+            await flushPromises();
+            expect(names(wrapper)).toEqual([uuid(101)]);
+        });
+
+        it("keeps the focused analysis visible while the others are hidden", async () => {
+            stubFetch(shown());
+            const { wrapper, store } = mountScreen((store) => {
+                FILTERED(store);
+                store.setShowOutside(false);
+                store.focusOn({ kind: "analysis", id: uuid(102) });
+            });
+            await flushPromises();
+            expect(names(wrapper)).toEqual([uuid(101), uuid(102)]);
+            store.focusOn(null);
+            await flushPromises();
+            expect(names(wrapper)).toEqual([uuid(101)]);
+        });
+
+        it("hides the identified materials the filters drop", async () => {
+            stubFetch({
+                ...shown(),
+                characterizations: [
+                    characterization(1, {
+                        zone: {
+                            canvas: "https://iiif.example/c1",
+                            shape: { type: "point", x: 1, y: 1 },
+                            source: "own",
+                        },
+                    }),
+                    characterization(2, {
+                        zone: {
+                            canvas: "https://iiif.example/c1",
+                            shape: { type: "point", x: 2, y: 2 },
+                            source: "own",
+                        },
+                    }),
+                ],
+                dimmed: [uuid(502)],
+            });
+            const { wrapper, store } = mountScreen(FILTERED);
+            await flushPromises();
+            const drawn = () =>
+                (
+                    wrapper
+                        .findComponent(FolioStub)
+                        .props("characterizations") as { id: string }[]
+                ).map((entry) => entry.id);
+            expect(drawn()).toEqual([uuid(501), uuid(502)]);
+            store.setShowOutside(false);
+            await flushPromises();
+            expect(drawn()).toEqual([uuid(501)]);
+        });
+
+        it("toggles without remounting or redrawing the folio", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            const folio = wrapper.findComponent(FolioStub);
+            const canvas = folio.props("canvas");
+            await wrapper.find("[role=switch]").trigger("click");
+            await wrapper.find("[role=switch]").trigger("click");
+            expect(wrapper.findComponent(FolioStub).vm).toBe(folio.vm);
+            expect(wrapper.findComponent(FolioStub).props("canvas")).toBe(
+                canvas,
+            );
+            expect(focusTarget).not.toHaveBeenCalled();
+        });
+
+        it("keeps every page in the strip and the available views when hiding", async () => {
+            stubFetch(shown());
+            const { wrapper, store } = mountScreen(FILTERED);
+            await flushPromises();
+            const before = wrapper
+                .findComponent({ name: "CanvasStrip" })
+                .props();
+            store.setShowOutside(false);
+            await flushPromises();
+            expect(
+                wrapper.findComponent({ name: "CanvasStrip" }).props(),
+            ).toEqual(before);
+        });
+
+        it("shows the status line of a grouped change under the list", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+            await wrapper
+                .find(".on-this-page .page-select input")
+                .setValue(true);
+            await flushPromises();
+            expect(wrapper.find(".side .bulk-status-line").exists()).toBe(true);
+        });
+    });
+
     describe("folio views", () => {
         function everything() {
             return {
