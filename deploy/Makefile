@@ -9,8 +9,10 @@ COMPOSE := docker compose --project-directory $(COMPOSE_DIR) --env-file $(ENV_FI
 SECRETS_DIR ?= $(COMPOSE_DIR)/secrets
 IMAGE ?= manuspectrum:local
 EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
+# A value of the env file, read the way the file is written (KEY=value, no quoting).
+envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets build init admin-password manage load-snapshot up down restart status logs smoke
+.PHONY: help config volumes secrets build init admin-password manage load-snapshot up down restart status logs smoke nginx-test nginx-reload certs-local
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -82,3 +84,17 @@ logs: ## Follow the last 200 lines of every service
 
 smoke: ## Read-only checks of the running stack
 	$(COMPOSE_DIR)/smoke.sh check
+
+nginx-test: ## Check the nginx configuration of the running container
+	$(COMPOSE) exec nginx nginx -t
+
+nginx-reload: ## Reload nginx (new certificate or configuration) after checking it
+	$(COMPOSE) exec nginx nginx -t
+	$(COMPOSE) exec nginx nginx -s reload
+
+certs-local: ## CERT_MODE=local: make the rehearsal CA and a certificate for DOMAIN_NAMES in CERTS_DIR
+	@[ "$(call envval,CERT_MODE)" = local ] || { echo "CERT_MODE is not local in $(ENV_FILE)" >&2; exit 1; }
+	@certs="$(call envval,CERTS_DIR)"; names="$(call envval,DOMAIN_NAMES)"; \
+	[ -n "$$certs" ] && [ -n "$$names" ] || { echo "set CERTS_DIR and DOMAIN_NAMES in $(ENV_FILE)" >&2; exit 1; }; \
+	install -d -m 0755 "$$certs/acme-webroot" && \
+	$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/certs/make-local-ca.sh "$$certs" $$names
