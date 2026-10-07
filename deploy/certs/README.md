@@ -55,19 +55,42 @@ running the stack.
 
 ```bash
 make cert-init    # placeholder certificate, nginx up, certonly --webroot, reload
-make cert-renew   # certbot renew, reload only when the deploy hook ran
+make cert-renew   # certbot renew, nginx reloaded only when the certificate changed
 ```
 
-`cert-init` first writes a short-lived self-signed placeholder so nginx can
-start and answer the HTTP-01 challenge:
+Needs `CERT_MODE=acme`, `ACME_EMAIL` (refused when empty) and `ACME_SERVER` in
+`.env`. `ACME_SERVER` defaults to the Let's Encrypt **staging** directory:
+run `make cert-init` against staging first, and only then switch to the
+production directory and run `make cert-init CERTBOT_ARGS=--force-renewal` to
+replace the staging certificate.
+
+`cert-init` first writes a short-lived self-signed placeholder (unless a
+`fullchain.pem` already exists) so nginx can start and serve
+`/.well-known/acme-challenge/` from `CERTS_DIR/acme-webroot`:
 
 ```bash
 deploy/certs/make-local-ca.sh --self-signed "$CERTS_DIR" manuspectrum.test
 ```
 
 This writes only `fullchain.pem` and `privkey.pem` (0640), valid 30 days. The
-deploy hook of the certbot service then replaces them with the issued
-certificate, also at mode 0640.
+`certbot` service (Compose profile `acme`, never started by `make up`) then
+orders a certificate for every name of `DOMAIN_NAMES` under the lineage
+`manuspectrum`. It runs as the service account on a read-only root with no
+capability and publishes no port. Its account, lineages and logs live in
+`CERTS_DIR/letsencrypt/`. Its deploy hook
+(`deploy/compose/certbot/deploy-hook.sh`) copies the lineage to
+`CERTS_DIR/fullchain.pem` and `privkey.pem` (0640, through a rename), where
+nginx reads them; the Makefile then reloads nginx.
+
+### Renewal
+
+`deploy/systemd/manuspectrum-cert-renew.{service,timer}.in` run
+`make -C <deploy dir> cert-renew` twice a day (`00:00` and `12:00`, up to one
+hour of random delay, `Persistent=true`). certbot renews a certificate only in
+its last 30 days; the deploy hook then rewrites the files and `cert-renew`
+reloads nginx. PP-8 substitutes `@DEPLOY_DIR@` and `@APP_USER@` (an account
+in the `docker` group), installs both units and enables the timer when
+`CERT_MODE=acme`.
 
 ## provided
 
@@ -80,4 +103,11 @@ readable by the service account. Reload nginx
 
 ```bash
 deploy/certs/tests/test_make_local_ca.sh
+deploy/certs/tests/test_acme_pebble.sh   # docker and network; about one minute
 ```
+
+`test_acme_pebble.sh` runs the whole ACME flow against Pebble (Let's Encrypt's
+test server, HTTP-01 validated for real), with the certbot image and flags of
+the Compose service, a throwaway nginx and the real deploy hook, then checks
+the units with `systemd-analyze verify`. It never contacts a real CA and
+removes its containers and network.

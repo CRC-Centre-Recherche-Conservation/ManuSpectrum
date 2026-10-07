@@ -46,7 +46,7 @@ def to_bytes(value):
     return number * {"": 1, "k": 1024, "m": MIB, "g": GIB}[unit]
 
 
-def render(*files):
+def render(*files, profiles=()):
     """Return `docker compose config` as JSON for `files`, with .env.example values."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp) / "compose"
@@ -76,6 +76,8 @@ def render(*files):
         env = re.sub(r"(?m)^NGINX_LOG_HOST_DIR=.*$", f"NGINX_LOG_HOST_DIR={logs}", env)
         (project / ".env").write_text(env)
         command = ["docker", "compose", "--project-directory", str(project)]
+        for profile in profiles:
+            command += ["--profile", profile]
         command += ["--env-file", str(project / ".env")]
         for name in files:
             command += ["-f", str(project / name)]
@@ -95,6 +97,7 @@ class ComposeStackTests(unittest.TestCase):
         cls.base, cls.media = render("compose.yaml")
         cls.prod, _ = render("compose.yaml", "compose.prod.yaml")
         cls.stacks = {"base": cls.base, "prod": cls.prod}
+        cls.acme, _ = render("compose.yaml", "compose.prod.yaml", profiles=("acme",))
 
     def each_service(self):
         for label, stack in self.stacks.items():
@@ -156,7 +159,9 @@ class ComposeStackTests(unittest.TestCase):
                 self.assertNotIn("/etc/nginx/tests", mounts)
                 self.assertEqual(len(mounts), len(nginx["volumes"]))
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        nginx_source = source[source.index("\n  nginx:\n") : source.index("\nsecrets:")]
+        nginx_source = source[
+            source.index("\n  nginx:\n") : source.index("\n  certbot:\n")
+        ]
         self.assertEqual(nginx_source.count("create_host_path: false"), 4)
 
     def test_nginx_answers_to_the_public_name_on_the_internal_network(self):
@@ -332,7 +337,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 2)
+        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 2 + 1)
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -487,8 +492,34 @@ class ComposeStackTests(unittest.TestCase):
         env = (COMPOSE_DIR / ".env.example").read_text()
         self.assertRegex(env, r"(?m)^PUBLIC_SERVER_ADDRESS=https://\S+/$")
 
+    def test_certbot_runs_only_under_the_acme_profile(self):
+        self.assertNotIn("certbot", self.base["services"])
+        self.assertNotIn("certbot", self.prod["services"])
+        self.assertIn("certbot", self.acme["services"])
+
+    def test_certbot_is_hardened_and_publishes_nothing(self):
+        certbot = self.acme["services"]["certbot"]
+        self.assertEqual(certbot["user"], "10001:10001")
+        self.assertTrue(certbot["read_only"])
+        self.assertEqual(certbot["cap_drop"], ["ALL"])
+        self.assertFalse(certbot.get("cap_add"))
+        self.assertIn("no-new-privileges:true", certbot["security_opt"])
+        self.assertFalse(certbot.get("ports"))
+        self.assertEqual(certbot["restart"], "no")
+        self.assertEqual([t.split(":")[0] for t in certbot["tmpfs"]], ["/tmp"])
+
+    def test_certbot_mounts_the_certificates_writable_and_the_hook_read_only(self):
+        certbot = self.acme["services"]["certbot"]
+        mounts = {v["target"]: v for v in certbot["volumes"]}
+        self.assertEqual(set(mounts), {"/certs", "/hooks/deploy-hook.sh"})
+        self.assertFalse(mounts["/certs"].get("read_only"))
+        self.assertTrue(mounts["/certs"]["source"].endswith("certs"))
+        self.assertTrue(mounts["/hooks/deploy-hook.sh"]["read_only"])
+        self.assertIn("--config-dir=/certs/letsencrypt", certbot["entrypoint"])
+        self.assertFalse(certbot.get("secrets"))
+
     def test_third_party_images_are_pinned_by_digest(self):
-        for name, service in self.base["services"].items():
+        for name, service in self.acme["services"].items():
             if name not in APP_SERVICES:
                 with self.subTest(service=name):
                     self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
@@ -506,6 +537,51 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertRegex(makefile, r"(?m)^\t.*exec nginx nginx -s reload$")
         self.assertIn("certs/make-local-ca.sh", makefile)
         self.assertRegex(makefile, r"(?m)^certs-local:")
+
+    def test_acme_targets_refuse_outside_acme_mode_or_without_a_contact(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text()
+        self.assertRegex(makefile, r"(?m)^cert-init:")
+        self.assertRegex(makefile, r"(?m)^cert-renew:")
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        cases = {
+            "cert-init": [
+                ("CERT_MODE=local", "ACME_EMAIL=ops@manuspectrum.test", "not acme"),
+                ("CERT_MODE=acme", "ACME_EMAIL=", "set ACME_EMAIL"),
+            ],
+            "cert-renew": [("CERT_MODE=provided", "ACME_EMAIL=", "not acme")],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for target, variants in cases.items():
+                for mode, email, message in variants:
+                    text = re.sub(r"(?m)^CERT_MODE=.*$", mode, env)
+                    text = re.sub(r"(?m)^ACME_EMAIL=.*$", email, text)
+                    path = Path(tmp) / "env"
+                    path.write_text(text)
+                    with self.subTest(target=target, mode=mode, email=email):
+                        result = subprocess.run(
+                            ["make", "-C", str(DEPLOY_DIR), target, f"ENV_FILE={path}"],
+                            capture_output=True,
+                            text=True,
+                        )
+                        self.assertEqual(result.returncode, 2)
+                        self.assertIn(message, result.stderr)
+
+    def test_acme_server_defaults_to_the_staging_directory(self):
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(
+            env,
+            r"(?m)^ACME_SERVER=https://acme-staging-v02\.api\.letsencrypt\.org/directory$",
+        )
+
+    def test_renewal_units_run_the_make_target_twice_a_day(self):
+        service = (
+            DEPLOY_DIR / "systemd/manuspectrum-cert-renew.service.in"
+        ).read_text()
+        timer = (DEPLOY_DIR / "systemd/manuspectrum-cert-renew.timer.in").read_text()
+        self.assertIn("ExecStart=/usr/bin/make -C @DEPLOY_DIR@ cert-renew", service)
+        self.assertIn("OnCalendar=*-*-* 00,12:00", timer)
+        self.assertIn("RandomizedDelaySec=1h", timer)
+        self.assertIn("Persistent=true", timer)
 
     def test_env_example_ships_production_as_the_environment(self):
         text = (COMPOSE_DIR / ".env.example").read_text()

@@ -341,6 +341,36 @@ services:
       retries: 3
       start_period: 20s
 
+  # Issues and renews the Let's Encrypt certificate (CERT_MODE=acme). Never
+  # started by `up`: `make cert-init` and `make cert-renew` run it once per
+  # call. State, logs and the issued files live in CERTS_DIR (webroot
+  # acme-webroot/, account and lineages letsencrypt/); the deploy hook copies
+  # the lineage to CERTS_DIR/fullchain.pem and privkey.pem, which nginx reads.
+  certbot:
+    <<: *service
+    profiles: [acme]
+    restart: "no"
+    # certbot/certbot v5.8.0
+    image: certbot/certbot@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
+    user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
+    read_only: true
+    entrypoint:
+      - certbot
+      - --config-dir=/certs/letsencrypt
+      - --logs-dir=/certs/letsencrypt/logs
+      - --work-dir=/tmp/certbot
+    environment:
+      HOME: /tmp
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=16m,mode=1777"
+    volumes:
+      - type: bind
+        source: ${CERTS_DIR:?set CERTS_DIR in .env}
+        target: /certs
+        bind:
+          create_host_path: false
+      - {type: bind, source: ./certbot/deploy-hook.sh, target: /hooks/deploy-hook.sh, read_only: true}
+
 secrets:
   pg_password:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/pg_password
