@@ -85,6 +85,9 @@ NAMES = [
     "BIBLISSIMA_ASYNC_INDEXING",
     "CELERY_WORKER_HIJACK_ROOT_LOGGER",
     "SILENCED_SYSTEM_CHECKS",
+    "RATELIMIT_IP_META_KEY",
+    "SECURE_HSTS_SECONDS",
+    "USE_X_FORWARDED_HOST",
 ]
 
 PROBE = textwrap.dedent("""
@@ -98,7 +101,7 @@ PROBE = textwrap.dedent("""
     except Exception as error:
         print(json.dumps({{"error": type(error).__name__, "message": str(error)}}))
     else:
-        values = {{name: getattr(s, name) for name in {names!r}}}
+        values = {{name: getattr(s, name, None) for name in {names!r}}}
         values["SITE_URL"] = s.EXTRA_EMAIL_CONTEXT["site_url"]
         print(json.dumps(values, default=str))
     """)
@@ -161,6 +164,16 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertEqual(
             middleware[-1], "django_prometheus.middleware.PrometheusAfterMiddleware"
         )
+
+    def test_client_address_comes_from_nginx_and_edge_owned_checks_are_silenced(self):
+        values = load(BASE_ENV)
+        self.assertEqual(
+            values["RATELIMIT_IP_META_KEY"], "manuspectrum.utils.client_ip.client_ip"
+        )
+        for check in ("security.W004", "security.W008", "staticfiles.W004"):
+            self.assertIn(check, values["SILENCED_SYSTEM_CHECKS"])
+        self.assertFalse(values["SECURE_HSTS_SECONDS"] or 0)
+        self.assertFalse(values["USE_X_FORWARDED_HOST"])
 
     def test_missing_required_variable_is_refused(self):
         for name in (

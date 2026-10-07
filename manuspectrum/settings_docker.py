@@ -113,6 +113,8 @@ EXTRA_EMAIL_CONTEXT = {
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
+# django-ratelimit keys on the visitor address nginx puts in X-Real-IP, not on the proxy.
+RATELIMIT_IP_META_KEY = "manuspectrum.utils.client_ip.client_ip"
 # nginx sets X-Forwarded-Proto; the Arches deployment guide's example names X-Forwarded-Protocol.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -248,4 +250,7 @@ MIDDLEWARE = [
 SILENCED_SYSTEM_CHECKS = [
     *globals().get("SILENCED_SYSTEM_CHECKS", []),
     "staticfiles.W004",
+    # nginx sets HSTS and the HTTPS redirect on every response (deploy/compose/nginx).
+    "security.W004",
+    "security.W008",
 ]
