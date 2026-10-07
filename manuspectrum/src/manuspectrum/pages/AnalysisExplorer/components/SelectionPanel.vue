@@ -331,35 +331,62 @@ function removeLabel(slot: number): string {
 
 .selection-panel ol {
     display: grid;
-    gap: 0.25rem;
+    gap: 0;
     padding: 0;
+    border-block-start: 0.0625rem solid var(--border-hover);
     list-style: none;
 }
 
 .selection-panel li {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    align-items: center;
+    align-items: start;
     gap: 0 0.5rem;
+    padding-block: 0.375rem;
+    padding-inline: 0.25rem;
+    border-block-end: 0.0625rem solid var(--border-hover);
+}
+
+.selection-panel li:nth-child(even) {
+    background: var(--bg);
+}
+
+.selection-panel li:hover {
+    background: var(--bg-alt);
 }
 
 .selection-panel .slot {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 2rem;
+    padding-block: 0.125rem;
+    border-radius: 0.25rem;
+    background: var(--ink);
+    color: var(--surface);
     font-family: var(--font-mono);
+    font-size: 0.75rem;
     font-weight: 600;
+    line-height: 1.3;
 }
 
 .selection-panel .info {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0 0.5rem;
+    gap: 0 0.375rem;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+}
+
+.selection-panel .title {
+    font-weight: 500;
 }
 
 .selection-panel .kind,
 .selection-panel .document,
 .selection-panel .gone {
     color: var(--ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
 }
 
 .selection-panel .pending {
@@ -370,14 +397,21 @@ function removeLabel(slot: number): string {
 .selection-panel .remove {
     display: inline-grid;
     place-items: center;
-    inline-size: var(--explorer-target, 2.75rem);
-    block-size: var(--explorer-target, 2.75rem);
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;
     background: var(--surface);
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+}
+
+@media (pointer: coarse) {
+    .selection-panel .remove {
+        inline-size: var(--explorer-target, 2.75rem);
+        block-size: var(--explorer-target, 2.75rem);
+    }
 }
 
 .selection-panel .remove:focus-visible,
