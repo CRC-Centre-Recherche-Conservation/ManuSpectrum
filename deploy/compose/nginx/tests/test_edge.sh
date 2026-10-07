@@ -27,6 +27,7 @@ FILE_B="00000000-0000-4000-8000-00000000000b"
 FILE_C="00000000-0000-4000-8000-00000000000c"
 FILE_D="00000000-0000-4000-8000-00000000000d"
 FILE_E="00000000-0000-4000-8000-00000000000e"
+FILE_F="00000000-0000-4000-8000-00000000000f"
 STATIC_SWAP_WAIT="${STATIC_SWAP_WAIT:-32}"
 
 GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate upstream_down)
@@ -311,6 +312,9 @@ group_static() {
 group_log() {
   get '/en/reset/abc/def-123/?secret=1' -e 'https://elsewhere.example/page?token=zzz' >/dev/null
   get '/query?name=value' >/dev/null
+  get '/en/api/resource/x?q=1' >/dev/null
+  get '/en/%72eset/tok-enc-1/' >/dev/null
+  get '/en/reset%2Ftok-enc-2/' >/dev/null
   sleep 1
   local request_id seen
   seen="$(get '/rid?x=1')"
@@ -340,6 +344,16 @@ import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
 assert any(r["referer"] == "https://elsewhere.example/page" for r in rows)
 assert not any("zzz" in json.dumps(r) for r in rows)' "$LOGS/access.log"
+  check "a denied route is logged under its own path, not the error page" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+row = next(r for r in rows if r["uri"] == "/en/api/resource/x")
+assert row["status"] == 404
+assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in rows)' "$LOGS/access.log"
+  check "percent-encoded spellings of a reset link are redacted" python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+assert "tok-enc" not in text' "$LOGS/access.log"
   check "error.log exists in the same directory" test -f "$LOGS/error.log"
 }
 
@@ -379,6 +393,12 @@ codes() { # codes COUNT PATH [curl args] : the status of COUNT requests in a row
   for ((i = 0; i < count; i++)); do out+="$(code "$@") "; done
   echo "$out"
 }
+get_many() { # get_many COUNT PATH : the statuses of COUNT concurrent requests
+  local urls=() i
+  for ((i = 0; i < $1; i++)); do urls+=("https://$HOST:$HTTPS_PORT$2"); done
+  curl -sS -Z --parallel-max 40 --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca.crt" \
+    -o /dev/null -w '%{http_code}\n' "${urls[@]}"
+}
 # location_block FILE-SECTION PATTERN < nginx -T : the text of one location
 location_block() {
   python3 -I -c '
@@ -400,6 +420,10 @@ group_media() {
   equals "files/<A>: exactly one nosniff" 1 "$(header_count X-Content-Type-Options <<<"$out")"
   equals "files/<E> (export deliverable): 200" 200 "$(code "/fr/files/$FILE_E")"
   equals "files/<E>: the bytes of the export" "zip bytes" "$(get "/fr/files/$FILE_E")"
+  out="$(headers "/en/files/$FILE_F")"
+  equals "files/<F> (file missing on disk): 404" 404 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  check "files/<F>: the site page, no attachment header" bash -c '! grep -qi "^Content-Disposition" <<<"$1"' _ "$out"
+  check "files/<F>: the site 404 body" grep -q 'Page not found' <<<"$(get "/en/files/$FILE_F")"
   equals "files/<B>: the 403 of Django passes through" 403 "$(code "/en/files/$FILE_B")"
   equals "files/<C> (archestemp): 404" 404 "$(code "/en/files/$FILE_C")"
   equals "files/<D> (encoded slashes): 404" 404 "$(code "/en/files/$FILE_D")"
@@ -490,6 +514,14 @@ group_rate() {
   equals "the 429 page carries Retry-After" 60 "$(header_value retry-after <<<"$out")"
   check "the 429 body is the nginx page" grep -q 'Too many requests' <<<"$(get /en/auth/ -X POST)"
   assert_one_of_each "the 429 page" "$out"
+  sleep 1
+  check "a limited request is logged under its own path with status 429" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["uri"] == "/en/auth/" and r["status"] == 429 for r in rows)
+assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in rows)' "$LOGS/access.log"
+  check "rate-limit refusals do not reach error.log (they carry the raw request line)" \
+    bash -c '! grep -Eq "limiting (requests|connections)" "$1"' _ "$LOGS/error.log"
   out="$(codes 7 /en/auth/)"
   check "7 GETs to /en/auth/ are never limited" bash -c '! grep -q 429 <<<"$1"' _ "$out"
   out="$(codes 15 "/api/spectrum-preview/$FILE_A?n=full")"
@@ -501,8 +533,14 @@ group_rate() {
   out="$(codes 12 "/api/spectrum-preview/$FILE_A?n=200")"
   check "12 requests with n=200 are not counted as full" bash -c '! grep -q 429 <<<"$1"' _ "$out"
   sleep 4
-  out="$(codes 10 /en/api/explorer/share)"
-  check "the share route is limited (heavy)" grep -q 429 <<<"$out"
+  out="$(codes 14 /en/api/explorer/share)"
+  check "the share route is limited (share zone)" grep -q 429 <<<"$out"
+  equals "the share zone does not spend the heavy budget of the manifest" 200 "$(code /iiif/v3/explorer-manifest)"
+  sleep 3
+  out="$(get_many 80 /healthz)"
+  check "/healthz is limited too (burst 10, 80 requests at once)" grep -q 429 <<<"$out"
+  sleep 3
+  equals "/healthz answers again once the burst has drained" 200 "$(code /healthz)"
 }
 
 group_timeout_config() {

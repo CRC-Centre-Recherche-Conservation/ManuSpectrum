@@ -28,6 +28,7 @@ FILE_B = "00000000-0000-4000-8000-00000000000b"
 FILE_C = "00000000-0000-4000-8000-00000000000c"
 FILE_D = "00000000-0000-4000-8000-00000000000d"
 FILE_E = "00000000-0000-4000-8000-00000000000e"
+FILE_F = "00000000-0000-4000-8000-00000000000f"
 
 FILE_REDIRECTS = {
     FILE_A: (302, "/files/uploadedfiles/smoke%20file%20%C3%A9.csv"),
@@ -35,6 +36,7 @@ FILE_REDIRECTS = {
     FILE_C: (302, "/files/archestemp/x.zip"),
     FILE_D: (302, "/files/uploadedfiles/..%2F..%2Fetc%2Fpasswd"),
     FILE_E: (302, "/files/export_deliverables/e.zip"),
+    FILE_F: (302, "/files/uploadedfiles/missing.csv"),
 }
 
 DJANGO_HEADERS = {
