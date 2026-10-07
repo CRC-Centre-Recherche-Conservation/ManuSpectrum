@@ -13,6 +13,7 @@ import {
     FACET_LABELS_KEY,
     RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
@@ -413,5 +414,92 @@ describe("CorpusResults", () => {
         expect(list.attributes("aria-busy")).toBe("true");
         expect(list.findAll(".document-card")).toHaveLength(2);
         expect(wrapper.find("[role=status]").text()).toBe("Updating…");
+    });
+
+    describe("selection bar", () => {
+        async function mountAnalyses(count = 3) {
+            const hits = Array.from({ length: count }, (_, index) =>
+                analysisHit(index + 1),
+            );
+            fetchMock.mockResolvedValue(
+                jsonResponse(searchResponse({ results: hits, total: count })),
+            );
+            useExplorerStore().setFilter("grain", "analyses");
+            const wrapper = mountResults();
+            await flushPromises();
+            return { wrapper, hits };
+        }
+
+        it("has a select-all only in the Analyses grain, covering the shown page", async () => {
+            const { wrapper } = await mountAnalyses(3);
+            const bar = wrapper.get(".selection-bar");
+            expect(bar.find(".select-all-checkbox input").exists()).toBe(true);
+            expect(bar.text()).toContain("Select all (3 shown)");
+            expect(
+                wrapper.findAll(".analysis-row .selection-checkbox"),
+            ).toHaveLength(3);
+        });
+
+        it("has no checkbox in the Documents grain", async () => {
+            fetchMock.mockResolvedValue(
+                jsonResponse(
+                    searchResponse({ results: [documentHit(1)], total: 1 }),
+                ),
+            );
+            const wrapper = mountResults();
+            await flushPromises();
+            expect(wrapper.find(".selection-bar").exists()).toBe(false);
+            expect(wrapper.find(".selection-checkbox").exists()).toBe(false);
+            expect(wrapper.find(".select-all-checkbox").exists()).toBe(false);
+        });
+
+        it("adds every analysis of the page at once and says how many are held", async () => {
+            const { wrapper, hits } = await mountAnalyses(3);
+            const store = useExplorerStore();
+            expect(wrapper.get(".selection-bar .held-count").text()).toBe(
+                "0 / 3 in the Selection",
+            );
+            await wrapper
+                .get(".selection-bar .select-all-checkbox input")
+                .setValue(true);
+            expect(store.basket.map((item) => item.key)).toEqual(
+                hits.map((hit) => analysisKey(hit.id)),
+            );
+            expect(wrapper.get(".selection-bar .held-count").text()).toBe(
+                "3 / 3 in the Selection",
+            );
+            expect(wrapper.get(".bulk-status-line").text()).toContain(
+                "3 analyses added",
+            );
+        });
+
+        it("undoes the grouped addition from the status line", async () => {
+            const { wrapper } = await mountAnalyses(2);
+            await wrapper
+                .get(".selection-bar .select-all-checkbox input")
+                .setValue(true);
+            await wrapper.get("[data-action=undo]").trigger("click");
+            expect(useExplorerStore().basket).toEqual([]);
+        });
+
+        it("follows a Selection changed elsewhere (another tab's storage event)", async () => {
+            const { wrapper, hits } = await mountAnalyses(3);
+            const store = useExplorerStore();
+            store.$patch((state) => {
+                state.basket = [
+                    { key: analysisKey(hits[0].id), kind: "analysis", slot: 0 },
+                ];
+            });
+            await flushPromises();
+            expect(wrapper.get(".selection-bar .held-count").text()).toBe(
+                "1 / 3 in the Selection",
+            );
+            const rows = wrapper.findAll(".analysis-row");
+            expect(rows[0].classes()).toContain("held");
+            expect(rows[1].classes()).not.toContain("held");
+            const all = wrapper.get(".selection-bar .select-all-checkbox input")
+                .element as HTMLInputElement;
+            expect(all.indeterminate).toBe(true);
+        });
     });
 });

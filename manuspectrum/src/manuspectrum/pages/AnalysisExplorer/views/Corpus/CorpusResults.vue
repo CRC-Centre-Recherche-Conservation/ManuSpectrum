@@ -10,7 +10,9 @@ import {
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
+import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import AnalysisRow from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue";
@@ -20,6 +22,7 @@ import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/compon
 
 import { peekJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useDocumentPrefetch } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
 import {
     RESULTS_MEMO_KEY,
@@ -38,11 +41,13 @@ import {
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
     documentHref,
     snapshotOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type {
     AnalysisHit,
     DocumentHit,
@@ -100,6 +105,7 @@ const search = useSearch(() => searchQuery(store.filters, page.value), {
     holdsFacets: (filters) => heldFacets.value?.filters === filters,
     debounceFilters: true,
 });
+const toggle = useSelectionToggle();
 const prefetch = useDocumentPrefetch(() => filterQuery(store.filters));
 
 /** The filters of the payload shown, and of the rail. */
@@ -210,6 +216,50 @@ async function restore(): Promise<void> {
     if (screenFocus) screenFocus.value = false;
     restoring.value = false;
 }
+
+/** The analyses of the page shown, in the Analyses grain: what the select-all covers. */
+const shownAnalyses = computed<AnalysisHit[]>(() =>
+    store.filters.grain === "analyses"
+        ? (search.data.value?.results ?? []).filter(
+              (hit): hit is AnalysisHit => hit.type === "analysis",
+          )
+        : [],
+);
+const shownKeys = computed(() =>
+    shownAnalyses.value.map((hit) => analysisKey(hit.id)),
+);
+const shownHints = computed(
+    () =>
+        new Map<string, SelectionHint>(
+            shownAnalyses.value.map((hit) => [
+                analysisKey(hit.id),
+                { title: hit.name, kind: $gettext("analysis") },
+            ]),
+        ),
+);
+const showBar = computed(
+    () =>
+        shownKeys.value.length > 0 &&
+        search.status.value !== "error" &&
+        search.status.value !== "unavailable",
+);
+const heldCount = computed(
+    () => shownKeys.value.filter((key) => toggle.isHeld(key)).length,
+);
+const selectAllLabel = computed(() =>
+    interpolate(
+        $gettext("Select all (%{n} shown)"),
+        { n: shownKeys.value.length },
+        true,
+    ),
+);
+const heldText = computed(() =>
+    interpolate(
+        $gettext("%{held} / %{n} in the Selection"),
+        { held: heldCount.value, n: shownKeys.value.length },
+        true,
+    ),
+);
 
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
@@ -369,6 +419,23 @@ function goHome(): void {
                 scope="results"
                 :count="search.data.value?.unpublishedCount ?? 0"
             />
+            <div
+                v-if="showBar"
+                class="selection-bar"
+            >
+                <SelectAllCheckbox
+                    :keys="shownKeys"
+                    :label="selectAllLabel"
+                    :hints="shownHints"
+                />
+                <span class="held-count">{{ heldText }}</span>
+                <BulkStatusLine
+                    class="bulk"
+                    :status="toggle.lastBulk.value"
+                    @undo="toggle.undo"
+                    @dismiss="toggle.dismiss"
+                />
+            </div>
             <UnavailableState
                 v-if="
                     search.status.value === 'error' ||
@@ -521,6 +588,33 @@ function goHome(): void {
     border-block-end: 0.0625rem solid var(--border);
 }
 
+.corpus-results .selection-bar {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1rem;
+    padding-block: 0.25rem;
+    border-block-end: 0.0625rem solid var(--border);
+    background: var(--surface);
+}
+
+.corpus-results .selection-bar .held-count {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+
+.corpus-results .selection-bar .bulk {
+    flex: 1 1 100%;
+}
+
+.corpus-results .list > li {
+    scroll-margin-block-start: 4rem;
+}
+
 .corpus-results .grain {
     display: flex;
     gap: 1rem;
@@ -666,6 +760,17 @@ function goHome(): void {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+    .corpus-results .selection-bar :deep(.select-all-checkbox .text) {
+        position: absolute;
+        inline-size: 0.0625rem;
+        block-size: 0.0625rem;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
 }
 
 @media (max-width: 80rem) {
