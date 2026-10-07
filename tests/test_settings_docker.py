@@ -72,6 +72,7 @@ NAMES = [
     "CACHES",
     "CACHE_CODE_VERSION",
     "CANTALOUPE_HTTP_ENDPOINT",
+    "CANTALOUPE_INTERNAL_ENDPOINT",
     "CONTACT_EMAIL",
     "DEFAULT_FROM_EMAIL",
     "EMAIL_HOST",
@@ -85,6 +86,9 @@ NAMES = [
     "BIBLISSIMA_ASYNC_INDEXING",
     "CELERY_WORKER_HIJACK_ROOT_LOGGER",
     "SILENCED_SYSTEM_CHECKS",
+    "RATELIMIT_IP_META_KEY",
+    "SECURE_HSTS_SECONDS",
+    "USE_X_FORWARDED_HOST",
 ]
 
 PROBE = textwrap.dedent("""
@@ -98,7 +102,7 @@ PROBE = textwrap.dedent("""
     except Exception as error:
         print(json.dumps({{"error": type(error).__name__, "message": str(error)}}))
     else:
-        values = {{name: getattr(s, name) for name in {names!r}}}
+        values = {{name: getattr(s, name, None) for name in {names!r}}}
         values["SITE_URL"] = s.EXTRA_EMAIL_CONTEXT["site_url"]
         print(json.dumps(values, default=str))
     """)
@@ -162,6 +166,16 @@ class SettingsDockerTests(SimpleTestCase):
             middleware[-1], "django_prometheus.middleware.PrometheusAfterMiddleware"
         )
 
+    def test_client_address_comes_from_nginx_and_edge_owned_checks_are_silenced(self):
+        values = load(BASE_ENV)
+        self.assertEqual(
+            values["RATELIMIT_IP_META_KEY"], "manuspectrum.utils.client_ip.client_ip"
+        )
+        for check in ("security.W004", "security.W008", "staticfiles.W004"):
+            self.assertIn(check, values["SILENCED_SYSTEM_CHECKS"])
+        self.assertFalse(values["SECURE_HSTS_SECONDS"] or 0)
+        self.assertFalse(values["USE_X_FORWARDED_HOST"])
+
     def test_missing_required_variable_is_refused(self):
         for name in (
             "MANUSPECTRUM_SECRET_KEY",
@@ -195,6 +209,19 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertRefused(
             dict(BASE_ENV, PGPASSWORD_FILE="/nonexistent/pg_password"),
             "PGPASSWORD_FILE",
+        )
+
+    def test_public_host_must_be_the_host_of_the_public_address(self):
+        self.assertRefused(
+            dict(BASE_ENV, PUBLIC_HOST="www.manuspectrum.test"), "PUBLIC_HOST"
+        )
+        values = load(dict(BASE_ENV, PUBLIC_HOST="manuspectrum.test"))
+        self.assertNotIn("error", values)
+
+    def test_public_address_host_must_be_a_domain_name(self):
+        self.assertRefused(
+            dict(BASE_ENV, PUBLIC_SERVER_ADDRESS="https://other.test/"),
+            "DOMAIN_NAMES",
         )
 
     def test_plain_http_public_address_is_refused(self):
@@ -289,7 +316,16 @@ class SettingsDockerTests(SimpleTestCase):
         )
         self.assertEqual(values["ELASTICSEARCH_HTTP_PORT"], "9200")
         self.assertEqual(values["ELASTICSEARCH_PREFIX"], "manuspectrum")
-        self.assertEqual(values["CANTALOUPE_HTTP_ENDPOINT"], "http://cantaloupe:8182/")
+        self.assertEqual(
+            values["CANTALOUPE_INTERNAL_ENDPOINT"], "http://cantaloupe:8182/"
+        )
+
+    def test_cantaloupe_endpoint_mints_public_canvas_ids(self):
+        values = load(BASE_ENV)
+        self.assertEqual(
+            values["CANTALOUPE_HTTP_ENDPOINT"],
+            "https://manuspectrum.test/iiifserver/",
+        )
 
     def test_mail_defaults_suit_a_relay_without_tls_or_authentication(self):
         values = load(BASE_ENV)

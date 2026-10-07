@@ -21,7 +21,7 @@ name an image format.
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
@@ -200,6 +200,32 @@ class ManifestFetcherRetrieveTests(SimpleTestCase):
             "https://img.example.org/thumb.png",
             headers=IMAGE_HEADERS,
             purpose="thumbnail",
+        )
+
+    @override_settings(
+        CANTALOUPE_HTTP_ENDPOINT="https://manuspectrum.test/iiifserver/",
+        CANTALOUPE_INTERNAL_ENDPOINT="http://cantaloupe:8182/",
+    )
+    def test_a_thumbnail_of_the_own_image_service_is_read_internally(
+        self, tile_model, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [tile(**{MANIFEST_NODE: TILE_MANIFEST_URL})]
+        )
+        fetch_manifest.return_value = v2_manifest(
+            thumbnail="https://manuspectrum.test/iiifserver/iiif/2/a.tif/full/90,/0/default.jpg"
+        )
+        safe_fetch.return_value = response(
+            content=PNG_BYTES, headers={"Content-Type": "image/png"}
+        )
+
+        self.fetcher.get_thumbnail(retrieve=True)
+
+        safe_fetch.assert_called_once_with(
+            "http://cantaloupe:8182/iiif/2/a.tif/full/90,/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
+            allow_private=True,
         )
 
     def test_the_content_type_comes_from_the_signature_when_the_header_is_absent(

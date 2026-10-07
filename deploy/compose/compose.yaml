@@ -1,8 +1,9 @@
 # ManuSpectrum stack: the application (web, worker, beat), PostgreSQL/PostGIS,
-# Elasticsearch, a Redis broker, a Redis cache and Cantaloupe. Security, health
+# Elasticsearch, a Redis broker, a Redis cache, Cantaloupe and nginx. Security, health
 # and persistence live here and apply everywhere; compose.prod.yaml adds the
 # sizing of the production host. Always run both files together on a host
-# (make -C deploy <target>). No service publishes a port.
+# (make -C deploy <target>). Only nginx publishes ports (HTTP_PORT and
+# HTTPS_PORT, 80 and 443 by default).
 #
 # Data volumes are external: `make -C deploy volumes` creates them once, and
 # no Compose command, `down -v` included, deletes them.
@@ -171,6 +172,8 @@ services:
       CANTALOUPE_LOG_APPLICATION_CONSOLEAPPENDER_ENABLED: "true"
       CANTALOUPE_LOG_APPLICATION_ROLLINGFILEAPPENDER_ENABLED: "false"
       CANTALOUPE_LOG_ERROR_ROLLINGFILEAPPENDER_ENABLED: "false"
+      # nginx writes the access log (JSON, rotated by age on the host); json-file only rotates by size.
+      CANTALOUPE_LOG_ACCESS_CONSOLEAPPENDER_ENABLED: "false"
     volumes:
       - type: bind
         source: ${MEDIA_HOST_DIR:?set MEDIA_HOST_DIR in .env}/uploadedfiles
@@ -204,6 +207,12 @@ services:
     volumes:
       - *media
       - static:/srv/static
+      - type: bind
+        source: ${LOCAL_CA_CERT:-/dev/null}
+        target: /run/ms-ca/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
     # Above gunicorn's graceful_timeout (300 s): a recycled or stopped worker
     # lets its downloads finish.
     stop_grace_period: 310s
@@ -232,6 +241,12 @@ services:
       - "/run/prometheus:rw,noexec,nosuid,nodev,size=64m,mode=1777"
     volumes:
       - *media
+      - type: bind
+        source: ${LOCAL_CA_CERT:-/dev/null}
+        target: /run/ms-ca/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
     stop_grace_period: 60s
     depends_on:
       web: {condition: service_healthy}
@@ -253,6 +268,119 @@ services:
     # A singleton nobody waits on; the image's /healthz probe does not apply to it.
     healthcheck:
       disable: true
+
+  nginx:
+    <<: *service
+    # nginx-unprivileged listens on 80 and 443 with no capability: Docker sets
+    # net.ipv4.ip_unprivileged_port_start=0 in the container.
+    # Runs as the service account, which owns the media files and the log directory.
+    image: nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:15c994d10d6d78658721c3bcafff14cb281fba2a4bdf9d5ba92c416a472516e3
+    user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
+    read_only: true
+    ports:
+      - {target: 80, published: "${HTTP_PORT:-80}", protocol: tcp}
+      - {target: 443, published: "${HTTPS_PORT:-443}", protocol: tcp}
+    networks:
+      # web and worker reach the public name through nginx (server-side info.json
+      # fetch of Arches' manifest manager, which uses the public origin).
+      default:
+        aliases: ["${PUBLIC_HOST:?set PUBLIC_HOST in .env (the host name of PUBLIC_SERVER_ADDRESS)}"]
+    environment:
+      DOMAIN_NAMES: ${DOMAIN_NAMES:?set DOMAIN_NAMES in .env}
+      HSTS_MAX_AGE: ${HSTS_MAX_AGE:-3600}
+      NGINX_ENVSUBST_OUTPUT_DIR: /tmp
+      NGINX_ENVSUBST_FILTER: ^(DOMAIN_NAMES|HSTS_MAX_AGE)$$
+      NGINX_ENTRYPOINT_QUIET_LOGS: "1"
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=16m,mode=1777"
+      # Request bodies of uploads (client_max_body_size 100m, two at once).
+      - "/var/cache/nginx:rw,nosuid,nodev,size=256m,mode=1777"
+    volumes:
+      - {type: bind, source: ./nginx/nginx.conf, target: /etc/nginx/nginx.conf, read_only: true}
+      - {type: bind, source: ./nginx/snippets, target: /etc/nginx/snippets, read_only: true}
+      - {type: bind, source: ./nginx/templates, target: /etc/nginx/templates, read_only: true}
+      - {type: bind, source: ./nginx/errors, target: /etc/nginx/errors, read_only: true}
+      - {type: bind, source: ./nginx/ffdhe2048.pem, target: /etc/nginx/ffdhe2048.pem, read_only: true}
+      # The site's own error page, shared with Django (self-contained).
+      - {type: bind, source: ../../manuspectrum/templates/errors/500.htm, target: /etc/nginx/site-errors/500.htm, read_only: true}
+      - type: bind
+        source: ${CERTS_DIR:?set CERTS_DIR in .env}/live
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CERTS_DIR}/acme-webroot
+        target: /var/www/acme
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_HOST_DIR:?set MEDIA_HOST_DIR in .env}
+        target: /srv/media
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: static
+        target: /srv/static
+        read_only: true
+      - type: bind
+        source: ${NGINX_LOG_HOST_DIR:?set NGINX_LOG_HOST_DIR in .env}
+        target: /var/log/manuspectrum
+        bind:
+          create_host_path: false
+    depends_on:
+      # The static files are published before gunicorn starts.
+      web: {condition: service_healthy}
+      cantaloupe: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Issues and renews the Let's Encrypt certificate (CERT_MODE=acme). Never
+  # started by `up`: `make cert-init` and `make cert-renew` run it once per
+  # call. It sees three subdirectories of CERTS_DIR and no more: the webroot
+  # acme-webroot/, the account and lineages letsencrypt/ (never mounted into
+  # nginx), and live/, where the deploy hook copies the lineage as
+  # fullchain.pem and privkey.pem, the only files nginx reads.
+  certbot:
+    <<: *service
+    profiles: [acme]
+    restart: "no"
+    # certbot/certbot v5.8.0
+    image: certbot/certbot@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
+    user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
+    read_only: true
+    entrypoint:
+      - certbot
+      - --config-dir=/certs/letsencrypt
+      - --logs-dir=/certs/letsencrypt/logs
+      - --work-dir=/tmp/certbot
+    environment:
+      HOME: /tmp
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=16m,mode=1777"
+    volumes:
+      - type: bind
+        source: ${CERTS_DIR:?set CERTS_DIR in .env}/live
+        target: /certs/live
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CERTS_DIR}/letsencrypt
+        target: /certs/letsencrypt
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CERTS_DIR}/acme-webroot
+        target: /certs/acme-webroot
+        bind:
+          create_host_path: false
+      - {type: bind, source: ./certbot/deploy-hook.sh, target: /hooks/deploy-hook.sh, read_only: true}
 
 secrets:
   pg_password:

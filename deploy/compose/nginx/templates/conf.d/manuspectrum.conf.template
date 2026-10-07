@@ -1,0 +1,118 @@
+# Rendered by the image entrypoint (NGINX_ENVSUBST_FILTER keeps only
+# DOMAIN_NAMES and HSTS_MAX_AGE) into /tmp/conf.d/manuspectrum.conf.
+# DOMAIN_NAMES is the space-separated list of public names.
+
+map $host $hsts_header {
+    default "max-age=${HSTS_MAX_AGE}";
+}
+
+# Unknown Host on port 80, unknown SNI on port 443: nothing is answered.
+server {
+    listen 80 default_server;
+    server_name _;
+    access_log off;
+    return 444;
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name _;
+    access_log off;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    server_name ${DOMAIN_NAMES};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        default_type text/plain;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN_NAMES};
+
+    ssl_certificate /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+    include snippets/tls.conf;
+
+    include snippets/security-headers.conf;
+
+    error_page 404 /_errors/404.html;
+    error_page 429 /_errors/429.html;
+    error_page 500 502 503 504 /_errors/50x.html;
+
+    location ^~ /_errors/ {
+        internal;
+        alias /etc/nginx/errors/;
+        include snippets/security-headers.conf;
+        include snippets/local-headers.conf;
+    }
+
+    location = /_errors/429.html {
+        internal;
+        alias /etc/nginx/errors/429.html;
+        include snippets/security-headers.conf;
+        include snippets/local-headers.conf;
+        add_header Retry-After 60 always;
+    }
+
+    # The project's own self-contained 500 page, mounted from the app tree.
+    location = /_errors/50x.html {
+        internal;
+        alias /etc/nginx/site-errors/500.htm;
+        include snippets/security-headers.conf;
+        include snippets/local-headers.conf;
+    }
+
+    include snippets/static.conf;
+
+    # Include points of the edge rules (regex locations match in file order).
+    include snippets/edge-rules.conf;
+    include snippets/media.conf;
+    include snippets/iiifserver.conf;
+
+    # location /grafana/ { ... }  (PP-6)
+
+    location / {
+        include snippets/proxy-web.conf;
+        limit_req zone=site burst=60 nodelay;
+        limit_conn perip 20;
+        proxy_pass http://web_up;
+    }
+}
+
+# Loopback only, never published: the bytes of uploaded files and search
+# exports, reached by the 302 that Arches' FileView answers (see media.conf).
+server {
+    listen 127.0.0.1:8081;
+    server_name media.internal;
+    access_log off;
+
+    location = /nginx-health {
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location ^~ /files/uploadedfiles/ {
+        alias /srv/media/uploadedfiles/;
+        include snippets/media-headers.conf;
+    }
+
+    location ^~ /files/export_deliverables/ {
+        alias /srv/media/export_deliverables/;
+        include snippets/media-headers.conf;
+    }
+
+    location / {
+        return 404;
+    }
+}

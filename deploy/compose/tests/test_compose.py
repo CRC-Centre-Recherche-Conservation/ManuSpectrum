@@ -35,7 +35,9 @@ PROD_LIMITS = {
     "cantaloupe": 1792 * MIB,
     "redis-broker": 256 * MIB,
     "redis-cache": 768 * MIB,
+    "nginx": 512 * MIB,
 }
+PROD_LIMITS_CEILING = 17.5 * GIB
 
 
 def to_bytes(value):
@@ -44,7 +46,7 @@ def to_bytes(value):
     return number * {"": 1, "k": 1024, "m": MIB, "g": GIB}[unit]
 
 
-def render(*files):
+def render(*files, profiles=()):
     """Return `docker compose config` as JSON for `files`, with .env.example values."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp) / "compose"
@@ -63,11 +65,20 @@ def render(*files):
         (secrets / "email_password").write_text("")
         media = Path(tmp) / "media"
         (media / "uploadedfiles").mkdir(parents=True)
+        certs = Path(tmp) / "certs"
+        for sub in ("acme-webroot", "live", "ca", "letsencrypt"):
+            (certs / sub).mkdir(parents=True)
+        logs = Path(tmp) / "nginx-logs"
+        logs.mkdir()
         env = (COMPOSE_DIR / ".env.example").read_text()
         env = re.sub(r"(?m)^SECRETS_DIR=.*$", f"SECRETS_DIR={secrets}", env)
         env = re.sub(r"(?m)^MEDIA_HOST_DIR=.*$", f"MEDIA_HOST_DIR={media}", env)
+        env = re.sub(r"(?m)^CERTS_DIR=.*$", f"CERTS_DIR={certs}", env)
+        env = re.sub(r"(?m)^NGINX_LOG_HOST_DIR=.*$", f"NGINX_LOG_HOST_DIR={logs}", env)
         (project / ".env").write_text(env)
         command = ["docker", "compose", "--project-directory", str(project)]
+        for profile in profiles:
+            command += ["--profile", profile]
         command += ["--env-file", str(project / ".env")]
         for name in files:
             command += ["-f", str(project / name)]
@@ -87,16 +98,152 @@ class ComposeStackTests(unittest.TestCase):
         cls.base, cls.media = render("compose.yaml")
         cls.prod, _ = render("compose.yaml", "compose.prod.yaml")
         cls.stacks = {"base": cls.base, "prod": cls.prod}
+        cls.acme, _ = render("compose.yaml", "compose.prod.yaml", profiles=("acme",))
 
     def each_service(self):
         for label, stack in self.stacks.items():
             for name, service in stack["services"].items():
                 yield label, name, service
 
-    def test_no_service_publishes_a_port(self):
+    def test_only_nginx_publishes_ports(self):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):
-                self.assertFalse(service.get("ports"))
+                if name != "nginx":
+                    self.assertFalse(service.get("ports"))
+                    continue
+                self.assertEqual(
+                    {(p["target"], p["published"]) for p in service["ports"]},
+                    {(80, "80"), (443, "443")},
+                )
+
+    def test_nginx_is_hardened(self):
+        for label, stack in self.stacks.items():
+            nginx = stack["services"]["nginx"]
+            with self.subTest(stack=label):
+                self.assertTrue(nginx["read_only"])
+                self.assertEqual(nginx["user"], "10001:10001")
+                self.assertEqual(nginx["cap_drop"], ["ALL"])
+                self.assertFalse(nginx.get("cap_add"))
+                self.assertIn("no-new-privileges:true", nginx["security_opt"])
+                tmpfs = {t.split(":")[0]: t for t in nginx["tmpfs"]}
+                self.assertEqual(set(tmpfs), {"/tmp", "/var/cache/nginx"})
+                self.assertIn("mode=1777", tmpfs["/tmp"])
+                self.assertIn("size=256m", tmpfs["/var/cache/nginx"])
+
+    def test_nginx_mounts(self):
+        for label, stack in self.stacks.items():
+            nginx = stack["services"]["nginx"]
+            mounts = {v["target"]: v for v in nginx["volumes"]}
+            with self.subTest(stack=label):
+                for target in (
+                    "/etc/nginx/nginx.conf",
+                    "/etc/nginx/snippets",
+                    "/etc/nginx/templates",
+                    "/etc/nginx/errors",
+                    "/etc/nginx/ffdhe2048.pem",
+                    "/etc/nginx/site-errors/500.htm",
+                    "/etc/nginx/certs",
+                    "/var/www/acme",
+                    "/srv/media",
+                    "/srv/static",
+                ):
+                    self.assertTrue(mounts[target]["read_only"], target)
+                self.assertEqual(mounts["/srv/static"]["source"], "static")
+                self.assertTrue(mounts["/srv/media"]["source"].endswith("/media"))
+                certs = mounts["/etc/nginx/certs"]["source"]
+                self.assertTrue(certs.endswith("/certs/live"), certs)
+                self.assertEqual(
+                    mounts["/var/www/acme"]["source"],
+                    certs[: -len("/live")] + "/acme-webroot",
+                )
+                logs = mounts["/var/log/manuspectrum"]
+                self.assertFalse(logs.get("read_only"))
+                self.assertTrue(logs["source"].endswith("nginx-logs"))
+                self.assertNotIn("/etc/nginx/tests", mounts)
+                self.assertEqual(len(mounts), len(nginx["volumes"]))
+        source = (COMPOSE_DIR / "compose.yaml").read_text()
+        nginx_source = source[
+            source.index("\n  nginx:\n") : source.index("\n  certbot:\n")
+        ]
+        self.assertEqual(nginx_source.count("create_host_path: false"), 4)
+
+    def test_nginx_answers_to_the_public_name_on_the_internal_network(self):
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        host = re.search(r"(?m)^PUBLIC_SERVER_ADDRESS=https://([^/:\s]+)/$", env)[1]
+        self.assertRegex(env, rf"(?m)^PUBLIC_HOST={re.escape(host)}$")
+        for label, stack in self.stacks.items():
+            with self.subTest(stack=label):
+                networks = stack["services"]["nginx"]["networks"]
+                self.assertEqual(networks["default"]["aliases"], [host])
+
+    def test_local_ca_reaches_web_and_worker_only_as_a_read_only_certificate(self):
+        for label, stack in self.stacks.items():
+            for name, service in stack["services"].items():
+                mounts = [
+                    v
+                    for v in service.get("volumes", [])
+                    if v["target"] == "/run/ms-ca/ca.crt"
+                ]
+                with self.subTest(stack=label, service=name):
+                    if name in ("web", "worker"):
+                        self.assertEqual(len(mounts), 1)
+                        self.assertTrue(mounts[0]["read_only"])
+                        self.assertEqual(mounts[0]["source"], "/dev/null")
+                    else:
+                        self.assertEqual(mounts, [])
+        for name in ("web", "worker", "beat"):
+            for volume in self.base["services"][name].get("volumes", []):
+                self.assertNotIn("privkey", str(volume.get("source", "")))
+        self.assertRegex(
+            (COMPOSE_DIR / ".env.example").read_text(), r"(?m)^LOCAL_CA_CERT=$"
+        )
+
+    def test_only_nginx_and_certbot_see_the_certificate_directories(self):
+        for label, stack in self.stacks.items():
+            for name, service in stack["services"].items():
+                for v in service.get("volumes", []):
+                    source = str(v.get("source", ""))
+                    with self.subTest(stack=label, service=name, source=source):
+                        if "/certs" not in source:
+                            continue
+                        self.assertIn(name, ("nginx", "certbot"))
+                        self.assertNotRegex(source, r"/certs(/ca)?$")
+                        self.assertNotIn("/ca", source.split("/certs", 1)[1])
+                        if source.endswith("/live"):
+                            self.assertEqual(
+                                v["target"],
+                                (
+                                    "/etc/nginx/certs"
+                                    if name == "nginx"
+                                    else "/certs/live"
+                                ),
+                            )
+
+    def test_nginx_waits_for_a_healthy_web(self):
+        depends = self.base["services"]["nginx"]["depends_on"]
+        self.assertEqual(depends["web"]["condition"], "service_healthy")
+        self.assertEqual(depends["cantaloupe"]["condition"], "service_started")
+
+    def test_nginx_renders_only_its_two_variables(self):
+        nginx = self.base["services"]["nginx"]
+        environment = nginx["environment"]
+        self.assertEqual(environment["NGINX_ENVSUBST_OUTPUT_DIR"], "/tmp")
+        # `config` renders the Compose escape `$$` as is; the container sees one `$`.
+        self.assertEqual(
+            environment["NGINX_ENVSUBST_FILTER"], "^(DOMAIN_NAMES|HSTS_MAX_AGE)$$"
+        )
+        self.assertEqual(environment["DOMAIN_NAMES"], "manuspectrum.test")
+        self.assertEqual(environment["HSTS_MAX_AGE"], "3600")
+        self.assertNotIn("NGINX_ENVSUBST_TEMPLATE_DIR", environment)
+        self.assertIn(
+            "127.0.0.1:8081/nginx-health", " ".join(nginx["healthcheck"]["test"])
+        )
+
+    def test_cantaloupe_writes_no_access_log(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(
+            environment["CANTALOUPE_LOG_ACCESS_CONSOLEAPPENDER_ENABLED"], "false"
+        )
 
     def test_every_service_restarts_logs_and_drops_privileges(self):
         for label, name, service in self.each_service():
@@ -195,7 +342,9 @@ class ComposeStackTests(unittest.TestCase):
     def test_media_is_the_host_directory_never_created_by_docker(self):
         for name in ("web", "worker", "cantaloupe"):
             binds = [
-                v for v in self.base["services"][name]["volumes"] if v["type"] == "bind"
+                v
+                for v in self.base["services"][name]["volumes"]
+                if v["type"] == "bind" and v["target"] != "/run/ms-ca/ca.crt"
             ]
             with self.subTest(service=name):
                 self.assertEqual(len(binds), 1)
@@ -212,7 +361,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2)
+        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1)
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -277,6 +426,10 @@ class ComposeStackTests(unittest.TestCase):
         java = services["cantaloupe"]["environment"]["JAVA_TOOL_OPTIONS"].split()
         self.assertIn("-Xmx1g", java)
         self.assertIn("-XX:+ExitOnOutOfMemoryError", java)
+
+    def test_production_limits_stay_within_the_budget(self):
+        self.assertLessEqual(sum(PROD_LIMITS.values()), PROD_LIMITS_CEILING)
+        self.assertEqual(sum(PROD_LIMITS.values()), PROD_LIMITS_CEILING)
 
     def test_production_services_never_swap(self):
         for name, limit in PROD_LIMITS.items():
@@ -363,8 +516,45 @@ class ComposeStackTests(unittest.TestCase):
         env = (COMPOSE_DIR / ".env.example").read_text()
         self.assertRegex(env, r"(?m)^PUBLIC_SERVER_ADDRESS=https://\S+/$")
 
+    def test_certbot_runs_only_under_the_acme_profile(self):
+        self.assertNotIn("certbot", self.base["services"])
+        self.assertNotIn("certbot", self.prod["services"])
+        self.assertIn("certbot", self.acme["services"])
+
+    def test_certbot_is_hardened_and_publishes_nothing(self):
+        certbot = self.acme["services"]["certbot"]
+        self.assertEqual(certbot["user"], "10001:10001")
+        self.assertTrue(certbot["read_only"])
+        self.assertEqual(certbot["cap_drop"], ["ALL"])
+        self.assertFalse(certbot.get("cap_add"))
+        self.assertIn("no-new-privileges:true", certbot["security_opt"])
+        self.assertFalse(certbot.get("ports"))
+        self.assertEqual(certbot["restart"], "no")
+        self.assertEqual([t.split(":")[0] for t in certbot["tmpfs"]], ["/tmp"])
+
+    def test_certbot_mounts_three_certificate_directories_and_the_hook_read_only(self):
+        certbot = self.acme["services"]["certbot"]
+        mounts = {v["target"]: v for v in certbot["volumes"]}
+        self.assertEqual(
+            set(mounts),
+            {
+                "/certs/live",
+                "/certs/letsencrypt",
+                "/certs/acme-webroot",
+                "/hooks/deploy-hook.sh",
+            },
+        )
+        for name in ("live", "letsencrypt", "acme-webroot"):
+            self.assertFalse(mounts[f"/certs/{name}"].get("read_only"))
+            self.assertTrue(
+                mounts[f"/certs/{name}"]["source"].endswith(f"/certs/{name}")
+            )
+        self.assertTrue(mounts["/hooks/deploy-hook.sh"]["read_only"])
+        self.assertIn("--config-dir=/certs/letsencrypt", certbot["entrypoint"])
+        self.assertFalse(certbot.get("secrets"))
+
     def test_third_party_images_are_pinned_by_digest(self):
-        for name, service in self.base["services"].items():
+        for name, service in self.acme["services"].items():
             if name not in APP_SERVICES:
                 with self.subTest(service=name):
                     self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
@@ -375,6 +565,95 @@ class RepositoryRulesTests(unittest.TestCase):
         makefile = (DEPLOY_DIR / "Makefile").read_text()
         for forbidden in ("down -v", "--volumes", "volume rm", "prune"):
             self.assertNotIn(forbidden, makefile)
+
+    def test_makefile_drives_nginx_and_the_local_certificates(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text()
+        self.assertRegex(makefile, r"(?m)^nginx-test:.*\n\t.*exec nginx nginx -t$")
+        self.assertRegex(makefile, r"(?m)^\t.*exec nginx nginx -s reload$")
+        self.assertIn("certs/make-local-ca.sh", makefile)
+        self.assertRegex(makefile, r"(?m)^certs-local:")
+
+    def test_cert_renew_reloads_on_a_change_and_exits_with_certbots_status(self):
+        cases = [
+            ("changed, certbot fails", "echo new > $$CERT; exit 3", True, False),
+            ("changed, certbot succeeds", "echo new > $$CERT", True, True),
+            ("unchanged, certbot succeeds", "true", False, True),
+            ("unchanged, certbot fails", "exit 3", False, False),
+        ]
+        for label, certbot, reloaded, succeeds in cases:
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                (tmp / "live").mkdir()
+                cert = tmp / "live" / "fullchain.pem"
+                cert.write_text("old\n")
+                env = (COMPOSE_DIR / ".env.example").read_text()
+                env = re.sub(r"(?m)^CERT_MODE=.*$", "CERT_MODE=acme", env)
+                env = re.sub(r"(?m)^CERTS_DIR=.*$", f"CERTS_DIR={tmp}", env)
+                (tmp / "env").write_text(env)
+                fake = tmp / "compose"
+                fake.write_text(f'#!/bin/sh\necho "$@" >> {tmp}/calls\n')
+                fake.chmod(0o755)
+                result = subprocess.run(
+                    [
+                        "make",
+                        "-C",
+                        str(DEPLOY_DIR),
+                        "cert-renew",
+                        f"ENV_FILE={tmp}/env",
+                        f"COMPOSE={fake}",
+                        f"CERTBOT=env CERT={cert} sh -c '{certbot}'",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                calls = (tmp / "calls").read_text() if (tmp / "calls").exists() else ""
+                self.assertEqual("nginx -s reload" in calls, reloaded, result.stderr)
+                self.assertEqual(result.returncode == 0, succeeds, result.stderr)
+
+    def test_acme_targets_refuse_outside_acme_mode_or_without_a_contact(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text()
+        self.assertRegex(makefile, r"(?m)^cert-init:")
+        self.assertRegex(makefile, r"(?m)^cert-renew:")
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        cases = {
+            "cert-init": [
+                ("CERT_MODE=local", "ACME_EMAIL=ops@manuspectrum.test", "not acme"),
+                ("CERT_MODE=acme", "ACME_EMAIL=", "set ACME_EMAIL"),
+            ],
+            "cert-renew": [("CERT_MODE=provided", "ACME_EMAIL=", "not acme")],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for target, variants in cases.items():
+                for mode, email, message in variants:
+                    text = re.sub(r"(?m)^CERT_MODE=.*$", mode, env)
+                    text = re.sub(r"(?m)^ACME_EMAIL=.*$", email, text)
+                    path = Path(tmp) / "env"
+                    path.write_text(text)
+                    with self.subTest(target=target, mode=mode, email=email):
+                        result = subprocess.run(
+                            ["make", "-C", str(DEPLOY_DIR), target, f"ENV_FILE={path}"],
+                            capture_output=True,
+                            text=True,
+                        )
+                        self.assertEqual(result.returncode, 2)
+                        self.assertIn(message, result.stderr)
+
+    def test_acme_server_defaults_to_the_staging_directory(self):
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(
+            env,
+            r"(?m)^ACME_SERVER=https://acme-staging-v02\.api\.letsencrypt\.org/directory$",
+        )
+
+    def test_renewal_units_run_the_make_target_twice_a_day(self):
+        service = (
+            DEPLOY_DIR / "systemd/manuspectrum-cert-renew.service.in"
+        ).read_text()
+        timer = (DEPLOY_DIR / "systemd/manuspectrum-cert-renew.timer.in").read_text()
+        self.assertIn("ExecStart=/usr/bin/make -C @DEPLOY_DIR@ cert-renew", service)
+        self.assertIn("OnCalendar=*-*-* 00,12:00", timer)
+        self.assertIn("RandomizedDelaySec=1h", timer)
+        self.assertIn("Persistent=true", timer)
 
     def test_env_example_ships_production_as_the_environment(self):
         text = (COMPOSE_DIR / ".env.example").read_text()
@@ -389,4 +668,9 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertEqual(addresses, set())
         self.assertIn("APP_UID=10001", text)
         self.assertIn("APP_GID=10001", text)
+        for name in ("CERTS_DIR", "NGINX_LOG_HOST_DIR"):
+            self.assertRegex(text, rf"(?m)^{name}=/data/manuspectrum/\S+$")
+        self.assertRegex(text, r"(?m)^CERT_MODE=local$")
+        self.assertRegex(text, r"(?m)^HSTS_MAX_AGE=3600$")
+        self.assertRegex(text, r"(?m)^ACME_EMAIL=$")
         self.assertNotRegex(text, r"(?i)(password|secret_key)=\S")

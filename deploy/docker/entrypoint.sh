@@ -159,6 +159,22 @@ manage_refusal() {
   return 1
 }
 
+# Adds the CA of a rehearsal (a non-empty file mounted at CA_CERT_FILE) to the
+# trusted bundle: the image's certifi bundle plus that CA, so public trust is
+# kept. requests (REQUESTS_CA_BUNDLE) and ssl (SSL_CERT_FILE) read it. An empty
+# or missing file, as in production, changes nothing.
+trust_local_ca() {
+  local ca="${CA_CERT_FILE:-/run/ms-ca/ca.crt}" bundle="${CA_BUNDLE_FILE:-/tmp/ca-bundle.pem}" certifi
+  [ -s "$ca" ] || return 0
+  certifi="$(oneoff python -c 'import certifi; print(certifi.where())')" || {
+    log "cannot locate the certifi bundle; not starting"
+    exit 1
+  }
+  { cat "$certifi"; echo; cat "$ca"; } >"$bundle"
+  export REQUESTS_CA_BUNDLE="$bundle" SSL_CERT_FILE="$bundle"
+  log "trusting the local CA $ca"
+}
+
 command="${1:-web}"
 case "$command" in
   web)
@@ -191,12 +207,14 @@ case "$command" in
     PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 oneoff python manage.py migrate --noinput
     publish-static /app/static /srv/static
     reset_metrics_dir
+    trust_local_ca
     exec gunicorn --config /app/gunicorn.conf.py
     ;;
   worker)
     wait_for PostgreSQL postgres_ready
     wait_for Elasticsearch elasticsearch_ready
     reset_metrics_dir
+    trust_local_ca
     exec celery -A manuspectrum.celery worker \
       --loglevel="${CELERY_LOG_LEVEL:-INFO}" \
       --concurrency="${CELERY_CONCURRENCY:-2}" \
@@ -243,6 +261,7 @@ case "$command" in
     fi
     # Management commands (reindex, imports) run without those timeouts.
     export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
+    trust_local_ca
     exec env -u PROMETHEUS_MULTIPROC_DIR python manage.py "$@"
     ;;
   *)

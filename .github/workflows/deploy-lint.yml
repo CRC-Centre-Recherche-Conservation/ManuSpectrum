@@ -47,8 +47,8 @@ jobs:
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
-          stack='deploy/(docker|compose)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|pyproject\.toml$|uv\.lock$'
-          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          stack='deploy/(docker|compose|certs|logrotate|systemd)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
+          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/rewrite_dev_origin\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflow)")"
@@ -97,6 +97,9 @@ jobs:
 
       - name: Check the image and Compose files
         run: bash deploy/check-stack.sh
+
+      - name: ACME flow against Pebble
+        run: bash deploy/certs/tests/test_acme_pebble.sh
 
   image:
     needs: changes
@@ -160,13 +163,18 @@ jobs:
         run: |
           secrets="$RUNNER_TEMP/secrets"
           media="$RUNNER_TEMP/media"
-          install -d "$media/uploadedfiles"
+          certs="$RUNNER_TEMP/certs"
+          install -d "$media/uploadedfiles" "$certs/acme-webroot" "$certs/live" "$RUNNER_TEMP/nginx-logs"
+          CA_DIR="$certs/ca" bash deploy/certs/make-local-ca.sh "$certs/live" manuspectrum.test
           make -C deploy secrets SECRETS_DIR="$secrets"
           sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
               -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
               -e "s#^APP_GID=.*#APP_GID=$(id -g)#" \
               -e "s#^MEDIA_HOST_DIR=.*#MEDIA_HOST_DIR=$media#" \
               -e "s#^SECRETS_DIR=.*#SECRETS_DIR=$secrets#" \
+              -e "s#^CERTS_DIR=.*#CERTS_DIR=$certs#" \
+              -e "s#^NGINX_LOG_HOST_DIR=.*#NGINX_LOG_HOST_DIR=$RUNNER_TEMP/nginx-logs#" \
+              -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca/ca.crt#" \
               deploy/compose/.env.example > "$ENV_FILE"
 
       - name: First installation
@@ -176,6 +184,7 @@ jobs:
         run: |
           deploy/compose/smoke.sh check
           deploy/compose/smoke.sh observability
+          deploy/compose/smoke.sh edge
           deploy/compose/smoke.sh mark
           deploy/compose/smoke.sh init-guard
 
@@ -213,6 +222,7 @@ jobs:
         run: |
           [ -f "$ENV_FILE" ] || { echo "The stack was never started: no service log."; exit 0; }
           mkdir -p "$RUNNER_TEMP/compose-logs"
+          cp -r "$RUNNER_TEMP/nginx-logs" "$RUNNER_TEMP/compose-logs/nginx-logs" 2>/dev/null || true
           compose() {
             docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
               -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml "$@"
