@@ -29,7 +29,7 @@ FILE_D="00000000-0000-4000-8000-00000000000d"
 FILE_E="00000000-0000-4000-8000-00000000000e"
 STATIC_SWAP_WAIT="${STATIC_SWAP_WAIT:-32}"
 
-GROUPS_ALL=(config tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate upstream_down)
+GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate upstream_down)
 
 RUN="msedge-$$"
 NET="$RUN-net"
@@ -132,7 +132,7 @@ start_nginx() {
   local args=()
   mapfile -t args < <(nginx_run_args)
   docker run -d --name "$NGINX" --network "$NET" \
-    -p 127.0.0.1::8080 -p 127.0.0.1::8443 "${args[@]}" "$NGINX_IMAGE" >/dev/null
+    -p 127.0.0.1::80 -p 127.0.0.1::443 "${args[@]}" "$NGINX_IMAGE" >/dev/null
 }
 
 wait_for() { # wait_for SECONDS CMD... : true as soon as CMD succeeds
@@ -174,8 +174,8 @@ setup() {
   # nginx first, with no upstream yet: it must start and follow them when they appear.
   start_nginx || return 1
   wait_for 20 docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/nginx-health || return 1
-  HTTP_PORT="$(docker port "$NGINX" 8080/tcp | head -1 | sed 's/.*://')"
-  HTTPS_PORT="$(docker port "$NGINX" 8443/tcp | head -1 | sed 's/.*://')"
+  HTTP_PORT="$(docker port "$NGINX" 80/tcp | head -1 | sed 's/.*://')"
+  HTTPS_PORT="$(docker port "$NGINX" 443/tcp | head -1 | sed 's/.*://')"
   check "nginx starts with web and cantaloupe unresolvable (upstream resolve)" \
     docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/nginx-health
   start_stub web 8000 && start_stub cantaloupe 8182 || return 1
@@ -198,6 +198,20 @@ group_config() {
   out="$(docker exec "$NGINX" nginx -T 2>&1)"
   check "the template is rendered with DOMAIN_NAMES and HSTS_MAX_AGE" \
     bash -c 'grep -q "server_name manuspectrum.test;" <<<"$1" && grep -q "max-age=3600" <<<"$1" && ! grep -q "\${" <<<"$1"' _ "$out"
+}
+
+group_privileges() {
+  local uid caps listening
+  uid="$(docker exec "$NGINX" id -u)"
+  check "nginx runs as a non-root uid" test "$uid" -ne 0
+  caps="$(docker inspect -f '{{.HostConfig.CapDrop}}' "$NGINX")"
+  equals "every capability is dropped" "[ALL]" "$caps"
+  listening="$(docker exec "$NGINX" cat /proc/net/tcp /proc/net/tcp6 | awk '$4 == "0A" {print $2}')"
+  check "nginx listens on 80 inside the container" grep -q ':0050$' <<<"$listening"
+  check "nginx listens on 443 inside the container" grep -q ':01BB$' <<<"$listening"
+  check "a container on the network reaches nginx on 443 by its default port" \
+    docker run --rm --network "$NET" --cap-drop ALL "$PYTHON_IMAGE" python -c \
+    "import socket,sys; socket.create_connection(('$NGINX', 443), 5)"
 }
 
 group_tls() {
