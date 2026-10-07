@@ -3,6 +3,8 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import CompareView from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue";
+import WindowGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/WindowGrid.vue";
+import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -10,11 +12,20 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisHit,
     characterization,
+    documentPayload,
     fileEntry,
     imagingEntry,
     technique,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    installDialog,
+    pressEscape,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/dialog.ts";
+import {
+    stubIiifLayer,
+    stubSideBySide,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
 import { resetFakeGrids } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
 import {
     plotly,
@@ -30,6 +41,15 @@ import type {
     Item,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+vi.hoisted(() => {
+    // jsdom's SVG has no createSVGRect: without it Leaflet has no path renderer.
+    (
+        SVGSVGElement.prototype as unknown as { createSVGRect: () => object }
+    ).createSVGRect = () => ({});
+});
+vi.mock("leaflet-iiif", () => ({}));
+vi.mock("leaflet-side-by-side", () => ({}));
 
 vi.mock("gridstack", async () =>
     (
@@ -67,6 +87,7 @@ const SYNTHESIS: SynthesisResponse = {
             label: "f. 12r",
             document: uuid(1),
             counts: { xrf: 1 },
+            components: [{ component: null, counts: { xrf: 1 } }],
         },
     ],
     canvases: [
@@ -75,11 +96,14 @@ const SYNTHESIS: SynthesisResponse = {
             label: "f. 12r",
             document: uuid(1),
             selected: true,
+            analyses: [],
+            materials: [],
         },
     ],
     techniques: [technique("http://example.org/xrf", "XRF", 1, "xrf")],
     pairs: [],
-    elements: [{ symbol: "Cu", level: null, count: 1 }],
+    elements: [{ symbol: "Cu", level: null, count: 1, materials: [] }],
+    materials: [],
     unpublishedCount: 0,
 };
 
@@ -133,6 +157,19 @@ const XRF_EIGHT_ITEM = whole(
     Array.from({ length: 8 }, (_, index) => spectrum(10 + index, XRF)),
 );
 const MAPS_ITEM = whole(8, [imagingEntry()]);
+const COMPONENT_ITEM: Item = {
+    key: `an:${analysisHit(11).id}:-`,
+    kind: "analysis",
+    analysis: {
+        ...analysisHit(11),
+        component: {
+            id: uuid(951),
+            model: "component",
+            name: { value: "Initial T", lang: "en" },
+        },
+    },
+    files: [spectrum(11, XRF)],
+};
 
 const ITEMS = new Map(
     [
@@ -147,6 +184,7 @@ const ITEMS = new Map(
         MAPS_ITEM,
         XRF_THIRD_ITEM,
         XRF_EIGHT_ITEM,
+        COMPONENT_ITEM,
     ].map((item) => [item.key, item]),
 );
 
@@ -154,17 +192,26 @@ let pinia: Pinia;
 let announce: ReturnType<typeof vi.fn>;
 let fetchMock: ReturnType<typeof vi.fn>;
 let synthesis: SynthesisResponse;
+/** Answers the next synthesis requests instead of `synthesis`, while set. */
+let synthesisReply: (() => Promise<Response>) | null = null;
 let wrapper: VueWrapper | null = null;
+let uninstallDialog: () => void;
 
 beforeEach(() => {
+    stubIiifLayer({ size: { w: 2000, h: 3000 } });
+    stubSideBySide();
+    uninstallDialog = installDialog();
     resetFakeGrids();
     forgetPayloads();
     window.localStorage.clear();
     announce = vi.fn();
     resetPlotly();
     synthesis = SYNTHESIS;
+    synthesisReply = null;
     fetchMock = vi.fn(async (url: string) => {
-        if (url.startsWith(SYNTHESIS_PATH)) return jsonResponse(synthesis);
+        if (url.startsWith(SYNTHESIS_PATH)) {
+            return synthesisReply ? synthesisReply() : jsonResponse(synthesis);
+        }
         if (url.startsWith(SERIES_PATH)) {
             return jsonResponse({
                 x: [1, 2],
@@ -188,6 +235,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
+    uninstallDialog();
     vi.unstubAllGlobals();
 });
 
@@ -242,6 +290,42 @@ function windowOf(view: VueWrapper, id: string) {
     return view
         .findAll(".grid-stack-item")
         .find((item) => item.attributes("data-window-id") === id)!;
+}
+
+function hiddenButton(view: VueWrapper) {
+    return view.find(".hidden-windows .hidden-windows-button");
+}
+
+/** The entries of « Hidden windows », its menu opened first. */
+async function hiddenEntries(view: VueWrapper) {
+    if (hiddenButton(view).attributes("aria-expanded") !== "true") {
+        await hiddenButton(view).trigger("click");
+    }
+    return view.findAll('.hidden-windows [role="menuitem"]');
+}
+
+/** The synthesis with the identified material of `MATERIAL`, citing the analysis of `XRF_ITEM`. */
+function citingSynthesis(selected: boolean): SynthesisResponse {
+    return {
+        ...SYNTHESIS,
+        materials: [
+            {
+                id: characterization(1).id,
+                evidence: [analysisHit(1).id],
+                canvases: [],
+                objects: [],
+                summary: characterization(1),
+                selected,
+            },
+        ],
+    };
+}
+
+/** The Selection column of each line of the Materials window. */
+function materialSelection(view: VueWrapper): string[] {
+    return windowOf(view, "auto:characterizations")
+        .findAll("tbody td .selection")
+        .map((cell) => cell.text());
 }
 
 function storedLayout(): {
@@ -300,13 +384,37 @@ describe("CompareView", () => {
             "auto:not-in-chart",
         ]);
         expect(
-            view.findAll(".compare-window h3").map((title) => title.text()),
+            view
+                .findAll(".compare-window h3 .name")
+                .map((title) => title.text()),
         ).toEqual([
             "Intensity against Raman shift (cm-1)",
             "XRF — energy / counts",
             "Micro-images",
-            "Identified materials",
+            "Materials",
             "Without visualisation",
+        ]);
+        expect(
+            view
+                .findAll(".compare-window h3")
+                .map((title) => title.find(".kind").exists()),
+        ).toEqual([true, true, false, false, false]);
+        expect(
+            view
+                .findAll(".compare-window h3 .subtitle")
+                .map((title) => title.text()),
+        ).toEqual([
+            "1 spectrum",
+            "1 spectrum",
+            "1 image",
+            "1 identified material",
+            "1 item",
+        ]);
+        expect(
+            view.findAllComponents(XyWorkshop).map((xy) => xy.props("title")),
+        ).toEqual([
+            "Intensity against Raman shift (cm-1)",
+            "XRF — energy / counts",
         ]);
         expect(
             plotly.react.mock.calls.flatMap(([, traces]) =>
@@ -317,24 +425,108 @@ describe("CompareView", () => {
             windowOf(view, "auto:micro").find("figcaption").text(),
         ).toContain("A4");
         expect(
-            windowOf(view, "auto:characterizations").find("tbody th").text(),
+            windowOf(view, "auto:characterizations")
+                .find("tbody th button")
+                .attributes("title"),
         ).toBe("Characterization 1");
         expect(windowOf(view, "auto:not-in-chart").find(".reason").text()).toBe(
             "No data to display.",
         );
     });
 
-    it("puts the layered maps side by side in their own window, not among the items in no chart", async () => {
+    it("lists the components of the Selection under the toolbar, none when it has none", async () => {
+        select(XRF_ITEM);
+        const view = await mountView();
+        expect(view.find(".component-strip").exists()).toBe(false);
+        select(COMPONENT_ITEM);
+        await flushPromises();
+        const strip = view.find(".window-grid > .component-strip");
+        expect(strip.exists()).toBe(true);
+        expect(strip.findAll(".chip").map((chip) => chip.text())).toEqual([
+            "Initial T1 · 0",
+        ]);
+        expect(
+            strip.element.previousElementSibling?.classList.contains("toolbar"),
+        ).toBe(true);
+    });
+
+    it("opens every window and every tool at size M", async () => {
+        select(
+            MATERIAL,
+            RAMAN_ITEM,
+            XRF_ITEM,
+            MICRO_ITEM,
+            EMPTY_ITEM,
+            MAPS_ITEM,
+        );
+        const view = await mountView();
+        for (const kind of ["coverage", "periodic"]) {
+            await openTool(view, kind);
+        }
+        const sizes = view
+            .findComponent(WindowGrid)
+            .props("windows")
+            .map((spec: { id: string; size: string }) => [spec.id, spec.size]);
+        expect(sizes.length).toBe(8);
+        expect(sizes.filter(([, size]) => size !== "M")).toEqual([]);
+    });
+
+    it("puts the layered maps on the light table in their own window, not among the items in no chart", async () => {
         select(MAPS_ITEM, EMPTY_ITEM);
         const view = await mountView();
-        expect(windowIds(view)).toEqual(["auto:maps", "auto:not-in-chart"]);
-        const maps = windowOf(view, "auto:maps");
-        expect(maps.find("h3").text()).toBe("Element maps");
-        expect(maps.find("figcaption").text()).toContain("A1");
-        expect(maps.find(".layer-picker label").text()).toBe("Element");
+        expect(windowIds(view)).toEqual([
+            "auto:chemical-imaging",
+            "auto:not-in-chart",
+        ]);
+        const maps = windowOf(view, "auto:chemical-imaging");
+        expect(maps.find("h3 .name").text()).toBe("Imaging");
+        expect(maps.find("h3 .subtitle").text()).toBe(
+            "1 analysis · 2 canvases",
+        );
+        expect(maps.find(".light-table").exists()).toBe(true);
+        expect(maps.find(".curtain-pane").exists()).toBe(true);
+        expect(
+            maps
+                .findAll(".curtain-pane .chip .label")
+                .map((node) => node.text()),
+        ).toEqual(["Pb", "Hg"]);
         expect(windowOf(view, "auto:not-in-chart").findAll("li")).toHaveLength(
             1,
         );
+    });
+
+    it("counts the analyses and the canvases of the light table", async () => {
+        select(MAPS_ITEM, whole(12, [imagingEntry()]));
+        ITEMS.set(whole(12, [imagingEntry()]).key, whole(12, [imagingEntry()]));
+        const view = await mountView();
+        expect(
+            windowOf(view, "auto:chemical-imaging").find("h3 .subtitle").text(),
+        ).toBe("2 analyses · 4 canvases");
+        ITEMS.delete(whole(12, [imagingEntry()]).key);
+    });
+
+    it("keeps the window id, so a box saved for it is applied again", async () => {
+        select(MAPS_ITEM);
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: { "auto:chemical-imaging": { x: 6, y: 0, w: 6, h: 5 } },
+                hidden: [],
+                folded: { "auto:chemical-imaging": false },
+            }),
+        );
+        const view = await mountView();
+        expect(windowIds(view)).toEqual(["auto:chemical-imaging"]);
+        expect(
+            windowOf(view, "auto:chemical-imaging")
+                .find('[data-action="fold"]')
+                .attributes("aria-expanded"),
+        ).toBe("true");
+        expect(storedLayout()?.boxes["auto:chemical-imaging"]).toMatchObject({
+            x: 6,
+            w: 6,
+        });
     });
 
     it("opens the fourth XY window folded to its header", async () => {
@@ -350,6 +542,25 @@ describe("CompareView", () => {
                 .find('[data-action="fold"]')
                 .attributes("aria-expanded"),
         ).toBe("true");
+    });
+
+    it("sums a folded XY window up under its header and draws it from there", async () => {
+        select(XRF_ITEM, RAMAN_ITEM, FORS_ITEM, FTIR_ITEM);
+        const view = await mountView();
+        const folded = windowOf(view, `auto:xy:${FTIR}`);
+        expect(folded.find(".folded-summary .line").text()).toBe(
+            "1 XRF spectrum, not drawn",
+        );
+        expect(
+            folded.findAll(".folded-summary .slots li").map((li) => li.text()),
+        ).toEqual(["A4"]);
+        expect(
+            windowOf(view, `auto:xy:${FORS}`).find(".folded-summary").exists(),
+        ).toBe(false);
+        await folded.find(".folded-summary button.unfold").trigger("click");
+        await flushPromises();
+        expect(seriesCalls()).toContain(`${SERIES_PATH}${uuid(706)}?n=full`);
+        expect(folded.find(".folded-summary").exists()).toBe(false);
     });
 
     it("reads the spectra of a folded XY window only once it is unfolded", async () => {
@@ -379,21 +590,21 @@ describe("CompareView", () => {
         ]);
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
         expect(announce).toHaveBeenLastCalledWith(
-            "Identified materials hidden. Show it again from « Hidden windows ».",
+            "Materials hidden. Show it again from « Hidden windows ».",
         );
         expect(storedLayout()?.hidden).toEqual(["auto:characterizations"]);
-        expect(view.find(".hidden-windows h3").text()).toBe(
-            "Hidden windows (1)",
-        );
-        const show = view.find(".hidden-windows button");
-        expect(show.text()).toBe("Show Identified materials");
+        expect(hiddenButton(view).text()).toBe("Hidden windows (1)");
+        expect(hiddenButton(view).attributes("aria-disabled")).toBeUndefined();
+        const [show] = await hiddenEntries(view);
+        expect(show.text()).toBe("Show Materials");
         await show.trigger("click");
         await flushPromises();
         expect(windowIds(view)).toEqual([
             `auto:xy:${XRF}`,
             "auto:characterizations",
         ]);
-        expect(view.find(".hidden-windows").exists()).toBe(false);
+        expect(hiddenButton(view).text()).toBe("Hidden windows (0)");
+        expect(hiddenButton(view).attributes("aria-disabled")).toBe("true");
         expect(storedLayout()?.hidden).toEqual([]);
         expect(document.activeElement).toBe(
             windowOf(view, "auto:characterizations").find(".compare-window")
@@ -413,7 +624,7 @@ describe("CompareView", () => {
         );
         const view = await mountView();
         expect(windowIds(view)).toEqual(["auto:characterizations"]);
-        expect(view.find(".hidden-windows button").text()).toBe(
+        expect((await hiddenEntries(view))[0].text()).toBe(
             "Show XRF — energy / counts",
         );
         select(XRF_OTHER_ITEM);
@@ -433,10 +644,10 @@ describe("CompareView", () => {
         );
         const view = await mountView();
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
-        expect(view.find(".hidden-windows").exists()).toBe(false);
+        expect(hiddenButton(view).attributes("aria-disabled")).toBe("true");
     });
 
-    it("brings every hidden window back when the windows are rearranged", async () => {
+    it("keeps the hidden windows hidden when the windows are rearranged", async () => {
         select(XRF_ITEM, MATERIAL);
         const view = await mountView();
         await windowOf(view, `auto:xy:${XRF}`)
@@ -445,12 +656,26 @@ describe("CompareView", () => {
         await flushPromises();
         await view.find("button.rearrange").trigger("click");
         await flushPromises();
-        expect(windowIds(view)).toEqual([
-            `auto:xy:${XRF}`,
-            "auto:characterizations",
-        ]);
-        expect(view.find(".hidden-windows").exists()).toBe(false);
-        expect(announce).toHaveBeenLastCalledWith("Windows rearranged.");
+        expect(windowIds(view)).toEqual(["auto:characterizations"]);
+        expect(hiddenButton(view).text()).toBe("Hidden windows (1)");
+        expect(storedLayout()?.hidden).toEqual([`auto:xy:${XRF}`]);
+        expect(announce).toHaveBeenLastCalledWith(
+            "Windows rearranged. 1 window stays hidden.",
+        );
+    });
+
+    it("offers « Hidden windows » in the toolbar, disabled while no window is hidden", async () => {
+        select(XRF_ITEM);
+        const view = await mountView();
+        const button = hiddenButton(view);
+        expect(button.text()).toBe("Hidden windows (0)");
+        expect(button.attributes("aria-disabled")).toBe("true");
+        expect(button.attributes("aria-haspopup")).toBe("menu");
+        await button.trigger("click");
+        expect(view.find('.hidden-windows [role="menu"]').exists()).toBe(false);
+        expect(
+            view.find(".window-grid .toolbar .hidden-windows").exists(),
+        ).toBe(true);
     });
 
     it("keeps the rearrange button when every window is hidden", async () => {
@@ -462,9 +687,7 @@ describe("CompareView", () => {
         await flushPromises();
         expect(windowIds(view)).toEqual([]);
         expect(view.find("button.rearrange").exists()).toBe(true);
-        expect(document.activeElement).toBe(
-            view.find(".hidden-windows button").element,
-        );
+        expect(document.activeElement).toBe(hiddenButton(view).element);
     });
 
     it("drops a window whose items leave the Selection, and forgets it", async () => {
@@ -485,11 +708,39 @@ describe("CompareView", () => {
         expect(view.find(".grid-stack").exists()).toBe(false);
         expect(view.find(".hidden-windows").exists()).toBe(false);
         expect(storedLayout()).toEqual({
-            version: 2,
+            version: 3,
             boxes: {},
             hidden: [],
             folded: {},
         });
+    });
+
+    it("stops counting an identified material removed from the Selection as its own, and keeps its window while the next synthesis is read", async () => {
+        synthesis = citingSynthesis(true);
+        select(XRF_ITEM, MATERIAL);
+        const view = await mountView();
+        expect(materialSelection(view)).toEqual(["A2"]);
+        let answer: (response: Response) => void = () => undefined;
+        synthesisReply = () =>
+            new Promise<Response>((resolve) => (answer = resolve));
+        useExplorerStore().removeFromBasket(MATERIAL.key);
+        await flushPromises();
+        expect(windowIds(view)).toContain("auto:characterizations");
+        expect(materialSelection(view)).toEqual(["cites A1"]);
+        answer(jsonResponse(citingSynthesis(false)));
+        await flushPromises();
+        expect(materialSelection(view)).toEqual(["cites A1"]);
+    });
+
+    it("lists no identified material of a previous synthesis once the next one fails", async () => {
+        synthesis = citingSynthesis(false);
+        select(XRF_ITEM);
+        const view = await mountView();
+        expect(windowIds(view)).toContain("auto:characterizations");
+        synthesisReply = async () => jsonResponse({ error: "down" }, 500);
+        select(RAMAN_ITEM);
+        await flushPromises();
+        expect(windowIds(view)).not.toContain("auto:characterizations");
     });
 
     it("adds the windows of an item added later, reading only that item", async () => {
@@ -542,6 +793,7 @@ describe("CompareView", () => {
             .find('[data-action="close"]')
             .trigger("click");
         await flushPromises();
+        await hiddenEntries(view);
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
         select(XRF_OTHER_ITEM);
         await flushPromises();
@@ -566,7 +818,7 @@ describe("CompareView", () => {
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
         select(XRF_OTHER_ITEM);
         await flushPromises();
-        const show = view.find(".hidden-windows button");
+        const [show] = await hiddenEntries(view);
         expect(show.find(".badge").text()).toBe("1 spectrum added");
         await show.trigger("click");
         await flushPromises();
@@ -574,6 +826,7 @@ describe("CompareView", () => {
             .find('[data-action="close"]')
             .trigger("click");
         await flushPromises();
+        await hiddenEntries(view);
         expect(view.find(".hidden-windows .badge").exists()).toBe(false);
     });
 
@@ -592,7 +845,7 @@ describe("CompareView", () => {
             .find('[data-action="close"]')
             .trigger("click");
         await flushPromises();
-        await view.find(".hidden-windows button").trigger("click");
+        await (await hiddenEntries(view))[0].trigger("click");
         await flushPromises();
         expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
         expect(seriesCalls()).toBe(9);
@@ -627,9 +880,9 @@ describe("CompareView", () => {
                 `auto:xy:${XRF}`,
                 "tool:periodic:-",
             ]);
-            expect(windowOf(view, "tool:periodic:-").find("h3").text()).toBe(
-                "Periodic table",
-            );
+            expect(
+                windowOf(view, "tool:periodic:-").find("h3 .name").text(),
+            ).toBe("Periodic table");
             expect(
                 windowOf(view, "tool:periodic:-")
                     .find('.grid button[aria-label="Cu, 1"]')
@@ -683,7 +936,7 @@ describe("CompareView", () => {
                 .trigger("click");
             await flushPromises();
             expect(windowIds(view)).toEqual([`auto:xy:${XRF}`]);
-            expect(view.find(".hidden-windows").exists()).toBe(false);
+            expect(hiddenButton(view).attributes("aria-disabled")).toBe("true");
             expect(useExplorerStore().compare.tools).toEqual([]);
             expect(storedLayout()?.tools).toBeUndefined();
             expect(storedLayout()?.boxes).not.toHaveProperty("tool:coverage:-");
@@ -705,9 +958,7 @@ describe("CompareView", () => {
                 .trigger("click");
             await flushPromises();
             expect(windowIds(view)).toEqual([]);
-            expect(document.activeElement).toBe(
-                view.find(".hidden-windows button").element,
-            );
+            expect(document.activeElement).toBe(hiddenButton(view).element);
         });
 
         it("says how many drafts the tools read while a tool is open", async () => {
@@ -749,16 +1000,127 @@ describe("CompareView", () => {
             ]);
         });
 
-        it("drops a tool filter whose value left with the Selection", async () => {
+        it("links the windows through the selection shown in the toolbar, and clears it on Escape", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            const indicator = view.find(".toolbar .selection-indicator");
+            expect(indicator.find(".summary").text()).toBe("No focus");
+            await openTool(view, "periodic");
+            await windowOf(view, "tool:periodic:-")
+                .find('.grid button[aria-label="Cu, 1"]')
+                .trigger("click");
+            expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
+            expect(indicator.find(".summary").text()).toBe(
+                "1 in focus · 0 related",
+            );
+            expect(announce).toHaveBeenLastCalledWith("1 in focus · 0 related");
+            document.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Escape",
+                    cancelable: true,
+                }),
+            );
+            await flushPromises();
+            expect(useExplorerStore().compare.selection).toEqual([]);
+            expect(indicator.find(".summary").text()).toBe("No focus");
+        });
+
+        it("keeps the selection when Escape closes an enlarged window", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            await windowOf(view, "tool:periodic:-")
+                .find('.grid button[aria-label="Cu, 1"]')
+                .trigger("click");
+            await windowOf(view, `auto:xy:${XRF}`)
+                .find('[data-action="enlarge"]')
+                .trigger("click");
+            await flushPromises();
+            const dialog = document.querySelector("dialog")!;
+            expect(dialog.open).toBe(true);
+            pressEscape(dialog);
+            await flushPromises();
+            expect(dialog.open).toBe(false);
+            expect(useExplorerStore().compare.selection).toEqual(["el:Cu"]);
+        });
+
+        it("names a tool « Tool » over its title and closes it from its « More » menu", async () => {
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "periodic");
+            const tool = windowOf(view, "tool:periodic:-");
+            expect(tool.find("h3 .kind").text()).toBe("Tool");
+            await tool.find('[data-action="more"]').trigger("click");
+            await tool.find('[data-action="menu-close"]').trigger("click");
+            await flushPromises();
+            expect(useExplorerStore().compare.tools).toEqual([]);
+        });
+
+        it("shows the folio of a coverage row clicked in every folio image tool, and says so once", async () => {
+            const second = {
+                ...SYNTHESIS.canvases[0],
+                canvas: "https://iiif.example/c2",
+                label: "f. 12v",
+            };
+            synthesis = {
+                ...SYNTHESIS,
+                coverage: [
+                    ...SYNTHESIS.coverage,
+                    {
+                        ...SYNTHESIS.coverage[0],
+                        canvas: second.canvas,
+                        label: second.label,
+                    },
+                ],
+                canvases: [...SYNTHESIS.canvases, second],
+            };
+            const answer = fetchMock.getMockImplementation()!;
+            fetchMock.mockImplementation(async (url: string) =>
+                url === "/en/api/explorer/items"
+                    ? jsonResponse(documentPayload())
+                    : answer(url),
+            );
+            select(XRF_ITEM);
+            const view = await mountView();
+            await openTool(view, "coverage");
+            const rowHeader = () =>
+                windowOf(view, "tool:coverage:-").findAll("tbody .folio")[1];
+            await rowHeader().trigger("click");
+            await flushPromises();
+            expect(announce).not.toHaveBeenLastCalledWith(
+                expect.stringContaining("folio image"),
+            );
+            await rowHeader().trigger("click");
+            await openTool(view, "folio");
+            const folios = () =>
+                view
+                    .findAll(".folio-tool select")
+                    .map(
+                        (picker) => (picker.element as HTMLSelectElement).value,
+                    );
+            expect(folios()).toEqual(["https://iiif.example/c1"]);
+            await rowHeader().trigger("click");
+            await flushPromises();
+            expect(folios()).toEqual(["https://iiif.example/c2"]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "1 in focus · 0 related. The folio image shows f. 12v.",
+            );
+        });
+
+        it("drops a selected element that left with the Selection", async () => {
             select(XRF_ITEM);
             const store = useExplorerStore();
-            store.setToolFilter("element", "Cu");
             await mountView();
-            expect(store.compare.toolFilters.element).toBe("Cu");
+            store.toggleSelection("el:Cu");
+            await flushPromises();
+            expect(store.compare.selection).toEqual(["el:Cu"]);
             synthesis = { ...SYNTHESIS, elements: [] };
             select(MATERIAL);
             await flushPromises();
-            expect(store.compare.toolFilters.element).toBeNull();
+            expect(store.compare.selection).toEqual([]);
+            expect(announce).toHaveBeenCalledWith(
+                "1 node in focus is no longer linked to the Selection and left the focus.",
+            );
         });
     });
 });

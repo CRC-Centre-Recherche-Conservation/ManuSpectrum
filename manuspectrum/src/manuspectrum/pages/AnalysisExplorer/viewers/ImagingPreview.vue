@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, ref, toRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import Slider from "primevue/slider";
@@ -7,7 +7,7 @@ import Slider from "primevue/slider";
 import LayerScroll from "@/manuspectrum/pages/AnalysisExplorer/viewers/LayerScroll.vue";
 
 import {
-    layerImageUrl,
+    layerImageChain,
     overlayKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
@@ -15,7 +15,6 @@ import {
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import { layerKindLabel } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-labels.ts";
 
 import type {
     AnalysisPayload,
@@ -28,32 +27,49 @@ const PREVIEW_SIZE = 480;
 const PERCENT = 100;
 const OPACITY_STEP = 5;
 
-/** A map the image server does not give is said so in place, with Retry. */
-const props = defineProps<{ file: FileEntry; analysis: AnalysisPayload }>();
+/**
+ * A map the image server does not give is said so in place, with Retry.
+ *
+ * A classic viewer: a layer scroll steps through the file's own layers, by
+ * their stored label. The laid layers live in `store.overlays` (the document
+ * screen's folio).
+ */
+const props = defineProps<{
+    file: FileEntry;
+    analysis: Pick<AnalysisPayload, "id">;
+}>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
 const zones = inject(FOLIO_ZONES_KEY, ref<ReadonlySet<string>>(new Set()));
 
 const store = useExplorerStore();
+const overlays = {
+    settings: toRef(store, "overlays"),
+    set: store.setOverlay,
+};
 const { $gettext } = useGettext();
 const percentFormat = new Intl.NumberFormat(
     document.documentElement.lang || "en",
     { style: "percent" },
 );
 
-/** Opens on the layer of this file laid on the page, if any. */
+/** Opens on the layer of this file laid on the page, if any, else the first. */
 const position = ref(
     Math.max(
         0,
         props.file.layers.findIndex(
             (entry) =>
-                store.overlays[overlayKey(props.analysis.id, entry.index)]?.on,
+                overlays.settings.value[
+                    overlayKey(props.analysis.id, entry.index)
+                ]?.on,
         ),
     ),
 );
 
 const imageFailed = ref(false);
 const attempt = ref(0);
+/** How many steps of `imageChain` the plain-`<img>` path has already gone past for this layer. */
+const step = ref(0);
 
 const layer = computed<FileLayer | null>(
     () => props.file.layers[position.value] ?? null,
@@ -62,7 +78,7 @@ const key = computed(() =>
     layer.value ? overlayKey(props.analysis.id, layer.value.index) : "",
 );
 const setting = computed(() =>
-    key.value ? store.overlays[key.value] : undefined,
+    key.value ? overlays.settings.value[key.value] : undefined,
 );
 const laid = computed(() => Boolean(setting.value?.on));
 const opacity = computed(() => setting.value?.opacity ?? DEFAULT_OPACITY);
@@ -72,22 +88,34 @@ const canLay = computed(() => zones.value.has(props.analysis.id));
 const underCurtain = computed(
     () => key.value !== "" && curtain.value === key.value,
 );
-const imageUrl = computed(() =>
-    layer.value ? layerImageUrl(layer.value.image, PREVIEW_SIZE) : null,
+const imageChain = computed(() =>
+    layer.value ? layerImageChain(layer.value.image, PREVIEW_SIZE) : [],
 );
+const imageUrl = computed(() => imageChain.value[step.value] ?? null);
 const labels = computed(() => props.file.layers.map((entry) => entry.label));
 
-watch(imageUrl, () => {
+watch(key, () => {
     imageFailed.value = false;
+    step.value = 0;
 });
 
+/**
+ * A failure goes to the next address of `layerImageChain` (bounded size,
+ * percentage, `max`), silently, each tried once; only the last failing shows
+ * the "unavailable" state.
+ */
 function onImageError(): void {
-    imageFailed.value = true;
+    if (step.value + 1 < imageChain.value.length) {
+        step.value += 1;
+    } else {
+        imageFailed.value = true;
+    }
 }
 
 function retryImage(): void {
     attempt.value += 1;
     imageFailed.value = false;
+    step.value = 0;
 }
 
 function firstValue(value: number | number[]): number {
@@ -96,7 +124,7 @@ function firstValue(value: number | number[]): number {
 
 function lay(on: boolean): void {
     if (!layer.value) return;
-    store.setOverlay(key.value, {
+    overlays.set(key.value, {
         element: layer.value.label,
         opacity: opacity.value,
         on,
@@ -110,7 +138,7 @@ function onLayChange(event: Event): void {
 
 function setOpacity(value: number | number[]): void {
     if (!layer.value) return;
-    store.setOverlay(key.value, {
+    overlays.set(key.value, {
         element: layer.value.label,
         opacity: firstValue(value) / PERCENT,
         on: laid.value,
@@ -125,7 +153,7 @@ function moveTo(value: number): void {
     if (wasLaid) lay(false);
     position.value = value;
     if (wasLaid && layer.value) {
-        store.setOverlay(key.value, {
+        overlays.set(key.value, {
             element: layer.value.label,
             opacity: keptOpacity,
             on: true,
@@ -147,7 +175,6 @@ function onCurtainChange(event: Event): void {
             v-if="layer"
             class="current"
         >
-            <span>{{ layerKindLabel($gettext, layer.kind) }}</span>
             <span class="value">{{ layer.label }}</span>
         </p>
         <LayerScroll

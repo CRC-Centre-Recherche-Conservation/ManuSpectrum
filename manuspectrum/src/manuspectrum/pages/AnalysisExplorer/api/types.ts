@@ -149,6 +149,13 @@ export interface DocumentAnalysis {
     zones: AnalysisZone[];
 }
 
+/** A visible Component of a document placed on its pages: its own zones, by page then feature id. */
+export interface DocumentComponent {
+    id: string;
+    name: Label;
+    zones: AnalysisZone[];
+}
+
 export interface MatchKept {
     /** The analyses the filters keep; null when no filter is active (every analysis kept). */
     analyses: string[] | null;
@@ -222,6 +229,8 @@ export interface DocumentPayload {
     /** Each technique of the document's analyses, by uri. */
     techniques: Record<string, Technique>;
     analyses: DocumentAnalysis[];
+    /** The Components placed on its pages, by first page then name. */
+    components: DocumentComponent[];
     characterizations: CharacterizationSummary[];
     history: HistoryLine[];
     unpublishedCount: number;
@@ -230,13 +239,54 @@ export interface DocumentPayload {
     samples: SampleSummary[];
 }
 
+/** A chemical element declared for a layer; `symbol` is the altLabel of its list item when it reads as one (`Pb`). */
+export interface LayerElement {
+    value: ValueRef;
+    symbol: string | null;
+}
+
+/** The unit of a layer's band; `symbol` is the altLabel of its list item (`nm`), null when it has none. */
+export interface LayerUnit extends ValueRef {
+    symbol: string | null;
+}
+
+/** The processing method of a layer; `symbol` is the altLabel of its list item (`PCA`), null when it has none. */
+export interface LayerMethod extends ValueRef {
+    symbol: string | null;
+}
+
+/** The spectral band of a layer: a value, or its bounds, and the unit. */
+export interface LayerBand {
+    value: number | null;
+    lower: number | null;
+    upper: number | null;
+    unit: LayerUnit | null;
+}
+
+/** How a layer was derived: the method, its component number and the inputs as stored. */
+export interface LayerProcessing {
+    method: LayerMethod | null;
+    index: number | null;
+    inputs: string | null;
+}
+
+/**
+ * One canvas of a chemical-imaging manifest. `index`, `label` and `image` come from the
+ * manifest (`label` as stored, never interpreted); `id` is the canvas id as the server
+ * rewrites it; the rest comes from the layer tile of that canvas, and a canvas without a
+ * tile is unclassified: `content` null, the others empty.
+ */
 export interface FileLayer {
     index: number;
+    id: string;
     label: string;
-    kind: "element" | "band" | "other";
-    element: string | null;
-    band: { value: number; unit: string } | null;
     image: ImageRef;
+    content: ValueRef | null;
+    elements: LayerElement[];
+    emissionLine: ValueRef | null;
+    band: LayerBand | null;
+    processing: LayerProcessing | null;
+    note: string | null;
 }
 
 /** How a file is drawn: its stored renderer configuration, as the server read it. */
@@ -398,24 +448,46 @@ export interface ItemsResponse {
     missing: string[];
 }
 
+/** The analyses of a coverage row observing one component (null: the folio itself, no component), by technique id. */
+export interface SynthesisCoverageComponent {
+    component: Ref | null;
+    counts: Record<string, number>;
+}
+
 /** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
 export interface SynthesisCoverage {
     canvas: string;
-    /** The canvas label, prefixed with its document's name when the placed canvases span several documents. */
+    /** The canvas label, as in `SynthesisCanvas`. */
     label: string;
     /** Id of the document whose manifest lists the canvas. */
     document: string;
     counts: Record<string, number>;
+    /**
+     * `counts` split by the component each analysis observes (`AnalysisHit.component`),
+     * summing to `counts`: null first, then the components by the first row of
+     * the response they appear in, then name.
+     */
+    components: SynthesisCoverageComponent[];
 }
 
-/** A canvas an item of the synthesis is placed on, labelled as in `SynthesisCoverage`. */
+/** A canvas an item of the synthesis is placed on. */
 export interface SynthesisCanvas {
     canvas: string;
     /** Id of the document whose manifest lists the canvas. */
     document: string;
+    /**
+     * The manifest label, prefixed with its document's name when the placed
+     * canvases span several documents, then followed by its 1-based position
+     * in the manifest (« f. · view 23 ») when another canvas of the response
+     * shares it; the one label of the canvas in the payload.
+     */
     label: string;
     /** Whether an item of the Selection itself (an analysis or a `ch:` material) is placed on it, not only a material citing one. */
     selected: boolean;
+    /** Ids of the Selection's analyses placed on it, sorted. */
+    analyses: string[];
+    /** Ids of the identified materials of the synthesis placed on it, sorted. */
+    materials: string[];
 }
 
 /** An element of an identified material; `symbol` null when its labels give none. */
@@ -426,13 +498,10 @@ export interface SynthesisPair {
     colour: ValueRef | null;
     material: ValueRef;
     elements: SynthesisElementRef[];
-    /** Canvas ids, in document then page order. */
-    canvases: string[];
-    confidenceBest: RankedValue | null;
     /** Number of identified materials. */
     count: number;
-    /** `[canvas, technique id]` of each identified material: its canvases × the techniques of its evidence analyses in the Selection; by canvas, then technique label. */
-    cells: [string, string][];
+    /** Ids of its identified materials, sorted; `count` is their number. */
+    materials: string[];
 }
 
 /** An element with a symbol, counted once per identified material naming it, with its best level. */
@@ -440,6 +509,23 @@ export interface SynthesisElement {
     symbol: string;
     level: RankedValue | null;
     count: number;
+    /** Ids of the identified materials naming it, sorted; `count` is their number. */
+    materials: string[];
+}
+
+/** An identified material of the synthesis with the ids it links. */
+export interface SynthesisMaterial {
+    id: string;
+    /** Ids of the Selection's analyses it cites in evidence, sorted. */
+    evidence: string[];
+    /** Ids of the canvases it is placed on, in document then page order. */
+    canvases: string[];
+    /** Ids of its visible objects observed (documents and components), sorted. */
+    objects: string[];
+    /** Its summary, as `ItemsResponse` gives it for its `ch:` key (`zone` null), with the visitor's view. */
+    summary: CharacterizationSummary;
+    /** Whether it is a `ch:` item of the Selection itself rather than only citing one of its analyses. */
+    selected: boolean;
 }
 
 /**
@@ -457,6 +543,8 @@ export interface SynthesisResponse {
     pairs: SynthesisPair[];
     /** Most frequent first. */
     elements: SynthesisElement[];
+    /** The identified materials of `pairs` and `elements`, by id. */
+    materials: SynthesisMaterial[];
     unpublishedCount: number;
 }
 
@@ -496,6 +584,45 @@ export const SHAPE_KEYS = {
         width: true,
         height: true,
     } satisfies Record<keyof ImageRef, true>,
+    FileLayer: {
+        index: true,
+        id: true,
+        label: true,
+        image: true,
+        content: true,
+        elements: true,
+        emissionLine: true,
+        band: true,
+        processing: true,
+        note: true,
+    } satisfies Record<keyof FileLayer, true>,
+    LayerElement: { value: true, symbol: true } satisfies Record<
+        keyof LayerElement,
+        true
+    >,
+    LayerUnit: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerUnit, true>,
+    LayerMethod: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerMethod, true>,
+    LayerBand: {
+        value: true,
+        lower: true,
+        upper: true,
+        unit: true,
+    } satisfies Record<keyof LayerBand, true>,
+    LayerProcessing: {
+        method: true,
+        index: true,
+        inputs: true,
+    } satisfies Record<keyof LayerProcessing, true>,
     Technique: {
         id: true,
         uri: true,
@@ -570,6 +697,7 @@ export const SHAPE_KEYS = {
         canvases: true,
         techniques: true,
         analyses: true,
+        components: true,
         characterizations: true,
         history: true,
         unpublishedCount: true,
@@ -587,6 +715,10 @@ export const SHAPE_KEYS = {
     } satisfies Record<keyof DocumentAnalysis, true>,
     AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
         keyof AnalysisZone,
+        true
+    >,
+    DocumentComponent: { id: true, name: true, zones: true } satisfies Record<
+        keyof DocumentComponent,
         true
     >,
     ContentStateLink: {
@@ -728,6 +860,7 @@ export const SHAPE_KEYS = {
         techniques: true,
         pairs: true,
         elements: true,
+        materials: true,
         unpublishedCount: true,
     } satisfies Record<keyof SynthesisResponse, true>,
     SynthesisCoverage: {
@@ -735,21 +868,26 @@ export const SHAPE_KEYS = {
         label: true,
         document: true,
         counts: true,
+        components: true,
     } satisfies Record<keyof SynthesisCoverage, true>,
+    SynthesisCoverageComponent: {
+        component: true,
+        counts: true,
+    } satisfies Record<keyof SynthesisCoverageComponent, true>,
     SynthesisCanvas: {
         canvas: true,
         document: true,
         label: true,
         selected: true,
+        analyses: true,
+        materials: true,
     } satisfies Record<keyof SynthesisCanvas, true>,
     SynthesisPair: {
         colour: true,
         material: true,
         elements: true,
-        canvases: true,
-        confidenceBest: true,
         count: true,
-        cells: true,
+        materials: true,
     } satisfies Record<keyof SynthesisPair, true>,
     SynthesisElementRef: {
         id: true,
@@ -761,5 +899,14 @@ export const SHAPE_KEYS = {
         symbol: true,
         level: true,
         count: true,
+        materials: true,
     } satisfies Record<keyof SynthesisElement, true>,
+    SynthesisMaterial: {
+        id: true,
+        evidence: true,
+        canvases: true,
+        objects: true,
+        summary: true,
+        selected: true,
+    } satisfies Record<keyof SynthesisMaterial, true>,
 } as const;

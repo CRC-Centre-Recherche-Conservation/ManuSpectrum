@@ -6,6 +6,7 @@ Usage:
 
 import datetime
 import json
+import re
 from pathlib import Path
 from unittest import mock
 
@@ -13,14 +14,26 @@ import bibtexparser
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.db import connection
 from django.http import QueryDict
 from django.test import SimpleTestCase
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import NodeGroup, TileModel
 from arches.app.utils.permission_backend import assign_perm
 
 from tests.explorer_contract import assert_shape
-from tests.explorer_fixtures import CANVAS, MANIFEST, XY_CONFIG_ID
+from tests.explorer_fixtures import (
+    CANVAS,
+    CANVAS_2,
+    CANVAS_3,
+    MANIFEST,
+    POINT,
+    RECT,
+    TRIANGLE,
+    XY_CONFIG_ID,
+    IIIFCase,
+)
 from tests.test_explorer_service import AZURITE, FORS, XRF, ServiceCase
 
 from manuspectrum.views.explorer import service as explorer_service
@@ -585,6 +598,151 @@ class DocumentRouteTests(CorpusCase):
             self.assertEqual(refused["Cache-Control"], unknown["Cache-Control"])
 
 
+class DocumentComponentsTests(IIIFCase):
+    COMPONENT_ZONE = "location_in_document"
+
+    def payload(self):
+        return self.client.get(f"/en/api/explorer/document/{self.documents['open'].pk}")
+
+    def component(self, name, zones, document=None):
+        found = self.new_resource("component", name)
+        self.tile(
+            found,
+            "item_visual_is_part_of_document",
+            self.refs(document or self.documents["open"]),
+        )
+        if zones:
+            self.zone(found, zones, alias=self.COMPONENT_ZONE)
+        return found
+
+    def test_components_list_their_own_zones_by_canvas_position(self):
+        initial = "0b0b0b0b-0000-4000-8000-000000000001"
+        initial_3 = "0b0b0b0b-0000-4000-8000-000000000002"
+        self.zone(
+            self.components["open"],
+            [(initial_3, CANVAS_3, RECT), (initial, CANVAS, TRIANGLE)],
+            alias=self.COMPONENT_ZONE,
+        )
+        border = self.component(
+            "f. 2r — border",
+            [("0b0b0b0b-0000-4000-8000-000000000003", CANVAS_2, POINT)],
+        )
+
+        response = self.payload()
+
+        payload = response.json()
+        assert_shape(self, payload, "DocumentPayload")
+        for component in payload["components"]:
+            assert_shape(self, component, "DocumentComponent")
+            for zone in component["zones"]:
+                assert_shape(self, zone, "AnalysisZone")
+        self.assertEqual(
+            [c["id"] for c in payload["components"]],
+            [str(self.components["open"].pk), str(border.pk)],
+        )
+        first = payload["components"][0]
+        self.assertEqual(first["name"]["value"], "f. 1v — initial")
+        self.assertEqual(
+            [(z["canvas"], z["feature"], z["shape"]["type"]) for z in first["zones"]],
+            [(0, initial, "polygon"), (2, initial_3, "rect")],
+        )
+        self.assertEqual([z["canvas"] for z in payload["components"][1]["zones"]], [1])
+
+    def test_components_on_the_same_first_page_are_ordered_by_name(self):
+        later = self.component(
+            "f. 2r — border",
+            [("0b0b0b0b-0000-4000-8000-000000000004", CANVAS_2, POINT)],
+        )
+        sooner = self.component(
+            "Band, f. 2r", [("0b0b0b0b-0000-4000-8000-000000000005", CANVAS_2, POINT)]
+        )
+
+        payload = self.payload().json()
+
+        self.assertEqual(
+            [c["id"] for c in payload["components"]], [str(sooner.pk), str(later.pk)]
+        )
+
+    def test_a_component_without_a_zone_on_the_pages_is_left_out(self):
+        self.component("f. 5r — no zone", [])
+        self.component(
+            "Elsewhere",
+            [
+                (
+                    "0b0b0b0b-0000-4000-8000-000000000006",
+                    "https://example.org/iiif/other/canvas/9",
+                    POINT,
+                )
+            ],
+        )
+
+        self.assertEqual(self.payload().json()["components"], [])
+
+    def test_a_component_of_another_document_is_not_listed(self):
+        self.zone(
+            self.components["embargoed"],
+            [("0b0b0b0b-0000-4000-8000-000000000007", CANVAS, POINT)],
+            alias=self.COMPONENT_ZONE,
+        )
+
+        self.assertEqual(self.payload().json()["components"], [])
+
+    def test_a_restricted_component_is_never_listed(self):
+        self.zone(
+            self.components["open"],
+            [("0b0b0b0b-0000-4000-8000-000000000008", CANVAS, POINT)],
+            alias=self.COMPONENT_ZONE,
+        )
+        self.embargo(self.components["open"])
+
+        payload = self.payload().json()
+
+        self.assertEqual(payload["components"], [])
+        self.assertNotIn(str(self.components["open"].pk), json.dumps(payload))
+
+    def test_a_zone_nodegroup_the_visitor_cannot_read_lists_no_component(self):
+        self.zone(
+            self.components["open"],
+            [("0b0b0b0b-0000-4000-8000-000000000009", CANVAS, POINT)],
+            alias=self.COMPONENT_ZONE,
+        )
+        nodegroup = NodeGroup.objects.get(
+            pk=self.nodes[("component", self.COMPONENT_ZONE)].nodegroup_id
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        self.assertEqual(self.payload().json()["components"], [])
+
+    def test_the_query_count_does_not_grow_with_the_components(self):
+        def queries():
+            self.payload()
+            with CaptureQueriesContext(connection) as captured:
+                response = self.payload()
+            self.assertEqual(response.status_code, 200)
+            return len(
+                [
+                    q
+                    for q in captured.captured_queries
+                    if not re.search(r"silk_|SAVEPOINT|^EXPLAIN", q["sql"])
+                ]
+            )
+
+        self.component(
+            "Part 1", [("0b0b0b0b-0000-4000-8000-00000000000a", CANVAS, POINT)]
+        )
+        one = queries()
+        for n in range(3):
+            self.component(
+                f"Part {n + 2}",
+                [(f"0b0b0b0b-0000-4000-8000-00000000001{n}", CANVAS_2, POINT)],
+            )
+        many = queries()
+
+        self.assertEqual(len(self.payload().json()["components"]), 4)
+        self.assertEqual(many, one)
+
+
 class DocumentMatchRouteTests(CorpusCase):
     def get(self, resource, query=""):
         return self.client.get(f"/en/api/explorer/document/{resource}/match{query}")
@@ -944,6 +1102,258 @@ class ItemsRouteTests(CorpusCase):
         files = payload["items"][0]["files"]
         self.assertEqual([f["dataKind"] for f in files], ["xy", "chemical-imaging"])
         self.assertEqual([layer["label"] for layer in files[1]["layers"]], ["Pb"])
+        for layer in files[1]["layers"]:
+            assert_shape(self, layer, "FileLayer")
+
+    LAYER_MANIFEST = {
+        "@context": "http://iiif.io/api/presentation/3/context.json",
+        "id": "https://example.org/iiif/imaging/x",
+        "items": [
+            {
+                "id": "https://example.org/iiif/imaging/x/canvas/pb",
+                "type": "Canvas",
+                "label": {"none": ["Pb map"]},
+            },
+            {
+                "id": "https://example.org/iiif/imaging/x/canvas/650",
+                "type": "Canvas",
+                "label": {"none": ["650 nm"]},
+            },
+        ],
+    }
+    LAYER_CANVASES = {
+        "pb": "https://example.org/iiif/imaging/x/canvas/pb",
+        "650": "https://example.org/iiif/imaging/x/canvas/650",
+    }
+
+    def layer_files(self, manifest=None):
+        node = self.nodes[("analysis", "chemical_imaging_manifest")]
+        if not TileModel.objects.filter(
+            resourceinstance=self.analyses["open"], nodegroup_id=node.nodegroup_id
+        ).exists():
+            self.tile(
+                self.analyses["open"],
+                "chemical_imaging_manifest",
+                "https://example.org/iiif/imaging/x",
+            )
+        with mock.patch(
+            "manuspectrum.views.explorer.service.manifest_json",
+            return_value=manifest or self.LAYER_MANIFEST,
+        ):
+            payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
+        return payload["items"][0]["files"][-1]["layers"]
+
+    def layer_tile(self, canvas, **values):
+        return self.tile_values(
+            self.analyses["open"],
+            "analysis",
+            imaging_layer_canvas=canvas,
+            **values,
+        )
+
+    def ref(self, uri, en, fr=None, alt=None):
+        return self.reference_value(uri, en, fr, alt=alt)
+
+    def test_a_layer_tile_fills_content_elements_band_and_processing(self):
+        lead = self.ref("https://example.org/el/lead", "Lead", "Plomb", alt="Pb")
+        self.layer_tile(
+            self.LAYER_CANVASES["pb"],
+            imaging_layer_label="Pb map",
+            imaging_layer_content=self.ref(
+                "https://example.org/c/element", "Element distribution"
+            ),
+            imaging_layer_elements=lead,
+            imaging_layer_emission_line=self.ref("https://example.org/l/la", "Lα"),
+            imaging_layer_processing_method=self.ref(
+                "https://example.org/m/pca",
+                "Principal component analysis",
+                alt="PCA",
+            ),
+            imaging_layer_component_index=2,
+            imaging_layer_processing_inputs="  a, b ",
+            imaging_layer_note=self.string_value("  A note  "),
+        )
+        self.layer_tile(
+            self.LAYER_CANVASES["650"],
+            imaging_layer_content=self.ref("https://example.org/c/band", "Band"),
+            imaging_layer_band_value=650.0,
+            imaging_layer_band_lower=640,
+            imaging_layer_band_upper=660,
+            imaging_layer_band_unit=self.ref(
+                "https://example.org/u/nm", "Nanometre", alt="nm"
+            ),
+        )
+
+        pb, band = self.layer_files()
+
+        assert_shape(self, pb, "FileLayer")
+        assert_shape(self, band, "FileLayer")
+        self.assertEqual(
+            (pb["index"], pb["id"], pb["label"]),
+            (0, self.LAYER_CANVASES["pb"], "Pb map"),
+        )
+        self.assertEqual(pb["content"]["label"]["value"], "Element distribution")
+        self.assertEqual(
+            [(e["value"]["label"]["value"], e["symbol"]) for e in pb["elements"]],
+            [("Lead", "Pb")],
+        )
+        assert_shape(self, pb["elements"][0], "LayerElement")
+        self.assertEqual(pb["emissionLine"]["label"]["value"], "Lα")
+        self.assertIsNone(pb["band"])
+        assert_shape(self, pb["processing"], "LayerProcessing")
+        self.assertEqual(
+            (
+                pb["processing"]["method"]["label"]["value"],
+                pb["processing"]["index"],
+                pb["processing"]["inputs"],
+            ),
+            ("Principal component analysis", 2, "a, b"),
+        )
+        assert_shape(self, pb["processing"]["method"], "LayerMethod")
+        self.assertEqual(pb["processing"]["method"]["symbol"], "PCA")
+        self.assertEqual(pb["note"], "A note")
+        assert_shape(self, band["band"], "LayerBand")
+        self.assertEqual(
+            (band["band"]["value"], band["band"]["lower"], band["band"]["upper"]),
+            (650, 640, 660),
+        )
+        assert_shape(self, band["band"]["unit"], "LayerUnit")
+        self.assertEqual(band["band"]["unit"]["label"]["value"], "Nanometre")
+        self.assertEqual(band["band"]["unit"]["symbol"], "nm")
+        self.assertEqual(
+            (band["elements"], band["emissionLine"], band["processing"], band["note"]),
+            ([], None, None, None),
+        )
+
+    def test_a_band_unit_without_alternative_label_has_no_symbol(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["650"],
+            imaging_layer_content=self.ref("https://example.org/c/band", "Band"),
+            imaging_layer_band_value=650,
+            imaging_layer_band_unit=self.ref("https://example.org/u/nm", "Nanometre"),
+        )
+
+        _, band = self.layer_files()
+
+        assert_shape(self, band["band"]["unit"], "LayerUnit")
+        self.assertEqual(band["band"]["unit"]["label"]["value"], "Nanometre")
+        self.assertIsNone(band["band"]["unit"]["symbol"])
+
+    def test_a_processing_method_without_alternative_label_has_no_symbol(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["pb"],
+            imaging_layer_content=self.ref("https://example.org/c/comp", "Component"),
+            imaging_layer_processing_method=self.ref(
+                "https://example.org/m/deconv", "Deconvolution / fitting"
+            ),
+            imaging_layer_component_index=1,
+        )
+
+        pb, _ = self.layer_files()
+
+        assert_shape(self, pb["processing"]["method"], "LayerMethod")
+        self.assertEqual(
+            pb["processing"]["method"]["label"]["value"], "Deconvolution / fitting"
+        )
+        self.assertIsNone(pb["processing"]["method"]["symbol"])
+
+    def test_all_layers_unclassified_when_no_tile_exists(self):
+        layers = self.layer_files()
+
+        self.assertEqual([layer["index"] for layer in layers], [0, 1])
+        self.assertEqual(
+            [layer["id"] for layer in layers], list(self.LAYER_CANVASES.values())
+        )
+        for layer in layers:
+            assert_shape(self, layer, "FileLayer")
+            self.assertEqual(
+                (
+                    layer["content"],
+                    layer["elements"],
+                    layer["emissionLine"],
+                    layer["band"],
+                    layer["processing"],
+                    layer["note"],
+                ),
+                (None, [], None, None, None, None),
+            )
+        self.assertEqual([layer["label"] for layer in layers], ["Pb map", "650 nm"])
+
+    def test_some_layers_classified_and_a_content_only_tile(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["650"],
+            imaging_layer_content=self.ref("https://example.org/c/video", "Video"),
+        )
+
+        first, second = self.layer_files()
+
+        self.assertEqual(
+            (first["content"], first["elements"], first["band"]), (None, [], None)
+        )
+        self.assertEqual(second["content"]["label"]["value"], "Video")
+        self.assertEqual(
+            (second["elements"], second["band"], second["processing"]),
+            ([], None, None),
+        )
+        self.assertEqual(second["label"], "650 nm")
+
+    def test_layer_nodegroup_unreadable_reads_as_unclassified(self):
+        self.layer_tile(
+            self.LAYER_CANVASES["pb"],
+            imaging_layer_content=self.ref("https://example.org/c/el", "Element"),
+        )
+        self.restrict_nodegroup(
+            self.nodes[("analysis", "imaging_layer_canvas")].nodegroup_id,
+            self.editor,
+        )
+
+        layers = self.layer_files()
+
+        self.assertEqual([layer["content"] for layer in layers], [None, None])
+        self.assertEqual([layer["label"] for layer in layers], ["Pb map", "650 nm"])
+
+    def legacy_case(self, tile_host, manifest_host):
+        canvas = "/iiif/manifest/canvas/pb.json"
+        manifest = {
+            **self.LAYER_MANIFEST,
+            "items": [
+                {"id": f"http://{manifest_host}{canvas}", "type": "Canvas"},
+            ],
+        }
+        self.layer_tile(
+            f"http://{tile_host}{canvas}",
+            imaging_layer_content=self.ref("https://example.org/c/el", "Element"),
+        )
+        return self.layer_files(manifest)
+
+    def test_imaging_entries_matches_a_layer_tile_stored_under_a_legacy_host(self):
+        new_host = settings.PUBLIC_SERVER_ADDRESS.split("//", 1)[1].strip("/")
+        group = self.nodes[("analysis", "imaging_layer_canvas")].nodegroup_id
+
+        with self.settings(EXPLORER_LEGACY_HOSTS=["old-host"]):
+            tile_old = self.legacy_case("old-host", new_host)
+            TileModel.objects.filter(nodegroup_id=group).delete()
+            tile_mirror = self.legacy_case(new_host, "old-host")
+
+        for layers in (tile_old, tile_mirror):
+            self.assertEqual(len(layers), 1)
+            self.assertEqual(layers[0]["content"]["label"]["value"], "Element")
+            self.assertTrue(layers[0]["id"].startswith(settings.PUBLIC_SERVER_ADDRESS))
+
+    def test_layers_are_read_in_one_values_query(self):
+        def tile_queries():
+            with CaptureQueriesContext(connection) as queries:
+                self.layer_files()
+            return len([q for q in queries if 'FROM "tiles"' in q["sql"]])
+
+        without = tile_queries()
+        for canvas in self.LAYER_CANVASES.values():
+            self.layer_tile(
+                canvas,
+                imaging_layer_content=self.ref("https://example.org/c/el", "Element"),
+            )
+
+        self.assertEqual(tile_queries(), without)
 
     def test_a_hidden_unknown_or_malformed_analysis_key_is_missing(self):
         self.embargo(self.analyses["open"])
@@ -1240,27 +1650,29 @@ class RevalidationTests(CorpusCase):
 
 
 class LayerOfTests(SimpleTestCase):
-    def test_an_element_symbol_gives_an_element_layer(self):
-        layer = layer_of(0, "Pb", {"url": None})
+    def test_a_layer_without_a_tile_is_unclassified(self):
+        layer = layer_of(3, "  Pb  ", {"url": None}, "canvas-id")
 
-        self.assertEqual(layer["kind"], "element")
-        self.assertEqual(layer["element"], "Pb")
-        self.assertIsNone(layer["band"])
+        self.assertEqual(
+            layer,
+            {
+                "index": 3,
+                "id": "canvas-id",
+                "label": "Pb",
+                "image": {"url": None},
+                "content": None,
+                "elements": [],
+                "emissionLine": None,
+                "band": None,
+                "processing": None,
+                "note": None,
+            },
+        )
 
-    def test_a_value_and_a_unit_gives_a_band_layer(self):
-        nanometres = layer_of(1, "450 nm", {"url": None})
-        wavenumber = layer_of(2, "1650 cm-1", {"url": None})
+    def test_a_missing_label_is_an_empty_string(self):
+        layer = layer_of(0, None, {"url": None})
 
-        self.assertEqual(nanometres["kind"], "band")
-        self.assertEqual(nanometres["band"], {"value": 450.0, "unit": "nm"})
-        self.assertEqual(wavenumber["kind"], "band")
-        self.assertEqual(wavenumber["band"], {"value": 1650.0, "unit": "cm⁻¹"})
-
-    def test_anything_else_gives_another_layer_without_an_element(self):
-        layer = layer_of(3, "deconv_Pb", {"url": None})
-
-        self.assertEqual(layer["kind"], "other")
-        self.assertIsNone(layer["element"])
+        self.assertEqual(layer["label"], "")
 
 
 class ImagingEntriesTests(SimpleTestCase):
@@ -1292,7 +1704,7 @@ class ImagingEntriesTests(SimpleTestCase):
         ],
     }
 
-    def test_layer_indices_continue_across_manifests_and_bands_sort_by_value(self):
+    def test_layer_indices_continue_across_manifests_in_canvas_order(self):
         with mock.patch(
             "manuspectrum.views.explorer.service.manifest_json",
             side_effect=[self.MANIFEST_A, self.MANIFEST_B],
@@ -1307,9 +1719,9 @@ class ImagingEntriesTests(SimpleTestCase):
             )
 
         self.assertEqual([len(entry["layers"]) for entry in entries], [2, 1])
-        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [1, 0])
+        self.assertEqual([layer["index"] for layer in entries[0]["layers"]], [0, 1])
         self.assertEqual(
-            [layer["band"]["value"] for layer in entries[0]["layers"]], [450.0, 650.0]
+            [layer["label"] for layer in entries[0]["layers"]], ["650 nm", "450 nm"]
         )
         self.assertEqual(entries[1]["layers"][0]["index"], 2)
-        self.assertEqual(entries[1]["layers"][0]["kind"], "element")
+        self.assertEqual(entries[1]["layers"][0]["label"], "Pb")

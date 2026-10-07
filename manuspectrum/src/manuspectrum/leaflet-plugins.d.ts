@@ -18,6 +18,7 @@ declare module "leaflet" {
         function sideBySide(
             left: Layer | Layer[],
             right: Layer | Layer[],
+            options?: { thumbSize?: number; padding?: number },
         ): SideBySide;
     }
     namespace TileLayer {

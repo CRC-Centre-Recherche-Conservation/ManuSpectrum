@@ -27,12 +27,54 @@ IMAGE_REF = {
     "height": int,
 }
 
+LAYER_ELEMENT = {"value": "ValueRef", "symbol": (str, type(None))}
+LAYER_UNIT = {
+    "id": str,
+    "uri": str,
+    "label": "Label",
+    "symbol": (str, type(None)),
+}
+LAYER_BAND = {
+    "value": (int, float, type(None)),
+    "lower": (int, float, type(None)),
+    "upper": (int, float, type(None)),
+    "unit": ("LayerUnit", None),
+}
+LAYER_PROCESSING = {
+    "method": ("LayerMethod", None),
+    "index": (int, float, type(None)),
+    "inputs": (str, type(None)),
+}
+FILE_LAYER = {
+    "index": int,
+    "id": str,
+    "label": str,
+    "image": "ImageRef",
+    "content": ("ValueRef", None),
+    "elements": list,
+    "emissionLine": ("ValueRef", None),
+    "band": ("LayerBand", None),
+    "processing": ("LayerProcessing", None),
+    "note": (str, type(None)),
+}
+
 SHAPES = {
     "Label": LABEL,
     "Ref": REF,
     "ValueRef": VALUE_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
+    "FileLayer": FILE_LAYER,
+    "LayerElement": LAYER_ELEMENT,
+    "LayerBand": LAYER_BAND,
+    "LayerUnit": LAYER_UNIT,
+    "LayerMethod": {
+        "id": str,
+        "uri": str,
+        "label": "Label",
+        "symbol": (str, type(None)),
+    },
+    "LayerProcessing": LAYER_PROCESSING,
     "NamedRef": NAMED_REF,
     "Citation": CITATION,
     "Technique": TECHNIQUE,
@@ -94,6 +136,7 @@ SHAPES = {
         "canvases": list,
         "techniques": dict,
         "analyses": list,
+        "components": list,
         "characterizations": list,
         "history": list,
         "unpublishedCount": int,
@@ -110,6 +153,7 @@ SHAPES = {
         "zones": list,
     },
     "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
+    "DocumentComponent": {"id": str, "name": "Label", "zones": list},
     "ContentStateLink": {"feature": str, "url": str},
     "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
     "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
@@ -211,6 +255,7 @@ SHAPES = {
         "techniques": list,
         "pairs": list,
         "elements": list,
+        "materials": list,
         "unpublishedCount": int,
     },
     "SynthesisCoverage": {
@@ -218,16 +263,23 @@ SHAPES = {
         "label": str,
         "document": str,
         "counts": dict,
+        "components": list,
     },
-    "SynthesisCanvas": {"canvas": str, "document": str, "label": str, "selected": bool},
+    "SynthesisCoverageComponent": {"component": ("Ref", None), "counts": dict},
+    "SynthesisCanvas": {
+        "canvas": str,
+        "document": str,
+        "label": str,
+        "selected": bool,
+        "analyses": list,
+        "materials": list,
+    },
     "SynthesisPair": {
         "colour": ("ValueRef", None),
         "material": "ValueRef",
         "elements": list,
-        "canvases": list,
-        "confidenceBest": ("RankedValue", None),
         "count": int,
-        "cells": list,
+        "materials": list,
     },
     "SynthesisElementRef": {
         "id": str,
@@ -235,7 +287,20 @@ SHAPES = {
         "label": "Label",
         "symbol": (str, type(None)),
     },
-    "SynthesisElement": {"symbol": str, "level": ("RankedValue", None), "count": int},
+    "SynthesisElement": {
+        "symbol": str,
+        "level": ("RankedValue", None),
+        "count": int,
+        "materials": list,
+    },
+    "SynthesisMaterial": {
+        "id": str,
+        "evidence": list,
+        "canvases": list,
+        "objects": list,
+        "summary": "CharacterizationSummary",
+        "selected": bool,
+    },
     "ShareDocument": {"id": str, "name": "Label", "url": str, "path": str},
     "ProductLink": {"url": str, "path": str},
     "ShareLinks": {

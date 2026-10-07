@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import {
-    computed,
-    nextTick,
-    onBeforeUnmount,
-    ref,
-    useId,
-    useTemplateRef,
-    watch,
-} from "vue";
+import { computed, useId, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
 import { toolTitles } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts";
 
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
@@ -24,13 +17,12 @@ interface MenuEntry {
 }
 
 /**
- * « + Tool »: a menu button (WAI-ARIA menu button pattern) listing the tools
- * the Selection has something for (`offered`, null until the synthesis is
+ * « + Tool »: a menu button (`useMenuButton`) listing the tools the
+ * Selection has something for (`offered`, null until the synthesis is
  * read). While it is read, or when it failed, one entry says so (the
- * failure offers Retry). Arrows, Home and End move through the entries;
- * Escape closes and gives the focus back to the button, as does a choice;
- * Tab or a click outside closes. When the entries change while it is open,
- * the first one takes the focus.
+ * failure offers Retry). A choice closes the menu and gives the focus back
+ * to the button. When the entries change while it is open, the first one
+ * takes the focus.
  */
 const props = defineProps<{
     offered: readonly ToolKind[] | null;
@@ -48,8 +40,14 @@ const buttonId = useId();
 const menuId = useId();
 const root = useTemplateRef<HTMLElement>("root");
 const button = useTemplateRef<HTMLButtonElement>("button");
-
-const expanded = ref(false);
+const {
+    expanded,
+    focusItem,
+    closeMenu,
+    toggle,
+    onButtonKeydown,
+    onMenuKeydown,
+} = useMenuButton(root, button);
 
 const entries = computed<MenuEntry[]>(() => {
     if (props.offered === null) {
@@ -105,87 +103,6 @@ watch(
     },
     { flush: "post" },
 );
-
-onBeforeUnmount(stopListening);
-
-function menuItems(): HTMLElement[] {
-    return [
-        ...(root.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ??
-            []),
-    ];
-}
-
-function focusItem(index: number): void {
-    const found = menuItems();
-    if (found.length === 0) return;
-    found[(index + found.length) % found.length].focus();
-}
-
-async function openMenu(focusIndex: number): Promise<void> {
-    expanded.value = true;
-    document.addEventListener("pointerdown", onPointerDown);
-    await nextTick();
-    focusItem(focusIndex);
-}
-
-function stopListening(): void {
-    document.removeEventListener("pointerdown", onPointerDown);
-}
-
-function closeMenu(returnFocus: boolean): void {
-    expanded.value = false;
-    stopListening();
-    if (returnFocus) button.value?.focus();
-}
-
-function onPointerDown(event: PointerEvent): void {
-    if (!root.value?.contains(event.target as Node)) closeMenu(false);
-}
-
-function toggle(): void {
-    if (expanded.value) closeMenu(true);
-    else void openMenu(0);
-}
-
-function onButtonKeydown(event: KeyboardEvent): void {
-    if (event.key === "ArrowDown") {
-        event.preventDefault();
-        void openMenu(0);
-    } else if (event.key === "ArrowUp") {
-        event.preventDefault();
-        void openMenu(-1);
-    }
-}
-
-function onMenuKeydown(event: KeyboardEvent): void {
-    const found = menuItems();
-    const index = found.indexOf(document.activeElement as HTMLElement);
-    switch (event.key) {
-        case "ArrowDown":
-            event.preventDefault();
-            focusItem(index + 1);
-            break;
-        case "ArrowUp":
-            event.preventDefault();
-            focusItem(index - 1);
-            break;
-        case "Home":
-            event.preventDefault();
-            focusItem(0);
-            break;
-        case "End":
-            event.preventDefault();
-            focusItem(-1);
-            break;
-        case "Escape":
-            event.preventDefault();
-            closeMenu(true);
-            break;
-        case "Tab":
-            closeMenu(false);
-            break;
-    }
-}
 
 function choose(entry: MenuEntry): void {
     if (entry.disabled) return;

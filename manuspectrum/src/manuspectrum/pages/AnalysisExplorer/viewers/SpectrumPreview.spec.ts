@@ -22,12 +22,14 @@ import type { FileEntry } from "@/manuspectrum/pages/AnalysisExplorer/api/types.
 interface TraceCall {
     name: string;
     y: number[];
+    hovertemplate: string;
     line: { color: string };
 }
 
 interface LayoutCall {
     showlegend: boolean;
-    xaxis: { title: { text: string } };
+    hovermode: string;
+    xaxis: { title: { text: string }; unifiedhovertitle?: { text?: string } };
     yaxis: { title: { text: string } };
 }
 
@@ -108,6 +110,23 @@ describe("SpectrumPreview", () => {
         wrapper.unmount();
     });
 
+    it("hovers the workshop's compact box: one line per curve under x unified, the shared x in the header", async () => {
+        const { wrapper } = mountPreview([readable(1), readable(2)], () =>
+            jsonResponse(SERIES),
+        );
+        await flushPromises();
+        const { traces, layout } = lastDrawing();
+        expect(layout.hovermode).toBe("x unified");
+        expect(layout.xaxis.unifiedhovertitle?.text).toBe(
+            "%{x:.4~g} · Energy (keV)",
+        );
+        expect(traces.map((trace) => trace.hovertemplate)).toEqual([
+            "P1.csv · %{y:.4~g}<extra></extra>",
+            "P2.csv · %{y:.4~g}<extra></extra>",
+        ]);
+        wrapper.unmount();
+    });
+
     it("titles the axes from the first spectrum drawn that stores a title", async () => {
         const untitled = readable(1, {
             viewer: { ...fileEntry().viewer, xLabel: null, yLabel: null },
@@ -174,6 +193,20 @@ describe("SpectrumPreview", () => {
         const { traces, layout } = lastDrawing();
         expect(traces).toHaveLength(1);
         expect(layout.showlegend).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("escapes a file name once in the trace name and once in its hover line", async () => {
+        const { wrapper } = mountPreview(
+            [readable(1, { name: "A&B<1>.csv" }), readable(2)],
+            () => jsonResponse(SERIES),
+        );
+        await flushPromises();
+        const { traces } = lastDrawing();
+        expect(traces[0].name).toBe("A&amp;B&lt;1&gt;.csv");
+        expect(traces[0].hovertemplate).toBe(
+            "A&amp;B&lt;1&gt;.csv · %{y:.4~g}<extra></extra>",
+        );
         wrapper.unmount();
     });
 

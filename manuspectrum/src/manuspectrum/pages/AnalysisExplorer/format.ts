@@ -67,3 +67,10 @@ export function foldText(text: string): string {
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
 }
+
+/** Whether two texts read the same once folded (`foldText`) and their whitespace collapsed. */
+export function sameText(a: string, b: string): boolean {
+    const fold = (text: string): string =>
+        foldText(text).replace(/\s+/g, " ").trim();
+    return fold(a) === fold(b);
+}

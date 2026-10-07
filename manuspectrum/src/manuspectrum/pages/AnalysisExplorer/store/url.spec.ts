@@ -162,6 +162,22 @@ describe("toQuery / fromQuery", () => {
             `?doc=${DOC}&q=gold`,
         );
     });
+
+    it("opens a document on a folio, focused on a record in the folio view that draws it", () => {
+        const snapshot = { ...home(), view: "compare" as const };
+        const href = documentHref(snapshot, DOC, "https://iiif.example/c1", {
+            kind: "characterization",
+            id: ANALYSIS,
+        });
+        const back = fromQuery(new URLSearchParams(href.slice(1)));
+        expect(back.view).toBe("corpus");
+        expect(back.document).toEqual({
+            id: DOC,
+            canvas: "https://iiif.example/c1",
+        });
+        expect(back.focus).toEqual({ kind: "characterization", id: ANALYSIS });
+        expect(back.folioView).toBe("characterizations");
+    });
 });
 
 describe("historyMode", () => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ElementMaps from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ElementMaps.vue";
+import LightTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue";
 import MaterialsTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue";
 import MicroImageGrid from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MicroImageGrid.vue";
 import NotInChartList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/NotInChartList.vue";
@@ -7,18 +7,21 @@ import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import type { AutoWindow } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
-/** The content of a window arranged from the Selection, by its kind. */
-const props = defineProps<{ window: AutoWindow }>();
+/** The content of a window arranged from the Selection, by its kind; `title` is the window's, for what the content exports. */
+const props = defineProps<{ window: AutoWindow; title: string }>();
 </script>
 
 <template>
     <XyWorkshop
         v-if="props.window.kind === 'xy'"
         :curves="props.window.curves"
+        :title="props.title"
+        :window-id="props.window.id"
     />
-    <ElementMaps
-        v-else-if="props.window.kind === 'maps'"
+    <LightTable
+        v-else-if="props.window.kind === 'chemical-imaging'"
         :maps="props.window.maps"
+        :window-id="props.window.id"
     />
     <MicroImageGrid
         v-else-if="props.window.kind === 'micro'"
@@ -26,7 +29,10 @@ const props = defineProps<{ window: AutoWindow }>();
     />
     <MaterialsTable
         v-else-if="props.window.kind === 'characterizations'"
-        :rows="props.window.rows"
+        :records="props.window.records"
+        :pairs="props.window.synthesis?.pairs ?? []"
+        :canvases="props.window.synthesis?.canvases ?? []"
+        :analyses="props.window.analyses"
     />
     <NotInChartList
         v-else

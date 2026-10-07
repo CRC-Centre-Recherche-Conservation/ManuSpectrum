@@ -12,7 +12,9 @@ const SIGNIFICANT_DIGITS = 6;
  * The curves of an XY window as a table, the chart's accessible equivalent:
  * one row per curve with its point count and its X and Y ranges as drawn.
  * Every value of a full series would make a table nobody can read; they are
- * in the CSV.
+ * in the CSV. While the linked selection holds something, a row carries how
+ * it is linked in `data-rel`, a linked row a bar, a row it does not link
+ * muted text.
  */
 const props = defineProps<{
     rows: readonly CurveRow[];
@@ -71,6 +73,7 @@ function titled(axis: string, title: string): string {
             <tr
                 v-for="row in props.rows"
                 :key="row.id"
+                :data-rel="row.relation"
             >
                 <th
                     class="curve"
@@ -118,6 +121,16 @@ function titled(axis: string, title: string): string {
     border-block-end: 0.0625rem solid var(--border-hover);
     text-align: start;
     vertical-align: baseline;
+}
+
+.xy-curve-list tr[data-rel="self"] th,
+.xy-curve-list tr[data-rel="direct"] th,
+.xy-curve-list tr[data-rel="evidence"] th {
+    border-inline-start: 0.1875rem solid var(--blue-text);
+}
+
+.xy-curve-list tr[data-rel="none"] {
+    color: var(--ink-muted);
 }
 
 .xy-curve-list .curve {

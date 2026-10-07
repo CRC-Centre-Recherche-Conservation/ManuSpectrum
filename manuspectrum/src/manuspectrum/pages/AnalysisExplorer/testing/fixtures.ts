@@ -10,7 +10,10 @@ import type {
     Facet,
     FacetValue,
     FileEntry,
+    FileLayer,
     HomeResponse,
+    LayerMethod,
+    LayerUnit,
     ProductLink,
     SampleSummary,
     SearchResponse,
@@ -179,6 +182,7 @@ export function documentPayload(
         ],
         techniques: {},
         analyses: [],
+        components: [],
         characterizations: [],
         history: [],
         unpublishedCount: 0,
@@ -277,6 +281,28 @@ export function technique(
 
 export function valueRef(uri: string, text: string): ValueRef {
     return { id: uri, uri, label: label(text) };
+}
+
+/** A band unit as the server sends it: the item's label (« Nanometre ») and its symbol, the alternative label (« nm »). */
+export function layerUnit(
+    text = "Nanometre",
+    symbol: string | null = "nm",
+    lang = "en",
+): LayerUnit {
+    return {
+        ...valueRef("http://example.org/unit-nm", text),
+        label: { value: text, lang },
+        symbol,
+    };
+}
+
+/** A processing method as the server sends it: the item's label (« Principal component analysis ») and its symbol, the alternative label (« PCA »). */
+export function layerMethod(
+    text = "Principal component analysis",
+    symbol: string | null = "PCA",
+    uri = "http://example.org/pca",
+): LayerMethod {
+    return { ...valueRef(uri, text), symbol };
 }
 
 export function annotation(
@@ -379,6 +405,29 @@ export function fileEntry(overrides: Partial<FileEntry> = {}): FileEntry {
     };
 }
 
+/** A layer with no tile (situation A, spec §7); `overrides` lays a mapping on it. */
+export function layerOf(
+    overrides: Partial<FileLayer> & { index: number },
+): FileLayer {
+    return {
+        id: `http://testserver/iiif/canvas/${overrides.index}`,
+        label: "",
+        image: {
+            service: "https://iiif.example/image/pb",
+            url: null,
+            width: 2000,
+            height: 3000,
+        },
+        content: null,
+        elements: [],
+        emissionLine: null,
+        band: null,
+        processing: null,
+        note: null,
+        ...overrides,
+    };
+}
+
 export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
     const image = {
         service: "https://iiif.example/image/pb",
@@ -404,22 +453,12 @@ export function imagingEntry(overrides: Partial<FileEntry> = {}): FileEntry {
             decimated: false,
         },
         layers: [
-            {
-                index: 0,
-                label: "Pb",
-                kind: "element",
-                element: "Pb",
-                band: null,
-                image,
-            },
-            {
+            layerOf({ index: 0, label: "Pb", image }),
+            layerOf({
                 index: 1,
                 label: "Hg",
-                kind: "element",
-                element: "Hg",
-                band: null,
                 image: { ...image, service: "https://iiif.example/image/hg" },
-            },
+            }),
         ],
         previewUrl: null,
         ...overrides,

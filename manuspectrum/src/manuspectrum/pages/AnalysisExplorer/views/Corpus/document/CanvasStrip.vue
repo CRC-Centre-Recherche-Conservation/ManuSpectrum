@@ -108,11 +108,13 @@ watch(
 
 onMounted(() => reveal(props.current));
 
-/** A small image of the page from its IIIF service, an http(s) address only (`safeHref`); none once the server refused it (some hosts refuse hotlinks). */
+/**
+ * A small image of the page from its IIIF service, an http(s) address only
+ * (`safeHref`); none once the server refused it (some hosts refuse hotlinks).
+ */
 function thumbnailOf(canvas: DocumentCanvas): string | null {
-    return canvas.image.service && !failed.value.has(canvas.id)
-        ? safeHref(imageUrl(canvas.image.service, { size: THUMBNAIL_SIZE }))
-        : null;
+    if (!canvas.image.service || failed.value.has(canvas.id)) return null;
+    return safeHref(imageUrl(canvas.image.service, { size: THUMBNAIL_SIZE }));
 }
 
 function matchingOf(canvas: DocumentCanvas): number {

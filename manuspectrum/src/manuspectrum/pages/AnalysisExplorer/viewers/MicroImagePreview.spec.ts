@@ -117,4 +117,41 @@ describe("MicroImagePreview", () => {
         expect(invalidate).toHaveBeenCalledTimes(1);
         wrapper.unmount();
     });
+
+    async function mountInWindow(tick: ReturnType<typeof ref<number>>) {
+        const images = recordImages();
+        const wrapper = mount(MicroImagePreview, {
+            attachTo: sizedContainer(),
+            props: {
+                file: fileEntry({
+                    dataKind: "micro-imaging",
+                    role: "other",
+                    downloadUrl: "/files/micro.jpg",
+                    previewUrl: null,
+                }),
+            },
+            global: { provide: { [WINDOW_RESIZE_KEY as symbol]: tick } },
+        });
+        Object.defineProperty(images[0], "naturalWidth", { value: 1200 });
+        Object.defineProperty(images[0], "naturalHeight", { value: 800 });
+        images[0].dispatchEvent(new Event("load"));
+        await flushPromises();
+        return wrapper;
+    }
+
+    it("fits the whole image to its well again when the window changes size, until the reader zooms", async () => {
+        const fit = vi.spyOn(L.Map.prototype, "fitBounds");
+        const tick = ref(0);
+        const wrapper = await mountInWindow(tick);
+        expect(fit).toHaveBeenCalledTimes(1);
+        tick.value = 1;
+        await nextTick();
+        expect(fit).toHaveBeenCalledTimes(2);
+        wrapper.find(".leaflet-control-zoom-in").trigger("click");
+        await nextTick();
+        tick.value = 2;
+        await nextTick();
+        expect(fit).toHaveBeenCalledTimes(2);
+        wrapper.unmount();
+    });
 });

@@ -1,3 +1,4 @@
+import { materialRecords } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
 import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 
 import type {
@@ -5,26 +6,28 @@ import type {
     CharacterizationSummary,
     FileEntry,
     Item,
+    SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketItem,
     ItemKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { MaterialRecord } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
 
 export type AutoWindowKind =
     | "xy"
-    | "maps"
+    | "chemical-imaging"
     | "micro"
     | "characterizations"
     | "not-in-chart";
 
-/** XY windows shown unfolded; the next ones, and the maps window after as many, open folded to their header. */
+/** XY windows shown unfolded; the next ones, and the chemical imaging window after as many, open folded to their header. */
 export const UNFOLDED_XY_WINDOWS = 3;
 
 /** The group of readable spectra whose configuration states no axis title. */
 const NO_AXIS_GROUP = "-";
 
-export const MAPS_WINDOW_ID = "auto:maps";
+export const CHEMICAL_IMAGING_WINDOW_ID = "auto:chemical-imaging";
 export const MICRO_WINDOW_ID = "auto:micro";
 export const MATERIALS_WINDOW_ID = "auto:characterizations";
 export const NOT_IN_CHART_WINDOW_ID = "auto:not-in-chart";
@@ -82,8 +85,9 @@ export interface XyWindow extends WindowBase {
     curves: FileLine[];
 }
 
-export interface MapsWindow extends WindowBase {
-    kind: "maps";
+/** The layered maps (`chemical-imaging` files) of the Selection, side by side. */
+export interface ChemicalImagingWindow extends WindowBase {
+    kind: "chemical-imaging";
     maps: MapLine[];
     folded: boolean;
 }
@@ -93,9 +97,15 @@ export interface MicroWindow extends WindowBase {
     images: FileLine[];
 }
 
+/** Every identified material of the synthesis: the Selection's own (`rows`, its `keys`) and those citing one of its analyses. */
 export interface MaterialsWindow extends WindowBase {
     kind: "characterizations";
     rows: MaterialRow[];
+    records: MaterialRecord[];
+    /** The Selection's analyses, once each, in slot order. */
+    analyses: AnalysisHit[];
+    /** The synthesis the records come from; null before it answers. */
+    synthesis: SynthesisResponse | null;
 }
 
 export interface NotInChartWindow extends WindowBase {
@@ -106,7 +116,7 @@ export interface NotInChartWindow extends WindowBase {
 /** A window arranged from the Selection. */
 export type AutoWindow =
     | XyWindow
-    | MapsWindow
+    | ChemicalImagingWindow
     | MicroWindow
     | MaterialsWindow
     | NotInChartWindow;
@@ -141,7 +151,13 @@ class Collector {
     readonly maps: MapLine[] = [];
     readonly images: FileLine[] = [];
     readonly rows: MaterialRow[] = [];
+    readonly analyses = new Map<string, AnalysisHit>();
     readonly entries: NotInChartEntry[] = [];
+
+    constructor(
+        private readonly synthesis: SynthesisResponse | null,
+        private readonly previous: boolean,
+    ) {}
 
     addFile(line: FileLine, named: number | null = null): boolean {
         if (isLayeredMap(line.file)) {
@@ -171,6 +187,12 @@ class Collector {
 
     add(item: BasketItem, read: Item): void {
         const { key, slot } = item;
+        if (
+            read.kind !== "characterization" &&
+            !this.analyses.has(read.analysis.id)
+        ) {
+            this.analyses.set(read.analysis.id, read.analysis);
+        }
         if (read.kind === "characterization") {
             this.rows.push({
                 key,
@@ -245,8 +267,8 @@ class Collector {
             const keys: ItemKey[] = [];
             for (const line of this.maps) withKey(keys, line.key);
             windows.push({
-                id: MAPS_WINDOW_ID,
-                kind: "maps",
+                id: CHEMICAL_IMAGING_WINDOW_ID,
+                kind: "chemical-imaging",
                 keys,
                 maps: this.maps,
                 folded: this.curves.size >= UNFOLDED_XY_WINDOWS,
@@ -262,12 +284,20 @@ class Collector {
                 images: this.images,
             });
         }
-        if (this.rows.length > 0) {
+        const records = materialRecords(
+            this.rows,
+            this.synthesis,
+            this.previous ? new Set(this.analyses.keys()) : null,
+        );
+        if (records.length > 0) {
             windows.push({
                 id: MATERIALS_WINDOW_ID,
                 kind: "characterizations",
                 keys: this.rows.map((row) => row.key),
                 rows: this.rows,
+                records,
+                analyses: [...this.analyses.values()],
+                synthesis: this.synthesis,
             });
         }
         if (this.entries.length > 0) {
@@ -285,9 +315,12 @@ class Collector {
 /**
  * The windows arranged from the Selection: one XY window per axis group
  * (`FileEntry.viewer.axisKey`, every readable spectrum of an analysis in its
- * slot), the layered maps (opened folded when the XY windows already fill
- * the unfolded ones), the micro-images, the identified materials, and what
- * no window draws. Windows and their contents follow slot order; an XY window comes
+ * slot), the chemical imaging maps (opened folded when the XY windows already fill
+ * the unfolded ones), the micro-images, the identified materials (the
+ * Selection's own and, once `synthesis` is given, those citing one of its
+ * analyses: `materialRecords`; with `previous`, `synthesis` answers a
+ * previous Selection and only what the Selection still justifies is kept
+ * of it), and what no window draws. Windows and their contents follow slot order; an XY window comes
  * where its first slot does. An item not read yet waits outside the
  * windows; a key the items API reports missing is listed as such. Older
  * one-file (`af:`) and one-layer (`im:`) keys are read into the same windows.
@@ -296,8 +329,10 @@ export function autoWindows(
     basket: readonly BasketItem[],
     byKey: ReadonlyMap<string, Item>,
     missing: ReadonlySet<string>,
+    synthesis: SynthesisResponse | null = null,
+    previous = false,
 ): AutoWindow[] {
-    const collector = new Collector();
+    const collector = new Collector(synthesis, previous);
     for (const item of [...basket].sort((a, b) => a.slot - b.slot)) {
         const read = byKey.get(item.key);
         if (read) {

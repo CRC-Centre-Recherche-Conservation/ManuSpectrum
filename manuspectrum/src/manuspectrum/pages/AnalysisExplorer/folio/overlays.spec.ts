@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
     curtainable,
     folioOverlays,
+    layerImageChain,
     layerImageUrl,
     overlayKey,
     overlayPane,
+    paneKey,
+    removeOverlayPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     analysisPayload,
@@ -56,6 +59,73 @@ describe("folio overlays", () => {
         );
     });
 
+    it("falls back to a percentage of the size the server holds, never an upscale, and to max when no size is declared", () => {
+        const large = {
+            service: "https://iiif.example/pb",
+            url: null,
+            width: 4000,
+            height: 3000,
+        };
+        expect(layerImageUrl(large, 480, { fallback: true })).toBe(
+            "https://iiif.example/pb/full/pct:12/0/default.jpg",
+        );
+        expect(
+            layerImageUrl({ ...large, width: 300, height: 200 }, 480, {
+                fallback: true,
+            }),
+        ).toBe("https://iiif.example/pb/full/pct:100/0/default.jpg");
+        expect(
+            layerImageUrl({ ...large, width: 0, height: 0 }, 480, {
+                fallback: true,
+            }),
+        ).toBe("https://iiif.example/pb/full/max/0/default.jpg");
+        expect(
+            layerImageUrl(
+                { service: null, url: "https://x/pb.png", width: 1, height: 1 },
+                480,
+                { fallback: true },
+            ),
+        ).toBe("https://x/pb.png");
+        expect(
+            layerImageUrl(
+                { service: null, url: null, width: 1, height: 1 },
+                480,
+                { fallback: true },
+            ),
+        ).toBeNull();
+    });
+
+    it("chains bounded, percentage and max addresses, none twice", () => {
+        const large = {
+            service: "https://iiif.example/pb",
+            url: null,
+            width: 4000,
+            height: 3000,
+        };
+        expect(layerImageChain(large, 480)).toEqual([
+            "https://iiif.example/pb/full/!480,480/0/default.jpg",
+            "https://iiif.example/pb/full/pct:12/0/default.jpg",
+            "https://iiif.example/pb/full/max/0/default.jpg",
+        ]);
+        expect(layerImageChain({ ...large, width: 0, height: 0 }, 480)).toEqual(
+            [
+                "https://iiif.example/pb/full/!480,480/0/default.jpg",
+                "https://iiif.example/pb/full/max/0/default.jpg",
+            ],
+        );
+        expect(
+            layerImageChain({
+                service: null,
+                url: "https://x/pb.png",
+                width: 1,
+                height: 1,
+            }),
+        ).toEqual(["https://x/pb.png"]);
+        expect(
+            layerImageChain({ service: null, url: null, width: 1, height: 1 }),
+        ).toEqual([]);
+    });
+
     it("lays the layers switched on in the bounding box of the analysis zone", () => {
         const analysis = analysisPayload({ files: [imagingEntry()] });
         const zone = annotation(1, {
@@ -82,6 +152,10 @@ describe("folio overlays", () => {
             {
                 key: `${uuid(101)}:1`,
                 url: "https://iiif.example/image/hg/full/!2000,2048/0/default.jpg",
+                fallbackUrls: [
+                    "https://iiif.example/image/hg/full/pct:68/0/default.jpg",
+                    "https://iiif.example/image/hg/full/max/0/default.jpg",
+                ],
                 bounds: [
                     [-1, 0],
                     [0, 2],
@@ -126,6 +200,30 @@ describe("folio overlays", () => {
                 overlay as unknown as { getContainer: () => unknown }
             ).getContainer(),
         ).toBe(pane);
+        map.remove();
+    });
+});
+
+describe("paneKey and removeOverlayPane", () => {
+    it("keeps apart two ids that overlayPane would sanitise to the same name", () => {
+        const map = L.map(document.createElement("div"));
+        const first = overlayPane(map, `stack-${paneKey("https://x/c_1")}`);
+        const second = overlayPane(map, `stack-${paneKey("https://x/c-1")}`);
+        expect(first).not.toBe(second);
+        expect(paneKey("https://x/c_1")).toBe(paneKey("https://x/c_1"));
+        map.remove();
+    });
+
+    it("takes a pane off the map and lets the name be made again", () => {
+        const map = L.map(document.createElement("div"));
+        const name = overlayPane(map, "a");
+        const pane = map.getPane(name)!;
+        removeOverlayPane(map, name);
+        expect(map.getPane(name)).toBeUndefined();
+        expect(pane.isConnected).toBe(false);
+        expect(overlayPane(map, "a")).toBe(name);
+        expect(map.getPane(name)).not.toBe(pane);
+        removeOverlayPane(map, "never-made");
         map.remove();
     });
 });

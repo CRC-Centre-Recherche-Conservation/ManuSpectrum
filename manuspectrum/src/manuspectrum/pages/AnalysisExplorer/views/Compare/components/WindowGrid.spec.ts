@@ -9,6 +9,10 @@ import {
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
+    installDialog,
+    pressEscape,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/dialog.ts";
+import {
     lastGrid,
     resetFakeGrids,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/gridstack.ts";
@@ -92,14 +96,39 @@ function control(id: string, action: string): HTMLButtonElement {
     )!;
 }
 
+/** Opens the window's « More » menu and returns its entry `action`. */
+async function menuEntry(id: string, action: string): Promise<HTMLElement> {
+    const menu = item(id).querySelector('[role="menu"]');
+    if (!menu) {
+        control(id, "more").click();
+        await nextTick();
+    }
+    return item(id).querySelector<HTMLElement>(
+        `[role="menuitem"][data-action="${action}"]`,
+    )!;
+}
+
+/** The text of the element that names `element` (`aria-labelledby`). */
+function nameOf(element: Element): string | undefined {
+    const id = element.getAttribute("aria-labelledby") ?? "";
+    return document.getElementById(id)?.textContent ?? undefined;
+}
+
+function dialog(): HTMLDialogElement {
+    return document.querySelector<HTMLDialogElement>("dialog.enlarged-dialog")!;
+}
+
+let uninstallDialog: () => void;
+
 function stored(): unknown {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
     if (raw === null) return null;
     const parsed = JSON.parse(raw);
-    return parsed.version === 2 ? parsed.boxes : parsed;
+    return parsed.version === 3 ? parsed.boxes : parsed;
 }
 
 beforeEach(() => {
+    uninstallDialog = installDialog();
     resetFakeGrids();
     window.localStorage.clear();
     announce = vi.fn();
@@ -108,6 +137,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
+    uninstallDialog();
     vi.useRealTimers();
     vi.unstubAllGlobals();
 });
@@ -199,6 +229,18 @@ describe("WindowGrid", () => {
         expect(stored()).toBeNull();
     });
 
+    it("gives each row more height in one column, where a header takes two lines, and the usual height back on 12 columns", async () => {
+        mountGrid();
+        const grid = lastGrid();
+        expect(grid.options.cellHeight).toBe("4rem");
+        grid.setColumns(1);
+        await flushPromises();
+        expect(grid.cellHeight).toHaveBeenLastCalledWith("5.5rem");
+        grid.setColumns(12);
+        await flushPromises();
+        expect(grid.cellHeight).toHaveBeenLastCalledWith("4rem");
+    });
+
     it("grows to one column under 768 px", () => {
         mountGrid();
         expect(lastGrid().options.columnOpts).toEqual({
@@ -278,13 +320,15 @@ describe("WindowGrid", () => {
         expect(node(second.id)).toMatchObject({ x: 0, y: 5 });
         expect(node(fourth.id)).toMatchObject({ x: 6, y: 5 });
         expect(
-            control(fourth.id, "move-after").getAttribute("aria-disabled"),
+            (await menuEntry(fourth.id, "move-after")).getAttribute(
+                "aria-disabled",
+            ),
         ).toBe("true");
     });
 
-    it("moves a window after the next one, says where it is and keeps the focus on it", async () => {
+    it("moves a window after the next one from its « More » menu, says where it is and keeps the focus on it", async () => {
         mountGrid();
-        const button = control(XRF.id, "move-after");
+        const button = await menuEntry(XRF.id, "move-after");
         button.focus();
         button.click();
         await nextTick();
@@ -297,9 +341,12 @@ describe("WindowGrid", () => {
         });
         expect(node(XRF.id)).toEqual({ id: XRF.id, x: 4, y: 0, w: 6, h: 5 });
         expect(announce).toHaveBeenLastCalledWith("XRF: 2 of 2");
-        expect(document.activeElement).toBe(control(XRF.id, "move-after"));
+        expect(document.activeElement).toBe(control(XRF.id, "more"));
+        expect(item(XRF.id).querySelector('[role="menu"]')).toBeNull();
         expect(
-            control(XRF.id, "move-after").getAttribute("aria-disabled"),
+            (await menuEntry(XRF.id, "move-after")).getAttribute(
+                "aria-disabled",
+            ),
         ).toBe("true");
         expect(stored()).toEqual({
             [MICRO.id]: { x: 0, y: 0, w: 4, h: 4 },
@@ -309,7 +356,7 @@ describe("WindowGrid", () => {
 
     it("does not move the first window before", async () => {
         mountGrid();
-        const button = control(XRF.id, "move-before");
+        const button = await menuEntry(XRF.id, "move-before");
         expect(button.getAttribute("aria-disabled")).toBe("true");
         button.click();
         await nextTick();
@@ -318,10 +365,10 @@ describe("WindowGrid", () => {
         expect(announce).not.toHaveBeenCalled();
     });
 
-    it("sizes a window S, M or L and marks the size it has", async () => {
+    it("sizes a window S, M or L and checks the size it has", async () => {
         mountGrid();
         const grid = lastGrid();
-        expect(control(XRF.id, "size-M").getAttribute("aria-pressed")).toBe(
+        expect(control(XRF.id, "size-M").getAttribute("aria-checked")).toBe(
             "true",
         );
         control(XRF.id, "size-L").click();
@@ -330,10 +377,10 @@ describe("WindowGrid", () => {
             w: 12,
             h: 6,
         });
-        expect(control(XRF.id, "size-L").getAttribute("aria-pressed")).toBe(
+        expect(control(XRF.id, "size-L").getAttribute("aria-checked")).toBe(
             "true",
         );
-        expect(control(XRF.id, "size-M").getAttribute("aria-pressed")).toBe(
+        expect(control(XRF.id, "size-M").getAttribute("aria-checked")).toBe(
             "false",
         );
         expect(control(XRF.id, "size-L").getAttribute("aria-label")).toBe(
@@ -399,33 +446,180 @@ describe("WindowGrid", () => {
         );
     });
 
-    it("lets its parent bring hidden windows back before it lays every window out", async () => {
-        const grid: VueWrapper = mount(WindowGrid, {
-            props: {
-                windows: [MICRO],
-                retained: [XRF.id],
-                onRearrange: () => grid.setProps({ windows: [XRF, MICRO] }),
-            },
-            attachTo: document.body,
-            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
-        });
-        wrapper = grid;
-        await wrapper.find("button.rearrange").trigger("click");
+    it("rearranges the windows shown only: hidden windows stay hidden, folds and tools stay saved", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                version: 2,
+                boxes: {
+                    [MICRO.id]: { x: 6, y: 3, w: 4, h: 4 },
+                    [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                    [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+                },
+                hidden: [XRF.id, MATERIALS.id],
+                folded: { [MICRO.id]: false },
+                tools: [{ kind: "periodic", params: {} }],
+            }),
+        );
+        const view = mountGrid([MICRO], [XRF.id, MATERIALS.id]);
+        await view.find("button.rearrange").trigger("click");
         await flushPromises();
-        expect(node(XRF.id)).toEqual({ id: XRF.id, x: 0, y: 0, w: 6, h: 5 });
+        expect(view.emitted("rearrange")).toBeUndefined();
         expect(node(MICRO.id)).toEqual({
             id: MICRO.id,
-            x: 6,
+            x: 0,
             y: 0,
             w: 4,
             h: 4,
         });
-        expect(announce).toHaveBeenCalledTimes(1);
-        expect(announce).toHaveBeenLastCalledWith("Windows rearranged.");
-        expect(stored()).toEqual({
-            [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
-            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+        expect(
+            JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
+        ).toEqual({
+            version: 3,
+            boxes: { [MICRO.id]: { x: 0, y: 0, w: 4, h: 4 } },
+            hidden: [XRF.id, MATERIALS.id],
+            folded: { [MICRO.id]: false },
+            tools: [{ kind: "periodic", params: {} }],
         });
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce).toHaveBeenLastCalledWith(
+            "Windows rearranged. 2 windows stay hidden.",
+        );
+    });
+
+    it("says one window stays hidden when it rearranges", async () => {
+        const view = mountGrid([MICRO], [XRF.id]);
+        await view.find("button.rearrange").trigger("click");
+        await flushPromises();
+        expect(announce).toHaveBeenLastCalledWith(
+            "Windows rearranged. 1 window stays hidden.",
+        );
+    });
+
+    it("closes the hole a window leaves, moving the windows under it up without reordering the others", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+                [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+            }),
+        );
+        const view = mountGrid([XRF, MICRO, MATERIALS]);
+        control(XRF.id, "close").click();
+        await view.setProps({ windows: [MICRO, MATERIALS] });
+        await nextTick();
+        expect(node(MATERIALS.id)).toMatchObject({ x: 0, y: 0 });
+        expect(node(MICRO.id)).toMatchObject({ x: 6, y: 0 });
+        expect(stored()).toEqual({
+            [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+            [MATERIALS.id]: { x: 0, y: 0, w: 6, h: 5 },
+        });
+    });
+
+    it("gives the focus to the window nearest the one closed, without scrolling to it", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+                [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+            }),
+        );
+        const scrollIntoView = vi.fn();
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 100, 600, 300));
+        HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        try {
+            const view = mountGrid([XRF, MICRO, MATERIALS]);
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO, MATERIALS] });
+            await nextTick();
+            const target = item(MATERIALS.id).querySelector(".compare-window");
+            expect(document.activeElement).toBe(target);
+            expect(focus.mock.contexts.at(-1)).toBe(target);
+            expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+            expect(scrollIntoView).not.toHaveBeenCalled();
+        } finally {
+            rect.mockRestore();
+            focus.mockRestore();
+            delete (HTMLElement.prototype as Partial<HTMLElement>)
+                .scrollIntoView;
+        }
+    });
+
+    it("keeps the page as tall after a close until the reader scrolls up past the room left", async () => {
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 100, 600, 300));
+        const height = vi
+            .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+            .mockReturnValue(1200);
+        try {
+            const view = mountGrid();
+            const root = view.find<HTMLElement>(".window-grid").element;
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO] });
+            await nextTick();
+            expect(root.style.minBlockSize).toBe("1200px");
+            window.dispatchEvent(new Event("scroll"));
+            await nextTick();
+            expect(root.style.minBlockSize).toBe("1200px");
+            rect.mockReturnValue(new DOMRect(0, 500, 600, 300));
+            window.dispatchEvent(new Event("scroll"));
+            await nextTick();
+            expect(root.style.minBlockSize).toBe("");
+        } finally {
+            rect.mockRestore();
+            height.mockRestore();
+        }
+    });
+
+    it("lets the page shorten at once when the windows left still reach the bottom of the screen", async () => {
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 100, 600, 900));
+        const height = vi
+            .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+            .mockReturnValue(1200);
+        try {
+            const view = mountGrid();
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO] });
+            await flushPromises();
+            expect(
+                view.find<HTMLElement>(".window-grid").element.style
+                    .minBlockSize,
+            ).toBe("");
+        } finally {
+            rect.mockRestore();
+            height.mockRestore();
+        }
+    });
+
+    it("scrolls the window it focuses into view only when it is off the screen", async () => {
+        const scrollIntoView = vi.fn();
+        vi.stubGlobal("innerHeight", 800);
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue(new DOMRect(0, 900, 600, 300));
+        HTMLElement.prototype.scrollIntoView = scrollIntoView;
+        try {
+            const view = mountGrid();
+            control(XRF.id, "close").click();
+            await view.setProps({ windows: [MICRO] });
+            await nextTick();
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+        } finally {
+            rect.mockRestore();
+            delete (HTMLElement.prototype as Partial<HTMLElement>)
+                .scrollIntoView;
+        }
     });
 
     it("opens a folded window to its header only, and unfolds it on demand", async () => {
@@ -464,6 +658,33 @@ describe("WindowGrid", () => {
         expect(node(XRF.id)).toEqual({ id: XRF.id, x: 4, y: 0, w: 6, h: 5 });
     });
 
+    it("shows a folded window's summary under its header, whose action unfolds it", async () => {
+        const folded: CompareWindowSpec = { ...XRF, folded: true };
+        wrapper = mount(WindowGrid, {
+            props: { windows: [MICRO, folded] },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+            slots: {
+                default: `<template #default="{ window }"><p class="content">{{ window.id }}</p></template>`,
+                summary: `<template #summary="{ window, unfold }"><button class="draw" @click="unfold">{{ window.id }}</button></template>`,
+            },
+        });
+        const summary = item(XRF.id).querySelector(".summary");
+        expect(summary?.querySelector(".draw")?.textContent).toBe(XRF.id);
+        expect(item(XRF.id).querySelector(".content")).toBeNull();
+        expect(item(MICRO.id).querySelector(".summary")).toBeNull();
+        item(XRF.id).querySelector<HTMLButtonElement>(".draw")!.click();
+        await nextTick();
+        expect(lastGrid().update).toHaveBeenLastCalledWith(item(XRF.id), {
+            h: 5,
+        });
+        expect(item(XRF.id).querySelector(".summary")).toBeNull();
+        expect(item(XRF.id).querySelector(".content")?.textContent).toBe(
+            XRF.id,
+        );
+        expect(announce).toHaveBeenLastCalledWith("XRF: unfolded");
+    });
+
     it("keeps what a window shows while it is folded", async () => {
         wrapper = mount(WindowGrid, {
             props: { windows: [{ ...XRF, folded: false }] },
@@ -475,9 +696,11 @@ describe("WindowGrid", () => {
         typed.value = "kept";
         control(XRF.id, "fold").click();
         await nextTick();
-        expect(item(XRF.id).querySelector<HTMLElement>(".body")!.hidden).toBe(
-            true,
-        );
+        expect(
+            item(XRF.id).querySelector<HTMLElement>(
+                ".compare-window-frame > .body",
+            )!.hidden,
+        ).toBe(true);
         control(XRF.id, "fold").click();
         await nextTick();
         expect(item(XRF.id).querySelector(".typed")).toBe(typed);
@@ -527,18 +750,18 @@ describe("WindowGrid", () => {
         );
     });
 
-    it("names each window's controls by its title, and its fold button by the title alone", async () => {
+    it("names each window's controls by its title, and its fold button by what it does", async () => {
         mountGrid([{ ...XRF, folded: true }, MICRO]);
         expect(
             item(XRF.id).querySelector(".controls")?.getAttribute("aria-label"),
         ).toBe("Arrange « XRF »");
-        expect(control(XRF.id, "fold").getAttribute("aria-label")).toBe("XRF");
+        expect(nameOf(control(XRF.id, "fold"))).toBe("Unfold");
         expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
             "false",
         );
         control(XRF.id, "fold").click();
         await nextTick();
-        expect(control(XRF.id, "fold").getAttribute("aria-label")).toBe("XRF");
+        expect(nameOf(control(XRF.id, "fold"))).toBe("Fold");
         expect(control(XRF.id, "fold").getAttribute("aria-expanded")).toBe(
             "true",
         );
@@ -571,6 +794,186 @@ describe("WindowGrid", () => {
         expect(document.activeElement).toBe(button.element);
     });
 
+    it("enlarges a window in a modal dialog, the same content with its state, its title focused and the page still", async () => {
+        wrapper = mount(WindowGrid, {
+            props: { windows: [XRF, MICRO] },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+            slots: { default: `<input class="typed" />` },
+        });
+        const typed = item(XRF.id).querySelector<HTMLInputElement>(".typed")!;
+        typed.value = "kept";
+        control(XRF.id, "enlarge").click();
+        await flushPromises();
+
+        expect(dialog().open).toBe(true);
+        expect(dialog().getAttribute("aria-label")).toBe("XRF");
+        expect(dialog().querySelector(".typed")).toBe(typed);
+        expect(item(XRF.id).querySelector(".typed")).toBeNull();
+        expect(
+            item(XRF.id).querySelector(".enlarged-note")?.textContent,
+        ).toContain("Shown enlarged");
+        expect(document.activeElement).toBe(dialog().querySelector("h3"));
+        expect(document.documentElement.style.overflow).toBe("hidden");
+        const restore = dialog().querySelector<HTMLElement>(
+            '[data-action="enlarge"]',
+        )!;
+        expect(nameOf(restore)).toBe("Restore");
+        expect(dialog().querySelector('[data-action="close"]')).toBeNull();
+        expect(dialog().querySelector('[role="radiogroup"]')).toBeNull();
+
+        const focus = vi.spyOn(HTMLElement.prototype, "focus");
+        restore.click();
+        await flushPromises();
+        expect(dialog().open).toBe(false);
+        expect(item(XRF.id).querySelector(".typed")).toBe(typed);
+        expect(typed.value).toBe("kept");
+        expect(document.activeElement).toBe(control(XRF.id, "enlarge"));
+        expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+        expect(document.documentElement.style.overflow).toBe("");
+    });
+
+    it("restores from the grid cell too, and on Escape, which the linked selection leaves alone", async () => {
+        const keys = vi.fn();
+        document.addEventListener("keydown", keys);
+        try {
+            mountGrid();
+            control(XRF.id, "enlarge").click();
+            await flushPromises();
+            item(XRF.id)
+                .querySelector<HTMLElement>('[data-action="restore"]')!
+                .click();
+            await flushPromises();
+            expect(dialog().open).toBe(false);
+
+            control(MICRO.id, "enlarge").click();
+            await flushPromises();
+            expect(dialog().getAttribute("aria-label")).toBe("Micro-images");
+            pressEscape(dialog());
+            await flushPromises();
+            expect(dialog().open).toBe(false);
+            expect(keys).toHaveBeenCalledTimes(1);
+            expect(document.activeElement).toBe(control(MICRO.id, "enlarge"));
+        } finally {
+            document.removeEventListener("keydown", keys);
+        }
+    });
+
+    it("unfolds a folded window's content in the dialog only", async () => {
+        mountGrid([{ ...XRF, folded: true }]);
+        expect(item(XRF.id).querySelector(".content")).toBeNull();
+        control(XRF.id, "enlarge").click();
+        await flushPromises();
+        const body = dialog().querySelector<HTMLElement>(
+            ".compare-window-frame > .body",
+        )!;
+        expect(body.hidden).toBe(false);
+        expect(body.querySelector(".content")?.textContent).toBe(XRF.id);
+        expect(lastGrid().update).not.toHaveBeenCalled();
+    });
+
+    it("closes the dialog when its window leaves the grid", async () => {
+        const view = mountGrid();
+        control(XRF.id, "enlarge").click();
+        await flushPromises();
+        await view.setProps({ windows: [MICRO] });
+        await flushPromises();
+        expect(dialog().open).toBe(false);
+        expect(document.documentElement.style.overflow).toBe("");
+    });
+
+    it("gives the focus to the window nearest the one enlarged when it leaves the grid", async () => {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                [XRF.id]: { x: 0, y: 0, w: 6, h: 5 },
+                [MICRO.id]: { x: 6, y: 0, w: 4, h: 4 },
+                [MATERIALS.id]: { x: 0, y: 5, w: 6, h: 5 },
+            }),
+        );
+        const view = mountGrid([XRF, MICRO, MATERIALS]);
+        control(XRF.id, "enlarge").click();
+        await flushPromises();
+        await view.setProps({ windows: [MICRO, MATERIALS] });
+        await flushPromises();
+        expect(dialog().open).toBe(false);
+        expect(document.activeElement).toBe(
+            item(MATERIALS.id).querySelector(".compare-window"),
+        );
+    });
+
+    it("leaves no resize pending once unmounted while a window is enlarged", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const view = mountGrid();
+        control(XRF.id, "enlarge").click();
+        await vi.advanceTimersByTimeAsync(300);
+        view.unmount();
+        wrapper = null;
+        await flushPromises();
+        expect(vi.getTimerCount()).toBe(0);
+        expect(document.documentElement.style.overflow).toBe("");
+    });
+
+    it("tells the windows to draw again when the dialog opens, closes or changes size", async () => {
+        // Vue skips a handler attached at the time a bubbling event was first handled: a frozen Date would drop the button's own.
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const observers: ResizeObserverCallback[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: ResizeObserverCallback) {
+                    observers.push(callback);
+                }
+                observe(): void {}
+                disconnect(): void {}
+            },
+        );
+        wrapper = mount(WindowGrid, {
+            props: { windows: [XRF] },
+            attachTo: document.body,
+            global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
+            slots: { default: () => h(ResizeReader) },
+        });
+        const tick = (): string =>
+            document.querySelector(".tick")!.textContent!;
+        control(XRF.id, "enlarge").click();
+        await vi.advanceTimersByTimeAsync(300);
+        expect(tick()).toBe("1");
+        observers[1](sized(900, 600), {} as ResizeObserver);
+        await vi.advanceTimersByTimeAsync(300);
+        expect(tick()).toBe("2");
+        dialog().close();
+        await vi.advanceTimersByTimeAsync(300);
+        expect(tick()).toBe("3");
+    });
+
+    it("hides a window from its « More » menu, or closes a tool", async () => {
+        const tool: CompareWindowSpec = {
+            id: "tool:periodic",
+            title: "Periodic table",
+            size: "L",
+            hides: false,
+        };
+        const view = mountGrid([XRF, tool]);
+        const hide = await menuEntry(XRF.id, "menu-close");
+        expect(hide.textContent).toContain("Hide the window");
+        const close = await menuEntry(tool.id, "menu-close");
+        expect(close.textContent).toContain("Close the tool");
+        close.click();
+        await nextTick();
+        expect(view.emitted("close")).toEqual([[{ id: tool.id }]]);
+    });
+
+    it("shows a window's kind and what it holds on its title line", () => {
+        mountGrid([{ ...XRF, kind: "Spectra", subtitle: "3 spectra" }]);
+        const heading = item(XRF.id).querySelector("h3")!;
+        expect(heading.querySelector(".kind")?.textContent).toBe("Spectra");
+        expect(heading.querySelector(".name")?.textContent).toBe("XRF");
+        expect(heading.querySelector(".subtitle")?.textContent).toBe(
+            "3 spectra",
+        );
+    });
+
     it("tells the windows once when the grid has changed size", async () => {
         vi.useFakeTimers();
         const observers: ResizeObserverCallback[] = [];
@@ -593,7 +996,7 @@ describe("WindowGrid", () => {
             global: { provide: { [ANNOUNCE_KEY as symbol]: announce } },
             slots: { default: () => h(ResizeReader) },
         });
-        expect(observers).toHaveLength(1);
+        expect(observers).toHaveLength(2);
         observers[0](sized(800, 400), {} as ResizeObserver);
         lastGrid().trigger("resizestop");
         observers[0](sized(700, 400), {} as ResizeObserver);

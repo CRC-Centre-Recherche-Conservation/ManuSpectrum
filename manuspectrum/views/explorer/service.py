@@ -67,11 +67,11 @@ from manuspectrum.views.explorer.citations import (
 )
 from manuspectrum.views.explorer.conditions import clean_html, conditions_of
 from manuspectrum.views.explorer.values import (
-    ELEMENT_SYMBOL,
     FALLBACK_LANGUAGE,
     StoredConfig,
     acronym,
     dataset_of,
+    element_symbols,
     file_entries,
     label,
     name_of,
@@ -163,21 +163,52 @@ def _tile_order(row):
     return (sortorder is None, sortorder or 0, tileid)
 
 
+LAYER_KEYS = (
+    "layer_canvas",
+    "layer_label",
+    "layer_content",
+    "layer_elements",
+    "layer_line",
+    "layer_band_value",
+    "layer_band_lower",
+    "layer_band_upper",
+    "layer_band_unit",
+    "layer_method",
+    "layer_component_index",
+    "layer_inputs",
+    "layer_note",
+)
+_unresolved_optional_warned = False
+
+
 class Values:
     """Tile values of *resource_ids* for the roles *keys*, from readable nodegroups only.
 
     ``get`` flattens list values except references, whose list is one value;
     ``tiles`` keeps each tile's data for the roles read tile by tile
     (statements, material with its certainty), reduced to the nodes of the
-    roles asked for. A role whose node is not resolved logs a warning and
-    reads as empty.
+    roles asked for. A role whose node is not resolved reads as empty and logs
+    a warning; the layer roles are optional (a graph published before the
+    imaging layers lacks them), so all of them together warn once per process.
     """
 
     def __init__(self, resource_ids, keys, user):
         nodes = {key: role_node(*ROLES[key]) for key in keys}
+        optional = []
         for key, node in nodes.items():
-            if node is None:
+            if node is not None:
+                continue
+            if key in LAYER_KEYS:
+                optional.append(key)
+            else:
                 logger.warning("explorer: role %s.%s is not resolved", *ROLES[key])
+        global _unresolved_optional_warned
+        if optional and not _unresolved_optional_warned:
+            _unresolved_optional_warned = True
+            logger.warning(
+                "explorer: imaging layer roles are not resolved: %s",
+                ", ".join(".".join(ROLES[key]) for key in optional),
+            )
         self._nodes = {key: node for key, node in nodes.items() if node is not None}
         readable = readable_nodegroup_ids(user)
         by_group = defaultdict(list)
@@ -1754,6 +1785,30 @@ def sample_summaries(analyses, visible, user, language, dims, sample_of=None):
     ]
 
 
+def component_zones(document_id, bundle, dims, position, readable):
+    """``{component id: [AnalysisZone, …]}`` of the visible Components of *document_id* placed on a canvas of its manifest.
+
+    A Component belongs to the document through a readable
+    ``item_visual_is_part_of_document`` link; its zones are read off
+    ``location_in_document`` as analysis zones are, by page then feature id.
+    A Component without a zone on a listed canvas is left out.
+    """
+    ids = sorted(
+        c
+        for c, documents in bundle.links["part_of"].items()
+        if document_id in documents and c in bundle.visible.components
+    )
+    zones = defaultdict(list)
+    for component, feature, canvas, shape in annotation_features(
+        role_node(*ROLES["comp_zone"]), ids, dims, readable
+    ):
+        if canvas in position:
+            zones[component].append(
+                {"canvas": position[canvas], "shape": shape, "feature": feature}
+            )
+    return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
+
+
 def document_payload(document_id, user, language, ticket=None):
     """``DocumentPayload`` of a visible document, the same whatever the filters; None when it is unknown or not visible.
 
@@ -1761,7 +1816,9 @@ def document_payload(document_id, user, language, ticket=None):
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases`` and named by its ``feature`` id.
     A zone on a canvas the manifest does not list is left out; an analysis
-    without zones is not located on a page. ``document_match`` says what the filters keep. ``history`` (the
+    without zones is not located on a page. ``components`` lists the visible
+    Components placed on its pages (``component_zones``), by first page then
+    name. ``document_match`` says what the filters keep. ``history`` (the
     document's dated and placed events, spec §5) is empty until the map and
     timeline API fills it.
     """
@@ -1787,6 +1844,7 @@ def document_payload(document_id, user, language, ticket=None):
             zones[analysis].append(
                 {"canvas": position[canvas], "shape": shape, "feature": feature}
             )
+    placed = component_zones(document_id, bundle, dims, position, readable)
     techniques = {}
     analyses = []
     for row in rows:
@@ -1818,7 +1876,11 @@ def document_payload(document_id, user, language, ticket=None):
         for v in values.get(document_id, "doc_owner")
         if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    label_of = names({document_id} | set(owners[:1]), language, user)
+    label_of = names({document_id} | set(owners[:1]) | set(placed), language, user)
+    components = sorted(
+        (c for c in placed if c in label_of),
+        key=lambda c: (placed[c][0]["canvas"], fold(label_of[c]["value"]), c),
+    )
     per_canvas = Counter(
         zone["canvas"]
         for entry in analyses
@@ -1840,6 +1902,9 @@ def document_payload(document_id, user, language, ticket=None):
         ],
         "techniques": techniques,
         "analyses": analyses,
+        "components": [
+            {"id": c, "name": label_of[c], "zones": placed[c]} for c in components
+        ],
         "characterizations": summaries,
         "history": [],
         "unpublishedCount": sum(1 for row in rows if row["unpublished"])
@@ -1857,51 +1922,109 @@ def document_payload(document_id, user, language, ticket=None):
     }
 
 
-_BAND = re.compile(
-    r"^(?P<value>\d+(?:[.,]\d+)?)\s*(?P<unit>nm|µm|um|cm-1|cm⁻¹|keV|eV)$"
-)
+FILE_KEYS = ("files", "micro", "imaging", *LAYER_KEYS)
 
 
-def layer_of(index, text, image):
-    """One image layer of an imaging manifest (D46): an element map (maXRF), a spectral band (hyperspectral) or another image."""
-    text = (text or "").strip()
-    band = _BAND.match(text)
-    if ELEMENT_SYMBOL.match(text):
-        return {
-            "index": index,
-            "label": text,
-            "kind": "element",
-            "element": text,
-            "band": None,
-            "image": image,
-        }
-    if band:
-        value = float(band["value"].replace(",", "."))
-        unit = band["unit"].replace("um", "µm").replace("cm-1", "cm⁻¹")
-        return {
-            "index": index,
-            "label": text,
-            "kind": "band",
-            "element": None,
-            "band": {"value": value, "unit": unit},
-            "image": image,
-        }
+def _text(value):
+    """The stripped text of a string value (plain or localized), None when empty."""
+    texts = string_texts(value)
+    text = next((t.strip() for t in texts.values() if t and t.strip()), "")
+    return text or None
+
+
+def _number(value):
+    return value if isinstance(value, (int, float)) else None
+
+
+def _only(refs):
+    return refs[0] if refs else None
+
+
+def _layer_tiles(values, analysis_id):
+    """``{canvas id: {role: value}}`` of the imaging layer tiles of an analysis.
+
+    The canvas id is passed through ``rewrite_legacy_url``, as ``canvases_of``
+    does for the manifest's; the first tile wins a canvas. Empty when the
+    layer nodegroup is unreadable or unresolved.
+    """
+    nodes = {key: values.node(key) for key in LAYER_KEYS}
+    if nodes["layer_canvas"] is None:
+        return {}
+    found = {}
+    for data in values.tiles(analysis_id, "layer_canvas"):
+        canvas = data.get(nodes["layer_canvas"].nodeid)
+        if isinstance(canvas, str) and canvas.strip():
+            found.setdefault(
+                rewrite_legacy_url(canvas.strip()),
+                {
+                    key: data.get(node.nodeid)
+                    for key, node in nodes.items()
+                    if node is not None
+                },
+            )
+    return found
+
+
+def layer_of(index, text, image, canvas_id="", fields=None, language="en"):
+    """One image layer of an imaging manifest, as ``FileLayer`` states it.
+
+    Its position, its canvas id, its label as stored and its image; the rest
+    comes from *fields*, the ``{role: value}`` of the layer tile of that
+    canvas. Without a tile the layer is unclassified.
+    """
+    fields = fields or {}
+    elements = fields.get("layer_elements")
+    unit = _only(value_refs(fields.get("layer_band_unit"), language))
+    method = _only(value_refs(fields.get("layer_method"), language))
+    band = {
+        "value": _number(fields.get("layer_band_value")),
+        "lower": _number(fields.get("layer_band_lower")),
+        "upper": _number(fields.get("layer_band_upper")),
+        "unit": (
+            {**unit, "symbol": acronym(fields.get("layer_band_unit"))} if unit else None
+        ),
+    }
+    processing = {
+        "method": (
+            {**method, "symbol": acronym(fields.get("layer_method"))}
+            if method
+            else None
+        ),
+        "index": _number(fields.get("layer_component_index")),
+        "inputs": _text(fields.get("layer_inputs")),
+    }
     return {
         "index": index,
-        "label": text,
-        "kind": "other",
-        "element": None,
-        "band": None,
+        "id": canvas_id,
+        "label": (text or "").strip(),
         "image": image,
+        "content": _only(value_refs(fields.get("layer_content"), language)),
+        "elements": [
+            {"value": ref, "symbol": symbol}
+            for ref, symbol in zip(
+                value_refs(elements, language), element_symbols(elements)
+            )
+        ],
+        "emissionLine": _only(value_refs(fields.get("layer_line"), language)),
+        "band": band if any(v is not None for v in band.values()) else None,
+        "processing": (
+            processing if any(v is not None for v in processing.values()) else None
+        ),
+        "note": _text(fields.get("layer_note")),
     }
 
 
-def imaging_entries(analysis_id, manifest_values, language, read=None):
+def imaging_entries(
+    analysis_id, manifest_values, language, read=None, layer_tiles=None
+):
     """``FileEntry`` of each imaging manifest of an analysis (maXRF, hyperspectral, other); its canvases are the layers, numbered across manifests.
 
-    *read* reads a manifest by URL: a caller's memoised reader, else ``manifest_json``.
+    *read* reads a manifest by URL: a caller's memoised reader, else
+    ``manifest_json``. *layer_tiles* is ``_layer_tiles`` of the analysis; a
+    canvas without a tile is an unclassified layer.
     """
     read = read or manifest_json
+    layer_tiles = layer_tiles or {}
     entries, index = [], 0
     for position, value in enumerate(manifest_values):
         url = rewrite_legacy_url(
@@ -1912,14 +2035,17 @@ def imaging_entries(analysis_id, manifest_values, language, read=None):
         manifest = read(url) or {}
         layers = []
         for canvas in canvases_of(manifest):
-            layers.append(layer_of(index, canvas["label"], canvas["image"]))
-            index += 1
-        layers.sort(
-            key=lambda layer: (
-                layer["kind"] != "band",
-                layer["band"]["value"] if layer["band"] else 0,
+            layers.append(
+                layer_of(
+                    index,
+                    canvas["label"],
+                    canvas["image"],
+                    canvas["id"],
+                    layer_tiles.get(canvas["id"]),
+                    language,
+                )
             )
-        )
+            index += 1
         entries.append(
             {
                 "id": f"{analysis_id}:imaging:{position}",
@@ -1976,7 +2102,7 @@ def analysis_files(analysis_id, user, language, values=None, configs=None, read=
     (``imaging_entries``).
     """
     if values is None:
-        values = Values([analysis_id], ["files", "micro", "imaging"], user)
+        values = Values([analysis_id], FILE_KEYS, user)
     if configs is None:
         configs = renderer_configs(values, [analysis_id])
     return (
@@ -1993,7 +2119,11 @@ def analysis_files(analysis_id, user, language, values=None, configs=None, read=
             kind="micro-imaging",
         )
         + imaging_entries(
-            analysis_id, values.get(analysis_id, "imaging"), language, read
+            analysis_id,
+            values.get(analysis_id, "imaging"),
+            language,
+            read,
+            _layer_tiles(values, analysis_id),
         )
     )
 
@@ -2275,9 +2405,7 @@ def items_payload(keys, user, language):
         {m.group(2) for _, m in parsed if m and m.group(1) in ("an", "af", "im")}
         & set(rows)
     )
-    shared_values = (
-        Values(file_ids, ["files", "micro", "imaging"], user) if file_ids else None
-    )
+    shared_values = Values(file_ids, FILE_KEYS, user) if file_ids else None
     shared_configs = (
         renderer_configs(shared_values, file_ids) if shared_values else None
     )

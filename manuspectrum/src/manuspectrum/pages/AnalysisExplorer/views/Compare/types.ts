@@ -11,6 +11,12 @@ export interface CompareWindowSpec {
     title: string;
     size: WindowSize;
     folded?: boolean;
+    /** Shown in small capitals before the title. */
+    kind?: string;
+    /** What the window holds, counted, after the title. */
+    subtitle?: string;
+    /** « Close » closes a tool (false) rather than hiding the window. */
+    hides?: boolean;
 }
 
 /** A window's place on the grid, in cells. */
@@ -23,3 +29,11 @@ export interface WindowBox {
 
 /** Saved places, by window id. */
 export type WindowLayout = Record<string, WindowBox>;
+
+/** A window hidden by the reader, as « Hidden windows » lists it. */
+export interface HiddenWindowEntry {
+    id: string;
+    title: string;
+    /** Spectra it holds that it did not hold when hidden; 0 for none. */
+    added: number;
+}

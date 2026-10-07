@@ -3,8 +3,19 @@ import {
     removeStorage,
     writeStorage,
 } from "@/manuspectrum/public/safe-storage.ts";
+import {
+    NEUTRAL_FILTERS,
+    PANE_COUNT,
+    TABLE_LAYOUTS,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { OFFERED_TOOLS } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/tools.ts";
 
+import type {
+    PaneFilters,
+    StackLayer,
+    StoredImaging,
+    TableGrouping,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type { ToolWindow } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 import type {
     WindowBox,
@@ -12,7 +23,7 @@ import type {
     WindowSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/types.ts";
 
-/** Places of the Compare windows, the windows hidden and those folded or unfolded by the reader, and the tools open, on this browser; not synced between tabs. */
+/** Places of the Compare windows, the windows hidden and those folded or unfolded by the reader, the tools open and the imaging light table, on this browser; not synced between tabs. */
 export const LAYOUT_STORAGE_KEY = "ms-explorer-layout-v1";
 
 export const GRID_COLUMNS = 12;
@@ -52,9 +63,12 @@ function isBox(value: unknown): value is WindowBox {
  * its unfolded height), the windows hidden, the windows the reader folded
  * (`true`) or unfolded (`false`), and the tools open (kind and parameters,
  * written only when one is open). `folded` and `tools` came after `hidden`
- * in the same version and may be absent.
+ * in the same version and may be absent. Version 3 adds `imaging`, the light
+ * table (panes, stack, filters, grouping, linking, and `gallery` when the
+ * reader showed or hid the gallery); a version 2 record has none.
  */
-const LAYOUT_VERSION = 2;
+const LAYOUT_VERSION = 3;
+const READABLE_VERSIONS: readonly number[] = [2, LAYOUT_VERSION];
 
 /** A tool open in Compare, as stored: its window id is derived from it (`toolWindowId`). */
 export type StoredTool = Pick<ToolWindow, "kind" | "params">;
@@ -64,10 +78,17 @@ interface StoredLayout {
     hidden: string[];
     folded: Record<string, boolean>;
     tools: StoredTool[];
+    imaging: StoredImaging | undefined;
 }
 
 function emptyLayout(): StoredLayout {
-    return { boxes: {}, hidden: [], folded: {}, tools: [] };
+    return {
+        boxes: {},
+        hidden: [],
+        folded: {},
+        tools: [],
+        imaging: undefined,
+    };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -129,6 +150,73 @@ function toolsOf(value: unknown): StoredTool[] {
     );
 }
 
+function percentOf(value: unknown, fallback: number): number {
+    return typeof value === "number" && Number.isFinite(value)
+        ? Math.min(200, Math.max(0, Math.round(value)))
+        : fallback;
+}
+
+function filtersOf(value: unknown): PaneFilters[] {
+    const entries = Array.isArray(value) ? value : [];
+    return Array.from({ length: PANE_COUNT + 1 }, (_, index) => {
+        const entry: unknown = entries[index];
+        if (!isRecord(entry)) return { ...NEUTRAL_FILTERS };
+        return {
+            brightness: percentOf(entry.brightness, NEUTRAL_FILTERS.brightness),
+            contrast: percentOf(entry.contrast, NEUTRAL_FILTERS.contrast),
+            saturation: percentOf(entry.saturation, NEUTRAL_FILTERS.saturation),
+            greyscale: entry.greyscale === true,
+        };
+    });
+}
+
+function stackLayersOf(value: unknown): StackLayer[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((entry) =>
+        isRecord(entry) && typeof entry.canvas === "string" && entry.canvas
+            ? [
+                  {
+                      canvas: entry.canvas,
+                      opacity: Math.min(100, percentOf(entry.opacity, 100)),
+                      on: entry.on !== false,
+                      tint: typeof entry.tint === "string" ? entry.tint : null,
+                  },
+              ]
+            : [],
+    );
+}
+
+/** The light table as stored, field by field: a field that is not readable takes its default; undefined when there is no record. */
+function imagingOf(value: unknown): StoredImaging | undefined {
+    if (!isRecord(value)) return undefined;
+    const stack = isRecord(value.stack) ? value.stack : {};
+    const layers = stackLayersOf(stack.layers);
+    const panes = Array.isArray(value.panes) ? value.panes : [];
+    const grouping: TableGrouping =
+        value.grouping === "tag" ? "tag" : "analysis";
+    return {
+        layout:
+            TABLE_LAYOUTS.find((layout) => layout === value.layout) ?? "single",
+        panes: Array.from({ length: PANE_COUNT }, (_, index) => {
+            const pane: unknown = panes[index];
+            return typeof pane === "string" && pane !== "" ? pane : null;
+        }),
+        syncViews: value.syncViews === true,
+        filters: filtersOf(value.filters),
+        stack: {
+            analysis:
+                layers.length > 0 && typeof stack.analysis === "string"
+                    ? stack.analysis
+                    : null,
+            layers,
+        },
+        grouping,
+        ...(typeof value.gallery === "boolean"
+            ? { gallery: value.gallery }
+            : {}),
+    };
+}
+
 /**
  * A stored layout, anything unreadable dropped. A layout saved before hidden
  * windows existed is a bare `Record<windowId, box>`: its boxes are read, with
@@ -143,12 +231,16 @@ function parseStored(raw: string | null): StoredLayout {
         return emptyLayout();
     }
     if (!isRecord(parsed)) return emptyLayout();
-    if (parsed.version === LAYOUT_VERSION) {
+    if (
+        typeof parsed.version === "number" &&
+        READABLE_VERSIONS.includes(parsed.version)
+    ) {
         return {
             boxes: boxesOf(parsed.boxes),
             hidden: hiddenOf(parsed.hidden),
             folded: foldedOf(parsed.folded),
             tools: toolsOf(parsed.tools),
+            imaging: imagingOf(parsed.imaging),
         };
     }
     return { ...emptyLayout(), boxes: boxesOf(parsed) };
@@ -158,7 +250,13 @@ function readStored(): StoredLayout {
     return parseStored(readStorage(LAYOUT_STORAGE_KEY));
 }
 
-function writeStored({ boxes, hidden, folded, tools }: StoredLayout): void {
+function writeStored({
+    boxes,
+    hidden,
+    folded,
+    tools,
+    imaging,
+}: StoredLayout): void {
     writeStorage(
         LAYOUT_STORAGE_KEY,
         JSON.stringify({
@@ -167,6 +265,7 @@ function writeStored({ boxes, hidden, folded, tools }: StoredLayout): void {
             hidden,
             folded,
             ...(tools.length > 0 ? { tools } : {}),
+            ...(imaging ? { imaging } : {}),
         }),
     );
 }
@@ -221,14 +320,33 @@ export function writeTools(tools: readonly StoredTool[]): void {
     });
 }
 
-/** Forgets the places, the hidden windows and the folded ones; the tools stay open. */
-export function clearLayout(): void {
-    const { tools } = readStored();
-    if (tools.length === 0) {
-        removeStorage(LAYOUT_STORAGE_KEY);
-    } else {
-        writeStored({ ...emptyLayout(), tools });
-    }
+/** The light table as the reader left it; undefined when nothing was stored. */
+export function readImaging(): StoredImaging | undefined {
+    return readStored().imaging;
+}
+
+/** Saves the light table (undefined forgets it); the rest stays as stored. */
+export function writeImaging(imaging: StoredImaging | undefined): void {
+    const stored = { ...readStored(), imaging };
+    if (isEmpty(stored)) removeStorage(LAYOUT_STORAGE_KEY);
+    else writeStored(stored);
+}
+
+function isEmpty(stored: StoredLayout): boolean {
+    return (
+        Object.keys(stored.boxes).length === 0 &&
+        stored.hidden.length === 0 &&
+        Object.keys(stored.folded).length === 0 &&
+        stored.tools.length === 0 &&
+        stored.imaging === undefined
+    );
+}
+
+/** Forgets the places of the windows; the hidden, folded and open windows and the light table stay as stored. */
+export function clearBoxes(): void {
+    const stored = { ...readStored(), boxes: {} };
+    if (isEmpty(stored)) removeStorage(LAYOUT_STORAGE_KEY);
+    else writeStored(stored);
 }
 
 /** Forgets the place, the hidden and the folded state of every window `ids` does not name; writes nothing when none is gone. */
@@ -244,7 +362,7 @@ export function forgetWindows(ids: readonly string[]): void {
     ) {
         return;
     }
-    writeStored({ boxes, hidden, folded, tools: stored.tools });
+    writeStored({ ...stored, boxes, hidden, folded });
 }
 
 /** The entries of the windows `ids` names. */
@@ -266,6 +384,53 @@ export function readingOrder<T extends { x: number; y: number }>(
     boxes: readonly T[],
 ): T[] {
     return [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/** The gap between two spans on one axis, 0 when they touch or overlap. */
+function gapBetween(
+    start: number,
+    length: number,
+    otherStart: number,
+    otherLength: number,
+): number {
+    return Math.max(
+        0,
+        otherStart - (start + length),
+        start - (otherStart + otherLength),
+    );
+}
+
+/**
+ * The box nearest `target`, in grid cells: the smallest gap between their
+ * edges, then the smallest distance between their centres, then the first
+ * in reading order; null when there is none.
+ */
+export function nearestBox<T extends WindowBox>(
+    target: WindowBox,
+    boxes: readonly T[],
+): T | null {
+    const centreX = target.x + target.w / 2;
+    const centreY = target.y + target.h / 2;
+    let nearest: T | null = null;
+    let nearestGap = Infinity;
+    let nearestCentre = Infinity;
+    for (const box of readingOrder(boxes)) {
+        const gap =
+            gapBetween(target.x, target.w, box.x, box.w) +
+            gapBetween(target.y, target.h, box.y, box.h);
+        const centre =
+            Math.abs(box.x + box.w / 2 - centreX) +
+            Math.abs(box.y + box.h / 2 - centreY);
+        if (
+            gap < nearestGap ||
+            (gap === nearestGap && centre < nearestCentre)
+        ) {
+            nearest = box;
+            nearestGap = gap;
+            nearestCentre = centre;
+        }
+    }
+    return nearest;
 }
 
 /**

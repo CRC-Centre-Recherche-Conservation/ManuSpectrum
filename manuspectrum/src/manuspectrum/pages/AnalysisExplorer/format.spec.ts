@@ -4,6 +4,7 @@ import {
     formatDateRange,
     formatSize,
     safeHref,
+    sameText,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 describe("format", () => {
@@ -55,5 +56,17 @@ describe("safeHref", () => {
         expect(safeHref("")).toBeNull();
         expect(safeHref(null)).toBeNull();
         expect(safeHref(undefined)).toBeNull();
+    });
+});
+
+describe("sameText", () => {
+    it("folds case, accents and whitespace", () => {
+        expect(sameText("450 nm", " 450  NM ")).toBe(true);
+        expect(sameText("Cu Lα", "cu lα")).toBe(true);
+        expect(sameText("Pb", "Pb")).toBe(true);
+    });
+
+    it("tells two different texts apart", () => {
+        expect(sameText("Cu", "MS59-f13v-deconv_Cu")).toBe(false);
     });
 });

@@ -77,17 +77,46 @@
     --spectral-5: #3b82f6;
     --spectral-6: #8b5cf6;
 
-    // Analysis Explorer (spec §10.1). Series colours are the compared items
-    // A1…A8; technique colours are drawn on images with a white outline and
-    // carry their code in --stage (contrast ≥ 6:1 for each hue).
+    // Analysis Explorer (spec §10.1). Series colours (palette « Pigments »)
+    // are the Selection's items: A1…A12 take one each, A13… go round again
+    // (dashed line and ring marker, then dotted and ring with a dot). The
+    // eight first are told apart all pairs at once on --bg, colour vision
+    // deficiencies included, each ≥ 3:1 on --bg; text drawn on a series
+    // colour takes its --series-N-on. Technique colours are drawn on
+    // images with a white outline and carry their code in --stage (contrast
+    // ≥ 6:1 for each hue).
     --series-1: #1d4ed8;
-    --series-2: #b45309;
-    --series-3: #6d28d9;
-    --series-4: #047857;
-    --series-5: #b91c1c;
-    --series-6: #0891b2;
-    --series-7: #a16207;
-    --series-8: #be185d;
+    --series-2: #7c9217;
+    --series-3: #9f0c54;
+    --series-4: #588cff;
+    --series-5: #8b5600;
+    --series-6: #0099a6;
+    --series-7: #7860a0;
+    --series-8: #ea5974;
+    --series-1-on: #ffffff;
+    --series-2-on: var(--ink);
+    --series-3-on: #ffffff;
+    --series-4-on: var(--ink);
+    --series-5-on: #ffffff;
+    --series-6-on: var(--ink);
+    --series-7-on: #ffffff;
+    --series-8-on: var(--ink);
+    // --series-9…12: each clear of the amber/gold hue band (heat-3/-4,
+    // ~69-96deg) and ≥ 12 OKLab dE (Euclidean distance in L,a,b ×100) from
+    // every --series-1…8 and --focus-1…4 hue; contrast is WCAG's against white.
+    --series-9: #d42515; // dE >= 12.0 series, 20.9 focus, 18.1 heat; 5.15:1 on white
+    --series-10: #008016; // dE >= 12.2 series, 13.8 focus, 16.6 heat; 5.12:1 on white
+    --series-11: #7e58eb; // dE >= 12.0 series, 12.6 focus, 31.1 heat; 4.68:1 on white
+    --series-12: #d251b9; // dE >= 12.1 series, 12.7 focus, 28.6 heat; 3.74:1 on white
+    --series-9-on: #ffffff;
+    --series-10-on: #ffffff;
+    --series-11-on: #ffffff;
+    --series-12-on: var(--ink);
+    // A curve dimmed by the focus's « Dim » switch (unrelated to every pin)
+    // draws in this grey whatever its item (3.26:1 on --bg,
+    // 3.43:1 on --surface; a neutral grey, lighter than A1, A3, A5 and A7 and
+    // about as light as the others).
+    --series-context: #8a8999;
     --tech-1: #8aa9ff;
     --tech-2: #f0a35c;
     --tech-3: #b69cff;
@@ -102,6 +131,97 @@
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;
     --map-coast: #b7c4cf;
+    // Light table: false-colour hues of the stack, drawn through an SVG
+    // feColorMatrix (stack-tints.ts holds the same values; a spec pins them equal).
+    --map-pb: #f1ede0;
+    --map-cu: #22d3ee;
+    --map-fe: #fb923c;
+    --map-hg: #ef4444;
+    --map-ca: #facc15;
+    --map-k: #a78bfa;
+    --map-mn: #e879f9;
+    --map-zn: #4ade80;
+    --map-au: #e0b020;
+    --map-ag: #cfd3d8;
+    --map-as: #a3e635;
+    --map-s: #fef08a;
+    --map-rank-1: #60a5fa;
+    --map-rank-2: #f472b6;
+    --map-rank-3: #34d399;
+    --map-rank-4: #fbbf24;
+    --map-rank-5: #c084fc;
+    --map-rank-6: #f87171;
+    --map-rank-7: #2dd4bf;
+    --map-rank-8: #fb923c;
+    --map-rank-9: #a3e635;
+    --map-rank-10: #38bdf8;
+    --map-rank-11: #e879f9;
+    --map-rank-12: #fde68a;
+    // Compare's focus: one hue per pinned slot (1–4), illuminator's inks —
+    // indigo, verdigris, orchil, dragon's blood. White digits on them ≥ 5.7:1;
+    // as a ring ≥ 3.1:1 on --heat-3. On --heat-4 no such hue reaches 3:1: the
+    // ring there takes a 1px --surface halo (explorer.scss).
+    --focus-1: #3d2e8d;
+    --focus-2: #1e6256;
+    --focus-3: #93499e;
+    --focus-4: #760a03;
+    --focus-on: #ffffff;
+    // Light table: the letter and rim of panes A to D, apart from the focus
+    // hues (gold, teal, orchil, olive: white letters on them >= 4.5:1).
+    --pane-a: var(--accent-text);
+    --pane-b: #2f7a8c;
+    --pane-c: #8a4f7d;
+    --pane-d: #5d6b2e;
+    --link-ring: 0.125rem;
+    --link-pip: 0.875rem;
+    --focus-room: 0.4375rem;
+    --link-fade-surface: 30%;
+    --linked-fade: 0.35;
+    // Compare's counted tables (coverage matrix, periodic table): the
+    // homepage gold, parchment to iron-gall, four steps, each with the text
+    // drawn on it (≥ 4.5:1); kept apart from the focus hues.
+    --heat-1: #fbf3df;
+    --heat-2: #f3dfa6;
+    --heat-3: #e2bb5c;
+    --heat-4: #7a5410;
+    --heat-1-on: var(--ink);
+    --heat-2-on: var(--ink);
+    --heat-3-on: var(--ink);
+    --heat-4-on: #ffffff;
+    // Compare's Materials window. Certainty, same gold, step 4 the most
+    // certain: --cert-4 ≥ 8:1 on --surface (it also colours the step 4
+    // label), --cert-3 ≥ 3.8:1 (a graphic, ≥ 3:1), --cert-2 and --cert-1 are
+    // graphic only, always beside the written label (--cert-1 is drawn
+    // hollow); --cert-track the unfilled bars. The Selection column: an item
+    // of the Selection is sealed (--sel-own-ink ≥ 7.9:1 on --sel-own-bg), an
+    // item citing it is hollow and dashed (--sel-cite-ink ≥ 8:1 on
+    // --surface). --mt-rule is the gold hairline under the heading and above
+    // a group, --mt-band a group's parchment band, --mt-zebra every other
+    // record.
+    --cert-1: #e6d3a3;
+    --cert-2: #d2a84a;
+    --cert-3: #a07d1c;
+    --cert-4: #6b4a0e;
+    --cert-track: rgba(122, 84, 16, 0.14);
+    --sel-own-bg: #f6ead0;
+    --sel-own-ink: #5c410a;
+    --sel-own-rule: #c9a44e;
+    --sel-cite-ink: #6b4a0e;
+    --sel-cite-rule: rgba(160, 125, 28, 0.55);
+    // Segmented controls (Materials « Group by », the XY « Hide | Dim »): the
+    // pressed segment's rule and ink.
+    --seg-on-rule: #c9a44e;
+    --seg-on-ink: #5c410a;
+    --mt-rule: rgba(160, 125, 28, 0.28);
+    --mt-band: #f7f2e7;
+    --mt-zebra: #fbfaf7;
+    // Compare's motion: one bloom per toggle that gains a slot, one breath
+    // per window; nothing sweeps.
+    --dur-fast: 160ms;
+    --dur-med: 260ms;
+    --dur-slow: 420ms;
+    --bloom-dur: 560ms;
+    --breathe-dur: 900ms;
 
     // Typography
     --font-display: 'Cormorant Garamond', Georgia, serif;
@@ -117,6 +237,15 @@
     // by the About content). They used to be 2rem vs 24px, which showed up as a
     // 12px misalignment exactly where footer and content meet.
     --ms-gutter: 2rem;
+}
+
+// An item's colour as `--slot-fill` and the colour of text drawn on it
+// (`slot-1…12`, see workshop.ts `itemTone`): chips and folio markers read them.
+@for $n from 1 through 12 {
+    .slot-#{$n} {
+        --slot-fill: var(--series-#{$n});
+        --slot-on: var(--series-#{$n}-on);
+    }
 }
 
 html {

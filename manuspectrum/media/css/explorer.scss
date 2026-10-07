@@ -35,6 +35,12 @@ body.ms-page--app::after {
     display: none;
 }
 
+// A light-table layer zoomed past its native zoom (`pixelatedAbove`): image
+// pixels are drawn as sharp squares; `image-rendering` is inherited by tiles.
+.ms-pixelated {
+    image-rendering: pixelated;
+}
+
 // --- Intro: the homepage heading on the Explorer home, one line elsewhere ---
 .ms-explorer-intro {
     @include ms-app-container;
@@ -237,5 +243,329 @@ body.ms-page--app .ms-skeleton {
 
     body.ms-page--app .ms-skeleton {
         animation: none;
+    }
+}
+
+// --- Compare's focus: the recipes shared by every toggle ---
+// A toggle carries the class `ms-focus` and the attributes of
+// `useLinkedMarks().focus(ids)`: `data-rel` (self | direct | evidence | none
+// while something is pinned), `data-slots`, `data-preview`, `data-bloom`,
+// and the custom properties `--ring` (the slot hue, or a conic gradient
+// segmenting several), `--h1` (the first slot's hue) and `--hp` (the hue of
+// the slot the node previewed would take). Its `FocusPip` is a direct child.
+// `--r` is the toggle's corner radius, which the ring follows.
+// Every mark is drawn inside the toggle's own box (ring, orbit, bloom,
+// wash), so no scroller clips it and two toggles never share a mark. Only
+// the pip rises above the box, by `--focus-room`, at its inline end: a
+// scroller of toggles keeps that room at its top (`padding-block-start`) and
+// a list of stacked toggles keeps it between its rows (`row-gap`). A list
+// of toggles too small to hold the pip beside their text (element tiles and
+// chips) sets `--focus-room` to the pip's height less the ring, so the pip
+// stands on the ring above the text.
+:where(.ms-focus) {
+    position: relative;
+    isolation: isolate;
+    transition: background-color var(--dur-med), color var(--dur-med);
+}
+
+.ms-focus::before,
+.ms-focus::after {
+    position: absolute;
+    border-radius: inherit;
+    content: '';
+    opacity: 0;
+    pointer-events: none;
+}
+
+// The ring: a masked block along the inside of the edge, so a conic
+// gradient segments it.
+.ms-focus::before {
+    inset: 0;
+    padding: var(--link-ring);
+    border-radius: var(--r, 0.375rem);
+    background: var(--ring, var(--focus-1));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+        linear-gradient(#000 0 0) content-box exclude,
+        linear-gradient(#000 0 0);
+    transition: opacity var(--dur-med) var(--ease-out-expo);
+}
+
+// The bloom: a soft glow inside the edge that appears once and fades as it
+// settles (opacity only). The parity restarts it on a second change.
+.ms-focus::after {
+    z-index: -1;
+    inset: 0;
+    border-radius: var(--r, 0.375rem);
+    box-shadow: inset 0 0 0 0.375rem color-mix(in srgb, var(--h1, var(--focus-1)) 22%, transparent);
+    transition: opacity var(--dur-fast) linear;
+}
+
+.ms-focus[data-bloom='odd']::after {
+    animation: ms-focus-bloom-odd var(--bloom-dur) var(--ease-out-expo) 1;
+}
+
+.ms-focus[data-bloom='even']::after {
+    animation: ms-focus-bloom-even var(--bloom-dur) var(--ease-out-expo) 1;
+}
+
+@keyframes ms-focus-bloom-odd {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+@keyframes ms-focus-bloom-even {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+// The pip: one digit per slot, each on its hue (solid = direct, hollow =
+// evidence, underlined = the pinned node itself); « + » on an unpinned
+// toggle under the pointer. It sits on the top edge at the inline end,
+// rising `--focus-room` above it and never past the end.
+.ms-focus > .ms-focus-pip {
+    position: absolute;
+    z-index: 2;
+    inset-block-start: calc(-1 * var(--focus-room));
+    inset-inline-end: 0.125rem;
+    display: inline-flex;
+    block-size: var(--link-pip);
+    min-inline-size: var(--link-pip);
+    overflow: hidden;
+    border-radius: 999rem;
+    box-shadow: 0 0 0 0.125rem var(--surface);
+    font: 700 0.5625rem/1 var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-fast);
+}
+
+.ms-focus-pip b {
+    display: grid;
+    flex: 1;
+    place-items: center;
+    min-inline-size: 0.375rem;
+    padding-inline: 0.0625rem;
+    background: var(--h, var(--ink));
+    color: var(--focus-on);
+    font-weight: 700;
+}
+
+.ms-focus-pip b::before {
+    content: attr(data-n);
+}
+
+.ms-focus-pip b:first-child {
+    padding-inline-start: 0.1875rem;
+}
+
+.ms-focus-pip b:last-child {
+    padding-inline-end: 0.1875rem;
+}
+
+.ms-focus-pip b.ev {
+    background: var(--surface);
+    color: var(--h);
+    box-shadow: inset 0 0 0 0.09375rem var(--h);
+}
+
+.ms-focus-pip b.own {
+    text-decoration: underline;
+    text-decoration-thickness: 0.09375rem;
+    text-underline-offset: 0.125rem;
+}
+
+.ms-focus-pip b.add {
+    background: var(--ink);
+    font-size: 0.75rem;
+}
+
+// Self: a fuller ring in its own hue, bold.
+.ms-focus[data-rel='self'] {
+    font-weight: 700;
+}
+
+.ms-focus[data-rel='self']::before {
+    padding: calc(var(--link-ring) + 0.0625rem);
+    opacity: 1;
+}
+
+.ms-focus[data-rel='self'] > .ms-focus-pip {
+    font-size: 0.625rem;
+    opacity: 1;
+}
+
+// Direct: ring and solid digits.
+.ms-focus[data-rel='direct']::before,
+.ms-focus[data-rel='direct'] > .ms-focus-pip {
+    opacity: 1;
+}
+
+// Evidence: a hairline ring, hollow digits.
+.ms-focus[data-rel='evidence']::before {
+    padding: 0.0625rem;
+    opacity: 1;
+}
+
+.ms-focus[data-rel='evidence'] > .ms-focus-pip {
+    opacity: 1;
+}
+
+// Not linked: steps back, its fill washed toward the surface, text still AA.
+.ms-focus[data-rel='none'] {
+    background: color-mix(in srgb, var(--cell-heat, var(--bg-alt)) var(--link-fade-surface), var(--surface)) !important;
+    color: var(--ink-muted) !important;
+}
+
+// Preview (a pointer resting on something unpinned), in the hue the pin
+// would take (`--hp`). Every toggle it links gets a static wash under its
+// text and an underline inside it (a shape, not only a colour): 2px at 7 %
+// for self and direct, 1px at 4 % for evidence; the wash sits on `::after`,
+// faded by opacity only. The source under the pointer also gets its ring
+// drawn once by a light (`--ms-orbit` from 0 to 380deg), then kept, lit
+// softly from inside; over a pinned ring the light draws on top of it.
+// Pills and small tiles set `--preview-inset` so the underline clears their
+// rounded ends.
+@property --ms-orbit {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+.ms-focus[data-preview] {
+    --preview-line: 0.125rem;
+    --preview-wash: 7%;
+    --preview-mark: 100%;
+}
+
+.ms-focus[data-preview='evidence'] {
+    --preview-line: 0.0625rem;
+    --preview-wash: 4%;
+    --preview-mark: 75%;
+}
+
+.ms-focus[data-preview='self'] {
+    --preview-wash: 10%;
+}
+
+.ms-focus[data-preview]::after {
+    inset: 0;
+    border-radius: var(--r, 0.375rem);
+    background:
+        linear-gradient(
+                to top,
+                color-mix(in srgb, var(--hp, var(--focus-1)) var(--preview-mark), transparent) 0 var(--preview-line),
+                rgb(255 255 255 / 0.7) var(--preview-line) calc(var(--preview-line) + 0.0625rem),
+                transparent 0
+            )
+            50% calc(100% - 0.1875rem) / calc(100% - 2 * var(--preview-inset, 0.375rem))
+            calc(var(--preview-line) + 0.0625rem) no-repeat,
+        color-mix(in srgb, var(--hp, var(--focus-1)) var(--preview-wash), transparent);
+    box-shadow: none;
+    opacity: 1;
+}
+
+.ms-focus[data-preview][data-rel='none'] {
+    background: color-mix(in srgb, var(--cell-heat, var(--bg-alt)) 70%, var(--surface)) !important;
+    color: var(--ink) !important;
+}
+
+.ms-focus[data-preview='self']:hover::before {
+    --ms-orbit: 380deg;
+    padding: calc(var(--link-ring) + 0.03125rem);
+    background: conic-gradient(
+        from -90deg,
+        var(--hp, var(--focus-1)) 0 calc(var(--ms-orbit) - 18deg),
+        color-mix(in srgb, var(--hp, var(--focus-1)) 40%, #fff) var(--ms-orbit),
+        color-mix(in srgb, var(--hp, var(--focus-1)) 22%, transparent) var(--ms-orbit)
+    );
+    opacity: 1;
+    animation: ms-focus-orbit 1.4s cubic-bezier(0.45, 0, 0.25, 1) 1 both;
+}
+
+.ms-focus[data-preview='self'][data-slots]:hover::before {
+    background:
+        conic-gradient(
+            from -90deg,
+            var(--hp, var(--focus-1)) 0 calc(var(--ms-orbit) - 18deg),
+            color-mix(in srgb, var(--hp, var(--focus-1)) 40%, #fff) var(--ms-orbit),
+            transparent var(--ms-orbit)
+        ),
+        var(--ring);
+}
+
+// The soft light of the source, inside its ring.
+.ms-focus[data-preview='self']:hover::after {
+    box-shadow: inset 0 0 0.3125rem 0.0625rem color-mix(in srgb, var(--hp, var(--focus-1)) 35%, transparent);
+}
+
+@keyframes ms-focus-orbit {
+    from { --ms-orbit: 0deg; }
+}
+
+.ms-focus:not([data-slots]):hover > .ms-focus-pip {
+    opacity: 1;
+}
+
+.ms-focus[data-preview='self']:not([data-slots]):hover > .ms-focus-pip b.add {
+    background: var(--hp, var(--focus-1));
+}
+
+// A heat-4 cell (coverage matrix, periodic table) is dark enough that no
+// focus hue reaches 3:1 against it: the ring takes a 1px --surface halo
+// just inside it, painted on the cell's own box, under the masked ::before
+// ring (self: ring + 2px, direct: ring + 1px, evidence: 1px).
+:is(.coverage-matrix .cell, .periodic-table .found)[data-heat='4'].ms-focus[data-rel='self'] {
+    box-shadow: inset 0 0 0 calc(var(--link-ring) + 0.125rem) var(--surface);
+}
+
+:is(.coverage-matrix .cell, .periodic-table .found)[data-heat='4'].ms-focus[data-rel='direct'] {
+    box-shadow: inset 0 0 0 calc(var(--link-ring) + 0.0625rem) var(--surface);
+}
+
+:is(.coverage-matrix .cell, .periodic-table .found)[data-heat='4'].ms-focus[data-rel='evidence'] {
+    box-shadow: inset 0 0 0 0.125rem var(--surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ms-focus,
+    .ms-focus::before,
+    .ms-focus::after,
+    .ms-focus > .ms-focus-pip {
+        animation: none !important;
+        transition-duration: 1ms !important;
+    }
+}
+
+@media (forced-colors: active) {
+    .ms-focus[data-rel='self'] {
+        outline: 0.1875rem solid Highlight;
+        outline-offset: -0.1875rem;
+    }
+
+    .ms-focus[data-rel='direct'] {
+        outline: 0.125rem solid Highlight;
+        outline-offset: -0.125rem;
+    }
+
+    .ms-focus[data-rel='evidence'] {
+        outline: 0.0625rem dotted Highlight;
+        outline-offset: -0.0625rem;
+    }
+
+    .ms-focus[data-preview='self']:hover {
+        outline: 0.125rem solid Highlight;
+        outline-offset: -0.125rem;
+    }
+
+    .ms-focus:is([data-preview='direct'], [data-preview='evidence'], [data-preview='self']:not(:hover)) {
+        outline: 0.0625rem dashed CanvasText;
+        outline-offset: -0.25rem;
+    }
+
+    .ms-focus-pip b {
+        forced-color-adjust: none;
     }
 }
