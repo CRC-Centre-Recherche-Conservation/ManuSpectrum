@@ -225,8 +225,8 @@ export interface CharacterizationSummary {
     id: string;
     name: Label;
     objects: Ref[];
-    /** Ids of the visible components linked to it, sorted: those it observes and those of the analyses it cites. */
-    components: string[];
+    /** The visible components linked to it, by id: those it observes and those of the analyses it cites. */
+    components: Ref[];
     materials: {
         value: ValueRef;
         confidence: RankedValue | null;

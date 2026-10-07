@@ -469,6 +469,19 @@ describe("CorpusDocument", () => {
             expect(store.showOutside).toBe(true);
         });
 
+        it("offers no switch without a filter, and lists everything even when the address says outside=hide", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen((opened) => {
+                opened.openDocument(uuid(1));
+                opened.setShowOutside(false);
+            });
+            await flushPromises();
+            expect(wrapper.find(".stage-head [role=switch]").exists()).toBe(
+                false,
+            );
+            expect(names(wrapper)).toEqual([uuid(101), uuid(102)]);
+        });
+
         it("offers the switch in the stage head with the number of analyses left out, on by default", async () => {
             stubFetch(shown());
             const { wrapper } = mountScreen(FILTERED);
@@ -811,11 +824,23 @@ describe("CorpusDocument", () => {
                         name: label("Component 1"),
                     },
                 ],
-                components: [uuid(701)],
+                components: [
+                    {
+                        id: uuid(701),
+                        model: "component",
+                        name: label("Component 1"),
+                    },
+                ],
             });
             const citing = characterization(2, {
                 evidence: [{ id: uuid(101), name: label("MS1_f12_XRF_01") }],
-                components: [OBSERVED],
+                components: [
+                    {
+                        id: OBSERVED,
+                        model: "component",
+                        name: label("Component 3"),
+                    },
+                ],
             });
             stubFetch({
                 ...withComponents(),

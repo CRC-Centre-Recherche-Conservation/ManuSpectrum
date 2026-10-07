@@ -523,6 +523,7 @@ LEAD_WHITE, RED, LAPIS = (
     "http://vocab/red",
     "http://vocab/lapis",
 )
+GREEN = "http://vocab/green"
 ILLUMINATION, INITIAL, PART_BLUE = (
     "http://vocab/illumination",
     "http://vocab/initial",
@@ -645,11 +646,7 @@ class ColourTests(LevelCase):
 
         self.assertEqual(
             self.ids(payload),
-            {
-                str(self.analyses["open"].pk),
-                str(self.analyses["draft"].pk),
-                str(self.analyses["on_document"].pk),
-            },
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
         )
 
     def test_an_identified_colour_alone_keeps_the_row(self):
@@ -690,14 +687,22 @@ class ColourTests(LevelCase):
             }
 
         self.assertEqual(counts(f"colour={BLUE}"), {AZURITE: 2})
-        self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 2, LEAD_WHITE: 1})
+        self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 1, LEAD_WHITE: 1})
 
     def test_counts_of_colour_are_values_of_the_kept_entries(self):
         colours = self.facet(self.search(""), "colour")
 
         self.assertEqual(
             {uri: colours[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
-            {BLUE: 2, RED: 1, PART_BLUE: 3},
+            {BLUE: 2, RED: 1, PART_BLUE: 2},
+        )
+
+    def test_an_analysis_off_the_blue_part_is_not_kept_by_its_material_observing_it(
+        self,
+    ):
+        self.assertNotIn(
+            str(self.analyses["on_document"].pk),
+            self.ids(self.search(f"colour={PART_BLUE}")),
         )
 
     def test_kept_characterizations_extend_the_part_colour(self):
@@ -760,17 +765,24 @@ class MaterialComponentTests(ServiceCase):
             self.assertIn(m, found["kept"]["characterizations"], text)
             self.assertIn(a, self.search_ids(text), text)
 
-    def test_a_material_observing_a_blue_part_and_citing_a_red_one_carries_both(self):
+    def test_a_material_observing_a_blue_part_and_citing_a_red_one_colours_its_row_red(
+        self,
+    ):
         b, m = str(self.red_analysis.pk), str(self.sees_blue.pk)
 
-        for text in (
-            f"colour={BLUE}&material={self.TUBE}",
-            f"colour={RED}&material={self.TUBE}",
-        ):
-            found = self.match(text)
-            self.assertIn(b, found["kept"]["analyses"], text)
-            self.assertIn(m, found["kept"]["characterizations"], text)
-            self.assertIn(b, self.search_ids(text), text)
+        found = self.match(f"colour={RED}&material={self.TUBE}")
+        self.assertIn(b, found["kept"]["analyses"])
+        self.assertIn(m, found["kept"]["characterizations"])
+        self.assertIn(b, self.search_ids(f"colour={RED}&material={self.TUBE}"))
+
+    def test_the_observed_blue_part_keeps_the_material_but_not_the_red_row(self):
+        b, m = str(self.red_analysis.pk), str(self.sees_blue.pk)
+        text = f"colour={BLUE}&material={self.TUBE}"
+
+        found = self.match(text)
+        self.assertEqual(found["kept"]["analyses"], [])
+        self.assertIn(m, found["kept"]["characterizations"])
+        self.assertNotIn(b, self.search_ids(text))
 
     def test_search_and_match_keep_the_same_analyses(self):
         document = str(self.documents["open"].pk)
@@ -789,17 +801,25 @@ class MaterialComponentTests(ServiceCase):
             }
             self.assertEqual(set(self.match(text)["kept"]["analyses"]), found, text)
 
-    def test_the_payload_lists_the_linked_components(self):
+    def test_the_payload_lists_the_linked_components_as_named_refs(self):
         payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
         summaries = {s["id"]: s for s in payload["characterizations"]}
 
+        def ref(part, name):
+            return {"id": str(part.pk), "model": "component", "name": name}
+
+        cites = summaries[str(self.cites_blue.pk)]["components"]
+        self.assertEqual(cites, [ref(self.blue_part, cites[0]["name"])])
+        self.assertEqual(cites[0]["name"]["value"], "Blue part")
+        sees = summaries[str(self.sees_blue.pk)]["components"]
         self.assertEqual(
-            summaries[str(self.cites_blue.pk)]["components"],
-            [str(self.blue_part.pk)],
-        )
-        self.assertEqual(
-            summaries[str(self.sees_blue.pk)]["components"],
-            sorted([str(self.blue_part.pk), str(self.red_part.pk)]),
+            [(c["id"], c["model"], c["name"]["value"]) for c in sees],
+            sorted(
+                [
+                    (str(self.blue_part.pk), "component", "Blue part"),
+                    (str(self.red_part.pk), "component", "Red part"),
+                ]
+            ),
         )
 
     def test_rows_of_one_material_and_component_share_one_entry(self):
@@ -808,6 +828,100 @@ class MaterialComponentTests(ServiceCase):
 
         self.assertEqual(entry["colour"], {BLUE})
         self.assertNotIn("colourOwn", entry)
+
+
+class CitedColourTests(ServiceCase):
+    """A row is kept by a colour its own component or a material it cites carries as its own."""
+
+    M_URI = "http://vocab/shared-pigment"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref, tile = cls.reference_value, cls.tile
+        document = cls.documents["open"]
+
+        def part(name, colour):
+            made = cls.new_resource("component", name)
+            tile(made, "item_visual_is_part_of_document", cls.refs(document))
+            tile(made, "color_features", ref(*colour))
+            return made
+
+        def analysis(name, observed):
+            made = cls.new_resource("analysis", name)
+            tile(made, "component_observed", cls.refs(observed))
+            return made
+
+        cls.a1 = analysis("A1", part("Red part", (RED, "Red", "Rouge")))
+        cls.a2 = analysis("A2", part("Green part", (GREEN, "Green", "Vert")))
+        cls.shared = cls.new_resource("characterization", "Shared, no colour")
+        tile(cls.shared, "object_observed", cls.refs(document))
+        tile(cls.shared, "evidence_analyses", cls.refs(cls.a1, cls.a2))
+        tile(cls.shared, "identified_material", ref(cls.M_URI, "Shared"))
+
+    def ids(self, text):
+        payload = search_payload(self.query(f"{text}&size=50"), self.anonymous, "en")
+        return {r["id"] for r in payload["results"]}
+
+    def facet(self, payload, key):
+        return {
+            v["id"]: v
+            for f in payload["facets"]
+            if f["key"] == key
+            for v in f["values"]
+        }
+
+    def match(self, text):
+        return match_payload(
+            self.documents["open"].pk, self.query(text), self.anonymous, "en"
+        )
+
+    def test_a_colour_keeps_the_row_on_that_colour_only(self):
+        a1, a2 = str(self.a1.pk), str(self.a2.pk)
+
+        for text in (f"colour={RED}", f"colour={RED}&material={self.M_URI}"):
+            found = self.ids(text)
+            self.assertIn(a1, found, text)
+            self.assertNotIn(a2, found, text)
+            kept = self.match(text)["kept"]["analyses"]
+            self.assertIn(a1, kept, text)
+            self.assertNotIn(a2, kept, text)
+
+    def test_the_red_count_does_not_count_the_green_row(self):
+        colours = self.facet(
+            search_payload(self.query(), self.anonymous, "en"), "colour"
+        )
+
+        self.assertEqual(colours[RED]["count"], 1)
+        self.assertEqual(colours[GREEN]["count"], 1)
+
+    def test_match_keeps_the_material_through_each_cited_colour(self):
+        shared = str(self.shared.pk)
+
+        for colour in (RED, GREEN):
+            kept = self.match(f"colour={colour}&material={self.M_URI}")["kept"]
+            self.assertIn(shared, kept["characterizations"], colour)
+        self.assertNotIn(
+            shared, self.match(f"colour={BLUE}")["kept"]["characterizations"]
+        )
+
+    def test_a_kept_material_has_a_kept_row_unless_it_observes_a_component(self):
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+        summaries = {s["id"]: s for s in payload["characterizations"]}
+        for text in (
+            f"colour={RED}",
+            f"colour={GREEN}",
+            f"colour={BLUE}",
+            f"colour={RED}&material={self.M_URI}",
+            f"colour={BLUE}&material={AZURITE}",
+        ):
+            rows = self.ids(text)
+            for c in self.match(text)["kept"]["characterizations"]:
+                cited = {e["id"] for e in summaries[c]["evidence"]}
+                observes = any(
+                    o["model"] == "component" for o in summaries[c]["objects"]
+                )
+                self.assertTrue(cited & rows or observes, (text, c))
 
 
 class ColourListTests(LevelCase):
@@ -918,11 +1032,7 @@ class PartLevelTests(LevelCase):
 
         self.assertEqual(
             self.ids(payload),
-            {
-                str(self.analyses["open"].pk),
-                str(self.analyses["draft"].pk),
-                str(self.analyses["on_document"].pk),
-            },
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
         )
 
     def test_each_facet_names_its_group_in_rail_order(self):

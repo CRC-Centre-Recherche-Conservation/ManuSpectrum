@@ -362,6 +362,12 @@ def _matches(value, expected):
     )
 
 
+ITEM_SHAPES = {
+    ("CharacterizationSummary", "objects"): "Ref",
+    ("CharacterizationSummary", "components"): "Ref",
+}
+
+
 def assert_shape(testcase, payload, shape_name):
     """Fail when *payload* misses a key of *shape_name*, carries an extra one, or a value has the wrong type."""
     shape = SHAPES[shape_name]
@@ -383,3 +389,5 @@ def assert_shape(testcase, payload, shape_name):
         )
         if nested and isinstance(value, dict):
             assert_shape(testcase, value, nested)
+        for item in value if (shape_name, key) in ITEM_SHAPES else ():
+            assert_shape(testcase, item, ITEM_SHAPES[(shape_name, key)])

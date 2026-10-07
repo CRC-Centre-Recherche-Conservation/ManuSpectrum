@@ -633,7 +633,9 @@ def material_components(visible, chains, objects_of):
     A material is linked to a component it observes (``object_observed``) or
     that is observed by a visible analysis it cites as evidence. Every
     surface that relates a material to a component reads this one rule: the
-    colours of rows and kept materials, the ``components`` of the payload.
+    kept materials of ``match_payload``, the ``components`` of the payload.
+    The colour of a row never reads it: a row carries the material's own
+    colour and its own component's.
     """
     found = {}
     for c in visible.characterizations:
@@ -648,7 +650,8 @@ def material_components(visible, chains, objects_of):
 
 def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
     """``(rows, values, parents, linked)``: the ``corpus_rows``, per visible
-    identified material ``{key: set of uris}`` of the characterization facets,
+    identified material ``{key: set of uris}`` of the characterization facets
+    for ``match_payload``,
     the ``place_closure`` parents of the places the rows carry and the
     ``material_components``.
 
@@ -659,12 +662,12 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
 
     A row's ``characterizations`` hold one entry per identified material it
     cites, plus one without material when its component has a colour and
-    nothing cites it. A material's values hold ``colour``, the union of its
-    ``color_aspect`` and the ``color_features`` of the components linked to it
-    (``material_components``, with *objects_of* read when omitted); a row
-    shares the values of the material it cites, extended with the colours of
-    its own component when they are not already there, one object per
-    (material, component).
+    nothing cites it. The entry of a cited material holds its own
+    ``color_aspect`` extended with the ``color_features`` of the row's
+    component, one object per (material, component); *objects_of* is read
+    when omitted. The second value holds, per material, the values of the
+    kept-materials rule of ``match_payload``: ``colour`` is its own colour
+    plus those of every component linked to it (``material_components``).
     """
     memo = _BuildMemo(language)
     if objects_of is None:
@@ -754,6 +757,7 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
         return colours_memo[component]
 
     value_sets = {}
+    match_sets = {}
     for c in visible.characterizations:
         value_sets[c] = {
             key: {
@@ -763,11 +767,15 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
             }
             for key, role in CHARACTERIZATION_ROLES.items()
         }
-        value_sets[c]["colour"] |= set().union(*(colours_of(k) for k in linked[c]))
+        match_sets[c] = {
+            **value_sets[c],
+            "colour": value_sets[c]["colour"]
+            | set().union(*(colours_of(k) for k in linked[c])),
+        }
     entries = {}
 
     def entry_of(material, component):
-        """The values of *material* as a row on *component* carries them."""
+        """The values of *material* as a row on *component* carries them: its own colour and the component's."""
         key = (material, component)
         if key not in entries:
             own, part = value_sets[material], colours_of(component)
@@ -924,7 +932,7 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "periods": production_of(document, component)[1],
             }
         )
-    return rows, value_sets, place_parents, linked
+    return rows, match_sets, place_parents, linked
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -940,7 +948,9 @@ class CorpusBundle:
     in name order. ``order`` is the analyses-grain sort key of each row.
     ``links`` holds the role maps the payloads follow, keyed by source id.
     ``characterization_values`` holds, per visible identified material, the
-    uris it carries for each facet of the characterization group;
+    uris it carries for each facet of the characterization group, as
+    ``match_payload`` keeps materials (its ``colour`` adds the colours of the
+    components linked to it);
     ``material_components`` the sorted ids of the visible components linked to
     each (``material_components``).
     ``colour_items`` is ``[(uri, rank)]`` of the items of the colour list, in
@@ -1778,7 +1788,9 @@ def match_payload(document_id, query, user, language, ticket=None):
     absent. ``kept.analyses`` are the document's analyses ``row_filter``
     keeps, with the facet universe of the whole corpus, or None when no
     filter is active (every analysis kept); ``total`` counts them. ``kept.characterizations`` are its identified materials carrying a
-    selected value of each active facet of the characterization group; the
+    selected value of each active facet of the characterization group (a
+    colour is carried by the material itself, a component it observes or the
+    component of an analysis it cites); the
     other facets, the place, the period and the free text leave them kept.
     ``period`` is the ``RangeFacet`` of the document's analyses (None when none
     is dated). Grain, page and size are not read.
@@ -2090,8 +2102,8 @@ def characterization_summaries(
     ``evidence`` names each visible analysis cited, in id order. *objects_of*
     is the characterization → objects observed map the caller already holds,
     *analysis_rows* the corpus rows by analysis id, whose names it reuses.
-    ``components`` is the material's entry of *components_of*
-    (``CorpusBundle.material_components``).
+    ``components`` are the references to the material's entry of *components_of*
+    (``CorpusBundle.material_components``), named like ``objects``.
     """
     ids = sorted(i for i in ids if i in visible.characterizations)
     if not ids:
@@ -2126,9 +2138,11 @@ def characterization_summaries(
     authors = {c: [a for a in authors_of[c] if a in shown_authors] for c in ids}
     rows = analysis_rows or {}
     cited = {a for c in ids for a in visible.evidence.get(c, ())}
+    linked = {c: list(components_of.get(c, ())) for c in ids}
     label_of = names(
         set(ids)
         | {o for v in objects.values() for o in v}
+        | {k for v in linked.values() for k in v}
         | {a for v in authors.values() for a in v}
         | {a for a in cited if a not in rows},
         language,
@@ -2173,7 +2187,11 @@ def characterization_summaries(
                     {"id": o, "model": slug_of.get(o, ""), "name": label_of[o]}
                     for o in objects[c]
                 ],
-                "components": list(components_of.get(c, ())),
+                "components": [
+                    {"id": k, "model": "component", "name": label_of[k]}
+                    for k in linked[c]
+                    if k in label_of
+                ],
                 "materials": materials,
                 "colours": _unique(
                     [

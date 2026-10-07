@@ -72,7 +72,9 @@ export function componentMaterials(
     componentId: string,
 ): ComponentMaterial[] {
     return view.characterizations
-        .filter((summary) => summary.components.includes(componentId))
+        .filter((summary) =>
+            summary.components.some((entry) => entry.id === componentId),
+        )
         .map((summary) => {
             const levels = summary.materials
                 .map((entry) => entry.confidence)
@@ -99,7 +101,6 @@ export function characterizationComponents(
     view: DocumentView,
     summary: CharacterizationSummary,
 ): DocumentComponent[] {
-    return view.components.filter((component) =>
-        summary.components.includes(component.id),
-    );
+    const linked = new Set(summary.components.map((entry) => entry.id));
+    return view.components.filter((component) => linked.has(component.id));
 }

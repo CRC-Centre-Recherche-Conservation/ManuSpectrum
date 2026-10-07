@@ -142,6 +142,14 @@ describe("PeriodFacet bounds", () => {
 });
 
 describe("PeriodFacet period equal to the bounds", () => {
+    it("does not emit a null period when none is held and the slider ends on the bounds", () => {
+        const wrapper = mountFacet();
+        wrapper
+            .findComponent({ name: "RangeSlider" })
+            .vm.$emit("change", [1030, 1465]);
+        expect(wrapper.emitted("change")).toBeUndefined();
+    });
+
     it("clears the period when the slider ends on the bounds", () => {
         const wrapper = mountFacet({ period: [1201, 1400] });
         wrapper

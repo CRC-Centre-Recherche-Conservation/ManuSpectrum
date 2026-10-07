@@ -150,28 +150,20 @@ describe("materialRecords", () => {
         expect(records[1].selected).toBe(true);
     });
 
-    it("names the components a material is linked to from its objects and the coverage rows, one it cites included", () => {
+    it("keeps the components a ch:-only Selection's material is linked to, the one it cites outside the Selection included", () => {
         const initial = component(1, "Initial T");
         const border = component(2, "Border");
         const cited = characterization(1, {
             objects: [],
-            components: [initial.id, border.id, uuid(990)],
+            components: [initial, border],
         });
-        const synthesis = {
-            ...SYNTHESIS,
-            coverage: [
-                {
-                    ...SYNTHESIS.coverage[0],
-                    components: [{ component: border, counts: {} }],
-                },
-            ],
-            materials: [],
-        };
-        const [entry] = materialRecords(
-            [row(0, { ...cited, objects: [initial] })],
-            synthesis,
-        );
+        const synthesis = { ...SYNTHESIS, coverage: [], materials: [] };
+        const [entry] = materialRecords([row(0, cited)], synthesis);
         expect(entry.components).toEqual([initial, border]);
+        expect(materialRecords([row(0, cited)], null)[0].components).toEqual([
+            initial,
+            border,
+        ]);
     });
 
     it("lists the rows alone without a synthesis, once each", () => {

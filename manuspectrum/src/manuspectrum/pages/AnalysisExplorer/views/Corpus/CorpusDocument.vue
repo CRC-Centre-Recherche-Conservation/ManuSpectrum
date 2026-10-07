@@ -247,12 +247,13 @@ const excludedMaterialsCount = computed(
                 !(data.value?.keptCharacterizations.has(summary.id) ?? true),
         ).length,
 );
-/** Whether the switch is offered: something is left out, or the outside is hidden (it must stay reachable). */
+/** Whether the switch is offered: a filter is active and something is left out, or the outside is hidden (it must stay reachable). Without a filter the outside is shown, whatever `outside=hide` says. */
 const outsideSwitchShown = computed(
     () =>
-        (filtered.value &&
-            (excludedCount.value > 0 || excludedMaterialsCount.value > 0)) ||
-        !store.showOutside,
+        filtered.value &&
+        (excludedCount.value > 0 ||
+            excludedMaterialsCount.value > 0 ||
+            !store.showOutside),
 );
 /** Whether an analysis is listed and drawn: kept by the filters, shown while outside ones are shown, or the one in focus. */
 function isShownAnalysis(entry: { analysis: string; match: boolean }): boolean {

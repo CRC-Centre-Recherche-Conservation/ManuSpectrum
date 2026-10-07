@@ -44,10 +44,16 @@ export interface SelectionToggle {
 
 type Kind = "analysis" | "material" | "item";
 
-/** What `keys` are: analyses, identified materials, or items when the kinds are mixed (or there is none). */
+/** What `keys` are: analyses (`an:`), identified materials (`ch:`), or items when the kinds are mixed, none, or neither (`af:`, `im:`). */
 function kindOf(keys: readonly string[]): Kind {
     const kinds = new Set<Kind>(
-        keys.map((key) => (key.startsWith("ch:") ? "material" : "analysis")),
+        keys.map((key) =>
+            key.startsWith("an:")
+                ? "analysis"
+                : key.startsWith("ch:")
+                  ? "material"
+                  : "item",
+        ),
     );
     return kinds.size === 1 ? [...kinds][0] : "item";
 }

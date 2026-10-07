@@ -93,6 +93,12 @@ function send(change: Partial<PeriodChange>): void {
     });
 }
 
+/** Emits `period`, except a null one while none is held. */
+function sendPeriod(period: Bounds | null): void {
+    if (period === null && props.period === null) return;
+    send({ period });
+}
+
 function chooseEvent(event: PeriodEvent): void {
     if (event === "modification" && !MODIFICATION_HAS_DATA) return;
     if (event !== props.event) send({ event });
@@ -110,7 +116,7 @@ function periodOf(value: Bounds): Bounds | null {
 
 function onSliderChange(value: Bounds): void {
     draft.value = null;
-    send({ period: periodOf(value) });
+    sendPeriod(periodOf(value));
 }
 
 function onCentury(from: number, to: number): void {
@@ -119,7 +125,7 @@ function onCentury(from: number, to: number): void {
         Math.min(to, props.facet.max),
     ];
     const same = props.period?.[0] === next[0] && props.period?.[1] === next[1];
-    send({ period: same ? null : periodOf(next) });
+    sendPeriod(same ? null : periodOf(next));
 }
 
 function sideName(side: Side): string {

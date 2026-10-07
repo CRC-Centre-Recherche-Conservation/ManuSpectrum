@@ -11,6 +11,7 @@ import {
 import {
     analysisKey,
     characterizationKey,
+    fileKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -233,6 +234,24 @@ describe("useSelectionToggle", () => {
             expect(announce).toHaveBeenLastCalledWith(
                 "1 identified material removed from the Selection.",
             );
+        });
+
+        it("counts an analysis file as an item, never as an analysis", () => {
+            const file = fileKey(uuid(7), uuid(8));
+            toggle.toggleAll([key(1), file]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "2 items added (A1 to A2). Selection: 2 / 30.",
+            );
+            toggle.toggleAll([file]);
+            toggle.dismiss();
+            toggle.toggleAll([file, fileKey(uuid(7), uuid(9))]);
+            expect(announce).toHaveBeenLastCalledWith(
+                "2 items added (A2 to A3). Selection: 3 / 30.",
+            );
+            toggle.toggleAll(Array.from({ length: 26 }, (_, n) => key(n + 20)));
+            expect(
+                toggle.blockedReason([key(100), fileKey(uuid(7), uuid(10))]),
+            ).toBe("2 items to add, 1 place left");
         });
 
         it("names the kind in the blocked reason", () => {
