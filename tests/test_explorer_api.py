@@ -63,6 +63,7 @@ class SearchRouteTests(ServiceCase):
             assert_shape(self, facet, "Facet")
             for value in facet["values"]:
                 assert_shape(self, value, "FacetValue")
+        assert_shape(self, response.json()["period"], "RangeFacet")
         techniques = [r["technique"] for r in response.json()["results"]]
         self.assertTrue(any(techniques))
         for technique in filter(None, techniques):
@@ -785,6 +786,36 @@ class DocumentMatchRouteTests(CorpusCase):
                 assert_shape(self, value, "FacetValue")
         self.assertEqual(payload["kept"]["analyses"], [str(self.analyses["open"].pk)])
 
+    def test_match_carries_period_and_place(self):
+        document = self.documents["open"].pk
+        paris, lyon = (self.places[k].pk for k in ("paris", "lyon"))
+
+        payload = self.get(document, f"?place={lyon}&period=1000,2000").json()
+
+        assert_shape(self, payload, "DocumentMatch")
+        assert_shape(self, payload["period"], "RangeFacet")
+        self.assertEqual(payload["period"]["min"], 1401)
+        keys = {f["key"] for f in payload["facets"]}
+        self.assertIn("place", keys)
+        self.assertEqual(len(payload["kept"]["analyses"]), 2)
+        self.assertEqual(
+            self.get(document, f"?place={paris}").json()["total"],
+            self.get(document).json()["total"],
+        )
+
+    def test_a_restricted_place_nodegroup_leaves_its_facet_out(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            for slug in ("document", "component"):
+                nodegroup = NodeGroup.objects.get(
+                    pk=self.nodes[(slug, "production_at_place")].nodegroup_id
+                )
+                assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertNotIn("place", [f["key"] for f in payload["facets"]])
+        self.assertIsNone(payload["period"])
+
     def test_the_match_without_a_filter_keeps_every_analysis_as_null(self):
         response = self.get(self.documents["open"].pk)
 
@@ -1481,6 +1512,50 @@ class FacetRouteTests(CorpusCase):
 
         self.assertEqual((response.status_code, response.content), (404, b""))
 
+    def test_facet_period_answers_the_range_facet(self):
+        search = self.client.get("/en/api/explorer/search?technique=" + XRF).json()
+        response = self.get("period", f"?technique={XRF}&find=ignored")
+
+        self.assertEqual(response.status_code, 200)
+        assert_shape(self, response.json(), "RangeFacet")
+        self.assertEqual(response.json(), search["period"])
+        self.assertEqual(response.json()["event"], "production")
+        for bucket in response.json()["buckets"]:
+            self.assertEqual(set(bucket), {"from", "to", "count"})
+
+    def test_facet_period_of_a_document(self):
+        document = self.documents["open"].pk
+        response = self.get("period", f"?document={document}")
+        match = self.client.get(f"/en/api/explorer/document/{document}/match").json()
+
+        self.assertEqual(response.json(), match["period"])
+        undated = self.get("period", f"?document={self.documents['embargoed'].pk}")
+        self.assertEqual((undated.status_code, undated.content), (404, b""))
+
+    def test_facet_place_lists_the_tree_and_find_keeps_the_ancestors(self):
+        response = self.get("place", "?find=pari")
+
+        facet = response.json()
+        assert_shape(self, facet, "Facet")
+        self.assertEqual(
+            {v["id"] for v in facet["values"]},
+            {str(self.places[k].pk) for k in ("paris", "france", "europe")},
+        )
+        for value in facet["values"]:
+            assert_shape(self, value, "FacetValue")
+
+    def test_a_restricted_place_nodegroup_answers_like_an_absent_facet(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            for slug in ("document", "component"):
+                nodegroup = NodeGroup.objects.get(
+                    pk=self.nodes[(slug, "production_at_place")].nodegroup_id
+                )
+                assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        response = self.get("place")
+
+        self.assertEqual((response.status_code, response.content), (404, b""))
+
     def test_a_document_scope_counts_only_the_rows_of_the_document(self):
         document = self.documents["open"].pk
         corpus = self.get("part").json()
@@ -1676,6 +1751,48 @@ class RevalidationTests(CorpusCase):
 
             self.assertNotEqual(etag, scoped, url)
             self.assertEqual(again.status_code, 304, url)
+
+    def test_period_place_and_their_options_enter_the_etag(self):
+        paris = self.places["paris"].pk
+        variants = (
+            "period=1300,1400",
+            "period=1300,1400&periodMatch=within",
+            "period=1300,1400&periodEvent=modification",
+            "period=1300,1400&undated=1",
+            f"place={paris}",
+        )
+        for route in (
+            "/en/api/explorer/search?grain=analyses",
+            "/en/api/explorer/facet/technique?grain=analyses",
+            "/en/api/explorer/document/{document}/match?grain=analyses",
+        ):
+            url = route.format(document=self.documents["open"].pk)
+            seen = {self.client.get(url)["ETag"]}
+            for variant in variants:
+                joined = f"{url}&{variant}"
+                etag = self.client.get(joined)["ETag"]
+                with (
+                    mock.patch.object(
+                        explorer_service, "build_bundle", side_effect=AssertionError
+                    ),
+                    mock.patch.object(
+                        explorer_service.explorer_memo,
+                        "remember",
+                        side_effect=AssertionError,
+                    ),
+                ):
+                    again = self.client.get(joined, HTTP_IF_NONE_MATCH=etag)
+
+                self.assertNotIn(etag, seen, joined)
+                seen.add(etag)
+                self.assertEqual(again.status_code, 304, joined)
+
+    def test_an_invalid_period_is_answered_like_none(self):
+        plain = self.client.get("/en/api/explorer/search?grain=analyses")
+        broken = self.client.get("/en/api/explorer/search?grain=analyses&period=abc")
+
+        self.assertEqual(broken.status_code, 200)
+        self.assertEqual(broken.content, plain.content)
 
     def test_the_etag_changes_when_the_data_changes(self):
         for url in self.urls():

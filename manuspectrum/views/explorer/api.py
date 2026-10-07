@@ -123,7 +123,15 @@ def _token(route, ticket, *parts):
     ).hexdigest()
 
 
-FILTER_KEYS = (*FACET_KEYS, "q", "colourScope")
+FILTER_KEYS = (
+    *FACET_KEYS,
+    "q",
+    "colourScope",
+    "period",
+    "periodMatch",
+    "periodEvent",
+    "undated",
+)
 
 
 def _filters(query):
@@ -165,7 +173,7 @@ class ExplorerFacetView(View):
 
     def get(self, request, key):
         document_id = document_scope(request.GET)
-        if key not in FACET_KEYS or document_id is None:
+        if (key not in FACET_KEYS and key != "period") or document_id is None:
             return _not_found()
         reader = anonymous_user()
         ticket, language = _ticket(reader), translation.get_language()

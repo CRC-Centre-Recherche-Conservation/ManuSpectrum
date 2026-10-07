@@ -89,6 +89,7 @@ from manuspectrum.views.explorer.swatches import (
 from manuspectrum.views.summary_service import GraphIndex, _date
 
 FACET_GROUPS = (
+    ("document", ("place",)),
     ("part", ("partType", "part")),
     ("analysis", ("project", "technique", "operator", "year")),
     ("characterization", ("material", "colour", "layer", "element")),
@@ -113,6 +114,8 @@ CHARACTERIZATION_ROLES = {
 TECHNIQUE_PALETTE = 10
 SWATCH_FACETS = ("colour",)
 LAZY_FACETS = ("part",)
+PERIOD_EVENTS = ("production", "modification")
+PERIOD_BOUND = re.compile(r"-?\d{1,4}")
 PREVIEW_SIZE = 6
 PLACE_DEPTH = 16
 _EMPTY = (None, "", [], {})
@@ -1123,6 +1126,15 @@ def _unique(refs):
     return kept
 
 
+def parse_period(raw):
+    """``(low, high)`` years of ``YYYY,YYYY``; None when *raw* is not two whole years in order."""
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 2 or not all(PERIOD_BOUND.fullmatch(part) for part in parts):
+        return None
+    low, high = int(parts[0]), int(parts[1])
+    return (low, high) if low <= high else None
+
+
 def parse_filters(query):
     """Filters and page number of a search query; lists come as repeated or comma-separated parameters.
 
@@ -1130,7 +1142,11 @@ def parse_filters(query):
     documents without analyses. ``colour`` is the union of the ``colour`` and
     ``partColour`` values: ``partColour`` is the alias of the two colour facets
     merged in 2026-10, still read for one release. ``colourScope`` is ``part``
-    or ``material``, else ``all``.
+    or ``material``, else ``all``. ``period`` is ``(low, high)`` from
+    ``YYYY,YYYY`` (whole years, low <= high), else None; ``periodMatch`` is
+    ``within``, else ``overlap``; ``periodEvent`` is ``modification``, else
+    ``production``; ``undated`` asks to keep the rows without a date for the
+    event. An invalid value is ignored, never an error.
     """
     filters = {
         key: sorted(
@@ -1155,6 +1171,16 @@ def parse_filters(query):
     filters["colourScope"] = (
         query.get("colourScope") if query.get("colourScope") in COLOUR_KEY else "all"
     )
+    filters["period"] = parse_period(query.get("period", ""))
+    filters["periodMatch"] = (
+        "within" if query.get("periodMatch") == "within" else "overlap"
+    )
+    filters["periodEvent"] = (
+        query.get("periodEvent")
+        if query.get("periodEvent") in PERIOD_EVENTS
+        else PERIOD_EVENTS[0]
+    )
+    filters["undated"] = query.get("undated", "").lower() in ("1", "true", "yes")
     filters["q"] = query.get("q", "").strip()
     filters["grain"] = "documents" if query.get("grain") == "documents" else "analyses"
     filters["empty"] = query.get("empty", "").lower() in ("1", "true", "yes")
@@ -1177,6 +1203,8 @@ def _facet_values(row, key):
         return [row["component"]] if row["component"] else []
     if key == "year":
         return [str(row["year"])] if row["year"] else []
+    if key == "place":
+        return row["places"]
     if key in ("project", "operator"):
         return row[f"{key}s"]
     return list(
@@ -1201,12 +1229,12 @@ def _facet_labels(rows, language, user):
     ids = {
         v
         for row in rows
-        for key in ("part", "project", "operator")
+        for key in ("place", "part", "project", "operator")
         for v in _facet_values(row, key)
     }
     named = names(ids, language, user)
     for row in rows:
-        for key in ("part", "project", "operator"):
+        for key in ("place", "part", "project", "operator"):
             for v in _facet_values(row, key):
                 labels[key][v] = named.get(v, {"value": v[:8], "lang": language})
     return labels
@@ -1258,12 +1286,31 @@ def meets(values, wanted):
     return all(values[key] & selected for key, selected in wanted)
 
 
+def in_period(row, filters):
+    """Whether *row* meets the ``period`` of *filters*: true without one.
+
+    The row's years for the ``periodEvent`` overlap the period, or lie within
+    it with ``periodMatch=within``; a row without a date for the event is kept
+    only with ``undated``.
+    """
+    if not filters["period"]:
+        return True
+    bounds = row["periods"].get(filters["periodEvent"])
+    if bounds is None:
+        return filters["undated"]
+    low, high = filters["period"]
+    start, end, _ = bounds
+    if filters["periodMatch"] == "within":
+        return start >= low and end <= high
+    return start <= high and end >= low
+
+
 def row_filter(rows, query, universe=None):
     """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe, carried)``.
 
     ``keep(row, skip=None)`` is OR inside a facet, AND across facets, and the
     folded free text ``needle``; ``skip`` leaves one facet out (open facet
-    counts). The facets of the characterization group hold on one identified
+    counts; ``"period"`` leaves the period out). The facets of the characterization group hold on one identified
     material: a row is kept when one characterization citing it carries a
     selected value of each of them. ``carried(row, key)`` is the set of
     values of *key* a row counts for under the other selections: in that
@@ -1299,6 +1346,8 @@ def row_filter(rows, query, universe=None):
                 return False
         if meeting(row, skip) == []:
             return False
+        if skip != "period" and not in_period(row, filters):
+            return False
         return not needle or needle in row["text"]
 
     def carried(row, key):
@@ -1328,6 +1377,7 @@ def facet_entry(
     offered,
     ranks=None,
     complete=False,
+    places=None,
 ):
     """One ``Facet`` over *rows*: the values of *offered* with a count and the selected ones.
 
@@ -1336,8 +1386,10 @@ def facet_entry(
     for it. Values are in label order, years in numeric order; ``total`` is
     the number of values. ``colour`` is in the fixed order of ``colour_order``
     (*ranks*); with *complete*, every offered value is listed, at count 0 when
-    no row counts for it.
+    no row counts for it. *places* is ``CorpusBundle.places``: ``place``
+    values name their ``parent`` and whether they are ``unpublished``.
     """
+    places = (places or {}) if key == "place" else {}
     counts = Counter(v for row in rows for v in counted(row, key))
     values = [
         {
@@ -1346,6 +1398,8 @@ def facet_entry(
             "count": counts[v],
             "mark": marks.get(v) if key == "technique" else None,
             "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
+            "parent": places.get(v, {}).get("parent"),
+            "unpublished": places.get(v, {}).get("unpublished", False),
         }
         for v in offered | set(active[key])
         if complete or counts[v] > 0 or v in active[key]
@@ -1374,6 +1428,69 @@ def colour_order(ranks):
         return (0, rank, "", uri) if rank is not None else (1, 0, fold(text), uri)
 
     return order
+
+
+def century(year):
+    """Index ``k`` of the century ``100k + 1`` to ``100(k + 1)`` holding *year*."""
+    return (year - 1) // 100
+
+
+def period_bounds_of(rows, event):
+    """``(min start, max end)`` years of the *rows* dated for *event*; None without one."""
+    dated = [row["periods"][event] for row in rows if row["periods"].get(event)]
+    if not dated:
+        return None
+    return min(p[0] for p in dated), max(p[1] for p in dated)
+
+
+def period_facet(rows, keep, event, bounds):
+    """The ``RangeFacet`` of *rows* for *event*, spanning *bounds* (``(min, max)`` years); None without bounds.
+
+    One bucket per century from the one of ``min`` to the one of ``max``. A row
+    kept by ``keep(row, skip="period")`` (the other selections, the period
+    left out) counts in every century its years overlap; ``undated`` counts
+    the kept rows without a date for *event*.
+    """
+    if bounds is None:
+        return None
+    low, high = bounds
+    first, last = century(low), century(high)
+    counts = Counter()
+    undated = 0
+    for row in rows:
+        if not keep(row, "period"):
+            continue
+        years = row["periods"].get(event)
+        if years is None:
+            undated += 1
+            continue
+        for index in range(
+            max(first, century(years[0])), min(last, century(years[1])) + 1
+        ):
+            counts[index] += 1
+    return {
+        "key": "period",
+        "group": "document",
+        "event": event,
+        "min": low,
+        "max": high,
+        "buckets": [
+            {"from": 100 * k + 1, "to": 100 * (k + 1), "count": counts[k]}
+            for k in range(first, last + 1)
+        ],
+        "undated": undated,
+    }
+
+
+def place_ancestors(ids, places):
+    """The ids above *ids* in the ``parent`` links of *places* (``CorpusBundle.places``), cycles cut."""
+    found = set()
+    for place in ids:
+        parent = places.get(place, {}).get("parent")
+        while parent and parent not in found:
+            found.add(parent)
+            parent = places.get(parent, {}).get("parent")
+    return found
 
 
 def preview(facet, active):
@@ -1413,6 +1530,7 @@ def corpus_facets(bundle, rows, active, counted):
             offered_values(bundle, key),
             bundle.colour_ranks,
             complete=key == "colour",
+            places=bundle.places,
         )
         facets.append(preview(facet, active) if key in LAZY_FACETS else facet)
     return facets
@@ -1431,7 +1549,9 @@ def search_payload(query, user, language, ticket=None):
     visible set; a selected value that is not in the visible set is ignored
     without a word. ``facets`` is None with ``facets=0``; a facet of
     ``LAZY_FACETS`` lists its first ``PREVIEW_SIZE`` values and the selected
-    ones, ``facet_payload`` gives all of them.
+    ones, ``facet_payload`` gives all of them. ``period`` is the ``RangeFacet``
+    of the corpus for the queried event, counted open to the other selections;
+    None with ``facets=0`` or when no visible analysis is dated for the event.
 
     In the documents grain, a visible document without any visible analysis
     is listed only with ``empty``, when no facet filter is active and the
@@ -1444,9 +1564,11 @@ def search_payload(query, user, language, ticket=None):
         rows, query, universe=bundle.universe
     )
     matching = [row for row in rows if keep(row)]
-    facets = (
-        corpus_facets(bundle, rows, active, counted) if wants_facets(query) else None
-    )
+    facets = period = None
+    if wants_facets(query):
+        facets = corpus_facets(bundle, rows, active, counted)
+        event = filters["periodEvent"]
+        period = period_facet(rows, keep, event, bundle.period_bounds[event])
 
     visible, label_of = bundle.visible, bundle.label_of
     size = filters["size"]
@@ -1457,7 +1579,7 @@ def search_payload(query, user, language, ticket=None):
         candidates = bundle.documents
         bare = (
             set()
-            if any(active.values())
+            if any(active.values()) or filters["period"]
             else {
                 d
                 for d in candidates
@@ -1491,6 +1613,7 @@ def search_payload(query, user, language, ticket=None):
         "facets": facets,
         "unpublishedCount": unpublished,
         "withoutAnalyses": without_analyses,
+        "period": period,
     }
 
 
@@ -1523,8 +1646,25 @@ def document_facet(key, bundle, rows, active, counted):
         bundle.swatches,
         {v for row in rows for v in _facet_values(row, key)},
         bundle.colour_ranks,
+        places=bundle.places,
     )
     return facet if facet["values"] else None
+
+
+def range_facet(bundle, document_id, query):
+    """The ``RangeFacet`` of the corpus, or of the visible document *document_id* when given; None when absent."""
+    if document_id:
+        rows = document_rows(bundle, document_id)
+        if rows is None:
+            return None
+    else:
+        rows = bundle.rows
+    keep, _, filters, *_ = row_filter(rows, query, universe=bundle.universe)
+    event = filters["periodEvent"]
+    bounds = (
+        period_bounds_of(rows, event) if document_id else bundle.period_bounds[event]
+    )
+    return period_facet(rows, keep, event, bounds)
 
 
 def facet_payload(key, query, user, language, ticket=None):
@@ -1534,14 +1674,18 @@ def facet_payload(key, query, user, language, ticket=None):
     ``document`` names it: then the facet is the one ``match_payload`` lists
     for that document. ``find`` narrows the values to those whose folded
     label holds its folded text, the selected ones kept; ``total`` stays the
-    number of values without it. A key outside ``FACET_KEYS``, a facet the
-    search or the match would not show (no value), or a ``document`` that is
-    not a UUID or not visible, is None.
+    number of values without it. ``find`` on ``place`` keeps the ancestors of
+    the matches as well. The key ``period`` answers the ``RangeFacet`` (``find``
+    ignored). A key outside ``FACET_KEYS`` and ``period``, a facet the search
+    or the match would not show (no value), or a ``document`` that is not a
+    UUID or not visible, is None.
     """
     document_id = document_scope(query)
-    if key not in FACET_KEYS or document_id is None:
+    if (key not in FACET_KEYS and key != "period") or document_id is None:
         return None
     bundle = corpus_bundle(user, language, ticket)
+    if key == "period":
+        return range_facet(bundle, document_id, query)
     if document_id:
         rows = document_rows(bundle, document_id)
         if rows is None:
@@ -1567,14 +1711,22 @@ def facet_payload(key, query, user, language, ticket=None):
             offered_values(bundle, key),
             bundle.colour_ranks,
             complete=key == "colour",
+            places=bundle.places,
         )
     needle = fold(query.get("find", "").strip())
     if needle:
         selected = set(active[key])
+        matching = {
+            value["id"]
+            for value in facet["values"]
+            if needle in fold(value["label"]["value"])
+        }
+        if key == "place":
+            matching |= place_ancestors(matching, bundle.places)
         facet["values"] = [
             value
             for value in facet["values"]
-            if needle in fold(value["label"]["value"]) or value["id"] in selected
+            if value["id"] in matching or value["id"] in selected
         ]
     return facet
 
@@ -1601,8 +1753,9 @@ def match_payload(document_id, query, user, language, ticket=None):
     keeps, with the facet universe of the whole corpus, or None when no
     filter is active (every analysis kept); ``total`` counts them. ``kept.characterizations`` are its identified materials carrying a
     selected value of each active facet of the characterization group; the
-    other facets and the free text leave them kept. Grain, page and size are
-    not read.
+    other facets, the place, the period and the free text leave them kept.
+    ``period`` is the ``RangeFacet`` of the document's analyses (None when none
+    is dated). Grain, page and size are not read.
     """
     bundle = corpus_bundle(user, language, ticket)
     document_id = str(document_id)
@@ -1618,7 +1771,8 @@ def match_payload(document_id, query, user, language, ticket=None):
         if (facet := document_facet(key, bundle, rows, active, counted))
     ]
     kept = sorted(row["id"] for row in rows if keep(row))
-    filtered = bool(needle) or any(active.values())
+    filtered = bool(needle) or any(active.values()) or bool(filters["period"])
+    event = filters["periodEvent"]
     wanted = characterization_wanted(active, scope=filters["colourScope"])
     return {
         "facets": facets,
@@ -1631,6 +1785,7 @@ def match_payload(document_id, query, user, language, ticket=None):
             ],
         },
         "total": len(kept),
+        "period": period_facet(rows, keep, event, period_bounds_of(rows, event)),
     }
 
 

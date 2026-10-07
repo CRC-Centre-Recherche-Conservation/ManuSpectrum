@@ -79,6 +79,7 @@ export function analysisHit(
 }
 
 const GROUP_OF: Record<Facet["key"], Facet["group"]> = {
+    place: "document",
     partType: "part",
     partColour: "part",
     part: "part",
@@ -104,6 +105,8 @@ export function facetValue(
         count: 1,
         mark: null,
         swatch: null,
+        parent: null,
+        unpublished: false,
         ...overrides,
     };
 }
@@ -122,6 +125,8 @@ export function facet(key: Facet["key"], count: number): Facet {
                     ? { code: `T${n}`, colour: n + 1, family: `${key}-${n}` }
                     : null,
             swatch: null,
+            parent: null,
+            unpublished: false,
         })),
         total: count,
     };
@@ -152,6 +157,7 @@ export function searchResponse(
         facets: [],
         unpublishedCount: 0,
         withoutAnalyses: 0,
+        period: null,
         ...overrides,
     };
 }
@@ -200,6 +206,7 @@ export function documentMatch(
         facets: [],
         kept: { analyses: [], characterizations: [] },
         total: 0,
+        period: null,
         ...overrides,
     };
 }

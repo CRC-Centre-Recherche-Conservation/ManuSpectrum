@@ -26,6 +26,8 @@ export function useVocabulary(): {
     /** The title of a facet in the rail; both colour facets are « Colour » there, told apart by the toggle. */
     function facetTitle(key: FacetKey): string {
         switch (key) {
+            case "place":
+                return $gettext("Place");
             case "partType":
                 return $gettext("Type");
             case "partColour":

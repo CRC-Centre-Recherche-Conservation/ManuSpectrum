@@ -100,6 +100,17 @@ SHAPES = {
         "count": int,
         "mark": ("TechniqueMark", None),
         "swatch": (str, type(None)),
+        "parent": (str, type(None)),
+        "unpublished": bool,
+    },
+    "RangeFacet": {
+        "key": str,
+        "group": str,
+        "event": str,
+        "min": int,
+        "max": int,
+        "buckets": list,
+        "undated": int,
     },
     "SearchResponse": {
         "total": int,
@@ -108,6 +119,7 @@ SHAPES = {
         "facets": (list, type(None)),
         "unpublishedCount": int,
         "withoutAnalyses": int,
+        "period": ("RangeFacet", None),
     },
     "HomeResponse": {
         "documentCount": int,
@@ -169,7 +181,12 @@ SHAPES = {
     "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
     "DocumentComponent": {"id": str, "name": "Label", "zones": list},
     "ContentStateLink": {"feature": str, "url": str},
-    "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
+    "DocumentMatch": {
+        "facets": list,
+        "kept": "MatchKept",
+        "total": int,
+        "period": ("RangeFacet", None),
+    },
     "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
     "SampleSummary": {
         "id": str,

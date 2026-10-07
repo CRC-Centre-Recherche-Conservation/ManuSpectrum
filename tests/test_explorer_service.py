@@ -31,6 +31,7 @@ from manuspectrum.views.explorer.service import (
     family_colours,
     fold,
     manifest_json,
+    facet_payload,
     match_payload,
     meets,
     row_filter,
@@ -216,6 +217,8 @@ class RowFilterTests(SimpleTestCase):
                 "partTypes": [],
                 "partColours": [],
                 "characterizations": [],
+                "places": [],
+                "periods": {"production": None, "modification": None},
                 "text": "ms 59 xrf",
             },
             {
@@ -231,6 +234,8 @@ class RowFilterTests(SimpleTestCase):
                 "partTypes": [],
                 "partColours": [],
                 "characterizations": [],
+                "places": [],
+                "periods": {"production": None, "modification": None},
                 "text": "ms 59 fors",
             },
         ]
@@ -854,6 +859,7 @@ class PartLevelTests(LevelCase):
         self.assertEqual(
             [(f["key"], f["group"]) for f in payload["facets"]],
             [
+                ("place", "document"),
                 ("partType", "part"),
                 ("part", "part"),
                 ("project", "analysis"),
@@ -1535,4 +1541,311 @@ class PeriodTests(ServiceCase):
         self.assertEqual(
             hits()[str(self.documents["embargoed"].pk)]["dates"],
             {"start": "1301-01-01", "end": None, "approximate": False},
+        )
+
+
+class PlaceFilterTests(ServiceCase):
+    facet = FacetTests.facet
+
+    def place(self, key):
+        return str(self.places[key].pk)
+
+    def search(self, text=""):
+        return search_payload(self.query(text), self.anonymous, "en")
+
+    def found(self, text):
+        return {r["id"] for r in self.search(text)["results"]}
+
+    def rows(self, *keys):
+        return {str(self.analyses[k].pk) for k in keys}
+
+    def test_a_place_keeps_the_rows_carrying_it_as_their_own_or_as_an_ancestor(self):
+        self.assertEqual(
+            self.found(f"place={self.place('europe')}"),
+            self.rows("open", "on_document", "draft"),
+        )
+        self.assertEqual(
+            self.found(f"place={self.place('lyon')}"), self.rows("open", "draft")
+        )
+
+    def test_several_places_are_ored(self):
+        self.assertEqual(
+            self.found(f"place={self.place('lyon')}&place={self.place('paris')}"),
+            self.rows("open", "on_document", "draft"),
+        )
+        self.assertEqual(
+            self.found(f"place={self.place('lyon')},{self.place('paris')}"),
+            self.rows("open", "on_document", "draft"),
+        )
+
+    def test_a_place_combines_with_another_facet_by_and(self):
+        self.assertEqual(
+            self.found(f"place={self.place('europe')}&technique={FORS}"),
+            self.rows("on_document"),
+        )
+
+    def test_a_place_no_row_carries_is_ignored(self):
+        self.assertEqual(
+            self.found("place=00000000-0000-4000-8000-000000000001"),
+            self.rows("open", "on_document", "draft", "embargoed"),
+        )
+
+    def test_a_parent_counts_each_row_once_and_a_child_only_its_own(self):
+        places = self.facet(self.search(), "place")
+
+        self.assertEqual(places[self.place("europe")]["count"], 3)
+        self.assertEqual(places[self.place("france")]["count"], 3)
+        self.assertEqual(places[self.place("paris")]["count"], 3)
+        self.assertEqual(places[self.place("lyon")]["count"], 2)
+
+    def test_a_place_facet_is_open_to_the_other_selections(self):
+        places = self.facet(self.search(f"technique={FORS}"), "place")
+
+        self.assertEqual(places[self.place("europe")]["count"], 1)
+        self.assertNotIn(self.place("lyon"), places)
+
+    def test_a_place_value_names_its_parent_and_its_state(self):
+        places = self.facet(self.search(), "place")
+
+        self.assertIsNone(places[self.place("europe")]["parent"])
+        self.assertEqual(places[self.place("france")]["parent"], self.place("europe"))
+        self.assertEqual(places[self.place("paris")]["parent"], self.place("france"))
+        self.assertIs(places[self.place("france")]["unpublished"], True)
+        self.assertIs(places[self.place("paris")]["unpublished"], False)
+        self.assertEqual(
+            places[self.place("paris")]["label"], {"value": "Paris", "lang": "en"}
+        )
+
+    def test_the_other_facets_carry_no_parent_and_are_published(self):
+        for value in self.facet(self.search(), "technique").values():
+            self.assertIsNone(value["parent"])
+            self.assertIs(value["unpublished"], False)
+
+    def test_find_on_place_returns_matches_with_their_ancestors(self):
+        facet = facet_payload("place", self.query("find=pari"), self.anonymous, "en")
+
+        self.assertEqual(
+            {v["id"] for v in facet["values"]},
+            {self.place("paris"), self.place("france"), self.place("europe")},
+        )
+        self.assertEqual(facet["total"], 4)
+
+    def test_find_on_place_keeps_the_selected_ones(self):
+        facet = facet_payload(
+            "place",
+            self.query(f"find=lyon&place={self.place('paris')}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(
+            {v["id"] for v in facet["values"]},
+            {self.place("lyon"), self.place("paris")},
+        )
+
+    def test_a_match_applies_the_place_rule_of_the_search(self):
+        payload = match_payload(
+            self.documents["open"].pk,
+            self.query(f"place={self.place('lyon')}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(set(payload["kept"]["analyses"]), self.rows("open", "draft"))
+        self.assertEqual(payload["total"], 2)
+
+    def test_a_restricted_place_nodegroup_leaves_the_facet_out(self):
+        for slug in ("document", "component"):
+            self.restrict_nodegroup(
+                self.nodes[(slug, "production_at_place")].nodegroup_id, self.editor
+            )
+
+        self.assertNotIn("place", [f["key"] for f in self.search()["facets"]])
+
+
+class PeriodFilterTests(ServiceCase):
+    """Open, on_document and draft rows are produced 1401-1500 (the Document's); embargoed is undated."""
+
+    facet = FacetTests.facet
+
+    def search(self, text=""):
+        return search_payload(self.query(text), self.anonymous, "en")
+
+    def found(self, text):
+        return {r["id"] for r in self.search(text)["results"]}
+
+    def rows(self, *keys):
+        return {str(self.analyses[k].pk) for k in keys}
+
+    DATED = ("open", "on_document", "draft")
+
+    def test_overlap_keeps_a_row_touching_the_bounds(self):
+        for text in ("1500,1600", "1300,1401", "1450,1460", "1000,2000"):
+            self.assertEqual(self.found(f"period={text}"), self.rows(*self.DATED), text)
+        for text in ("1501,1600", "1300,1400"):
+            self.assertEqual(self.found(f"period={text}"), set(), text)
+
+    def test_within_keeps_only_rows_inside(self):
+        self.assertEqual(
+            self.found("period=1401,1500&periodMatch=within"), self.rows(*self.DATED)
+        )
+        self.assertEqual(self.found("period=1402,1500&periodMatch=within"), set())
+        self.assertEqual(self.found("period=1401,1499&periodMatch=within"), set())
+
+    def test_undated_rows_are_excluded_unless_asked(self):
+        self.assertNotIn(
+            str(self.analyses["embargoed"].pk), self.found("period=1000,2000")
+        )
+        self.assertEqual(
+            self.found("period=1000,2000&undated=1"),
+            self.rows(*self.DATED, "embargoed"),
+        )
+        self.assertEqual(
+            self.found("period=1501,1600&undated=1"), self.rows("embargoed")
+        )
+
+    def test_undated_alone_filters_nothing(self):
+        self.assertEqual(self.found("undated=1"), self.rows(*self.DATED, "embargoed"))
+
+    def test_the_component_production_wins_over_the_document_s(self):
+        self.tile_values(
+            self.components["open"],
+            "component",
+            date_start_of_production_time="1250",
+            date_end_of_production_time="1275",
+        )
+
+        self.assertEqual(self.found("period=1260,1270"), self.rows("open", "draft"))
+        self.assertEqual(self.found("period=1450,1460"), self.rows("on_document"))
+
+    def test_an_invalid_period_is_ignored_without_400(self):
+        everything = self.rows(*self.DATED, "embargoed")
+        for text in ("abc", "1600,1500", "1400", "1400,1500,1600", ",", "12345,99999"):
+            self.assertEqual(self.found(f"period={text}"), everything, text)
+
+    def test_an_invalid_option_falls_back_to_its_default(self):
+        self.assertEqual(
+            self.found("period=1500,1600&periodMatch=bogus&periodEvent=bogus"),
+            self.rows(*self.DATED),
+        )
+
+    def test_period_event_modification_dates_nothing(self):
+        everything = self.rows(*self.DATED, "embargoed")
+        self.assertEqual(self.found("period=1000,2000&periodEvent=modification"), set())
+        self.assertEqual(
+            self.found("period=1000,2000&periodEvent=modification&undated=1"),
+            everything,
+        )
+
+    def test_the_range_facet_counts_each_century_a_row_overlaps_open_to_the_other_selections(
+        self,
+    ):
+        self.tile_values(
+            self.documents["embargoed"],
+            "document",
+            date_start_of_production_time="1390",
+            date_end_of_production_time="1410",
+        )
+
+        facet = self.search()["period"]
+        self.assertEqual(
+            facet,
+            {
+                "key": "period",
+                "group": "document",
+                "event": "production",
+                "min": 1390,
+                "max": 1500,
+                "buckets": [
+                    {"from": 1301, "to": 1400, "count": 1},
+                    {"from": 1401, "to": 1500, "count": 4},
+                ],
+                "undated": 0,
+            },
+        )
+        narrowed = self.search(f"technique={FORS}&period=1000,1100")["period"]
+        self.assertEqual([b["count"] for b in narrowed["buckets"]], [0, 1])
+        self.assertEqual(narrowed["undated"], 0)
+
+    def test_the_range_facet_counts_the_undated_rows_the_other_filters_keep(self):
+        facet = self.search()["period"]
+        self.assertEqual(facet["undated"], 1)
+        self.assertEqual(
+            [(b["from"], b["to"], b["count"]) for b in facet["buckets"]],
+            [(1401, 1500, 3)],
+        )
+        self.assertEqual(self.search(f"technique={FORS}")["period"]["undated"], 0)
+
+    def test_the_range_facet_is_absent_without_a_dated_row_or_facets(self):
+        self.assertIsNone(self.search("facets=0")["period"])
+        TileModel.objects.filter(
+            resourceinstance=self.documents["open"],
+            nodegroup_id=self.nodes[
+                ("document", "date_start_of_production_time")
+            ].nodegroup_id,
+        ).delete()
+
+        self.assertIsNone(self.search()["period"])
+        self.assertIsNone(facet_payload("period", self.query(), self.anonymous, "en"))
+
+    def test_the_range_facet_of_the_modification_event_is_absent(self):
+        self.assertIsNone(self.search("periodEvent=modification")["period"])
+
+    def test_the_facet_route_answers_the_range_facet_of_the_corpus_or_a_document(self):
+        corpus = facet_payload("period", self.query(), self.anonymous, "en")
+        own = facet_payload(
+            "period",
+            self.query(f"document={self.documents['open'].pk}&find=zzz"),
+            self.anonymous,
+            "en",
+        )
+        none = facet_payload(
+            "period",
+            self.query(f"document={self.documents['embargoed'].pk}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(corpus, self.search()["period"])
+        self.assertEqual(own["undated"], 0)
+        self.assertEqual(own["buckets"], [{"from": 1401, "to": 1500, "count": 3}])
+        self.assertIsNone(none)
+
+    def test_a_match_applies_the_period_rule_and_carries_the_range_facet(self):
+        payload = match_payload(
+            self.documents["open"].pk,
+            self.query("period=1501,1600"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(payload["kept"]["analyses"], [])
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["period"]["min"], 1401)
+        self.assertEqual(payload["period"]["buckets"][0]["count"], 3)
+        self.assertIsNone(
+            match_payload(
+                self.documents["embargoed"].pk, self.query(), self.anonymous, "en"
+            )["period"]
+        )
+
+    def test_a_period_makes_a_match_filtered(self):
+        payload = match_payload(
+            self.documents["open"].pk,
+            self.query("period=1000,2000"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(len(payload["kept"]["analyses"]), 3)
+
+    def test_the_documents_grain_lists_the_documents_with_a_kept_row(self):
+        payload = search_payload(
+            self.query("grain=documents&period=1000,2000"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(
+            [r["id"] for r in payload["results"]], [str(self.documents["open"].pk)]
         )

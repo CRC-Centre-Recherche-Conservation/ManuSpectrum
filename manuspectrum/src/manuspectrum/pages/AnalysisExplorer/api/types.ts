@@ -40,6 +40,7 @@ export type EventType =
     | "sampling";
 export type ColourScope = "all" | "part" | "material";
 export type FacetKey =
+    | "place"
     | "partType"
     | "partColour"
     | "part"
@@ -53,6 +54,10 @@ export type FacetKey =
     | "project";
 /** Level of the chain a facet filters: the studied component, the analysis, the identified material. */
 export type FacetGroup = "part" | "analysis" | "characterization";
+/** The group of the place facet and of the period range facet. */
+export type DocumentFacetGroup = "document";
+export type PeriodMatch = "overlap" | "within";
+export type PeriodEvent = "production" | "modification";
 export type DateRange = { start: string | null; end: string | null };
 /** Production bounds as stored (YYYY, YYYY-MM or YYYY-MM-DD) and whether the date is approximate. */
 export interface ProductionDates {
@@ -69,6 +74,25 @@ export interface FacetValue {
     mark: TechniqueMark | null;
     /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
     swatch: string | null;
+    /** Place values only: the id of the parent shown; null elsewhere and for a root. */
+    parent: string | null;
+    /** Place values only: the place is a Draft; false elsewhere. */
+    unpublished: boolean;
+}
+
+/** Century histogram of the `period` filter, counted open to the other selections. */
+export interface RangeFacet {
+    key: "period";
+    group: DocumentFacetGroup;
+    /** The event counted (`periodEvent` of the query). */
+    event: PeriodEvent;
+    /** Lowest start year and highest end year of the dated rows. */
+    min: number;
+    max: number;
+    /** One per century from `min` to `max`: from = 100k + 1, to = 100(k + 1). */
+    buckets: { from: number; to: number; count: number }[];
+    /** Rows kept by the other filters without a date for the event. */
+    undated: number;
 }
 
 /**
@@ -79,7 +103,7 @@ export interface FacetValue {
  */
 export interface Facet {
     key: FacetKey;
-    group: FacetGroup;
+    group: FacetGroup | DocumentFacetGroup;
     values: FacetValue[];
     total: number;
 }
@@ -122,6 +146,8 @@ export interface SearchResponse {
     unpublishedCount: number;
     /** Documents without analyses the query would list with `empty=1` (0 outside the documents grain). */
     withoutAnalyses: number;
+    /** Null with `facets=0` or when no visible row is dated for the event. */
+    period: RangeFacet | null;
 }
 
 /** Body of `GET home?day=YYYY-MM-DD`: the explorer home of the reader's day. */
@@ -178,6 +204,8 @@ export interface DocumentMatch {
     kept: MatchKept;
     /** Number of analyses kept. */
     total: number;
+    /** The range facet over the document's analyses; null when none is dated. */
+    period: RangeFacet | null;
 }
 
 export interface SampleSummary {
@@ -672,7 +700,18 @@ export const SHAPE_KEYS = {
         count: true,
         mark: true,
         swatch: true,
+        parent: true,
+        unpublished: true,
     } satisfies Record<keyof FacetValue, true>,
+    RangeFacet: {
+        key: true,
+        group: true,
+        event: true,
+        min: true,
+        max: true,
+        buckets: true,
+        undated: true,
+    } satisfies Record<keyof RangeFacet, true>,
     SearchResponse: {
         total: true,
         page: true,
@@ -680,6 +719,7 @@ export const SHAPE_KEYS = {
         facets: true,
         unpublishedCount: true,
         withoutAnalyses: true,
+        period: true,
     } satisfies Record<keyof SearchResponse, true>,
     HomeResponse: {
         documentCount: true,
@@ -750,10 +790,12 @@ export const SHAPE_KEYS = {
         feature: true,
         url: true,
     } satisfies Record<keyof ContentStateLink, true>,
-    DocumentMatch: { facets: true, kept: true, total: true } satisfies Record<
-        keyof DocumentMatch,
-        true
-    >,
+    DocumentMatch: {
+        facets: true,
+        kept: true,
+        total: true,
+        period: true,
+    } satisfies Record<keyof DocumentMatch, true>,
     MatchKept: { analyses: true, characterizations: true } satisfies Record<
         keyof MatchKept,
         true
