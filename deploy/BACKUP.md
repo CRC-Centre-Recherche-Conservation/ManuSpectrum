@@ -242,10 +242,16 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
 ## Moving to a new host
 
 1. Install the host as for a first installation (`make volumes`, directories of
-   "Setup on a host", `.env`), but **before `make secrets`**:
-   `make -C deploy secret-set NAME=restic_password`, typing the value from the
-   vault item. `make secrets` never overwrites a file, so the order matters.
-2. `make -C deploy secrets` creates the other files; set the ones you want to keep
+   "Setup on a host", `.env`), with `RESTIC_REPOSITORY_DIR` pointing at the
+   repository (copy it first when the network filesystem is not shared), but
+   **before `make secrets`**: `make -C deploy secret-set NAME=restic_password`,
+   typing the value from the vault item. `make secrets` never overwrites a file,
+   so the order matters.
+2. `make -C deploy backup-init`: it checks that the repository opens and creates
+   `BACKUP_DUMP_DIR/latest` and `BACKUP_DUMP_DIR/tmp`, which every `restic`
+   service run (`restore-files` included) binds and which only this command
+   creates. It needs nothing but the repository path and `restic_password`.
+3. `make -C deploy secrets` creates the other files; set the ones you want to keep
    from the vault (`SECRETS.md`, section 5). To read an old value that is not in
    the vault, pull it from the backup:
 
@@ -254,9 +260,6 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
    ```
 
    and the old `.env` the same way with `INCLUDE=/backup/db/env`.
-3. Point `RESTIC_REPOSITORY_DIR` at the repository (copy it first when the
-   network filesystem is not shared) and run `make -C deploy backup-init`: it
-   checks that the repository opens.
 4. `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes`.
    No `make init`: the restore recreates the database from `template_postgis`,
    which the postgres image creates in a new cluster.

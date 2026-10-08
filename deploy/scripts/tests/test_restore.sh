@@ -40,7 +40,7 @@ FACTS
 DEFAULT_MIGRATIONS='{"arches": "0001_initial", "manuspectrum": "0005_sample"}'
 write_fixture() { # write_fixture [MIGRATIONS-JSON] [APP_UID]: config, snapshot, media, dump directory
   rm -rf "${TMP:?}/media" "${TMP:?}/dump" "${TMP:?}/snapshot" "${TMP:?}/snapshot-media"
-  mkdir -p "$TMP/media/uploadedfiles" "$TMP/repo" "$TMP/dump" "$TMP/snapshot" "$TMP/snapshot-media/uploadedfiles/sub"
+  mkdir -p "$TMP/media/uploadedfiles" "$TMP/repo" "$TMP/dump/latest" "$TMP/dump/tmp" "$TMP/snapshot" "$TMP/snapshot-media/uploadedfiles/sub"
   echo old >"$TMP/media/uploadedfiles/old.txt"
   echo new >"$TMP/snapshot-media/uploadedfiles/new.txt"
   echo nested >"$TMP/snapshot-media/uploadedfiles/sub/n.txt"
@@ -102,6 +102,7 @@ case "$*" in
             [ -z "$STUB_BAD_FILE" ] || printf 'tampered' >"$mount/backup/db/db.dump" ;;
           *"--include /backup/media/uploadedfiles "*)
             [ -z "$STUB_DF_DROP" ] || echo 10 >"$TMP/df_avail"
+            [ -z "$STUB_BLOCK_MEDIA" ] || { touch "$TMP/blocked"; exec sleep 30; }
             mkdir -p "$mount/backup/media" && cp -r "$TMP/snapshot-media/uploadedfiles" "$mount/backup/media/" ;;
           *)
             inc="${*#*--include }"
@@ -136,7 +137,12 @@ if [ "$1 $2" = "-c %d" ]; then
 fi
 exec /usr/bin/stat "$@"
 STUB
-chmod +x "$TMP/bin/docker" "$TMP/bin/make" "$TMP/bin/df" "$TMP/bin/stat"
+cat >"$TMP/bin/rm" <<'STUB'
+#!/bin/sh
+case "$*" in *"/.restore-"*) [ -z "$STUB_RM_SLOW" ] || { touch "$TMP/cleaning"; sleep 1; } ;; esac
+exec /bin/rm "$@"
+STUB
+chmod +x "$TMP/bin/docker" "$TMP/bin/make" "$TMP/bin/df" "$TMP/bin/stat" "$TMP/bin/rm"
 
 n=0 failed=0
 assert() { # assert DESCRIPTION CONDITION-EXIT-CODE
@@ -318,6 +324,33 @@ wait "$pid" && status=0 || status=$?
   && [ "$(cat "$TMP/media/previous-"*/uploadedfiles/old.txt)" = old ]
 assert "TERM mid-swap: exit 143, the staging directories are kept and the aside is named" $?
 
+# --- a run stopped by a signal before the first change
+signalled_restore() { # signalled_restore VAR=value...: TERM while blocked in the uploads restore; the second TERM, if the caller sends one, goes to the script alone
+  write_fixture
+  : >"$TMP/calls"
+  rm -f "$TMP/blocked" "$TMP/df_avail" "$TMP/cleaning"
+  setsid env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+    MAKE_CMD="make" BACKUP_LOCK_WAIT=2 CONFIRM=yes ERASURES_CHECKED=yes RESTIC_SNAPSHOT=latest STUB_BLOCK_MEDIA=1 "$@" \
+    bash "$RESTORE" >"$TMP/out" 2>&1 &
+  pid=$!
+  local waited=0
+  while [ ! -e "$TMP/blocked" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+  kill -TERM -- "-$pid"
+}
+signalled_restore
+wait "$pid" && status=0 || status=$?
+[ "$status" -eq 143 ] && no_staging && no_mutation && ! grep -q "the data this run replaced" "$TMP/out" \
+  && ! grep -q "staging directories are kept" "$TMP/out" && [ "$(cat "$TMP/media/uploadedfiles/old.txt")" = old ]
+assert "TERM before the first change: exit 143, both staging directories removed, no aside named, nothing mutated" $?
+
+signalled_restore STUB_RM_SLOW=1
+waited=0
+while [ ! -e "$TMP/cleaning" ] && [ "$waited" -lt 100 ]; do sleep 0.05; waited=$((waited + 1)); done
+kill -TERM "$pid"
+wait "$pid" && status=0 || status=$?
+[ "$status" -eq 143 ] && no_staging
+assert "a second TERM during the cleanup: exit 143 and both staging directories are still removed" $?
+
 # --- success from an aside directory
 write_fixture
 mkdir -p "$ASIDE_OLD/uploadedfiles"
@@ -331,6 +364,21 @@ assert "ok-aside: the aside dump and uploads are restored, no restic call, no ma
 run_restore "${OK_ENV[@]}" ASIDE="$TMP/elsewhere" && status=0 || status=$?
 [ "$status" -eq 1 ] && no_mutation
 assert "an aside outside MEDIA_HOST_DIR is refused" $?
+
+# --- the directories the restic service binds
+for missing in tmp latest; do
+  write_fixture
+  rmdir "$TMP/dump/$missing"
+  run_restore "${OK_ENV[@]}" RESTIC_SNAPSHOT=latest && status=0 || status=$?
+  [ "$status" -eq 1 ] && grep -qF "$TMP/dump/$missing is missing (the restic service binds it): run make -C deploy backup-init" "$TMP/out" \
+    && no_restic && no_mutation
+  assert "restore with a missing $missing/: exit 1 with the backup-init hint, no restic call, nothing changed" $?
+done
+write_fixture
+rmdir "$TMP/dump/tmp"
+run_restore "${OK_ENV[@]}" ASIDE="$ASIDE_OLD" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "is missing (the restic service binds it)" "$TMP/out" && no_mutation
+assert "restore from an aside with a missing tmp/: exit 1 with the backup-init hint, nothing changed" $?
 
 # --- lock
 write_fixture
@@ -388,5 +436,15 @@ run_files RESTIC_SNAPSHOT=0123abcd INCLUDE=/backup/db TARGET="$TMP/empty-target"
 assert "files-ok: an empty existing TARGET and an explicit snapshot id are accepted; nothing else is touched" $?
 no_leak
 assert "files-ok: neither fake password appears in output or calls" $?
+
+for missing in tmp latest; do
+  write_fixture
+  mkdir -p "$TMP/media/uploadedfiles"
+  rmdir "$TMP/dump/$missing"
+  run_files "${FILES_OK[@]}" TARGET="$TMP/out-missing" && status=0 || status=$?
+  [ "$status" -eq 1 ] && grep -qF "$TMP/dump/$missing is missing (the restic service binds it): run make -C deploy backup-init" "$TMP/out" \
+    && no_restic && [ ! -e "$TMP/out-missing" ]
+  assert "files-refusals: missing $missing/: exit 1 with the backup-init hint, no restic call, no target created" $?
+done
 
 exit "$failed"

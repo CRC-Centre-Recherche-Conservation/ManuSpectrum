@@ -1073,7 +1073,9 @@ as the only memory.
   5.3, **including** `restic_password`: `mkdir deploy/compose/secrets/aside && mv deploy/compose/secrets/*_password deploy/compose/secrets/django_secret_key deploy/compose/secrets/aside/`.
   `make -C deploy backup-init` now fails (the file is missing).
 - [ ] *(service account)* `make -C deploy secret-set NAME=restic_password`, pasting the value **from the vault**
-  → `restic_password: written`. `make -C deploy backup-init` → `repository exists and opens`.
+  → `restic_password: written`. `make -C deploy backup-init` → `repository exists and opens` (it also creates `latest/` and `tmp/` under
+  `BACKUP_DUMP_DIR`, which the `restore-files` run below binds; on a host where they are missing, every restic run
+  fails with `run make -C deploy backup-init`).
   `make -C deploy secrets` → the other files created (`created`), `restic_password` `kept`.
   - On failure: `does not open` = the vault holds another value than the repository's: this is the failure
     the vault field exists to prevent; fix the vault from the file in `aside/` and note it.

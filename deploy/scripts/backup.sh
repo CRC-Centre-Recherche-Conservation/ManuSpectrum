@@ -81,6 +81,8 @@ esac
 case "$TAG" in nightly | manual | pre-update) ;; *) usage_die "unknown tag '$TAG' (nightly, manual or pre-update)" ;; esac
 
 if [ "$mode" = restic ]; then
+  backup_config
+  require_backup_dirs
   RESTIC_INTERACTIVE=1 restic_run "$@"
   exit $?
 fi
@@ -96,6 +98,7 @@ metrics_ready=0
 [ "$mode" != backup ] || metrics_ready=1
 on_exit() {
   local rc=$? now
+  trap '' TERM INT HUP
   trap - EXIT
   [ -z "${session_pid:-}" ] || kill "$session_pid" 2>/dev/null || true
   if [ "$mode" = backup ] && [ "$metrics_ready" = 1 ]; then
@@ -155,6 +158,7 @@ step 1 "configuration, lock and PostgreSQL health"
 backup_config
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: create it (0700) as the service account"
 [ -d "$MEDIA_HOST_DIR" ] || die "MEDIA_HOST_DIR $MEDIA_HOST_DIR does not exist"
+require_backup_dirs
 take_lock "$BACKUP_LOCK_WAIT"
 wait_for_postgres "$POSTGRES_WAIT"
 

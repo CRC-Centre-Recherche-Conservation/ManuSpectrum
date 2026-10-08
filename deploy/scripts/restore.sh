@@ -95,6 +95,7 @@ fi
 backup_config
 [ -d "$MEDIA_HOST_DIR" ] || die "MEDIA_HOST_DIR $MEDIA_HOST_DIR does not exist"
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: run make backup-init"
+require_backup_dirs
 check_identity
 take_lock 0
 
@@ -110,6 +111,7 @@ facts="$(mktemp)"
 restore_log="$(mktemp)"
 on_exit() {
   local rc=$?
+  trap '' TERM INT HUP
   trap - EXIT
   rm -f "$facts" "$restore_log"
   if [ "$rc" -eq 0 ] || [ "$changed" = 0 ]; then

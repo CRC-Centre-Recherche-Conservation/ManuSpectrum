@@ -29,7 +29,7 @@ echo "PGDBNAME=manuspectrum" >"$TMP/.env"
 
 write_fixture() { # media, repository, dump directory and the Compose configuration
   rm -rf "${TMP:?}/media" "${TMP:?}/repo" "${TMP:?}/dump"
-  mkdir -p "$TMP/media/uploadedfiles/a" "$TMP/repo" "$TMP/dump"
+  mkdir -p "$TMP/media/uploadedfiles/a" "$TMP/repo" "$TMP/dump/latest" "$TMP/dump/tmp"
   printf 'abcde' >"$TMP/media/uploadedfiles/a/one.txt"
   printf 'xyz' >"$TMP/media/uploadedfiles/two.txt"
   python3 - "$TMP" "$UID_NOW" "$GID_NOW" "${1:-$TMP/repo}" <<'PY'
@@ -77,6 +77,7 @@ case "$*" in
   *"pg_dump --version"*) echo "pg_dump (PostgreSQL) 17.2" ;;
   *"exec -T postgres pg_dump "*)
     [ -z "$STUB_DUMP_FAIL" ] || { echo "pg_dump: error: stub failure" >&2; exit 1; }
+    [ -z "$STUB_DUMP_BLOCK" ] || { touch "$TMP/blocked"; exec sleep 30; }
     [ -z "$STUB_DUMP_EMPTY" ] || exit 0
     printf PGDUMP ;;
   *"pg_restore --list"*)
@@ -94,7 +95,12 @@ case "$*" in
 esac
 exit 0
 STUB
-chmod +x "$TMP/bin/docker"
+cat >"$TMP/bin/rm" <<'STUB'
+#!/bin/sh
+case "$*" in *"/.new-"*) [ -z "$STUB_RM_SLOW" ] || { touch "$TMP/cleaning"; sleep 1; } ;; esac
+exec /bin/rm "$@"
+STUB
+chmod +x "$TMP/bin/docker" "$TMP/bin/rm"
 
 n=0 failed=0
 assert() { # assert DESCRIPTION CONDITION-EXIT-CODE
@@ -225,7 +231,7 @@ run_backup -- --tag nightly
   && grep -q '"tag": "nightly"' "$TMP/dump/latest/manifest.json" && [ -n "$first" ]
 assert "rotation: previous/ holds the first run, latest/ the second" $?
 run_backup -- --tag manual
-[ "$(find "$TMP/dump" -mindepth 1 -maxdepth 1 -not -name '.*' -printf '%f\n' | sort | tr '\n' ' ')" = "latest previous " ]
+[ "$(find "$TMP/dump" -mindepth 1 -maxdepth 1 -not -name '.*' -printf '%f\n' | sort | tr '\n' ' ')" = "latest previous tmp " ]
 assert "rotation: two generations only" $?
 
 # --- failures before anything is rotated or pushed
@@ -316,8 +322,47 @@ run_backup METRICS_TEXTFILE_DIR="$TMP/absent" -- --tag manual && status=0 || sta
 [ "$status" -eq 2 ] && [ ! -s "$TMP/calls" ]
 assert "missing METRICS_TEXTFILE_DIR directory: exit 2, no docker call" $?
 
+# --- the directories the restic service binds
+missing_dirs_case() { # missing_dirs_case DESCRIPTION MISSING-DIR [ARGS...]
+  local description="$1" dir="$2"
+  shift 2
+  reset
+  rmdir "$TMP/dump/$dir"
+  run_backup -- "$@" && status=0 || status=$?
+  [ "$status" -eq 1 ] && grep -qF "$TMP/dump/$dir is missing (the restic service binds it): run make -C deploy backup-init" "$TMP/out" \
+    && ! grep -qE 'exec -T|run --rm|restic' "$TMP/calls" && [ -z "$(find "$TMP/dump" -maxdepth 1 -name '.new-*')" ]
+  assert "$description: exit 1 with the backup-init hint, no docker exec or run, no restic call" $?
+}
+missing_dirs_case "missing tmp/" tmp --tag nightly
+missing_dirs_case "missing latest/" latest --tag nightly
+missing_dirs_case "--restic with a missing tmp/" tmp --restic snapshots
+reset
+rmdir "$TMP/dump/tmp"
+run_backup -- --tag nightly
+grep -q '^manuspectrum_backup_failed 1$' "$TMP/metrics/manuspectrum_backup.prom" && [ ! -d "$TMP/dump/previous" ]
+assert "missing tmp/: failed 1 written, no rotation" $?
+
+# --- a second signal does not cut the cleanup short
+reset
+: >"$TMP/calls"
+rm -f "$TMP/blocked" "$TMP/cleaning"
+setsid env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+  METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 STUB_DUMP_BLOCK=1 STUB_RM_SLOW=1 bash "$BACKUP" --tag manual >"$TMP/out" 2>&1 &
+pid=$!
+waited=0
+while [ ! -e "$TMP/blocked" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+kill -TERM -- "-$pid"
+waited=0
+while [ ! -e "$TMP/cleaning" ] && [ "$waited" -lt 100 ]; do sleep 0.05; waited=$((waited + 1)); done
+kill -TERM "$pid"
+wait "$pid" && status=0 || status=$?
+[ "$status" -eq 143 ] && grep -q '^manuspectrum_backup_failed 1$' "$TMP/metrics/manuspectrum_backup.prom" \
+  && [ -z "$(find "$TMP/dump" -maxdepth 1 -name '.new-*')" ]
+assert "a second TERM during the cleanup: exit 143, the staging directory is removed and failed 1 is still written" $?
+
 # --- backup-init (backup.sh --init)
 reset
+rmdir "$TMP/dump/latest" "$TMP/dump/tmp"
 run_backup -- --init && status=0 || status=$?
 [ "$status" -eq 0 ] && grep -q ' restic --no-cache --retry-lock 30m init$' "$TMP/calls" \
   && [ -d "$TMP/dump/latest" ] && [ "$(stat -c %a "$TMP/dump/latest")" = 700 ] \

@@ -6,7 +6,7 @@
 #
 # Constants: the retention of the restic repository and the paths restic does
 # not back up, in one place for the script, its tests and deploy/BACKUP.md.
-# Functions: usage_die, backup_config, scratch_database_name, restic_run,
+# Functions: usage_die, backup_config, require_backup_dirs, scratch_database_name, restic_run,
 # restic_run_with, take_lock, wait_for_postgres, verify_backup_files,
 # write_metrics.
 # shellcheck disable=SC2154,SC2034  # inputs assigned by the sourcing script; constants it reads
@@ -83,6 +83,16 @@ for key, value in values.items():
     [[ "${!name:-}" == /* ]] || die "$name is empty or not an absolute path in the Compose configuration (set it in $ENV_FILE)"
   done
   [ -n "${MANUSPECTRUM_IMAGE:-}" ] || die "the web service has no image in the Compose configuration"
+}
+
+# The restic service binds BACKUP_DUMP_DIR/latest (the sources) and
+# BACKUP_DUMP_DIR/tmp (its temporary packs) and Docker refuses to start it when
+# either is missing; only `backup.sh --init` creates them.
+require_backup_dirs() {
+  local dir
+  for dir in "$BACKUP_DUMP_DIR/latest" "$BACKUP_DUMP_DIR/tmp"; do
+    [ -d "$dir" ] || die "$dir is missing (the restic service binds it): run make -C deploy backup-init"
+  done
 }
 
 # Prints the name of the scratch database of the restore test for the live

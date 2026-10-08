@@ -28,7 +28,7 @@ echo "PGDBNAME=manuspectrum" >"$TMP/.env"
 
 write_fixture() { # Compose configuration, dump directory, fixture snapshot
   rm -rf "${TMP:?}/media" "${TMP:?}/dump" "${TMP:?}/snapshot"
-  mkdir -p "$TMP/media" "$TMP/repo" "$TMP/dump" "$TMP/snapshot"
+  mkdir -p "$TMP/media" "$TMP/repo" "$TMP/dump/latest" "$TMP/dump/tmp" "$TMP/snapshot"
   python3 - "$TMP" "$UID_NOW" "$GID_NOW" "${1:-manuspectrum}" <<'PY'
 import hashlib
 import json
@@ -67,6 +67,8 @@ case "$*" in
     echo $((polls + 1)) >"$TMP/pgpolls"
     if [ "$polls" -lt "${STUB_PG_STARTING_POLLS:-0}" ]; then echo '{"Service":"postgres","State":"running","Health":"starting"}'
     else echo '{"Service":"postgres","State":"running","Health":"healthy"}'; fi ;;
+  *"exec -T postgres psql"*"DROP DATABASE"*)
+    if [ -n "$STUB_DROP_SLOW" ] && [ -e "$TMP/blocked" ]; then touch "$TMP/cleaning"; sleep 1; touch "$TMP/dropped"; fi ;;
   *"exec -T postgres psql"*" -c "*) ;;
   *"exec -T postgres psql"*)
     while IFS= read -r line; do
@@ -244,6 +246,34 @@ wait "$pid" && status=0 || status=$?
   && [ "$(cat "$TMP/metrics/manuspectrum_restore_test_success.prom")" = "manuspectrum_restore_test_last_success_timestamp_seconds 111" ] \
   && clean_dump_dir
 assert "TERM while blocked in restic restore: exit 143, failed 1 written, success file untouched, staging removed" $?
+
+# --- the directories the restic service binds
+for missing in tmp latest; do
+  reset
+  rmdir "$TMP/dump/$missing"
+  run_test -- && status=0 || status=$?
+  [ "$status" -eq 1 ] && grep -qF "$TMP/dump/$missing is missing (the restic service binds it): run make -C deploy backup-init" "$TMP/out" \
+    && [ "$(sql_calls)" -eq 0 ] && ! restic_subs | grep -q . \
+    && grep -q '^manuspectrum_restore_test_failed 1$' "$TMP/metrics/manuspectrum_restore_test.prom"
+  assert "missing $missing/: exit 1 with the backup-init hint, failed 1, no restic call, no SQL" $?
+done
+
+# --- a second signal does not cut the cleanup short
+reset
+: >"$TMP/calls"
+rm -f "$TMP/pgpolls" "$TMP/blocked" "$TMP/cleaning" "$TMP/dropped"
+setsid env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+  METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 STUB_RESTIC_BLOCK=check STUB_DROP_SLOW=1 bash "$SCRIPT" >"$TMP/out" 2>&1 &
+pid=$!
+waited=0
+while [ ! -e "$TMP/blocked" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+kill -TERM -- "-$pid"
+waited=0
+while [ ! -e "$TMP/cleaning" ] && [ "$waited" -lt 100 ]; do sleep 0.05; waited=$((waited + 1)); done
+kill -TERM "$pid"
+wait "$pid" && status=0 || status=$?
+[ "$status" -eq 143 ] && [ -e "$TMP/dropped" ] && grep -q '^manuspectrum_restore_test_failed 1$' "$TMP/metrics/manuspectrum_restore_test.prom" && clean_dump_dir
+assert "a second TERM during the scratch drop: exit 143, the drop completes, failed 1 is written, staging removed" $?
 
 # --- scratch name guard
 reset

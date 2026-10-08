@@ -384,7 +384,8 @@ services:
 
   # Backups (deploy/BACKUP.md). Never started by `up`: backup.sh, restore-test.sh,
   # restore.sh and restore-files.sh run it once per call. No network; the
-  # sources are read-only and the repository is the only writable mount.
+  # sources are read-only; the repository and /restic-tmp (temporary packs) are
+  # the only writable mounts.
   restic:
     <<: *service
     profiles: [backup]

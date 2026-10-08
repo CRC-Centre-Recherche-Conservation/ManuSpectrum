@@ -50,6 +50,7 @@ if [[ "$TARGET" =~ (^|/)\.\.(/|$) ]]; then die "TARGET must not hold a '..' segm
 [ -f "$ENV_FILE" ] || die "no $ENV_FILE"
 
 backup_config
+require_backup_dirs
 check_identity
 
 # A path is inside PROTECTED when, once normalised, it equals it or starts with it.
