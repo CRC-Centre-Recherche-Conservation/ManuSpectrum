@@ -1,8 +1,8 @@
 # Secrets
 
 How the secrets of the stack are made, kept, restored and rotated. The
-runtime model is simple: six files in `SECRETS_DIR` (default
-`deploy/compose/secrets`), generated on the host by `make -C deploy secrets`
+runtime model is simple: six files in the `SECRETS_DIR` directory of `.env`,
+generated on the host by `make -C deploy secrets`
 and given to the containers as Compose file secrets. This page adds what
 happens around them: where the off-host copy lives, how to restore it and how
 to rotate each secret.
@@ -12,9 +12,13 @@ its history cannot be rotated.
 
 In the commands below, `dc` is
 `docker compose --project-directory deploy/compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml`,
-and every command runs as the service account, from the repository root, with
-`SECRETS_DIR=deploy/compose/secrets` (the default of `make secrets`,
-`secret-set` and `secrets-check`).
+and every command runs as the service account, from the repository root. The
+`make` targets (`secrets`, `secret-set`, `secrets-check`) read `SECRETS_DIR`
+from `.env` (`deploy/compose/secrets` when it is unset), like Compose; a
+`SECRETS_DIR=` on the `make` command line wins. In the commands, `$SECRETS_DIR`
+is a shell variable set once per session with
+`SECRETS_DIR=$(sed -n 's/^SECRETS_DIR=//p' deploy/compose/.env | tail -n 1)`
+(an absolute path on a production host).
 
 ## 1. Inventory
 
@@ -45,6 +49,12 @@ To come: the Grafana admin password with the monitoring (PP-6). It joins
 - Never in an argument list (`ps`), a log line, an error message or a
   clear-text backup. `secret-set` reads a value from the terminal or from
   stdin, and `secrets-check` prints names and problems, never values.
+- On the production host `SECRETS_DIR` is `/srv/manuspectrum/secrets`, outside
+  the directories the provider's TSM client backs up by default (`/etc`,
+  `/home`, `/opt`, `/root`, `/var/log`...): the checkout lives under `/home`, and
+  a secret there would be copied in clear. Before `make secrets`, create the
+  parent once: `sudo install -d -o <account> -g <account> -m 0750 /srv/manuspectrum`.
+  The secrets stay in the encrypted restic repository and in the vault.
 - Only the service account reads `SECRETS_DIR` (directory `0700`, files
   `0444` because several container uids read them: the directory mode is the
   barrier). Check it any time with `make -C deploy secrets-check`.
@@ -62,7 +72,7 @@ single entry in the project's password manager (Bitwarden):
   `admin_password`, `restic_password`), holding the value without a trailing newline. An empty
   `email_password` is recorded as empty. No file attachment.
 - Fill it once, after the first `make secrets`: read each value as the service
-  account (`cat deploy/compose/secrets/<name>`, in a terminal nobody watches)
+  account (`cat "$SECRETS_DIR/<name>"`, in a terminal nobody watches)
   and paste it into the field. Update the field after every rotation (section 6).
 - Access: exactly the two administrators, through the collection. Each
   administrator keeps the account's recovery code in their own safe place; it
@@ -132,7 +142,7 @@ deploy/compose/smoke.sh check
 
 Everyone is logged out; reset links, IIIF tokens and Arches e-mail links in
 flight become invalid. Update the vault item, copying the value from
-`deploy/compose/secrets/django_secret_key`.
+`"$SECRETS_DIR/django_secret_key"`.
 
 ### `pg_password`
 
@@ -142,8 +152,8 @@ through stdin (`printf` is a shell builtin: nothing appears in `ps`), and the
 session turns statement logging off before `ALTER ROLE`.
 
 ```bash
-[ -e deploy/compose/secrets/pg_password.new ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > deploy/compose/secrets/pg_password.new )
-{ printf '\\set pw %s\n' "$(cat deploy/compose/secrets/pg_password.new)"
+[ -e "$SECRETS_DIR/pg_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/pg_password.new" )
+{ printf '\\set pw %s\n' "$(cat "$SECRETS_DIR/pg_password.new")"
   cat <<'SQL'
 SET log_statement = 'none';
 SET log_min_duration_statement = -1;
@@ -151,8 +161,8 @@ SET log_min_error_statement = panic;
 ALTER ROLE :"user" PASSWORD :'pw';
 SQL
 } | dc exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -v user="$POSTGRES_USER" -U "$POSTGRES_USER" -d postgres' &&
-  make -C deploy secret-set NAME=pg_password FORCE=yes < deploy/compose/secrets/pg_password.new &&
-  rm deploy/compose/secrets/pg_password.new &&
+  make -C deploy secret-set NAME=pg_password FORCE=yes < "$SECRETS_DIR/pg_password.new" &&
+  rm "$SECRETS_DIR/pg_password.new" &&
   make -C deploy down up &&
   deploy/compose/smoke.sh check
 ```
@@ -161,17 +171,17 @@ SQL
 the container's local socket does not ask for a password, so the old value is
 not needed. Until the containers are recreated the application still sends the
 old password: do the last four lines without delay. Check that the new value
-is not in the logs: `dc logs postgres --since 10m | grep -cFf <(head -c 12 deploy/compose/secrets/pg_password)`
+is not in the logs: `dc logs postgres --since 10m | grep -cFf <(head -c 12 "$SECRETS_DIR/pg_password")`
 → `0`.
 
 ### `elastic_password`
 
 ```bash
-[ -e deploy/compose/secrets/elastic_password.new ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > deploy/compose/secrets/elastic_password.new )
-printf '{"password":"%s"}' "$(cat deploy/compose/secrets/elastic_password.new)" |
+[ -e "$SECRETS_DIR/elastic_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/elastic_password.new" )
+printf '{"password":"%s"}' "$(cat "$SECRETS_DIR/elastic_password.new")" |
   dc exec -T elasticsearch sh -c 'curl -fsS -u "elastic:$(cat /run/secrets/elastic_password)" -H "Content-Type: application/json" -X POST http://localhost:9200/_security/user/elastic/_password --data-binary @-' &&
-  make -C deploy secret-set NAME=elastic_password FORCE=yes < deploy/compose/secrets/elastic_password.new &&
-  rm deploy/compose/secrets/elastic_password.new &&
+  make -C deploy secret-set NAME=elastic_password FORCE=yes < "$SECRETS_DIR/elastic_password.new" &&
+  rm "$SECRETS_DIR/elastic_password.new" &&
   make -C deploy down up &&
   deploy/compose/smoke.sh check
 ```
@@ -240,10 +250,10 @@ key. The repository is mounted read-write by the `restic` service; run restic
 through it (the container sees `RESTIC_PASSWORD_FILE` and `/repo`).
 
 ```bash
-[ -e deploy/compose/secrets/restic_password.new ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > deploy/compose/secrets/restic_password.new )
-dc run --rm --no-deps -T -v "$PWD/deploy/compose/secrets/restic_password.new:/run/restic_new:ro" restic key add --new-password-file /run/restic_new &&
-  make -C deploy secret-set NAME=restic_password FORCE=yes < deploy/compose/secrets/restic_password.new &&
-  rm deploy/compose/secrets/restic_password.new
+[ -e "$SECRETS_DIR/restic_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/restic_password.new" )
+dc run --rm --no-deps -T -v "$SECRETS_DIR/restic_password.new:/run/restic_new:ro" restic key add --new-password-file /run/restic_new &&
+  make -C deploy secret-set NAME=restic_password FORCE=yes < "$SECRETS_DIR/restic_password.new" &&
+  rm "$SECRETS_DIR/restic_password.new"
 dc run --rm --no-deps -T restic key list
 ```
 

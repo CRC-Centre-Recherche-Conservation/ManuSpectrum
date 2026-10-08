@@ -1,6 +1,7 @@
 # Secret files
 
-Compose reads six files from this directory (or from `SECRETS_DIR` in `.env`):
+Compose reads six files from `SECRETS_DIR` of `.env` (this directory when it is
+unset; on the production host a directory outside `/home`, see `SECRETS.md`):
 
 - `pg_password`: password of the PostgreSQL superuser.
 - `elastic_password`: password of the Elasticsearch `elastic` user.

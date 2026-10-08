@@ -220,10 +220,14 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   the rehearsal VM sets it explicitly: `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`.
   Check: `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
   A production host leaves `production`.
+- [ ] *(admin)* `sudo install -d -o <service-account> -g <service-account> -m 0750 /srv/manuspectrum`
+  (the parent of the `SECRETS_DIR` of `.env.example`, outside the directories TSM backs up by
+  default; keep that value on the rehearsal VM).
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
-  files; the commands by hand are in `deploy/compose/secrets/README.md`);
-  `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`,
-  `email_password` (empty), `admin_password` as `-r--r--r--`, plus `README.md`; `ls -ld deploy/compose/secrets` →
+  files; the commands by hand are in `deploy/compose/secrets/README.md`). From here on,
+  `SECRETS_DIR=$(sed -n 's/^SECRETS_DIR=//p' deploy/compose/.env | tail -n 1)` is set in the shell;
+  `ls -l "$SECRETS_DIR"` → `pg_password`, `elastic_password`, `django_secret_key`,
+  `email_password` (empty), `admin_password` as `-r--r--r--`; `ls -ld "$SECRETS_DIR"` →
   `drwx------`.
 - [ ] *(service account)* `git status --short deploy/compose` → empty (neither `.env` nor
   the secrets are tracked or untracked-visible).
@@ -260,7 +264,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
 - [ ] *(service account)* The end of the `init` output says
   `admin password set from the admin_password secret`. Read the password once,
-  `cat deploy/compose/secrets/admin_password`, and sign in as `admin` on the
+  `cat "$SECRETS_DIR/admin_password"`, and sign in as `admin` on the
   rehearsal address (`/en/auth/`): it works, and `admin` / `admin` is refused.
   Store it immediately in the institution's password manager (break-glass account),
   create a named account for each operator and use those day to day. To read it as the
@@ -798,11 +802,11 @@ production-shaped VM, and the rotations, which CI does not run.
 ### 5.2 The secrets and the vault item
 
 - [ ] *(service account)* `make -C deploy secrets-check` → `directory: ok` and five `<name>: ok` lines,
-  exit 0. Break one on purpose and watch it fail, then restore it: `chmod 600 deploy/compose/secrets/pg_password`
+  exit 0. Break one on purpose and watch it fail, then restore it: `chmod 600 "$SECRETS_DIR/pg_password"`
   → `pg_password: mode is 600, expected 444`, exit 1; `chmod 444` → ok again.
 - [ ] The vault item `ManuSpectrum <host> secrets` exists in the shared collection, with one hidden
   field per name (`pg_password`, `elastic_password`, `django_secret_key`, `email_password`,
-  `admin_password`), filled from the files (`cat deploy/compose/secrets/<name>`, in a terminal nobody
+  `admin_password`), filled from the files (`cat "$SECRETS_DIR/<name>"`, in a terminal nobody
   watches). Both administrators open it; each knows where their recovery code is kept (do not read it).
   Record the item's location in the follow-up artifact.
   - On failure: an administrator cannot see the item: share the collection, not the item.
@@ -810,7 +814,7 @@ production-shaped VM, and the rotations, which CI does not run.
 ### 5.3 Restore drill
 
 - [ ] *(service account)* Move the five files aside, inside the (ignored) directory:
-  `cd deploy/compose/secrets && mkdir aside && mv pg_password elastic_password django_secret_key email_password admin_password aside/ && cd ../../..`
+  `mkdir "$SECRETS_DIR/aside" && mv "$SECRETS_DIR"/{pg_password,elastic_password,django_secret_key,email_password,admin_password} "$SECRETS_DIR/aside/"`
   → `make -C deploy secrets-check` now reports five `missing`, exit 1.
 - [ ] *(service account)* For each of the five names,
   `make -C deploy secret-set NAME=<name>`, pasting the value from the vault at the prompt (typed twice,
@@ -818,10 +822,10 @@ production-shaped VM, and the rotations, which CI does not run.
 - [ ] *(service account)* `make -C deploy secrets-check` → all `ok`. A second `secret-set NAME=pg_password`
   with the same value → `pg_password: kept (same value)`; with another value → refused, with `FORCE=yes`
   in the message.
-- [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp deploy/compose/secrets/$f deploy/compose/secrets/aside/$f && echo "$f identical"; done`
+- [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp "$SECRETS_DIR/$f" "$SECRETS_DIR/aside/$f" && echo "$f identical"; done`
   → five `identical`.
 - [ ] *(service account)* `make -C deploy down up`, then `deploy/compose/smoke.sh check` → only `ok:` lines.
-- [ ] *(service account)* `rm -r deploy/compose/secrets/aside`; `git status --short deploy/compose` → empty.
+- [ ] *(service account)* `rm -r "$SECRETS_DIR/aside"`; `git status --short deploy/compose` → empty.
   - On failure: `cmp` differs = the vault holds a different value, fix the vault or the file before going on.
 
 ### 5.4 Rotation drills
@@ -834,12 +838,12 @@ In this order, each with the procedure of `SECRETS.md` section 6, each followed 
   - On failure: the API call answered 401 = the mounted file no longer matches what Elasticsearch stores;
     reset it with `dc exec elasticsearch bin/elasticsearch-reset-password -u elastic -i` and follow
     « Which value to type » in `SECRETS.md`.
-- [ ] PostgreSQL password. After: `dc logs postgres --since 10m | grep -cFf <(head -c 12 deploy/compose/secrets/pg_password)`
+- [ ] PostgreSQL password. After: `dc logs postgres --since 10m | grep -cFf <(head -c 12 "$SECRETS_DIR/pg_password")`
   → `0` (the value is not in the logs).
   - On failure: `web` cannot connect after `down up` = the role was not changed; run the block again (it keeps an existing `.new` file and stops at the first failing step).
 - [ ] Admin password: `make -C deploy secret-set NAME=admin_password FORCE=yes`, `make -C deploy admin-password`;
   signing in as `admin` works with the new value and is refused with the old one.
-- [ ] `make -C deploy secrets-check` → all `ok`; no `*.new` file is left in `deploy/compose/secrets`.
+- [ ] `make -C deploy secrets-check` → all `ok`; no `*.new` file is left in `SECRETS_DIR`.
 
 ### 5.5 The commit hook
 
@@ -902,7 +906,7 @@ timings and the systemd timers, which CI does not run.
   - On failure: `restic_password: shorter than 32` = the file was typed by hand; delete it and run
     `make -C deploy secrets` again (before the first backup only).
 - [ ] The vault item `ManuSpectrum <host> secrets` has a field `restic_password`, filled from
-  `cat deploy/compose/secrets/restic_password` (5.2). Both administrators see it.
+  `cat "$SECRETS_DIR/restic_password"` (5.2). Both administrators see it.
   - On failure: stop here. A backup whose password is not in the vault cannot be read after a loss of
     the VM.
 - [ ] *(service account)* `make -C deploy backup-init` → `repository created`, exit 0, and the line
@@ -1069,8 +1073,8 @@ timings and the systemd timers, which CI does not run.
 Played on the same rehearsal VM, as the procedure of `BACKUP.md`, "Moving to a new host", with the vault
 as the only memory.
 
-- [ ] *(service account)* Note `sha256sum deploy/compose/secrets/restic_password`. Move the secrets aside as in
-  5.3, **including** `restic_password`: `mkdir deploy/compose/secrets/aside && mv deploy/compose/secrets/*_password deploy/compose/secrets/django_secret_key deploy/compose/secrets/aside/`.
+- [ ] *(service account)* Note `sha256sum "$SECRETS_DIR/restic_password"`. Move the secrets aside as in
+  5.3, **including** `restic_password`: `mkdir "$SECRETS_DIR/aside" && mv "$SECRETS_DIR"/*_password "$SECRETS_DIR/django_secret_key" "$SECRETS_DIR/aside/"`.
   `make -C deploy backup-init` now fails (the file is missing).
 - [ ] *(service account)* `make -C deploy secret-set NAME=restic_password`, pasting the value **from the vault**
   → `restic_password: written`. `make -C deploy backup-init` → `repository exists and opens` (it also creates `latest/` and `tmp/` under
@@ -1082,15 +1086,15 @@ as the only memory.
 - [ ] *(service account)* Pull the old secrets and the old `.env` into a separate directory:
   `make -C deploy restore-files INCLUDE=/backup/secrets TARGET=$HOME/moving-secrets` and
   `make -C deploy restore-files INCLUDE=/backup/db/env TARGET=$HOME/moving-env` →
-  `cmp $HOME/moving-secrets/backup/secrets/django_secret_key deploy/compose/secrets/aside/django_secret_key`
+  `cmp $HOME/moving-secrets/backup/secrets/django_secret_key "$SECRETS_DIR/aside/django_secret_key"`
   identical, and `diff $HOME/moving-env/backup/db/env deploy/compose/.env` shows only the differences
-  you expect. Neither command touched `deploy/compose/secrets`.
+  you expect. Neither command touched `SECRETS_DIR`.
 - [ ] *(service account)* Restore the secrets that must be kept with `make -C deploy secret-set NAME=<name>`
   (5.3), then `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes` →
   fourteen steps, `done`; `smoke.sh check` → only `ok:` lines; `make -C deploy secrets-check` → all `ok`.
-  `deploy/compose/secrets` and `.env` are what the operator put there, **not** what the snapshot held
+  `SECRETS_DIR` and `.env` are what the operator put there, **not** what the snapshot held
   (`restore` never writes them).
-- [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env deploy/compose/secrets/aside`; then
+- [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env "$SECRETS_DIR/aside"`; then
   `make -C deploy backup` → `done` (the first backup on the restored stack).
 
 ### 6.11 What cannot be tested in rehearsal

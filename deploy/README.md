@@ -16,7 +16,7 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/compose.yaml` | The stack: security, health checks, persistence |
 | `compose/compose.prod.yaml` | Sizing of the production host only |
 | `compose/.env.example` | Variables to copy into `compose/.env` |
-| `compose/secrets/` | Secret files read by Compose (see its README) |
+| `compose/secrets/` | Secret files read by Compose (see its README); the default `SECRETS_DIR` |
 | `BACKUP.md` | Backups: what is kept where, the schedule, the restore test, restore of a file or of the stack, moving day, personal data |
 | `SECRETS.md` | Secret inventory, the vault item, restore and rotation of each secret, scanning |
 | `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh`, `backup.sh`, `restore-test.sh`, `restore.sh`, `restore-files.sh`, the libraries they share and their tests |

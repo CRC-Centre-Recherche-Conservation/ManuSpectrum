@@ -12,7 +12,7 @@ to.
 | --- | --- | --- | --- |
 | A | `BACKUP_DUMP_DIR`, local disk of the service account (under `/home`) | `latest/` and `previous/`, each with `db.dump`, `globals.sql`, `manifest.json`, `env` | The last two nightly dumps |
 | B | `RESTIC_REPOSITORY_DIR`, a restic repository on the network filesystem, encrypted | Copy A `latest/`, the whole `MEDIA_HOST_DIR`, `SECRETS_DIR` | 7 daily, 4 weekly, 6 monthly snapshots |
-| C | The hosting provider's TSM backup, once it is activated for the VM | The daily incremental backup of the VM's `/home` includes copy A | The provider's policy |
+| C | The hosting provider's TSM backup, once it is activated for the VM | The daily incremental backup of the VM's default TSM domain (`/home` included) holds copy A in clear; `SECRETS_DIR` is kept under `/srv` on purpose, and `/data` is covered only if the provider adds it | The provider's policy |
 | D | Snapshots of the VM disks, by the hosting provider | The virtual disks | The provider's policy (frequent for a week, then weekly for a month) |
 
 Copy B is the one this repository controls, and the only one restored by the

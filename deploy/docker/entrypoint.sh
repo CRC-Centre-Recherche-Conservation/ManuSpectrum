@@ -263,7 +263,7 @@ case "$command" in
       log "setup_db succeeded but the admin password could not be set: the account still has Arches' default password; fix ${ADMIN_PASSWORD_FILE:-ADMIN_PASSWORD_FILE}, then run: make -C deploy admin-password"
       exit 1
     fi
-    log "admin password set from the admin_password secret (deploy/compose/secrets/admin_password on the host); create named accounts next and keep admin for emergencies (deploy/compose/secrets/README.md)"
+    log "admin password set from the admin_password secret (the admin_password file of SECRETS_DIR on the host); create named accounts next and keep admin for emergencies (deploy/compose/secrets/README.md)"
     ;;
   manage)
     shift
