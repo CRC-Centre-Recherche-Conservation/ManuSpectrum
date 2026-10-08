@@ -493,7 +493,16 @@ const lensLabels = computed<LensLabels>(() => ({
     compton: $gettext("Compton"),
     escape: $gettext("esc"),
     sum: $gettext("sum"),
-    voltage: (kV) => interpolate($gettext("%{kV} kV"), { kV }, true),
+    voltage: (kV) =>
+        interpolate(
+            $gettext("%{kV} kV"),
+            {
+                kV: new Intl.NumberFormat(lang, {
+                    maximumFractionDigits: 1,
+                }).format(kV),
+            },
+            true,
+        ),
     elementsFull: interpolate(
         $gettext("The lens holds at most %{n} elements"),
         { n: XRF_MAX_ELEMENTS },
@@ -720,8 +729,12 @@ useWindowActions(() => {
     return actions;
 });
 
-watch([drawn, layout, chart], () => void draw());
-watch(logShown, () => void redrawKeepingRange());
+watch([drawn, layout, chart, logShown], (now, before) => {
+    const onlyLog =
+        now[3] !== before[3] &&
+        now.slice(0, 3).every((value, index) => value === before[index]);
+    void (onlyLog ? redrawKeepingRange() : draw());
+});
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
@@ -1733,6 +1746,11 @@ function chooseView(event: Event): void {
         inset 0 0 0 0.0625rem var(--seg-on-rule);
     color: var(--seg-on-ink);
     font-weight: 600;
+}
+
+.xy-workshop .segmented button[aria-disabled="true"] {
+    color: var(--ink-dim);
+    cursor: default;
 }
 
 .xy-workshop .retry:focus-visible,

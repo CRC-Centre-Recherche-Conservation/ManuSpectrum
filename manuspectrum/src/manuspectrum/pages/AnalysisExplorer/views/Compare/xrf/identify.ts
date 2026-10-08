@@ -209,6 +209,11 @@ function confirm(
 ): Confirmation[] {
     const element = ctx.table.elements[symbol];
     const width = fwhmAt(line.energy, ctx.fwhmMn);
+    const clicked = {
+        energy: line.energy,
+        fwhm: width,
+        height: netSignal(ctx.x, ctx.y, line.energy, width).net,
+    };
     return focusLines(element)
         .filter(
             (other) =>
@@ -236,6 +241,7 @@ function confirm(
                     ctx.y,
                     other.energy,
                     fwhmAt(other.energy, ctx.fwhmMn),
+                    clicked,
                 ).present
                     ? "present"
                     : "absent";
@@ -330,7 +336,8 @@ function compare(a: Candidate, b: Candidate): number {
  * lines, a strong absent one pulls it down), relative intensity and |ΔE|.
  * A candidate line is at least `MIN_CONFIRMATION` strong. A confirmation
  * line is another focus line of the same shell, a FWHM or more from the
- * clicked line (under 1.25 FWHM it is « unresolved » and not scored); a present line
+ * clicked line (under 1.25 FWHM it is « unresolved » and not scored), read
+ * with the clicked peak's Gaussian tail taken off; a present line
  * much stronger than the candidate does not count as a confirmation. Pure: nothing is pinned.
  */
 export function candidates(energy: number, ctx: CandidateContext): Candidate[] {

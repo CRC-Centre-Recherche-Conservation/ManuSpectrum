@@ -301,6 +301,25 @@ describe('plotly binding logarithmic Y', () => {
             expect(plotly.react.mock.calls.at(-1)[1][1].marker.color).toBe('#00ff00');
         });
 
+        it('puts the axis back on linear when a series without positive value is added in log mode, keeping the zoom', async () => {
+            const config = dataConfig(true);
+            const element = await mount(config);
+            element.data = [{}];
+            config.seriesStyles([
+                { tileid: 't1', color: '#ff0000' },
+                { tileid: 't2', color: '#0000ff' },
+            ]);
+            config.seriesData.push(added('s1', 't1', [1, 2, 4]));
+            const first = plotly.react.mock.calls.at(-1)[2];
+            expect(first.yaxis.type).toBe('log');
+            const before = first.uirevision;
+            element.data = [{}, { tileid: 't1' }];
+            config.seriesData.push(added('s2', 't2', [0, 0, 0]));
+            const [, , layout] = plotly.react.mock.calls.at(-1);
+            expect(layout.yaxis.type).toBe('linear');
+            expect(layout.uirevision).toBe(before);
+        });
+
         it('lays a series added while the axis is log on that axis', async () => {
             const config = dataConfig(true);
             const element = await mount(config);

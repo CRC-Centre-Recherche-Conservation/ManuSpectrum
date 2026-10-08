@@ -39,6 +39,9 @@ export function reloadXrfSettings(): void {
     state().value = readXrfSettings() ?? defaults();
 }
 
+/** Scopes using the settings: the `storage` listener lives while there is one. */
+let listeners = 0;
+
 function onStorage(event: StorageEvent): void {
     if (event.key !== null && event.key !== LAYOUT_STORAGE_KEY) return;
     const next = readXrfSettings() ?? defaults();
@@ -62,8 +65,14 @@ function commit(next: XrfSettings): void {
 export function useXrfSettings() {
     const settings = state();
     if (getCurrentScope()) {
-        window.addEventListener("storage", onStorage);
-        onScopeDispose(() => window.removeEventListener("storage", onStorage));
+        if (listeners === 0) window.addEventListener("storage", onStorage);
+        listeners += 1;
+        onScopeDispose(() => {
+            listeners -= 1;
+            if (listeners === 0) {
+                window.removeEventListener("storage", onStorage);
+            }
+        });
     }
 
     function setDetector(detector: XrfDetector): void {

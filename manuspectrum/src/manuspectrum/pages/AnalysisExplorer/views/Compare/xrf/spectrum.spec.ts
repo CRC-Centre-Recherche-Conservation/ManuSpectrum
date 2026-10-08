@@ -111,9 +111,10 @@ describe("netSignal", () => {
         expect(netSignal([], [], 1, FWHM).present).toBe(false);
     });
 
-    it("takes the lower window as the background when the other sits on a neighbouring peak", () => {
+    describe("next to a neighbouring peak", () => {
+        const NEIGHBOUR = { energy: 2.3, fwhm: FWHM, height: 1000 };
         const x = energies(500);
-        const y = spectrum(
+        const withLine = spectrum(
             x,
             [
                 { at: 2.3, height: 1000 },
@@ -121,9 +122,49 @@ describe("netSignal", () => {
             ],
             () => 100,
         );
-        const found = netSignal(x, y, 2.5, FWHM);
-        expect(found.present).toBe(true);
-        expect(found.net).toBeGreaterThan(80);
+        const without = spectrum(x, [{ at: 2.3, height: 1000 }], () => 100);
+
+        it("sees a line its neighbour's tail sits under, once the tail is modelled out", () => {
+            const found = netSignal(x, withLine, 2.5, FWHM, NEIGHBOUR);
+            expect(found.present).toBe(true);
+            expect(found.net).toBeGreaterThan(80);
+        });
+
+        it("does not take the neighbour's tail for a line", () => {
+            expect(netSignal(x, without, 2.5, FWHM, NEIGHBOUR).present).toBe(
+                false,
+            );
+        });
+
+        it("leaves a window centred on the neighbour out and reads the other side", () => {
+            const found = netSignal(x, withLine, 2.45, FWHM, NEIGHBOUR);
+            expect(found.sigma).toBeCloseTo(10, 0);
+        });
+    });
+
+    it("calls an absent line present in at most 5 % of seeded Poisson runs on a plain slope", () => {
+        let seed = 12345;
+        const uniform = () => {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return (seed + 1) / 4294967297;
+        };
+        const gauss = () =>
+            Math.sqrt(-2 * Math.log(uniform())) *
+            Math.cos(2 * Math.PI * uniform());
+        const x = energies(500, 0.01);
+        let falsePresent = 0;
+        const runs = 400;
+        for (let run = 0; run < runs; run += 1) {
+            const y = x.map((e) => {
+                const mean = 2000 - 400 * (e - 2);
+                return Math.max(
+                    0,
+                    Math.round(mean + Math.sqrt(mean) * gauss()),
+                );
+            });
+            if (netSignal(x, y, 2.5, FWHM).present) falsePresent += 1;
+        }
+        expect(falsePresent / runs).toBeLessThanOrEqual(0.05);
     });
 });
 

@@ -113,23 +113,6 @@ function looksLikeCounts(y: Series): boolean {
     return result;
 }
 
-function windowValues(
-    x: Series,
-    y: Series,
-    centre: number,
-    width: number,
-): number[] {
-    const range = indexRange(x, centre - width / 2, centre + width / 2);
-    if (range === null) {
-        return [];
-    }
-    const values: number[] = [];
-    for (let i = range[0]; i <= range[1]; i += 1) {
-        values.push(y[i]);
-    }
-    return values;
-}
-
 function median(values: number[]): number {
     const sorted = [...values].sort((a, b) => a - b);
     const mid = sorted.length >> 1;
@@ -153,26 +136,69 @@ function pooledDeviation(windows: number[][]): number {
     return degrees > 0 ? Math.sqrt(sum / degrees) : 0;
 }
 
+/** A neighbouring peak to model out: its centre and FWHM (keV) and its height (counts). */
+export interface NeighbourPeak {
+    energy: number;
+    fwhm: number;
+    height: number;
+}
+
+/** A background window whose centre is within this many FWHM of the neighbour is left out. */
+const NEIGHBOUR_REACH = 1.5;
+const LN2_4 = 4 * Math.LN2;
+
+function tailAt(neighbour: NeighbourPeak | undefined, at: number): number {
+    if (!neighbour || neighbour.height <= 0 || neighbour.fwhm <= 0) return 0;
+    return (
+        neighbour.height *
+        Math.exp(-LN2_4 * ((at - neighbour.energy) / neighbour.fwhm) ** 2)
+    );
+}
+
 /**
  * Net signal of a line at `energy`: the maximum of y within ±fwhm/2 minus a
  * linear background between the medians of two windows of width `fwhm`
- * centred at energy ± 1.5·fwhm (one window alone gives a flat background; when
- * the two medians differ by more than 3σ, one window sits on a neighbouring
- * peak and the lower one is taken).
+ * centred at energy ± 1.5·fwhm (one window alone gives a flat background).
  * Count-like series (all ≥ 0, integers) take σ = √max(background, 1); other
  * series the deviation within the background windows (about each window's mean). Present when
  * net > 3σ.
+ *
+ * With a `neighbour` (the peak the reader clicked, a few FWHM away), its
+ * Gaussian tail is taken off every value read, and a background window
+ * centred within 1.5 of its FWHM is left out: the background then comes
+ * from the other side alone.
  */
 export function netSignal(
     x: Series,
     y: Series,
     energy: number,
     fwhm: number,
+    neighbour?: NeighbourPeak,
 ): NetSignal {
-    const peak = snapToPeak(x, y, energy, fwhm / 2);
-    const top = peak >= 0 ? y[peak] : 0;
-    const left = windowValues(x, y, energy - 1.5 * fwhm, fwhm);
-    const right = windowValues(x, y, energy + 1.5 * fwhm, fwhm);
+    const reach = neighbour ? NEIGHBOUR_REACH * neighbour.fwhm : 0;
+    const clean = (centre: number, width: number, drop: boolean): number[] => {
+        if (drop && Math.abs(centre - neighbour!.energy) < reach) return [];
+        const range = indexRange(x, centre - width / 2, centre + width / 2);
+        if (range === null) return [];
+        const values: number[] = [];
+        for (let i = range[0]; i <= range[1]; i += 1) {
+            values.push(y[i] - tailAt(neighbour, x[i]));
+        }
+        return values;
+    };
+    const span = indexRange(x, energy - fwhm / 2, energy + fwhm / 2);
+    let top: number;
+    if (span === null) {
+        const nearest = nearestIndex(x, energy);
+        top = nearest >= 0 ? y[nearest] - tailAt(neighbour, x[nearest]) : 0;
+    } else {
+        top = -Infinity;
+        for (let i = span[0]; i <= span[1]; i += 1) {
+            top = Math.max(top, y[i] - tailAt(neighbour, x[i]));
+        }
+    }
+    const left = clean(energy - 1.5 * fwhm, fwhm, neighbour !== undefined);
+    const right = clean(energy + 1.5 * fwhm, fwhm, neighbour !== undefined);
     if (left.length === 0 && right.length === 0) {
         return { net: top, sigma: 0, present: false };
     }
@@ -182,14 +208,7 @@ export function netSignal(
     } else if (right.length === 0) {
         background = median(left);
     } else {
-        const low = Math.min(median(left), median(right));
-        const high = Math.max(median(left), median(right));
-        const spread = looksLikeCounts(y)
-            ? Math.sqrt(Math.max(low, 1))
-            : pooledDeviation([left, right]);
-        // A window sitting on a neighbouring peak would hide the line.
-        background =
-            high - low > PRESENT_SIGMAS * spread ? low : (low + high) / 2;
+        background = (median(left) + median(right)) / 2;
     }
     const sigma = looksLikeCounts(y)
         ? Math.sqrt(Math.max(background, 1))

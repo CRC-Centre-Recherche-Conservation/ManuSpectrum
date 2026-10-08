@@ -1875,8 +1875,10 @@ describe("XyWorkshop XRF lens", () => {
         await settle();
         await view.find('[data-scale="log"]').trigger("click");
         await flushPromises();
+        plotly.react.mockClear();
         await view.find('[data-layout="offset"]').trigger("click");
         await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(1);
         expect(lastDrawing().layout.yaxis).not.toHaveProperty("type");
         plotly.react.mockClear();
         const log = view.find('[data-scale="log"]');

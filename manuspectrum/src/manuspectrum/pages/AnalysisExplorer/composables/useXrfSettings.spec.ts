@@ -60,4 +60,13 @@ describe("useXrfSettings", () => {
         otherTabWrites(["Cu"]);
         expect(settings.value.elements).toEqual([]);
     });
+
+    it("keeps adopting foreign writes while one window is left", () => {
+        const first = host();
+        const second = host();
+        first.unmount();
+        otherTabWrites(["Fe"]);
+        expect(settings.value.elements).toEqual(["Fe"]);
+        second.unmount();
+    });
 });

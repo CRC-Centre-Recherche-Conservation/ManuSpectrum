@@ -84,9 +84,15 @@ function draw(Plotly, element, config) {
         !!(config.yLog && ko.unwrap(config.yLog)) && canUseLogScale(rawTraces);
     const scaledTraces = () =>
         wantsLog() ? logScaleFigure(rawTraces).traces : rawTraces;
-    const redraw = () => {
+    // `uirevision` keeps the reader's zoom across a react; a new value drops it.
+    let revision = 0;
+    const redraw = (keepView = false) => {
         layout.yaxis.type = wantsLog() ? SCALE_LOG : SCALE_LINEAR;
-        layout.yaxis.autorange = true;
+        if (!keepView) {
+            revision += 1;
+            layout.yaxis.autorange = true;
+        }
+        layout.uirevision = revision;
         Plotly.react(element, scaledTraces(), layout, chartConfig);
     };
     traces = scaledTraces();
@@ -275,7 +281,7 @@ function draw(Plotly, element, config) {
     }
 
     if (config.yLog && ko.isObservable(config.yLog)) {
-        subscriptions.push(config.yLog.subscribe(redraw));
+        subscriptions.push(config.yLog.subscribe(() => redraw()));
     }
 
     if (useTracesMode) {
@@ -327,8 +333,8 @@ function draw(Plotly, element, config) {
                             tileid: series.value.tileid
                         };
                         rawTraces = [...rawTraces, added];
-                        if (wantsLog()) {
-                            redraw();
+                        if (wantsLog() || layout.yaxis.type === SCALE_LOG) {
+                            redraw(true);
                         } else {
                             Plotly.addTraces(element, added, element.data.length);
                         }

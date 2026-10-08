@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { candidates, instrumentPeaks } from "./identify";
 import { loadLineTable } from "./line-table";
+import { fwhmAt } from "./physics";
 
 import type { DeclaredElement } from "./declared";
 import type {
@@ -13,13 +14,14 @@ import type {
 const FWHM_MN = 0.14;
 
 /** Counts on 0.5–40 keV: a flat 100 background plus Gaussians of `[keV, height]`. */
-function spectrum(peaks: [number, number][], top = 40) {
+function spectrum(peaks: [number, number][], top = 40, sigma = 0.05) {
     const n = Math.round((top - 0.5) / 0.01) + 1;
     const x = Float64Array.from({ length: n }, (_, i) => 0.5 + i * 0.01);
     const y = Float64Array.from(x, (e) => {
         let counts = 100;
         for (const [centre, height] of peaks) {
-            counts += height * Math.exp(-((e - centre) ** 2) / (2 * 0.05 ** 2));
+            counts +=
+                height * Math.exp(-((e - centre) ** 2) / (2 * sigma ** 2));
         }
         return Math.round(counts);
     });
@@ -192,10 +194,27 @@ describe("candidates", () => {
     });
 
     describe("a clicked line with a close companion", () => {
-        const S_SPECTRUM = spectrum([
-            [2.309, 1000],
-            [2.465, 90],
-        ]);
+        /** The detector's own peak width at S Kα (140 eV at Mn Kα). */
+        const SIGMA = fwhmAt(2.309, FWHM_MN) / 2.355;
+        const S_SPECTRUM = spectrum(
+            [
+                [2.309, 1000],
+                [2.465, 90],
+            ],
+            40,
+            SIGMA,
+        );
+        const S_ALONE = spectrum([[2.309, 1000]], 40, SIGMA);
+
+        it("reads S Kβ1 as absent when only S Kα1 is there, its tail alone is not a line", async () => {
+            const s = elementRows(
+                candidates(2.31, await context(S_ALONE)),
+            ).find((r) => r.symbol === "S")!;
+            expect(s.confirmations.map((c) => [c.line.name, c.state])).toEqual([
+                ["Kb1", "absent"],
+            ]);
+            expect(s.score).toBe(0);
+        });
 
         it("reads S Kβ1 next to S Kα1 as present, not absent", async () => {
             const rows = elementRows(
