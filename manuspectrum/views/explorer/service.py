@@ -66,6 +66,7 @@ from manuspectrum.views.explorer.citations import (
     person_name,
 )
 from manuspectrum.views.explorer.conditions import clean_html, conditions_of
+from manuspectrum.views.explorer.excitation import excitation_of
 from manuspectrum.views.explorer.values import (
     FALLBACK_LANGUAGE,
     StoredConfig,
@@ -2371,6 +2372,23 @@ def parse_keys(query):
     )
 
 
+def analysis_excitation(values, analysis_id):
+    """``{"anode", "kV", "source"}`` inferred from every statement text of the analysis, or None.
+
+    Reads the statement tiles of *values* (``statement_content`` loaded) in
+    every language; an unreadable nodegroup leaves no text.
+    """
+    node = values.node("statement_content")
+    if node is None:
+        return None
+    texts = [
+        text
+        for data in values.tiles(analysis_id, "statement_content")
+        for text in string_texts((data or {}).get(node.nodeid)).values()
+    ]
+    return excitation_of(texts)
+
+
 def items_payload(keys, user, language):
     """``ItemsResponse``: the items still visible and the keys that are not, without saying why.
 
@@ -2405,7 +2423,9 @@ def items_payload(keys, user, language):
         {m.group(2) for _, m in parsed if m and m.group(1) in ("an", "af", "im")}
         & set(rows)
     )
-    shared_values = Values(file_ids, FILE_KEYS, user) if file_ids else None
+    shared_values = (
+        Values(file_ids, (*FILE_KEYS, "statement_content"), user) if file_ids else None
+    )
     shared_configs = (
         renderer_configs(shared_values, file_ids) if shared_values else None
     )
@@ -2445,6 +2465,7 @@ def items_payload(keys, user, language):
                     "key": key,
                     "kind": "analysis",
                     "analysis": analysis_hit(rows[rid], label_of),
+                    "excitation": analysis_excitation(shared_values, rid),
                     "files": shown_files(files_of[rid]),
                 }
             )
@@ -2476,6 +2497,11 @@ def items_payload(keys, user, language):
                 "key": key,
                 "kind": "analysis-file" if kind == "af" else "imaging",
                 "analysis": analysis_hit(rows[rid], label_of),
+                **(
+                    {"excitation": analysis_excitation(shared_values, rid)}
+                    if kind == "af"
+                    else {}
+                ),
                 "file": found,
             }
         )

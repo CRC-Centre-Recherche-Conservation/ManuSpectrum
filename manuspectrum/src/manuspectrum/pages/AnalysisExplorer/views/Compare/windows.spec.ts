@@ -65,6 +65,7 @@ function whole(n: number, files: FileEntry[], hit?: AnalysisHit): Item {
     return {
         key: `an:${analysis.id}:-`,
         kind: "analysis",
+        excitation: null,
         analysis,
         files,
     };
@@ -332,18 +333,21 @@ describe("autoWindows", () => {
         const readable: Item = {
             key: `af:${hit.id}:${uuid(701)}`,
             kind: "analysis-file",
+            excitation: null,
             analysis: hit,
             file: spectrum(1, XRF),
         };
         const image: Item = {
             key: `af:${hit.id}:${uuid(751)}`,
             kind: "analysis-file",
+            excitation: null,
             analysis: hit,
             file: micro(1),
         };
         const raw: Item = {
             key: `af:${hit.id}:${uuid(702)}`,
             kind: "analysis-file",
+            excitation: null,
             analysis: hit,
             file: fileEntry({
                 id: uuid(702),
@@ -356,6 +360,7 @@ describe("autoWindows", () => {
         const other: Item = {
             key: `af:${hit.id}:${uuid(703)}`,
             kind: "analysis-file",
+            excitation: null,
             analysis: hit,
             file: fileEntry({
                 id: uuid(703),
