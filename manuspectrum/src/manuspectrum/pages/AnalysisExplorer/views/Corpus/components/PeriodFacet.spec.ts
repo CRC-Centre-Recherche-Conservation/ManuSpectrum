@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 
 import PeriodFacet from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
 
@@ -263,20 +264,95 @@ describe("PeriodFacet histogram and options", () => {
         ]);
     });
 
-    it("chooses between overlapping the period and lying entirely within it", async () => {
+    it("offers the rule in a menu button at the end of the event row", async () => {
         const wrapper = mountFacet({ period: [1201, 1400] });
-        const radios = wrapper.findAll<HTMLInputElement>("input[name$=match]");
-        expect(
-            wrapper.findAll(".match .text").map((text) => text.text()),
-        ).toEqual(["Overlaps the period", "Entirely within the period"]);
-        expect(radios.map((radio) => radio.element.checked)).toEqual([
+        const row = wrapper.find(".event-row");
+        expect(row.element.lastElementChild?.classList.contains("rule")).toBe(
             true,
-            false,
+        );
+        expect(wrapper.find("fieldset").exists()).toBe(false);
+        const button = wrapper.find("[data-action=rule]");
+        expect(button.attributes("aria-haspopup")).toBe("menu");
+        expect(button.attributes("aria-expanded")).toBe("false");
+        expect(wrapper.find("[role=menu]").exists()).toBe(false);
+        await button.trigger("click");
+        expect(button.attributes("aria-expanded")).toBe("true");
+        const items = wrapper.findAll("[role=menuitemradio]");
+        expect(items.map((item) => item.find(".rule-name").text())).toEqual([
+            "Overlaps the period",
+            "Entirely within the period",
         ]);
-        await radios[1].setValue(true);
+        expect(items.map((item) => item.find(".rule-detail").text())).toEqual([
+            "Keeps documents whose dates touch the period",
+            "Keeps documents dated entirely inside the period",
+        ]);
+        expect(items.map((item) => item.attributes("aria-checked"))).toEqual([
+            "true",
+            "false",
+        ]);
+        expect(button.attributes("aria-controls")).toBe(
+            wrapper.find("[role=menu]").attributes("id"),
+        );
+    });
+
+    it("chooses the rule from the menu and closes it", async () => {
+        const wrapper = mountFacet({ period: [1201, 1400] });
+        await wrapper.find("[data-action=rule]").trigger("click");
+        await wrapper.findAll("[role=menuitemradio]")[1].trigger("click");
         expect(wrapper.emitted("change")?.[0][0]).toMatchObject({
             period: [1201, 1400],
             match: "within",
+        });
+        expect(wrapper.find("[role=menu]").exists()).toBe(false);
+    });
+
+    it("does not emit when the rule already held is chosen", async () => {
+        const wrapper = mountFacet({ period: [1201, 1400] });
+        await wrapper.find("[data-action=rule]").trigger("click");
+        await wrapper.findAll("[role=menuitemradio]")[0].trigger("click");
+        expect(wrapper.emitted("change")).toBeUndefined();
+    });
+
+    it("opens with ArrowDown, moves with the arrows and closes with Escape, giving the focus back", async () => {
+        const wrapper = mount(PeriodFacet, {
+            attachTo: document.body,
+            props: {
+                facet: rangeFacet(),
+                period: null,
+                match: "overlap",
+                event: "production",
+                undated: false,
+            },
+        });
+        const button = wrapper.find<HTMLButtonElement>("[data-action=rule]");
+        await button.trigger("keydown", { key: "ArrowDown" });
+        await nextTick();
+        const items = wrapper.findAll<HTMLButtonElement>(
+            "[role=menuitemradio]",
+        );
+        expect(document.activeElement).toBe(items[0].element);
+        await wrapper.find("[role=menu]").trigger("keydown", {
+            key: "ArrowDown",
+        });
+        expect(document.activeElement).toBe(items[1].element);
+        await wrapper.find("[role=menu]").trigger("keydown", {
+            key: "Escape",
+        });
+        expect(wrapper.find("[role=menu]").exists()).toBe(false);
+        expect(document.activeElement).toBe(button.element);
+        wrapper.unmount();
+    });
+
+    it("shows a note with a Reset button while the rule is not the default", async () => {
+        expect(mountFacet().find(".rule-note").exists()).toBe(false);
+        const wrapper = mountFacet({ period: [1201, 1400], match: "within" });
+        const note = wrapper.find(".rule-note");
+        expect(note.text()).toContain("Entirely within the period");
+        await note.find("button").trigger("click");
+        expect(note.find("button").text()).toBe("Reset");
+        expect(wrapper.emitted("change")?.[0][0]).toMatchObject({
+            period: [1201, 1400],
+            match: "overlap",
         });
     });
 
