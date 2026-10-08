@@ -8,9 +8,6 @@ import type {
 
 export const BASKET_LIMIT = 30;
 
-/** From this many free places or fewer the Selection counts as nearly full. */
-export const NEARLY_FULL_FREE = 5;
-
 const PAGE = /^\d{1,4}$/;
 const KEY_SHAPE = /^(an|af|im|ch):([^:]+):([^:]+)$/;
 const KIND_BY_PREFIX: Record<string, BasketKind> = {

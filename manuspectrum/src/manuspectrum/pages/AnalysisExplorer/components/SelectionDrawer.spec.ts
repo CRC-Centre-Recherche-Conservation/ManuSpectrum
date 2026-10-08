@@ -46,7 +46,7 @@ describe("SelectionDrawer", () => {
         wrapper.unmount();
     });
 
-    it("turns its meter ochre from five free places and full at thirty, with an icon", async () => {
+    it("turns ochre with an icon only when full, with no meter", async () => {
         const { wrapper, store } = mountDrawer();
         const button = wrapper.find("button.opener");
         const fill = (count: number, from = 0) =>
@@ -58,17 +58,14 @@ describe("SelectionDrawer", () => {
             );
         fill(24);
         await flushPromises();
-        expect(button.classes()).not.toContain("near");
-        expect(button.find(".meter").attributes("aria-hidden")).toBe("true");
+        expect(button.find(".meter").exists()).toBe(false);
         fill(1, 24);
         await flushPromises();
-        expect(button.classes()).toContain("near");
         expect(button.classes()).not.toContain("full");
         expect(button.find("svg.icon").exists()).toBe(false);
         fill(5, 25);
         await flushPromises();
         expect(button.classes()).toContain("full");
-        expect(button.classes()).not.toContain("near");
         expect(button.find("svg.icon").attributes("aria-hidden")).toBe("true");
         expect(button.attributes("aria-label")).toBe(
             "Selection full: 30 of 30",

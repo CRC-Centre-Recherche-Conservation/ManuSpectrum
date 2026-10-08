@@ -11,19 +11,15 @@ import {
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 
-import {
-    BASKET_LIMIT,
-    NEARLY_FULL_FREE,
-} from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { BASKET_LIMIT } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 const PHONE_QUERY = "(max-width: 30rem)";
 
 /**
  * The Selection's own entry, on every Corpus screen, and its only capacity
- * gauge: a button with « n/30 » and a meter, that opens the Selection in a
- * drawer on the right (from the bottom on a phone). The meter turns ochre
- * from `NEARLY_FULL_FREE` places left; full, the border and the chip turn
+ * gauge: a button with « n/30 », that opens the Selection in a drawer on the
+ * right (from the bottom on a phone). Full, the border and the chip turn
  * ochre and an icon appears. State is in the accessible name, not in the
  * colour. `open()` is exposed for the notices (`SELECTION_DRAWER_KEY`).
  * Closing it (Escape, its close button) gives the focus back to the element
@@ -43,9 +39,6 @@ let opener: Element | null = null;
 
 const held = computed(() => store.basket.length);
 const full = computed(() => held.value >= BASKET_LIMIT);
-const near = computed(
-    () => !full.value && BASKET_LIMIT - held.value <= NEARLY_FULL_FREE,
-);
 const label = computed(() =>
     interpolate(
         full.value
@@ -55,9 +48,6 @@ const label = computed(() =>
         true,
     ),
 );
-const meterStyle = computed(() => ({
-    inlineSize: `${Math.min(100, (held.value / BASKET_LIMIT) * 100)}%`,
-}));
 
 watch(open, async (isOpen, wasOpen) => {
     if (isOpen || !wasOpen) return;
@@ -94,7 +84,7 @@ function closeForCompare(): void {
             ref="button"
             type="button"
             class="opener"
-            :class="{ near: near, full: full }"
+            :class="{ full: full }"
             aria-haspopup="dialog"
             :aria-label="label"
             :aria-expanded="open ? 'true' : 'false'"
@@ -119,11 +109,6 @@ function closeForCompare(): void {
                 aria-hidden="true"
                 >{{ held }}<span class="of">/{{ BASKET_LIMIT }}</span></span
             >
-            <span
-                class="meter"
-                aria-hidden="true"
-                ><i :style="meterStyle"></i
-            ></span>
         </button>
         <Drawer
             v-model:visible="open"
@@ -176,27 +161,6 @@ function closeForCompare(): void {
     inline-size: 1rem;
     block-size: 1rem;
     fill: var(--accent-text);
-}
-
-.selection-drawer .meter {
-    position: absolute;
-    inset-inline: 0.875rem;
-    inset-block-end: 0.1875rem;
-    block-size: 0.1875rem;
-    border-radius: 0.125rem;
-    background: var(--bg-alt);
-}
-
-.selection-drawer .meter i {
-    display: block;
-    block-size: 100%;
-    border-radius: 0.125rem;
-    background: var(--blue-text);
-}
-
-.selection-drawer .opener.near .meter i,
-.selection-drawer .opener.full .meter i {
-    background: var(--accent);
 }
 
 .selection-drawer .opener.full .badge {
