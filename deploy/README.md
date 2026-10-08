@@ -103,6 +103,12 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `SECRETS_DIR` or `.env`: on a new host `restic_password` comes from the vault
   first, the rest is pulled with `restore-files`. Elasticsearch, Redis, the
   Cantaloupe cache, static files, certificates and nginx logs are not backed up.
+- Upgrading a host that already has a `.env`: add `BACKUP_DUMP_DIR`,
+  `RESTIC_REPOSITORY_DIR` and `METRICS_TEXTFILE_DIR` (see `compose/.env.example`)
+  **before pulling this version**. Compose interpolates the services of a disabled
+  profile too, so without the three keys every Compose command, `up` included,
+  fails with `set BACKUP_DUMP_DIR in .env`. Then create the directories and run
+  `make -C deploy backup-init` (`BACKUP.md`, "Setup on a host").
 - `web` and `init` run Django's deployment checks first
   (`check --deploy --tag security --fail-level WARNING`) and refuse to start
   on any warning.

@@ -32,8 +32,10 @@ corrupted database, a lost VM and a lost disk, not against the loss of the site.
   Cantaloupe and the concept images. Excluded inside it: `previous-*` (the data
   a restore put aside), `.restore-*` (restore staging), `archestemp/` and
   `export_deliverables/` (rebuilt on demand).
-- **The secrets** (`SECRETS_DIR`, without `*.new` and `aside`) and a copy of
-  `.env` (it holds no secret by rule).
+- **The secrets** (`SECRETS_DIR`, without `*.new`, `aside` and `restic_password`)
+  and a copy of `.env` (it holds no secret by rule). `restic_password` is left
+  out on purpose: the vault is its source of truth, and a copy beside the data
+  it protects would add nothing a lost VM could use.
 - **`manifest.json`**: the row count of every table of the `public` schema taken
   in the dump's own snapshot, the latest migration of every app, the Arches and
   `pg_dump` versions, a summary of the uploads, and the checksum and size of each
@@ -64,6 +66,8 @@ the window is seconds.
    account's home), `RESTIC_REPOSITORY_DIR` (the network filesystem) and
    `METRICS_TEXTFILE_DIR` (local disk). Create the three directories as the
    service account: the first two `0700`, the metrics directory `0755`.
+   `make -C deploy backup-init` then creates `BACKUP_DUMP_DIR/latest` and
+   `BACKUP_DUMP_DIR/tmp` (`0700`), which the `restic` service binds.
 2. `make -C deploy secrets` creates `restic_password`. **Put it in the vault item
    now** (`SECRETS.md`, section 3), before the first backup: without it no backup
    can ever be read.
@@ -99,7 +103,19 @@ the next boot.
   `forget --prune`) and runs `restic check`; `manual` and `pre-update` stay short.
   It exits 0 only when the dump is verified and the restic snapshot is saved: the
   update procedure runs `make -C deploy backup TAG=pre-update` and stops on any
-  other status. Exit 2 is a wrong configuration found before anything ran.
+  other status.
+
+  **Exit statuses.** The script exits 0 on success, 1 on a failed step (a
+  configuration found wrong once Compose is read, such as a missing
+  `BACKUP_DUMP_DIR`, is a failed step), 2 on a wrong invocation or on a
+  `METRICS_TEXTFILE_DIR` found wrong before any command ran, and 143, 130 or 129
+  when it is stopped by `SIGTERM`, `SIGINT` or `SIGHUP`: a stopped run records
+  `failed 1` like any other failure. Through `make` the status you get is
+  make's own, always 2 for a failed recipe: the script's message (`backup: FAIL:
+  ...`) is the last line before make's `*** [...] Error N` line, where `N` is the
+  script's status. systemd records make's status too (`ExecMainStatus=2`); read
+  the cause in `journalctl -u manuspectrum-backup.service`. The same holds for
+  the restore test and the restore.
 - **One lock** (`BACKUP_DUMP_DIR/.lock`) serialises backup, restore test and
   restore. A backup or a restore test waits up to an hour for it
   (`BACKUP_LOCK_WAIT`); a restore refuses at once.
@@ -116,6 +132,15 @@ the next boot.
 
   Snapshots carry the fixed host name `manuspectrum` (one group across a move to
   a new VM) and the tag given to `make backup`.
+- **Waiting for PostgreSQL.** A backup or a restore test started at boot by the
+  `Persistent` timer waits up to `POSTGRES_WAIT` seconds (default 600) for the
+  `postgres` service to be running and healthy before it refuses.
+- **The restic temporary directory.** restic writes the packs it is building to
+  `TMPDIR`; the `restic` service points it at `BACKUP_DUMP_DIR/tmp` (a bind
+  mount, `0700`, created by `make backup-init`) because they reach the size of
+  the data in flight and its own `/tmp` is a 16 MiB tmpfs. It is emptied by
+  restic when a run ends; room for a few hundred megabytes is needed on the
+  disk of `BACKUP_DUMP_DIR`.
 - **Metrics**, in `METRICS_TEXTFILE_DIR`, written atomically for the node_exporter
   textfile collector:
 
@@ -165,8 +190,9 @@ make -C deploy restore-files RESTIC_SNAPSHOT=<id|latest> \
 
 `INCLUDE` is a path inside the snapshot under `/backup/` (`/backup/db`,
 `/backup/media/...`, `/backup/secrets/<name>`), without `..`. `TARGET` must be
-absolute, not exist or be empty, and not inside the live uploads, `SECRETS_DIR` or
-`BACKUP_DUMP_DIR/latest`. The file lands under `TARGET/backup/...`, verified.
+absolute, not exist or be empty, and neither inside nor equal to the live uploads,
+`SECRETS_DIR`, `RESTIC_REPOSITORY_DIR` or `BACKUP_DUMP_DIR` (the whole directory).
+The file lands under `TARGET/backup/...`, verified.
 Copy an upload back as the service account with mode `0640`, in its original
 directory; for a secret, use `make -C deploy secret-set NAME=<name>`.
 
@@ -186,7 +212,8 @@ make -C deploy restore RESTIC_SNAPSHOT=<id|latest> CONFIRM=yes ERASURES_CHECKED=
 the date of the snapshot and will replay them before the site reopens: read
 "Personal data" below. Without it the command refuses.
 
-What it does: restores the dump and the uploads into staging, checks the
+What it does: resolves `latest` once to a snapshot id (logged, and used for every
+restic call of the run), restores the dump and the uploads into staging, checks the
 checksums, the migrations and the Arches version against the manifest and the free
 space (nothing is changed before this passes), stops the application, dumps the
 current database aside, recreates the database from `template_postgis` and
@@ -276,7 +303,10 @@ are not.
 6 monthly, so the oldest backup is about six months old. The login records are
 kept six months in the database. The longest a login record can exist is therefore
 under twelve months: six months in the live database, then at most six months
-more in the monthly snapshots. That is inside the "six months to one year" the
+more in the monthly snapshots of copy B. Copy A rotates in two days and adds
+nothing to that bound. Copy C (TSM) follows the hosting provider's retention,
+which this repository does not control: the twelve-month bound holds only once
+that retention is known and recorded (`ACCEPTANCE.md` 6.12). The bound is inside the "six months to one year" the
 CNIL recommends for traces of operations
 ([Guide de la sécurité des données personnelles, fiche 16](https://www.cnil.fr/sites/default/files/2026-05/cnil_guide_securite_personnelle.pdf)).
 The purpose of the long tail is to recover an earlier state of the scientific data

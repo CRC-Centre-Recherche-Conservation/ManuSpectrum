@@ -29,7 +29,9 @@ and every command runs as the service account, from the repository root, with
 
 `restic_password` is the key of the backup repository: every snapshot is
 encrypted with it, so it must live outside that repository, in the vault item
-of section 3. A restore on a new host reads the vault before anything else. The full moving-day order
+of section 3. A restore on a new host reads the vault before anything else. For
+that reason the backup leaves `restic_password` out of the repository (the vault
+is its source of truth); every other file of `SECRETS_DIR` is in the snapshots. The full moving-day order
 and the backup procedures are in `BACKUP.md`.
 
 To come: the Grafana admin password with the monitoring (PP-6). It joins

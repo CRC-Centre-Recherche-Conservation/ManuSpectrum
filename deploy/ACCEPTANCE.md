@@ -886,6 +886,7 @@ timings and the systemd timers, which CI does not run.
 
 - [ ] *(service account)* Create the three directories, owned by the service account:
   `install -d -m 0700 "$(grep ^BACKUP_DUMP_DIR= deploy/compose/.env | cut -d= -f2)" "$(grep ^RESTIC_REPOSITORY_DIR= deploy/compose/.env | cut -d= -f2)"`
+  (`make -C deploy backup-init`, below, adds `latest/` and `tmp/` under the first one)
   and `install -d -m 0755 "$(grep ^METRICS_TEXTFILE_DIR= deploy/compose/.env | cut -d= -f2)"`, then
   `stat -c '%a %U' <each directory>` → `700 <account>`, `700 <account>`, `755 <account>`
   (`<account>` is the output of `id -un`).
@@ -906,6 +907,8 @@ timings and the systemd timers, which CI does not run.
     the VM.
 - [ ] *(service account)* `make -C deploy backup-init` → `repository created`, exit 0, and the line
   telling that the password must be in the vault. Run it again → `repository exists and opens`.
+  `stat -c '%a %U' "$BACKUP_DUMP_DIR"/latest "$BACKUP_DUMP_DIR"/tmp` → `700 <account>` twice (`tmp/` is
+  restic's temporary directory; without it every `make backup` fails at the saving step).
   - On failure: `restic init failed` with a permission error = the repository directory is not
     writable by the service account (first check, above); `does not open: wrong restic_password?` =
     the repository was created with another password: take it from the vault.
@@ -917,8 +920,10 @@ timings and the systemd timers, which CI does not run.
   Record the duration. While it runs, in the second terminal:
   `while sleep 5; do docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep -i restic; done`
   → record the peak memory of the restic container (the capacity review reserves 150–400 MB).
-  - On failure: the line naming the failed step is the last `backup:` line; `exit 1` is a failed step,
-    `exit 2` a wrong configuration found before anything ran (the message names the variable). Read
+  - On failure: the line naming the failed step is the last `backup:` line, then make's
+    `*** [...] Error N` line: `N` is the script's status (1 a failed step, 2 a wrong invocation or
+    `METRICS_TEXTFILE_DIR` found before anything ran; the message names the variable), and make itself
+    exits 2 whatever `N` is. Read
     "When things go wrong" in `BACKUP.md`; a failed run changes no copy except the log and the
     `manuspectrum_backup.prom` metric.
 - [ ] *(service account)* `ls -l "$BACKUP_DUMP_DIR"/latest` (the value of the `.env` key) → four files,
@@ -931,7 +936,7 @@ timings and the systemd timers, which CI does not run.
 - [ ] *(service account)* `make -C deploy restic ARGS=snapshots` → one snapshot, host `manuspectrum`,
   tag `nightly`. `make -C deploy restic ARGS="ls latest" | grep -c previous-` → `0`
   (the aside directories of a load are excluded). `make -C deploy restic ARGS="ls latest /backup/secrets"`
-  → the six secret files and no `*.new`.
+  → the five secret files and no `*.new`, no `aside` and no `restic_password` (the vault holds it).
 - [ ] *(service account)* `cat "$METRICS_TEXTFILE_DIR"/manuspectrum_backup.prom` → `manuspectrum_backup_failed 0`
   and a recent attempt timestamp; `manuspectrum_backup_success.prom` holds the success timestamp, the
   duration and `manuspectrum_backup_dump_bytes`. `stat -c %a` on both → `644`.
@@ -1008,8 +1013,10 @@ timings and the systemd timers, which CI does not run.
 ### 6.7 Refusals
 
 - [ ] *(service account)* `make -C deploy restore RESTIC_SNAPSHOT=latest` → refused (`run again with CONFIRM=yes`),
-  exit 1, nothing changed. `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes` → refused, the
-  message names `ERASURES_CHECKED=yes` and the « Personal data » section, exit 2. With both `RESTIC_SNAPSHOT`
+  the script's `restore: FAIL: ...` line then make's `Error 1`, nothing changed.
+  `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes` → refused, the
+  message names `ERASURES_CHECKED=yes` and the « Personal data » section, then make's `Error 2`
+  (`make` itself exits 2 in both cases; the script's own status is the `Error N` number). With both `RESTIC_SNAPSHOT`
   and `ASIDE` → refused.
 - [ ] *(service account)* In a second terminal start `make -C deploy backup TAG=manual`; in the first, at once,
   `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes` → refused immediately
@@ -1022,7 +1029,7 @@ timings and the systemd timers, which CI does not run.
 ### 6.8 A failure is visible
 
 - [ ] *(service account)* `chmod 000 "$RESTIC_REPOSITORY_DIR"`, then `make -C deploy backup TAG=manual` →
-  exit 1, a `FAIL:` line at the saving step; `manuspectrum_backup.prom` holds `manuspectrum_backup_failed 1`;
+  make's `Error 1` after a `FAIL:` line at the saving step (make exits 2); `manuspectrum_backup.prom` holds `manuspectrum_backup_failed 1`;
   `manuspectrum_backup_success.prom` is unchanged (`stat -c %Y` before and after).
 - [ ] *(service account)* `chmod 0700 "$RESTIC_REPOSITORY_DIR"`, then `make -C deploy backup TAG=manual` →
   `done`, `manuspectrum_backup_failed 0`, the success file renewed.
@@ -1097,6 +1104,8 @@ textfile directory; PP-10's `TAG=pre-update` backup in the update procedure.
   administrators see it (6.1).
 - [ ] TSM activation is requested from the hosting provider for the production VM (so that `/home`, copy A,
   leaves the VM), and its answer is recorded in the follow-up artifact.
+- [ ] Ask Huma-Num for the TSM retention (how long a copy of `/home` is kept) and record it in `BACKUP.md`,
+  "Personal data": the twelve-month bound holds for copy B only; copy C follows that retention.
 - [ ] `ls -l /data/.snapshot` (or the provider's snapshot directory of the network filesystem) is read and
   its retention is recorded in `BACKUP.md`, "Restore one file".
 - [ ] `make -C deploy backup-init` is done on the production repository; the first nightly run is seen
