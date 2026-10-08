@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 
@@ -32,6 +32,10 @@ function setup(options?: AnchoredPopoverOptions) {
 }
 
 describe("useAnchoredPopover", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
     it("shows the popover in the top layer while open and hides it after", async () => {
         const { open, element, view } = setup();
         let shown = false;
@@ -189,6 +193,5 @@ describe("useAnchoredPopover", () => {
         await nextTick();
         expect(watchers[0].disconnect).toHaveBeenCalled();
         view.unmount();
-        vi.unstubAllGlobals();
     });
 });

@@ -427,6 +427,12 @@ describe("XrfLensStrip", () => {
         });
         view.find('[role="listbox"]').element.dispatchEvent(press);
         expect(press.defaultPrevented).toBe(true);
+        const mouse = new Event("mousedown", {
+            bubbles: true,
+            cancelable: true,
+        });
+        view.find('[role="listbox"]').element.dispatchEvent(mouse);
+        expect(mouse.defaultPrevented).toBe(true);
     });
 
     it("keeps one popover open at a time, and leaves the table to the Escape of the options", async () => {

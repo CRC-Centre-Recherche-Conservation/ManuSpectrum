@@ -155,6 +155,7 @@ interface DrawnAxis {
 const AXIS_NAME = /^[xy]axis\d*$/;
 /** An update that sets or releases the range of an X axis. */
 const TOUCHES_X_AXIS = /xaxis\d*\.(range|autorange)/;
+const Y_AXIS_RANGE = /yaxis\d*\.(range|autorange)/;
 
 /** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
 const CHART_LAYOUTS: Readonly<
@@ -181,8 +182,6 @@ const REM = 16;
 /** Left and right margins of the plot inside the chart, in px (`workshop-figure` margins). */
 const PLOT_MARGIN_X = 80;
 const DEFAULT_POINTER = "mouse";
-/** A press that moves this far (px) is no click for Plotly; in « Identify a peak » it still names the peak it began on. */
-const SLIP_PX = 5;
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
@@ -233,7 +232,7 @@ const SLIP_PX = 5;
  * narrower than `MIN_ZOOM_PX` is the click it was meant to be: the axes go
  * back to the view the press began on and the curve under it, if any,
  * toggles. In an XRF window the « Identify a peak » mode sends that click
- * (and the slipped press) to `PeakIdentifier` instead: the energy is read on
+ * to `PeakIdentifier` instead (no drag zooms there): the energy is read on
  * the curve under the pointer, snapped to the local maximum of its raw
  * counts, and nothing is toggled in the focus.
  *
@@ -321,14 +320,14 @@ let press: {
     axes: Record<string, AxisView>;
 } | null = null;
 
-/** The press in progress on the chart: where it began and whether Plotly took it as a click. */
-let held: {
-    curve: Curve | null;
-    energy: number | null;
-    x: number;
-    y: number;
-    clicked: boolean;
-} | null = null;
+/**
+ * Whether the counts axes are the fit to the energy window (`yFit`) rather
+ * than a range the reader set: a zoom box, an axis drag or a reset on a
+ * counts axis ends it, and no refit overrides what the reader chose.
+ */
+let yFitted = false;
+/** The curves hidden on the chart as last restyled, joined; the counts fit follows a change of it only. */
+let shownHidden = "";
 
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
@@ -593,7 +592,6 @@ const identification = computed(() => {
         tolerance: lens.toleranceAt(held.energy),
     };
 });
-/** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
 /** The instrument peaks the strip lists: those inside the energy window shown. */
 const listedInstrument = computed(() => {
     const window = shownEnergy.value;
@@ -603,6 +601,7 @@ const listedInstrument = computed(() => {
           )
         : lens.instrumentNotes.value;
 });
+/** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
 const logShown = computed(
     () => lens.active.value && logScale.value && layout.value !== "offset",
 );
@@ -922,6 +921,8 @@ function purgeChart(): void {
     drawnOn = null;
     lastFigure = null;
     shownStates = "";
+    shownHidden = "";
+    yFitted = false;
     shownShapesKey = "";
     hovered = null;
     press = null;
@@ -1081,6 +1082,7 @@ async function draw(): Promise<void> {
         drawnTheme = theme;
         drawnSize = sizeOf(element);
         shownStates = effectiveStates.value.join();
+        shownHidden = hiddenKeyOf(effectiveStates.value);
         shownShapesKey = shapesKey(shapes);
         shownOpacities = opacities;
         shownHoverMode = hoverModeFor(visibleCurveCount(effectiveStates.value));
@@ -1196,6 +1198,7 @@ async function redrawKeepingRange(): Promise<void> {
             ...update,
             ...(energyWindow ? yFit(energyWindow as [number, number]) : {}),
         });
+        yFitted = energyWindow !== null && lens.active.value;
     } catch (error: unknown) {
         console.error("The energy range could not be set", error);
     } finally {
@@ -1305,19 +1308,29 @@ async function restyle(): Promise<void> {
             shownOpacities = opacities;
             shownStates = key;
         }
-        await refitCounts(element);
+        const hiddenKey = hiddenKeyOf(effectiveStates.value);
+        if (lastFigure === figure && hiddenKey !== shownHidden) {
+            shownHidden = hiddenKey;
+            await refitCounts(element);
+        }
     } catch (error: unknown) {
         console.error("Spectra comparison could not be restyled", error);
     }
 }
 
+/** The curves hidden among `states`, as a key: emphasis and dimming leave it as it was. */
+function hiddenKeyOf(states: readonly string[]): string {
+    return states.map((state) => state === "hidden").join();
+}
+
 /**
  * Fits the counts axes again to the energy window shown when the curves
- * shown changed (a curve that came back may be higher than the fit): a
- * relayout of the ranges that differ, none when the window is the full range.
+ * hidden changed (a curve that came back may be higher than the fit): a
+ * relayout of the ranges that differ, none when the window is the full range
+ * or when the reader set a counts range since the last fit (`yFitted`).
  */
 async function refitCounts(element: HTMLElement): Promise<void> {
-    if (!lens.active.value || rangeKey.value === "full") return;
+    if (!lens.active.value || rangeKey.value === "full" || !yFitted) return;
     const axes = axesOf(element);
     const energy = axes.xaxis;
     if (!energy || energy.autorange) return;
@@ -1334,51 +1347,43 @@ async function refitCounts(element: HTMLElement): Promise<void> {
         );
     });
     await setRanges(element, Object.fromEntries(changed));
+    yFitted = true;
 }
 
 function bindEvents(element: HTMLElement): void {
     const target = element as PlotlyTarget;
     if (boundCharts.has(element) || typeof target.on !== "function") return;
     boundCharts.add(element);
-    element.addEventListener("pointerdown", (event) => {
+    element.addEventListener("pointerdown", () => {
         press = {
             curve: hovered,
             energy: hoveredEnergy,
             axes: axesOf(element),
         };
-        held = {
-            curve: hovered,
-            energy: hoveredEnergy,
-            x: event.clientX,
-            y: event.clientY,
-            clicked: false,
-        };
     });
-    element.addEventListener("pointerup", (event) => {
-        const start = held;
-        held = null;
-        if (!start || !start.curve) return;
-        const moved = Math.hypot(
-            event.clientX - start.x,
-            event.clientY - start.y,
-        );
-        if (moved < SLIP_PX) return;
+    element.addEventListener("pointerup", () => {
+        const released = press;
         setTimeout(() => {
-            if (identifying.value && !start.clicked) {
-                identify(start.curve, start.energy);
-            }
+            if (press === released) press = null;
         }, 0);
     });
     target.on("plotly_relayout", (update: Record<string, unknown>) => {
         const before = press;
         press = null;
-        if (before && plotly && slipZoom(update, before.axes)) {
+        if (
+            before &&
+            !applyingRange &&
+            plotly &&
+            slipZoom(update, before.axes)
+        ) {
             void plotly.relayout(element, undoZoom(update, before.axes));
             if (identifying.value) identify(before.curve, before.energy);
             else if (before.curve) toggle(entryNode(before.curve));
             return;
         }
-        const touchesX = TOUCHES_X_AXIS.test(Object.keys(update).join());
+        const keys = Object.keys(update).join();
+        if (!applyingRange && Y_AXIS_RANGE.test(keys)) yFitted = false;
+        const touchesX = TOUCHES_X_AXIS.test(keys);
         if (!applyingRange) zoomed.value = zoomedAfter(update, zoomed.value);
         if (!applyingRange && touchesX) {
             rangeKey.value = zoomed.value ? CUSTOM_RANGE : "full";
@@ -1401,7 +1406,7 @@ function bindEvents(element: HTMLElement): void {
         preview(null, pointerOf(event));
     });
     target.on("plotly_click", (event: PlotMouseEvent) => {
-        if (held) held.clicked = true;
+        press = null;
         const curve = hoveredCurve(event);
         if (identifying.value) identify(curve, energyOf(event));
         else if (curve) toggle(entryNode(curve));
@@ -1420,7 +1425,7 @@ async function fitToEnergyWindow(
     if (
         !plotly ||
         !lens.active.value ||
-        /yaxis\d*\.(range|autorange)/.test(Object.keys(update).join())
+        Y_AXIS_RANGE.test(Object.keys(update).join())
     ) {
         return;
     }
@@ -1430,6 +1435,7 @@ async function fitToEnergyWindow(
     applyingRange = true;
     try {
         await plotly.relayout(element, fit);
+        yFitted = true;
     } catch (error: unknown) {
         console.error("The counts range could not be fitted", error);
     } finally {
@@ -1612,6 +1618,7 @@ async function chooseRange(key: string): Promise<void> {
     applyingRange = true;
     try {
         await plotly.relayout(element, update);
+        yFitted = lens.active.value;
     } catch (error: unknown) {
         console.error("The energy range could not be set", error);
     } finally {
@@ -1811,8 +1818,9 @@ function chooseView(event: Event): void {
                     </select>
                 </label>
                 <div
-                    v-if="selecting"
                     class="unrelated-mode"
+                    :class="{ idle: !selecting }"
+                    :inert="selecting ? undefined : true"
                 >
                     <span>{{ $gettext("Unlinked spectra") }}</span>
                     <span
@@ -1926,12 +1934,6 @@ function chooseView(event: Event): void {
             >
                 <span>{{ $gettext("The chart could not be drawn.") }}</span>
             </p>
-            <p
-                v-if="allHidden && layout !== 'table'"
-                class="note isolated"
-            >
-                <span>{{ allHiddenNote }}</span>
-            </p>
             <div
                 v-if="layout !== 'table'"
                 class="plot-area"
@@ -1956,6 +1958,12 @@ function chooseView(event: Event): void {
                     @toggle-eye="onLegendToggleEye"
                     @show-all="onLegendShowAll"
                 />
+                <p
+                    v-if="allHidden"
+                    class="note isolated"
+                >
+                    <span>{{ allHiddenNote }}</span>
+                </p>
             </div>
             <div
                 v-if="lens.active.value && layout !== 'table'"
@@ -2163,8 +2171,20 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .plot-area {
+    position: relative;
     display: grid;
     gap: 0.5rem;
+}
+
+.xy-workshop .plot-area .isolated {
+    position: absolute;
+    inset-block-start: 0.5rem;
+    inset-inline-start: 0.5rem;
+    max-inline-size: calc(100% - 1rem);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: var(--surface);
+    pointer-events: none;
 }
 
 .xy-workshop .chart {

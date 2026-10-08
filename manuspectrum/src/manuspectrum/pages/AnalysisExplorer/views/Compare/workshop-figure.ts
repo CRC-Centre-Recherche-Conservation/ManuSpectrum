@@ -407,9 +407,11 @@ export function multiplesFigure(input: FigureInput): Figure {
         Math.max(0, input.height - margin.t - margin.b),
     );
     const needed = spacing.height + margin.t + margin.b;
-    const cellWidth =
-        ((input.width - margin.l - margin.r) / grid.columns) *
-        (1 - spacing.xgap);
+    const cellWidth = gridCell(
+        input.width - margin.l - margin.r,
+        grid.columns,
+        spacing.xgap,
+    );
     const titleChars =
         input.width > 0
             ? Math.max(
@@ -640,9 +642,19 @@ export function annotationOpacities(
 }
 
 /**
+ * The width of one cell of a Plotly grid of `columns` over a plot `plot` px
+ * wide: `plot · (1 − gap) / (columns − gap)`, `gap` being a fraction of the
+ * step between two cells (`fillGridPositions` in plotly.js-cartesian-dist
+ * 4.0.0), not of the plot.
+ */
+function gridCell(plot: number, columns: number, gap: number): number {
+    return (Math.max(0, plot) * (1 - gap)) / (columns - gap);
+}
+
+/**
  * The plot width (px) of each panel of `figure` drawn `width` px wide, by axis
  * suffix (`""`, `"2"`…): the width less the margins, shared by the grid's
- * columns as Plotly does (`xgap` is a fraction of the plot width).
+ * columns as Plotly does (`gridCell`).
  */
 export function panelWidths(
     figure: Figure,
@@ -650,10 +662,9 @@ export function panelWidths(
 ): Record<string, number> {
     const layout = figure.layout as Record<string, unknown>;
     const margin = (layout.margin ?? {}) as { l?: number; r?: number };
-    const plot = Math.max(0, width - (margin.l ?? 0) - (margin.r ?? 0));
+    const plot = width - (margin.l ?? 0) - (margin.r ?? 0);
     const grid = layout.grid as { columns?: number; xgap?: number } | undefined;
-    const columns = grid?.columns ?? 1;
-    const cell = (plot * (1 - (grid?.xgap ?? 0) * (columns - 1))) / columns;
+    const cell = gridCell(plot, grid?.columns ?? 1, grid?.xgap ?? 0);
     const widths: Record<string, number> = {};
     for (const name of Object.keys(layout)) {
         const match = /^xaxis(\d*)$/.exec(name);

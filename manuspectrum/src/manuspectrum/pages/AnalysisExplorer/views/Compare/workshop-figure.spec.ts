@@ -499,7 +499,7 @@ describe("workshop figure", () => {
             });
         });
 
-        it("shares the plot width between the columns of a grid, less the gaps, for its own export width", () => {
+        it("shares the plot width between the columns of a grid by Plotly's formula (the gap is a fraction of the step), for its own export width", () => {
             const curves = [0, 1, 2, 3].map((slot) => curve(slot, [0, 5]));
             const figure = multiplesFigure(input(curves, { width: 900 }));
             const grid = figure.layout.grid as {
@@ -510,9 +510,9 @@ describe("workshop figure", () => {
             const widths = panelWidths(figure, 1140);
             expect(Object.keys(widths).sort()).toEqual(["", "2", "3", "4"]);
             const plot = 1140 - margin.l - margin.r;
-            expect(widths[""]).toBeCloseTo(
-                (plot * (1 - grid.xgap * (grid.columns - 1))) / grid.columns,
-            );
+            const step = plot / (grid.columns - grid.xgap);
+            expect(widths[""]).toBeCloseTo(step * (1 - grid.xgap));
+            expect(grid.columns * step - grid.xgap * step).toBeCloseTo(plot);
             expect(panelWidths(figure, 1140)[""]).toBeGreaterThan(
                 panelWidths(figure, 900)[""],
             );

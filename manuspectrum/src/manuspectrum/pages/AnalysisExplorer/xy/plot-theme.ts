@@ -16,8 +16,8 @@ export const ELEMENT_FALLBACKS = [
     "#8e3329",
     "#3f6212",
     "#6d28d9",
-    "#0e7490",
-    "#a04a00",
+    "#0828a0",
+    "#680070",
 ];
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;

@@ -63,6 +63,7 @@ describe("HelpTip", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+        vi.unstubAllGlobals();
         vi.useRealTimers();
     });
 
@@ -355,6 +356,5 @@ describe("HelpTip", () => {
         watchers.at(-1)?.([{ isIntersecting: false }]);
         await wrapper.vm.$nextTick();
         expect(shown()).toBeNull();
-        vi.unstubAllGlobals();
     });
 });

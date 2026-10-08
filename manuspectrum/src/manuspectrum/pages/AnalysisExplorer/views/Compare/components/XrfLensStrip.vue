@@ -46,8 +46,10 @@ const MAX_INSTRUMENT_LISTED = 12;
  * suggestions and the periodic table are popovers in the top layer, under
  * their input and button (`useAnchoredPopover`): Escape or a press outside
  * closes the table and the focus goes back to its button; the focus leaving
- * the button and the table together closes it too. The instrument list stops
- * at `MAX_INSTRUMENT_LISTED` peaks and counts the rest.
+ * the button and the table together closes it too. When the anchor leaves
+ * the visible area (`onLost`) the popover closes without taking the focus
+ * back: the button it would return to is out of sight. The instrument list
+ * stops at `MAX_INSTRUMENT_LISTED` peaks and counts the rest.
  */
 const props = defineProps<{
     elements: readonly StripElement[];
@@ -384,6 +386,7 @@ function onKeydown(event: KeyboardEvent): void {
                         role="listbox"
                         :aria-label="$gettext('Elements')"
                         @pointerdown.prevent
+                        @mousedown.prevent
                     >
                         <li
                             v-for="(symbol, index) in suggestions"

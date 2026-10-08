@@ -59,7 +59,34 @@ const PAIRS: [string, string][] = [
     ["Sn", "Ag"],
     ["Fe", "Zn"],
     ["Mn", "Ba"],
+    ["Cd", "S"],
+    ["Hg", "Cl"],
+    ["Sr", "Cr"],
+    ["Au", "Sn"],
+    ["Ba", "Se"],
 ];
+
+/** Smallest OKLab distance (×100) between the two colours of a pair. */
+const MIN_DELTA_E = 10;
+
+function oklab(hex: string): [number, number, number] {
+    const [r, g, b] = [1, 3, 5].map((at) =>
+        channel(parseInt(hex.slice(at, at + 2), 16)),
+    );
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [
+        0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+        1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+        0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    ];
+}
+
+function deltaE(one: string, other: string): number {
+    const [a, b] = [oklab(one), oklab(other)];
+    return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
 
 function channel(value: number): number {
     const unit = value / 255;
@@ -86,6 +113,18 @@ describe("elementHue", () => {
             expect(elementHue(one), `${one}/${other}`).not.toBe(
                 elementHue(other),
             );
+        }
+    });
+
+    it("gives every pair colours at least 10 apart in OKLab, not just two palette slots", () => {
+        for (const [one, other] of PAIRS) {
+            expect(
+                deltaE(
+                    ELEMENT_FALLBACKS[elementHue(one)],
+                    ELEMENT_FALLBACKS[elementHue(other)],
+                ),
+                `${one}/${other}`,
+            ).toBeGreaterThanOrEqual(MIN_DELTA_E);
         }
     });
 

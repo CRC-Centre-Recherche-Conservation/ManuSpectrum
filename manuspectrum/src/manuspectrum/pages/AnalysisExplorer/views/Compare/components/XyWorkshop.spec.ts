@@ -1321,7 +1321,8 @@ describe("XyWorkshop", () => {
 
     it("offers Hide or Dim for unrelated curves only while a focus is active, Hide by default", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
-        expect(view.find(".unrelated-mode").exists()).toBe(false);
+        expect(view.find(".unrelated-mode").classes()).toContain("idle");
+        expect(view.find(".unrelated-mode").attributes("inert")).toBeDefined();
 
         fake.selection.value = [analysisNode(analysisHit(1).id)];
         fake.levels.value = new Map([
@@ -1329,7 +1330,8 @@ describe("XyWorkshop", () => {
         ]);
         await flushPromises();
         const mode = view.find(".unrelated-mode");
-        expect(mode.exists()).toBe(true);
+        expect(mode.classes()).not.toContain("idle");
+        expect(mode.attributes("inert")).toBeUndefined();
         expect(mode.find('[data-mode="hide"]').attributes("aria-pressed")).toBe(
             "true",
         );
@@ -1351,7 +1353,8 @@ describe("XyWorkshop", () => {
         fake.selection.value = [];
         fake.levels.value = new Map();
         await flushPromises();
-        expect(view.find(".unrelated-mode").exists()).toBe(false);
+        expect(view.find(".unrelated-mode").classes()).toContain("idle");
+        expect(view.find(".unrelated-mode").attributes("inert")).toBeDefined();
     });
 
     it("previews the node of a legend entry or a curve under the mouse, and toggles a clicked curve", async () => {
@@ -2270,6 +2273,147 @@ describe("XyWorkshop XRF lens", () => {
             ).toEqual([]);
         });
 
+        function yUpdates(): Record<string, unknown>[] {
+            return plotly.relayout.mock.calls
+                .map(([, update]) => update as Record<string, unknown>)
+                .filter((update) =>
+                    Object.keys(update).some((key) => key.startsWith("yaxis")),
+                );
+        }
+
+        async function boxZoomed(view: VueWrapper): Promise<HTMLElement> {
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 40], autorange: false, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 15,
+                "yaxis.range[0]": 0,
+                "yaxis.range[1]": 40,
+            });
+            await flushPromises();
+            plotly.relayout.mockClear();
+            return chart as HTMLElement;
+        }
+
+        it("keeps the counts range of a box zoom through a hover preview", async () => {
+            const view = await mountTwo();
+            await boxZoomed(view);
+            fake.previewLevels.value = new Map([[fileNode(uuid(702)), "self"]]);
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.restyle).toHaveBeenCalled();
+            expect(yUpdates()).toEqual([]);
+        });
+
+        it("keeps the counts range of a box zoom when a curve is hidden or comes back", async () => {
+            const view = await mountTwo();
+            await boxZoomed(view);
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(yUpdates()).toEqual([]);
+        });
+
+        it("keeps the counts range after a preset when only the emphasis changes", async () => {
+            const view = await mountTwo();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            plotly.relayout.mockClear();
+            fake.previewLevels.value = new Map([[fileNode(uuid(702)), "self"]]);
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.restyle).toHaveBeenCalled();
+            expect(yUpdates()).toEqual([]);
+        });
+
+        it("does not read the programmatic relayout after a press that ended in a click as a slipped zoom", async () => {
+            const view = await mountTwo();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [1, 16], autorange: true, _length: 400 },
+                    yaxis: { range: [0, 5250], autorange: true, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 1, y: 30 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(new Event("pointerdown"));
+            emitPlotly(chart, "plotly_click", {
+                points: [{ curveNumber: 1, x: 8, y: 30 }],
+                event: {},
+            });
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            plotly.relayout.mockClear();
+            plotly.relayout.mockImplementationOnce(
+                async (target: HTMLElement) => {
+                    emitPlotly(target, "plotly_relayout", {
+                        "xaxis.range[0]": 5,
+                        "xaxis.range[1]": 15,
+                        "yaxis.range[0]": 0,
+                        "yaxis.range[1]": 200,
+                    });
+                },
+            );
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            expect(
+                plotly.relayout.mock.calls.filter(([, update]) =>
+                    Object.prototype.hasOwnProperty.call(
+                        update,
+                        "xaxis.autorange",
+                    ),
+                ),
+            ).toEqual([]);
+        });
+
+        it("does not read a relayout of its own as a slipped zoom while a press is still held", async () => {
+            const view = await mountTwo();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [1, 16], autorange: true, _length: 400 },
+                    yaxis: { range: [0, 5250], autorange: true, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 1, y: 30 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(new Event("pointerdown"));
+            plotly.relayout.mockClear();
+            plotly.relayout.mockImplementationOnce(
+                async (target: HTMLElement) => {
+                    emitPlotly(target, "plotly_relayout", {
+                        "xaxis.range[0]": 5,
+                        "xaxis.range[1]": 15,
+                        "yaxis.range[0]": 0,
+                        "yaxis.range[1]": 200,
+                    });
+                },
+            );
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(fake.toggle).not.toHaveBeenCalled();
+            expect(
+                plotly.relayout.mock.calls.filter(([, update]) =>
+                    Object.prototype.hasOwnProperty.call(
+                        update,
+                        "xaxis.autorange",
+                    ),
+                ),
+            ).toEqual([]);
+        });
+
         it("keeps « Reset the zoom » when the counts fit of a grid panel with nothing in the window echoes an autorange", async () => {
             const view = await mountTwo();
             await view.find('[data-layout="multiples"]').trigger("click");
@@ -2454,16 +2598,23 @@ describe("XyWorkshop XRF lens", () => {
             expect(region.find('[role="dialog"]').exists()).toBe(true);
         });
 
-        it("makes no drawing when a focus pin grows the strip but leaves the chart's box as it was", async () => {
-            await mountObserved();
-            plotly.Plots.resize.mockClear();
-            plotly.react.mockClear();
-            pinElement("Pb");
-            watcher.callback();
-            await nextFrame();
+        it("reserves the room of what a focus change shows: the selector is always in the toolbar and the note overlays the plot", async () => {
+            const view = await mountObserved();
+            const selector = view.find(".toolbar .unrelated-mode");
+            expect(selector.exists()).toBe(true);
+            expect(selector.attributes("inert")).toBeDefined();
+            fake.selection.value = [analysisNode(analysisHit(1).id)];
+            fake.levels.value = new Map();
             await flushPromises();
-            expect(plotly.react).not.toHaveBeenCalled();
-            expect(plotly.Plots.resize).not.toHaveBeenCalled();
+            expect(view.find(".toolbar .unrelated-mode").element).toBe(
+                selector.element,
+            );
+            const note = view.find(".isolated");
+            expect(note.exists()).toBe(true);
+            expect(note.element.parentElement?.classList).toContain(
+                "plot-area",
+            );
+            expect(view.find(".lens-region .isolated").exists()).toBe(false);
         });
 
         it("ignores the zero box of a folded window and does not draw again when it unfolds at the size it had", async () => {
@@ -2572,7 +2723,7 @@ describe("XyWorkshop XRF lens", () => {
             expect(plotly.react).not.toHaveBeenCalled();
         });
 
-        it("identifies the peak a press began on when the press moved too far for Plotly to call it a click", async () => {
+        it("identifies once on the click Plotly sends after a press that moved, and not on the release alone", async () => {
             const view = await mountPeak();
             await toggleButton(view).trigger("click");
             const chart = view.find(".chart").element;
@@ -2588,28 +2739,13 @@ describe("XyWorkshop XRF lens", () => {
             );
             await new Promise((resolve) => setTimeout(resolve, 5));
             await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            clickAt(view, 2.33);
+            await flushPromises();
             expect(view.find('[role="dialog"] h3').text()).toContain(
                 "2.35 keV",
             );
-        });
-
-        it("leaves a press that Plotly took as a click, or that did not move, to the click", async () => {
-            const view = await mountPeak();
-            await toggleButton(view).trigger("click");
-            const chart = view.find(".chart").element;
-            emitPlotly(chart, "plotly_hover", {
-                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
-                event: { pointerType: "mouse" },
-            });
-            chart.dispatchEvent(
-                new MouseEvent("pointerdown", { clientX: 100, clientY: 100 }),
-            );
-            chart.dispatchEvent(
-                new MouseEvent("pointerup", { clientX: 101, clientY: 101 }),
-            );
-            await new Promise((resolve) => setTimeout(resolve, 5));
-            await flushPromises();
-            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            expect(fake.toggle).not.toHaveBeenCalled();
         });
 
         it("keeps the drag off when the chart is drawn again while the mode is on", async () => {
