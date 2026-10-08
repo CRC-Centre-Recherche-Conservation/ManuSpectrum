@@ -17,11 +17,6 @@ msgstr ""
 msgid "(new tab)"
 msgstr "(nouvel onglet)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:176
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:122
-msgid "(outside the filters)"
-msgstr "(hors des filtres)"
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:119
 msgid "%{canvas}, %{component}, %{technique}: %{n} analysis"
 msgid_plural "%{canvas}, %{component}, %{technique}: %{n} analyses"
@@ -142,7 +137,7 @@ msgstr[0] "%{n} analyse ajoutée (%{first}). Sélection : %{held} / %{limit}."
 msgstr[1] ""
 "%{n} analyses ajoutées (%{first} à %{last}). Sélection : %{held} / %{limit}."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:126
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:131
 msgid "%{n} analysis outside the filters is hidden."
 msgid_plural "%{n} analyses outside the filters are hidden."
 msgstr[0] "%{n} analyse hors des filtres est masquée."
@@ -303,7 +298,7 @@ msgid_plural "%{n} linked"
 msgstr[0] "%{n} lié"
 msgstr[1] "%{n} liés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:91
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:93
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FoldedSummary.vue:54
 msgid "%{n} map"
 msgid_plural "%{n} maps"
@@ -322,7 +317,7 @@ msgid_plural "%{n} materials"
 msgstr[0] "%{n} matériau"
 msgstr[1] "%{n} matériaux"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:94
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:96
 msgid "%{n} micro-image"
 msgid_plural "%{n} micro-images"
 msgstr[0] "%{n} micro-image"
@@ -393,7 +388,7 @@ msgstr[1] "%{n} échantillons"
 msgid "%{n} samples here, zoom in"
 msgstr "%{n} échantillons ici, zoomez."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:89
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:91
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:391
 msgid "%{n} spectrum"
 msgid_plural "%{n} spectra"
@@ -458,6 +453,9 @@ msgid "%{name}: %{n} points from %{from} to %{to}."
 msgstr "%{name} : %{n} points de %{from} à %{to}."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:109
+msgid "%{name}: no preview available."
+msgstr "%{name} : aucun aperçu disponible."
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:492
 msgid "%{name}: nothing to draw."
 msgstr "%{name} : rien à tracer."
@@ -619,7 +617,7 @@ msgstr "Filtres actifs"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:36
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:180
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:150
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:155
 msgid "Add %{name} to the Selection"
 msgstr "Ajouter %{name} à la Sélection"
 
@@ -731,7 +729,7 @@ msgstr "Analyses hors des filtres (%{n})"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:32
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:252
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:167
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:118
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:123
 msgid "analysis"
 msgstr "analyse"
 
@@ -928,7 +926,7 @@ msgstr "Comparer"
 msgid "Compare (%{count})"
 msgstr "Comparer (%{count})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:76
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:78
 msgid "Compare (%{n})"
 msgstr "Comparer (%{n})"
 
@@ -955,7 +953,7 @@ msgstr "Composants"
 msgid "Components of the Selection"
 msgstr "Composants de la Sélection"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:375
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:380
 msgid "Components on this page"
 msgstr "Composants sur cette page"
 
@@ -1192,11 +1190,11 @@ msgstr "Télécharger le fichier brut"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:379
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:213
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:339
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:299
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:335
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:365
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:395
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:454
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:304
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:340
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:370
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:400
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:459
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:85
 msgid "Draft"
 msgstr "Brouillon"
@@ -1253,7 +1251,7 @@ msgstr "vide"
 msgid "Empty pane"
 msgstr "Volet vide"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:286
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:292
 msgid "Empty…"
 msgstr "Vider…"
 
@@ -1586,7 +1584,7 @@ msgstr ""
 msgid "How to use the gallery"
 msgstr "Utilisation de la galerie"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:112
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:114
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:91
 msgid "identified material"
 msgstr "matériau identifié"
@@ -1606,7 +1604,7 @@ msgstr "matériau identifié du composant %{name}"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:236
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:20
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:313
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:318
 msgid "Identified materials"
 msgstr "Matériaux identifiés"
 
@@ -1738,7 +1736,7 @@ msgstr "Garde les documents datés entièrement dans la période"
 msgid "Keeps documents whose dates touch the period"
 msgstr "Garde les documents dont les dates touchent la période"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:178
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:180
 msgid "Kept on this browser"
 msgstr "Gardée sur ce navigateur"
 
@@ -1847,7 +1845,7 @@ msgid "Loading the spectra…"
 msgstr "Chargement des spectres…"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue:20
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:256
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:258
 msgid "Loading…"
 msgstr "Chargement…"
 
@@ -1863,7 +1861,7 @@ msgstr "carte"
 msgid "Map & timeline"
 msgstr "Carte et chronologie"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:113
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:115
 msgid "map layer"
 msgstr "couche cartographique"
 
@@ -2025,7 +2023,7 @@ msgstr "Aucune donnée pour cet événement pour l'instant"
 msgid "No data to display."
 msgstr "Aucune donnée à visualiser."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:106
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:108
 msgid "no data to show"
 msgstr "aucune donnée à afficher"
 
@@ -2037,7 +2035,7 @@ msgstr "Aucun focus"
 msgid "No identified material of the Selection itself."
 msgstr "Aucun matériau identifié de la Sélection elle-même."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:88
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:93
 msgid "No identified material on this page."
 msgstr "Aucun matériau identifié sur cette page."
 
@@ -2058,7 +2056,7 @@ msgstr "Aucune couche ne correspond au filtre."
 msgid "No layer of the Selection has a declared element or band."
 msgstr "Aucune couche de la Sélection n’a d’élément ou de bande déclaré."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:239
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:241
 msgid "no longer available"
 msgstr "n'est plus disponible"
 
@@ -2074,7 +2072,7 @@ msgstr "Aucune correspondance"
 msgid "No published analysis"
 msgstr "Aucune analyse publiée"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:97
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:102
 msgid "No published analysis on this page."
 msgstr "Aucune analyse publiée sur cette page."
 
@@ -2082,7 +2080,7 @@ msgstr "Aucune analyse publiée sur cette page."
 msgid "No result."
 msgstr "Aucun résultat."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:93
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:98
 msgid "No sample on this page."
 msgstr "Aucun échantillon sur cette page."
 
@@ -2154,7 +2152,7 @@ msgstr "Nombre"
 msgid "Offset"
 msgstr "Décaler"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:210
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:215
 msgid "On this page"
 msgstr "Sur cette page"
 
@@ -2230,6 +2228,11 @@ msgstr "hors de la plage X commune"
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue:72
 msgid "Outgoing — this model carries the link"
 msgstr "Sortant — c’est ce modèle qui porte le lien"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:176
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:127
+msgid "outside filters"
+msgstr "hors filtres"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OutsideFiltersToggle.vue:45
 msgid "Outside the filters: %{materials}"
@@ -2436,11 +2439,11 @@ msgstr "Retirer"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue:43
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:188
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:158
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:163
 msgid "Remove %{name} from the Selection"
 msgstr "Retirer %{name} de la Sélection"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:157
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:159
 msgid "Remove %{slot}"
 msgstr "Retirer %{slot}"
 
@@ -2556,7 +2559,7 @@ msgid "Sample"
 msgstr "Échantillon"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:21
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:345
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:350
 msgid "Samples"
 msgstr "Échantillons"
 
@@ -2616,16 +2619,16 @@ msgstr[1] "Voir tout le corpus (%{n} documents)"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:264
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:171
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:137
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:142
 msgid "Select all (%{n} shown)"
 msgstr "Tout sélectionner (%{n} affichés)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:142
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:147
 msgid "Select all: %{name} (%{n} shown)"
 msgstr "Tout sélectionner : %{name} (%{n} affichés)"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue:69
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:172
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:174
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:547
 msgid "Selection"
 msgstr "Sélection"
@@ -3152,7 +3155,7 @@ msgstr[1] "Avec ses %{n} matériaux"
 msgid "with undated"
 msgstr "avec les non datées"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:166
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:171
 msgid "Without a position on the image (%{n})"
 msgstr "Sans position sur l'image (%{n})"
 
@@ -3169,7 +3172,7 @@ msgstr "Plage X"
 msgid "Y range"
 msgstr "Plage Y"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:187
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:189
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:525
 msgid ""
 "Your Selection is empty. Add analyses or identified materials with « + "
