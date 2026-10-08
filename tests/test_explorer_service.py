@@ -201,6 +201,16 @@ class AncestorTermsTests(ServiceCase):
         self.assertIn("XRF", ancestor_terms([str(child.pk)])[str(child.pk)])
 
 
+class FacetGroupTests(SimpleTestCase):
+    def test_layer_is_drawn_with_the_component_but_filters_with_the_material(self):
+        self.assertEqual(explorer_service.GROUP_OF["layer"], "part")
+        self.assertEqual(
+            [k for k in explorer_service.FACET_KEYS if k in ("part", "layer")],
+            ["part", "layer"],
+        )
+        self.assertIn("layer", explorer_service.CHARACTERIZATION_KEYS)
+
+
 class RowFilterTests(SimpleTestCase):
     def rows(self):
         return [

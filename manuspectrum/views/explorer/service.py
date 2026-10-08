@@ -90,13 +90,15 @@ from manuspectrum.views.summary_service import GraphIndex, _date
 
 FACET_GROUPS = (
     ("document", ("place",)),
-    ("part", ("partType", "part")),
+    ("part", ("partType", "part", "layer")),
     ("analysis", ("project", "technique", "operator", "year")),
-    ("characterization", ("material", "colour", "layer", "element")),
+    ("characterization", ("material", "colour", "element")),
 )
 FACET_KEYS = tuple(key for _, keys in FACET_GROUPS for key in keys)
 GROUP_OF = {key: group for group, keys in FACET_GROUPS for key in keys}
-CHARACTERIZATION_KEYS = dict(FACET_GROUPS)["characterization"]
+# The facets that must hold on one identified material; `layer` is drawn in the
+# component group but filters with these.
+CHARACTERIZATION_KEYS = ("material", "colour", "layer", "element")
 REF_FACETS = {
     "partType": ("partTypes",),
     "material": ("materials",),

@@ -90,7 +90,7 @@ const GROUP_OF: Record<Facet["key"], Facet["group"]> = {
     year: "analysis",
     material: "characterization",
     colour: "characterization",
-    layer: "characterization",
+    layer: "part",
     element: "characterization",
 };
 

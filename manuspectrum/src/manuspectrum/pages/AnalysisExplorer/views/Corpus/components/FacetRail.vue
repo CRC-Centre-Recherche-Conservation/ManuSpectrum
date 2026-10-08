@@ -39,9 +39,9 @@ const GROUPS: readonly FacetGroup[] = [
 /** The facets of each group in rail order; the period facet closes the document group (`period` prop). */
 const GROUP_KEYS: Readonly<Record<FacetGroup, readonly FacetKey[]>> = {
     document: ["place"],
-    part: ["partType", "part"],
+    part: ["partType", "part", "layer"],
     analysis: ["project", "technique", "operator", "year"],
-    characterization: ["material", "colour", "layer", "element"],
+    characterization: ["material", "colour", "element"],
 };
 const RAIL_KEYS: readonly FacetKey[] = [
     ...GROUP_KEYS.document,

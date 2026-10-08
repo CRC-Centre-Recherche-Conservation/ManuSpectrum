@@ -165,6 +165,19 @@ describe("FacetRail", () => {
         expect(body.isVisible()).toBe(false);
     });
 
+    it("draws the Layer facet in the studied component group, after the component facets", () => {
+        const wrapper = mountRail({
+            facets: [facet("material", 1), facet("layer", 2), facet("part", 1)],
+            selected: {},
+        });
+        const groups = wrapper.findAll(".group");
+        expect(
+            groups.map((group) => group.find(".group-title").text()),
+        ).toEqual(["▾Studied component", "▾Identified material"]);
+        expect(groups[0].findAll(".facet")).toHaveLength(2);
+        expect(groups[1].findAll(".facet")).toHaveLength(1);
+    });
+
     it("shows one Colour facet of every colour in the order served, with no level toggle", async () => {
         const colour = facet("colour", 15);
         const wrapper = mountRail({
