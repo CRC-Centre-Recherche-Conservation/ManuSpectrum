@@ -701,6 +701,40 @@ class RepositoryRulesTests(unittest.TestCase):
                 self.assertIn("$(SECRET_FILES)", recipe)
                 self.assertTrue((DEPLOY_DIR / "scripts" / script).is_file())
 
+    def test_secrets_directory_follows_the_env_file(self):
+        compose_dir = (DEPLOY_DIR / "compose").resolve()
+
+        def resolved(env_text, *extra):
+            with tempfile.TemporaryDirectory() as tmp:
+                env = Path(tmp) / ".env"
+                if env_text is not None:
+                    env.write_text(env_text, encoding="utf-8")
+                out = subprocess.run(
+                    ["make", "-n", "-C", str(DEPLOY_DIR), "secrets-check"]
+                    + [f"ENV_FILE={env}", *extra],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            return re.search(r"--dir '([^']*)'", out)[1]
+
+        cases = (
+            ("absolute", "A=1\nSECRETS_DIR=/srv/ms/secrets\n", (), "/srv/ms/secrets"),
+            (
+                "relative",
+                "SECRETS_DIR=./secrets\n",
+                (),
+                str(compose_dir / "secrets"),
+            ),
+            ("last line wins", "SECRETS_DIR=/a\nSECRETS_DIR=/b\n", (), "/b"),
+            ("no line", "A=1\n", (), str(compose_dir / "secrets")),
+            ("no env file", None, (), str(compose_dir / "secrets")),
+            ("command line wins", "SECRETS_DIR=/srv/ms\n", ("SECRETS_DIR=/x",), "/x"),
+        )
+        for name, env_text, extra, expected in cases:
+            with self.subTest(case=name):
+                self.assertEqual(resolved(env_text, *extra), expected)
+
     def test_backup_targets_pass_the_metrics_directory(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()

@@ -6,7 +6,10 @@ COMPOSE_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/compose
 ENV_FILE ?= $(COMPOSE_DIR)/.env
 COMPOSE := docker compose --project-directory $(COMPOSE_DIR) --env-file $(ENV_FILE) \
 	-f $(COMPOSE_DIR)/compose.yaml -f $(COMPOSE_DIR)/compose.prod.yaml
-SECRETS_DIR ?= $(COMPOSE_DIR)/secrets
+# SECRETS_DIR: the command line or environment, else the env file (a relative
+# value resolves against COMPOSE_DIR, as Compose does), else compose/secrets.
+ENV_SECRETS_DIR := $(shell sed -n 's/^SECRETS_DIR=//p' '$(ENV_FILE)' 2>/dev/null | tail -n 1)
+SECRETS_DIR ?= $(if $(ENV_SECRETS_DIR),$(if $(filter /%,$(ENV_SECRETS_DIR)),$(ENV_SECRETS_DIR),$(abspath $(COMPOSE_DIR)/$(ENV_SECRETS_DIR))),$(COMPOSE_DIR)/secrets)
 SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
 IMAGE ?= manuspectrum:local
 EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
