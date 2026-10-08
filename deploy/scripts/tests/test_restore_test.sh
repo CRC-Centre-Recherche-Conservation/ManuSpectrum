@@ -62,6 +62,7 @@ cat >"$TMP/bin/docker" <<'STUB'
 printf 'docker %s\n' "$*" >>"$CALLS"
 case "$*" in
   *"config --format json"*) cat "$TMP/config.json" ;;
+  *"exec -T postgres psql"*" -c "*) ;;
   *"exec -T postgres psql"*)
     while IFS= read -r line; do
       printf 'psql< %s\n' "$line" >>"$CALLS"
