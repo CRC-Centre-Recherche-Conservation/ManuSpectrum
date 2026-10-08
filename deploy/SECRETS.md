@@ -1,8 +1,8 @@
 # Secrets
 
 How the secrets of the stack are made, kept, restored and rotated. The
-runtime model is simple: five files in `SECRETS_DIR` (default
-`deploy/compose/secrets`), generated on the host by `make -C deploy secrets`
+runtime model is simple: six files in the `SECRETS_DIR` directory of `.env`,
+generated on the host by `make -C deploy secrets`
 and given to the containers as Compose file secrets. This page adds what
 happens around them: where the off-host copy lives, how to restore it and how
 to rotate each secret.
@@ -12,9 +12,13 @@ its history cannot be rotated.
 
 In the commands below, `dc` is
 `docker compose --project-directory deploy/compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml`,
-and every command runs as the service account, from the repository root, with
-`SECRETS_DIR=deploy/compose/secrets` (the default of `make secrets`,
-`secret-set` and `secrets-check`).
+and every command runs as the service account, from the repository root. The
+`make` targets (`secrets`, `secret-set`, `secrets-check`) read `SECRETS_DIR`
+from `.env` (`deploy/compose/secrets` when it is unset), like Compose; a
+`SECRETS_DIR=` on the `make` command line wins. In the commands, `$SECRETS_DIR`
+is a shell variable set once per session with
+`SECRETS_DIR=$(make -s -C deploy secrets-dir)`
+(an absolute path on a production host).
 
 ## 1. Inventory
 
@@ -25,11 +29,17 @@ and every command runs as the service account, from the repository root, with
 | `django_secret_key` | `web`, `worker`, `beat` (sessions, password-reset links, IIIF tokens, signup and 2FA links) | `make secrets` (`secrets.token_urlsafe(64)`) | Optional: a new key logs everyone out | Everyone is logged out; password-reset links, IIIF tokens and Arches e-mail links in flight stop working. Arches also encrypts each user's 2FA secret (`UserProfile.encrypted_mfa_hash`, `arches/app/views/auth.py`) with `SECRET_KEY`: if `ENABLE_TWO_FACTOR_AUTHENTICATION` is ever enabled, a new key makes enrolled TOTP unreadable and users re-enrol (off today) |
 | `email_password` | `web`, `worker`, `beat` (SMTP relay) | `make secrets` creates it **empty** (relay without authentication) | Yes, when the relay needs a password | Changed at the mail provider, then the file |
 | `admin_password` | `web` only (`make init`, `make admin-password`) | `make secrets` | No: its hash comes back with the database; the vault is the reference | Written to the file, then applied with `make admin-password` |
+| `restic_password` | the `restic` service only (profile `backup`: backups, restore test, restore) | `make secrets` (random, 48 bytes base64) | **Yes, always: without it no backup can be read; it is the one secret that must be in the vault before any restore** | Not by rewriting the file: the repository holds the old key. Add the new key to the repository first (`restic key add`), then the file, then remove the old key (section 6) |
 
-To come: `restic_password` with the backups (PP-7; it must live outside the
-restic repository, in the vault item of section 3) and the Grafana admin
-password with the monitoring (PP-6). Each joins `SECRET_FILES` in the
-Makefile, gets a row here and a field in the vault item.
+`restic_password` is the key of the backup repository: every snapshot is
+encrypted with it, so it must live outside that repository, in the vault item
+of section 3. A restore on a new host reads the vault before anything else. For
+that reason the backup leaves `restic_password` out of the repository (the vault
+is its source of truth); every other file of `SECRETS_DIR` is in the snapshots. The full moving-day order
+and the backup procedures are in `BACKUP.md`.
+
+To come: the Grafana admin password with the monitoring (PP-6). It joins
+`SECRET_FILES` in the Makefile, gets a row here and a field in the vault item.
 
 ## 2. Rules
 
@@ -39,6 +49,12 @@ Makefile, gets a row here and a field in the vault item.
 - Never in an argument list (`ps`), a log line, an error message or a
   clear-text backup. `secret-set` reads a value from the terminal or from
   stdin, and `secrets-check` prints names and problems, never values.
+- On the production host `SECRETS_DIR` is `/srv/manuspectrum/secrets`, outside
+  the directories the provider's TSM client backs up by default (`/etc`,
+  `/home`, `/opt`, `/root`, `/var/log`...): the checkout lives under `/home`, and
+  a secret there would be copied in clear. Before `make secrets`, create the
+  parent once: `sudo install -d -o <account> -g <account> -m 0750 /srv/manuspectrum`.
+  The secrets stay in the encrypted restic repository and in the vault.
 - Only the service account reads `SECRETS_DIR` (directory `0700`, files
   `0444` because several container uids read them: the directory mode is the
   barrier). Check it any time with `make -C deploy secrets-check`.
@@ -53,10 +69,10 @@ single entry in the project's password manager (Bitwarden):
   have their own item.
 - One hidden custom field per secret, named exactly like the file
   (`pg_password`, `elastic_password`, `django_secret_key`, `email_password`,
-  `admin_password`), holding the value without a trailing newline. An empty
+  `admin_password`, `restic_password`), holding the value without a trailing newline. An empty
   `email_password` is recorded as empty. No file attachment.
 - Fill it once, after the first `make secrets`: read each value as the service
-  account (`cat deploy/compose/secrets/<name>`, in a terminal nobody watches)
+  account (`cat "$SECRETS_DIR/<name>"`, in a terminal nobody watches)
   and paste it into the field. Update the field after every rotation (section 6).
 - Access: exactly the two administrators, through the collection. Each
   administrator keeps the account's recovery code in their own safe place; it
@@ -71,25 +87,27 @@ make -C deploy secrets-check
 
 One line per file: `ok`, or what is wrong (missing, mode other than `0444`,
 trailing newline, empty, `django_secret_key` under 50 characters,
-`admin_password` under 16), then the directory mode (`0700`). Exit 1 on any
-problem. It never prints a value.
+`admin_password` under 16, `restic_password` under 32), then the directory mode
+(`0700`). Exit 1 on any problem. It never prints a value.
 
 ## 5. Restore on a new host
 
-1. `make -C deploy secrets-check` shows what is missing. If the PP-7 restic
-   restore has brought back `SECRETS_DIR`, it ends here.
-2. Otherwise set each file from the vault item, one at a time:
+1. `make -C deploy secrets-check` shows what is missing. The backup restore
+   never writes `SECRETS_DIR`, and it needs `restic_password` to read any
+   backup: set that file first from the vault item, before `make secrets`.
+2. Set each file from the vault item, one at a time (a copy of the directory
+   is in the restic snapshots, `restore-files` can pull it for comparison):
 
    ```bash
    make -C deploy secret-set NAME=pg_password
    ```
 
    The value is typed twice without echo (or piped on stdin, one value, the
-   trailing newline removed). Do the five names; for `email_password`, press
+   trailing newline removed). Do the six names; for `email_password`, press
    Enter twice when the relay needs no password. An existing file with another
    value is refused unless you add `FORCE=yes`; the same value is reported as
    `kept`, so a run can be repeated safely.
-3. `make -C deploy secrets-check` → five `ok`.
+3. `make -C deploy secrets-check` → six `ok`.
 4. Without the vault, `make -C deploy secrets` creates fresh values for the
    missing files. That is a new installation of the secrets, not a restore:
    `pg_password` and `elastic_password` then no longer match what the data
@@ -124,7 +142,7 @@ deploy/compose/smoke.sh check
 
 Everyone is logged out; reset links, IIIF tokens and Arches e-mail links in
 flight become invalid. Update the vault item, copying the value from
-`deploy/compose/secrets/django_secret_key`.
+`"$SECRETS_DIR/django_secret_key"`.
 
 ### `pg_password`
 
@@ -134,8 +152,8 @@ through stdin (`printf` is a shell builtin: nothing appears in `ps`), and the
 session turns statement logging off before `ALTER ROLE`.
 
 ```bash
-[ -e deploy/compose/secrets/pg_password.new ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > deploy/compose/secrets/pg_password.new )
-{ printf '\\set pw %s\n' "$(cat deploy/compose/secrets/pg_password.new)"
+[ -e "$SECRETS_DIR/pg_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/pg_password.new" )
+{ printf '\\set pw %s\n' "$(cat "$SECRETS_DIR/pg_password.new")"
   cat <<'SQL'
 SET log_statement = 'none';
 SET log_min_duration_statement = -1;
@@ -143,8 +161,8 @@ SET log_min_error_statement = panic;
 ALTER ROLE :"user" PASSWORD :'pw';
 SQL
 } | dc exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -v user="$POSTGRES_USER" -U "$POSTGRES_USER" -d postgres' &&
-  make -C deploy secret-set NAME=pg_password FORCE=yes < deploy/compose/secrets/pg_password.new &&
-  rm deploy/compose/secrets/pg_password.new &&
+  make -C deploy secret-set NAME=pg_password FORCE=yes < "$SECRETS_DIR/pg_password.new" &&
+  rm "${SECRETS_DIR:?}/pg_password.new" &&
   make -C deploy down up &&
   deploy/compose/smoke.sh check
 ```
@@ -153,17 +171,17 @@ SQL
 the container's local socket does not ask for a password, so the old value is
 not needed. Until the containers are recreated the application still sends the
 old password: do the last four lines without delay. Check that the new value
-is not in the logs: `dc logs postgres --since 10m | grep -cFf <(head -c 12 deploy/compose/secrets/pg_password)`
+is not in the logs: `dc logs postgres --since 10m | grep -cFf <(head -c 12 "$SECRETS_DIR/pg_password")`
 → `0`.
 
 ### `elastic_password`
 
 ```bash
-[ -e deploy/compose/secrets/elastic_password.new ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > deploy/compose/secrets/elastic_password.new )
-printf '{"password":"%s"}' "$(cat deploy/compose/secrets/elastic_password.new)" |
+[ -e "$SECRETS_DIR/elastic_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/elastic_password.new" )
+printf '{"password":"%s"}' "$(cat "$SECRETS_DIR/elastic_password.new")" |
   dc exec -T elasticsearch sh -c 'curl -fsS -u "elastic:$(cat /run/secrets/elastic_password)" -H "Content-Type: application/json" -X POST http://localhost:9200/_security/user/elastic/_password --data-binary @-' &&
-  make -C deploy secret-set NAME=elastic_password FORCE=yes < deploy/compose/secrets/elastic_password.new &&
-  rm deploy/compose/secrets/elastic_password.new &&
+  make -C deploy secret-set NAME=elastic_password FORCE=yes < "$SECRETS_DIR/elastic_password.new" &&
+  rm "${SECRETS_DIR:?}/elastic_password.new" &&
   make -C deploy down up &&
   deploy/compose/smoke.sh check
 ```
@@ -223,12 +241,39 @@ check`. The vault is the reference for this account; if the password was
 changed from the profile page, the file no longer matches and the vault item is
 the only truth.
 
+### `restic_password`
+
+A restic repository holds its master key encrypted by one or more passwords
+(keys). Rewriting the file alone would lock the repository: the old password
+is the only one it knows. Add the new key, switch the file, then remove the old
+key. The repository is mounted read-write by the `restic` service; run restic
+through it (the container sees `RESTIC_PASSWORD_FILE` and `/repo`).
+
+```bash
+[ -e "$SECRETS_DIR/restic_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/restic_password.new" )
+dc run --rm --no-deps -T -v "${SECRETS_DIR:?}/restic_password.new:/run/restic_new:ro" restic key add --new-password-file /run/restic_new &&
+  make -C deploy secret-set NAME=restic_password FORCE=yes < "$SECRETS_DIR/restic_password.new" &&
+  rm "${SECRETS_DIR:?}/restic_password.new"
+dc run --rm --no-deps -T restic key list
+```
+
+`key list` marks the key in use with `*`. Remove the old key by its id, with
+the new file now in place:
+
+```bash
+dc run --rm --no-deps -T restic key remove <old id>
+```
+
+No stack is recreated: only one-off containers read this file. Update the vault
+item. If the file and the vault disagree, the vault is the truth; nothing in
+the repository can recover a lost password.
+
 ## 7. When to rotate
 
 - No periodic rotation: a password nobody has seen leave is not made safer by
   age (NIST SP 800-63B).
 - Someone with access to the host or to the vault item leaves: remove them
-  from the collection and the host, then rotate **all five** secrets with
+  from the collection and the host, then rotate **all six** secrets with
   section 6 (about 15 minutes).
 - A secret leaks (pasted in a chat, printed in a log, committed): rotate that
   one at once.

@@ -7,6 +7,7 @@ checks the result. Starts nothing; needs the docker CLI with Compose v2.
 """
 
 import json
+import os
 import re
 import runpy
 import shutil
@@ -60,6 +61,7 @@ def render(*files, profiles=()):
             "elastic_password",
             "django_secret_key",
             "admin_password",
+            "restic_password",
         ):
             (secrets / name).write_text("x" * 64)
         (secrets / "email_password").write_text("")
@@ -70,7 +72,23 @@ def render(*files, profiles=()):
             (certs / sub).mkdir(parents=True)
         logs = Path(tmp) / "nginx-logs"
         logs.mkdir()
+        dumps = Path(tmp) / "backups"
+        (dumps / "latest").mkdir(parents=True)
+        (dumps / "tmp").mkdir()
+        repository = Path(tmp) / "restic"
+        repository.mkdir()
+        metrics = Path(tmp) / "metrics"
+        metrics.mkdir()
         env = (COMPOSE_DIR / ".env.example").read_text()
+        env = re.sub(r"(?m)^BACKUP_DUMP_DIR=.*$", f"BACKUP_DUMP_DIR={dumps}", env)
+        env = re.sub(
+            r"(?m)^RESTIC_REPOSITORY_DIR=.*$",
+            f"RESTIC_REPOSITORY_DIR={repository}",
+            env,
+        )
+        env = re.sub(
+            r"(?m)^METRICS_TEXTFILE_DIR=.*$", f"METRICS_TEXTFILE_DIR={metrics}", env
+        )
         env = re.sub(r"(?m)^SECRETS_DIR=.*$", f"SECRETS_DIR={secrets}", env)
         env = re.sub(r"(?m)^MEDIA_HOST_DIR=.*$", f"MEDIA_HOST_DIR={media}", env)
         env = re.sub(r"(?m)^CERTS_DIR=.*$", f"CERTS_DIR={certs}", env)
@@ -99,6 +117,9 @@ class ComposeStackTests(unittest.TestCase):
         cls.prod, _ = render("compose.yaml", "compose.prod.yaml")
         cls.stacks = {"base": cls.base, "prod": cls.prod}
         cls.acme, _ = render("compose.yaml", "compose.prod.yaml", profiles=("acme",))
+        cls.backup, _ = render(
+            "compose.yaml", "compose.prod.yaml", profiles=("backup",)
+        )
 
     def each_service(self):
         for label, stack in self.stacks.items():
@@ -361,7 +382,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1)
+        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 5)
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -490,9 +511,10 @@ class ComposeStackTests(unittest.TestCase):
     def test_every_declared_secret_is_made_by_make_secrets(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         made = set(re.search(r"^SECRET_FILES := (.+)$", makefile, re.M)[1].split())
+        self.assertEqual(set(self.backup["secrets"]), made)
         for label, stack in self.stacks.items():
             with self.subTest(stack=label):
-                self.assertEqual(set(stack["secrets"]), made)
+                self.assertEqual(set(stack["secrets"]), made - {"restic_password"})
 
     def test_smtp_password_is_an_optional_secret_file(self):
         for label, stack in self.stacks.items():
@@ -554,10 +576,99 @@ class ComposeStackTests(unittest.TestCase):
         self.assertFalse(certbot.get("secrets"))
 
     def test_third_party_images_are_pinned_by_digest(self):
-        for name, service in self.acme["services"].items():
-            if name not in APP_SERVICES:
+        for label, stack in (("acme", self.acme), ("backup", self.backup)):
+            for name, service in stack["services"].items():
+                if name not in APP_SERVICES:
+                    with self.subTest(profile=label, service=name):
+                        self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
+
+    def test_restic_runs_only_under_the_backup_profile(self):
+        self.assertNotIn("restic", self.base["services"])
+        self.assertNotIn("restic", self.prod["services"])
+        self.assertNotIn("restic", self.acme["services"])
+        self.assertIn("restic", self.backup["services"])
+
+    def test_restic_is_hardened_and_offline(self):
+        restic = self.backup["services"]["restic"]
+        self.assertEqual(restic["network_mode"], "none")
+        self.assertTrue(restic["read_only"])
+        self.assertEqual(restic["user"], "10001:10001")
+        self.assertEqual(restic["cap_drop"], ["ALL"])
+        self.assertFalse(restic.get("cap_add"))
+        self.assertIn("no-new-privileges:true", restic["security_opt"])
+        self.assertFalse(restic.get("ports"))
+        self.assertEqual(restic["restart"], "no")
+        self.assertTrue(restic["healthcheck"]["disable"])
+
+    def test_restic_reads_its_sources_read_only_and_writes_only_the_repository(self):
+        restic = self.backup["services"]["restic"]
+        mounts = {v["target"]: v for v in restic["volumes"]}
+        self.assertEqual(
+            set(mounts),
+            {"/repo", "/restic-tmp", "/backup/db", "/backup/media", "/backup/secrets"},
+        )
+        self.assertFalse(mounts["/repo"].get("read_only"))
+        self.assertFalse(mounts["/restic-tmp"].get("read_only"))
+        for target in ("/backup/db", "/backup/media", "/backup/secrets"):
+            with self.subTest(target=target):
+                self.assertTrue(mounts[target]["read_only"])
+        for target, mount in mounts.items():
+            with self.subTest(bind=target):
+                self.assertEqual(mount["type"], "bind")
+                self.assertFalse(mount.get("bind", {}).get("create_host_path", False))
+        self.assertTrue(mounts["/backup/db"]["source"].endswith("/backups/latest"))
+        self.assertTrue(mounts["/backup/media"]["source"].endswith("/media"))
+        self.assertTrue(mounts["/restic-tmp"]["source"].endswith("/backups/tmp"))
+        self.assertEqual(
+            [t.split(":")[0] for t in restic["tmpfs"]],
+            ["/tmp"],
+        )
+
+    def test_restic_temporary_packs_go_to_disk_not_to_the_small_tmpfs(self):
+        restic = self.backup["services"]["restic"]
+        self.assertEqual(restic["environment"]["TMPDIR"], "/restic-tmp")
+        size = re.search(r"size=(\w+)", restic["tmpfs"][0])[1]
+        self.assertLessEqual(to_bytes(size), 16 * 1024 * 1024)
+
+    def test_restic_password_is_a_file_secret_of_restic_only(self):
+        restic = self.backup["services"]["restic"]
+        environment = restic["environment"]
+        self.assertEqual(
+            environment["RESTIC_PASSWORD_FILE"], "/run/secrets/restic_password"
+        )
+        self.assertNotIn("RESTIC_PASSWORD", environment)
+        self.assertEqual(environment["RESTIC_HOST"], "manuspectrum")
+        self.assertEqual([s["source"] for s in restic["secrets"]], ["restic_password"])
+        for name, service in self.backup["services"].items():
+            if name != "restic":
                 with self.subTest(service=name):
-                    self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
+                    self.assertNotIn(
+                        "restic_password",
+                        [s["source"] for s in service.get("secrets", [])],
+                    )
+
+    def test_restic_has_its_own_production_limit(self):
+        restic = self.backup["services"]["restic"]
+        self.assertEqual(
+            to_bytes(restic["deploy"]["resources"]["limits"]["memory"]), GIB
+        )
+        self.assertEqual(to_bytes(restic["memswap_limit"]), GIB)
+        self.assertNotIn("restic", PROD_LIMITS)
+        steady = sum(
+            to_bytes(s["deploy"]["resources"]["limits"]["memory"])
+            for n, s in self.prod["services"].items()
+        )
+        self.assertEqual(steady, sum(PROD_LIMITS.values()))
+
+    def test_env_example_declares_the_backup_paths(self):
+        text = (COMPOSE_DIR / ".env.example").read_text()
+        for name in (
+            "BACKUP_DUMP_DIR",
+            "RESTIC_REPOSITORY_DIR",
+            "METRICS_TEXTFILE_DIR",
+        ):
+            with self.subTest(name=name):
+                self.assertRegex(text, rf"(?m)^{name}=/[^\s]+$")
 
 
 class RepositoryRulesTests(unittest.TestCase):
@@ -591,6 +702,138 @@ class RepositoryRulesTests(unittest.TestCase):
                 self.assertIn("$(SECRET_FILES)", recipe)
                 self.assertTrue((DEPLOY_DIR / "scripts" / script).is_file())
 
+    def test_secrets_directory_follows_the_env_file(self):
+        compose_dir = (DEPLOY_DIR / "compose").resolve()
+
+        def make(env_text, *extra, environ=None):
+            with tempfile.TemporaryDirectory() as tmp:
+                env = Path(tmp) / ".env"
+                if env_text is not None:
+                    env.write_text(env_text, encoding="utf-8")
+                variables = {k: v for k, v in os.environ.items() if k != "SECRETS_DIR"}
+                variables.update(environ or {})
+                return subprocess.run(
+                    ["make", "-n", "-C", str(DEPLOY_DIR), "secrets-check"]
+                    + [f"ENV_FILE={env}", *extra],
+                    capture_output=True,
+                    text=True,
+                    env=variables,
+                )
+
+        def resolved(env_text, *extra, environ=None):
+            done = make(env_text, *extra, environ=environ)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            return re.search(r"--dir '([^']*)'", done.stdout)[1]
+
+        default = str(compose_dir / "secrets")
+        cases = (
+            (
+                "absolute",
+                "A=1\nSECRETS_DIR=/srv/ms/secrets\n",
+                (),
+                {},
+                "/srv/ms/secrets",
+            ),
+            (
+                "relative",
+                "SECRETS_DIR=../elsewhere\n",
+                (),
+                {},
+                str(compose_dir.parent / "elsewhere"),
+            ),
+            ("dot relative", "SECRETS_DIR=./secrets\n", (), {}, default),
+            ("last line wins", "SECRETS_DIR=/a\nSECRETS_DIR=/b\n", (), {}, "/b"),
+            ("no line", "A=1\n", (), {}, default),
+            ("no env file", None, (), {}, default),
+            ("command line wins", "SECRETS_DIR=/s\n", ("SECRETS_DIR=/x",), {}, "/x"),
+            ("environment wins", "SECRETS_DIR=/s\n", (), {"SECRETS_DIR": "/e"}, "/e"),
+        )
+        for name, env_text, extra, environ, expected in cases:
+            with self.subTest(case=name):
+                self.assertEqual(resolved(env_text, *extra, environ=environ), expected)
+        for line in (
+            "export SECRETS_DIR=/x",
+            'SECRETS_DIR="/x"',
+            "SECRETS_DIR='/x'",
+            "SECRETS_DIR = /x",
+            "SECRETS_DIR=/x # note",
+            "SECRETS_DIR=/ok\nexport SECRETS_DIR=/x",
+        ):
+            with self.subTest(malformed=line):
+                done = make(line + "\n")
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("must be a plain SECRETS_DIR=/path line", done.stderr)
+
+    def test_backup_targets_pass_the_metrics_directory(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        for target, option in (
+            ("backup-init", "--init"),
+            ("backup", "--tag"),
+            ("restic", "--restic"),
+        ):
+            with self.subTest(target=target):
+                self.assertIn(target, phony)
+                self.assertRegex(makefile, rf"(?m)^{target}:.*## \S")
+                recipe = re.search(rf"(?ms)^{target}:.*?\n(.*?)(?:\n\n|\Z)", makefile)[
+                    1
+                ]
+                self.assertIn("$(BACKUP_ENV)", recipe)
+                self.assertIn(
+                    f"scripts/backup.sh {option}",
+                    recipe.replace("$(SCRIPTS_DIR)/", "scripts/"),
+                )
+        env = re.search(r"(?m)^BACKUP_ENV =(.*)$", makefile)[1]
+        self.assertIn("METRICS_TEXTFILE_DIR=", env)
+        self.assertIn("$(call envval,METRICS_TEXTFILE_DIR)", env)
+        self.assertTrue((DEPLOY_DIR / "scripts" / "backup.sh").is_file())
+
+    def test_restore_test_target_passes_the_metrics_directory_and_an_optional_snapshot(
+        self,
+    ):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        self.assertIn("restore-test", phony)
+        self.assertRegex(makefile, r"(?m)^restore-test:.*## \S")
+        recipe = re.search(r"(?ms)^restore-test:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
+        self.assertIn("$(BACKUP_ENV)", recipe)
+        self.assertIn(
+            "scripts/restore-test.sh", recipe.replace("$(SCRIPTS_DIR)/", "scripts/")
+        )
+        self.assertRegex(
+            recipe,
+            r"\$\(if \$\(RESTIC_SNAPSHOT\), --snapshot '\$\(RESTIC_SNAPSHOT\)'\)",
+        )
+        self.assertTrue((DEPLOY_DIR / "scripts" / "restore-test.sh").is_file())
+
+    def test_restore_targets_forward_their_variables(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        for target, script, variables in (
+            (
+                "restore",
+                "restore.sh",
+                ("CONFIRM", "ERASURES_CHECKED", "RESTIC_SNAPSHOT", "ASIDE"),
+            ),
+            (
+                "restore-files",
+                "restore-files.sh",
+                ("RESTIC_SNAPSHOT", "INCLUDE", "TARGET"),
+            ),
+        ):
+            with self.subTest(target=target):
+                self.assertIn(target, phony)
+                self.assertRegex(makefile, rf"(?m)^{target}:.*## \S")
+                recipe = re.search(rf"(?ms)^{target}:.*?\n(.*?)(?:\n\n|\Z)", makefile)[
+                    1
+                ]
+                self.assertIn(
+                    f"scripts/{script}", recipe.replace("$(SCRIPTS_DIR)/", "scripts/")
+                )
+                for variable in ("COMPOSE", "ENV_FILE") + variables:
+                    self.assertIn(f"{variable}='$({variable})'", recipe)
+                self.assertTrue((DEPLOY_DIR / "scripts" / script).is_file())
+
     def test_secret_set_needs_a_name_and_forwards_force_only_on_yes(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         recipe = re.search(r"(?ms)^secret-set:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
@@ -604,6 +847,36 @@ class RepositoryRulesTests(unittest.TestCase):
         for name in names:
             with self.subTest(secret=name):
                 self.assertRegex(text, rf"(?m)^\| `{name}` \|")
+
+    def test_backup_doc_covers_every_target(self):
+        doc = (DEPLOY_DIR / "BACKUP.md").read_text(encoding="utf-8")
+        readme = (DEPLOY_DIR / "README.md").read_text(encoding="utf-8")
+        for target in (
+            "backup-init",
+            "backup",
+            "restore-test",
+            "restore",
+            "restore-files",
+            "restic",
+        ):
+            with self.subTest(target=target):
+                self.assertIn(f"make -C deploy {target}", doc)
+                self.assertRegex(readme, rf"(?m)^\| `{target}` \|")
+
+    def test_backup_doc_states_the_retention_of_the_script(self):
+        lib = (DEPLOY_DIR / "scripts" / "lib-backup.sh").read_text(encoding="utf-8")
+        kept = [
+            re.search(rf"(?m)^RETENTION_KEEP_{period}=(\d+)$", lib)[1]
+            for period in ("DAILY", "WEEKLY", "MONTHLY")
+        ]
+        doc = (DEPLOY_DIR / "BACKUP.md").read_text(encoding="utf-8")
+        self.assertIn("{} daily, {} weekly, {} monthly".format(*kept), doc)
+
+    def test_scripts_point_to_a_heading_of_the_backup_doc(self):
+        doc = (DEPLOY_DIR / "BACKUP.md").read_text(encoding="utf-8")
+        self.assertRegex(doc, r"(?m)^## Personal data$")
+        restore = (DEPLOY_DIR / "scripts" / "restore.sh").read_text(encoding="utf-8")
+        self.assertIn("deploy/BACKUP.md", restore)
 
     def test_cert_renew_reloads_on_a_change_and_exits_with_certbots_status(self):
         cases = [
@@ -686,6 +959,42 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertIn("OnCalendar=*-*-* 00,12:00", timer)
         self.assertIn("RandomizedDelaySec=1h", timer)
         self.assertIn("Persistent=true", timer)
+
+    def test_backup_units_run_the_make_targets(self):
+        def unit(name):
+            return (DEPLOY_DIR / f"systemd/manuspectrum-{name}.in").read_text()
+
+        def timeout(text):
+            value = re.search(r"(?m)^TimeoutStartSec=(\S+)$", text)[1]
+            match = re.fullmatch(r"(?:(\d+)h)?(?:(\d+)min)?", value)
+            return int(match[1] or 0) * 60 + int(match[2] or 0)
+
+        for name, target, calendar, limit in (
+            ("backup", "backup TAG=nightly", "OnCalendar=*-*-* 02:00", 150),
+            ("restore-test", "restore-test", "OnCalendar=Sun *-*-* 05:30", 120),
+        ):
+            with self.subTest(unit=name):
+                service = unit(f"{name}.service")
+                timer = unit(f"{name}.timer")
+                self.assertRegex(
+                    service,
+                    rf"(?m)^ExecStart=/usr/bin/make -C @DEPLOY_DIR@ {target}$",
+                )
+                self.assertRegex(service, r"(?m)^Type=oneshot$")
+                self.assertRegex(service, r"(?m)^User=@APP_USER@$")
+                self.assertRegex(service, r"(?m)^Wants=network-online\.target$")
+                self.assertRegex(
+                    service,
+                    r"(?m)^After=docker\.service network-online\.target remote-fs\.target$",
+                )
+                self.assertNotIn("RequiresMountsFor", service)
+                self.assertEqual(timeout(service), limit)
+                self.assertIn(calendar + "\n", timer)
+                self.assertIn("Persistent=true", timer)
+                self.assertNotIn("RandomizedDelaySec", timer)
+                self.assertIn("WantedBy=timers.target", timer)
+        # The unattended reboot is at 04:50: the backup must have stopped.
+        self.assertLess(2 * 60 + timeout(unit("backup.service")), 4 * 60 + 50)
 
     def test_env_example_ships_production_as_the_environment(self):
         text = (COMPOSE_DIR / ".env.example").read_text()

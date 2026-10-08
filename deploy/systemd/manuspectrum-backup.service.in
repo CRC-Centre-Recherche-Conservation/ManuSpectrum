@@ -1,0 +1,14 @@
+# Nightly backup of the database, the uploads and the secrets (make backup).
+# One flock in backup.sh serialises it with the restore test. It stops before
+# the unattended reboot at 04:50. PP-8 substitutes the two placeholders and
+# installs this file with the timer next to it.
+[Unit]
+Description=ManuSpectrum nightly backup
+Wants=network-online.target
+After=docker.service network-online.target remote-fs.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+ExecStart=/usr/bin/make -C @DEPLOY_DIR@ backup TAG=nightly
+TimeoutStartSec=2h30min

@@ -9,7 +9,7 @@ Usage: $(basename "$0") --dir SECRETS_DIR --names "NAME NAME..."
 
 Per file: present, mode 0444, no trailing newline, not empty (email_password
 may be), django_secret_key of at least 50 characters, admin_password of at
-least 16. The directory must be 0700.
+least 16, restic_password of at least 32. The directory must be 0700.
 USAGE
 }
 
@@ -52,6 +52,7 @@ for name in $NAMES; do
   case "$name" in
     django_secret_key) [ "$size" -ge 50 ] || issues+=("shorter than 50 characters") ;;
     admin_password) [ "$size" -ge 16 ] || issues+=("shorter than 16 characters") ;;
+    restic_password) [ "$size" -ge 32 ] || issues+=("shorter than 32 characters") ;;
   esac
   if [ "${#issues[@]}" -eq 0 ]; then
     echo "$name: ok"

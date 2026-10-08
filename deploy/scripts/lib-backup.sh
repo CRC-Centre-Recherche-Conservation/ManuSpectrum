@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# Shared parts of the backup scripts (backup.sh, restore-test.sh, restore.sh,
+# restore-files.sh). Sourced, never executed; `set -euo pipefail` is the
+# caller's. Needs log, die, compose and as_app from lib-replace-data.sh
+# (sourced first by the caller).
+#
+# Constants: the retention of the restic repository and the paths restic does
+# not back up, in one place for the script, its tests and deploy/BACKUP.md.
+# Functions: usage_die, backup_config, require_backup_dirs, scratch_database_name, restic_run,
+# restic_run_with, take_lock, wait_for_postgres, verify_backup_files,
+# write_metrics.
+# shellcheck disable=SC2154,SC2034  # inputs assigned by the sourcing script; constants it reads
+#
+# Inputs set by the caller before calling a function:
+#   compose_cmd     array: the Compose invocation
+#   BACKUP_DUMP_DIR (set by backup_config) holds the lock file
+
+RETENTION_KEEP_DAILY=7
+RETENTION_KEEP_WEEKLY=4
+RETENTION_KEEP_MONTHLY=6
+
+# Paths of the restic container (see the restic service in compose.yaml).
+RESTIC_EXCLUDES=(
+  '/backup/media/previous-*'
+  '/backup/media/.restore-*'
+  '/backup/media/archestemp'
+  '/backup/media/export_deliverables'
+  '/backup/secrets/*.new'
+  '/backup/secrets/aside'
+  '/backup/secrets/restic_password'
+)
+
+# A wrong invocation or configuration, found before anything ran: exit 2.
+usage_die() { log "FAIL: $*"; exit 2; }
+
+# Reads what Compose resolves from .env (the `backup` profile included) and
+# sets PGDBNAME, PGUSERNAME, APP_UID, APP_GID, MEDIA_HOST_DIR, MANUSPECTRUM_IMAGE,
+# RESTIC_REPOSITORY_DIR (source of /repo), BACKUP_DUMP_DIR (source of /backup/db
+# without its `latest` directory) and SECRETS_DIR (source of /backup/secrets).
+backup_config() {
+  local json key value
+  json="$(compose --profile backup config --format json)" || die "compose config failed"
+  while IFS=$'\t' read -r key value; do
+    [[ "$key" =~ ^[A-Z_]+$ ]] || continue
+    printf -v "$key" '%s' "$value"
+  done < <(printf '%s' "$json" | python3 -c '
+import json
+import sys
+
+services = json.load(sys.stdin)["services"]
+web, postgres, restic = services["web"], services["postgres"], services["restic"]
+
+
+def source(service, target):
+    return next((v["source"] for v in service.get("volumes", []) if v.get("target") == target), "")
+
+
+user = web.get("user", "")
+dump_dir = source(restic, "/backup/db")
+if dump_dir.endswith("/latest"):
+    dump_dir = dump_dir[: -len("/latest")]
+values = {
+    "PGDBNAME": web.get("environment", {}).get("PGDBNAME") or "",
+    "PGUSERNAME": postgres.get("environment", {}).get("POSTGRES_USER") or "",
+    "APP_UID": user.split(":")[0],
+    "APP_GID": user.split(":")[-1] if ":" in user else "",
+    "MEDIA_HOST_DIR": source(web, "/srv/media"),
+    "MANUSPECTRUM_IMAGE": web.get("image", ""),
+    "RESTIC_REPOSITORY_DIR": source(restic, "/repo"),
+    "BACKUP_DUMP_DIR": dump_dir,
+    "SECRETS_DIR": source(restic, "/backup/secrets"),
+}
+for key, value in values.items():
+    print(f"{key}\t{value}")
+')
+  [[ "${PGDBNAME:-}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die "PGDBNAME '${PGDBNAME:-}' is not a plain identifier"
+  [ -n "${PGUSERNAME:-}" ] || die "PGUSERNAME is empty in the Compose configuration"
+  if ! [[ "${APP_UID:-}" =~ ^[1-9][0-9]*$ && "${APP_GID:-}" =~ ^[1-9][0-9]*$ ]]; then
+    die "APP_UID and APP_GID must be numeric and not 0 (got '${APP_UID:-}' and '${APP_GID:-}')"
+  fi
+  local name
+  for name in MEDIA_HOST_DIR RESTIC_REPOSITORY_DIR BACKUP_DUMP_DIR SECRETS_DIR; do
+    [[ "${!name:-}" == /* ]] || die "$name is empty or not an absolute path in the Compose configuration (set it in $ENV_FILE)"
+  done
+  [ -n "${MANUSPECTRUM_IMAGE:-}" ] || die "the web service has no image in the Compose configuration"
+}
+
+# The restic service binds BACKUP_DUMP_DIR/latest (the sources) and
+# BACKUP_DUMP_DIR/tmp (its temporary packs) and Docker refuses to start it when
+# either is missing; only `backup.sh --init` creates them.
+require_backup_dirs() {
+  local dir
+  for dir in "$BACKUP_DUMP_DIR/latest" "$BACKUP_DUMP_DIR/tmp"; do
+    [ -d "$dir" ] || die "$dir is missing (the restic service binds it): run make -C deploy backup-init"
+  done
+}
+
+# Prints the name of the scratch database of the restore test for the live
+# database DBNAME. Fails (nothing printed) when DBNAME is itself a scratch
+# name, or when the name does not fit the 63 bytes of a PostgreSQL identifier
+# (PostgreSQL would truncate it, and a 63-character DBNAME would get its own
+# name back).
+scratch_database_name() { # scratch_database_name DBNAME
+  local db="$1" scratch
+  scratch="${db}_restoretest"
+  [[ "$db" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+  [[ "$db" != *_restoretest ]] || return 1
+  [ "${#scratch}" -le 63 ] || return 1
+  [ "$scratch" != "$db" ] || return 1
+  printf '%s' "$scratch"
+}
+
+# One run of the restic service: no local cache, a held repository lock is
+# retried. RESTIC_INTERACTIVE=1 keeps the terminal attached (make restic).
+restic_run() {
+  local tty_flag=(-T)
+  [ "${RESTIC_INTERACTIVE:-}" != 1 ] || tty_flag=()
+  compose --profile backup run --rm --no-deps "${tty_flag[@]}" restic --no-cache --retry-lock 30m "$@"
+}
+
+restic_run_with() { # restic_run_with HOSTDIR:CONTAINERDIR ARGS...: restic_run with one more mount
+  local mount="$1"
+  shift
+  compose --profile backup run --rm --no-deps -T -v "$mount" restic --no-cache --retry-lock 30m "$@"
+}
+
+# Holds the lock of BACKUP_DUMP_DIR on fd 9 for the life of the process; a
+# wait of 0 refuses at once.
+take_lock() { # take_lock WAIT_SECONDS
+  local wait="$1" flags=(-n)
+  [ "$wait" = 0 ] || flags=(-w "$wait")
+  exec 9>"$BACKUP_DUMP_DIR/.lock" || die "cannot open $BACKUP_DUMP_DIR/.lock"
+  flock "${flags[@]}" 9 || die "another backup or restore is running (lock $BACKUP_DUMP_DIR/.lock)"
+}
+
+# Waits up to WAIT_SECONDS (polling every POSTGRES_WAIT_INTERVAL seconds,
+# default 5) for the postgres service to be running and healthy, so that a
+# catch-up run started at boot (Persistent timers) does not refuse while the
+# stack is still coming up. Dies when it never is.
+wait_for_postgres() { # wait_for_postgres WAIT_SECONDS
+  local wait="$1" interval="${POSTGRES_WAIT_INTERVAL:-5}" deadline state
+  deadline=$((SECONDS + wait))
+  while :; do
+    state="$(compose ps --format json postgres | python3 -c '
+import json
+import sys
+
+text = sys.stdin.read().strip()
+rows = json.loads(text) if text.startswith("[") else [json.loads(l) for l in text.splitlines() if l.strip()]
+row = next((r for r in rows if r.get("Service") == "postgres"), None)
+print("healthy" if row and row.get("State") == "running" and row.get("Health") in ("healthy", "") else "down")
+')" || die "could not read the state of postgres"
+    [ "$state" != healthy ] || return 0
+    [ "$SECONDS" -lt "$deadline" ] || break
+    sleep "$interval"
+  done
+  die "postgres is not running and healthy after ${wait}s: start the stack first"
+}
+
+# Writes a Prometheus textfile of gauges for the node_exporter textfile
+# collector: temporary name, then rename, so a reader never sees half a file.
+write_metrics() { # write_metrics FILE NAME VALUE [NAME VALUE ...]
+  local file="$1" name value
+  shift
+  { [ "$(($# % 2))" = 0 ] && [ "$#" -gt 0 ]; } || return 1
+  : >"$file.tmp" || return 1
+  while [ "$#" -gt 0 ]; do
+    name="$1" value="$2"
+    shift 2
+    [[ "$name" =~ ^manuspectrum_[a-z_]+$ ]] || { rm -f "$file.tmp"; return 1; }
+    [[ "$value" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { rm -f "$file.tmp"; return 1; }
+    printf '# HELP %s ManuSpectrum backup job: %s\n# TYPE %s gauge\n%s %s\n' \
+      "$name" "${name#manuspectrum_}" "$name" "$name" "$value" >>"$file.tmp" || return 1
+  done
+  chmod 0644 "$file.tmp" && mv -f "$file.tmp" "$file"
+}
+
+# Checks the files listed in DIR/manifest.json (sha256 and size) and prints
+# the names that are missing or differ on stderr; status 1 when there are any,
+# or when the manifest has no `counts` or no `db.dump` entry.
+verify_backup_files() { # verify_backup_files DIR
+  python3 - "$1" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+directory = sys.argv[1]
+manifest = json.load(open(os.path.join(directory, "manifest.json"), encoding="utf-8"))
+bad = []
+for name, expected in manifest["files"].items():
+    path = os.path.join(directory, name)
+    data = open(path, "rb").read() if os.path.isfile(path) else None
+    if data is None or hashlib.sha256(data).hexdigest() != expected["sha256"] or len(data) != expected["bytes"]:
+        bad.append(name)
+if bad or "counts" not in manifest or "db.dump" not in manifest["files"]:
+    print("checksum or size mismatch: " + ", ".join(bad or ["manifest"]), file=sys.stderr)
+    sys.exit(1)
+PY
+}

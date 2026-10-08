@@ -6,14 +6,26 @@ COMPOSE_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/compose
 ENV_FILE ?= $(COMPOSE_DIR)/.env
 COMPOSE := docker compose --project-directory $(COMPOSE_DIR) --env-file $(ENV_FILE) \
 	-f $(COMPOSE_DIR)/compose.yaml -f $(COMPOSE_DIR)/compose.prod.yaml
-SECRETS_DIR ?= $(COMPOSE_DIR)/secrets
+# SECRETS_DIR: the command line or environment, else the env file (a relative
+# value resolves against COMPOSE_DIR, as Compose does), else compose/secrets.
+# The last SECRETS_DIR line of the env file must be a plain SECRETS_DIR=/path
+# (no export, spaces, quotes or comment), which is what this file reads and
+# Compose reads alike; the check also runs when the command line overrides it,
+# since Compose reads the env file anyway.
+ENV_SECRETS_PATTERN := ^[[:space:]]*(export[[:space:]]+)?SECRETS_DIR[[:space:]]*=
+ENV_SECRETS_LINE := $(shell grep -E '$(ENV_SECRETS_PATTERN)' '$(ENV_FILE)' 2>/dev/null | tail -n 1)
+ifneq ($(shell grep -E '$(ENV_SECRETS_PATTERN)' '$(ENV_FILE)' 2>/dev/null | tail -n 1 | grep -cvE '^SECRETS_DIR=[^[:space:]"'\''\#]+$$'),0)
+$(error SECRETS_DIR in $(ENV_FILE) must be a plain SECRETS_DIR=/path line (no export, quotes, spaces or comment))
+endif
+ENV_SECRETS_DIR := $(patsubst SECRETS_DIR=%,%,$(ENV_SECRETS_LINE))
+SECRETS_DIR ?= $(if $(ENV_SECRETS_DIR),$(if $(filter /%,$(ENV_SECRETS_DIR)),$(ENV_SECRETS_DIR),$(abspath $(COMPOSE_DIR)/$(ENV_SECRETS_DIR))),$(COMPOSE_DIR)/secrets)
 SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
 IMAGE ?= manuspectrum:local
 EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -29,7 +41,7 @@ volumes: ## Create the external data volumes (once per host, idempotent)
 
 # Each file is written to a temporary name and moved into place, so a failed
 # generator leaves no empty secret; an existing file is never replaced.
-SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password
+SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password restic_password
 
 secrets: ## Create the secrets directory (0700) and the secret files that are missing
 	@command -v openssl >/dev/null || { echo "openssl is required to generate the secrets" >&2; exit 1; }
@@ -39,7 +51,7 @@ secrets: ## Create the secrets directory (0700) and the secret files that are mi
 	for f in $(SECRET_FILES); do \
 		[ -e $$f ] && continue; \
 		case $$f in \
-			pg_password|elastic_password|admin_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
+			pg_password|elastic_password|admin_password|restic_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
 			django_secret_key) python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > $$f.tmp ;; \
 			email_password) : > $$f.tmp ;; \
 		esac; \
@@ -53,6 +65,9 @@ secret-set: ## Set one secret from the terminal or stdin, never an argument: mak
 
 secrets-check: ## Check the secret files (presence, modes, lengths) without printing a value
 	@$(SCRIPTS_DIR)/secrets-check.sh --dir '$(SECRETS_DIR)' --names '$(SECRET_FILES)'
+
+secrets-dir: ## Print the secrets directory the make targets use
+	@echo '$(SECRETS_DIR)'
 
 build: ## Build the image (CI or rehearsal VM, 10 GB free RAM; never the development VM)
 	docker build -f $(COMPOSE_DIR)/../docker/Dockerfile -t $(IMAGE) $(COMPOSE_DIR)/../..
@@ -70,6 +85,31 @@ manage: ## Run a management command, interactive: make -C deploy manage ARGS="ch
 load-snapshot: ## Rehearsal only: replace the data with a dev snapshot (SNAPSHOT=/path) or an aside directory (RESTORE_BEFORE=/path), CONFIRM=yes
 	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' RESTORE_BEFORE='$(RESTORE_BEFORE)' \
 		$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/load-snapshot.sh '$(SNAPSHOT)'
+
+# Backups (BACKUP.md). TAG: nightly (retention and repository check), manual or
+# pre-update (the blocking backup before an update: non-zero exit stops it).
+TAG ?= manual
+BACKUP_ENV = COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' METRICS_TEXTFILE_DIR="$(call envval,METRICS_TEXTFILE_DIR)"
+
+backup-init: ## Once per host: create the restic repository, or check that it opens (idempotent)
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --init
+
+backup: ## Back up the database, the uploads and the secrets: make -C deploy backup [TAG=nightly|manual|pre-update]
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --tag '$(TAG)'
+
+restore-test: ## Prove the latest backup restores into a scratch database: make -C deploy restore-test [RESTIC_SNAPSHOT=<id>]
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/restore-test.sh$(if $(RESTIC_SNAPSHOT), --snapshot '$(RESTIC_SNAPSHOT)')
+
+restore: ## Replace the database and the uploads from a backup: make -C deploy restore RESTIC_SNAPSHOT=<id|latest> | ASIDE=<dir> CONFIRM=yes ERASURES_CHECKED=yes
+	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' ERASURES_CHECKED='$(ERASURES_CHECKED)' \
+		RESTIC_SNAPSHOT='$(RESTIC_SNAPSHOT)' ASIDE='$(ASIDE)' $(SCRIPTS_DIR)/restore.sh
+
+restore-files: ## Pull files from a backup into a separate directory: make -C deploy restore-files INCLUDE=/backup/... TARGET=/path [RESTIC_SNAPSHOT=<id>]
+	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' RESTIC_SNAPSHOT='$(RESTIC_SNAPSHOT)' INCLUDE='$(INCLUDE)' \
+		TARGET='$(TARGET)' $(SCRIPTS_DIR)/restore-files.sh
+
+restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS="snapshots"
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --restic $(ARGS)
 
 # `up --wait` refuses a service whose healthcheck is disabled, and beat has
 # none on purpose: wait for every other service, then start beat (it depends

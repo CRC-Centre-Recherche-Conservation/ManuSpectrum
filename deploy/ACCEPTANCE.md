@@ -220,10 +220,14 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   the rehearsal VM sets it explicitly: `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`.
   Check: `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
   A production host leaves `production`.
+- [ ] *(admin)* `sudo install -d -o <service-account> -g <service-account> -m 0750 /srv/manuspectrum`
+  (the parent of the `SECRETS_DIR` of `.env.example`, outside the directories TSM backs up by
+  default; keep that value on the rehearsal VM).
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
-  files; the commands by hand are in `deploy/compose/secrets/README.md`);
-  `ls -l deploy/compose/secrets` → `pg_password`, `elastic_password`, `django_secret_key`,
-  `email_password` (empty), `admin_password` as `-r--r--r--`, plus `README.md`; `ls -ld deploy/compose/secrets` →
+  files; the commands by hand are in `deploy/compose/secrets/README.md`). From here on,
+  `SECRETS_DIR=$(make -s -C deploy secrets-dir)` is set in the shell;
+  `ls -l "$SECRETS_DIR"` → `pg_password`, `elastic_password`, `django_secret_key`,
+  `email_password` (empty), `admin_password` as `-r--r--r--`; `ls -ld "$SECRETS_DIR"` →
   `drwx------`.
 - [ ] *(service account)* `git status --short deploy/compose` → empty (neither `.env` nor
   the secrets are tracked or untracked-visible).
@@ -260,7 +264,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
 - [ ] *(service account)* The end of the `init` output says
   `admin password set from the admin_password secret`. Read the password once,
-  `cat deploy/compose/secrets/admin_password`, and sign in as `admin` on the
+  `cat "$SECRETS_DIR/admin_password"`, and sign in as `admin` on the
   rehearsal address (`/en/auth/`): it works, and `admin` / `admin` is refused.
   Store it immediately in the institution's password manager (break-glass account),
   create a named account for each operator and use those day to day. To read it as the
@@ -446,7 +450,7 @@ The markers of 2.7 stay in place until here: 2.8 reuses them.
 
 the checks that need nginx, TLS and a browser (an XY chart in the editor and in a report,
 the model page, Compare, a French page) are step 4;
-the vault copy and the rotation of secrets (step 5), `/readyz` and the JSON logs, backups, the real SMTP relay, and
+the vault copy and the rotation of secrets (step 5), backups and restore (step 6), `/readyz` and the JSON logs, the real SMTP relay, and
 pyramidal TIFFs for Cantaloupe (a separate change).
 
 ---
@@ -798,19 +802,19 @@ production-shaped VM, and the rotations, which CI does not run.
 ### 5.2 The secrets and the vault item
 
 - [ ] *(service account)* `make -C deploy secrets-check` → `directory: ok` and five `<name>: ok` lines,
-  exit 0. Break one on purpose and watch it fail, then restore it: `chmod 600 deploy/compose/secrets/pg_password`
+  exit 0. Break one on purpose and watch it fail, then restore it: `chmod 600 "$SECRETS_DIR/pg_password"`
   → `pg_password: mode is 600, expected 444`, exit 1; `chmod 444` → ok again.
 - [ ] The vault item `ManuSpectrum <host> secrets` exists in the shared collection, with one hidden
   field per name (`pg_password`, `elastic_password`, `django_secret_key`, `email_password`,
-  `admin_password`), filled from the files (`cat deploy/compose/secrets/<name>`, in a terminal nobody
+  `admin_password`), filled from the files (`cat "$SECRETS_DIR/<name>"`, in a terminal nobody
   watches). Both administrators open it; each knows where their recovery code is kept (do not read it).
   Record the item's location in the follow-up artifact.
   - On failure: an administrator cannot see the item: share the collection, not the item.
 
 ### 5.3 Restore drill
 
-- [ ] *(service account)* Move the five files aside, inside the (ignored) directory:
-  `cd deploy/compose/secrets && mkdir aside && mv pg_password elastic_password django_secret_key email_password admin_password aside/ && cd ../../..`
+- [ ] *(service account)* Move the five files aside, inside `SECRETS_DIR`:
+  `mkdir "${SECRETS_DIR:?}/aside" && mv "${SECRETS_DIR:?}"/{pg_password,elastic_password,django_secret_key,email_password,admin_password} "${SECRETS_DIR:?}/aside/"`
   → `make -C deploy secrets-check` now reports five `missing`, exit 1.
 - [ ] *(service account)* For each of the five names,
   `make -C deploy secret-set NAME=<name>`, pasting the value from the vault at the prompt (typed twice,
@@ -818,10 +822,10 @@ production-shaped VM, and the rotations, which CI does not run.
 - [ ] *(service account)* `make -C deploy secrets-check` → all `ok`. A second `secret-set NAME=pg_password`
   with the same value → `pg_password: kept (same value)`; with another value → refused, with `FORCE=yes`
   in the message.
-- [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp deploy/compose/secrets/$f deploy/compose/secrets/aside/$f && echo "$f identical"; done`
+- [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp "$SECRETS_DIR/$f" "$SECRETS_DIR/aside/$f" && echo "$f identical"; done`
   → five `identical`.
 - [ ] *(service account)* `make -C deploy down up`, then `deploy/compose/smoke.sh check` → only `ok:` lines.
-- [ ] *(service account)* `rm -r deploy/compose/secrets/aside`; `git status --short deploy/compose` → empty.
+- [ ] *(service account)* `rm -r "${SECRETS_DIR:?}/aside"`; `git status --short deploy/compose` → empty.
   - On failure: `cmp` differs = the vault holds a different value, fix the vault or the file before going on.
 
 ### 5.4 Rotation drills
@@ -834,12 +838,12 @@ In this order, each with the procedure of `SECRETS.md` section 6, each followed 
   - On failure: the API call answered 401 = the mounted file no longer matches what Elasticsearch stores;
     reset it with `dc exec elasticsearch bin/elasticsearch-reset-password -u elastic -i` and follow
     « Which value to type » in `SECRETS.md`.
-- [ ] PostgreSQL password. After: `dc logs postgres --since 10m | grep -cFf <(head -c 12 deploy/compose/secrets/pg_password)`
+- [ ] PostgreSQL password. After: `dc logs postgres --since 10m | grep -cFf <(head -c 12 "$SECRETS_DIR/pg_password")`
   → `0` (the value is not in the logs).
   - On failure: `web` cannot connect after `down up` = the role was not changed; run the block again (it keeps an existing `.new` file and stops at the first failing step).
 - [ ] Admin password: `make -C deploy secret-set NAME=admin_password FORCE=yes`, `make -C deploy admin-password`;
   signing in as `admin` works with the new value and is refused with the old one.
-- [ ] `make -C deploy secrets-check` → all `ok`; no `*.new` file is left in `deploy/compose/secrets`.
+- [ ] `make -C deploy secrets-check` → all `ok`; no `*.new` file is left in `SECRETS_DIR`.
 
 ### 5.5 The commit hook
 
@@ -851,8 +855,7 @@ In this order, each with the procedure of `SECRETS.md` section 6, each followed 
 
 ### 5.6 What cannot be tested in rehearsal
 
-The real production vault item and its two administrators; the restic password and the backup of `SECRETS_DIR`
-(PP-7); the Grafana password (PP-6); Ansible (PP-8); GitHub secret scanning and push protection (repository settings).
+The real production vault item and its two administrators; the Grafana password (PP-6); Ansible (PP-8); GitHub secret scanning and push protection (repository settings).
 
 ### 5.7 Before production
 
@@ -865,8 +868,262 @@ The real production vault item and its two administrators; the restic password a
 
 ---
 
+## Step 6 — Backups (`deploy/BACKUP.md`)
+
+The nightly backup, the weekly restore test, the restore of one file or of the whole stack, and the
+moving-day procedure, played on the rehearsal VM with the dev snapshot loaded. Uses the `dc` alias of
+step 2 and the same convention: *(service account)* commands run after `sudo -iu manuspectrum` and
+`cd ~/manuspectrum`. Start from the installed stack of step 2 **with the dev snapshot loaded (2.9)**
+and the secrets of step 5. Record every duration and size asked for: they are written into `BACKUP.md`
+before production. Never record a secret value.
+
+**What CI already proves.** `check-stack.sh` runs the stub tests of the scripts (`test_backup.sh`,
+`test_restore*.sh`, the library shared with `load-snapshot.sh`), the restic round trip
+(`test_restic_roundtrip.sh`), the unit checks (`deploy/systemd/tests/test_units.sh`: `systemd-analyze
+verify` on the rendered pairs, the calendars) and `test_compose.py` (the pinned `restic` service, the
+secret, the documented variables). The `deploy-lint` image job runs, on a runner, `make backup`,
+`make restore-test` (every table equal to the manifest), then `smoke.sh lose`, `make restore` and
+`smoke.sh survived`. What follows proves them on the production-shaped VM, with real data, real
+timings and the systemd timers, which CI does not run.
+
+### 6.1 Setup
+
+- [ ] *(service account)* Create the three directories, owned by the service account:
+  `install -d -m 0700 "$(grep ^BACKUP_DUMP_DIR= deploy/compose/.env | cut -d= -f2)" "$(grep ^RESTIC_REPOSITORY_DIR= deploy/compose/.env | cut -d= -f2)"`
+  (`make -C deploy backup-init`, below, adds `latest/` and `tmp/` under the first one)
+  and `install -d -m 0755 "$(grep ^METRICS_TEXTFILE_DIR= deploy/compose/.env | cut -d= -f2)"`, then
+  `stat -c '%a %U' <each directory>` → `700 <account>`, `700 <account>`, `755 <account>`
+  (`<account>` is the output of `id -un`).
+  - On failure: the repository directory is on the network filesystem: a mount that squashes the owner
+    shows another user; fix the export or the mount options (step 1.3) before going on.
+- [ ] *(service account)* `grep -E '^(BACKUP_DUMP_DIR|RESTIC_REPOSITORY_DIR|METRICS_TEXTFILE_DIR)=' deploy/compose/.env`
+  → three lines, the first and the third under the service account's home, the second on the network
+  filesystem (the example values of `.env.example` are paths, not production values).
+  - On failure: a missing key makes `docker compose config` fail for every command, with a message
+    naming the variable (`BACKUP_DUMP_DIR`...); add it and run again.
+- [ ] *(service account)* `make -C deploy secrets` → `restic_password: created`, the five others
+  `kept`. Then `make -C deploy secrets-check` → `directory: ok` and six `<name>: ok` lines, exit 0.
+  - On failure: `restic_password: shorter than 32` = the file was typed by hand; delete it and run
+    `make -C deploy secrets` again (before the first backup only).
+- [ ] The vault item `ManuSpectrum <host> secrets` has a field `restic_password`, filled from
+  `cat "$SECRETS_DIR/restic_password"` (5.2). Both administrators see it.
+  - On failure: stop here. A backup whose password is not in the vault cannot be read after a loss of
+    the VM.
+- [ ] *(service account)* `make -C deploy backup-init` → `repository created`, exit 0, and the line
+  telling that the password must be in the vault. Run it again → `repository exists and opens`.
+  `stat -c '%a %U' "$BACKUP_DUMP_DIR"/latest "$BACKUP_DUMP_DIR"/tmp` → `700 <account>` twice (`tmp/` is
+  restic's temporary directory; without it every `make backup` fails at the saving step).
+  - On failure: `restic init failed` with a permission error = the repository directory is not
+    writable by the service account (first check, above); `does not open: wrong restic_password?` =
+    the repository was created with another password: take it from the vault.
+
+### 6.2 First backup, timed
+
+- [ ] *(service account)* In another terminal, start `docker stats` (below), then
+  `time make -C deploy backup TAG=nightly` → nine `backup: step n/9` lines, `done: tag nightly`, exit 0.
+  Record the duration. While it runs, in the second terminal:
+  `while sleep 5; do docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | grep -i restic; done`
+  → record the peak memory of the restic container (the capacity review reserves 150–400 MB).
+  - On failure: the line naming the failed step is the last `backup:` line, then make's
+    `*** [...] Error N` line: `N` is the script's status (1 a failed step, 2 a wrong invocation or
+    `METRICS_TEXTFILE_DIR` found before anything ran; the message names the variable), and make itself
+    exits 2 whatever `N` is. Read
+    "When things go wrong" in `BACKUP.md`; a failed run changes no copy except the log and the
+    `manuspectrum_backup.prom` metric.
+- [ ] *(service account)* `ls -l "$BACKUP_DUMP_DIR"/latest` (the value of the `.env` key) → four files,
+  `db.dump`, `globals.sql`, `manifest.json`, `env`, each `-rw-------`.
+- [ ] *(service account)* `jq .counts.tiles "$BACKUP_DUMP_DIR"/latest/manifest.json` → the number of
+  tiles of the dev snapshot (order of 115 000); compare with
+  `dc exec postgres psql -U <db user> -d <db> -tAc 'select count(*) from tiles'` → the same number.
+  - On failure: a different count after a load means a write happened between the two (stop the
+    application, `dc stop web worker beat`, and compare again).
+- [ ] *(service account)* `make -C deploy restic ARGS=snapshots` → one snapshot, host `manuspectrum`,
+  tag `nightly`. `make -C deploy restic ARGS="ls latest" | grep -c previous-` → `0`
+  (the aside directories of a load are excluded). `make -C deploy restic ARGS="ls latest /backup/secrets"`
+  → the five secret files and no `*.new`, no `aside` and no `restic_password` (the vault holds it).
+- [ ] *(service account)* `cat "$METRICS_TEXTFILE_DIR"/manuspectrum_backup.prom` → `manuspectrum_backup_failed 0`
+  and a recent attempt timestamp; `manuspectrum_backup_success.prom` holds the success timestamp, the
+  duration and `manuspectrum_backup_dump_bytes`. `stat -c %a` on both → `644`.
+- [ ] Record the repository size: `du -sh "$RESTIC_REPOSITORY_DIR"` (the repository directory, **never** the
+  mount root, which holds the other projects' data), and `make -C deploy restic ARGS="stats --mode raw-data"`.
+
+### 6.3 Second backup, deduplication
+
+- [ ] *(service account)* `make -C deploy restic ARGS="stats --mode raw-data"` (before), then
+  `time make -C deploy backup TAG=manual` → nine steps, `done`; `stats --mode raw-data` again (after).
+  Record the duration and the added size. Expected: seconds to minutes and a few megabytes (an unchanged
+  dump re-chunks almost entirely to existing data); the retention and the repository check are skipped
+  (`step 9/9: retention and check skipped (tag manual)`).
+  - On failure: an added size close to the first backup's means the dump is not deduplicating (a changed
+    compression or a changing header) or the media is re-read as new: note it, it decides the nightly
+    network cost; run it a third time to separate the two.
+- [ ] `make -C deploy restic ARGS=snapshots` → two snapshots, tags `nightly` and `manual`.
+
+### 6.4 Restore test
+
+- [ ] *(service account)* `time make -C deploy restore-test` → checksums verified, `restore-test: N tables,
+  every count equal to the manifest`, `restic check --read-data-subset=10%` without error, exit 0.
+  Record the duration.
+  - On failure: a line `FAIL:` names the step. A table whose count differs means the dump and its
+    manifest disagree: do not trust that snapshot, run `make -C deploy backup` again and test the new
+    one. A checksum mismatch means copy A or the snapshot is damaged (`BACKUP.md`, "When things go
+    wrong").
+- [ ] *(service account)* `cat "$METRICS_TEXTFILE_DIR"/manuspectrum_restore_test.prom` →
+  `manuspectrum_restore_test_failed 0`; `manuspectrum_restore_test_success.prom` holds the duration.
+- [ ] *(service account)* `dc exec postgres psql -U <db user> -lqt | grep -c restoretest` → `0` (the scratch
+  database `<db>_restoretest` is dropped), and `dc exec postgres psql -U <db user> -d <db> -tAc 'select count(*) from tiles'`
+  still returns the live count (the live database was not touched).
+  - On failure: a leftover `<db>_restoretest` after a killed run is dropped by the next run; if it stays,
+    `dc exec postgres dropdb -U <db user> <db>_restoretest`.
+
+### 6.5 One file
+
+- [ ] *(service account)* Choose an upload: `f=$(find "$MEDIA_HOST_DIR/uploadedfiles" -type f | head -1)`;
+  `sha256sum "$f"` (note it) and open the image in the browser (a report page showing it). Delete it:
+  `rm "$f"`; the browser now shows a broken image or a 404 for it.
+- [ ] *(service account)* `make -C deploy restore-files RESTIC_SNAPSHOT=latest INCLUDE=/backup/media/uploadedfiles/<relative path of $f> TARGET=$HOME/restore-one`
+  (`TARGET` does not exist yet) → `done: copy what you need from …; the running stack was not touched`,
+  and `sha256sum $HOME/restore-one/backup/media/uploadedfiles/<relative path>` → the sum noted above.
+  - On failure: `TARGET must be absolute, not exist or be empty` or `inside the live uploads` = pick
+    another directory; a path with `..` is refused on purpose.
+- [ ] *(service account)* Copy it back: `install -m 0640 $HOME/restore-one/backup/media/uploadedfiles/<relative path> "$f"`;
+  reload the page → the image displays. `rm -r $HOME/restore-one`.
+
+### 6.6 Disaster drill, timed
+
+- [ ] *(service account)* `deploy/compose/smoke.sh mark` → `ok: markers written (…)`, then
+  `make -C deploy backup TAG=manual` → `done` (the snapshot holds the marker), then
+  `deploy/compose/smoke.sh lose` → the PostgreSQL marker row and the uploads marker are deleted, and
+  `deploy/compose/smoke.sh survived` now fails.
+- [ ] *(service account)* `time make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes`
+  → fourteen `restore: step n/14` lines, then `done: snapshot latest is restored. Replay the erasure
+  requests …`. Record the total duration and the duration of step 12 (the reindex) from the log
+  timestamps; the share of the reindex is the part that grows with the data.
+  - On failure: a step that fails before step 4 changed nothing (checksums, migrations, Arches version,
+    free space are checked first); from step 4 on, the log names the aside directory and the undo
+    command is below. `not enough free space` = the staged uploads need room under `MEDIA_HOST_DIR`.
+- [ ] *(service account)* `deploy/compose/smoke.sh survived` → `survived`; `deploy/compose/smoke.sh check` →
+  only `ok:` lines. In the browser: a resource report opens, a IIIF image of an upload displays
+  (Cantaloupe saw the new `uploadedfiles/`), search returns results (the reindex ran).
+  - On failure: images 404 while the files exist = the uploads swap lost Cantaloupe's view of the
+    bind mount: `make -C deploy restart` and look at `dc logs cantaloupe`; record it, it is unverified
+    fact 7 of the plan.
+- [ ] *(service account)* Undo it. The last log line names the aside directory:
+  `ls -d "$MEDIA_HOST_DIR"/previous-*` → its newest entry. `make -C deploy restore ASIDE=<that directory> CONFIRM=yes ERASURES_CHECKED=yes`
+  → fourteen steps, `done: <directory> is restored`; `smoke.sh check` → only `ok:` lines, and the counts
+  are those of before the drill. Then restore `latest` again (the same command as the drill) and
+  `smoke.sh check` → `ok:`.
+
+### 6.7 Refusals
+
+- [ ] *(service account)* `make -C deploy restore RESTIC_SNAPSHOT=latest` → refused (`run again with CONFIRM=yes`),
+  the script's `restore: FAIL: ...` line then make's `Error 1`, nothing changed.
+  `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes` → refused, the
+  message names `ERASURES_CHECKED=yes` and the « Personal data » section, then make's `Error 2`
+  (`make` itself exits 2 in both cases; the script's own status is the `Error N` number). With both `RESTIC_SNAPSHOT`
+  and `ASIDE` → refused.
+- [ ] *(service account)* In a second terminal start `make -C deploy backup TAG=manual`; in the first, at once,
+  `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes` → refused immediately
+  (`another backup or restore is running`), the backup is not disturbed and ends `done`.
+- [ ] *(service account)* Stale lock: start a backup, then `docker kill` its `restic` container
+  (`docker ps --filter name=restic -q`) during step 8. The next `make -C deploy backup` either proceeds
+  (restic waits up to 30 minutes, then reports the lock) or fails with the lock message that
+  `BACKUP.md` explains; `make -C deploy restic ARGS=unlock` clears it, then the backup ends `done`.
+
+### 6.8 A failure is visible
+
+- [ ] *(service account)* `chmod 000 "$RESTIC_REPOSITORY_DIR"`, then `make -C deploy backup TAG=manual` →
+  make's `Error 1` after a `FAIL:` line at the saving step (make exits 2); `manuspectrum_backup.prom` holds `manuspectrum_backup_failed 1`;
+  `manuspectrum_backup_success.prom` is unchanged (`stat -c %Y` before and after).
+- [ ] *(service account)* `chmod 0700 "$RESTIC_REPOSITORY_DIR"`, then `make -C deploy backup TAG=manual` →
+  `done`, `manuspectrum_backup_failed 0`, the success file renewed.
+  - On failure: a root-squashing mount may ignore `chmod 000`; use `chattr`-free alternatives only on a
+    local test directory, or note the check as not testable there.
+
+### 6.9 Timers
+
+- [ ] The four units are installed by hand as in `BACKUP.md`, "Setup on a host", step 4 (the
+  configuration management does it in production, PP-8). `systemd-analyze verify /etc/systemd/system/manuspectrum-backup.service /etc/systemd/system/manuspectrum-backup.timer /etc/systemd/system/manuspectrum-restore-test.service /etc/systemd/system/manuspectrum-restore-test.timer`
+  → no output.
+  - On failure: a `@…@` left in a unit means a placeholder was not substituted; redo the `sed`.
+- [ ] `bash deploy/systemd/tests/test_units.sh` → only `ok` lines. **(CI too)**
+- [ ] `systemctl list-timers 'manuspectrum-*'` → `manuspectrum-backup.timer` (next run 02:00 of the coming
+  night) and `manuspectrum-restore-test.timer` (next run Sunday 05:30). `systemctl show -p Persistent manuspectrum-backup.timer manuspectrum-restore-test.timer`
+  → `Persistent=yes` twice.
+- [ ] `sudo systemctl start manuspectrum-backup.service` (waits for the end), then
+  `journalctl -u manuspectrum-backup.service --since '15 min ago'` → the nine steps and `done`;
+  `systemctl show -p Result -p ExecMainStatus manuspectrum-backup.service` → `Result=success`, `ExecMainStatus=0`;
+  the success metric timestamp is renewed. Same for `manuspectrum-restore-test.service`.
+- [ ] Missed-run catch-up (the host was off at 02:00): with the timer enabled, `sudo systemctl poweroff` the VM
+  in the evening, power it on after 02:00, then `systemctl list-timers manuspectrum-backup.timer` → the
+  `LAST` column shows a run at boot time, and `systemctl show -p Result manuspectrum-backup.service` →
+  `Result=success` once it ends.
+  - On failure: no catch-up after a boot past 02:00 = `Persistent=true` is missing from the installed
+    timer (`systemctl cat manuspectrum-backup.timer`).
+- [ ] `sudo reboot`, then, once the stack is up: `systemctl list-timers 'manuspectrum-*'` → both timers still
+  listed with a next run; `systemctl is-enabled manuspectrum-backup.timer manuspectrum-restore-test.timer`
+  → `enabled` twice. The next morning: `journalctl -u manuspectrum-backup.service` shows the 02:00 run,
+  and it ended before the 04:50 reboot (record its start and end); the metric `manuspectrum_backup_last_success_timestamp_seconds`
+  is from that night.
+  - On failure: the 02:00 run is killed at `TimeoutStartSec=2h30min` = the backup is too slow for the
+    window; record the duration of 6.2 and decide before production (`BACKUP.md`, "Daily operation").
+
+### 6.10 Moving-day drill
+
+Played on the same rehearsal VM, as the procedure of `BACKUP.md`, "Moving to a new host", with the vault
+as the only memory.
+
+- [ ] *(service account)* Note `sha256sum "$SECRETS_DIR/restic_password"`. Move the secrets aside as in
+  5.3, **including** `restic_password`: `mkdir "${SECRETS_DIR:?}/aside" && mv "${SECRETS_DIR:?}"/*_password "${SECRETS_DIR:?}/django_secret_key" "${SECRETS_DIR:?}/aside/"`.
+  `make -C deploy backup-init` now fails (the file is missing).
+- [ ] *(service account)* `make -C deploy secret-set NAME=restic_password`, pasting the value **from the vault**
+  → `restic_password: written`. `make -C deploy backup-init` → `repository exists and opens` (it also creates `latest/` and `tmp/` under
+  `BACKUP_DUMP_DIR`, which the `restore-files` run below binds; on a host where they are missing, every restic run
+  fails with `run make -C deploy backup-init`).
+  `make -C deploy secrets` → the other files created (`created`), `restic_password` `kept`.
+  - On failure: `does not open` = the vault holds another value than the repository's: this is the failure
+    the vault field exists to prevent; fix the vault from the file in `aside/` and note it.
+- [ ] *(service account)* Pull the old secrets and the old `.env` into a separate directory:
+  `make -C deploy restore-files INCLUDE=/backup/secrets TARGET=$HOME/moving-secrets` and
+  `make -C deploy restore-files INCLUDE=/backup/db/env TARGET=$HOME/moving-env` →
+  `cmp $HOME/moving-secrets/backup/secrets/django_secret_key "$SECRETS_DIR/aside/django_secret_key"`
+  identical, and `diff $HOME/moving-env/backup/db/env deploy/compose/.env` shows only the differences
+  you expect. Neither command touched `SECRETS_DIR`.
+- [ ] *(service account)* Restore the secrets that must be kept with `make -C deploy secret-set NAME=<name>`
+  (5.3), then `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes` →
+  fourteen steps, `done`; `smoke.sh check` → only `ok:` lines; `make -C deploy secrets-check` → all `ok`.
+  `SECRETS_DIR` and `.env` are what the operator put there, **not** what the snapshot held
+  (`restore` never writes them).
+- [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env "${SECRETS_DIR:?}/aside"`; then
+  `make -C deploy backup` → `done` (the first backup on the restored stack).
+
+### 6.11 What cannot be tested in rehearsal
+
+TSM (copy C) and its activation for the VM; the hosting provider's NFS snapshots (`.snapshot/`) and their
+retention; the production volume of media (timings and repository size scale with it); the PP-6 alerts
+(`BackupFailed`, `BackupMissing`, `RestoreTestFailed`, `RestoreTestMissing`) until node_exporter reads the
+textfile directory; PP-10's `TAG=pre-update` backup in the update procedure.
+
+### 6.12 Before production
+
+- [ ] The production vault item has the field `restic_password`, filled before the first backup; both
+  administrators see it (6.1).
+- [ ] TSM activation is requested from the hosting provider for the production VM (so that `/home`, copy A,
+  leaves the VM), and its answer is recorded in the follow-up artifact.
+- [ ] Ask Huma-Num for the TSM retention (how long a copy of `/home` is kept) and record it in `BACKUP.md`,
+  "Personal data": the twelve-month bound holds for copy B only; copy C follows that retention.
+- [ ] `ls -l /data/.snapshot` (or the provider's snapshot directory of the network filesystem) is read and
+  its retention is recorded in `BACKUP.md`, "Restore one file".
+- [ ] `make -C deploy backup-init` is done on the production repository; the first nightly run is seen
+  `failed 0`, with its duration; `make -C deploy restore-test` run once there (6.4).
+- [ ] The timings and sizes of 6.2 to 6.6 are written into `BACKUP.md`.
+- [ ] The units are installed by the configuration management (PP-8) and `systemctl list-timers 'manuspectrum-*'`
+  lists both (6.9).
+
+---
+
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): backups, deployed observability, accounts, Ansible, delivery, then
+what to do on failure): deployed observability, accounts, Ansible, delivery, then
 "Before production".

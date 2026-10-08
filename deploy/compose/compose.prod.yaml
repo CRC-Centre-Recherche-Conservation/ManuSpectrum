@@ -65,3 +65,8 @@ services:
     # Process and buffers, plus the 256 MiB tmpfs of upload bodies (counted against the limit).
     deploy: {resources: {limits: {memory: 512m}}}
     memswap_limit: 512m
+
+  # One-off backup runs: outside the steady-state budget above, like certbot.
+  restic:
+    deploy: {resources: {limits: {memory: 1g}}}
+    memswap_limit: 1g

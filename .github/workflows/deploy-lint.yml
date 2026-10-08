@@ -165,6 +165,8 @@ jobs:
           media="$RUNNER_TEMP/media"
           certs="$RUNNER_TEMP/certs"
           install -d "$media/uploadedfiles" "$certs/acme-webroot" "$certs/live" "$RUNNER_TEMP/nginx-logs"
+          install -d -m 0700 "$RUNNER_TEMP/backups" "$RUNNER_TEMP/backups/latest" "$RUNNER_TEMP/backups/tmp" "$RUNNER_TEMP/restic"
+          install -d -m 0755 "$RUNNER_TEMP/metrics"
           CA_DIR="$certs/ca" bash deploy/certs/make-local-ca.sh "$certs/live" manuspectrum.test
           make -C deploy secrets SECRETS_DIR="$secrets"
           sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
@@ -174,6 +176,9 @@ jobs:
               -e "s#^SECRETS_DIR=.*#SECRETS_DIR=$secrets#" \
               -e "s#^CERTS_DIR=.*#CERTS_DIR=$certs#" \
               -e "s#^NGINX_LOG_HOST_DIR=.*#NGINX_LOG_HOST_DIR=$RUNNER_TEMP/nginx-logs#" \
+              -e "s#^BACKUP_DUMP_DIR=.*#BACKUP_DUMP_DIR=$RUNNER_TEMP/backups#" \
+              -e "s#^RESTIC_REPOSITORY_DIR=.*#RESTIC_REPOSITORY_DIR=$RUNNER_TEMP/restic#" \
+              -e "s#^METRICS_TEXTFILE_DIR=.*#METRICS_TEXTFILE_DIR=$RUNNER_TEMP/metrics#" \
               -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca/ca.crt#" \
               deploy/compose/.env.example > "$ENV_FILE"
 
@@ -215,6 +220,23 @@ jobs:
             docker volume inspect "$volume" >/dev/null
           done
           make -C deploy up
+          deploy/compose/smoke.sh survived
+
+      # The dumps hold the runner's own accounts: the log collection below
+      # never copies the backup or repository directories.
+      - name: "Backups: back up, test, lose, restore"
+        run: |
+          make -C deploy backup-init backup TAG=nightly
+          make -C deploy restore-test
+          grep -q '^manuspectrum_backup_failed 0$' "$RUNNER_TEMP/metrics/manuspectrum_backup.prom"
+          grep -q '^manuspectrum_restore_test_failed 0$' "$RUNNER_TEMP/metrics/manuspectrum_restore_test.prom"
+          deploy/compose/smoke.sh lose
+          if deploy/compose/smoke.sh survived; then
+            echo "::error::the markers were not lost"
+            exit 1
+          fi
+          make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes
+          deploy/compose/smoke.sh check
           deploy/compose/smoke.sh survived
 
       - name: Collect the service logs
