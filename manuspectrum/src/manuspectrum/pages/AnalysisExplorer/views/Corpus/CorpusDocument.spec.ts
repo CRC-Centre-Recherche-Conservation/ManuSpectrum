@@ -347,11 +347,12 @@ describe("CorpusDocument", () => {
         expect(wrapper.find(".document-bar .production").exists()).toBe(false);
     });
 
-    it("shows the period facet of the document's analyses in its rail", async () => {
+    it("leaves the document's own place and date out of its rail", async () => {
         stubFetch({ annotations: [annotation(1)], period: rangeFacet() });
         const { wrapper } = mountScreen();
         await flushPromises();
-        expect(wrapper.find(".rail .period-facet").exists()).toBe(true);
+        expect(wrapper.find(".rail .period-facet").exists()).toBe(false);
+        expect(wrapper.find(".rail .tree").exists()).toBe(false);
     });
 
     it("shows the first analysed page and changes page from the strip", async () => {

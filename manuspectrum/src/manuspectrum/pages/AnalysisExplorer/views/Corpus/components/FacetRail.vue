@@ -63,7 +63,8 @@ const TREE_KEYS: readonly FacetKey[] = ["place"];
  * payload's `selected`, which lags behind while the next search loads.
  * The period (`period`, the `RangeFacet` of the payload) closes the Document
  * group; its state is read from the filters and every edit is emitted whole
- * as `period-change`. `countHint`, a translated text with `%{n}`, says what a count counts
+ * as `period-change`. `documentGroup` false leaves the Document group out
+ * (a document's own screen: its rows share its place and date). `countHint`, a translated text with `%{n}`, says what a count counts
  * (« %{n} in this document »). Under `facetQuery`, the query of the facet
  * route (the filters, `filtersOf`, and `document=` on a document's rail),
  * a facet longer than `SEARCH_THRESHOLD` has a search box: the values shown
@@ -80,8 +81,9 @@ const props = withDefaults(
         countHint?: string;
         facetQuery?: string | null;
         period?: RangeFacet | null;
+        documentGroup?: boolean;
     }>(),
-    { countHint: "", facetQuery: null, period: null },
+    { countHint: "", facetQuery: null, period: null, documentGroup: true },
 );
 const emit = defineEmits<{
     change: [key: FacetKey, ids: string[]];
@@ -101,14 +103,16 @@ const byKey = computed(
     () => new Map(props.facets.map((facet) => [facet.key, facet])),
 );
 const sections = computed(() =>
-    GROUPS.map((group) => ({
-        group,
-        facets: GROUP_KEYS[group].flatMap((key) => {
-            const facet = byKey.value.get(key);
-            return facet ? [facet] : [];
-        }),
-        hasPeriod: group === "document" && props.period !== null,
-    })).filter((section) => section.facets.length > 0 || section.hasPeriod),
+    GROUPS.filter((group) => group !== "document" || props.documentGroup)
+        .map((group) => ({
+            group,
+            facets: GROUP_KEYS[group].flatMap((key) => {
+                const facet = byKey.value.get(key);
+                return facet ? [facet] : [];
+            }),
+            hasPeriod: group === "document" && props.period !== null,
+        }))
+        .filter((section) => section.facets.length > 0 || section.hasPeriod),
 );
 
 /** The full values of each facet the server cut short, asked for once unfolded or searched. */

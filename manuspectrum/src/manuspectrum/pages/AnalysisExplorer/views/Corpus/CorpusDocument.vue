@@ -968,9 +968,8 @@ function goHome(): void {
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
                         :facet-query="facetQuery"
-                        :period="currentMatch?.period ?? null"
+                        :document-group="false"
                         @change="onFacetChange"
-                        @period-change="store.setPeriod"
                     />
                     <p
                         v-if="store.activeFilterCount > 0"

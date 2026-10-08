@@ -576,6 +576,18 @@ describe("FacetRail with the period facet", () => {
         expect(wrapper.find(".period-facet").exists()).toBe(true);
     });
 
+    it("leaves the Document group out on a document's own rail", () => {
+        const wrapper = mountRail({
+            facets: [place, facet("technique", 2)],
+            selected: {},
+            period: rangeFacet(),
+            documentGroup: false,
+        });
+        expect(wrapper.find(".period-facet").exists()).toBe(false);
+        expect(wrapper.find(".tree").exists()).toBe(false);
+        expect(wrapper.findAll(".group")).toHaveLength(1);
+    });
+
     it("shows the group for a period alone, and nothing without one", () => {
         expect(
             mountRail({ facets: [], selected: {}, period: rangeFacet() })
