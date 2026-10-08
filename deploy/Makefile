@@ -7,12 +7,13 @@ ENV_FILE ?= $(COMPOSE_DIR)/.env
 COMPOSE := docker compose --project-directory $(COMPOSE_DIR) --env-file $(ENV_FILE) \
 	-f $(COMPOSE_DIR)/compose.yaml -f $(COMPOSE_DIR)/compose.prod.yaml
 SECRETS_DIR ?= $(COMPOSE_DIR)/secrets
+SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
 IMAGE ?= manuspectrum:local
 EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets build init admin-password manage load-snapshot up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -45,6 +46,13 @@ secrets: ## Create the secrets directory (0700) and the secret files that are mi
 		if [ "$$f" != email_password ] && [ ! -s $$f.tmp ]; then rm -f $$f.tmp; echo "could not generate $$f" >&2; exit 1; fi; \
 		chmod 0444 $$f.tmp && mv -n $$f.tmp $$f; \
 	done && ls -l $(SECRETS_DIR)
+
+secret-set: ## Set one secret from the terminal or stdin, never an argument: make -C deploy secret-set NAME=pg_password [FORCE=yes]
+	@[ -n "$(NAME)" ] || { echo "set NAME=<one of: $(SECRET_FILES)>" >&2; exit 1; }
+	@$(SCRIPTS_DIR)/secret-set.sh --dir '$(SECRETS_DIR)' --names '$(SECRET_FILES)' $(if $(filter yes,$(FORCE)),--force) '$(NAME)'
+
+secrets-check: ## Check the secret files (presence, modes, lengths) without printing a value
+	@$(SCRIPTS_DIR)/secrets-check.sh --dir '$(SECRETS_DIR)' --names '$(SECRET_FILES)'
 
 build: ## Build the image (CI or rehearsal VM, 10 GB free RAM; never the development VM)
 	docker build -f $(COMPOSE_DIR)/../docker/Dockerfile -t $(IMAGE) $(COMPOSE_DIR)/../..

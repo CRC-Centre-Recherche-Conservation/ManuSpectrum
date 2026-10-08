@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
-# publish-static, entrypoint guard, load-snapshot, local CA, nginx edge and
+# publish-static, entrypoint guard, load-snapshot, secret-set, local CA, nginx edge and
 # logrotate tests, the Compose rules, actionlint, uv.lock freshness and
 # gitleaks (its tests, then a scan of the whole tree). Builds no image and
 # starts no stack (the tests run small stub containers; logrotate needs the
@@ -40,6 +40,9 @@ bash deploy/docker/tests/test_entrypoint_guard.sh
 
 step "load-snapshot tests"
 bash deploy/scripts/tests/test_load_snapshot.sh
+
+step "secret-set tests"
+bash deploy/scripts/tests/test_secret_set.sh
 
 step "local CA tests"
 bash deploy/certs/tests/test_make_local_ca.sh
