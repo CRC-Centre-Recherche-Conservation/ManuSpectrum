@@ -5,9 +5,12 @@ Usage:
 """
 
 import json
+import tempfile
 from importlib.util import find_spec
 from io import StringIO
-from unittest import SkipTest, TestCase, skipUnless
+from pathlib import Path
+from types import SimpleNamespace
+from unittest import SkipTest, TestCase, mock, skipUnless
 
 from django.test import SimpleTestCase
 
@@ -128,3 +131,54 @@ class MissingXraydbTests(SimpleTestCase):
         with self.assertRaisesMessage(CommandError, "xraydb==") as context:
             call_command("xrf_line_table", "--check")
         self.assertIn("PYTHONPATH", str(context.exception))
+
+
+class CommandWithFakeSourceTests(SimpleTestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.path = Path(folder.name) / "xrf" / "xray-lines.json"
+        for target, value in (("xraydb_source", FakeSource), ("TABLE_PATH", self.path)):
+            patcher = mock.patch.object(table, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_write_then_check(self):
+        out = StringIO()
+        call_command("xrf_line_table", "--write", stdout=out)
+        self.assertEqual(
+            self.path.read_text(encoding="utf-8"),
+            table.dumps(table.build_table(FakeSource())),
+        )
+        self.assertIn("Wrote", out.getvalue())
+
+        call_command("xrf_line_table", "--check", stdout=out)
+        self.assertIn("up to date", out.getvalue())
+
+    def test_check_refuses_a_missing_or_stale_file(self):
+        with self.assertRaisesMessage(CommandError, "9.9.9"):
+            call_command("xrf_line_table", "--check")
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text("{}\n", encoding="utf-8")
+        with self.assertRaisesMessage(CommandError, "differs"):
+            call_command("xrf_line_table", "--check")
+
+
+class XrayDBSourceTests(TestCase):
+    def setUp(self):
+        line = SimpleNamespace(energy=10551.0, intensity=0.68, initial_level="L3")
+        self.module = SimpleNamespace(
+            __version__="4.5.8",
+            atomic_symbol=lambda z: {82: "Pb"}[z],
+            xray_lines=lambda symbol: {"La1": line},
+            xray_edges=lambda symbol: {"L3": SimpleNamespace(energy=13035.0)},
+        )
+
+    def test_reads_symbols_lines_and_edges_from_the_module(self):
+        with mock.patch.dict("sys.modules", {"xraydb": self.module}):
+            source = table.xraydb_source()
+
+        self.assertEqual(source.version, "4.5.8")
+        self.assertEqual(source.symbol(82), "Pb")
+        self.assertEqual(source.lines("Pb"), {"La1": (10551.0, 0.68, "L3")})
+        self.assertEqual(source.edges("Pb"), {"L3": 13035.0})
