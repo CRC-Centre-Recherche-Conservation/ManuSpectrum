@@ -17,7 +17,7 @@ and every command runs as the service account, from the repository root. The
 from `.env` (`deploy/compose/secrets` when it is unset), like Compose; a
 `SECRETS_DIR=` on the `make` command line wins. In the commands, `$SECRETS_DIR`
 is a shell variable set once per session with
-`SECRETS_DIR=$(sed -n 's/^SECRETS_DIR=//p' deploy/compose/.env | tail -n 1)`
+`SECRETS_DIR=$(make -s -C deploy secrets-dir)`
 (an absolute path on a production host).
 
 ## 1. Inventory
@@ -162,7 +162,7 @@ ALTER ROLE :"user" PASSWORD :'pw';
 SQL
 } | dc exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -v user="$POSTGRES_USER" -U "$POSTGRES_USER" -d postgres' &&
   make -C deploy secret-set NAME=pg_password FORCE=yes < "$SECRETS_DIR/pg_password.new" &&
-  rm "$SECRETS_DIR/pg_password.new" &&
+  rm "${SECRETS_DIR:?}/pg_password.new" &&
   make -C deploy down up &&
   deploy/compose/smoke.sh check
 ```
@@ -181,7 +181,7 @@ is not in the logs: `dc logs postgres --since 10m | grep -cFf <(head -c 12 "$SEC
 printf '{"password":"%s"}' "$(cat "$SECRETS_DIR/elastic_password.new")" |
   dc exec -T elasticsearch sh -c 'curl -fsS -u "elastic:$(cat /run/secrets/elastic_password)" -H "Content-Type: application/json" -X POST http://localhost:9200/_security/user/elastic/_password --data-binary @-' &&
   make -C deploy secret-set NAME=elastic_password FORCE=yes < "$SECRETS_DIR/elastic_password.new" &&
-  rm "$SECRETS_DIR/elastic_password.new" &&
+  rm "${SECRETS_DIR:?}/elastic_password.new" &&
   make -C deploy down up &&
   deploy/compose/smoke.sh check
 ```
@@ -251,9 +251,9 @@ through it (the container sees `RESTIC_PASSWORD_FILE` and `/repo`).
 
 ```bash
 [ -e "$SECRETS_DIR/restic_password.new" ] || ( umask 077; openssl rand -base64 48 | tr -d '\n' > "$SECRETS_DIR/restic_password.new" )
-dc run --rm --no-deps -T -v "$SECRETS_DIR/restic_password.new:/run/restic_new:ro" restic key add --new-password-file /run/restic_new &&
+dc run --rm --no-deps -T -v "${SECRETS_DIR:?}/restic_password.new:/run/restic_new:ro" restic key add --new-password-file /run/restic_new &&
   make -C deploy secret-set NAME=restic_password FORCE=yes < "$SECRETS_DIR/restic_password.new" &&
-  rm "$SECRETS_DIR/restic_password.new"
+  rm "${SECRETS_DIR:?}/restic_password.new"
 dc run --rm --no-deps -T restic key list
 ```
 

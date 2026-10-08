@@ -7,6 +7,7 @@ checks the result. Starts nothing; needs the docker CLI with Compose v2.
 """
 
 import json
+import os
 import re
 import runpy
 import shutil
@@ -704,36 +705,64 @@ class RepositoryRulesTests(unittest.TestCase):
     def test_secrets_directory_follows_the_env_file(self):
         compose_dir = (DEPLOY_DIR / "compose").resolve()
 
-        def resolved(env_text, *extra):
+        def make(env_text, *extra, environ=None):
             with tempfile.TemporaryDirectory() as tmp:
                 env = Path(tmp) / ".env"
                 if env_text is not None:
                     env.write_text(env_text, encoding="utf-8")
-                out = subprocess.run(
+                variables = {k: v for k, v in os.environ.items() if k != "SECRETS_DIR"}
+                variables.update(environ or {})
+                return subprocess.run(
                     ["make", "-n", "-C", str(DEPLOY_DIR), "secrets-check"]
                     + [f"ENV_FILE={env}", *extra],
                     capture_output=True,
                     text=True,
-                    check=True,
-                ).stdout
-            return re.search(r"--dir '([^']*)'", out)[1]
+                    env=variables,
+                )
 
+        def resolved(env_text, *extra, environ=None):
+            done = make(env_text, *extra, environ=environ)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            return re.search(r"--dir '([^']*)'", done.stdout)[1]
+
+        default = str(compose_dir / "secrets")
         cases = (
-            ("absolute", "A=1\nSECRETS_DIR=/srv/ms/secrets\n", (), "/srv/ms/secrets"),
+            (
+                "absolute",
+                "A=1\nSECRETS_DIR=/srv/ms/secrets\n",
+                (),
+                {},
+                "/srv/ms/secrets",
+            ),
             (
                 "relative",
-                "SECRETS_DIR=./secrets\n",
+                "SECRETS_DIR=../elsewhere\n",
                 (),
-                str(compose_dir / "secrets"),
+                {},
+                str(compose_dir.parent / "elsewhere"),
             ),
-            ("last line wins", "SECRETS_DIR=/a\nSECRETS_DIR=/b\n", (), "/b"),
-            ("no line", "A=1\n", (), str(compose_dir / "secrets")),
-            ("no env file", None, (), str(compose_dir / "secrets")),
-            ("command line wins", "SECRETS_DIR=/srv/ms\n", ("SECRETS_DIR=/x",), "/x"),
+            ("dot relative", "SECRETS_DIR=./secrets\n", (), {}, default),
+            ("last line wins", "SECRETS_DIR=/a\nSECRETS_DIR=/b\n", (), {}, "/b"),
+            ("no line", "A=1\n", (), {}, default),
+            ("no env file", None, (), {}, default),
+            ("command line wins", "SECRETS_DIR=/s\n", ("SECRETS_DIR=/x",), {}, "/x"),
+            ("environment wins", "SECRETS_DIR=/s\n", (), {"SECRETS_DIR": "/e"}, "/e"),
         )
-        for name, env_text, extra, expected in cases:
+        for name, env_text, extra, environ, expected in cases:
             with self.subTest(case=name):
-                self.assertEqual(resolved(env_text, *extra), expected)
+                self.assertEqual(resolved(env_text, *extra, environ=environ), expected)
+        for line in (
+            "export SECRETS_DIR=/x",
+            'SECRETS_DIR="/x"',
+            "SECRETS_DIR='/x'",
+            "SECRETS_DIR = /x",
+            "SECRETS_DIR=/x # note",
+            "SECRETS_DIR=/ok\nexport SECRETS_DIR=/x",
+        ):
+            with self.subTest(malformed=line):
+                done = make(line + "\n")
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("must be a plain SECRETS_DIR=/path line", done.stderr)
 
     def test_backup_targets_pass_the_metrics_directory(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")

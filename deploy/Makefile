@@ -8,7 +8,16 @@ COMPOSE := docker compose --project-directory $(COMPOSE_DIR) --env-file $(ENV_FI
 	-f $(COMPOSE_DIR)/compose.yaml -f $(COMPOSE_DIR)/compose.prod.yaml
 # SECRETS_DIR: the command line or environment, else the env file (a relative
 # value resolves against COMPOSE_DIR, as Compose does), else compose/secrets.
-ENV_SECRETS_DIR := $(shell sed -n 's/^SECRETS_DIR=//p' '$(ENV_FILE)' 2>/dev/null | tail -n 1)
+# The last SECRETS_DIR line of the env file must be a plain SECRETS_DIR=/path
+# (no export, spaces, quotes or comment), which is what this file reads and
+# Compose reads alike; the check also runs when the command line overrides it,
+# since Compose reads the env file anyway.
+ENV_SECRETS_PATTERN := ^[[:space:]]*(export[[:space:]]+)?SECRETS_DIR[[:space:]]*=
+ENV_SECRETS_LINE := $(shell grep -E '$(ENV_SECRETS_PATTERN)' '$(ENV_FILE)' 2>/dev/null | tail -n 1)
+ifneq ($(shell grep -E '$(ENV_SECRETS_PATTERN)' '$(ENV_FILE)' 2>/dev/null | tail -n 1 | grep -cvE '^SECRETS_DIR=[^[:space:]"'\''\#]+$$'),0)
+$(error SECRETS_DIR in $(ENV_FILE) must be a plain SECRETS_DIR=/path line (no export, quotes, spaces or comment))
+endif
+ENV_SECRETS_DIR := $(patsubst SECRETS_DIR=%,%,$(ENV_SECRETS_LINE))
 SECRETS_DIR ?= $(if $(ENV_SECRETS_DIR),$(if $(filter /%,$(ENV_SECRETS_DIR)),$(ENV_SECRETS_DIR),$(abspath $(COMPOSE_DIR)/$(ENV_SECRETS_DIR))),$(COMPOSE_DIR)/secrets)
 SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
 IMAGE ?= manuspectrum:local
@@ -16,7 +25,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -56,6 +65,9 @@ secret-set: ## Set one secret from the terminal or stdin, never an argument: mak
 
 secrets-check: ## Check the secret files (presence, modes, lengths) without printing a value
 	@$(SCRIPTS_DIR)/secrets-check.sh --dir '$(SECRETS_DIR)' --names '$(SECRET_FILES)'
+
+secrets-dir: ## Print the secrets directory the make targets use
+	@echo '$(SECRETS_DIR)'
 
 build: ## Build the image (CI or rehearsal VM, 10 GB free RAM; never the development VM)
 	docker build -f $(COMPOSE_DIR)/../docker/Dockerfile -t $(IMAGE) $(COMPOSE_DIR)/../..

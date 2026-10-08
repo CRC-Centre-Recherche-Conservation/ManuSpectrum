@@ -225,7 +225,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   default; keep that value on the rehearsal VM).
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
   files; the commands by hand are in `deploy/compose/secrets/README.md`). From here on,
-  `SECRETS_DIR=$(sed -n 's/^SECRETS_DIR=//p' deploy/compose/.env | tail -n 1)` is set in the shell;
+  `SECRETS_DIR=$(make -s -C deploy secrets-dir)` is set in the shell;
   `ls -l "$SECRETS_DIR"` → `pg_password`, `elastic_password`, `django_secret_key`,
   `email_password` (empty), `admin_password` as `-r--r--r--`; `ls -ld "$SECRETS_DIR"` →
   `drwx------`.
@@ -813,8 +813,8 @@ production-shaped VM, and the rotations, which CI does not run.
 
 ### 5.3 Restore drill
 
-- [ ] *(service account)* Move the five files aside, inside the (ignored) directory:
-  `mkdir "$SECRETS_DIR/aside" && mv "$SECRETS_DIR"/{pg_password,elastic_password,django_secret_key,email_password,admin_password} "$SECRETS_DIR/aside/"`
+- [ ] *(service account)* Move the five files aside, inside `SECRETS_DIR`:
+  `mkdir "${SECRETS_DIR:?}/aside" && mv "${SECRETS_DIR:?}"/{pg_password,elastic_password,django_secret_key,email_password,admin_password} "${SECRETS_DIR:?}/aside/"`
   → `make -C deploy secrets-check` now reports five `missing`, exit 1.
 - [ ] *(service account)* For each of the five names,
   `make -C deploy secret-set NAME=<name>`, pasting the value from the vault at the prompt (typed twice,
@@ -825,7 +825,7 @@ production-shaped VM, and the rotations, which CI does not run.
 - [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp "$SECRETS_DIR/$f" "$SECRETS_DIR/aside/$f" && echo "$f identical"; done`
   → five `identical`.
 - [ ] *(service account)* `make -C deploy down up`, then `deploy/compose/smoke.sh check` → only `ok:` lines.
-- [ ] *(service account)* `rm -r "$SECRETS_DIR/aside"`; `git status --short deploy/compose` → empty.
+- [ ] *(service account)* `rm -r "${SECRETS_DIR:?}/aside"`; `git status --short deploy/compose` → empty.
   - On failure: `cmp` differs = the vault holds a different value, fix the vault or the file before going on.
 
 ### 5.4 Rotation drills
@@ -1074,7 +1074,7 @@ Played on the same rehearsal VM, as the procedure of `BACKUP.md`, "Moving to a n
 as the only memory.
 
 - [ ] *(service account)* Note `sha256sum "$SECRETS_DIR/restic_password"`. Move the secrets aside as in
-  5.3, **including** `restic_password`: `mkdir "$SECRETS_DIR/aside" && mv "$SECRETS_DIR"/*_password "$SECRETS_DIR/django_secret_key" "$SECRETS_DIR/aside/"`.
+  5.3, **including** `restic_password`: `mkdir "${SECRETS_DIR:?}/aside" && mv "${SECRETS_DIR:?}"/*_password "${SECRETS_DIR:?}/django_secret_key" "${SECRETS_DIR:?}/aside/"`.
   `make -C deploy backup-init` now fails (the file is missing).
 - [ ] *(service account)* `make -C deploy secret-set NAME=restic_password`, pasting the value **from the vault**
   → `restic_password: written`. `make -C deploy backup-init` → `repository exists and opens` (it also creates `latest/` and `tmp/` under
@@ -1094,7 +1094,7 @@ as the only memory.
   fourteen steps, `done`; `smoke.sh check` → only `ok:` lines; `make -C deploy secrets-check` → all `ok`.
   `SECRETS_DIR` and `.env` are what the operator put there, **not** what the snapshot held
   (`restore` never writes them).
-- [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env "$SECRETS_DIR/aside"`; then
+- [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env "${SECRETS_DIR:?}/aside"`; then
   `make -C deploy backup` → `done` (the first backup on the restored stack).
 
 ### 6.11 What cannot be tested in rehearsal
