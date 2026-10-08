@@ -640,6 +640,8 @@ describe("AnalysisCard", () => {
         });
         const toggle = wrapper.get(".cite button.toggle");
         expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(toggle.text()).toBe("Cite");
+        expect(wrapper.find(".cite .summary").exists()).toBe(false);
         expect(wrapper.get(".cite .content").isVisible()).toBe(false);
         const copy = wrapper.get(".cite .head").findComponent(CopyButton);
         expect(copy.props("text")).toBe(payload.citation.text);

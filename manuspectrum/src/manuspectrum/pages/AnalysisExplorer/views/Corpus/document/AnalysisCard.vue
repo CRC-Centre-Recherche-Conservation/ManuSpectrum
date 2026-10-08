@@ -577,7 +577,6 @@ function focusHeading(): void {
                 class="cite"
                 :title="$gettext('Cite')"
                 :open="citeOpen"
-                :summary="analysis.citation.text"
                 @toggle="setCiteOpen"
             >
                 <template #actions>
