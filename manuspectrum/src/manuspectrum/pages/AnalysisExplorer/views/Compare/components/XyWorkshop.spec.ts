@@ -1576,11 +1576,60 @@ describe("XyWorkshop", () => {
         resize.value += 1;
         await flushPromises();
         expect(element.style.minBlockSize).toBe("");
-        expect(plotly.react.mock.calls.length).toBe(drawings + 2);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
         expect(plotly.Plots.resize.mock.calls.at(-1)?.[0]).toBe(element);
         resize.value += 1;
         await flushPromises();
-        expect(plotly.react.mock.calls.length).toBe(drawings + 2);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+    });
+
+    it("keeps small multiples at the height they took, whatever the box they hold open echoes", async () => {
+        const observers: { callback: () => void; observed: Element[] }[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                observed: Element[] = [];
+                callback: () => void;
+                constructor(callback: () => void) {
+                    this.callback = callback;
+                    observers.push(this);
+                }
+                observe(element: Element) {
+                    this.observed.push(element);
+                }
+                disconnect() {}
+                unobserve() {}
+            },
+        );
+        const view = await mountWorkshop(
+            Array.from({ length: 9 }, (_, index) =>
+                curve(index % 2, index + 1),
+            ),
+        );
+        const element = view.find<HTMLElement>(".chart").element;
+        Object.defineProperty(element, "clientWidth", { value: 300 });
+        Object.defineProperty(element, "clientHeight", {
+            get: () =>
+                element.style.minBlockSize
+                    ? parseFloat(element.style.minBlockSize) * 16
+                    : 300,
+        });
+        const watcher = observers.find((o) => o.observed.includes(element))!;
+        const frame = () =>
+            new Promise((resolve) => requestAnimationFrame(resolve));
+        watcher.callback();
+        await frame();
+        await flushPromises();
+        const held = element.style.minBlockSize;
+        expect(held).not.toBe("");
+        const drawings = plotly.react.mock.calls.length;
+        for (let turn = 0; turn < 4; turn += 1) {
+            watcher.callback();
+            await frame();
+            await flushPromises();
+        }
+        expect(element.style.minBlockSize).toBe(held);
+        expect(plotly.react.mock.calls.length).toBe(drawings);
     });
 
     it("aborts the requests of an unmounted window", async () => {

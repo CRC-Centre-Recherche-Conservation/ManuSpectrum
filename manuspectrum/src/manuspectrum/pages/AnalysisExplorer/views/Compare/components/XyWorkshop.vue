@@ -291,6 +291,15 @@ let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
+/**
+ * The height the chart has when small multiples do not hold it open
+ * (`chartHeight` null): small multiples are laid out for it, never for the
+ * height they gave themselves, which would release and grip the box at each
+ * frame.
+ */
+let naturalHeight = 0;
+/** The next drawing releases a held height first, to read the natural one again. */
+let remeasure = false;
 /** Set on unmount: a drawing still waiting stops, and one that ends late is purged. */
 let disposed = false;
 /** Whether a preview started here (a curve or a legend entry) is not ended yet. */
@@ -780,7 +789,7 @@ watch([lens.active, layout], ([isXrf, shown]) => {
 });
 watch(
     () => resizeTick?.value,
-    () => followSize(),
+    () => followSize(true),
 );
 watch(
     chart,
@@ -811,6 +820,10 @@ function sizeOf(element: HTMLElement): string {
     return `${element.clientWidth}×${element.clientHeight}`;
 }
 
+function widthOf(size: string): number {
+    return Number(size.split("×")[0]);
+}
+
 /** One `followSize` per frame, whatever moved the chart's box (the lens strip opening, a window resize). */
 function scheduleFollowSize(): void {
     if (sizeFrame !== null) return;
@@ -821,12 +834,18 @@ function scheduleFollowSize(): void {
 }
 
 /** Draws the chart again for its size, when that size is not the one it was drawn at. */
-function followSize(): void {
+function followSize(measureAgain = false): void {
     const element = chart.value;
     if (!plotly || !element || layout.value === "table") return;
     const size = sizeOf(element);
-    if (size === drawnSize) return;
+    const held = chartHeight.value !== null;
+    if (held && !measureAgain && element.clientWidth === widthOf(drawnSize)) {
+        drawnSize = size;
+        return;
+    }
+    if (size === drawnSize && !(held && measureAgain)) return;
     drawnSize = size;
+    remeasure = held;
     void resizeChart(element);
 }
 
@@ -896,7 +915,11 @@ function viewName(entry: XyView): string {
 }
 
 /** What the figure is drawn from, for the chart element's size. */
-function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
+function figureInput(
+    theme: PlotTheme,
+    element: HTMLElement,
+    height = element.clientHeight,
+): FigureInput {
     return {
         curves: drawn.value,
         states: effectiveStates.value,
@@ -905,7 +928,7 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
         titles: { ...titles.value, offset: offsetTitle.value },
         xReversed: xReversed.value,
         width: element.clientWidth,
-        height: element.clientHeight,
+        height,
         yLog: logShown.value,
         lens: lens.active.value,
     };
@@ -949,9 +972,16 @@ async function draw(): Promise<void> {
         if (disposed) return;
         if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
+        if (remeasure && chartHeight.value !== null) {
+            chartHeight.value = null;
+            await nextTick();
+            if (disposed) return;
+        }
+        remeasure = false;
+        if (chartHeight.value === null) naturalHeight = element.clientHeight;
         const shapes = lensShapesFor(theme);
         const input = {
-            ...figureInput(theme, element),
+            ...figureInput(theme, element, naturalHeight),
             ...(shapes.length > 0 ? { shapes } : {}),
         };
         const figure =
