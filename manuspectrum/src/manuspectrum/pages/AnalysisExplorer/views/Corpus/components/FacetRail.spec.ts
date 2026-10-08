@@ -567,13 +567,55 @@ describe("FacetRail with the period facet", () => {
             selected: {},
             period: rangeFacet(),
         });
-        const legends = wrapper.findAll("legend.title");
-        expect(legends.map((legend) => legend.text())).toEqual([
+        const titles = wrapper.findAll(".facet .title");
+        expect(titles.map((title) => title.text())).toEqual([
             "Place of production",
             "Date of production",
         ]);
         expect(wrapper.findAll(".group")).toHaveLength(1);
         expect(wrapper.find(".period-facet").exists()).toBe(true);
+    });
+
+    it("lays the rule menu on the title line of the period, beside the title", () => {
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        const row = wrapper.get(".title-row");
+        expect(row.get(".title").text()).toBe("Date of production");
+        expect(row.element.lastElementChild).toBe(
+            row.get(".period-rule-menu").element,
+        );
+        expect(
+            wrapper.get(".period-facet").find("[data-action=rule]").exists(),
+        ).toBe(false);
+        expect(wrapper.get("[role=group]").attributes("aria-labelledby")).toBe(
+            row.get(".title").attributes("id"),
+        );
+    });
+
+    it("emits the whole period state when the rule is chosen from the title line", async () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1201, 1400]);
+        store.setFilter("undated", true);
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        await wrapper.get("[data-action=rule]").trigger("click");
+        await wrapper.findAll("[role=menuitemradio]")[1].trigger("click");
+        expect(wrapper.emitted("period-change")).toEqual([
+            [
+                {
+                    period: [1201, 1400],
+                    match: "within",
+                    event: "production",
+                    undated: true,
+                },
+            ],
+        ]);
     });
 
     it("leaves the Document group out on a document's own rail", () => {

@@ -8,6 +8,7 @@ import Tooltip from "primevue/tooltip";
 import FacetTree from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue";
 import FacetValues from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue";
 import PeriodFacet from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
+import PeriodRuleMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodRuleMenu.vue";
 
 import {
     buildTree,
@@ -23,6 +24,7 @@ import type {
     FacetGroup,
     FacetKey,
     FacetValue,
+    PeriodMatch,
     RangeFacet,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { PeriodChange } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
@@ -95,6 +97,7 @@ const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const { facetTitle, groupTitle, periodTitle } = useVocabulary();
 const baseId = useId();
+const periodTitleId = `${baseId}-period-title`;
 
 const expanded = ref<Set<FacetKey>>(new Set());
 const queries = ref<Partial<Record<FacetKey, string>>>({});
@@ -287,6 +290,15 @@ function summaryId(key: FacetKey): string {
     return `${baseId}-${key}-summary`;
 }
 
+function onPeriodMatch(match: PeriodMatch): void {
+    emit("period-change", {
+        period: store.filters.period,
+        match,
+        event: store.filters.periodEvent,
+        undated: store.filters.undated,
+    });
+}
+
 function onPeriodChange(payload: PeriodChange): void {
     emit("period-change", payload);
 }
@@ -413,13 +425,23 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                         <span>{{ moreLabel(facet) }}</span>
                     </button>
                 </fieldset>
-                <fieldset
+                <div
                     v-if="section.hasPeriod && props.period"
                     class="facet"
+                    role="group"
+                    :aria-labelledby="periodTitleId"
                 >
-                    <legend class="title">
-                        <span>{{ periodTitle() }}</span>
-                    </legend>
+                    <div class="title-row">
+                        <span
+                            :id="periodTitleId"
+                            class="title"
+                            >{{ periodTitle() }}</span
+                        >
+                        <PeriodRuleMenu
+                            :match="store.filters.periodMatch"
+                            @change="onPeriodMatch"
+                        />
+                    </div>
                     <PeriodFacet
                         :facet="props.period"
                         :period="store.filters.period"
@@ -428,7 +450,7 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                         :undated="store.filters.undated"
                         @change="onPeriodChange"
                     />
-                </fieldset>
+                </div>
             </div>
         </section>
     </div>
@@ -508,6 +530,13 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
     border: none;
 }
 
+.facet-rail .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
 .facet-rail .title {
     margin-block-end: 0.25rem;
     color: var(--ink-muted);
@@ -515,6 +544,10 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
     font-size: 0.6875rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+}
+
+.facet-rail .title-row .title {
+    margin-block-end: 0;
 }
 
 .facet-rail .search {

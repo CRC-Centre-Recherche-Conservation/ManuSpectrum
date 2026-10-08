@@ -1,19 +1,9 @@
 <script setup lang="ts">
-import {
-    computed,
-    onBeforeUnmount,
-    ref,
-    useId,
-    useTemplateRef,
-    watch,
-} from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import CenturyHistogram from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/CenturyHistogram.vue";
 import RangeSlider from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RangeSlider.vue";
-
-import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
 
 import type {
     PeriodEvent,
@@ -40,9 +30,9 @@ const MODIFICATION_HAS_DATA = false;
  * The production-date facet: which event is dated (Modification is offered
  * but disabled while it has no data), a century histogram, a two-thumb slider,
  * « From » and « To » fields brought back to the bounds of the dated rows, the
- * rule (overlap or entirely within, a menu at the end of the event row; a
- * note under the fields names the rule while it is not the default one) and
- * whether undated rows are kept. With no
+ * rule (overlap or entirely within, chosen in `PeriodRuleMenu`, which the rail
+ * lays on the title line; a note under the fields names the rule while it is
+ * not the default one) and whether undated rows are kept. With no
  * period the slider rests on the bounds and the fields are empty. Every edit
  * emits the whole state in `change`; a typed year waits 300 ms (or a `change`
  * event) before it does, a drag only at its end.
@@ -71,12 +61,6 @@ const sliderValue = computed<Bounds>(() => {
     return [clampYear(low), clampYear(high)];
 });
 const reasonId = computed(() => `${baseId}-reason`);
-const menuId = useId();
-const ruleRoot = useTemplateRef<HTMLElement>("ruleRoot");
-const ruleControl = useTemplateRef<InstanceType<typeof IconButton>>("rule");
-const ruleElement = computed(() => ruleControl.value?.element ?? null);
-const { expanded, closeMenu, toggle, onButtonKeydown, onMenuKeydown } =
-    useMenuButton(ruleRoot, ruleElement);
 
 watch(
     shown,
@@ -214,28 +198,6 @@ function onType(side: Side, event: Event): void {
     timer = setTimeout(() => commitFields(side), FIELD_DELAY_MS);
 }
 
-function chooseMatch(match: PeriodMatch): void {
-    closeMenu(true);
-    if (match !== props.match) send({ match });
-}
-
-const rules = computed<{ match: PeriodMatch; name: string; detail: string }[]>(
-    () => [
-        {
-            match: "overlap",
-            name: $gettext("Overlaps the period"),
-            detail: $gettext("Keeps documents whose dates touch the period"),
-        },
-        {
-            match: "within",
-            name: $gettext("Entirely within the period"),
-            detail: $gettext(
-                "Keeps documents dated entirely inside the period",
-            ),
-        },
-    ],
-);
-
 function resetMatch(): void {
     send({ match: "overlap" });
 }
@@ -255,86 +217,38 @@ function undatedLabel(): string {
 
 <template>
     <div class="period-facet">
-        <div class="event-row">
-            <div
-                class="event"
-                role="radiogroup"
-                :aria-label="$gettext('Dated event')"
+        <div
+            class="event"
+            role="radiogroup"
+            :aria-label="$gettext('Dated event')"
+        >
+            <button
+                type="button"
+                class="choice"
+                role="radio"
+                :aria-checked="props.event === 'production' ? 'true' : 'false'"
+                @click="chooseEvent('production')"
             >
-                <button
-                    type="button"
-                    class="choice"
-                    role="radio"
-                    :aria-checked="
-                        props.event === 'production' ? 'true' : 'false'
-                    "
-                    @click="chooseEvent('production')"
-                >
-                    <span>{{ $gettext("Production") }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="choice"
-                    role="radio"
-                    aria-disabled="true"
-                    :aria-checked="
-                        props.event === 'modification' ? 'true' : 'false'
-                    "
-                    :aria-describedby="reasonId"
-                    @click="chooseEvent('modification')"
-                >
-                    <span>{{ $gettext("Modification") }}</span>
-                </button>
-                <span
-                    :id="reasonId"
-                    class="visually-hidden"
-                    >{{ $gettext("No data for this event yet") }}</span
-                >
-            </div>
-            <div
-                ref="ruleRoot"
-                class="rule"
+                <span>{{ $gettext("Production") }}</span>
+            </button>
+            <button
+                type="button"
+                class="choice"
+                role="radio"
+                aria-disabled="true"
+                :aria-checked="
+                    props.event === 'modification' ? 'true' : 'false'
+                "
+                :aria-describedby="reasonId"
+                @click="chooseEvent('modification')"
             >
-                <IconButton
-                    ref="rule"
-                    data-action="rule"
-                    icon="ellipsis-h"
-                    aria-haspopup="menu"
-                    :label="$gettext('Rule for the period')"
-                    :aria-expanded="expanded ? 'true' : 'false'"
-                    :aria-controls="expanded ? menuId : undefined"
-                    @click="toggle"
-                    @keydown="onButtonKeydown"
-                />
-                <ul
-                    v-if="expanded"
-                    :id="menuId"
-                    class="menu"
-                    role="menu"
-                    :aria-label="$gettext('Rule for the period')"
-                    @keydown="onMenuKeydown"
-                >
-                    <li
-                        v-for="rule in rules"
-                        :key="rule.match"
-                        role="none"
-                    >
-                        <button
-                            type="button"
-                            role="menuitemradio"
-                            tabindex="-1"
-                            :data-match="rule.match"
-                            :aria-checked="
-                                props.match === rule.match ? 'true' : 'false'
-                            "
-                            @click="chooseMatch(rule.match)"
-                        >
-                            <span class="rule-name">{{ rule.name }}</span>
-                            <span class="rule-detail">{{ rule.detail }}</span>
-                        </button>
-                    </li>
-                </ul>
-            </div>
+                <span>{{ $gettext("Modification") }}</span>
+            </button>
+            <span
+                :id="reasonId"
+                class="visually-hidden"
+                >{{ $gettext("No data for this event yet") }}</span
+            >
         </div>
         <CenturyHistogram
             :buckets="props.facet.buckets"
@@ -419,16 +333,8 @@ function undatedLabel(): string {
     gap: 0.5rem;
 }
 
-.period-facet .event-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-}
-
 .period-facet .event {
     display: flex;
-    flex: 1 1 10rem;
     min-inline-size: 0;
     gap: 0.125rem;
     padding: 0.125rem;
@@ -492,70 +398,6 @@ function undatedLabel(): string {
 .period-facet .dash {
     padding-block-end: 0.75rem;
     color: var(--ink-muted);
-}
-
-.period-facet .rule {
-    position: relative;
-    flex: none;
-}
-
-.period-facet .menu {
-    position: absolute;
-    z-index: 110;
-    inset-block-start: 100%;
-    inset-inline-end: 0;
-    display: grid;
-    inline-size: max-content;
-    max-inline-size: min(18rem, 80vw);
-    padding: 0.25rem;
-    border: 0.0625rem solid var(--border-hover);
-    border-radius: 0.375rem;
-    background: var(--surface);
-    box-shadow: var(--shadow-md);
-    list-style: none;
-}
-
-.period-facet .menu button {
-    display: grid;
-    gap: 0.125rem;
-    inline-size: 100%;
-    min-block-size: var(--explorer-target, 2rem);
-    padding: 0.25rem 0.5rem 0.25rem 1.5rem;
-    border: none;
-    border-radius: 0.25rem;
-    background: none;
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.8125rem;
-    text-align: start;
-    cursor: pointer;
-}
-
-.period-facet .menu button[aria-checked="true"] {
-    position: relative;
-    font-weight: 600;
-}
-
-.period-facet .menu button[aria-checked="true"]::before {
-    content: "✓";
-    position: absolute;
-    inset-inline-start: 0.5rem;
-}
-
-.period-facet .menu button:hover,
-.period-facet .menu button:focus {
-    background: var(--bg-alt);
-}
-
-.period-facet .menu button:focus-visible {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: -0.125rem;
-}
-
-.period-facet .rule-detail {
-    color: var(--ink-muted);
-    font-size: 0.6875rem;
-    font-weight: 400;
 }
 
 .period-facet .rule-note {
