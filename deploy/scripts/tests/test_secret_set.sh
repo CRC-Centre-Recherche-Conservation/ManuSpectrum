@@ -15,7 +15,7 @@ CHECK="$HERE/../secrets-check.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-NAMES="pg_password elastic_password django_secret_key email_password admin_password"
+NAMES="pg_password elastic_password django_secret_key email_password admin_password restic_password"
 
 N=0
 FAILED=0
@@ -168,12 +168,14 @@ put elastic_password "$ESV"
 put django_secret_key "$KEY"
 put email_password ""
 put admin_password "$ADM"
+RST="$(rand 48)"
+put restic_password "$RST"
 run_check
 expect "check-ok: a complete directory passes" zero
-for v in "$KEY" "$ADM" "$PGV" "$ESV"; do
+for v in "$KEY" "$ADM" "$PGV" "$ESV" "$RST"; do
   grep -qF -- "$v" <<<"$OUT" && { not_ok "check-ok: a value reached the output"; break; }
 done
-[ "$(grep -v '^directory' <<<"$OUT" | grep -c ': ok')" -eq 5 ] && ok "check-ok: one ok line per name" || not_ok "check-ok: one ok line per name" "$OUT"
+[ "$(grep -v '^directory' <<<"$OUT" | grep -c ': ok')" -eq 6 ] && ok "check-ok: one ok line per name" || not_ok "check-ok: one ok line per name" "$OUT"
 
 rm "$C/pg_password"
 run_check
@@ -201,6 +203,11 @@ run_check
 expect "check-admin: a short admin password fails" nonzero
 grep -q 'admin_password.*16' <<<"$OUT" && ok "check-admin: the line gives the minimum" || not_ok "check-admin: the line gives the minimum" "$OUT"
 put admin_password "$ADM"
+put restic_password "$(rand 31)"
+run_check
+expect "check-restic: a short restic password fails" nonzero
+grep -q 'restic_password.*32' <<<"$OUT" && ok "check-restic: the line gives the minimum" || not_ok "check-restic: the line gives the minimum" "$OUT"
+put restic_password "$RST"
 chmod 755 "$C"
 run_check
 expect "check-dir: a directory that is not 0700 fails" nonzero

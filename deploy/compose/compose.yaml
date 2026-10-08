@@ -382,6 +382,53 @@ services:
           create_host_path: false
       - {type: bind, source: ./certbot/deploy-hook.sh, target: /hooks/deploy-hook.sh, read_only: true}
 
+  # Backups (deploy/BACKUP.md). Never started by `up`: backup.sh, restore-test.sh,
+  # restore.sh and restore-files.sh run it once per call. No network; the
+  # sources are read-only and the repository is the only writable mount.
+  restic:
+    <<: *service
+    profiles: [backup]
+    restart: "no"
+    # restic 0.19.1
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
+    read_only: true
+    network_mode: none
+    environment:
+      RESTIC_REPOSITORY: /repo
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+      RESTIC_HOST: manuspectrum
+      HOME: /tmp
+    secrets: [restic_password]
+    healthcheck:
+      disable: true
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=64m,mode=1777"
+    volumes:
+      - type: bind
+        source: ${RESTIC_REPOSITORY_DIR:?set RESTIC_REPOSITORY_DIR in .env}
+        target: /repo
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${BACKUP_DUMP_DIR:?set BACKUP_DUMP_DIR in .env}/latest
+        target: /backup/db
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_HOST_DIR}
+        target: /backup/media
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SECRETS_DIR}
+        target: /backup/secrets
+        read_only: true
+        bind:
+          create_host_path: false
+
 secrets:
   pg_password:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/pg_password
@@ -395,6 +442,9 @@ secrets:
   # Password given to the Arches superuser `admin` by `init`; only web mounts it.
   admin_password:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/admin_password
+  # Password of the restic repository; only the restic service mounts it.
+  restic_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/restic_password
 
 volumes:
   pg_data:

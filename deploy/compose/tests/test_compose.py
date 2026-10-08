@@ -60,6 +60,7 @@ def render(*files, profiles=()):
             "elastic_password",
             "django_secret_key",
             "admin_password",
+            "restic_password",
         ):
             (secrets / name).write_text("x" * 64)
         (secrets / "email_password").write_text("")
@@ -70,7 +71,22 @@ def render(*files, profiles=()):
             (certs / sub).mkdir(parents=True)
         logs = Path(tmp) / "nginx-logs"
         logs.mkdir()
+        dumps = Path(tmp) / "backups"
+        (dumps / "latest").mkdir(parents=True)
+        repository = Path(tmp) / "restic"
+        repository.mkdir()
+        metrics = Path(tmp) / "metrics"
+        metrics.mkdir()
         env = (COMPOSE_DIR / ".env.example").read_text()
+        env = re.sub(r"(?m)^BACKUP_DUMP_DIR=.*$", f"BACKUP_DUMP_DIR={dumps}", env)
+        env = re.sub(
+            r"(?m)^RESTIC_REPOSITORY_DIR=.*$",
+            f"RESTIC_REPOSITORY_DIR={repository}",
+            env,
+        )
+        env = re.sub(
+            r"(?m)^METRICS_TEXTFILE_DIR=.*$", f"METRICS_TEXTFILE_DIR={metrics}", env
+        )
         env = re.sub(r"(?m)^SECRETS_DIR=.*$", f"SECRETS_DIR={secrets}", env)
         env = re.sub(r"(?m)^MEDIA_HOST_DIR=.*$", f"MEDIA_HOST_DIR={media}", env)
         env = re.sub(r"(?m)^CERTS_DIR=.*$", f"CERTS_DIR={certs}", env)
@@ -99,6 +115,9 @@ class ComposeStackTests(unittest.TestCase):
         cls.prod, _ = render("compose.yaml", "compose.prod.yaml")
         cls.stacks = {"base": cls.base, "prod": cls.prod}
         cls.acme, _ = render("compose.yaml", "compose.prod.yaml", profiles=("acme",))
+        cls.backup, _ = render(
+            "compose.yaml", "compose.prod.yaml", profiles=("backup",)
+        )
 
     def each_service(self):
         for label, stack in self.stacks.items():
@@ -361,7 +380,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1)
+        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 4)
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -490,9 +509,10 @@ class ComposeStackTests(unittest.TestCase):
     def test_every_declared_secret_is_made_by_make_secrets(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         made = set(re.search(r"^SECRET_FILES := (.+)$", makefile, re.M)[1].split())
+        self.assertEqual(set(self.backup["secrets"]), made)
         for label, stack in self.stacks.items():
             with self.subTest(stack=label):
-                self.assertEqual(set(stack["secrets"]), made)
+                self.assertEqual(set(stack["secrets"]), made - {"restic_password"})
 
     def test_smtp_password_is_an_optional_secret_file(self):
         for label, stack in self.stacks.items():
@@ -554,10 +574,90 @@ class ComposeStackTests(unittest.TestCase):
         self.assertFalse(certbot.get("secrets"))
 
     def test_third_party_images_are_pinned_by_digest(self):
-        for name, service in self.acme["services"].items():
-            if name not in APP_SERVICES:
+        for label, stack in (("acme", self.acme), ("backup", self.backup)):
+            for name, service in stack["services"].items():
+                if name not in APP_SERVICES:
+                    with self.subTest(profile=label, service=name):
+                        self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
+
+    def test_restic_runs_only_under_the_backup_profile(self):
+        self.assertNotIn("restic", self.base["services"])
+        self.assertNotIn("restic", self.prod["services"])
+        self.assertNotIn("restic", self.acme["services"])
+        self.assertIn("restic", self.backup["services"])
+
+    def test_restic_is_hardened_and_offline(self):
+        restic = self.backup["services"]["restic"]
+        self.assertEqual(restic["network_mode"], "none")
+        self.assertTrue(restic["read_only"])
+        self.assertEqual(restic["user"], "10001:10001")
+        self.assertEqual(restic["cap_drop"], ["ALL"])
+        self.assertFalse(restic.get("cap_add"))
+        self.assertIn("no-new-privileges:true", restic["security_opt"])
+        self.assertFalse(restic.get("ports"))
+        self.assertEqual(restic["restart"], "no")
+        self.assertTrue(restic["healthcheck"]["disable"])
+
+    def test_restic_reads_its_sources_read_only_and_writes_only_the_repository(self):
+        restic = self.backup["services"]["restic"]
+        mounts = {v["target"]: v for v in restic["volumes"]}
+        self.assertEqual(
+            set(mounts), {"/repo", "/backup/db", "/backup/media", "/backup/secrets"}
+        )
+        self.assertFalse(mounts["/repo"].get("read_only"))
+        for target in ("/backup/db", "/backup/media", "/backup/secrets"):
+            with self.subTest(target=target):
+                self.assertTrue(mounts[target]["read_only"])
+        for target, mount in mounts.items():
+            with self.subTest(bind=target):
+                self.assertEqual(mount["type"], "bind")
+                self.assertFalse(mount.get("bind", {}).get("create_host_path", False))
+        self.assertTrue(mounts["/backup/db"]["source"].endswith("/backups/latest"))
+        self.assertTrue(mounts["/backup/media"]["source"].endswith("/media"))
+        self.assertEqual(
+            [t.split(":")[0] for t in restic["tmpfs"]],
+            ["/tmp"],
+        )
+
+    def test_restic_password_is_a_file_secret_of_restic_only(self):
+        restic = self.backup["services"]["restic"]
+        environment = restic["environment"]
+        self.assertEqual(
+            environment["RESTIC_PASSWORD_FILE"], "/run/secrets/restic_password"
+        )
+        self.assertNotIn("RESTIC_PASSWORD", environment)
+        self.assertEqual(environment["RESTIC_HOST"], "manuspectrum")
+        self.assertEqual([s["source"] for s in restic["secrets"]], ["restic_password"])
+        for name, service in self.backup["services"].items():
+            if name != "restic":
                 with self.subTest(service=name):
-                    self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
+                    self.assertNotIn(
+                        "restic_password",
+                        [s["source"] for s in service.get("secrets", [])],
+                    )
+
+    def test_restic_has_its_own_production_limit(self):
+        restic = self.backup["services"]["restic"]
+        self.assertEqual(
+            to_bytes(restic["deploy"]["resources"]["limits"]["memory"]), GIB
+        )
+        self.assertEqual(to_bytes(restic["memswap_limit"]), GIB)
+        self.assertNotIn("restic", PROD_LIMITS)
+        steady = sum(
+            to_bytes(s["deploy"]["resources"]["limits"]["memory"])
+            for n, s in self.prod["services"].items()
+        )
+        self.assertEqual(steady, sum(PROD_LIMITS.values()))
+
+    def test_env_example_declares_the_backup_paths(self):
+        text = (COMPOSE_DIR / ".env.example").read_text()
+        for name in (
+            "BACKUP_DUMP_DIR",
+            "RESTIC_REPOSITORY_DIR",
+            "METRICS_TEXTFILE_DIR",
+        ):
+            with self.subTest(name=name):
+                self.assertRegex(text, rf"(?m)^{name}=/[^\s]+$")
 
 
 class RepositoryRulesTests(unittest.TestCase):

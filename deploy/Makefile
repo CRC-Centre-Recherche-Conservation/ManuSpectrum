@@ -29,7 +29,7 @@ volumes: ## Create the external data volumes (once per host, idempotent)
 
 # Each file is written to a temporary name and moved into place, so a failed
 # generator leaves no empty secret; an existing file is never replaced.
-SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password
+SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password restic_password
 
 secrets: ## Create the secrets directory (0700) and the secret files that are missing
 	@command -v openssl >/dev/null || { echo "openssl is required to generate the secrets" >&2; exit 1; }
@@ -39,7 +39,7 @@ secrets: ## Create the secrets directory (0700) and the secret files that are mi
 	for f in $(SECRET_FILES); do \
 		[ -e $$f ] && continue; \
 		case $$f in \
-			pg_password|elastic_password|admin_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
+			pg_password|elastic_password|admin_password|restic_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
 			django_secret_key) python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > $$f.tmp ;; \
 			email_password) : > $$f.tmp ;; \
 		esac; \
