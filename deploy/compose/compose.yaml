@@ -399,15 +399,22 @@ services:
       RESTIC_PASSWORD_FILE: /run/secrets/restic_password
       RESTIC_HOST: manuspectrum
       HOME: /tmp
+      # Temporary packs of a backup reach the size of the data in flight; /tmp is a small tmpfs.
+      TMPDIR: /restic-tmp
     secrets: [restic_password]
     healthcheck:
       disable: true
     tmpfs:
-      - "/tmp:rw,nosuid,nodev,size=64m,mode=1777"
+      - "/tmp:rw,nosuid,nodev,size=16m,mode=1777"
     volumes:
       - type: bind
         source: ${RESTIC_REPOSITORY_DIR:?set RESTIC_REPOSITORY_DIR in .env}
         target: /repo
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${BACKUP_DUMP_DIR:?set BACKUP_DUMP_DIR in .env}/tmp
+        target: /restic-tmp
         bind:
           create_host_path: false
       - type: bind

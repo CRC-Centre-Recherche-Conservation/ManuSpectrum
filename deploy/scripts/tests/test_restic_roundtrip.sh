@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # deploy/scripts/tests/test_restic_roundtrip.sh
 # Runs the pinned restic image (read from compose.yaml) the way the restic
-# service runs it (no network, read-only root, tmpfs /tmp, non-root user,
-# HOME=/tmp, password file) against a fixture tree laid out like /backup, with
+# service runs it (no network, read-only root, 16 MiB tmpfs /tmp, disk-backed
+# TMPDIR, non-root user, HOME=/tmp, password file) against a fixture tree laid out like /backup, with
 # the excludes and the retention of lib-backup.sh. No database. Prints
 # `ok N` / `not ok N`; exits non-zero on failure.
 # $? after a negated or compound test is the point of every assertion below.
@@ -21,7 +21,7 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q "$IMAGE" >/dev/n
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/repo" "$TMP/out" "$TMP/src/db" "$TMP/src/media/uploadedfiles" "$TMP/src/media/archestemp" \
+mkdir -p "$TMP/repo" "$TMP/restic-tmp" "$TMP/out" "$TMP/src/db" "$TMP/src/media/uploadedfiles" "$TMP/src/media/archestemp" \
   "$TMP/src/media/export_deliverables" "$TMP/src/media/previous-1-abc" "$TMP/src/media/.restore-1" \
   "$TMP/src/secrets/aside"
 printf 'dump-bytes' >"$TMP/src/db/db.dump"
@@ -34,17 +34,19 @@ printf 'x' >"$TMP/src/media/.restore-1/staged.txt"
 printf 'x' >"$TMP/src/secrets/aside/old_secret"
 printf 'x' >"$TMP/src/secrets/pg_password.new"
 printf 'secret' >"$TMP/src/secrets/pg_password"
+printf 'vault-copy' >"$TMP/src/secrets/restic_password"
 head -c 36 /dev/urandom | base64 | tr -d '\n=+/' >"$TMP/pw"
 head -c 36 /dev/urandom | base64 | tr -d '\n=+/' >"$TMP/pw-wrong"
 chmod 0644 "$TMP/pw" "$TMP/pw-wrong"
 
 restic() { # restic PASSWORD-FILE ARGS...: one run of the image as the restic service runs it
-  local pw="$1"
+  local pw="$1" tmpdir=()
   shift
+  [ -n "${NO_TMPDIR:-}" ] || tmpdir=(-e TMPDIR=/restic-tmp)
   docker run --rm --network none --read-only --user "$(id -u):$(id -g)" \
-    --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,nosuid,nodev,size=64m,mode=1777 \
-    -e HOME=/tmp -e RESTIC_REPOSITORY=/repo -e RESTIC_PASSWORD_FILE=/pw -e RESTIC_HOST=manuspectrum \
-    -v "$TMP/repo:/repo" -v "$pw:/pw:ro" -v "$TMP/src:/backup:ro" -v "$TMP/out:/out" \
+    --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:rw,nosuid,nodev,size=16m,mode=1777 \
+    -e HOME=/tmp "${tmpdir[@]}" -e RESTIC_REPOSITORY=/repo -e RESTIC_PASSWORD_FILE=/pw -e RESTIC_HOST=manuspectrum \
+    -v "${REPO:-$TMP/repo}:/repo" -v "$TMP/restic-tmp:/restic-tmp" -v "$pw:/pw:ro" -v "${SRC:-$TMP/src}:/backup:ro" -v "$TMP/out:/out" \
     "$IMAGE" --no-cache "$@"
 }
 
@@ -78,8 +80,8 @@ assert "snapshot carries the fixed host manuspectrum and the tag" $?
 listing="$(restic "$TMP/pw" ls latest --recursive 2>/dev/null)"
 grep -q '/backup/db/db.dump$' <<<"$listing" && grep -q '/backup/media/uploadedfiles/u.txt$' <<<"$listing" \
   && grep -q '/backup/secrets/pg_password$' <<<"$listing" \
-  && ! grep -qE 'previous-1-abc|\.restore-1|archestemp|export_deliverables|pg_password\.new|secrets/aside' <<<"$listing"
-assert "ls latest holds db, uploads and secrets and none of the excluded paths" $?
+  && ! grep -qE 'previous-1-abc|\.restore-1|archestemp|export_deliverables|pg_password\.new|secrets/aside|restic_password' <<<"$listing"
+assert "ls latest holds db, uploads and secrets and none of the excluded paths (the restic password included)" $?
 
 backup "2026-03-02 02:00:00"
 backup "2026-03-02 03:00:00"
@@ -98,6 +100,20 @@ assert "restore --include /backup/db --verify gives byte-identical files and not
 
 [ "$(stat -c %u "$TMP/out/backup/db/db.dump")" = "$(id -u)" ]
 assert "restored files are owned by the run uid" $?
+
+mkdir -p "$TMP/big/media" "$TMP/big-repo"
+for i in 1 2 3; do head -c 70M /dev/urandom >"$TMP/big/media/random$i.bin"; done
+big() { # big: init and back up the three files into a fresh repository (NO_TMPDIR=1: the pre-fix layout)
+  rm -rf "${TMP:?}/big-repo" && mkdir "$TMP/big-repo"
+  REPO="$TMP/big-repo" SRC="$TMP/big" restic "$TMP/pw" init >/dev/null 2>&1 \
+    && REPO="$TMP/big-repo" SRC="$TMP/big" restic "$TMP/pw" backup /backup >"$TMP/big.out" 2>&1
+}
+NO_TMPDIR=1 big
+status=$?
+[ "$status" -ne 0 ] && grep -q 'no space left on device' "$TMP/big.out"
+assert "control: without TMPDIR the temporary packs overflow the 16 MiB tmpfs (the test can fail)" $?
+big && [ -z "$(find "$TMP/restic-tmp" -mindepth 1 -print -quit)" ]
+assert "TMPDIR on a disk-backed mount: a backup of 210 MiB of incompressible data succeeds and leaves no temporary pack" $?
 
 ! restic "$TMP/pw-wrong" snapshots >/dev/null 2>&1
 assert "a wrong password is refused" $?

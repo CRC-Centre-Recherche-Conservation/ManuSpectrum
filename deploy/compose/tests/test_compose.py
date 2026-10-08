@@ -73,6 +73,7 @@ def render(*files, profiles=()):
         logs.mkdir()
         dumps = Path(tmp) / "backups"
         (dumps / "latest").mkdir(parents=True)
+        (dumps / "tmp").mkdir()
         repository = Path(tmp) / "restic"
         repository.mkdir()
         metrics = Path(tmp) / "metrics"
@@ -380,7 +381,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 4)
+        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 5)
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -602,9 +603,11 @@ class ComposeStackTests(unittest.TestCase):
         restic = self.backup["services"]["restic"]
         mounts = {v["target"]: v for v in restic["volumes"]}
         self.assertEqual(
-            set(mounts), {"/repo", "/backup/db", "/backup/media", "/backup/secrets"}
+            set(mounts),
+            {"/repo", "/restic-tmp", "/backup/db", "/backup/media", "/backup/secrets"},
         )
         self.assertFalse(mounts["/repo"].get("read_only"))
+        self.assertFalse(mounts["/restic-tmp"].get("read_only"))
         for target in ("/backup/db", "/backup/media", "/backup/secrets"):
             with self.subTest(target=target):
                 self.assertTrue(mounts[target]["read_only"])
@@ -614,10 +617,17 @@ class ComposeStackTests(unittest.TestCase):
                 self.assertFalse(mount.get("bind", {}).get("create_host_path", False))
         self.assertTrue(mounts["/backup/db"]["source"].endswith("/backups/latest"))
         self.assertTrue(mounts["/backup/media"]["source"].endswith("/media"))
+        self.assertTrue(mounts["/restic-tmp"]["source"].endswith("/backups/tmp"))
         self.assertEqual(
             [t.split(":")[0] for t in restic["tmpfs"]],
             ["/tmp"],
         )
+
+    def test_restic_temporary_packs_go_to_disk_not_to_the_small_tmpfs(self):
+        restic = self.backup["services"]["restic"]
+        self.assertEqual(restic["environment"]["TMPDIR"], "/restic-tmp")
+        size = re.search(r"size=(\w+)", restic["tmpfs"][0])[1]
+        self.assertLessEqual(to_bytes(size), 16 * 1024 * 1024)
 
     def test_restic_password_is_a_file_secret_of_restic_only(self):
         restic = self.backup["services"]["restic"]
