@@ -52,6 +52,7 @@ import {
     multiplesFigure,
     paintOf,
     stackedFigure,
+    yFitUpdate,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 import {
     curveLook,
@@ -328,7 +329,24 @@ const identifying = ref(false);
 const identified = ref<{ id: string; energy: number } | null>(null);
 /** The cue shown above the chart while the mode is on and no peak is chosen; also announced once when the mode turns on. */
 const identifyHint = computed(() =>
-    $gettext("Click a peak in the spectrum to list candidate elements."),
+    $gettext(
+        "Click the top of a peak: the elements with a line at that energy show under the chart.",
+    ),
+);
+const identifyHelpLabel = computed(() => $gettext("How to identify a peak"));
+const identifyHelp = computed(() =>
+    [
+        $gettext("The click snaps to the nearest peak top."),
+        $gettext(
+            "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
+        ),
+        $gettext(
+            "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
+        ),
+        $gettext(
+            "Hints only: the analyst decides. Escape or the target to leave.",
+        ),
+    ].join("\n"),
 );
 const identifyToggle =
     useTemplateRef<InstanceType<typeof IconButton>>("identifyToggle");
@@ -889,6 +907,7 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
         width: element.clientWidth,
         height: element.clientHeight,
         yLog: logShown.value,
+        lens: lens.active.value,
     };
 }
 
@@ -985,6 +1004,24 @@ async function draw(): Promise<void> {
     }
 }
 
+/**
+ * The relayout that fits the counts axes to the energy window `xRange`
+ * (`yFitUpdate`), back to their autorange for `null`; empty outside an XRF
+ * window.
+ */
+function yFit(
+    xRange: readonly [number, number] | null,
+): Record<string, unknown> {
+    const element = drawnOn;
+    const theme = drawnTheme;
+    if (!lens.active.value || !element || !theme) return {};
+    return yFitUpdate(
+        figureInput(theme, element),
+        layout.value === "table" ? "overlay" : layout.value,
+        xRange,
+    );
+}
+
 /** Draws again, then puts the energy range the reader had back (a redraw resets the axes). */
 async function redrawKeepingRange(): Promise<void> {
     const key = rangeKey.value;
@@ -998,9 +1035,13 @@ async function redrawKeepingRange(): Promise<void> {
     await draw();
     const element = drawnOn;
     if (!update || !plotly || !element || disposed) return;
+    const energyWindow = preset?.range ?? (held ? [...held.range] : null);
     applyingRange = true;
     try {
-        await plotly.relayout(element, update);
+        await plotly.relayout(element, {
+            ...update,
+            ...(energyWindow ? yFit(energyWindow as [number, number]) : {}),
+        });
     } catch (error: unknown) {
         console.error("The energy range could not be set", error);
     } finally {
@@ -1134,6 +1175,7 @@ function bindEvents(element: HTMLElement): void {
         zoomed.value = zoomedAfter(update, zoomed.value);
         if (!applyingRange && TOUCHES_X_AXIS.test(Object.keys(update).join())) {
             rangeKey.value = zoomed.value ? CUSTOM_RANGE : "full";
+            void fitToEnergyWindow(element, update);
         }
     });
     target.on("plotly_hover", (event: PlotMouseEvent) => {
@@ -1152,6 +1194,35 @@ function bindEvents(element: HTMLElement): void {
         if (identifying.value) identify(curve, energyOf(event));
         else if (curve) toggle(entryNode(curve));
     });
+}
+
+/**
+ * After a change of the energy window by hand (an axis drag), fits the
+ * counts axes to it, unless the same update already sets one (a box zoom,
+ * a reset).
+ */
+async function fitToEnergyWindow(
+    element: HTMLElement,
+    update: Record<string, unknown>,
+): Promise<void> {
+    if (
+        !plotly ||
+        !lens.active.value ||
+        /yaxis\d*\.(range|autorange)/.test(Object.keys(update).join())
+    ) {
+        return;
+    }
+    const axis = axesOf(element).xaxis;
+    if (!axis) return;
+    const fit = yFit(axis.autorange ? null : [axis.range[0], axis.range[1]]);
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, fit);
+    } catch (error: unknown) {
+        console.error("The counts range could not be fitted", error);
+    } finally {
+        applyingRange = false;
+    }
 }
 
 /** The energy Plotly names for a point (`points[0].x`); null when it is not a number. */
@@ -1309,7 +1380,8 @@ async function chooseRange(key: string): Promise<void> {
     const preset = rangePresetOf(key);
     const element = drawnOn;
     if (!preset || !plotly || !element) return;
-    const update = rangeUpdate(preset, xReversed.value);
+    const xUpdate = rangeUpdate(preset, xReversed.value);
+    const update = { ...xUpdate, ...yFit(preset.range) };
     rangeKey.value = key;
     applyingRange = true;
     try {
@@ -1319,7 +1391,7 @@ async function chooseRange(key: string): Promise<void> {
     } finally {
         applyingRange = false;
     }
-    zoomed.value = zoomedAfter(update, zoomed.value);
+    zoomed.value = zoomedAfter(xUpdate, zoomed.value);
 }
 
 function onLayer(event: {
@@ -1628,6 +1700,14 @@ function chooseView(event: Event): void {
                 class="note identify-hint"
             >
                 <span>{{ identifyHint }}</span>
+                <IconButton
+                    icon="question-circle"
+                    data-action="identify-help"
+                    :label="identifyHelpLabel"
+                    :description="identifyHelp"
+                    tip-placement="below"
+                    tip-align="start"
+                />
             </p>
             <div
                 v-if="layout !== 'table'"
@@ -1677,6 +1757,7 @@ function chooseView(event: Event): void {
                 :elements="lens.stripElements.value"
                 :declared-slots="lens.declaredSlots.value"
                 :overlaps="lens.overlapNotes.value"
+                :instrument="lens.instrumentNotes.value"
                 :symbols="lens.symbols.value"
                 :lens-symbols="lens.settings.value.elements"
                 :lang="lang"
@@ -1869,6 +1950,13 @@ function chooseView(event: Event): void {
     margin: 0;
     color: var(--ink-muted);
     font-size: 0.8125rem;
+}
+
+.xy-workshop .identify-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .xy-workshop .notes {

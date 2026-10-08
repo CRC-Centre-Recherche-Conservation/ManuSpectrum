@@ -209,5 +209,6 @@ function onDocumentKeydown(event: KeyboardEvent): void {
     display: block;
     padding-block-start: 0.25rem;
     font-size: 0.75rem;
+    white-space: pre-line;
 }
 </style>

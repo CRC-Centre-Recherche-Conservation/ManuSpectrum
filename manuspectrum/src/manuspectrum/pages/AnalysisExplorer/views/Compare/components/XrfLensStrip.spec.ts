@@ -6,6 +6,7 @@ import XrfLensStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/co
 import type {
     StripDeclaredSlot,
     StripElement,
+    StripInstrumentPeak,
     StripOverlap,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 
@@ -40,6 +41,7 @@ function mountStrip(
         elements?: StripElement[];
         declaredSlots?: StripDeclaredSlot[];
         overlaps?: StripOverlap[];
+        instrument?: StripInstrumentPeak[];
         lensSymbols?: string[];
         symbols?: string[];
     } = {},
@@ -49,6 +51,7 @@ function mountStrip(
             elements: [],
             declaredSlots: [],
             overlaps: [],
+            instrument: [],
             symbols: SYMBOLS,
             lensSymbols: [],
             lang: "en",
@@ -68,6 +71,7 @@ describe("XrfLensStrip", () => {
                 elements: [element()],
                 declaredSlots: [],
                 overlaps: [],
+                instrument: [],
                 symbols: SYMBOLS,
                 lensSymbols: [],
                 lang: "fr",
@@ -120,6 +124,30 @@ describe("XrfLensStrip", () => {
         expect(view.find("li.element").text()).toContain(
             "No line in the energy range shown",
         );
+    });
+
+    it("lists the instrument peaks once each, with the slots that carry them", () => {
+        const view = mountStrip({
+            instrument: [
+                {
+                    label: "esc",
+                    energy: 8.27,
+                    slots: [5, 6],
+                    everywhere: false,
+                },
+                { label: "sum", energy: 23.64, slots: [11], everywhere: false },
+                {
+                    label: "Ag Kα1",
+                    energy: 22.16,
+                    slots: [0, 1],
+                    everywhere: true,
+                },
+            ],
+        });
+        expect(view.find("li.instrument").text()).toBe(
+            "Instrument peaks: esc 8.27 keV (A6, A7) · sum 23.64 keV (A12) · Ag Kα1 22.16 keV (all)",
+        );
+        expect(mountStrip().find("li.instrument").exists()).toBe(false);
     });
 
     it("writes the overlap and the lines that tell the two apart", () => {
@@ -291,6 +319,7 @@ describe("XrfLensStrip", () => {
                 elements: [],
                 declaredSlots: [],
                 overlaps: [],
+                instrument: [],
                 symbols: SYMBOLS,
                 lensSymbols: [],
                 lang: "en",
@@ -313,6 +342,7 @@ describe("XrfLensStrip", () => {
                 elements: [],
                 declaredSlots: [],
                 overlaps: [],
+                instrument: [],
                 symbols: SYMBOLS,
                 lensSymbols: [],
                 lang: "en",

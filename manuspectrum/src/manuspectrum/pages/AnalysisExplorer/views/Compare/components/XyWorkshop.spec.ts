@@ -746,7 +746,10 @@ describe("XyWorkshop", () => {
             "xaxis.range[1]": 2.5,
         });
         await flushPromises();
-        expect(plotly.relayout).not.toHaveBeenCalled();
+        expect(plotly.relayout).not.toHaveBeenCalledWith(
+            chart,
+            expect.objectContaining({ "xaxis.autorange": true }),
+        );
         expect(fake.toggle).toHaveBeenCalledTimes(1);
         expect(actions()).toEqual(["reset", "png", "csv", "table"]);
     });
@@ -1873,6 +1876,7 @@ describe("XyWorkshop XRF lens", () => {
         expect(plotly.react).toHaveBeenCalledTimes(1);
         expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
             "xaxis.range": [5, 15],
+            "yaxis.autorange": true,
         });
         expect(
             view.find('[data-range="5-15"]').attributes("aria-pressed"),
@@ -1895,6 +1899,7 @@ describe("XyWorkshop XRF lens", () => {
         await flushPromises();
         expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
             "xaxis.range": [1.5, 2.5],
+            "yaxis.range": [0, 31.5],
         });
         expect(
             view.find('[data-range="custom"]').attributes("aria-pressed"),
@@ -1944,6 +1949,7 @@ describe("XyWorkshop XRF lens", () => {
         await flushPromises();
         expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
             "xaxis.range": [5, 15],
+            "yaxis.autorange": true,
         });
         expect(plotly.react).not.toHaveBeenCalled();
         expect(
@@ -1954,9 +1960,110 @@ describe("XyWorkshop XRF lens", () => {
         await flushPromises();
         expect(plotly.relayout).toHaveBeenLastCalledWith(
             expect.any(HTMLElement),
-            { "xaxis.autorange": true },
+            { "xaxis.autorange": true, "yaxis.autorange": true },
         );
         expect(view.find('[data-action="reset"]').exists()).toBe(false);
+    });
+
+    describe("counts range follows the energy window", () => {
+        const WIDE = series(
+            [1, 4, 6, 8, 10, 14, 16],
+            [900, 80, 50, 200, 120, 60, 999],
+        );
+
+        async function mountWide(): Promise<VueWrapper> {
+            answer(1, jsonResponse(WIDE));
+            const view = await mountWorkshop([curve(0, 1)]);
+            await settle();
+            plotly.relayout.mockClear();
+            plotly.react.mockClear();
+            return view;
+        }
+
+        it("fits the counts axis to the data inside a preset, with 5 % of headroom, in the same relayout", async () => {
+            const view = await mountWide();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledTimes(1);
+            expect(plotly.relayout).toHaveBeenCalledWith(
+                expect.any(HTMLElement),
+                { "xaxis.range": [5, 15], "yaxis.range": [0, 210] },
+            );
+            expect(plotly.react).not.toHaveBeenCalled();
+        });
+
+        it("gives the autorange back on « Toute la plage »", async () => {
+            const view = await mountWide();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            await view.find('[data-range="full"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                expect.any(HTMLElement),
+                { "xaxis.autorange": true, "yaxis.autorange": true },
+            );
+        });
+
+        it("fits again in log10 through a Log toggle, keeping the energy range", async () => {
+            const view = await mountWide();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            plotly.relayout.mockClear();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            const [, update] = plotly.relayout.mock.calls.at(-1) as [
+                HTMLElement,
+                Record<string, unknown>,
+            ];
+            expect(update["xaxis.range"]).toEqual([5, 15]);
+            const [from, to] = update["yaxis.range"] as number[];
+            expect(from).toBeLessThan(Math.log10(50));
+            expect(from).toBeGreaterThan(Math.log10(50) - 0.2);
+            expect(to).toBeGreaterThan(Math.log10(200));
+            expect(to).toBeLessThan(Math.log10(200) + 0.2);
+        });
+
+        it("fits the counts axis after a drag of the energy axis alone, but leaves a box zoom's own counts range", async () => {
+            const view = await mountWide();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                },
+            });
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 15,
+            });
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "yaxis.range": [0, 210],
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 15,
+                "yaxis.range[0]": 10,
+                "yaxis.range[1]": 100,
+            });
+            await flushPromises();
+            expect(plotly.relayout).not.toHaveBeenCalled();
+        });
+
+        it("gives the counts autorange back when the energy axis returns to its autorange", async () => {
+            const view = await mountWide();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [0, 20], autorange: true, _length: 400 },
+                },
+            });
+            emitPlotly(chart, "plotly_relayout", { "xaxis.autorange": true });
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "yaxis.autorange": true,
+            });
+        });
     });
 
     it("shows « Custom » once the reader zooms by hand, and « Reset the zoom » goes back to the full range", async () => {
@@ -2284,14 +2391,36 @@ describe("XyWorkshop XRF lens", () => {
             announce.mockClear();
             await toggleButton(view).trigger("click");
             const hint = view.find(".identify-hint");
-            expect(hint.text()).toBe(
-                "Click a peak in the spectrum to list candidate elements.",
-            );
-            expect(announce).toHaveBeenCalledWith(hint.text());
+            const sentence =
+                "Click the top of a peak: the elements with a line at that energy show under the chart.";
+            expect(hint.find(":scope > span").text()).toBe(sentence);
+            expect(announce).toHaveBeenCalledWith(sentence);
             clickAt(view, 2.33);
             await flushPromises();
             expect(view.find(".identify-hint").exists()).toBe(false);
             expect(announce).toHaveBeenCalledTimes(2);
+        });
+
+        it("offers a help button after the hint, named and described by the four rules", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const help = view.find(
+                ".identify-hint [data-action='identify-help']",
+            );
+            expect(help.exists()).toBe(true);
+            const named = document.getElementById(
+                help.attributes("aria-labelledby") ?? "",
+            );
+            expect(named?.textContent).toBe("How to identify a peak");
+            const described = document.getElementById(
+                help.attributes("aria-describedby") ?? "",
+            );
+            expect(described?.textContent?.split("\n")).toEqual([
+                "The click snaps to the nearest peak top.",
+                "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
+                "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
+                "Hints only: the analyst decides. Escape or the target to leave.",
+            ]);
         });
 
         it("keeps the chart where it is: the identifier follows the chart, before the lens strip", async () => {

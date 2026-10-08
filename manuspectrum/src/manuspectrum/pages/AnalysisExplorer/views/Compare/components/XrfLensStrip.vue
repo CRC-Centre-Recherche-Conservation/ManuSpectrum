@@ -23,6 +23,7 @@ import {
 import type {
     StripDeclaredSlot,
     StripElement,
+    StripInstrumentPeak,
     StripLineRef,
     StripOverlap,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
@@ -48,6 +49,8 @@ const props = defineProps<{
     elements: readonly StripElement[];
     declaredSlots: readonly StripDeclaredSlot[];
     overlaps: readonly StripOverlap[];
+    /** The instrument peaks the chart's bottom ticks draw, one per label and energy. */
+    instrument: readonly StripInstrumentPeak[];
     /** Every symbol of the line table, by atomic number; empty while it loads. */
     symbols: readonly string[];
     /** The reader's lens elements. */
@@ -123,7 +126,8 @@ const hasContent = computed(
     () =>
         props.elements.length > 0 ||
         props.declaredSlots.length > 0 ||
-        props.overlaps.length > 0,
+        props.overlaps.length > 0 ||
+        props.instrument.length > 0,
 );
 
 function energy(value: number): string {
@@ -181,6 +185,20 @@ function declaredSlotText(entry: StripDeclaredSlot): string {
         { slot: slotLabel(entry.slot) },
         true,
     )}: ${items}`;
+}
+
+function instrumentText(): string {
+    const peaks = props.instrument
+        .map(
+            (peak) =>
+                `${peak.label} ${energy(peak.energy)} keV (${
+                    peak.everywhere
+                        ? $gettext("all")
+                        : peak.slots.map(slotLabel).join(", ")
+                })`,
+        )
+        .join(" · ");
+    return `${$gettext("Instrument peaks")}: ${peaks}`;
 }
 
 function removeLabel(symbol: string): string {
@@ -464,6 +482,12 @@ function onKeydown(event: KeyboardEvent): void {
                 <span>{{ declaredSlotText(entry) }}</span>
             </li>
             <li
+                v-if="instrument.length > 0"
+                class="instrument"
+            >
+                <span>{{ instrumentText() }}</span>
+            </li>
+            <li
                 v-for="(overlap, index) in overlaps"
                 :key="`overlap:${index}`"
                 class="overlap"
@@ -678,6 +702,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 .xrf-strip .element .declared,
 .xrf-strip .declared-slot,
+.xrf-strip .instrument,
 .xrf-strip .overlap {
     color: var(--ink-muted);
 }

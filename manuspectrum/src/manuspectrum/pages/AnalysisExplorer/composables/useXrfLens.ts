@@ -89,6 +89,8 @@ const DETECTOR_FWHM_KEV: Record<XrfDetector, number> = {
     sdd: 0.14,
     "si-pin": 0.18,
 };
+/** Declared labels of small multiples: one row, over the panel's title. */
+const PANEL_STRIP = { rows: 1, lift: 16 };
 /** Instrument ticks closer than this (keV) are drawn once. */
 const TICK_MERGE_KEV = 0.02;
 /** Overlap sentences the strip lists at most. */
@@ -185,6 +187,15 @@ export interface StripOverlap {
     apartB: StripLineRef | null;
 }
 
+/** An instrument peak the chart draws as one tick, with the slots whose curves carry it. */
+export interface StripInstrumentPeak {
+    label: string;
+    energy: number;
+    slots: number[];
+    /** Every slot of the window carries it (and there are several). */
+    everywhere: boolean;
+}
+
 export interface StripDeclaredSlot {
     slot: number;
     items: { symbol: string; level: Label | null }[];
@@ -211,7 +222,7 @@ interface PanelModel {
     suffix: string;
     extent: [number, number];
     declared: LensPanel["declared"];
-    ticks: { curveOrder: number; label: string; energy: number }[];
+    ticks: { label: string; energy: number }[];
     bands: { curveOrder: number; label: string; from: number; to: number }[];
 }
 
@@ -664,13 +675,12 @@ export function useXrfLens(sources: LensSources) {
                         ticks.some(
                             (held) =>
                                 Math.abs(held.energy - peak.energy) <
-                                TICK_MERGE_KEV,
+                                tolerance(peak.energy, fwhmMn.value),
                         )
                     ) {
                         continue;
                     }
                     ticks.push({
-                        curveOrder,
                         label: instrumentLabel(peak, labels()),
                         energy: peak.energy,
                     });
@@ -692,6 +702,49 @@ export function useXrfLens(sources: LensSources) {
             elements: lensGroups.value,
             overlaps: overlapInfo.value.bands,
         };
+    });
+
+    /**
+     * The instrument peaks of the visible curves, one entry per label and
+     * energy (within the detector tolerance), by energy: what the ticks at
+     * the foot of the chart say, with the slots that carry each.
+     */
+    const instrumentNotes = computed<StripInstrumentPeak[]>(() => {
+        if (!active.value || !table.value) return [];
+        const curves = sources.curves();
+        const hidden = sources.hidden();
+        const notes: StripInstrumentPeak[] = [];
+        curves.forEach((curve, index) => {
+            if (hidden[index]) return;
+            for (const peak of instrumentOfCurves.value[index] ?? []) {
+                if (peak.kind === "compton") continue;
+                const label = instrumentLabel(peak, labels());
+                const held = notes.find(
+                    (note) =>
+                        note.label === label &&
+                        Math.abs(note.energy - peak.energy) <
+                            tolerance(peak.energy, fwhmMn.value),
+                );
+                if (!held) {
+                    notes.push({
+                        label,
+                        energy: peak.energy,
+                        slots: [curve.slot],
+                        everywhere: false,
+                    });
+                } else if (!held.slots.includes(curve.slot)) {
+                    held.slots.push(curve.slot);
+                }
+            }
+        });
+        const total = new Set(curves.map((curve) => curve.slot)).size;
+        return notes
+            .map((note) => ({
+                ...note,
+                slots: [...note.slots].sort((a, b) => a - b),
+                everywhere: total > 1 && note.slots.length === total,
+            }))
+            .sort((a, b) => a.energy - b.energy);
     });
 
     /**
@@ -732,7 +785,6 @@ export function useXrfLens(sources: LensSources) {
                 (tick): InstrumentTick => ({
                     label: tick.label,
                     energy: tick.energy,
-                    colour: colourOf(tick.curveOrder),
                 }),
             ),
             bands: panel.bands.map(
@@ -751,6 +803,8 @@ export function useXrfLens(sources: LensSources) {
             overlaps: current.overlaps,
             plotWidth,
             marker,
+            declaredStrip:
+                sources.layout() === "multiples" ? PANEL_STRIP : undefined,
             theme: {
                 ink: theme.ink,
                 inkMuted: theme.inkMuted,
@@ -976,6 +1030,7 @@ export function useXrfLens(sources: LensSources) {
         model,
         shapes,
         overlapNotes: computed(() => overlapInfo.value.notes),
+        instrumentNotes,
         stripElements,
         declaredSlots,
         setDetector,

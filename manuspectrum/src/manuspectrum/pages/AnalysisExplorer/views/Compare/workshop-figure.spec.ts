@@ -7,6 +7,7 @@ import {
     hoverTemplatesFor,
     multiplesFigure,
     stackedFigure,
+    yFitUpdate,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 
 import type {
@@ -449,6 +450,122 @@ describe("workshop figure", () => {
             expect(
                 exportFigure(withShapes, paints, THEME, text).layout.shapes,
             ).toEqual(shapes);
+        });
+    });
+
+    describe("XRF lens", () => {
+        it("keeps a linear counts axis at zero and a stacked chart's top margin for the declared labels", () => {
+            const plain = stackedFigure(input([curve(0, [0, 5, 2])]), false);
+            const lens = stackedFigure(
+                input([curve(0, [0, 5, 2])], { lens: true }),
+                false,
+            );
+            expect(plain.layout.yaxis).not.toHaveProperty("rangemode");
+            expect(lens.layout.yaxis).toMatchObject({ rangemode: "tozero" });
+            expect(
+                (lens.layout.margin as { t: number }).t -
+                    (plain.layout.margin as { t: number }).t,
+            ).toBe(32);
+        });
+
+        it("sets no zero floor on a log axis or in Offset, and none on the grid's margin", () => {
+            const log = stackedFigure(
+                input([curve(0, [1, 5, 2])], { lens: true, yLog: true }),
+                false,
+            );
+            expect(log.layout.yaxis).not.toHaveProperty("rangemode");
+            const offset = stackedFigure(
+                input([curve(0, [1, 5, 2])], { lens: true }),
+                true,
+            );
+            expect(offset.layout.yaxis).not.toHaveProperty("rangemode");
+            const grid = multiplesFigure(
+                input([curve(0, [1, 5]), curve(1, [1, 5])], { lens: true }),
+            );
+            const layout = grid.layout as Record<string, unknown>;
+            expect(layout.yaxis).toMatchObject({ rangemode: "tozero" });
+            expect(layout.yaxis2).toMatchObject({ rangemode: "tozero" });
+            expect((layout.margin as { t: number }).t).toBe(28);
+        });
+    });
+
+    describe("yFitUpdate", () => {
+        it("fits a linear axis from zero to the highest value inside the window, plus 5 %", () => {
+            const flat = curve(0, [0, 10, 100, 40, 90, 3]);
+            const update = yFitUpdate(input([flat]), "overlay", [2, 4]);
+            expect(update["yaxis.range"]).toEqual([0, 105]);
+        });
+
+        it("ignores a hidden curve and the values outside the window", () => {
+            const loud = curve(0, [500, 500, 500, 500]);
+            const quiet = curve(1, [0, 20, 40, 10]);
+            const given = input([loud, quiet], {
+                states: ["hidden", "plain"],
+            });
+            expect(yFitUpdate(given, "overlay", [1, 2])["yaxis.range"]).toEqual(
+                [0, 42],
+            );
+        });
+
+        it("goes back to the autorange for the whole spectrum, and for a window holding no value", () => {
+            const given = input([curve(0, [1, 2, 3])]);
+            expect(yFitUpdate(given, "overlay", null)).toEqual({
+                "yaxis.autorange": true,
+            });
+            expect(yFitUpdate(given, "overlay", [50, 60])).toEqual({
+                "yaxis.autorange": true,
+            });
+        });
+
+        it("lowers the floor under a negative value, with the same headroom", () => {
+            const given = input([curve(0, [-10, 0, 30])]);
+            const [from, to] = yFitUpdate(given, "overlay", [0, 2])[
+                "yaxis.range"
+            ] as number[];
+            expect(from).toBeCloseTo(-12);
+            expect(to).toBeCloseTo(32.1);
+        });
+
+        it("fits a log axis from the smallest positive to the highest, in log10", () => {
+            const given = input([curve(0, [0, 10, 1000, 100])], { yLog: true });
+            const [from, to] = yFitUpdate(given, "overlay", [0, 3])[
+                "yaxis.range"
+            ] as number[];
+            expect(from).toBeCloseTo(1 - 0.1);
+            expect(to).toBeCloseTo(3 + 0.1);
+        });
+
+        it("fits each panel of the grid to its own curves", () => {
+            const given = input([
+                curve(0, [0, 10, 20]),
+                curve(1, [0, 100, 200]),
+            ]);
+            const update = yFitUpdate(given, "multiples", [0, 2]);
+            expect(update["yaxis.range"]).toEqual([0, 21]);
+            expect(update["yaxis2.range"]).toEqual([0, 210]);
+        });
+
+        it("adds each curve's lift in Offset", () => {
+            const given = input([curve(0, [0, 10]), curve(1, [0, 10])]);
+            const range = yFitUpdate(given, "offset", [0, 1])[
+                "yaxis.range"
+            ] as number[];
+            expect(range[1]).toBeGreaterThan(10);
+            expect(range[0]).toBeLessThan(0);
+        });
+
+        it("never touches the curves it reads, nor the figures built from them", () => {
+            const frozen = curve(0, [0, 10, 100]);
+            Object.freeze(frozen.x);
+            Object.freeze(frozen.y);
+            const given = input([frozen], { lens: true, yLog: true });
+            expect(() => {
+                yFitUpdate(given, "overlay", [0, 2]);
+                stackedFigure(given, false);
+                stackedFigure(given, true);
+                multiplesFigure(given);
+            }).not.toThrow();
+            expect(frozen.y).toEqual([0, 10, 100]);
         });
     });
 });

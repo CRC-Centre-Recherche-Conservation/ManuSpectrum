@@ -23,6 +23,8 @@ import {
     unifiedHoverLine,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
+import { DECLARED_STRIP_PX } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
+
 import type { Layout, PlotData, Shape } from "plotly.js";
 import type {
     CurvePaint,
@@ -68,6 +70,12 @@ export interface FigureInput {
     yLog?: boolean;
     /** Layout shapes drawn over the curves, passed through as given. */
     shapes?: readonly Partial<Shape>[];
+    /**
+     * The chart carries the XRF lens: its counts axis never goes below zero
+     * (linear Y, not Offset) and a stacked chart keeps `DECLARED_STRIP_PX`
+     * more above its plot area for the declared labels.
+     */
+    lens?: boolean;
 }
 
 export interface Figure {
@@ -335,12 +343,18 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     const yaxis: Record<string, unknown> = {
         ...(base.yaxis as Record<string, unknown>),
         ...(log ? { type: "log" } : {}),
+        ...(input.lens && !log && !offset ? { rangemode: "tozero" } : {}),
     };
+    const margin = base.margin as { t: number };
     return {
         data,
         layout: {
             ...base,
-            margin: { ...(base.margin as object), r: LABEL_ROOM },
+            margin: {
+                ...margin,
+                r: LABEL_ROOM,
+                ...(input.lens ? { t: margin.t + DECLARED_STRIP_PX } : {}),
+            },
             yaxis: offset
                 ? {
                       ...yaxis,
@@ -428,6 +442,7 @@ export function multiplesFigure(input: FigureInput): Figure {
     const baseY: Record<string, unknown> = {
         ...(base.yaxis as Record<string, unknown>),
         ...(logY(input, false) ? { type: "log" } : {}),
+        ...(input.lens && !logY(input, false) ? { rangemode: "tozero" } : {}),
     };
     const annotations: Annotation[] = [];
     const follows: number[][] = [];
@@ -529,6 +544,75 @@ export function multiplesFigure(input: FigureInput): Figure {
         shown,
         height,
     };
+}
+
+/** How far above the highest value the fitted Y range goes, as a share of its height. */
+const FIT_HEADROOM = 0.05;
+/** The decades kept on each side of a log axis whose window holds one value. */
+const LOG_FLAT_PAD = 0.5;
+
+/**
+ * The relayout that fits the counts axes to the energy window `xRange`: for
+ * each Y axis, from zero (or the lowest value when negative) to the highest
+ * value of the curves shown there inside the window, plus `FIT_HEADROOM`;
+ * on a log axis from the smallest positive value to the highest, in log10, with
+ * the same share on both ends. Offset adds each curve's lift first. A curve
+ * hidden by its state is ignored. `null` or a window holding no value gives
+ * every axis back its autorange. A relayout of `yaxis*.range` only: no data
+ * is redrawn.
+ */
+export function yFitUpdate(
+    input: FigureInput,
+    kind: "overlay" | "offset" | "multiples",
+    xRange: readonly [number, number] | null,
+): Record<string, unknown> {
+    const offset = kind === "offset";
+    const log = logY(input, offset);
+    const lifts = offset
+        ? offsetLifts(input.curves.map((curve) => curve.yRange))
+        : [];
+    const slots =
+        kind === "multiples"
+            ? [...new Set(input.curves.map((curve) => curve.slot))].sort(
+                  (one, other) => one - other,
+              )
+            : [null];
+    const [low, high] = xRange
+        ? [Math.min(...xRange), Math.max(...xRange)]
+        : [0, 0];
+    const update: Record<string, unknown> = {};
+    slots.forEach((slot, panel) => {
+        const name = `yaxis${panel === 0 ? "" : panel + 1}`;
+        let min = Infinity;
+        let max = -Infinity;
+        input.curves.forEach((curve, index) => {
+            if (slot !== null && curve.slot !== slot) return;
+            if (input.states[index] === "hidden" || !xRange) return;
+            const lift = lifts[index] ?? 0;
+            for (let at = 0; at < curve.x.length; at += 1) {
+                const x = curve.x[at];
+                const y = curve.y[at] + lift;
+                if (!(x >= low && x <= high) || !Number.isFinite(y)) continue;
+                if (log && !(y > 0)) continue;
+                if (y < min) min = y;
+                if (y > max) max = y;
+            }
+        });
+        if (max === -Infinity || (!log && !(max > 0 || min < 0))) {
+            update[`${name}.autorange`] = true;
+            return;
+        }
+        if (log) {
+            const [from, to] = [Math.log10(min), Math.log10(max)];
+            const pad = to > from ? (to - from) * FIT_HEADROOM : LOG_FLAT_PAD;
+            update[`${name}.range`] = [from - pad, to + pad];
+            return;
+        }
+        const span = max > min ? max - min : Math.abs(max) || 1;
+        const floor = offset || min < 0 ? min - span * FIT_HEADROOM : 0;
+        update[`${name}.range`] = [floor, max + (max - floor) * FIT_HEADROOM];
+    });
+    return update;
 }
 
 /**

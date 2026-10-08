@@ -276,7 +276,7 @@ describe("lensShapes", () => {
                 ],
                 panels: [
                     panel("", {
-                        instrument: [{ label: "i", energy: 4, colour: "#f00" }],
+                        instrument: [{ label: "i", energy: 4 }],
                         bands: [
                             {
                                 label: "Compton",
@@ -323,7 +323,148 @@ describe("lensShapes", () => {
         expect(shapesKey([])).toBe("[]");
     });
 
+    describe("declared labels", () => {
+        const declared = (
+            entries: [string, number][],
+            over: Partial<LensShapesInput> = {},
+        ) =>
+            lensShapes(
+                input({
+                    plotWidth: 200,
+                    panels: [
+                        panel("", {
+                            extent: [0, 40],
+                            declared: entries.map(([symbol, energy]) => ({
+                                symbol,
+                                energy,
+                                rank: 0,
+                            })),
+                        }),
+                    ],
+                    ...over,
+                }),
+            );
+
+        it("keeps the tick in the plot and the label horizontal above it, in the element's colour", () => {
+            const [shape] = declared([["Hg", 10]]);
+            expect(shape).toMatchObject({
+                ysizemode: "pixel",
+                yanchor: 1,
+                y0: -14,
+                y1: 0,
+            });
+            expect(shape.label).toMatchObject({
+                text: "Hg",
+                textangle: 0,
+                xanchor: "center",
+                yanchor: "bottom",
+            });
+            expect(shape.label?.font?.color).toBe(shape.line?.color);
+        });
+
+        it("staggers labels that would touch on two rows, rising above the plot", () => {
+            const shapes = declared([
+                ["Fe", 10],
+                ["Hg", 10.4],
+                ["Pb", 14],
+            ]);
+            expect(shapes.every((s) => s.label !== undefined)).toBe(true);
+            expect(shapes.map((s) => s.y1)).toEqual([0, 14, 0]);
+            expect(shapes.map((s) => s.y0)).toEqual([-14, -14, -14]);
+        });
+
+        it("leaves a label out when both rows are taken, the tick stays", () => {
+            const shapes = declared([
+                ["Fe", 10],
+                ["Hg", 10.2],
+                ["Pb", 10.4],
+            ]);
+            expect(shapes).toHaveLength(3);
+            expect(shapes[2].label).toBeUndefined();
+        });
+
+        it("lifts the strip when the caller says so", () => {
+            const shapes = declared([["Fe", 10]], {
+                declaredStrip: { rows: 1, lift: 16 },
+            });
+            expect(shapes[0].y1).toBe(16);
+        });
+
+        it("keeps the level dashes", () => {
+            const shapes = lensShapes(
+                input({
+                    panels: [
+                        panel("", {
+                            declared: [
+                                { symbol: "A", energy: 1, rank: 0 },
+                                { symbol: "B", energy: 5, rank: 1 },
+                                { symbol: "C", energy: 9, rank: 2 },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(shapes.map((s) => s.line?.dash)).toEqual([
+                "solid",
+                "dash",
+                "dot",
+            ]);
+        });
+    });
+
+    describe("data axes", () => {
+        it("references no data Y axis: every shape sits on the panel's domain, so no range grows", () => {
+            const shapes = lensShapes(
+                input({
+                    focus: [
+                        {
+                            hue: 0,
+                            lines: [{ energy: 5, label: "a", intensity: 1 }],
+                        },
+                    ],
+                    panels: [
+                        panel("", {
+                            declared: [{ symbol: "Fe", energy: 6, rank: 0 }],
+                            instrument: [{ label: "i", energy: 4 }],
+                            bands: [
+                                {
+                                    label: "Compton",
+                                    from: 1,
+                                    to: 2,
+                                    colour: "#f00",
+                                },
+                            ],
+                        }),
+                    ],
+                    overlaps: [{ from: 3, to: 4, hue: 0, symbol: "Fe" }],
+                }),
+            );
+            expect(shapes.length).toBe(6);
+            expect(shapes.every((s) => s.yref === "y domain")).toBe(true);
+        });
+    });
+
     describe("instrument labels", () => {
+        it("draws every tick in muted ink, whoever carries it", () => {
+            const shapes = lensShapes(
+                input({
+                    panels: [
+                        panel("", {
+                            instrument: [
+                                { label: "somme", energy: 4 },
+                                { label: "éch.", energy: 8 },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(shapes.map((s) => s.line?.color)).toEqual(["#666", "#666"]);
+            expect(shapes.map((s) => s.label?.font?.color)).toEqual([
+                "#666",
+                "#666",
+            ]);
+        });
+
         const ticks = (labels: [string, number][], plotWidth = 200) =>
             lensShapes(
                 input({
@@ -334,7 +475,6 @@ describe("lensShapes", () => {
                             instrument: labels.map(([label, energy]) => ({
                                 label,
                                 energy,
-                                colour: "#f00",
                             })),
                         }),
                     ],

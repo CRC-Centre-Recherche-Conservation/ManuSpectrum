@@ -352,7 +352,7 @@ describe("useXrfLens", () => {
         expect(lineAt(shapesOf(lens), 9.989)).toBeUndefined();
     });
 
-    it("draws the tube's lines and the Compton band of a curve with a known anode, in the curve's hue", async () => {
+    it("draws the tube's lines and the Compton band of a curve with a known anode, the ticks in muted ink and the band in the curve's hue", async () => {
         const { lens } = await mountLens([
             curve({
                 order: 2,
@@ -361,9 +361,11 @@ describe("useXrfLens", () => {
         ]);
         const shapes = shapesOf(lens);
         const rayleigh = lineAt(shapes, 22.163);
-        expect(rayleigh?.line?.color).toBe("#s2");
+        expect(rayleigh?.line?.color).toBe("#444444");
         expect(rayleigh?.label?.text).toContain("Ag");
-        expect(shapes.some((shape) => shape.type === "rect")).toBe(true);
+        expect(shapes.find((shape) => shape.type === "rect")?.fillcolor).toBe(
+            "#s2",
+        );
     });
 
     it("takes the anode of the settings when the conditions give none, and draws nothing for « none »", async () => {
@@ -521,6 +523,63 @@ describe("useXrfLens", () => {
             expect.arrayContaining(["Comptonfr", "échap", "somme", "20 kVfr"]),
         );
         expect(french).not.toContain("esc");
+    });
+
+    describe("instrument ticks", () => {
+        const source = {
+            rawY: PEAKED,
+            excitation: { anode: "Ag", kV: 20, source: "conditions" as const },
+        };
+        const bottom = (lens: XrfLens) =>
+            shapesOf(lens).filter(
+                (shape) =>
+                    shape.ysizemode === "pixel" &&
+                    shape.yanchor === 0 &&
+                    shape.type === "line",
+            );
+
+        it("draws one tick per energy whatever the number of curves, in muted ink", async () => {
+            const one = await mountLens([curve(source)]);
+            const alone = bottom(one.lens);
+            one.wrapper.unmount();
+            const { lens } = await mountLens([
+                curve(source),
+                curve({ ...source, slot: 1, order: 1 }),
+                curve({ ...source, slot: 2, order: 2 }),
+            ]);
+            const ticks = bottom(lens);
+            expect(alone.length).toBeGreaterThan(0);
+            expect(ticks.map((shape) => shape.x0)).toEqual(
+                alone.map((shape) => shape.x0),
+            );
+            expect(
+                ticks.every((shape) => shape.line?.color === "#444444"),
+            ).toBe(true);
+        });
+
+        it("lists each peak once with the slots whose curves carry it", async () => {
+            const { lens, hidden } = await mountLens([
+                curve(source),
+                curve({ ...source, slot: 3, order: 1 }),
+            ]);
+            const escape = lens.instrumentNotes.value.filter(
+                (note) => note.label === "esc",
+            );
+            expect(escape).toHaveLength(1);
+            expect(escape[0].slots).toEqual([0, 3]);
+            expect(escape[0].everywhere).toBe(true);
+            hidden.value = [false, true];
+            expect(
+                lens.instrumentNotes.value.find((note) => note.label === "esc")
+                    ?.slots,
+            ).toEqual([0]);
+        });
+
+        it("lists nothing when the instrument layer is off", async () => {
+            const { lens } = await mountLens([curve(source)]);
+            lens.layers.value = { ...lens.layers.value, instrument: false };
+            expect(lens.instrumentNotes.value).toEqual([]);
+        });
     });
 
     it("announces a refusal at the caps of lens elements and anode choices", async () => {

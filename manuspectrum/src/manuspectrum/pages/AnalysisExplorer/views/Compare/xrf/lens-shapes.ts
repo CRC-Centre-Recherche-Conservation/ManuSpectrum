@@ -21,6 +21,9 @@ const LABEL_SIZE = 10;
 /** Rows the instrument labels are staggered on, and the height each row adds to its tick. */
 const INSTRUMENT_ROWS = 3;
 const ROW_STEP_PX = 14;
+/** Rows of declared labels in the strip above the plot area, and the room that strip takes above it. */
+export const DECLARED_ROWS = 2;
+export const DECLARED_STRIP_PX = DECLARED_ROWS * ROW_STEP_PX + 4;
 /** Width of one monospace glyph at `LABEL_SIZE`, and the gap kept between two labels on a row. */
 const GLYPH_PX = 6.2;
 const LABEL_GAP_PX = 4;
@@ -63,11 +66,10 @@ export interface DeclaredTick {
     focusHue?: number;
 }
 
-/** A dotted bottom tick in the hue of its curve. */
+/** A dotted bottom tick in muted ink: one per distinct energy, whatever curves carry it. */
 export interface InstrumentTick {
     label: string;
     energy: number;
-    colour: string;
 }
 
 export interface EnergyBand {
@@ -115,6 +117,12 @@ export interface LensShapesInput {
     plotWidth?: number;
     /** Drawn in front of every other shape and never dropped by the cap. */
     marker?: IdentifiedMarker;
+    /**
+     * Where the declared labels go: `rows` staggered rows, the first `lift`
+     * pixels above the plot area. The chart keeps `DECLARED_STRIP_PX` free
+     * above its plot area for the default two rows at no lift.
+     */
+    declaredStrip?: { rows: number; lift: number };
 }
 
 interface Ranked {
@@ -172,9 +180,13 @@ function fullLine(
 }
 
 /**
- * A short line against the top or the bottom edge of the panel. A bottom tick
- * (`row` 0 to `INSTRUMENT_ROWS - 1`) is `row` steps taller and carries its
- * label horizontally above its tip; a `null` text draws the tick alone.
+ * A short line against the top or the bottom edge of the panel.
+ *
+ * A bottom tick (`row` 0 to `INSTRUMENT_ROWS - 1`) rises `row` steps higher
+ * and carries its label horizontally above its tip. A top tick keeps
+ * `TICK_PX` inside the plot and, on `row` 1 and beyond, rises `lift` plus
+ * `row` steps above it into the strip over the plot area, where its label sits
+ * horizontally above the tip. A `null` text draws the tick alone.
  */
 function tick(
     panel: LensPanel,
@@ -185,8 +197,10 @@ function tick(
     text: string | null,
     theme: LensTheme,
     row = 0,
+    lift = 0,
 ): LensShape {
-    const length = TICK_PX + row * ROW_STEP_PX;
+    const length = TICK_PX + (top ? 0 : row * ROW_STEP_PX);
+    const reach = top ? lift + row * ROW_STEP_PX : 0;
     const shape: LensShape = {
         type: "line",
         layer: "above",
@@ -197,29 +211,28 @@ function tick(
         ysizemode: "pixel",
         yanchor: top ? 1 : 0,
         y0: top ? -length : 0,
-        y1: top ? 0 : length,
+        y1: top ? reach : length,
         line: { color: colour, width: 1.5, dash: dash as "dash" },
     };
     if (text !== null) {
-        shape.label = top
-            ? label(text, colour, theme, "start")
-            : label(text, colour, theme, "end", {
-                  textangle: 0,
-                  xanchor: "center",
-                  yanchor: "bottom",
-              });
+        shape.label = label(text, colour, theme, "end", {
+            textangle: 0,
+            xanchor: "center",
+            yanchor: "bottom",
+        });
     }
     return shape;
 }
 
 /**
- * The row (0 to `INSTRUMENT_ROWS - 1`) each tick's label takes, `null` when it
+ * The row (0 to `rowCount - 1`) each tick's label takes, `null` when it
  * fits on none or repeats the text of a neighbour it would touch.
  */
 function labelRows(
     texts: readonly string[],
     xs: readonly number[],
     pxPerKev: number,
+    rowCount: number,
 ): (number | null)[] {
     interface Placed {
         text: string;
@@ -243,7 +256,7 @@ function labelRows(
         ) {
             continue;
         }
-        for (let row = 0; row < INSTRUMENT_ROWS; row++) {
+        for (let row = 0; row < rowCount; row++) {
             const clear = placed.every(
                 (held) => held.row !== row || held.hi <= lo || hi <= held.lo,
             );
@@ -332,10 +345,13 @@ function overlapShapes(
  * flag turns a relayout into a full calc). Beyond `MAX_LENS_SHAPES` the least
  * important are dropped: focus lines, lens elements, declared majors, minors,
  * traces, instrument ticks, then bands; the identified `marker` is never
- * dropped. The instrument labels are
- * horizontal and staggered on `INSTRUMENT_ROWS` rows of taller ticks by the
- * width they need at `plotWidth`; one that fits on no row is left out and its
- * tick stays. A band's label sits above its panel.
+ * dropped. No shape reads or extends a data axis: the ticks are pixel-sized
+ * on the panel's domain. The instrument labels (muted ink) are horizontal and
+ * staggered on `INSTRUMENT_ROWS` rows of taller ticks by the width they need
+ * at `plotWidth`; the declared labels (the element's colour) are horizontal
+ * too, on `declaredStrip.rows` rows above the plot area, their tick staying in
+ * the plot. A label that fits on no row is left out and its tick stays. A
+ * band's label sits above its panel.
  */
 export function lensShapes(input: LensShapesInput): LensShape[] {
     const { theme } = input;
@@ -394,9 +410,25 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                 );
             }
         }
-        for (const entry of panel.declared) {
-            if (!inside(entry.energy, panel.extent)) continue;
+        const inPanel = panel.declared.filter((entry) =>
+            inside(entry.energy, panel.extent),
+        );
+        const span = panel.extent[1] - panel.extent[0];
+        const pxPerKev =
+            span > 0 ? (input.plotWidth ?? DEFAULT_PLOT_PX) / span : 0;
+        const strip = input.declaredStrip ?? {
+            rows: DECLARED_ROWS,
+            lift: 0,
+        };
+        const declaredRows = labelRows(
+            inPanel.map((entry) => entry.symbol),
+            inPanel.map((entry) => entry.energy),
+            pxPerKev,
+            strip.rows,
+        );
+        inPanel.forEach((entry, index) => {
             const rank = Math.min(Math.max(entry.rank, 0), 2);
+            const row = declaredRows[index];
             add(
                 2 + rank,
                 tick(
@@ -407,19 +439,21 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                         ? theme.focus[entry.focusHue]
                         : elementColour(theme, entry.symbol),
                     RANK_DASH[rank],
-                    entry.symbol,
+                    row === null ? null : entry.symbol,
                     theme,
+                    row ?? 0,
+                    strip.lift,
                 ),
             );
-        }
+        });
         const shown = panel.instrument.filter((entry) =>
             inside(entry.energy, panel.extent),
         );
-        const span = panel.extent[1] - panel.extent[0];
         const rows = labelRows(
             shown.map((entry) => entry.label),
             shown.map((entry) => entry.energy),
-            span > 0 ? (input.plotWidth ?? DEFAULT_PLOT_PX) / span : 0,
+            pxPerKev,
+            INSTRUMENT_ROWS,
         );
         shown.forEach((entry, index) => {
             const row = rows[index];
@@ -429,7 +463,7 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                     panel,
                     entry.energy,
                     false,
-                    entry.colour,
+                    theme.inkMuted,
                     "dot",
                     row === null ? null : entry.label,
                     theme,
