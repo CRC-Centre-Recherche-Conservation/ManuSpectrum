@@ -8,6 +8,7 @@ import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
+    ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -80,6 +81,7 @@ interface FakeLinked {
     linked: LinkedSelection;
     selection: { value: NodeId[] };
     slots: { value: (NodeId | null)[] };
+    nodes: { value: Set<NodeId> };
     levels: { value: Map<NodeId, RelationLevel> };
     previewLevels: { value: Map<NodeId, RelationLevel> };
     toggle: ReturnType<typeof vi.fn>;
@@ -146,6 +148,7 @@ const FOLIO_CANVAS = "https://iiif.example/f12r";
 function fakeLinked(): FakeLinked {
     const selection = ref<NodeId[]>([]);
     const slots = ref<(NodeId | null)[]>([]);
+    const nodes = ref(new Set<NodeId>());
     const levels = shallowRef(new Map<NodeId, RelationLevel>());
     const previewLevels = shallowRef(new Map<NodeId, RelationLevel>());
     const toggle = vi.fn();
@@ -153,7 +156,10 @@ function fakeLinked(): FakeLinked {
     const linked = {
         selection: computed(() => selection.value),
         slots: computed(() => slots.value),
-        graph: computed(() => ({ symbols: new Map<string, string>() })),
+        graph: computed(() => ({
+            symbols: new Map<string, string>(),
+            nodes: nodes.value,
+        })),
         levels: computed(() => levels.value),
         relations: computed(
             () =>
@@ -176,7 +182,16 @@ function fakeLinked(): FakeLinked {
         toggle,
         preview,
     } as unknown as LinkedSelection;
-    return { linked, selection, slots, levels, previewLevels, toggle, preview };
+    return {
+        linked,
+        selection,
+        slots,
+        nodes,
+        levels,
+        previewLevels,
+        toggle,
+        preview,
+    };
 }
 
 function nextFrame(): Promise<void> {
@@ -187,6 +202,7 @@ let fake: FakeLinked;
 let fetchMock: ReturnType<typeof vi.fn>;
 let wrapper: VueWrapper | null = null;
 let answers: Map<string, Response>;
+const announce = vi.fn();
 
 /** Answers each preview by its file number `n`; the others get `SERIES`. */
 function answer(n: number, response: Response): void {
@@ -208,6 +224,7 @@ async function mountWorkshop(
             provide: {
                 [WINDOW_RESIZE_KEY as symbol]: resize,
                 [LINKED_SELECTION_KEY as symbol]: fake.linked,
+                [ANNOUNCE_KEY as symbol]: announce,
             },
         },
     });
@@ -265,6 +282,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
+    announce.mockClear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     document.documentElement.removeAttribute("style");
@@ -1892,5 +1910,206 @@ describe("XyWorkshop XRF lens", () => {
             unknown[]
         >;
         expect(update.opacity).toEqual([1, 0]);
+    });
+
+    describe("peak identifier", () => {
+        /** 2.00 to 2.70 keV in 0.01 steps, flat at 10 counts with one peak of 500 at 2.35. */
+        const PEAK = series(
+            Array.from({ length: 71 }, (_, i) => 2 + i / 100),
+            Array.from({ length: 71 }, (_, i) => (i === 35 ? 500 : 10)),
+        );
+
+        async function mountPeak(): Promise<VueWrapper> {
+            answer(1, jsonResponse(PEAK));
+            const view = await mountWorkshop([curve(0, 1)]);
+            await settle();
+            return view;
+        }
+
+        function toggleButton(view: VueWrapper): DOMWrapper<Element> {
+            return view.find('[data-action="identify"]');
+        }
+
+        function clickAt(view: VueWrapper, x: number): void {
+            emitPlotly(view.find(".chart").element, "plotly_click", {
+                points: [{ curveNumber: 0, x, y: 10 }],
+                event: {},
+            });
+        }
+
+        async function identifyAt(view: VueWrapper, x: number): Promise<void> {
+            await toggleButton(view).trigger("click");
+            clickAt(view, x);
+            await flushPromises();
+        }
+
+        it("offers « Identify a peak » as a toggle, off at first and only in an XRF window", async () => {
+            const view = await mountPeak();
+            const button = toggleButton(view);
+            expect(button.attributes("aria-pressed")).toBe("false");
+            expect(button.attributes("aria-expanded")).toBeUndefined();
+            expect(button.attributes("data-popover")).toBeUndefined();
+            expect(view.find(".chart").classes()).not.toContain("identifying");
+            await button.trigger("click");
+            expect(button.attributes("aria-pressed")).toBe("true");
+            expect(view.find(".chart").classes()).toContain("identifying");
+        });
+
+        it("opens the candidates at the local maximum of the raw counts on a click, and toggles nothing in the focus", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const dialog = view.find('[role="dialog"]');
+            expect(dialog.find("h3").text()).toMatch(
+                /^Candidates at 2\.35 keV \(± 0\.\d\d\)$/,
+            );
+            expect(dialog.find(".checked").text()).toContain("A1");
+            expect(dialog.find('li[data-symbol="Pb"]').exists()).toBe(true);
+            expect(fake.toggle).not.toHaveBeenCalled();
+            const button = toggleButton(view);
+            expect(button.attributes("aria-expanded")).toBe("true");
+            expect(button.attributes("data-popover")).toBe("identify");
+        });
+
+        it("still toggles the focus on a click outside the mode", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            await toggleButton(view).trigger("click");
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            emitPlotly(view.find(".chart").element, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            clickAt(view, 2.33);
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            expect(fake.toggle).toHaveBeenCalledWith(
+                analysisNode(analysisHit(1).id),
+            );
+        });
+
+        it("identifies, rather than toggling, a press that slips into a zoom box under 20 px", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [2, 2.7], autorange: true, _length: 400 },
+                    yaxis: { range: [0, 500], autorange: true, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(new Event("pointerdown"));
+            emitPlotly(chart, "plotly_unhover", { points: [], event: {} });
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 2.33,
+                "xaxis.range[1]": 2.331,
+                "yaxis.range[0]": 10,
+                "yaxis.range[1]": 11,
+            });
+            await flushPromises();
+            expect(view.find('[role="dialog"] h3').text()).toContain(
+                "2.35 keV",
+            );
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("moves one channel with ← and →, and to the energy typed in the field", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const input = view.find('[role="dialog"] input');
+            expect(input.attributes("step")).toBe("0.01");
+            await view.find('[data-action="raise"]').trigger("click");
+            expect(view.find(".peak-identifier h3").text()).toContain(
+                "2.36 keV",
+            );
+            expect((input.element as HTMLInputElement).value).toBe("2.36");
+            await view.find('[data-action="lower"]').trigger("click");
+            await view.find('[data-action="lower"]').trigger("click");
+            expect(view.find(".peak-identifier h3").text()).toContain(
+                "2.34 keV",
+            );
+            await input.setValue("2.5");
+            expect(view.find(".peak-identifier h3").text()).toContain(
+                "2.50 keV",
+            );
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("toggles el:Pb in the focus with « Pin Pb », offered only for an element of the graph", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            expect(
+                view.find('li[data-symbol="Pb"] [data-action="pin"]').exists(),
+            ).toBe(false);
+            fake.nodes.value = new Set([elementNode("Pb")]);
+            await flushPromises();
+            const pin = view.find('li[data-symbol="Pb"] [data-action="pin"]');
+            expect(pin.text()).toBe("Pin Pb");
+            await pin.trigger("click");
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            expect(fake.toggle).toHaveBeenCalledWith(elementNode("Pb"));
+        });
+
+        it("adds the element to the lens elements with « Show Pb lines », leaving the focus alone", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const lines = view.find(
+                'li[data-symbol="Pb"] [data-action="lines"]',
+            );
+            expect(lines.text()).toBe("Show Pb lines");
+            expect(lines.attributes("aria-pressed")).toBe("false");
+            await lines.trigger("click");
+            await flushPromises();
+            expect(
+                view
+                    .find('li[data-symbol="Pb"] [data-action="lines"]')
+                    .attributes("aria-pressed"),
+            ).toBe("true");
+            expect(view.find(".xrf-strip li.element").text()).toContain("Pb");
+            expect(fake.toggle).not.toHaveBeenCalled();
+            expect(fake.selection.value).toEqual([]);
+        });
+
+        it("closes on Escape, gives the focus back to the toggle and leaves the selection intact", async () => {
+            const view = await mountPeak();
+            const held = analysisNode(analysisHit(1).id);
+            fake.selection.value = [held];
+            fake.slots.value = [held];
+            await identifyAt(view, 2.33);
+            expect(document.activeElement).toBe(
+                view.find('[role="dialog"] input').element,
+            );
+            await view
+                .find('[role="dialog"] input')
+                .trigger("keydown", { key: "Escape" });
+            await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            expect(document.activeElement).toBe(toggleButton(view).element);
+            expect(
+                toggleButton(view).attributes("aria-expanded"),
+            ).toBeUndefined();
+            expect(fake.selection.value).toEqual([held]);
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("announces the number of candidates when the identifier opens", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const count = view.findAll(".peak-identifier .candidate").length;
+            expect(count).toBeGreaterThan(0);
+            expect(announce).toHaveBeenLastCalledWith(
+                expect.stringMatching(/^\d+ candidates? at 2\.35 keV$/),
+            );
+        });
+
+        it("closes the identifier and leaves the mode with the toggle", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            await toggleButton(view).trigger("click");
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            expect(toggleButton(view).attributes("aria-pressed")).toBe("false");
+        });
     });
 });

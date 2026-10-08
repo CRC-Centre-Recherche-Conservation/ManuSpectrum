@@ -15,6 +15,7 @@ import { BASE_VIEW } from "utils/xy-views";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
+import PeakIdentifier from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeakIdentifier.vue";
 import XyCurveList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue";
 import XyLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
 import XrfLensControls from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue";
@@ -211,7 +212,10 @@ const DEFAULT_POINTER = "mouse";
  * on either previews it. A press on the chart that slips into a zoom box
  * narrower than `MIN_ZOOM_PX` is the click it was meant to be: the axes go
  * back to the view the press began on and the curve under it, if any,
- * toggles.
+ * toggles. In an XRF window the « Identify a peak » mode sends that click
+ * (and the slipped press) to `PeakIdentifier` instead: the energy is read on
+ * the curve under the pointer, snapped to the local maximum of its raw
+ * counts, and nothing is toggled in the focus.
  *
  * A file over the server's ceiling, missing or empty is named and left
  * out. A chart Plotly cannot draw says so in the window. The chart follows
@@ -273,9 +277,14 @@ let disposed = false;
 let previewing = false;
 /** The curve under the mouse, as Plotly last hovered it. */
 let hovered: Curve | null = null;
-/** The curve under the mouse and the axes shown when the last press on the chart began. */
-let press: { curve: Curve | null; axes: Record<string, AxisView> } | null =
-    null;
+/** The energy under the mouse (`points[0].x`), as Plotly last hovered it. */
+let hoveredEnergy: number | null = null;
+/** The curve under the mouse, its energy and the axes shown when the last press on the chart began. */
+let press: {
+    curve: Curve | null;
+    energy: number | null;
+    axes: Record<string, AxisView>;
+} | null = null;
 
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
@@ -294,6 +303,12 @@ const unrelatedMode = ref<"hide" | "dim">("hide");
 const logScale = ref(false);
 /** The energy range shown: a preset key, or `CUSTOM_RANGE` after a zoom by hand. */
 const rangeKey = ref("full");
+/** « Identify a peak »: a click on the chart identifies instead of toggling the focus. */
+const identifying = ref(false);
+/** The peak being identified: the curve it was read on (`curveId`) and its energy (keV). */
+const identified = ref<{ id: string; energy: number } | null>(null);
+const identifyToggle =
+    useTemplateRef<InstanceType<typeof IconButton>>("identifyToggle");
 
 /** Each readable file's answer, by preview URL, once the answer is for the files shown. */
 const answers = computed(() => {
@@ -473,6 +488,22 @@ const lens = useXrfLens({
     hidden: () => effectiveStates.value.map((state) => state === "hidden"),
     layout: () => layout.value,
     slots: () => slots.value,
+});
+/** The identifier's subject: the curve it reads and what the peak may be; null when closed, or when the curve left the window. */
+const identification = computed(() => {
+    const held = identified.value;
+    if (!held || !identifying.value || !lens.active.value) return null;
+    const index = drawn.value.findIndex((curve) => curveId(curve) === held.id);
+    if (index < 0) return null;
+    return {
+        index,
+        name: drawn.value[index].label,
+        energy: held.energy,
+        candidates: lens.candidatesAt(index, held.energy),
+        kV: lens.kVOf(index),
+        channel: lens.channelOf(index),
+        tolerance: lens.toleranceAt(held.energy),
+    };
 });
 /** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
 const logShown = computed(
@@ -671,6 +702,11 @@ watch(layout, (name) => {
 });
 watch(effectiveStates, () => scheduleRestyle());
 watch(lens.model, () => scheduleShapes());
+watch([xrfWindow, layout], ([isXrf, shown]) => {
+    if (isXrf && shown !== "table") return;
+    identifying.value = false;
+    identified.value = null;
+});
 watch(
     () => resizeTick?.value,
     () => followSize(),
@@ -962,14 +998,19 @@ function bindEvents(element: HTMLElement): void {
     if (boundCharts.has(element) || typeof target.on !== "function") return;
     boundCharts.add(element);
     element.addEventListener("pointerdown", () => {
-        press = { curve: hovered, axes: axesOf(element) };
+        press = {
+            curve: hovered,
+            energy: hoveredEnergy,
+            axes: axesOf(element),
+        };
     });
     target.on("plotly_relayout", (update: Record<string, unknown>) => {
         const before = press;
         press = null;
         if (before && plotly && slipZoom(update, before.axes)) {
             void plotly.relayout(element, undoZoom(update, before.axes));
-            if (before.curve) toggle(entryNode(before.curve));
+            if (identifying.value) identify(before.curve, before.energy);
+            else if (before.curve) toggle(entryNode(before.curve));
             return;
         }
         zoomed.value = zoomedAfter(update, zoomed.value);
@@ -980,16 +1021,51 @@ function bindEvents(element: HTMLElement): void {
     target.on("plotly_hover", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
         hovered = curve;
+        hoveredEnergy = energyOf(event);
         if (curve) preview(entryNode(curve), pointerOf(event));
     });
     target.on("plotly_unhover", (event: PlotMouseEvent) => {
         hovered = null;
+        hoveredEnergy = null;
         preview(null, pointerOf(event));
     });
     target.on("plotly_click", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
-        if (curve) toggle(entryNode(curve));
+        if (identifying.value) identify(curve, energyOf(event));
+        else if (curve) toggle(entryNode(curve));
     });
+}
+
+/** The energy Plotly names for a point (`points[0].x`); null when it is not a number. */
+function energyOf(event: PlotMouseEvent): number | null {
+    const x: unknown = event?.points?.[0]?.x;
+    return typeof x === "number" && Number.isFinite(x) ? x : null;
+}
+
+/** Opens the identifier on `curve` at `energy`, snapped to the local maximum of its raw counts; nothing without both. */
+function identify(curve: Curve | null, energy: number | null): void {
+    if (!curve || energy === null) return;
+    const index = drawn.value.indexOf(curve);
+    if (index < 0) return;
+    identified.value = {
+        id: curveId(curve),
+        energy: lens.snapEnergy(index, energy),
+    };
+}
+
+function toggleIdentify(): void {
+    identifying.value = !identifying.value;
+    if (!identifying.value) identified.value = null;
+}
+
+async function closeIdentifier(): Promise<void> {
+    identified.value = null;
+    await nextTick();
+    identifyToggle.value?.element?.focus();
+}
+
+function moveIdentified({ energy }: { energy: number }): void {
+    if (identified.value) identified.value = { ...identified.value, energy };
 }
 
 /** The axes Plotly shows on `element`, by name: range, autorange and length in pixels. */
@@ -1347,8 +1423,46 @@ function chooseView(event: Event): void {
                             "
                         />
                     </template>
+                    <template #identify>
+                        <IconButton
+                            ref="identifyToggle"
+                            icon="bullseye"
+                            data-action="identify"
+                            :data-popover="
+                                identification ? 'identify' : undefined
+                            "
+                            :aria-expanded="identification ? 'true' : undefined"
+                            :pressed="identifying"
+                            :label="$gettext('Identify a peak')"
+                            tip-placement="below"
+                            tip-align="start"
+                            @click="toggleIdentify"
+                            @keydown.esc="identification && closeIdentifier()"
+                        />
+                    </template>
                 </XrfLensControls>
             </div>
+            <PeakIdentifier
+                v-if="identification"
+                :energy="identification.energy"
+                :curve-name="identification.name"
+                :candidates="identification.candidates"
+                :k-v="identification.kV"
+                :channel="identification.channel"
+                :tolerance="identification.tolerance"
+                :lang="lang"
+                :pinnable="lens.pinnable"
+                :pinned="lens.isPinned"
+                :lens-symbols="lens.settings.value.elements"
+                :declared-parts="
+                    (entry) =>
+                        lens.declaredPartsAt(identification!.index, entry)
+                "
+                @move="moveIdentified"
+                @close="closeIdentifier"
+                @toggle-pin="lens.togglePin($event.symbol)"
+                @toggle-lens="lens.toggleElement($event.symbol)"
+            />
             <p
                 v-if="treatments.mixed"
                 class="note mixed"
@@ -1386,7 +1500,7 @@ function chooseView(event: Event): void {
                 <div
                     ref="chart"
                     class="chart"
-                    :class="{ failed: drawFailed }"
+                    :class="{ failed: drawFailed, identifying }"
                     :style="
                         chartHeight ? { minBlockSize: chartHeight } : undefined
                     "
@@ -1583,6 +1697,10 @@ function chooseView(event: Event): void {
 
 .xy-workshop .chart.failed {
     min-block-size: 0;
+}
+
+.xy-workshop .chart.identifying :deep(.nsewdrag) {
+    cursor: crosshair !important;
 }
 
 .xy-workshop .note,

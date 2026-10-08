@@ -6,14 +6,20 @@ import {
     SYNTHESIS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import { parseNodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import {
+    elementNode,
+    parseNodeId,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { itemHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 import {
     declaredByAnalysis,
     declaredParts,
     mergeDeclared,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
-import { instrumentPeaks } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
+import {
+    candidates,
+    instrumentPeaks,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
 import { lensShapes } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import {
     allSymbols,
@@ -28,7 +34,12 @@ import {
     focusLines,
     fwhmAt,
     principalLine,
+    tolerance,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/physics.ts";
+import {
+    channelWidth,
+    snapToPeak,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/spectrum.ts";
 
 import type { ShallowRef } from "vue";
 
@@ -51,7 +62,10 @@ import type {
     DeclaredMap,
     DeclaredParts,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
-import type { InstrumentPeak } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
+import type {
+    Candidate,
+    InstrumentPeak,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
 import type {
     FocusLines,
     InstrumentTick,
@@ -323,9 +337,10 @@ export function useXrfLens(sources: LensSources) {
         });
     });
 
-    const instrumentOfCurves = computed(() => {
+    /** The instrument peaks of each curve, whatever the layer toggle says (the identifier reads them too). */
+    const allInstrument = computed(() => {
         const loaded = table.value;
-        if (!loaded || !active.value || !layers.value.instrument) return [];
+        if (!loaded || !active.value) return [];
         return sources.curves().map((curve) => {
             const { anode, kV } = excitationOf(curve);
             return instrumentPeaks(
@@ -337,6 +352,9 @@ export function useXrfLens(sources: LensSources) {
             );
         });
     });
+    const instrumentOfCurves = computed(() =>
+        layers.value.instrument ? allInstrument.value : [],
+    );
 
     function elementOf(symbol: string): XrfElement | undefined {
         return table.value?.elements[symbol];
@@ -723,6 +741,92 @@ export function useXrfLens(sources: LensSources) {
         });
     });
 
+    /**
+     * The energy a click at `energy` means on curve `index`: the local
+     * maximum of its raw counts within half a FWHM, whatever the treatment.
+     */
+    function snapEnergy(index: number, energy: number): number {
+        const curve = sources.curves()[index];
+        if (!curve || curve.x.length === 0) return energy;
+        const at = snapToPeak(
+            curve.x,
+            curve.rawY,
+            energy,
+            fwhmAt(energy, fwhmMn.value) / 2,
+        );
+        return curve.x[at] ?? energy;
+    }
+
+    /** The spacing of curve `index`'s channels (keV), to the micro-keV; 0 when it has none. */
+    function channelOf(index: number): number {
+        const curve = sources.curves()[index];
+        return curve ? Math.round(channelWidth(curve.x) * 1e6) / 1e6 : 0;
+    }
+
+    /** The match tolerance (keV) around `energy`. */
+    function toleranceAt(energy: number): number {
+        return tolerance(energy, fwhmMn.value);
+    }
+
+    /** The tube voltage (kV) of curve `index`; null when unknown. */
+    function kVOf(index: number): number | null {
+        const curve = sources.curves()[index];
+        return curve ? excitationOf(curve).kV : null;
+    }
+
+    /** What a peak at `energy` on curve `index` may be; empty until the line table is loaded. */
+    function candidatesAt(index: number, energy: number): Candidate[] {
+        const loaded = table.value;
+        const curve = sources.curves()[index];
+        if (!loaded || !curve) return [];
+        return candidates(energy, {
+            table: loaded,
+            x: curve.x,
+            y: curve.rawY,
+            kV: excitationOf(curve).kV,
+            fwhmMn: fwhmMn.value,
+            declaredForCurve: declaredOfCurve(curve) ?? new Map(),
+            declaredInSelection: mergeDeclared(declared.value.values()),
+            lensElements: new Set(settings.value.elements),
+            instrumentPeaks: allInstrument.value[index] ?? [],
+        });
+    }
+
+    /** The parts of « declared major in Vermilion (A30) » for an element's entry, read from curve `index`'s analysis. */
+    function declaredPartsAt(
+        index: number,
+        entry: DeclaredElement,
+    ): DeclaredParts | null {
+        const data = synthesis?.value;
+        const curve = sources.curves()[index];
+        if (!data || !curve) return null;
+        const materials = [...entry.materials].sort(
+            (a, b) =>
+                (a.level?.rank ?? Infinity) - (b.level?.rank ?? Infinity) ||
+                a.id.localeCompare(b.id),
+        );
+        return declaredParts(
+            { ...entry, materials },
+            curve.analysis,
+            data,
+            store.basket,
+        );
+    }
+
+    /** Whether `symbol` is an `el:` node of the Selection's graph, so the focus can hold it. */
+    function pinnable(symbol: string): boolean {
+        return linked?.graph?.value?.nodes?.has(elementNode(symbol)) ?? false;
+    }
+
+    function isPinned(symbol: string): boolean {
+        return pinned.value.some((held) => held.symbol === symbol);
+    }
+
+    /** Pins or unpins `el:<symbol>` in the focus; nothing when the graph has no such node. */
+    function togglePin(symbol: string): void {
+        if (pinnable(symbol)) linked?.toggle(elementNode(symbol));
+    }
+
     watch(
         active,
         (on) => {
@@ -762,6 +866,15 @@ export function useXrfLens(sources: LensSources) {
         addElement,
         removeElement,
         toggleElement,
+        snapEnergy,
+        channelOf,
+        toleranceAt,
+        kVOf,
+        candidatesAt,
+        declaredPartsAt,
+        pinnable,
+        isPinned,
+        togglePin,
     };
 }
 
