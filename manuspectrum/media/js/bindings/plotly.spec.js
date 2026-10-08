@@ -204,3 +204,69 @@ describe('plotly binding disposal', () => {
         expect(plotly.relayout).not.toHaveBeenCalled();
     });
 });
+
+describe('plotly binding logarithmic Y', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        $(window).off('resize');
+        document.body.innerHTML = '';
+    });
+
+    const logConfig = (yLog) => ({
+        ...buildTracesConfig(),
+        traces: ko.observable([{ x: [1, 2, 3], y: [0, 5, 10] }]),
+        yLog: ko.observable(yLog),
+    });
+
+    it('draws linear when the toggle is off', async () => {
+        await mount(logConfig(false));
+
+        const [, traces, layout] = plotly.newPlot.mock.calls[0];
+        expect(layout.yaxis.type).toBe('linear');
+        expect(traces[0].y).toEqual([0, 5, 10]);
+    });
+
+    it('draws a log axis with the zeros clamped when the toggle is on', async () => {
+        await mount(logConfig(true));
+
+        const [, traces, layout] = plotly.newPlot.mock.calls[0];
+        expect(layout.yaxis.type).toBe('log');
+        expect(traces[0].y).toEqual([5, 5, 10]);
+        expect(traces[0].customdata).toEqual([0, 5, 10]);
+    });
+
+    it('redraws when the toggle changes, from the unmodified data', async () => {
+        const config = logConfig(false);
+        await mount(config);
+
+        config.yLog(true);
+        const [, logTraces, logLayout] = plotly.react.mock.calls.at(-1);
+        expect(logLayout.yaxis.type).toBe('log');
+        expect(logTraces[0].y).toEqual([5, 5, 10]);
+
+        config.yLog(false);
+        const [, linTraces, linLayout] = plotly.react.mock.calls.at(-1);
+        expect(linLayout.yaxis.type).toBe('linear');
+        expect(linTraces[0].y).toEqual([0, 5, 10]);
+        expect(config.traces()[0].y).toEqual([0, 5, 10]);
+    });
+
+    it('stays linear when a curve has nothing positive', async () => {
+        const config = logConfig(true);
+        config.traces([{ x: [1, 2], y: [0, 0] }]);
+        await mount(config);
+
+        expect(plotly.newPlot.mock.calls[0][2].yaxis.type).toBe('linear');
+    });
+
+    it('disposes the toggle subscription', async () => {
+        const config = logConfig(false);
+        const element = await mount(config);
+        ko.cleanNode(element);
+
+        expect(config.yLog.getSubscriptionsCount()).toBe(0);
+    });
+});

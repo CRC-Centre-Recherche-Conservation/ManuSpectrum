@@ -4,6 +4,7 @@
 
 import $ from 'jquery';
 import ko from 'knockout';
+import { canUseLogScale, logScaleFigure } from 'utils/xy-scale';
 
 // Each mount needs its own resize namespace, or disposing one chart detaches
 // another's handler.
@@ -71,6 +72,15 @@ function draw(Plotly, element, config) {
         }
     }
 
+    // Logarithmic Y is an axis scale: `config.yLog` (optional observable) asks
+    // for it, `utils/xy-scale` lays the data on it, the data stays as given.
+    let rawTraces = traces;
+    const wantsLog = () =>
+        !!(config.yLog && ko.unwrap(config.yLog)) && canUseLogScale(rawTraces);
+    const scaledTraces = () =>
+        wantsLog() ? logScaleFigure(rawTraces).traces : rawTraces;
+    traces = scaledTraces();
+
     const layout = {
         title: {
             text: config.title(),
@@ -92,6 +102,7 @@ function draw(Plotly, element, config) {
             }
         },
         yaxis: {
+            type: wantsLog() ? 'log' : 'linear',
             title: {
                 text: config.yAxisLabel(),
                 font: {
@@ -253,9 +264,19 @@ function draw(Plotly, element, config) {
         }));
     }
 
+    if (config.yLog && ko.isObservable(config.yLog)) {
+        subscriptions.push(config.yLog.subscribe(() => {
+            layout.yaxis.type = wantsLog() ? 'log' : 'linear';
+            layout.yaxis.autorange = true;
+            Plotly.react(element, scaledTraces(), layout, chartConfig);
+        }));
+    }
+
     if (useTracesMode) {
         subscriptions.push(config.traces.subscribe(newTraces => {
-            Plotly.react(element, newTraces || [], layout, chartConfig);
+            rawTraces = newTraces || [];
+            layout.yaxis.type = wantsLog() ? 'log' : 'linear';
+            Plotly.react(element, scaledTraces(), layout, chartConfig);
         }));
     } else {
         subscriptions.push(config.seriesStyles.subscribe(val => {

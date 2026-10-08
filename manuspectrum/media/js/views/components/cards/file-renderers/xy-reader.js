@@ -19,6 +19,7 @@ import {
     expandStoredConfig,
     seriesRoles,
 } from 'utils/xy-transforms';
+import { canUseLogScale } from 'utils/xy-scale';
 import dispose from 'utils/dispose';
 import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
@@ -112,9 +113,18 @@ export default ko.components.register('xy-reader', {
             this.commonData.xReversed = ko.observable(false);
             // What the configuration applied, stated under the chart.
             this.commonData.processing = ko.observable(null);
+            // Logarithmic Y axis: display only, off until the reader asks.
+            this.commonData.yLog = ko.observable(false);
         }
         this.xReversed = this.commonData.xReversed;
         this.processing = this.commonData.processing;
+        this.yLog = this.commonData.yLog;
+        this.canLogScale = ko.pureComputed(() => {
+            const data = self.chartData();
+            const series = data?.series || (data ? [{ count: data.count }] : []);
+            return canUseLogScale(series.map((s) => ({ y: s.count })));
+        });
+        this.disposables.push(this.canLogScale);
 
         this.rendererConfigs = ko.observable([]);
 
