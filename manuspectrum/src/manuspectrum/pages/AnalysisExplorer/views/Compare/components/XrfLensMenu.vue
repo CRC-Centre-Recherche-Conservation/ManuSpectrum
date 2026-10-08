@@ -159,7 +159,7 @@ function onKeydown(event: KeyboardEvent): void {
             :id="panelId"
             ref="panel"
             class="panel"
-            role="group"
+            role="dialog"
             :aria-label="$gettext('XRF lens settings')"
             @keydown="onKeydown"
         >

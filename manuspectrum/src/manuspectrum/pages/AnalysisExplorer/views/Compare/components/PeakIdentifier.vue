@@ -86,6 +86,9 @@ const numbers = computed(
             maximumFractionDigits: ENERGY_DIGITS,
         }),
 );
+const voltage = computed(
+    () => new Intl.NumberFormat(props.lang, { maximumFractionDigits: 1 }),
+);
 const heading = computed(() =>
     interpolate(
         $gettext("Candidates at %{energy} keV (± %{tolerance})"),
@@ -148,6 +151,12 @@ function confirmationText(confirmation: Confirmation): string {
                 values,
                 true,
             );
+        case "unresolved":
+            return interpolate(
+                $gettext("%{line} %{energy} too close to tell"),
+                values,
+                true,
+            );
         case "out-of-range":
             return interpolate(
                 $gettext("%{line} %{energy} out of range"),
@@ -157,7 +166,7 @@ function confirmationText(confirmation: Confirmation): string {
         default:
             return `${values.line} ${values.energy} ${interpolate(
                 $gettext("not excited at %{kv} kV"),
-                { kv: String(props.kV ?? "") },
+                { kv: props.kV === null ? "" : voltage.value.format(props.kV) },
                 true,
             )}`;
     }

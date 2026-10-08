@@ -262,6 +262,58 @@ describe('plotly binding logarithmic Y', () => {
         expect(plotly.newPlot.mock.calls[0][2].yaxis.type).toBe('linear');
     });
 
+    describe('in data mode', () => {
+        const dataConfig = (yLog) => ({
+            ...buildConfig(),
+            data: () => ({ value: [1, 2, 3], count: [0, 5, 10], name: 's0' }),
+            yLog: ko.observable(yLog),
+        });
+        const added = (name, tileid, count) => ({
+            tileid,
+            name,
+            data: { value: [1, 2, 3], count },
+        });
+
+        it('keeps a series added through seriesData across the toggle', async () => {
+            const config = dataConfig(false);
+            const element = await mount(config);
+            element.data = [{}];
+            config.seriesStyles([{ tileid: 't1', color: '#ff0000' }]);
+            config.seriesData.push(added('s1', 't1', [0, 2, 4]));
+
+            config.yLog(true);
+            const traces = plotly.react.mock.calls.at(-1)[1];
+            expect(traces.map((t) => t.name)).toEqual(['s0', 's1']);
+            expect(traces[1].y).toEqual([2, 2, 4]);
+            expect(traces[1].marker.color).toBe('#ff0000');
+        });
+
+        it('keeps a series colour set through seriesStyles across the toggle', async () => {
+            const config = dataConfig(false);
+            const element = await mount(config);
+            element.data = [{}];
+            config.seriesStyles([{ tileid: 't1', color: '#ff0000' }]);
+            config.seriesData.push(added('s1', 't1', [1, 2, 4]));
+            element.data = [{}, { tileid: 't1' }];
+            config.seriesStyles([{ tileid: 't1', color: '#00ff00' }]);
+
+            config.yLog(true);
+            expect(plotly.react.mock.calls.at(-1)[1][1].marker.color).toBe('#00ff00');
+        });
+
+        it('lays a series added while the axis is log on that axis', async () => {
+            const config = dataConfig(true);
+            const element = await mount(config);
+            element.data = [{}];
+            config.seriesStyles([{ tileid: 't1', color: '#ff0000' }]);
+            config.seriesData.push(added('s1', 't1', [0, 2, 4]));
+
+            const [, traces, layout] = plotly.react.mock.calls.at(-1);
+            expect(layout.yaxis.type).toBe('log');
+            expect(traces[1].y).toEqual([2, 2, 4]);
+        });
+    });
+
     it('disposes the toggle subscription', async () => {
         const config = logConfig(false);
         const element = await mount(config);

@@ -13,6 +13,7 @@ import { useGettext } from "vue3-gettext";
 import { deriveAxisLabel } from "utils/xy-transforms";
 import { BASE_VIEW } from "utils/xy-views";
 
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import PeakIdentifier from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeakIdentifier.vue";
@@ -73,6 +74,10 @@ import {
     CUSTOM_RANGE,
     rangePresetOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-range.ts";
+import {
+    XRF_MAX_ANODES,
+    XRF_MAX_ELEMENTS,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 import { shapesKey } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import { isXrfViewer } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/recognise.ts";
 import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
@@ -97,7 +102,14 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
-import type { LensCurve } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
+import type {
+    DeclaredElement,
+    DeclaredParts,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
+import type {
+    LensCurve,
+    LensLabels,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
     Figure,
@@ -149,9 +161,9 @@ const CHART_LAYOUTS: Readonly<
     multiples: "th-large",
 };
 
-/** The pixel mapping of an axis Plotly passes with a hovered point. */
+/** The pixel mapping of an axis Plotly passes with a hovered point (`c2p`: data to pixels, linear or log). */
 interface HoverAxis {
-    l2p?: (value: number) => number;
+    c2p?: (value: number) => number;
     _offset?: number;
 }
 
@@ -421,16 +433,10 @@ const flags = computed(() =>
 );
 const selecting = computed(() => (linked?.selection.value.length ?? 0) > 0);
 const selected = computed(() => new Set(linked?.selection.value ?? []));
-/** An XRF window: every curve drawn is an energy-dispersive spectrum. */
-const xrfWindow = computed(
-    () =>
-        drawn.value.length > 0 &&
-        drawn.value.every((curve) => isXrfViewer(curve.line.file.viewer)),
-);
 /** In an XRF window a focus of element pins alone dims the unrelated curves: the lens draws the elements on every spectrum, hiding would empty the window. */
 const elementFocusOnly = computed(
     () =>
-        xrfWindow.value &&
+        lens.active.value &&
         selecting.value &&
         (linked?.selection.value ?? []).every((id) => kindOfNode(id) === "el"),
 );
@@ -483,11 +489,28 @@ const lensCurves = computed<LensCurve[]>(() =>
         excitation: curve.line.excitation ?? null,
     })),
 );
+const lensLabels = computed<LensLabels>(() => ({
+    compton: $gettext("Compton"),
+    escape: $gettext("esc"),
+    sum: $gettext("sum"),
+    voltage: (kV) => interpolate($gettext("%{kV} kV"), { kV }, true),
+    elementsFull: interpolate(
+        $gettext("The lens holds at most %{n} elements"),
+        { n: XRF_MAX_ELEMENTS },
+        true,
+    ),
+    anodesFull: interpolate(
+        $gettext("At most %{n} anode choices can be kept"),
+        { n: XRF_MAX_ANODES },
+        true,
+    ),
+}));
 const lens = useXrfLens({
     curves: () => lensCurves.value,
     hidden: () => effectiveStates.value.map((state) => state === "hidden"),
     layout: () => layout.value,
     slots: () => slots.value,
+    labels: () => lensLabels.value,
 });
 /** The identifier's subject: the curve it reads and what the peak may be; null when closed, or when the curve left the window. */
 const identification = computed(() => {
@@ -507,7 +530,7 @@ const identification = computed(() => {
 });
 /** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
 const logShown = computed(
-    () => xrfWindow.value && logScale.value && layout.value !== "offset",
+    () => lens.active.value && logScale.value && layout.value !== "offset",
 );
 const rows = computed<CurveRow[]>(() =>
     drawn.value.map((curve, index) => ({
@@ -627,7 +650,8 @@ const chartLabel = computed(() => {
         { n: drawn.value.length },
         true,
     );
-    if (!xrfWindow.value || lens.drawnSymbols.value.length === 0) return label;
+    if (!lens.active.value || lens.drawnSymbols.value.length === 0)
+        return label;
     const lines = interpolate(
         $gettext("XRF lines drawn: %{elements}; listed below the chart."),
         { elements: lens.drawnSymbols.value.join(", ") },
@@ -696,13 +720,14 @@ useWindowActions(() => {
     return actions;
 });
 
-watch([drawn, layout, chart, logShown], () => void draw());
+watch([drawn, layout, chart], () => void draw());
+watch(logShown, () => void redrawKeepingRange());
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
 watch(effectiveStates, () => scheduleRestyle());
 watch(lens.model, () => scheduleShapes());
-watch([xrfWindow, layout], ([isXrf, shown]) => {
+watch([lens.active, layout], ([isXrf, shown]) => {
     if (isXrf && shown !== "table") return;
     identifying.value = false;
     identified.value = null;
@@ -819,7 +844,7 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
 
 /** The lens shapes for `theme`; none outside an XRF window. */
 function lensShapesFor(theme: PlotTheme): Partial<Shape>[] {
-    return xrfWindow.value ? lens.shapes(theme) : [];
+    return lens.active.value ? lens.shapes(theme) : [];
 }
 
 async function draw(): Promise<void> {
@@ -890,6 +915,31 @@ async function draw(): Promise<void> {
         await nextTick();
         followSize();
     }
+}
+
+/** Draws again, then puts the energy range the reader had back (a redraw resets the axes). */
+async function redrawKeepingRange(): Promise<void> {
+    const key = rangeKey.value;
+    const preset = rangePresetOf(key);
+    const held = drawnOn ? axesOf(drawnOn).xaxis : undefined;
+    let update: Record<string, unknown> | null = null;
+    if (preset?.range) update = rangeUpdate(preset, xReversed.value);
+    else if (key === CUSTOM_RANGE && held && !held.autorange) {
+        update = { "xaxis.range": [...held.range] };
+    }
+    await draw();
+    const element = drawnOn;
+    if (!update || !plotly || !element || disposed) return;
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, update);
+    } catch (error: unknown) {
+        console.error("The energy range could not be set", error);
+    } finally {
+        applyingRange = false;
+    }
+    zoomed.value = true;
+    rangeKey.value = key;
 }
 
 async function resizeChart(element: HTMLElement): Promise<void> {
@@ -1058,10 +1108,23 @@ function toggleIdentify(): void {
     if (!identifying.value) identified.value = null;
 }
 
+/** Escape on the toggle closes the open identifier and keeps the key from clearing the focus. */
+function onToggleEscape(event: KeyboardEvent): void {
+    if (!identification.value) return;
+    event.preventDefault();
+    void closeIdentifier();
+}
+
 async function closeIdentifier(): Promise<void> {
     identified.value = null;
     await nextTick();
     identifyToggle.value?.element?.focus();
+}
+
+function identifiedDeclaredParts(entry: DeclaredElement): DeclaredParts | null {
+    return identification.value
+        ? lens.declaredPartsAt(identification.value.index, entry)
+        : null;
 }
 
 function moveIdentified({ energy }: { energy: number }): void {
@@ -1105,9 +1168,9 @@ function hoveredCurve(event: PlotMouseEvent): Curve | null {
         let nearest = Infinity;
         for (const point of points) {
             const axis = point.yaxis as unknown as HoverAxis;
-            if (!axis?.l2p || typeof point.y !== "number") continue;
+            if (!axis?.c2p || typeof point.y !== "number") continue;
             const distance = Math.abs(
-                axis.l2p(point.y) + (axis._offset ?? 0) - pointer,
+                axis.c2p(point.y) + (axis._offset ?? 0) - pointer,
             );
             if (distance < nearest) {
                 nearest = distance;
@@ -1255,7 +1318,7 @@ async function downloadPng(): Promise<void> {
                 paints,
                 theme,
                 { title: exportTitle(), source: exportSource(shapes) },
-                xrfWindow.value ? shapes : undefined,
+                lens.active.value ? shapes : undefined,
             ),
             {
                 format: "png",
@@ -1379,29 +1442,51 @@ function chooseView(event: Event): void {
                         role="group"
                         :aria-label="$gettext('Unlinked spectra')"
                     >
-                        <button
+                        <template
                             v-for="option in unrelatedModeOptions"
                             :key="option.value"
-                            type="button"
-                            :data-mode="option.value"
-                            :aria-pressed="
-                                unrelatedShown === option.value
-                                    ? 'true'
-                                    : 'false'
-                            "
-                            :aria-disabled="
-                                elementFocusOnly && option.value === 'hide'
-                                    ? 'true'
-                                    : undefined
-                            "
-                            @click="chooseUnrelated(option.value)"
                         >
-                            <span>{{ option.label }}</span>
-                        </button>
+                            <HelpTip
+                                v-if="
+                                    elementFocusOnly && option.value === 'hide'
+                                "
+                                :text="
+                                    $gettext(
+                                        'Not available while only elements are in the focus: the lens draws them on every spectrum',
+                                    )
+                                "
+                                placement="below"
+                            >
+                                <template #default="{ describedby }">
+                                    <button
+                                        type="button"
+                                        :data-mode="option.value"
+                                        aria-pressed="false"
+                                        aria-disabled="true"
+                                        :aria-describedby="describedby"
+                                    >
+                                        <span>{{ option.label }}</span>
+                                    </button>
+                                </template>
+                            </HelpTip>
+                            <button
+                                v-else
+                                type="button"
+                                :data-mode="option.value"
+                                :aria-pressed="
+                                    unrelatedShown === option.value
+                                        ? 'true'
+                                        : 'false'
+                                "
+                                @click="chooseUnrelated(option.value)"
+                            >
+                                <span>{{ option.label }}</span>
+                            </button>
+                        </template>
                     </span>
                 </div>
                 <XrfLensControls
-                    v-if="xrfWindow && layout !== 'table'"
+                    v-if="lens.active.value && layout !== 'table'"
                     :log="logScale"
                     :log-disabled="layout === 'offset'"
                     :range="rangeKey"
@@ -1428,16 +1513,13 @@ function chooseView(event: Event): void {
                             ref="identifyToggle"
                             icon="bullseye"
                             data-action="identify"
-                            :data-popover="
-                                identification ? 'identify' : undefined
-                            "
                             :aria-expanded="identification ? 'true' : undefined"
                             :pressed="identifying"
                             :label="$gettext('Identify a peak')"
                             tip-placement="below"
                             tip-align="start"
                             @click="toggleIdentify"
-                            @keydown.esc="identification && closeIdentifier()"
+                            @keydown.esc="onToggleEscape"
                         />
                     </template>
                 </XrfLensControls>
@@ -1454,10 +1536,7 @@ function chooseView(event: Event): void {
                 :pinnable="lens.pinnable"
                 :pinned="lens.isPinned"
                 :lens-symbols="lens.settings.value.elements"
-                :declared-parts="
-                    (entry) =>
-                        lens.declaredPartsAt(identification!.index, entry)
-                "
+                :declared-parts="identifiedDeclaredParts"
                 @move="moveIdentified"
                 @close="closeIdentifier"
                 @toggle-pin="lens.togglePin($event.symbol)"
@@ -1517,7 +1596,7 @@ function chooseView(event: Event): void {
                 />
             </div>
             <XrfLensStrip
-                v-if="xrfWindow && layout !== 'table'"
+                v-if="lens.active.value && layout !== 'table'"
                 :elements="lens.stripElements.value"
                 :declared-slots="lens.declaredSlots.value"
                 :overlaps="lens.overlapNotes.value"

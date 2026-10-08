@@ -63,7 +63,7 @@ describe("tellApart", () => {
         expect(apart.b?.energy).toBeCloseTo(12.614, 3);
     });
 
-    it("gives null for S, whose only other line is just as close", async () => {
+    it("gives null for S, whose only other line is just as close, and Pb Lβ1 for Pb from its L shell", async () => {
         const { elements } = await loadLineTable();
         const [s] = await lines("S", ["Ka1"]);
         const [pb] = await lines("Pb", ["Ma"]);
@@ -75,7 +75,8 @@ describe("tellApart", () => {
             CONTEXT,
         );
         expect(apart.a).toBeNull();
-        expect(apart.b?.name).not.toBe("Ma");
+        expect(apart.b?.name).toBe("Lb1");
+        expect(apart.b?.energy).toBeCloseTo(12.614, 3);
     });
 
     it("skips a line the data range or the voltage rules out", async () => {
@@ -87,7 +88,7 @@ describe("tellApart", () => {
             as.line,
             { symbol: "Pb", element: elements.Pb },
             pb.line,
-            { ...CONTEXT, range: [0.5, 11] },
+            { ...CONTEXT, range: [9, 11] },
         );
         expect(apart.a).toBeNull();
         expect(apart.b).toBeNull();

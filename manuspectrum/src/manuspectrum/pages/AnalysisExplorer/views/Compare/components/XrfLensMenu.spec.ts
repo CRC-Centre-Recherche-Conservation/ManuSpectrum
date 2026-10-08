@@ -69,6 +69,7 @@ describe("XrfLensMenu", () => {
         expect(button.attributes("aria-controls")).toBe(
             view.find(".panel").attributes("id"),
         );
+        expect(view.find(".panel").attributes("role")).toBe("dialog");
         expect(document.activeElement).toBe(
             view.find('input[data-layer="declared"]').element,
         );

@@ -110,6 +110,21 @@ describe("netSignal", () => {
         expect(end.present).toBe(false);
         expect(netSignal([], [], 1, FWHM).present).toBe(false);
     });
+
+    it("takes the lower window as the background when the other sits on a neighbouring peak", () => {
+        const x = energies(500);
+        const y = spectrum(
+            x,
+            [
+                { at: 2.3, height: 1000 },
+                { at: 2.5, height: 90 },
+            ],
+            () => 100,
+        );
+        const found = netSignal(x, y, 2.5, FWHM);
+        expect(found.present).toBe(true);
+        expect(found.net).toBeGreaterThan(80);
+    });
 });
 
 describe("strongestPeaks", () => {

@@ -1,6 +1,7 @@
-import { shallowRef } from "vue";
+import { getCurrentScope, onScopeDispose, shallowRef } from "vue";
 
 import {
+    LAYOUT_STORAGE_KEY,
     XRF_MAX_ANODES,
     XRF_MAX_ELEMENTS,
     readXrfSettings,
@@ -38,6 +39,14 @@ export function reloadXrfSettings(): void {
     state().value = readXrfSettings() ?? defaults();
 }
 
+function onStorage(event: StorageEvent): void {
+    if (event.key !== null && event.key !== LAYOUT_STORAGE_KEY) return;
+    const next = readXrfSettings() ?? defaults();
+    if (JSON.stringify(next) !== JSON.stringify(state().value)) {
+        state().value = next;
+    }
+}
+
 function commit(next: XrfSettings): void {
     state().value = next;
     writeXrfSettings(isDefault(next) ? undefined : next);
@@ -47,17 +56,25 @@ function commit(next: XrfSettings): void {
  * The XRF settings of the reader (detector, anode per analysis, lens
  * elements), one copy for every XRF window of the tab and saved with the
  * Compare layout. The lens elements are a list of their own: they never enter
- * the focus.
+ * the focus. Another tab's write to the layout record is adopted through the
+ * `storage` event, as the Selection basket's is.
  */
 export function useXrfSettings() {
     const settings = state();
+    if (getCurrentScope()) {
+        window.addEventListener("storage", onStorage);
+        onScopeDispose(() => window.removeEventListener("storage", onStorage));
+    }
 
     function setDetector(detector: XrfDetector): void {
         commit({ ...settings.value, detector });
     }
 
-    /** Sets the anode of an analysis; null forgets the choice (the conditions' anode, else unknown). */
-    function setAnode(analysis: string, anode: XrfAnode | "none" | null): void {
+    /** Sets the anode of an analysis; null forgets the choice (the conditions' anode, else unknown). False when the list is full. */
+    function setAnode(
+        analysis: string,
+        anode: XrfAnode | "none" | null,
+    ): boolean {
         const anodes = { ...settings.value.anodes };
         if (anode === null) delete anodes[analysis];
         else if (
@@ -65,8 +82,9 @@ export function useXrfSettings() {
             Object.keys(anodes).length < XRF_MAX_ANODES
         ) {
             anodes[analysis] = anode;
-        } else return;
+        } else return false;
         commit({ ...settings.value, anodes });
+        return true;
     }
 
     /** Adds a lens element; false when it is there already or the list is full. */

@@ -91,6 +91,9 @@ export function usableLines(
         .map(([name, line]) => lineRef(name, line));
 }
 
+/** Shells in the order their lines are read: the K lines first. */
+const SHELL_ORDER = ["K", "L", "M"];
+
 function strongestApart(
     own: ElementLines,
     subject: LineRef,
@@ -98,26 +101,29 @@ function strongestApart(
     context: TellApartContext,
 ): LineRef | null {
     const rivals = usableLines(other.element, context.range, context.kV);
-    const shell = subject.name.charAt(0);
     const apart = usableLines(own.element, context.range, context.kV).filter(
         (line) =>
-            line.name.charAt(0) === shell &&
             line.name !== subject.name &&
             !rivals.some((rival) =>
                 closeTo(line.energy, rival.energy, context.fwhmAt),
             ),
     );
-    return apart.reduce<LineRef | null>(
-        (best, line) =>
-            best === null || line.intensity > best.intensity ? line : best,
-        null,
-    );
+    for (const shell of SHELL_ORDER) {
+        const lines = apart.filter((line) => line.name.charAt(0) === shell);
+        if (lines.length > 0) {
+            return lines.reduce((best, line) =>
+                line.intensity > best.intensity ? line : best,
+            );
+        }
+    }
+    return null;
 }
 
 /**
  * For two overlapping lines (`aLine` of `a`, `bLine` of `b`), the line each
- * element can be told apart by: its strongest other line of the same shell
- * that overlaps no usable line of the other element; null when none does.
+ * element can be told apart by: its strongest other usable line that
+ * overlaps no usable line of the other element, from the highest shell that
+ * has one (K, then L, then M); null when none does.
  */
 export function tellApart(
     a: ElementLines,

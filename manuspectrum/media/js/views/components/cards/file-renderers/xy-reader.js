@@ -122,7 +122,7 @@ export default ko.components.register('xy-reader', {
         this.canLogScale = ko.pureComputed(() => {
             const data = self.chartData();
             const series = data?.series || (data ? [{ count: data.count }] : []);
-            return canUseLogScale(series.map((s) => ({ y: s.count })));
+            return canUseLogScale(series.map((s) => ({ y: s.count, yaxis: s.yaxis })));
         });
         this.disposables.push(this.canLogScale);
 

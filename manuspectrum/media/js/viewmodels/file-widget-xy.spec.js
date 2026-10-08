@@ -11,6 +11,9 @@
  */
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ko from 'knockout';
 
 const FORS_ID = 'c0000000-0000-4000-8000-000000000001';
@@ -130,5 +133,21 @@ describe('a chart whose files disagree', () => {
         await flush();
 
         expect(vm.chartYAxisLabel()).toBe('Y Axis');
+    });
+});
+
+describe('the Lin / Log buttons of the report templates', () => {
+    const read = (path) =>
+        readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../templates', path), 'utf8');
+
+    it.each([
+        'views/components/cards/file-renderers/afs-reader.htm',
+        'views/components/widgets/file-xy.htm',
+    ])('state aria-pressed as a string on both buttons in %s', (path) => {
+        const html = read(path);
+        // Knockout's attr binding removes the attribute for a boolean false.
+        expect(html).toContain("'aria-pressed': yLog() ? 'false' : 'true'");
+        expect(html).toContain("'aria-pressed': yLog() ? 'true' : 'false'");
+        expect(html).not.toMatch(/'aria-pressed': !?yLog\(\)\s*[,}]/);
     });
 });

@@ -191,6 +191,85 @@ describe("candidates", () => {
         expect(low.score).toBeNull();
     });
 
+    describe("a clicked line with a close companion", () => {
+        const S_SPECTRUM = spectrum([
+            [2.309, 1000],
+            [2.465, 90],
+        ]);
+
+        it("reads S Kβ1 next to S Kα1 as present, not absent", async () => {
+            const rows = elementRows(
+                candidates(2.31, await context(S_SPECTRUM)),
+            );
+            const s = rows.find((r) => r.symbol === "S")!;
+            expect(s.line.name).toBe("Ka1");
+            expect(s.confirmations.map((c) => [c.line.name, c.state])).toEqual([
+                ["Kb1", "present"],
+            ]);
+            expect(s.score).toBe(1);
+        });
+
+        it("ranks S above Pb Mα1 and Mo Lα1 when none is declared", async () => {
+            const symbols = elementRows(
+                candidates(2.31, await context(S_SPECTRUM)),
+            ).map((r) => r.symbol);
+            expect(symbols[0]).toBe("S");
+            expect(symbols.indexOf("S")).toBeLessThan(symbols.indexOf("Pb"));
+            expect(symbols.indexOf("S")).toBeLessThan(symbols.indexOf("Mo"));
+        });
+
+        it("marks a confirmation closer than 1.25 FWHM as unresolved and leaves it out of the score", async () => {
+            const rows = elementRows(
+                candidates(
+                    2.34,
+                    await context(spectrum([[2.342, 1000]]), { fwhmMn: 0.13 }),
+                ),
+            );
+            const pb = rows.find((r) => r.symbol === "Pb")!;
+            expect(pb.line.name).toBe("Ma");
+            expect(
+                pb.confirmations.find((c) => c.line.name === "Mb")?.state,
+            ).toBe("unresolved");
+            expect(pb.score).toBeNull();
+        });
+
+        it("leaves Rh out of the candidates of S Kα1 on a Rh tube spectrum: its Lℓ is too weak to carry a row", async () => {
+            const rhTube = spectrum([
+                [2.309, 1000],
+                [2.465, 90],
+                [2.697, 2000],
+                [2.834, 2000],
+                [20.216, 3000],
+            ]);
+            const rows = elementRows(candidates(2.31, await context(rhTube)));
+            expect(rows.some((r) => r.symbol === "Rh")).toBe(false);
+            expect(rows.some((r) => r.symbol === "S")).toBe(true);
+            expect(rows.every((r) => r.line.intensity >= 0.05)).toBe(true);
+        });
+    });
+
+    it("lets a present line much stronger than the candidate only refute it", async () => {
+        const both = elementRows(
+            candidates(
+                2.465,
+                await context(
+                    spectrum([
+                        [2.309, 1000],
+                        [2.465, 90],
+                    ]),
+                ),
+            ),
+        ).find((r) => r.symbol === "S")!;
+        expect(both.line.name).toBe("Kb1");
+        expect(both.confirmations[0].state).toBe("present");
+        expect(both.score).toBeNull();
+        const alone = elementRows(
+            candidates(2.465, await context(spectrum([[2.465, 90]]))),
+        ).find((r) => r.symbol === "S")!;
+        expect(alone.confirmations[0].state).toBe("absent");
+        expect(alone.score).toBe(0);
+    });
+
     it("is pure: the same input gives the same rows", async () => {
         const ctx = await context();
         expect(candidates(10.55, ctx)).toEqual(candidates(10.55, ctx));
@@ -211,6 +290,15 @@ describe("instrumentPeaks", () => {
         expect(compton.from).toBeLessThan(compton.to);
         expect(compton.to).toBeCloseTo(21.24, 2);
         expect(kinds("duane-hunt")[0].energy).toBe(40);
+    });
+
+    it("uses the L lines as the Rayleigh and Compton lines of a W anode of unknown kV whose K lines are off the curve", async () => {
+        const table = await loadLineTable();
+        const peaks = instrumentPeaks(spectrum([]), "W", null, table, FWHM_MN);
+        expect(
+            peaks.filter((p) => p.kind === "rayleigh").map((p) => p.line),
+        ).toEqual(["Lα1", "Lβ1"]);
+        expect(peaks.find((p) => p.kind === "compton")?.line).toBe("Lα1");
     });
 
     it("uses the L lines when kV is under the K edge, none without an anode", async () => {

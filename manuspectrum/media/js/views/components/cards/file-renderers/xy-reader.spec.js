@@ -261,6 +261,21 @@ describe('xy-reader chart display state', () => {
         expect(chartVm.canLogScale()).toBe(false);
     });
 
+    it('keeps a right-axis curve out of the log rule, as the binding does', () => {
+        chartVm.chartData({
+            series: [
+                { value: [1], count: [2] },
+                { value: [1], count: [0], yaxis: 'y2' },
+            ],
+        });
+        expect(chartVm.canLogScale()).toBe(true);
+
+        chartVm.chartData({
+            series: [{ value: [1], count: [0], yaxis: 'y2' }],
+        });
+        expect(chartVm.canLogScale()).toBe(false);
+    });
+
     it('does not touch the stored configuration when the scale changes', () => {
         const before = structuredClone(stored.configs);
 

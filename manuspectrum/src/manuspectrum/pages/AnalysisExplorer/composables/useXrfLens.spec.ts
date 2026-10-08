@@ -6,6 +6,7 @@ import { defineComponent, ref, shallowRef } from "vue";
 import { useXrfLens } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import { reloadXrfSettings } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfSettings.ts";
 import {
+    ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     SYNTHESIS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -23,6 +24,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     LensCurve,
+    LensLabels,
     XrfLens,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
@@ -113,10 +115,17 @@ interface Harness {
 }
 
 let harness: Harness | null = null;
+const announce = vi.fn();
+
+/** Counts on 0.5–25 keV: a flat 10 plus one peak of 5000 at 7 keV. */
+const PEAKED = ENERGIES.map(
+    (e) => 10 + Math.round(5000 * Math.exp(-((e - 7) ** 2) / (2 * 0.05 ** 2))),
+);
 
 async function mountLens(
     start: LensCurve[],
     synthesis: SynthesisResponse | null = null,
+    labels?: LensLabels,
 ): Promise<Harness> {
     const slots = ref<(NodeId | null)[]>([]);
     const previewing = ref<NodeId | null>(null);
@@ -138,6 +147,7 @@ async function mountLens(
                 hidden: () => hidden.value,
                 layout: () => layout.value,
                 slots: () => [...new Set(curves.value.map((c) => c.slot))],
+                labels: labels ? () => labels : undefined,
             });
             return () => null;
         },
@@ -147,6 +157,7 @@ async function mountLens(
             provide: {
                 [LINKED_SELECTION_KEY as symbol]: linked,
                 [SYNTHESIS_KEY as symbol]: ref(synthesis),
+                [ANNOUNCE_KEY as symbol]: announce,
             },
         },
     });
@@ -180,6 +191,7 @@ function lineAt(shapes: LensShape[], energy: number): LensShape | undefined {
 }
 
 beforeEach(() => {
+    announce.mockClear();
     setActivePinia(createPinia());
     localStorage.clear();
     reloadXrfSettings();
@@ -405,5 +417,56 @@ describe("useXrfLens", () => {
         lens.setDetector("sdd");
         lens.removeElement("Fe");
         expect(localStorage.getItem("ms-explorer-layout-v1")).toBeNull();
+    });
+
+    it("names the instrument ticks and the Compton band in English unless given labels", async () => {
+        const source = {
+            rawY: PEAKED,
+            excitation: { anode: "Ag", kV: 20, source: "conditions" as const },
+        };
+        const { lens } = await mountLens([curve(source)]);
+        const texts = (shapes: LensShape[]) =>
+            shapes.flatMap((shape) => (shape.label ? [shape.label.text] : []));
+        expect(texts(shapesOf(lens))).toEqual(
+            expect.arrayContaining(["Compton", "esc", "sum", "20 kV"]),
+        );
+        harness?.wrapper.unmount();
+        const translated = await mountLens([curve(source)], null, {
+            compton: "Comptonfr",
+            escape: "échap",
+            sum: "somme",
+            voltage: (kV) => `${kV} kVfr`,
+            elementsFull: "",
+            anodesFull: "",
+        });
+        const french = texts(shapesOf(translated.lens));
+        expect(french).toEqual(
+            expect.arrayContaining(["Comptonfr", "échap", "somme", "20 kVfr"]),
+        );
+        expect(french).not.toContain("esc");
+    });
+
+    it("announces a refusal at the caps of lens elements and anode choices", async () => {
+        const { lens } = await mountLens([curve()]);
+        const symbols = lens.symbols.value.slice(0, 31);
+        symbols.slice(0, 30).forEach((symbol) => lens.addElement(symbol));
+        expect(announce).not.toHaveBeenCalled();
+        expect(lens.addElement(symbols[30])).toBe(false);
+        expect(lens.toggleElement(symbols[30])).toBe(false);
+        expect(announce).toHaveBeenCalledTimes(2);
+        expect(announce).toHaveBeenLastCalledWith(
+            "The lens holds no more elements",
+        );
+        announce.mockClear();
+        lens.addElement(symbols[0]);
+        expect(announce).not.toHaveBeenCalled();
+        for (let index = 0; index < 200; index += 1) {
+            lens.setAnode(`analysis-${index}`, "Rh");
+        }
+        expect(announce).not.toHaveBeenCalled();
+        lens.setAnode("analysis-200", "Rh");
+        expect(announce).toHaveBeenCalledWith(
+            "No more anode choices can be kept",
+        );
     });
 });

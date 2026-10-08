@@ -16,6 +16,10 @@ import type { Series } from "./spectrum";
 
 /** Weakest confirmation line, as a relative intensity within its shell. */
 const MIN_CONFIRMATION = 0.05;
+/** Confirmations closer than this many FWHM to the clicked line cannot be told from it. */
+const UNRESOLVED_FWHM = 1.25;
+/** A present line this many times stronger than the candidate line cannot confirm it. */
+const MAX_STRONGER = 3;
 const COMPTON_ANGLES: [number, number] = [90, 150];
 const STRONGEST_PEAKS = 3;
 const UNDECIDED_SCORE = 0.5;
@@ -23,6 +27,7 @@ const UNDECIDED_SCORE = 0.5;
 export type ConfirmationState =
     | "present"
     | "absent"
+    | "unresolved"
     | "out-of-range"
     | "not-excited";
 
@@ -145,7 +150,9 @@ export function instrumentPeaks(
                         l.name === "Lb1") &&
                     excitable(element.lines[l.name], element.edges, kV),
             );
-        const kLines = lineNames("K");
+        const kLines = lineNames("K").filter(
+            (l) => l.energy >= low && l.energy <= high,
+        );
         const lLines = lineNames("L");
         const main = kLines.length > 0 ? kLines : lLines;
         for (const line of [
@@ -218,6 +225,11 @@ function confirm(
                 !excitable(element.lines[other.name], element.edges, ctx.kV)
             ) {
                 state = "not-excited";
+            } else if (
+                Math.abs(other.energy - line.energy) <
+                UNRESOLVED_FWHM * width
+            ) {
+                state = "unresolved";
             } else {
                 state = netSignal(
                     ctx.x,
@@ -237,6 +249,11 @@ function scoreOf(line: LineRef, confirmations: Confirmation[]): number | null {
     let tested = 0;
     for (const { line: other, state } of confirmations) {
         if (state !== "present" && state !== "absent") continue;
+        if (
+            state === "present" &&
+            other.intensity > MAX_STRONGER * line.intensity
+        )
+            continue;
         const weight = other.intensity / line.intensity;
         tested += weight;
         if (state === "present") present += weight;
@@ -255,6 +272,7 @@ function elementCandidates(
         let best: LineRef | null = null;
         for (const [name, entry] of Object.entries(element.lines)) {
             if (
+                entry[1] >= MIN_CONFIRMATION &&
                 Math.abs(entry[0] - energy) <= tol &&
                 excitable(entry, element.edges, ctx.kV) &&
                 (best === null || entry[1] > best.intensity)
@@ -310,8 +328,10 @@ function compare(a: Candidate, b: Candidate): number {
  * Order: declared for the curve, declared in the Selection, instrument
  * peaks, then by confirmation score (present among tested confirmation
  * lines, a strong absent one pulls it down), relative intensity and |ΔE|.
- * A confirmation line is another focus line of the same shell, kept apart
- * from the clicked line by a FWHM. Pure: nothing is pinned.
+ * A candidate line is at least `MIN_CONFIRMATION` strong. A confirmation
+ * line is another focus line of the same shell, a FWHM or more from the
+ * clicked line (under 1.25 FWHM it is « unresolved » and not scored); a present line
+ * much stronger than the candidate does not count as a confirmation. Pure: nothing is pinned.
  */
 export function candidates(energy: number, ctx: CandidateContext): Candidate[] {
     const tol = tolerance(energy, ctx.fwhmMn);

@@ -4,7 +4,12 @@
 
 import $ from 'jquery';
 import ko from 'knockout';
-import { canUseLogScale, logScaleFigure } from 'utils/xy-scale';
+import {
+    SCALE_LINEAR,
+    SCALE_LOG,
+    canUseLogScale,
+    logScaleFigure
+} from 'utils/xy-scale';
 
 // Each mount needs its own resize namespace, or disposing one chart detaches
 // another's handler.
@@ -79,6 +84,11 @@ function draw(Plotly, element, config) {
         !!(config.yLog && ko.unwrap(config.yLog)) && canUseLogScale(rawTraces);
     const scaledTraces = () =>
         wantsLog() ? logScaleFigure(rawTraces).traces : rawTraces;
+    const redraw = () => {
+        layout.yaxis.type = wantsLog() ? SCALE_LOG : SCALE_LINEAR;
+        layout.yaxis.autorange = true;
+        Plotly.react(element, scaledTraces(), layout, chartConfig);
+    };
     traces = scaledTraces();
 
     const layout = {
@@ -102,7 +112,7 @@ function draw(Plotly, element, config) {
             }
         },
         yaxis: {
-            type: wantsLog() ? 'log' : 'linear',
+            type: wantsLog() ? SCALE_LOG : SCALE_LINEAR,
             title: {
                 text: config.yAxisLabel(),
                 font: {
@@ -265,23 +275,25 @@ function draw(Plotly, element, config) {
     }
 
     if (config.yLog && ko.isObservable(config.yLog)) {
-        subscriptions.push(config.yLog.subscribe(() => {
-            layout.yaxis.type = wantsLog() ? 'log' : 'linear';
-            layout.yaxis.autorange = true;
-            Plotly.react(element, scaledTraces(), layout, chartConfig);
-        }));
+        subscriptions.push(config.yLog.subscribe(redraw));
     }
 
     if (useTracesMode) {
         subscriptions.push(config.traces.subscribe(newTraces => {
             rawTraces = newTraces || [];
-            layout.yaxis.type = wantsLog() ? 'log' : 'linear';
+            layout.yaxis.type = wantsLog() ? SCALE_LOG : SCALE_LINEAR;
             Plotly.react(element, scaledTraces(), layout, chartConfig);
         }));
     } else {
         subscriptions.push(config.seriesStyles.subscribe(val => {
             if (val.length >= 1) {
                 val.forEach(style => {
+                    // rawTraces feeds the next scale redraw: keep it in step.
+                    rawTraces.forEach(trace => {
+                        if (trace.tileid === style.tileid) {
+                            trace.marker = { ...trace.marker, color: style.color };
+                        }
+                    });
                     let traceIndices = [];
                     element.data.forEach((trace, i) => {
                         if (trace.tileid === style.tileid) {
@@ -306,20 +318,25 @@ function draw(Plotly, element, config) {
                         el => el.tileid === series.value.tileid
                     );
                     if (style) {
-                        Plotly.addTraces(
-                            element,
-                            {
-                                x: series.value.data.value,
-                                y: series.value.data.count,
-                                opacity: 0.9,
-                                marker: { color: style.color },
-                                name: series.value.name,
-                                tileid: series.value.tileid
-                            },
-                            element.data.length
-                        );
+                        const added = {
+                            x: series.value.data.value,
+                            y: series.value.data.count,
+                            opacity: 0.9,
+                            marker: { color: style.color },
+                            name: series.value.name,
+                            tileid: series.value.tileid
+                        };
+                        rawTraces = [...rawTraces, added];
+                        if (wantsLog()) {
+                            redraw();
+                        } else {
+                            Plotly.addTraces(element, added, element.data.length);
+                        }
                     }
                 } else {
+                    rawTraces = rawTraces.filter(
+                        trace => trace.name !== series.value.name
+                    );
                     element.data.forEach((trace, i) => {
                         if (trace.name === series.value.name) {
                             Plotly.deleteTraces(element, i);

@@ -26,6 +26,7 @@ import {
     resetPlotly,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+import { OPEN_POPUP } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import { reloadXrfSettings } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfSettings.ts";
 import {
     analysisNode,
@@ -1699,10 +1700,26 @@ describe("XyWorkshop XRF lens", () => {
         );
     });
 
-    it("makes no shapes relayout for a pin of an analysis", async () => {
+    it("makes at most one shapes relayout and never a redraw for a pin of an analysis, whose hidden curves drop their instrument ticks", async () => {
+        const peakAt = (centre: number) =>
+            series(
+                Array.from({ length: 2001 }, (_, i) => i / 100),
+                Array.from({ length: 2001 }, (_, i) =>
+                    Math.round(
+                        10 +
+                            5000 *
+                                Math.exp(
+                                    -(((i / 100 - centre) / 0.05) ** 2) / 2,
+                                ),
+                    ),
+                ),
+            );
+        answer(1, jsonResponse(peakAt(6.4)));
+        answer(2, jsonResponse(peakAt(9)));
         await mountWorkshop([curve(0, 1), curve(1, 2)]);
         await settle();
         plotly.relayout.mockClear();
+        plotly.react.mockClear();
         fake.selection.value = [analysisNode(analysisHit(1).id)];
         fake.slots.value = [analysisNode(analysisHit(1).id)];
         fake.levels.value = new Map([
@@ -1711,7 +1728,13 @@ describe("XyWorkshop XRF lens", () => {
         ]);
         await nextFrame();
         await flushPromises();
-        expect(shapeCalls()).toEqual([]);
+        expect(plotly.react).not.toHaveBeenCalled();
+        const calls = shapeCalls();
+        expect(calls).toHaveLength(1);
+        const shapes = calls[0].shapes as { x0: number }[];
+        // Curve 2's escape (9 − 1.74) is gone with the curve; curve 1's (4.66) stays.
+        expect(shapes.some((s) => Math.abs(s.x0 - 7.26) < 0.02)).toBe(false);
+        expect(shapes.some((s) => Math.abs(s.x0 - 4.66) < 0.02)).toBe(true);
     });
 
     it("draws an element added to the lens without touching the focus", async () => {
@@ -1770,6 +1793,81 @@ describe("XyWorkshop XRF lens", () => {
             hovertemplate: string[];
         };
         expect(update.hovertemplate[0]).toContain("%{customdata:");
+    });
+
+    it("picks the curve nearest the pointer on a log axis, whatever the axis maps", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        // Plotly: c2p takes data values (linear or log), l2p takes linearised ones.
+        const yaxis = {
+            c2p: (value: number) => 100 - Math.log10(value) * 30,
+            l2p: (value: number) => 100 - value * 30,
+            _offset: 0,
+        };
+        emitPlotly(view.find(".chart").element, "plotly_click", {
+            points: [
+                { curveNumber: 0, x: 2, y: 1000, yaxis },
+                { curveNumber: 1, x: 2, y: 10, yaxis },
+            ],
+            event: { clientY: 15 },
+        });
+        expect(fake.toggle).toHaveBeenCalledWith(
+            analysisNode(analysisHit(1).id),
+        );
+    });
+
+    it("keeps the energy range through a Log toggle, a preset or a zoom by hand", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        await view.find('[data-range="5-15"]').trigger("click");
+        await flushPromises();
+        plotly.relayout.mockClear();
+        plotly.react.mockClear();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.range": [5, 15],
+        });
+        expect(
+            view.find('[data-range="5-15"]').attributes("aria-pressed"),
+        ).toBe("true");
+        expect(view.find('[data-action="reset"]').exists()).toBe(true);
+
+        const chart = view.find(".chart").element;
+        Object.assign(chart, {
+            _fullLayout: {
+                xaxis: { range: [1.5, 2.5], autorange: false, _length: 400 },
+            },
+        });
+        emitPlotly(chart, "plotly_relayout", {
+            "xaxis.range[0]": 1.5,
+            "xaxis.range[1]": 2.5,
+        });
+        await flushPromises();
+        plotly.relayout.mockClear();
+        await view.find('[data-scale="linear"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.range": [1.5, 2.5],
+        });
+        expect(
+            view.find('[data-range="custom"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("goes back to the full range through a Log toggle when none was chosen", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        plotly.relayout.mockClear();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).not.toHaveBeenCalled();
+        expect(
+            view.find('[data-range="full"]').attributes("aria-pressed"),
+        ).toBe("true");
     });
 
     it("does not offer the log scale with Offset, and says why", async () => {
@@ -1888,6 +1986,10 @@ describe("XyWorkshop XRF lens", () => {
         expect(update["line.color"]).toEqual([COLOURS[0], CONTEXT, CONTEXT]);
         const hide = view.find('[data-mode="hide"]');
         expect(hide.attributes("aria-disabled")).toBe("true");
+        const tip = view.find(`[id="${hide.attributes("aria-describedby")}"]`);
+        expect(tip.text()).toBe(
+            "Not available while only elements are in the focus: the lens draws them on every spectrum",
+        );
         expect(view.find('[data-mode="dim"]').attributes("aria-pressed")).toBe(
             "true",
         );
@@ -1948,7 +2050,6 @@ describe("XyWorkshop XRF lens", () => {
             const button = toggleButton(view);
             expect(button.attributes("aria-pressed")).toBe("false");
             expect(button.attributes("aria-expanded")).toBeUndefined();
-            expect(button.attributes("data-popover")).toBeUndefined();
             expect(view.find(".chart").classes()).not.toContain("identifying");
             await button.trigger("click");
             expect(button.attributes("aria-pressed")).toBe("true");
@@ -1967,7 +2068,6 @@ describe("XyWorkshop XRF lens", () => {
             expect(fake.toggle).not.toHaveBeenCalled();
             const button = toggleButton(view);
             expect(button.attributes("aria-expanded")).toBe("true");
-            expect(button.attributes("data-popover")).toBe("identify");
         });
 
         it("still toggles the focus on a click outside the mode", async () => {
@@ -2092,6 +2192,21 @@ describe("XyWorkshop XRF lens", () => {
             ).toBeUndefined();
             expect(fake.selection.value).toEqual([held]);
             expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("leaves Escape outside the panel to the page and takes it on the panel and the toggle", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            expect(document.querySelector(OPEN_POPUP)).toBeNull();
+            const onToggle = new KeyboardEvent("keydown", {
+                key: "Escape",
+                cancelable: true,
+                bubbles: true,
+            });
+            toggleButton(view).element.dispatchEvent(onToggle);
+            await flushPromises();
+            expect(onToggle.defaultPrevented).toBe(true);
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
         });
 
         it("announces the number of candidates when the identifier opens", async () => {

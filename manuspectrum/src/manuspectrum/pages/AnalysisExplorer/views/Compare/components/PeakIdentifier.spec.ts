@@ -155,6 +155,21 @@ describe("PeakIdentifier", () => {
         expect(arsenic).not.toContain("declared");
     });
 
+    it("says an unresolved confirmation is too close to tell, and writes the voltage in the reader's language", () => {
+        const close = element("S", "Kα1", 2.31, [
+            { line: line("Kβ1", 2.47), state: "unresolved" },
+            { line: line("Kβ3", 2.5), state: "not-excited" },
+        ]);
+        const view = mountIdentifier({
+            candidates: [close],
+            kV: 12.5,
+            lang: "fr",
+        });
+        const text = view.find('li[data-symbol="S"]').text();
+        expect(text).toContain("Kβ1 2,47 too close to tell");
+        expect(text).toContain("not excited at 12,5 kV");
+    });
+
     it("lists the instrument peaks", () => {
         const view = mountIdentifier({
             candidates: [

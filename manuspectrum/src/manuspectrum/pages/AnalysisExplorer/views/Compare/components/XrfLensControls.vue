@@ -14,7 +14,7 @@ type Scale = "linear" | "log";
  * Log unavailable in the Offset layout, said in a tooltip), the energy range
  * (a segmented group of the presets, not a select; « Custom » once the reader zoomed by hand), and
  * two slots for the controls of the lens that carry their own state: the
- * settings menu and, later, the peak identifier.
+ * settings menu and the peak identifier toggle.
  */
 const props = defineProps<{
     log: boolean;

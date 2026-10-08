@@ -2,6 +2,7 @@ import { computed, inject, onScopeDispose, ref, shallowRef, watch } from "vue";
 
 import { useXrfSettings } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfSettings.ts";
 import {
+    ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     SYNTHESIS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -116,7 +117,30 @@ export interface LensSources {
     layout: () => WorkshopLayout;
     /** The slots of the window, in panel order. */
     slots: () => readonly number[];
+    labels?: () => LensLabels;
 }
+
+/** The words the lens draws or announces, translated by the caller; English when absent. */
+export interface LensLabels {
+    compton: string;
+    escape: string;
+    sum: string;
+    /** The Duane–Hunt tick: « 40 kV ». */
+    voltage: (kV: number) => string;
+    /** Said when the lens elements are full. */
+    elementsFull: string;
+    /** Said when the anode choices are full. */
+    anodesFull: string;
+}
+
+const ENGLISH_LABELS: LensLabels = {
+    compton: "Compton",
+    escape: "esc",
+    sum: "sum",
+    voltage: (kV) => `${kV} kV`,
+    elementsFull: "The lens holds no more elements",
+    anodesFull: "No more anode choices can be kept",
+};
 
 export interface LensLayers {
     declared: boolean;
@@ -229,14 +253,36 @@ export function useXrfLens(sources: LensSources) {
     const linked = inject(LINKED_SELECTION_KEY, null);
     const synthesis = inject(SYNTHESIS_KEY, null);
     const store = useExplorerStore();
+    const announce = inject(ANNOUNCE_KEY, () => undefined);
     const {
         settings,
         setDetector,
-        setAnode,
-        addElement,
+        setAnode: keepAnode,
+        addElement: keepElement,
         removeElement,
-        toggleElement,
     } = useXrfSettings();
+    const labels = () => sources.labels?.() ?? ENGLISH_LABELS;
+
+    /** Adds a lens element; a refusal for a full list is announced. */
+    function addElement(symbol: string): boolean {
+        const added = keepElement(symbol);
+        if (!added && !settings.value.elements.includes(symbol)) {
+            announce(labels().elementsFull);
+        }
+        return added;
+    }
+
+    function toggleElement(symbol: string): boolean {
+        if (settings.value.elements.includes(symbol)) {
+            removeElement(symbol);
+            return false;
+        }
+        return addElement(symbol);
+    }
+
+    function setAnode(analysis: string, anode: XrfAnode | "none" | null): void {
+        if (!keepAnode(analysis, anode)) announce(labels().anodesFull);
+    }
 
     const layers = ref<LensLayers>({
         declared: true,
@@ -565,7 +611,7 @@ export function useXrfLens(sources: LensSources) {
                         ) {
                             bands.push({
                                 curveOrder,
-                                label: "Compton",
+                                label: labels().compton,
                                 from: peak.from,
                                 to: peak.to,
                             });
@@ -583,7 +629,7 @@ export function useXrfLens(sources: LensSources) {
                     }
                     ticks.push({
                         curveOrder,
-                        label: instrumentLabel(peak),
+                        label: instrumentLabel(peak, labels()),
                         energy: peak.energy,
                     });
                 }
@@ -880,15 +926,15 @@ export function useXrfLens(sources: LensSources) {
 
 export type XrfLens = ReturnType<typeof useXrfLens>;
 
-function instrumentLabel(peak: InstrumentPeak): string {
+function instrumentLabel(peak: InstrumentPeak, labels: LensLabels): string {
     switch (peak.kind) {
         case "rayleigh":
             return `${peak.source ?? ""} ${peak.line ?? ""}`.trim();
         case "duane-hunt":
-            return `${peak.energy} kV`;
+            return labels.voltage(peak.energy);
         case "escape":
-            return "esc";
+            return labels.escape;
         default:
-            return "sum";
+            return labels.sum;
     }
 }

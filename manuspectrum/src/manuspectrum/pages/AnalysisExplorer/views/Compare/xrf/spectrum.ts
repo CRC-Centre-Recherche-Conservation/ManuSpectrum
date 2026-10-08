@@ -156,7 +156,9 @@ function pooledDeviation(windows: number[][]): number {
 /**
  * Net signal of a line at `energy`: the maximum of y within ±fwhm/2 minus a
  * linear background between the medians of two windows of width `fwhm`
- * centred at energy ± 1.5·fwhm (one window alone gives a flat background).
+ * centred at energy ± 1.5·fwhm (one window alone gives a flat background; when
+ * the two medians differ by more than 3σ, one window sits on a neighbouring
+ * peak and the lower one is taken).
  * Count-like series (all ≥ 0, integers) take σ = √max(background, 1); other
  * series the deviation within the background windows (about each window's mean). Present when
  * net > 3σ.
@@ -180,7 +182,14 @@ export function netSignal(
     } else if (right.length === 0) {
         background = median(left);
     } else {
-        background = (median(left) + median(right)) / 2;
+        const low = Math.min(median(left), median(right));
+        const high = Math.max(median(left), median(right));
+        const spread = looksLikeCounts(y)
+            ? Math.sqrt(Math.max(low, 1))
+            : pooledDeviation([left, right]);
+        // A window sitting on a neighbouring peak would hide the line.
+        background =
+            high - low > PRESENT_SIGMAS * spread ? low : (low + high) / 2;
     }
     const sigma = looksLikeCounts(y)
         ? Math.sqrt(Math.max(background, 1))
