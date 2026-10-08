@@ -225,8 +225,10 @@ function onSelectionResolved(message: string): void {
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"
         >
-            <ShareExportPanel class="share" />
-            <SelectionDrawer class="selection" />
+            <div class="ms-explorer-intro__actions">
+                <ShareExportPanel />
+                <SelectionDrawer />
+            </div>
         </Teleport>
         <p
             v-if="selectionExpired"

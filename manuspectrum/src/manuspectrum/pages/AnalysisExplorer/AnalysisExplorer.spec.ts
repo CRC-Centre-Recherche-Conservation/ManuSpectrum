@@ -373,6 +373,10 @@ describe("AnalysisExplorer", () => {
                       : null,
         );
         expect(owners).toEqual(["share", "selection"]);
+        const actions = bar.querySelector(".ms-explorer-intro__actions");
+        expect(actions?.querySelector(".share-export")).not.toBeNull();
+        expect(actions?.querySelector(".selection-drawer")).not.toBeNull();
+        expect(actions?.closest("#ms-explorer-intro-bar")).toBe(bar);
         wrapper.unmount();
         bar.remove();
     });

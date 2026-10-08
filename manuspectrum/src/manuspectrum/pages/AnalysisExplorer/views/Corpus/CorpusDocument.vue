@@ -13,7 +13,6 @@ import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
 
 import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
-import Breadcrumb from "@/manuspectrum/pages/AnalysisExplorer/components/Breadcrumb.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import ReturnPill from "@/manuspectrum/pages/AnalysisExplorer/components/ReturnPill.vue";
@@ -614,14 +613,6 @@ const backLabel = computed(() =>
         ? resultsLabel.value
         : $gettext("Explorer home"),
 );
-/** The trail shown above the document; the results level only when the document was opened from them. */
-const trail = computed(() => [
-    { id: "corpus", label: $gettext("Whole corpus") },
-    ...(store.documentOrigin === "results"
-        ? [{ id: "results", label: resultsLabel.value }]
-        : []),
-    { id: "document", label: data.value?.name.value ?? "" },
-]);
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -837,10 +828,6 @@ function back(): void {
     store.setCorpusScreen(store.documentOrigin);
 }
 
-function goTo(step: string): void {
-    store.setCorpusScreen(step === "results" ? "results" : "home");
-}
-
 function goHome(): void {
     store.setCorpusScreen("home");
 }
@@ -887,11 +874,6 @@ function goHome(): void {
                 ref="back-pill"
                 :label="backLabel"
                 @click="back"
-            />
-            <Breadcrumb
-                v-if="data && !narrow"
-                :items="trail"
-                @go="goTo"
             />
         </Teleport>
         <UnavailableState
