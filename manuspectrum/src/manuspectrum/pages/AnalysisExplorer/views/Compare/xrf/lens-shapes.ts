@@ -1,4 +1,7 @@
+import { elementColour } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/element-colour.ts";
 import { escapePlotlyText } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
+
+import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 import type { Shape } from "plotly.js";
 
@@ -9,18 +12,18 @@ export const MAX_LENS_SHAPES = 150;
 
 const TICK_PX = 14;
 const MAJOR_INTENSITY = 0.5;
-const OVERLAP_OPACITY = 0.08;
+const OVERLAP_OPACITY = 0.22;
+/** An overlap is a few tens of eV wide: its centre line keeps it visible on a wide range. */
+const OVERLAP_RULE_WIDTH = 4;
+const OVERLAP_RULE_OPACITY = 0.5;
 const COMPTON_OPACITY = 0.12;
 const LABEL_SIZE = 10;
 
-/** Colours the lens draws with; `focus` holds the slot hues, indexed by `hue`. */
-export interface LensTheme {
-    /** Ink of the lens-element lines (distinct from every focus hue). */
-    ink: string;
-    inkMuted: string;
-    focus: string[];
-    fontMono: string;
-}
+/** Colours the lens draws with: the slot hues of `focus` (indexed by `hue`) and the hue of each element (`elementColour`). */
+export type LensTheme = Pick<
+    PlotTheme,
+    "ink" | "inkMuted" | "focus" | "element" | "fontMono"
+>;
 
 /** A vertical line across the panel. `intensity` is relative (0 to 1) within its shell. */
 export interface LensLine {
@@ -37,8 +40,9 @@ export interface FocusLines {
     lines: LensLine[];
 }
 
-/** A lens element (any symbol, not in the focus), in the neutral ink. */
+/** A lens element (any symbol, not in the focus), in its own hue. */
 export interface LensElementLines {
+    symbol: string;
     lines: LensLine[];
 }
 
@@ -47,6 +51,8 @@ export interface DeclaredTick {
     symbol: string;
     energy: number;
     rank: number;
+    /** The focus slot hue of an element the focus pins; the tick takes it, else the element's own hue. */
+    focusHue?: number;
 }
 
 /** A dotted bottom tick in the hue of its curve. */
@@ -66,8 +72,10 @@ export interface EnergyBand {
 export interface OverlapBand {
     from: number;
     to: number;
-    /** Focus hue index. */
+    /** Focus hue index of a pinned element of the pair; -1 when none is pinned. */
     hue: number;
+    /** The element whose own hue draws the band when none is pinned. */
+    symbol: string;
 }
 
 /**
@@ -197,6 +205,38 @@ function band(
     return shape;
 }
 
+function overlapShapes(
+    panel: LensPanel,
+    entry: OverlapBand,
+    theme: LensTheme,
+): LensShape[] {
+    const colour = theme.focus[entry.hue] ?? elementColour(theme, entry.symbol);
+    const rect = band(
+        panel,
+        entry.from,
+        entry.to,
+        colour,
+        OVERLAP_OPACITY,
+        null,
+        theme,
+    );
+    if (!rect) return [];
+    const centre = ((rect.x0 as number) + (rect.x1 as number)) / 2;
+    const rule: LensShape = {
+        type: "line",
+        layer: "below",
+        xref: rect.xref,
+        yref: rect.yref,
+        x0: centre,
+        x1: centre,
+        y0: 0,
+        y1: 1,
+        opacity: OVERLAP_RULE_OPACITY,
+        line: { color: colour, width: OVERLAP_RULE_WIDTH },
+    };
+    return [rect, rule];
+}
+
 /**
  * The Plotly shapes of the XRF lens for one window.
  *
@@ -244,7 +284,7 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                     fullLine(
                         panel,
                         line.energy,
-                        theme.ink,
+                        elementColour(theme, group.symbol),
                         lineStyle(line.intensity),
                         line.label,
                         theme,
@@ -261,7 +301,9 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                     panel,
                     entry.energy,
                     true,
-                    theme.inkMuted,
+                    entry.focusHue !== undefined && theme.focus[entry.focusHue]
+                        ? theme.focus[entry.focusHue]
+                        : elementColour(theme, entry.symbol),
                     RANK_DASH[rank],
                     entry.symbol,
                     theme,
@@ -298,18 +340,9 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
             );
         }
         for (const entry of input.overlaps) {
-            add(
-                6,
-                band(
-                    panel,
-                    entry.from,
-                    entry.to,
-                    theme.focus[entry.hue] ?? theme.ink,
-                    OVERLAP_OPACITY,
-                    null,
-                    theme,
-                ),
-            );
+            for (const shape of overlapShapes(panel, entry, theme)) {
+                add(6, shape);
+            }
         }
     }
 

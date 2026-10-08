@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { elementHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/element-colour.ts";
 import { declaredText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
 import {
     PERIODIC_TABLE,
@@ -311,6 +312,7 @@ function onKeydown(event: KeyboardEvent): void {
                 type="button"
                 class="cell"
                 :style="cell.position"
+                :data-hue="elementHue(cell.symbol)"
                 :aria-label="cellLabel(cell.symbol)"
                 :aria-pressed="cell.pressed ? 'true' : 'false'"
                 @click="emit('toggle-element', { symbol: cell.symbol })"
@@ -329,12 +331,22 @@ function onKeydown(event: KeyboardEvent): void {
                 class="element"
                 :data-kind="element.kind"
                 :data-symbol="element.symbol"
+                :data-hue="
+                    element.slot === null
+                        ? elementHue(element.symbol)
+                        : undefined
+                "
             >
                 <FocusSlotDot
                     v-if="element.slot !== null"
                     :number="element.slot"
                     size="small"
                 />
+                <span
+                    v-else
+                    class="swatch"
+                    aria-hidden="true"
+                ></span>
                 <strong class="symbol">{{ element.symbol }}</strong>
                 <span
                     v-if="!element.known"
@@ -490,9 +502,61 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .xrf-strip .mini-table .cell[aria-pressed="true"] {
-    border-color: var(--ink);
-    background: var(--ink);
+    border-color: var(--chip);
+    background: var(--chip);
     color: var(--surface);
+}
+
+.xrf-strip [data-hue="0"] {
+    --chip: var(--element-1);
+}
+
+.xrf-strip [data-hue="1"] {
+    --chip: var(--element-2);
+}
+
+.xrf-strip [data-hue="2"] {
+    --chip: var(--element-3);
+}
+
+.xrf-strip [data-hue="3"] {
+    --chip: var(--element-4);
+}
+
+.xrf-strip [data-hue="4"] {
+    --chip: var(--element-5);
+}
+
+.xrf-strip [data-hue="5"] {
+    --chip: var(--element-6);
+}
+
+.xrf-strip [data-hue="6"] {
+    --chip: var(--element-7);
+}
+
+.xrf-strip [data-hue="7"] {
+    --chip: var(--element-8);
+}
+
+.xrf-strip [data-hue="8"] {
+    --chip: var(--element-9);
+}
+
+.xrf-strip [data-hue="9"] {
+    --chip: var(--element-10);
+}
+
+.xrf-strip .swatch {
+    align-self: center;
+    inline-size: 0.25rem;
+    block-size: 1rem;
+    border-radius: 0.125rem;
+    background: var(--chip);
+}
+
+.xrf-strip .element[data-kind="lens"] .symbol {
+    color: var(--chip);
 }
 
 .xrf-strip .lines {

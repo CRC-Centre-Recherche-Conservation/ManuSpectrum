@@ -2052,10 +2052,24 @@ describe("XyWorkshop XRF lens", () => {
             const button = toggleButton(view);
             expect(button.attributes("aria-pressed")).toBe("false");
             expect(button.attributes("aria-expanded")).toBeUndefined();
-            expect(view.find(".chart").classes()).not.toContain("identifying");
+            expect(
+                view.find(".chart").attributes("data-identifying"),
+            ).toBeUndefined();
             await button.trigger("click");
             expect(button.attributes("aria-pressed")).toBe("true");
-            expect(view.find(".chart").classes()).toContain("identifying");
+            expect(
+                view.find(".chart").attributes("data-identifying"),
+            ).toBeDefined();
+        });
+
+        it("leaves the classes Plotly set on the chart alone when the mode toggles", async () => {
+            const view = await mountPeak();
+            const chart = view.find(".chart").element;
+            chart.classList.add("js-plotly-plot");
+            await toggleButton(view).trigger("click");
+            expect(chart.classList.contains("js-plotly-plot")).toBe(true);
+            await toggleButton(view).trigger("click");
+            expect(chart.classList.contains("js-plotly-plot")).toBe(true);
         });
 
         it("opens the candidates at the local maximum of the raw counts on a click, and toggles nothing in the focus", async () => {

@@ -17,6 +17,7 @@ import {
     declaredParts,
     mergeDeclared,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
+import { atomicNumber } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/periodic.ts";
 import {
     candidates,
     instrumentPeaks,
@@ -147,6 +148,9 @@ export interface LensLayers {
     instrument: boolean;
     overlaps: boolean;
 }
+
+/** How many things each layer draws on the window. */
+export type LayerCounts = Record<keyof LensLayers, number>;
 
 export type ElementKind = "pinned" | "preview" | "lens";
 
@@ -447,7 +451,10 @@ export function useXrfLens(sources: LensSources) {
         return groups;
     });
     const lensGroups = computed<LensElementLines[]>(() =>
-        lensSymbols.value.map((symbol) => ({ lines: linesOf(symbol) })),
+        lensSymbols.value.map((symbol) => ({
+            symbol,
+            lines: linesOf(symbol),
+        })),
     );
 
     /** The elements declared on the analyses of the visible curves, by symbol. */
@@ -459,15 +466,19 @@ export function useXrfLens(sources: LensSources) {
         );
     }
 
-    const overlapInfo = computed(() => {
+    /**
+     * Every overlap of the window, whatever the layer toggle says (the menu
+     * counts them): between the drawn elements, between those and the
+     * declared ones (against their principal line), and between declared
+     * elements (principal lines).
+     */
+    const overlapAll = computed(() => {
         const range = windowRange.value;
         const none = {
             bands: [] as OverlapBand[],
             notes: [] as StripOverlap[],
         };
-        if (!active.value || !layers.value.overlaps || !table.value || !range) {
-            return none;
-        }
+        if (!active.value || !table.value || !range) return none;
         const loaded = table.value;
         const curves = sources.curves();
         const fwhm = (energy: number) => fwhmAt(energy, fwhmMn.value);
@@ -485,7 +496,7 @@ export function useXrfLens(sources: LensSources) {
             const line = element ? principalLine(element, range, kV) : null;
             return line ? [{ symbol, line }] : [];
         };
-        const pairs: [string, string, boolean][] = [];
+        const pairs: [string, string, boolean | "principal"][] = [];
         subjects.forEach((one, index) => {
             subjects
                 .slice(index + 1)
@@ -496,11 +507,26 @@ export function useXrfLens(sources: LensSources) {
                 }
             }
         });
+        const apartDeclared = [...declaredSymbols(curves)]
+            .filter(
+                (symbol) =>
+                    !subjects.includes(symbol) && symbol in loaded.elements,
+            )
+            .sort(
+                (a, b) =>
+                    (atomicNumber(a) ?? 0) - (atomicNumber(b) ?? 0) ||
+                    a.localeCompare(b),
+            );
+        apartDeclared.forEach((one, index) => {
+            apartDeclared
+                .slice(index + 1)
+                .forEach((other) => pairs.push([one, other, "principal"]));
+        });
         const bands: OverlapBand[] = [];
         const notes: StripOverlap[] = [];
         for (const [one, other, againstDeclared] of pairs) {
             const found = overlaps(
-                full(one),
+                againstDeclared === "principal" ? principal(one) : full(one),
                 againstDeclared ? principal(other) : full(other),
                 fwhm,
             );
@@ -510,6 +536,7 @@ export function useXrfLens(sources: LensSources) {
                     from: overlap.centre - overlap.width / 2,
                     to: overlap.centre + overlap.width / 2,
                     hue,
+                    symbol: hueOf(one) >= 0 || hueOf(other) < 0 ? one : other,
                 });
                 if (notes.length >= MAX_OVERLAP_NOTES) continue;
                 const apart = tellApart(
@@ -529,6 +556,17 @@ export function useXrfLens(sources: LensSources) {
         }
         return { bands, notes };
     });
+    const overlapInfo = computed(() =>
+        layers.value.overlaps
+            ? overlapAll.value
+            : { bands: [] as OverlapBand[], notes: [] as StripOverlap[] },
+    );
+
+    function pinnedSlot(symbol: string): number | null {
+        return (
+            pinned.value.find((held) => held.symbol === symbol)?.slot ?? null
+        );
+    }
 
     /** The declared ticks of a curve: each element's principal line inside the curve's range. */
     function declaredTicks(curve: LensCurve): LensPanel["declared"] {
@@ -546,6 +584,9 @@ export function useXrfLens(sources: LensSources) {
                           symbol,
                           energy: line.energy,
                           rank: entry.rank ?? UNRANKED,
+                          ...(pinnedSlot(symbol) !== null
+                              ? { focusHue: (pinnedSlot(symbol) ?? 1) - 1 }
+                              : {}),
                       },
                   ]
                 : [];
@@ -652,6 +693,27 @@ export function useXrfLens(sources: LensSources) {
         };
     });
 
+    /**
+     * What each layer has to draw on this window, whatever its toggle says:
+     * the elements the visible analyses declare, the distinct instrument
+     * peaks, the overlaps.
+     */
+    const layerCounts = computed<LayerCounts>(() => {
+        const peaks = new Set<string>();
+        for (const found of allInstrument.value) {
+            for (const peak of found) {
+                peaks.add(
+                    `${peak.kind}:${Math.round(peak.energy / TICK_MERGE_KEV)}`,
+                );
+            }
+        }
+        return {
+            declared: active.value ? declaredSymbols(sources.curves()).size : 0,
+            instrument: peaks.size,
+            overlaps: overlapAll.value.bands.length,
+        };
+    });
+
     /** The shapes of the lens in `theme`; empty when the window is not XRF or the table is not loaded. */
     function shapes(theme: PlotTheme): LensShape[] {
         const current = model.value;
@@ -686,6 +748,7 @@ export function useXrfLens(sources: LensSources) {
                 ink: theme.ink,
                 inkMuted: theme.inkMuted,
                 focus: theme.focus,
+                element: theme.element,
                 fontMono: theme.fontMono,
             },
         });
@@ -898,6 +961,7 @@ export function useXrfLens(sources: LensSources) {
         active,
         table,
         layers,
+        layerCounts,
         settings,
         symbols,
         anodeRows,

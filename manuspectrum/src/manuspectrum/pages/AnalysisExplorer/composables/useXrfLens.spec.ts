@@ -35,6 +35,7 @@ import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-th
 const THEME: PlotTheme = {
     series: Array.from({ length: 12 }, (_, index) => `#s${index}`),
     focus: ["#f1", "#f2", "#f3", "#f4"],
+    element: Array.from({ length: 10 }, (_, index) => `#e${index}`),
     context: "#999999",
     ink: "#000000",
     inkMuted: "#444444",
@@ -103,6 +104,36 @@ const SYNTHESIS = {
     ],
 } as unknown as SynthesisResponse;
 
+/** One material declaring arsenic and lead (their Kα1 and Lα1 lie 8 eV apart). */
+const ARSENIC_LEAD = {
+    materials: [
+        {
+            ...SYNTHESIS.materials[0],
+            summary: {
+                id: MATERIAL,
+                name: { value: "Orpiment, lead white", lang: "en" },
+                elements: [
+                    {
+                        level: MAJOR,
+                        values: [
+                            {
+                                id: "value-as",
+                                uri: "value-as",
+                                label: { value: "As", lang: "en" },
+                            },
+                            {
+                                id: "value-pb",
+                                uri: "value-pb",
+                                label: { value: "Pb", lang: "en" },
+                            },
+                        ],
+                    },
+                ],
+            } as unknown as CharacterizationSummary,
+        },
+    ],
+} as unknown as SynthesisResponse;
+
 interface Harness {
     lens: XrfLens;
     wrapper: VueWrapper;
@@ -137,7 +168,13 @@ async function mountLens(
         slots,
         previewing,
         previewSlot,
-        graph: ref({ symbols: new Map([[HG_ID, "Hg"]]) }),
+        graph: ref({
+            symbols: new Map([
+                [HG_ID, "Hg"],
+                ["value-as", "As"],
+                ["value-pb", "Pb"],
+            ]),
+        }),
     } as unknown as LinkedSelection;
     let lens!: XrfLens;
     const Host = defineComponent({
@@ -244,11 +281,11 @@ describe("useXrfLens", () => {
         expect(lineAt(shapesOf(lens), 8.046)).toBeDefined();
     });
 
-    it("draws a lens element in ink without touching the focus, and forgets it when removed", async () => {
+    it("draws a lens element in its own hue without touching the focus, and forgets it when removed", async () => {
         const { lens, slots } = await mountLens([curve()]);
         lens.addElement("Fe");
         const shapes = shapesOf(lens);
-        expect(lineAt(shapes, 6.405)?.line?.color).toBe("#000000");
+        expect(lineAt(shapes, 6.405)?.line?.color).toBe("#e1");
         expect(slots.value).toEqual([]);
         expect(lens.settings.value.elements).toEqual(["Fe"]);
         expect(lens.stripElements.value.map((entry) => entry.kind)).toEqual([
@@ -366,6 +403,46 @@ describe("useXrfLens", () => {
         );
         lens.layers.value = { ...lens.layers.value, overlaps: false };
         expect(lens.overlapNotes.value).toEqual([]);
+    });
+
+    it("shows the overlaps of the declared elements alone, with nothing pinned or added", async () => {
+        const { lens } = await mountLens([curve()], ARSENIC_LEAD);
+        expect(lens.drawnSymbols.value).toEqual([]);
+        const [note] = lens.overlapNotes.value;
+        expect([note.a.symbol, note.b.symbol].sort()).toEqual(["As", "Pb"]);
+        const shapes = shapesOf(lens);
+        expect(shapes.some((shape) => shape.type === "rect")).toBe(true);
+        expect(lens.layerCounts.value.overlaps).toBe(1);
+    });
+
+    it("counts what each layer has to draw, whatever its toggle says", async () => {
+        const { lens } = await mountLens(
+            [
+                curve({
+                    excitation: { anode: "Ag", kV: 40, source: "conditions" },
+                }),
+            ],
+            SYNTHESIS,
+        );
+        const counts = lens.layerCounts.value;
+        expect(counts.declared).toBe(1);
+        expect(counts.instrument).toBeGreaterThan(0);
+        expect(counts.overlaps).toBe(0);
+        lens.layers.value = {
+            declared: false,
+            instrument: false,
+            overlaps: false,
+        };
+        expect(lens.layerCounts.value).toEqual(counts);
+    });
+
+    it("counts nothing for a window without declared elements or an anode", async () => {
+        const { lens } = await mountLens([curve()]);
+        expect(lens.layerCounts.value).toEqual({
+            declared: 0,
+            instrument: 0,
+            overlaps: 0,
+        });
     });
 
     it("keeps the same shapes when the focus gains a node that is not an element", async () => {

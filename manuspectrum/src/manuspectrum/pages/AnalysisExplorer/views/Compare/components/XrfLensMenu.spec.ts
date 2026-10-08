@@ -33,6 +33,7 @@ function mountMenu(
             instrument: true,
             overlaps: false,
             detector: "sdd",
+            counts: { declared: 3, instrument: 12, overlaps: 0 },
             anodes: [INFERRED, OPEN],
             version: "4.5.8",
             ...props,
@@ -52,6 +53,22 @@ afterEach(() => {
 });
 
 describe("XrfLensMenu", () => {
+    it("says what each layer draws, and « none » for a layer with nothing to draw", async () => {
+        const view = mountMenu();
+        await open(view);
+        const text = (name: string) =>
+            view.find(`input[data-layer="${name}"]`).element.parentElement
+                ?.textContent ?? "";
+        expect(text("declared")).toContain("(3)");
+        expect(text("instrument")).toContain("(12)");
+        expect(text("overlaps")).toContain("(none)");
+        expect(
+            view
+                .find('input[data-layer="overlaps"] + span + .count')
+                .attributes("data-empty"),
+        ).toBe("true");
+    });
+
     it("is a popover button named « XRF lens settings », closed at first", () => {
         const view = mountMenu();
         const button = view.find('[data-action="xrf-settings"]');

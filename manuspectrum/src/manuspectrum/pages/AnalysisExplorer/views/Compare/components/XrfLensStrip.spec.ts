@@ -155,6 +155,23 @@ describe("XrfLensStrip", () => {
         );
     });
 
+    it("marks a lens element and its mini-table cell with the element's hue, never by rank", () => {
+        const view = mountStrip({
+            elements: [
+                element({ symbol: "Pb", kind: "lens", slot: null }),
+                element({ symbol: "Fe", kind: "lens", slot: null }),
+                element({ symbol: "Cu", kind: "pinned", slot: 2 }),
+            ],
+            lensSymbols: ["Pb", "Fe"],
+        });
+        const rows = view.findAll("li.element");
+        expect(rows[0].attributes("data-hue")).toBe("0");
+        expect(rows[1].attributes("data-hue")).toBe("1");
+        expect(rows[0].find(".swatch").exists()).toBe(true);
+        expect(rows[2].attributes("data-hue")).toBeUndefined();
+        expect(rows[2].find(".swatch").exists()).toBe(false);
+    });
+
     it("offers a remove button on lens elements only", async () => {
         const view = mountStrip({
             elements: [

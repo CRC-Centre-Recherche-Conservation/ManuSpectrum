@@ -15,6 +15,18 @@ const theme = {
     ink: "#111",
     inkMuted: "#666",
     focus: ["#a00", "#0a0", "#00a", "#aa0"],
+    element: [
+        "#c2410c",
+        "#0e6baa",
+        "#b8860b",
+        "#14804a",
+        "#b912e2",
+        "#d0257a",
+        "#475569",
+        "#8e3329",
+        "#3f6212",
+        "#6d28d9",
+    ],
     fontMono: "monospace",
 };
 
@@ -61,10 +73,10 @@ describe("lensShapes", () => {
                         ],
                     }),
                 ],
-                overlaps: [{ from: 19.9, to: 22, hue: 1 }],
+                overlaps: [{ from: 19.9, to: 22, hue: 1, symbol: "Pb" }],
             }),
         );
-        expect(shapes).toHaveLength(2);
+        expect(shapes).toHaveLength(3);
         const rect = shapes.find((s) => s.type === "rect");
         expect(rect?.x1).toBe(20);
         expect(shapes.some((s) => s.x0 === 75 || s.x0 === 30)).toBe(false);
@@ -123,7 +135,7 @@ describe("lensShapes", () => {
         });
     });
 
-    it("draws a preview thin and dashed, in the lens ink for lens elements", () => {
+    it("draws a preview thin and dashed, a lens element in its own hue", () => {
         const shapes = lensShapes(
             input({
                 focus: [
@@ -134,7 +146,10 @@ describe("lensShapes", () => {
                     },
                 ],
                 elements: [
-                    { lines: [{ energy: 6, label: "b", intensity: 1 }] },
+                    {
+                        symbol: "Pb",
+                        lines: [{ energy: 6, label: "b", intensity: 1 }],
+                    },
                 ],
             }),
         );
@@ -143,7 +158,54 @@ describe("lensShapes", () => {
             dash: "dash",
             color: "#00a",
         });
-        expect(shapes[1].line?.color).toBe("#111");
+        expect(shapes[1].line?.color).toBe("#c2410c");
+        expect(shapes[1].label?.font?.color).toBe("#c2410c");
+    });
+
+    it("gives each element the same hue whatever else is drawn", () => {
+        const colourOf = (symbols: string[], wanted: string) =>
+            lensShapes(
+                input({
+                    elements: symbols.map((symbol) => ({
+                        symbol,
+                        lines: [{ energy: 6, label: symbol, intensity: 1 }],
+                    })),
+                }),
+            ).find((shape) => shape.label?.text === wanted)?.line?.color;
+        expect(colourOf(["Hg"], "Hg")).toBe(colourOf(["Ca", "Fe", "Hg"], "Hg"));
+        expect(colourOf(["Fe", "Hg"], "Fe")).not.toBe(
+            colourOf(["Fe", "Hg"], "Hg"),
+        );
+    });
+
+    it("draws a declared tick in its element's hue, in the focus hue when the element is pinned", () => {
+        const shapes = lensShapes(
+            input({
+                panels: [
+                    panel("", {
+                        declared: [
+                            { symbol: "Pb", energy: 3, rank: 0 },
+                            { symbol: "Fe", energy: 4, rank: 1, focusHue: 2 },
+                        ],
+                    }),
+                ],
+            }),
+        );
+        expect(shapes.map((s) => s.line?.color)).toEqual(["#c2410c", "#00a"]);
+    });
+
+    it("draws an overlap as a band and a centre rule that stay visible on a wide range", () => {
+        const shapes = lensShapes(
+            input({
+                overlaps: [{ from: 10.46, to: 10.63, hue: -1, symbol: "As" }],
+            }),
+        );
+        const rect = shapes.find((s) => s.type === "rect");
+        const rule = shapes.find((s) => s.type === "line");
+        expect(rect?.opacity).toBeGreaterThanOrEqual(0.2);
+        expect(rect?.fillcolor).toBe(rule?.line?.color);
+        expect(rule?.line?.width).toBeGreaterThanOrEqual(3);
+        expect(rule?.x0).toBeCloseTo(10.545, 3);
     });
 
     it("keeps the focus and the majors when it caps at 150", () => {
@@ -198,10 +260,10 @@ describe("lensShapes", () => {
                         ],
                     }),
                 ],
-                overlaps: [{ from: 3, to: 4, hue: 0 }],
+                overlaps: [{ from: 3, to: 4, hue: 0, symbol: "Fe" }],
             }),
         );
-        expect(shapes.length).toBe(4);
+        expect(shapes.length).toBe(5);
         expect(shapes.some((s) => "showlegend" in s)).toBe(false);
     });
 

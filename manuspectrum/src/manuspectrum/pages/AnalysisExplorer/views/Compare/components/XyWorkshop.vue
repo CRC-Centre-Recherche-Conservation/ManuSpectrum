@@ -1512,6 +1512,7 @@ function chooseView(event: Event): void {
                             :instrument="lens.layers.value.instrument"
                             :overlaps="lens.layers.value.overlaps"
                             :detector="lens.settings.value.detector"
+                            :counts="lens.layerCounts.value"
                             :anodes="lens.anodeRows.value"
                             :version="lens.table.value?.version ?? ''"
                             @update-layer="onLayer"
@@ -1592,7 +1593,8 @@ function chooseView(event: Event): void {
                 <div
                     ref="chart"
                     class="chart"
-                    :class="{ failed: drawFailed, identifying }"
+                    :data-failed="drawFailed || undefined"
+                    :data-identifying="identifying || undefined"
                     :style="
                         chartHeight ? { minBlockSize: chartHeight } : undefined
                     "
@@ -1792,11 +1794,11 @@ function chooseView(event: Event): void {
     }
 }
 
-.xy-workshop .chart.failed {
+.xy-workshop .chart[data-failed] {
     min-block-size: 0;
 }
 
-.xy-workshop .chart.identifying :deep(.nsewdrag) {
+.xy-workshop .chart[data-identifying] :deep(.nsewdrag) {
     cursor: crosshair !important;
 }
 

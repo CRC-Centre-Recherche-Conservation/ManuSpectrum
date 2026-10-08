@@ -11,7 +11,10 @@ import {
     XRF_DETECTORS,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
-import type { AnodeRow } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
+import type {
+    AnodeRow,
+    LayerCounts,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import type {
     XrfAnode,
     XrfDetector,
@@ -41,6 +44,8 @@ const props = defineProps<{
     instrument: boolean;
     overlaps: boolean;
     detector: XrfDetector;
+    /** What each layer draws on the window; a layer with nothing says so. */
+    counts: LayerCounts;
     anodes: readonly AnodeRow[];
     /** The version of the line table, for the attribution; empty while it loads. */
     version: string;
@@ -180,6 +185,15 @@ function onKeydown(event: KeyboardEvent): void {
                         @change="onLayer(name, $event)"
                     />
                     <span>{{ layerLabels[name] }}</span>
+                    <span
+                        class="count"
+                        :data-empty="counts[name] === 0 ? 'true' : undefined"
+                        >{{
+                            counts[name] === 0
+                                ? $gettext("(none)")
+                                : `(${counts[name]})`
+                        }}</span
+                    >
                 </label>
             </div>
             <label class="choice stacked">
@@ -287,6 +301,15 @@ function onKeydown(event: KeyboardEvent): void {
     align-items: center;
     gap: 0.5rem;
     min-block-size: 1.75rem;
+}
+
+.xrf-lens-menu .choice .count {
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.xrf-lens-menu .choice .count[data-empty] {
+    font-style: italic;
 }
 
 .xrf-lens-menu .choice.stacked {

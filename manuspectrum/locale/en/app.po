@@ -17,15 +17,19 @@ msgstr ""
 msgid "(new tab)"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:133
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:193
+msgid "(none)"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:134
 msgid "%{a} overlaps %{b}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:136
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:137
 msgid "%{a} overlaps %{b}: tell apart with %{c} vs %{d}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:99
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:104
 msgid "%{anode}, inferred from the conditions"
 msgstr ""
 
@@ -49,7 +53,7 @@ msgstr ""
 msgid "%{direct} direct · %{evidence} evidence"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:169
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:170
 msgid "%{element} (Z %{number})"
 msgstr ""
 
@@ -501,7 +505,7 @@ msgstr "Add a hop"
 msgid "Add a related count"
 msgstr "Add a related count"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:242
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:243
 msgid "Add an element"
 msgstr ""
 
@@ -942,7 +946,7 @@ msgstr "Date of the identification"
 msgid "declared %{level} in %{material}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:70
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:75
 msgid "Declared elements"
 msgstr ""
 
@@ -950,7 +954,7 @@ msgstr ""
 msgid "declared in %{material}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:153
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:154
 msgid "Declared on %{slot}"
 msgstr ""
 
@@ -971,7 +975,7 @@ msgstr ""
 msgid "Details"
 msgstr "Details"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:186
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:200
 msgid "Detector resolution"
 msgstr ""
 
@@ -1075,7 +1079,7 @@ msgid "Element or band"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:543
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:269
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:270
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:124
 msgid "Elements"
 msgstr "Elements"
@@ -1446,7 +1450,7 @@ msgstr ""
 msgid "Identified materials that name the element"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1531
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1532
 msgid "Identify a peak"
 msgstr ""
 
@@ -1526,11 +1530,11 @@ msgstr "Instrument"
 msgid "Instrument file: download only."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:71
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:76
 msgid "Instrument peaks"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1625
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1627
 msgid "Intensities are not comparable in absolute value across instruments."
 msgstr ""
 
@@ -1589,7 +1593,7 @@ msgstr "Layer"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:498
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:502
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:169
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:174
 msgid "Layers"
 msgstr ""
 
@@ -1615,7 +1619,7 @@ msgstr ""
 msgid "Layout: Curtain"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:306
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:307
 msgid "Lens elements"
 msgstr ""
 
@@ -1639,7 +1643,7 @@ msgstr ""
 msgid "Linear"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:85
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:90
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1307
 msgid "Lines: XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"
 msgstr ""
@@ -1886,11 +1890,11 @@ msgstr ""
 msgid "No layer of the Selection has a declared element or band."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:352
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:364
 msgid "No line in the energy range shown"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:124
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:125
 msgid "No line in the table for %{element} (Z 11–92)"
 msgstr ""
 
@@ -1936,7 +1940,7 @@ msgstr ""
 msgid "No visualisation for this file: it can be downloaded."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:240
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:254
 msgid "None (no tube)"
 msgstr ""
 
@@ -2081,7 +2085,7 @@ msgstr "Outgoing — this model carries the link"
 msgid "outside the filters"
 msgstr "outside the filters"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:72
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:77
 msgid "Overlaps"
 msgstr ""
 
@@ -2156,7 +2160,7 @@ msgstr "Per page"
 msgid "Period: %{start}–%{end}"
 msgstr "Period: %{start}–%{end}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:292
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:293
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts:9
 msgid "Periodic table"
 msgstr ""
@@ -2296,7 +2300,7 @@ msgstr "Reload the configuration"
 msgid "Remove"
 msgstr "Remove"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:161
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:162
 msgid "Remove %{element}"
 msgstr ""
 
@@ -2388,7 +2392,7 @@ msgstr "Results per page"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:298
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:822
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:436
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1648
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1650
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:839
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:853
 msgid "Retry"
@@ -2417,7 +2421,7 @@ msgstr ""
 msgid "Save this configuration"
 msgstr "Save this configuration"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:80
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:85
 msgid "SDD (≈ 140 eV at Mn Kα)"
 msgstr ""
 
@@ -2549,7 +2553,7 @@ msgstr[1] "Show the %{n} other citations"
 msgid "Shown enlarged"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:81
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:86
 msgid "Si-PIN (≈ 180 eV at Mn Kα)"
 msgstr ""
 
@@ -2723,7 +2727,7 @@ msgid ""
 "The canvas has no “Imaging layers” tile: the stored label is shown as is."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1579
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1580
 msgid "The chart could not be drawn."
 msgstr ""
 
@@ -2785,7 +2789,7 @@ msgstr[1] ""
 msgid "These data are no longer available."
 msgstr "These data are no longer available."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1563
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1564
 msgid ""
 "These spectra come from different configurations: only the treatments they "
 "share are offered."
@@ -2877,7 +2881,7 @@ msgstr ""
 msgid "Treatment"
 msgstr "Treatment"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:205
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:219
 msgid "Tube anode"
 msgstr ""
 
@@ -2901,7 +2905,7 @@ msgstr ""
 msgid "Unfold"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:230
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:244
 msgid "Unknown"
 msgstr ""
 
@@ -2962,16 +2966,16 @@ msgid "X range"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:76
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:235
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:236
 msgid "XRF lens"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:152
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:163
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:157
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:168
 msgid "XRF lens settings"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:324
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:326
 msgid "XRF lines"
 msgstr ""
 
