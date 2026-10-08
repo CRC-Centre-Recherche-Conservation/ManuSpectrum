@@ -42,7 +42,9 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * what the card that added it knew (`SELECTION_HINTS_KEY`). « Compare »
  * opens the Compare view, asks for its heading to take the focus
  * (`SCREEN_FOCUS_KEY`) and emits `compare`, so a drawer holding the panel
- * closes. « Empty… » empties the Selection at once and leaves a status
+ * closes. The panel is a column filling its container: the heading on top,
+ * the list as the only scrolling region, the footer (actions, undo line)
+ * pinned below it. « Empty… » empties the Selection at once and leaves a status
  * line with « Undo » that puts every item back at its slot. When the reading of the Selection fails, the rows not read lose
  * their placeholder and the panel offers Retry.
  */
@@ -266,38 +268,50 @@ function removeLabel(slot: number): string {
                 </button>
             </li>
         </ol>
-        <div
-            v-if="store.basket.length > 0"
-            class="actions"
+        <footer
+            v-if="store.basket.length > 0 || emptied"
+            class="foot"
         >
-            <button
-                v-if="canCompare"
-                type="button"
-                class="compare primary"
-                @click="compare"
+            <div
+                v-if="store.basket.length > 0"
+                class="actions"
             >
-                <span>{{ compareLabel }}</span>
-            </button>
-            <button
-                type="button"
-                class="clear secondary"
-                @click="empty"
-            >
-                <span>{{ $gettext("Empty…") }}</span>
-            </button>
-        </div>
-        <BulkStatusLine
-            :status="emptied"
-            @undo="undo"
-            @dismiss="dismiss"
-        />
+                <button
+                    v-if="canCompare"
+                    type="button"
+                    class="compare primary"
+                    @click="compare"
+                >
+                    <span>{{ compareLabel }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="clear secondary"
+                    @click="empty"
+                >
+                    <span>{{ $gettext("Empty…") }}</span>
+                </button>
+            </div>
+            <BulkStatusLine
+                :status="emptied"
+                @undo="undo"
+                @dismiss="dismiss"
+            />
+        </footer>
     </section>
 </template>
 
 <style scoped>
 .selection-panel {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 1rem;
+    block-size: 100%;
+    min-block-size: 0;
+}
+
+.selection-panel > * {
+    flex: none;
 }
 
 .selection-panel h3 {
@@ -331,7 +345,11 @@ function removeLabel(slot: number): string {
 
 .selection-panel ol {
     display: grid;
+    flex: 1 1 0;
+    align-content: start;
     gap: 0;
+    min-block-size: 0;
+    overflow-y: auto;
     padding: 0;
     border-block-start: 0.0625rem solid var(--border-hover);
     list-style: none;
@@ -421,16 +439,18 @@ function removeLabel(slot: number): string {
     outline-offset: 0.125rem;
 }
 
-.selection-panel .actions {
-    position: sticky;
-    inset-block-end: 0;
-    z-index: 1;
-    display: flex;
-    flex-wrap: wrap;
+.selection-panel .foot {
+    display: grid;
     gap: 0.5rem;
     padding-block: 0.5rem;
     border-block-start: 0.0625rem solid var(--border-hover);
     background: var(--surface);
+}
+
+.selection-panel .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .selection-panel .clear,

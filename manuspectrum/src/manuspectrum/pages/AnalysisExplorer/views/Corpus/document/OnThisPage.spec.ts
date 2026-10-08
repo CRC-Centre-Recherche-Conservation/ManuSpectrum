@@ -122,15 +122,76 @@ describe("OnThisPage", () => {
         ]);
     });
 
-    it("marks the analyses outside the filters without a visible label", () => {
+    it("greys an analysis outside the filters and ends its row with a visible badge", () => {
         const wrapper = mountList({
             annotations: [annotation(1, { match: false })],
         });
         const row = wrapper.find(".technique li");
         expect(row.classes()).toContain("is-dimmed");
-        expect(row.find(".outside").exists()).toBe(false);
-        const hidden = row.find("button .visually-hidden");
-        expect(hidden.text()).toBe("(outside the filters)");
+        const badge = row.find("button .outside");
+        expect(badge.text()).toBe("outside filters");
+        expect(badge.classes()).not.toContain("visually-hidden");
+        expect(row.find(".visually-hidden").exists()).toBe(false);
+    });
+
+    it("names an analysis outside the filters once, by its badge", () => {
+        const wrapper = mountList({
+            annotations: [annotation(1, { match: false })],
+        });
+        const text = wrapper.get(".technique li button").text();
+        expect(text.match(/outside/g)).toHaveLength(1);
+    });
+
+    it("puts the badge on an unlocated analysis outside the filters", () => {
+        const wrapper = mountList({
+            annotations: [],
+            unlocated: [unlocatedEntry(1, false), unlocatedEntry(2)],
+        });
+        const rows = wrapper.findAll(".unlocated li");
+        expect(rows[0].find(".outside").text()).toBe("outside filters");
+        expect(rows[1].find(".outside").exists()).toBe(false);
+    });
+
+    it("lists the groups with no analysis kept after the others, in their order otherwise", () => {
+        const codes = ["XRF", "FORS", "Raman"];
+        const make = (outside: string) => [
+            annotation(1, { match: outside !== "XRF" }),
+            annotation(2, {
+                technique: technique("t:fors", "FORS", 2),
+                match: outside !== "FORS",
+            }),
+            annotation(3, {
+                technique: technique("t:raman", "Raman", 3),
+                match: outside !== "Raman",
+            }),
+        ];
+        const titles = (outside: string) =>
+            mountList({ annotations: make(outside) })
+                .findAll(".technique .group-title")
+                .map((title) => title.text());
+        const base = titles("none");
+        expect(base).toHaveLength(3);
+        for (const code of codes) {
+            const dimmed = base.find((title) => title.includes(code))!;
+            expect(titles(code)).toEqual([
+                ...base.filter((title) => title !== dimmed),
+                dimmed,
+            ]);
+        }
+    });
+
+    it("keeps the groups in their order when no analysis is outside the filters", () => {
+        const annotations = [
+            annotation(1),
+            annotation(2, { technique: technique("t:fors", "FORS", 2) }),
+        ];
+        const titles = mountList({ annotations })
+            .findAll(".technique .group-title")
+            .map((title) => title.text());
+        const reversed = mountList({ annotations: [...annotations].reverse() })
+            .findAll(".technique .group-title")
+            .map((title) => title.text());
+        expect(titles).toEqual(reversed);
     });
 
     it("gives a row inside the filters no extra accessible text", () => {

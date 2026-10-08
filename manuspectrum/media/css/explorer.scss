@@ -236,6 +236,14 @@ body.ms-page--app .ms-skeleton {
     block-size: min(85dvh, calc(100% - 3rem));
 }
 
+.p-drawer.explorer-selection-drawer .p-drawer-content {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    padding-block-end: 0;
+    overflow: hidden;
+}
+
 .p-drawer.explorer-card-drawer,
 .p-drawer.explorer-rail-drawer,
 .p-drawer.explorer-share-drawer {

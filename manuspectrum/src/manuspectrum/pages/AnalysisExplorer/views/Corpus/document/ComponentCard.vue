@@ -173,7 +173,7 @@ const selectAllLabel = computed(() =>
         true,
     ),
 );
-const outsideText = computed(() => $gettext("(outside the filters)"));
+const outsideText = computed(() => $gettext("outside filters"));
 
 function addLabel(name: string): string {
     return interpolate(
@@ -308,7 +308,7 @@ function focusHeading(): void {
                         }}</span>
                         <span
                             v-if="!entry.match"
-                            class="visually-hidden"
+                            class="outside"
                         >
                             {{ outsideText }}
                         </span>
@@ -360,7 +360,7 @@ function focusHeading(): void {
                         }}</span>
                         <span
                             v-if="!entry.match"
-                            class="visually-hidden"
+                            class="outside"
                         >
                             {{ outsideText }}
                         </span>
@@ -453,16 +453,6 @@ function focusHeading(): void {
     color: var(--ink-muted);
 }
 
-.component-card li.is-dimmed > button::before {
-    content: "";
-    flex: none;
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    margin-inline-end: 0.5rem;
-    border: 0.0625rem solid var(--ink-muted);
-    border-radius: 50%;
-}
-
 .component-card .swatch {
     flex: none;
     inline-size: 0.75rem;
@@ -472,12 +462,14 @@ function focusHeading(): void {
     border-radius: 50%;
 }
 
-.component-card .visually-hidden {
-    position: absolute;
-    inline-size: 0.0625rem;
-    block-size: 0.0625rem;
-    overflow: hidden;
-    clip-path: inset(50%);
+.component-card .outside {
+    flex: none;
+    margin-inline-start: 0.5rem;
+    padding-inline: 0.375rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
     white-space: nowrap;
 }
 

@@ -75,6 +75,28 @@ describe("SelectionPanel", () => {
         expect(row.find(".pending").attributes("aria-label")).toBe("Loading…");
     });
 
+    it("lays out a column whose list is the only scroller and whose footer comes after it", () => {
+        const { wrapper } = mountPanel();
+        const children = [...wrapper.element.children].map(
+            (child) => child.tagName + "." + child.className,
+        );
+        expect(children.at(0)).toMatch(/^HEADER/);
+        expect(children.at(-1)).toMatch(/^FOOTER\.foot/);
+        expect(children.at(-2)).toMatch(/^OL/);
+        const foot = wrapper.get("footer.foot");
+        expect(foot.find(".actions .compare").exists()).toBe(true);
+        expect(wrapper.get("ol").element.contains(foot.element)).toBe(false);
+    });
+
+    it("keeps the undo line in the footer after the Selection is emptied", async () => {
+        const { wrapper } = mountPanel();
+        await wrapper.get(".clear").trigger("click");
+        await nextTick();
+        const foot = wrapper.get("footer.foot");
+        expect(foot.find('[data-action="undo"]').exists()).toBe(true);
+        expect(foot.find(".actions").exists()).toBe(false);
+    });
+
     it("says the Selection is kept on this browser", () => {
         const { wrapper } = mountPanel();
         expect(wrapper.find(".kept").text()).toBe("Kept on this browser");

@@ -31,8 +31,10 @@ const SEPARATOR = /\s+[—–-]\s+/;
  * What the page shows, listed. A row name drops the page label and the
  * document it ends with (`pageLabel`, `documentName`: the screen says them
  * already). The analyses without a position fold under their count when
- * the page has analyses of its own. A row outside the filters is muted with
- * a hollow dot and keeps « (outside the filters) » in its accessible name.
+ * the page has analyses of its own. A row outside the filters is greyed and
+ * ends with an « outside filters » badge, which is part of its accessible
+ * name; a technique group whose analyses are all outside the filters comes
+ * after the groups holding a kept one.
  * Each analysis has its Selection checkbox; a « select all » covers the
  * page, each technique group and the analyses without a position, counting
  * only the rows listed. `hiddenCount` is how many analyses outside the
@@ -76,9 +78,12 @@ const groups = computed(() => {
         const key = techniqueKey(annotation.technique);
         byTechnique.set(key, [...(byTechnique.get(key) ?? []), annotation]);
     }
-    return [...props.styles.values()]
+    const listed = [...props.styles.values()]
         .filter((style) => byTechnique.has(style.key))
         .map((style) => ({ style, items: byTechnique.get(style.key)! }));
+    const kept = (group: { items: Annotation[] }) =>
+        group.items.some((item) => item.match);
+    return [...listed.filter(kept), ...listed.filter((g) => !kept(g))];
 });
 
 /** The message of a view with nothing to list; null when the view lists something. */
@@ -119,7 +124,7 @@ const hints = computed(
             ]),
         ),
 );
-const outsideText = computed(() => $gettext("(outside the filters)"));
+const outsideText = computed(() => $gettext("outside filters"));
 const pageSelectLabel = computed(() => selectAllLabel(pageKeys.value.length));
 const hiddenNote = computed(() =>
     interpolate(
@@ -287,7 +292,7 @@ function select(focus: Focus): void {
                             }}</span>
                             <span
                                 v-if="!item.match"
-                                class="visually-hidden"
+                                class="outside"
                             >
                                 {{ outsideText }}
                             </span>
@@ -442,7 +447,7 @@ function select(focus: Focus): void {
                         }}</span>
                         <span
                             v-if="!item.match"
-                            class="visually-hidden"
+                            class="outside"
                         >
                             {{ outsideText }}
                         </span>
@@ -524,22 +529,14 @@ function select(focus: Focus): void {
     color: var(--ink-muted);
 }
 
-.on-this-page li.is-dimmed > button::before {
-    content: "";
+.on-this-page .outside {
     flex: none;
-    inline-size: 0.5rem;
-    block-size: 0.5rem;
-    margin-inline-end: 0.5rem;
-    border: 0.0625rem solid var(--ink-muted);
-    border-radius: 50%;
-}
-
-.on-this-page .visually-hidden {
-    position: absolute;
-    inline-size: 0.0625rem;
-    block-size: 0.0625rem;
-    overflow: hidden;
-    clip-path: inset(50%);
+    margin-inline-start: 0.5rem;
+    padding-inline: 0.375rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
     white-space: nowrap;
 }
 

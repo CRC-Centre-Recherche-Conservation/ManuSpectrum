@@ -167,13 +167,20 @@ describe("ComponentCard", () => {
         expect(wrapper.text()).toContain("No analysis of this document");
     });
 
-    it("mutes an analysis the filters drop, keeping the reason in its name", () => {
+    it("greys an analysis the filters drop and badges it once in its name", () => {
         const { wrapper } = mountCard(documentComponent(1), [
             entry(1, { match: false }),
         ]);
         const row = wrapper.get(".analyses li");
         expect(row.classes()).toContain("is-dimmed");
-        expect(row.text()).toContain("(outside the filters)");
+        expect(row.get("button .outside").text()).toBe("outside filters");
+        expect(
+            row
+                .get("button")
+                .text()
+                .match(/outside/g),
+        ).toHaveLength(1);
+        expect(row.find(".visually-hidden").exists()).toBe(false);
     });
 
     it("opens an analysis on the analyses view from its name", async () => {
