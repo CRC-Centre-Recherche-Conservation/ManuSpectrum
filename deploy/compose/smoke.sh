@@ -16,8 +16,11 @@
 #                rehearsal: it writes one File row and one image, then removes them)
 #   readiness    /readyz answers 503 while Elasticsearch is stopped, 200 after
 #                (CI and rehearsal only)
+#   lose         delete the PostgreSQL marker row and the uploads marker, as a
+#                disaster would; `survived` must then fail until a restore
+#                (CI and rehearsal only)
 #   clean        remove the markers
-# mark, static-swap, init-guard, edge, readiness and clean are for CI and rehearsal only.
+# mark, lose, static-swap, init-guard, edge, readiness and clean are for CI and rehearsal only.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -153,6 +156,19 @@ cmd_survived() {
   expect "media marker" "$TOKEN" "$(in_web cat /srv/media/.ms-smoke-marker)"
   expect "Cantaloupe reads the uploaded files" "$TOKEN" \
     "$(compose exec -T cantaloupe cat /imageroot/.ms-smoke-marker)"
+}
+
+# Deletes what a restore must bring back: the PostgreSQL marker row of the
+# remembered token and the copy of the marker in uploadedfiles/.
+# TOKEN comes from the sourced state file.
+# shellcheck disable=SC2153
+cmd_lose() {
+  [ -f "$SMOKE_STATE" ] || fail "no $SMOKE_STATE: run mark first"
+  # shellcheck source=/dev/null
+  . "$SMOKE_STATE"
+  psql_app "DELETE FROM ms_smoke_marker WHERE token = '$TOKEN'" >/dev/null
+  in_web rm -f /srv/media/uploadedfiles/.ms-smoke-marker
+  ok "markers lost"
 }
 
 # A stylesheet of the current release, fetched through nginx (HTTPS).
@@ -434,11 +450,12 @@ case "${1:-}" in
   check) cmd_check ;;
   mark) cmd_mark ;;
   survived) cmd_survived ;;
+  lose) cmd_lose ;;
   static-swap) cmd_static_swap ;;
   init-guard) cmd_init_guard ;;
   observability) cmd_observability ;;
   edge) cmd_edge ;;
   readiness) cmd_readiness ;;
   clean) cmd_clean ;;
-  *) sed -n '2,20p' "$0" >&2; exit 2 ;;
+  *) sed -n '2,23p' "$0" >&2; exit 2 ;;
 esac
