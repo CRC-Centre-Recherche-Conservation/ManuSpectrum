@@ -75,7 +75,8 @@ export function lineLabel(name: string): string {
     );
 }
 
-function ref(name: string, line: XrfLine): LineRef {
+/** A table line as a `LineRef`. */
+export function lineRef(name: string, line: XrfLine): LineRef {
     return {
         name,
         label: lineLabel(name),
@@ -88,7 +89,7 @@ function ref(name: string, line: XrfLine): LineRef {
 /** Lines used to confirm an element, those present in the table. */
 export function focusLines(element: XrfElement): LineRef[] {
     return FOCUS_LINE_NAMES.filter((name) => name in element.lines).map(
-        (name) => ref(name, element.lines[name]),
+        (name) => lineRef(name, element.lines[name]),
     );
 }
 
@@ -106,7 +107,7 @@ export function principalLine(
             line[0] <= range[1] &&
             excitable(line, element.edges, kV)
         ) {
-            return ref(name, line);
+            return lineRef(name, line);
         }
     }
     return null;
