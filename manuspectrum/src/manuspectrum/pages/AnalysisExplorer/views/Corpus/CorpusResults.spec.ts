@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { defineComponent, h, ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
@@ -8,6 +8,7 @@ import CorpusResults from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/Co
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { INTENT_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import {
     FACET_LABELS_KEY,
@@ -22,6 +23,7 @@ import {
     facetValue,
     rangeFacet,
     searchResponse,
+    uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
@@ -72,6 +74,15 @@ beforeEach(() => {
     pinia = createPinia();
     setActivePinia(pinia);
     labels = ref(new Map());
+    mount(
+        defineComponent({
+            setup() {
+                useSelectionToggle().dismiss();
+                return () => h("div");
+            },
+        }),
+        { global: { plugins: [pinia] } },
+    );
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
 });
@@ -478,7 +489,11 @@ describe("CorpusResults", () => {
             const { wrapper } = await mountAnalyses(3);
             const bar = wrapper.get(".selection-bar");
             expect(bar.find(".select-all-checkbox input").exists()).toBe(true);
-            expect(bar.text()).toContain("Select all (3 shown)");
+            expect(bar.get(".text").text()).toBe("Select all");
+            expect(bar.get(".chip").text()).toBe("3");
+            expect(bar.get("input").attributes("aria-label")).toBe(
+                "Select all: the 3 analyses on this results page",
+            );
             expect(
                 wrapper.findAll(".analysis-row .selection-checkbox"),
             ).toHaveLength(3);
@@ -510,6 +525,59 @@ describe("CorpusResults", () => {
             expect(wrapper.get(".bulk-status-line").text()).toContain(
                 "3 analyses added",
             );
+        });
+
+        it("holds the checkbox and one slot: the notice or the status line, never both", async () => {
+            const { wrapper } = await mountAnalyses(3);
+            const store = useExplorerStore();
+            const bar = wrapper.get(".selection-bar");
+            expect(
+                [...bar.element.children].map((node) => node.className),
+            ).toEqual(["select-all-checkbox", "slot"]);
+            expect(bar.find(".selection-capacity-notice").exists()).toBe(false);
+            store.addManyToBasket(
+                Array.from({ length: 28 }, (_, n) =>
+                    analysisKey(uuid(900 + n)),
+                ),
+            );
+            await flushPromises();
+            expect(bar.find(".slot .selection-capacity-notice").exists()).toBe(
+                true,
+            );
+            expect(bar.get("input").attributes("aria-describedby")).toBe(
+                bar.get(".selection-capacity-notice").attributes("id"),
+            );
+            expect(bar.find(".bulk-status-line").exists()).toBe(false);
+        });
+
+        it("pads the scroll of the page by the height of the bar as it changes", async () => {
+            const observers: ResizeObserverCallback[] = [];
+            vi.stubGlobal(
+                "ResizeObserver",
+                class {
+                    constructor(callback: ResizeObserverCallback) {
+                        observers.push(callback);
+                    }
+                    observe(): void {}
+                    unobserve(): void {}
+                    disconnect(): void {}
+                },
+            );
+            const height = vi
+                .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+                .mockReturnValue(64);
+            const { wrapper } = await mountAnalyses(3);
+            expect(document.documentElement.style.scrollPaddingTop).toBe(
+                "64px",
+            );
+            height.mockReturnValue(100);
+            observers.forEach((callback) => callback([], {} as ResizeObserver));
+            expect(document.documentElement.style.scrollPaddingTop).toBe(
+                "100px",
+            );
+            wrapper.unmount();
+            expect(document.documentElement.style.scrollPaddingTop).toBe("");
+            height.mockRestore();
         });
 
         it("undoes the grouped addition from the status line", async () => {

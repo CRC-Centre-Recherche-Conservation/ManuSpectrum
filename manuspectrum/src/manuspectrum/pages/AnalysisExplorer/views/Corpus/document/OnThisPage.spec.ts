@@ -1,9 +1,11 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
+import { defineComponent, h } from "vue";
 
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
 
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -22,7 +24,22 @@ let pinia = createPinia();
 beforeEach(() => {
     pinia = createPinia();
     setActivePinia(pinia);
+    mount(
+        defineComponent({
+            setup() {
+                useSelectionToggle().dismiss();
+                return () => h("div");
+            },
+        }),
+        { global: { plugins: [pinia] } },
+    );
 });
+
+function fillSelection(count: number): void {
+    useExplorerStore().addManyToBasket(
+        Array.from({ length: count }, (_, n) => analysisKey(uuid(900 + n))),
+    );
+}
 
 function unlocatedEntry(n: number, match = true) {
     return {
@@ -222,9 +239,11 @@ describe("OnThisPage", () => {
         });
         const groups = wrapper.findAll(".technique");
         const master = groups[1].find(".select-all-checkbox input");
-        expect(groups[1].find(".select-all-checkbox").text()).toContain(
-            "(2 shown)",
-        );
+        expect(
+            groups[1]
+                .find(".select-all-checkbox input")
+                .attributes("aria-label"),
+        ).toBe("Select all: XRF (2)");
         await master.setValue(true);
         expect(store.basket.map((item) => item.key).sort()).toEqual(
             [analysisKey(uuid(101)), analysisKey(uuid(102))].sort(),
@@ -239,7 +258,10 @@ describe("OnThisPage", () => {
         });
         await wrapper.find(".unlocated .fold").trigger("click");
         const page = wrapper.find(".page-select .select-all-checkbox");
-        expect(page.text()).toContain("(2 shown)");
+        expect(page.text()).toBe("Select all2");
+        expect(page.find("input").attributes("aria-label")).toBe(
+            "Select all: the 2 analyses on this page",
+        );
         await page.find("input").setValue(true);
         expect(store.basket).toHaveLength(2);
     });
@@ -250,7 +272,9 @@ describe("OnThisPage", () => {
             unlocated: [unlocatedEntry(1), unlocatedEntry(2)],
         });
         const master = wrapper.find(".unlocated .select-all-checkbox");
-        expect(master.text()).toContain("(2 shown)");
+        expect(master.find("input").attributes("aria-label")).toBe(
+            "Select all: Without a position on the image (2)",
+        );
         await master.find("input").setValue(true);
         expect(store.basket.map((item) => item.key).sort()).toEqual(
             [analysisKey(uuid(151)), analysisKey(uuid(152))].sort(),
@@ -265,7 +289,73 @@ describe("OnThisPage", () => {
         expect(wrapper.find(".unlocated .select-all-checkbox").exists()).toBe(
             false,
         );
-        expect(wrapper.find(".page-select").text()).toContain("(1 shown)");
+        expect(
+            wrapper.find(".page-select input").attributes("aria-label"),
+        ).toBe("Select all: the 1 analysis on this page");
+    });
+
+    describe("capacity", () => {
+        it("puts the notice before the select-all", () => {
+            fillSelection(28);
+            const wrapper = mountList({
+                annotations: [annotation(1), annotation(2), annotation(3)],
+            });
+            const children = [
+                ...wrapper.get(".page-select").element.children,
+            ].map((node) => node.className.split(" ")[0]);
+            expect(children).toEqual([
+                "selection-capacity-notice",
+                "select-all-checkbox",
+            ]);
+        });
+
+        it("describes the page and group checkboxes by the notice while it is shown", () => {
+            fillSelection(28);
+            const wrapper = mountList({
+                annotations: [annotation(1), annotation(2), annotation(3)],
+            });
+            const notice = wrapper.get(".selection-capacity-notice");
+            expect(notice.get(".title").text()).toBe(
+                "Only 2 places left in the Selection",
+            );
+            expect(
+                wrapper
+                    .get(".page-select .select-all-checkbox input")
+                    .attributes("aria-describedby"),
+            ).toBe(notice.attributes("id"));
+            expect(
+                wrapper
+                    .get(".technique .select-all-checkbox input")
+                    .attributes("aria-describedby"),
+            ).toBe(notice.attributes("id"));
+        });
+
+        it("shows the status line right under the select-all after a bulk add", async () => {
+            const wrapper = mountList({
+                annotations: [annotation(1), annotation(2)],
+            });
+            await wrapper.get(".page-select input").setValue(true);
+            const children = [
+                ...wrapper.get(".page-select").element.children,
+            ].map((node) => node.className.split(" ")[0]);
+            expect(children).toEqual([
+                "select-all-checkbox",
+                "bulk-status-line",
+            ]);
+            expect(wrapper.get(".bulk-status-line .message").text()).toBe(
+                "2 analyses added (A1 to A2).",
+            );
+        });
+
+        it("shows no notice once the whole page is held", async () => {
+            const wrapper = mountList({ annotations: [annotation(1)] });
+            fillSelection(29);
+            useExplorerStore().addToBasket(analysisKey(uuid(101)));
+            await wrapper.vm.$nextTick();
+            expect(wrapper.find(".selection-capacity-notice").exists()).toBe(
+                false,
+            );
+        });
     });
 
     it("says how many analyses outside the filters are hidden", () => {

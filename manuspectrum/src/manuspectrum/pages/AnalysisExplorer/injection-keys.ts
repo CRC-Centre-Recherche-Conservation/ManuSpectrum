@@ -103,3 +103,11 @@ export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
 /** How the Compare window holding a body is framed (its preset size, enlarged or not); provided by the window. */
 export const WINDOW_FRAME_KEY: InjectionKey<Readonly<Ref<TableFrame>>> =
     Symbol("window-frame");
+
+/** Opens the Selection drawer; provided by the shell, whose drawer holds the state. */
+export interface SelectionDrawerHandle {
+    open: () => void;
+}
+
+export const SELECTION_DRAWER_KEY: InjectionKey<SelectionDrawerHandle> =
+    Symbol("selection-drawer");

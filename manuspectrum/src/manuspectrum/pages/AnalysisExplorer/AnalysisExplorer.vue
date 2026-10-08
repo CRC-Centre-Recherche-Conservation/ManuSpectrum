@@ -8,6 +8,7 @@ import {
     provide,
     ref,
     shallowRef,
+    useTemplateRef,
     watch,
 } from "vue";
 import { useGettext } from "vue3-gettext";
@@ -32,6 +33,7 @@ import {
     MIRADOR_URL_KEY,
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
+    SELECTION_DRAWER_KEY,
     SELECTION_HINTS_KEY,
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -97,6 +99,8 @@ const selectionHints = ref(new Map<string, SelectionHint>());
 /** Whether the « Cite » block of the Analysis card is unfolded: memory only, for the life of the tab. */
 const citeOpen = ref(false);
 /** The Compare view once its chunk has arrived. */
+const selectionDrawer =
+    useTemplateRef<InstanceType<typeof SelectionDrawer>>("selectionDrawer");
 const compareView = shallowRef<Component>();
 /** Its chunk is on its way, or could not be fetched (Retry fetches it again). */
 const compareChunk = ref<"idle" | "loading" | "failed">("idle");
@@ -135,6 +139,9 @@ provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
 provide(CITE_OPEN_KEY, citeOpen);
 provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
+provide(SELECTION_DRAWER_KEY, {
+    open: () => selectionDrawer.value?.open(document.activeElement),
+});
 
 /**
  * Another view, a new Corpus screen or another document moves the focus to
@@ -227,7 +234,7 @@ function onSelectionResolved(message: string): void {
         >
             <div class="ms-explorer-intro__actions">
                 <ShareExportPanel />
-                <SelectionDrawer />
+                <SelectionDrawer ref="selectionDrawer" />
             </div>
         </Teleport>
         <p

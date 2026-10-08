@@ -602,7 +602,7 @@ describe("CorpusDocument", () => {
             ).toEqual(before);
         });
 
-        it("shows the status line of a grouped change under the list", async () => {
+        it("shows the status line of a grouped change under the page checkbox, not after the panel", async () => {
             stubFetch(shown());
             const { wrapper } = mountScreen(FILTERED);
             await flushPromises();
@@ -611,7 +611,15 @@ describe("CorpusDocument", () => {
                 .find(".on-this-page .page-select input")
                 .setValue(true);
             await flushPromises();
-            expect(wrapper.find(".side .bulk-status-line").exists()).toBe(true);
+            expect(
+                wrapper.find(".side .on-this-page .bulk-status-line").exists(),
+            ).toBe(true);
+            expect(
+                wrapper.findAll(".side > .bulk-status-line, .bulk-status-line"),
+            ).toHaveLength(1);
+            expect(wrapper.find(".side > .bulk-status-line").exists()).toBe(
+                false,
+            );
         });
     });
 
@@ -1373,7 +1381,7 @@ describe("CorpusDocument", () => {
             attachTo: document.body,
         });
         await flushPromises();
-        const entry = wrapper.find(".on-this-page button");
+        const entry = wrapper.find(".on-this-page li > button");
         (entry.element as HTMLButtonElement).focus();
         await entry.trigger("click");
         await flushPromises();

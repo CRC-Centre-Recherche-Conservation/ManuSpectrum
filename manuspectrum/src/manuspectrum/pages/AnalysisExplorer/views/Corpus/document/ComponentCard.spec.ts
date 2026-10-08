@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
-import { nextTick } from "vue";
+import { defineComponent, h, nextTick } from "vue";
 
 import ComponentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue";
 
@@ -9,6 +9,7 @@ import {
     analysisKey,
     characterizationKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentComponent,
@@ -59,6 +60,15 @@ function mountCard(
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
+    mount(
+        defineComponent({
+            setup() {
+                useSelectionToggle().dismiss();
+                return () => h("div");
+            },
+        }),
+        { global: { plugins: [pinia] } },
+    );
     const wrapper = mount(ComponentCard, {
         props: { component, analyses, materials },
         global: { plugins: [pinia] },
@@ -128,6 +138,54 @@ describe("ComponentCard", () => {
             analysisKey(uuid(102)),
             analysisKey(uuid(103)),
         ]);
+    });
+
+    it("names the select-all by its scope and shows the counter chip", () => {
+        const { wrapper } = mountCard();
+        const box = wrapper.get(".analyses .select-all-checkbox");
+        expect(box.get("input").attributes("aria-label")).toBe(
+            "Select all: the 3 analyses on this page",
+        );
+        expect(box.get(".text").text()).toBe("Select all");
+        expect(box.get(".chip").text()).toBe("3");
+    });
+
+    it("puts the notice above the select-all when the analyses do not fit", () => {
+        const { store, wrapper } = mountCard();
+        store.addManyToBasket(
+            Array.from({ length: 28 }, (_, n) => analysisKey(uuid(900 + n))),
+        );
+        return nextTick().then(() => {
+            const children = [...wrapper.get(".analyses").element.children].map(
+                (node) => node.className.split(" ")[0],
+            );
+            expect(children.slice(1, 3)).toEqual([
+                "selection-capacity-notice",
+                "select-all-checkbox",
+            ]);
+            expect(
+                wrapper
+                    .get(".analyses .select-all-checkbox input")
+                    .attributes("aria-describedby"),
+            ).toBe(wrapper.get(".selection-capacity-notice").attributes("id"));
+        });
+    });
+
+    it("shows its own status line under the select-all after a bulk add", async () => {
+        const { wrapper } = mountCard();
+        await wrapper
+            .get(".analyses .select-all-checkbox input")
+            .setValue(true);
+        const children = [...wrapper.get(".analyses").element.children].map(
+            (node) => node.className.split(" ")[0],
+        );
+        expect(children.slice(1, 3)).toEqual([
+            "select-all-checkbox",
+            "bulk-status-line",
+        ]);
+        expect(wrapper.get(".analyses .bulk-status-line").text()).toContain(
+            "3 analyses added (A1 to A3).",
+        );
     });
 
     it("adds all its analyses at once, an: keys only, with the hints naming the component", async () => {

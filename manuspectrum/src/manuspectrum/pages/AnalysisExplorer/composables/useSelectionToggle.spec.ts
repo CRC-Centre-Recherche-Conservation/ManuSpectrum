@@ -162,7 +162,48 @@ describe("useSelectionToggle", () => {
         toggle.toggleAll(Array.from({ length: 30 }, (_, n) => key(n + 1)));
         expect(toggle.blockedReason([key(1), key(2)])).toBeNull();
         expect(toggle.blockedReason([key(200)])).toBe(
-            "Selection full (30/30): remove items to add more.",
+            "Selection full (30 / 30)",
+        );
+    });
+
+    it("counts the keys it holds", () => {
+        toggle.toggle(key(1));
+        toggle.toggle(key(2));
+        expect(toggle.heldCount([key(1), key(2), key(3)])).toBe(2);
+        expect(toggle.heldCount([])).toBe(0);
+    });
+
+    it("tells why a group is refused: full, or not enough room", () => {
+        toggle.toggleAll(Array.from({ length: 27 }, (_, n) => key(n + 1)));
+        expect(toggle.refusal([key(100), key(101)])).toBeNull();
+        expect(
+            toggle.refusal(Array.from({ length: 4 }, (_, n) => key(n + 100))),
+        ).toEqual({
+            kind: "room",
+            needed: 4,
+            free: 3,
+        });
+        toggle.toggleAll([key(50), key(51), key(52)]);
+        expect(toggle.refusal([key(100)])).toEqual({ kind: "full" });
+        expect(toggle.refusal([key(1), key(2)])).toBeNull();
+    });
+
+    it("announces a refused action once and nothing for an action that fits", () => {
+        toggle.toggleAll(Array.from({ length: 28 }, (_, n) => key(n + 1)));
+        toggle.dismiss();
+        announce.mockReset();
+        toggle.announceRefused([key(100)]);
+        expect(announce).not.toHaveBeenCalled();
+        toggle.announceRefused([key(100), key(101), key(102)]);
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce).toHaveBeenLastCalledWith(
+            "Not enough room: 3 to add, 2 places left. Nothing was added.",
+        );
+        toggle.toggleAll([key(100), key(101)]);
+        announce.mockReset();
+        toggle.announceRefused([key(103)]);
+        expect(announce).toHaveBeenCalledWith(
+            "Selection full (30 / 30): nothing was added.",
         );
     });
 

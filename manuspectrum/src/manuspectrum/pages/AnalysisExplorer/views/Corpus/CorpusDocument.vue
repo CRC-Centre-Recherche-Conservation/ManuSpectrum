@@ -12,7 +12,6 @@ import { useMediaQuery } from "@vueuse/core";
 import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
 
-import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import ReturnPill from "@/manuspectrum/pages/AnalysisExplorer/components/ReturnPill.vue";
@@ -37,7 +36,6 @@ import {
     facetQueryOf,
     useDocumentMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
-import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
@@ -101,7 +99,6 @@ const CARD_HEADING_ID = "explorer-card-heading";
 const props = defineProps<{ documentId: string }>();
 
 const store = useExplorerStore();
-const toggle = useSelectionToggle();
 const gettext = useGettext();
 const { $gettext, $ngettext, interpolate } = gettext;
 const payload = useDocument(() => props.documentId);
@@ -1078,13 +1075,6 @@ function goHome(): void {
                         :page-label="currentCanvas?.label ?? ''"
                         :document-name="data.name.value"
                         @select="onSelect"
-                    />
-                    <BulkStatusLine
-                        v-if="!cardOpen || narrow"
-                        class="bulk"
-                        :status="toggle.lastBulk.value"
-                        @undo="toggle.undo"
-                        @dismiss="toggle.dismiss"
                     />
                 </aside>
             </div>

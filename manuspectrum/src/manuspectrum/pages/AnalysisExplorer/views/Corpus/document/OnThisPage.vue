@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
+import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
 import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCheckbox.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 
@@ -65,6 +68,8 @@ const props = withDefaults(
 const emit = defineEmits<{ select: [focus: Focus] }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
+const toggle = useSelectionToggle();
+const noticeId = useId();
 
 const unlocatedOpen = ref(props.annotations.length === 0);
 
@@ -125,7 +130,21 @@ const hints = computed(
         ),
 );
 const outsideText = computed(() => $gettext("outside filters"));
-const pageSelectLabel = computed(() => selectAllLabel(pageKeys.value.length));
+const pageSelectName = computed(() =>
+    interpolate(
+        $ngettext(
+            "Select all: the %{n} analysis on this page",
+            "Select all: the %{n} analyses on this page",
+            pageKeys.value.length,
+        ),
+        { n: pageKeys.value.length },
+        true,
+    ),
+);
+/** The notice is the reason of the checkboxes while it is shown. */
+const describedBy = computed(() =>
+    toggle.lastBulk.value === null ? noticeId : undefined,
+);
 const hiddenNote = computed(() =>
     interpolate(
         $ngettext(
@@ -138,13 +157,9 @@ const hiddenNote = computed(() =>
     ),
 );
 
-function selectAllLabel(count: number): string {
-    return interpolate($gettext("Select all (%{n} shown)"), { n: count }, true);
-}
-
-function groupSelectLabel(name: string, count: number): string {
+function groupSelectName(name: string, count: number): string {
     return interpolate(
-        $gettext("Select all: %{name} (%{n} shown)"),
+        $gettext("Select all: %{name} (%{n})"),
         { name, n: count },
         true,
     );
@@ -230,10 +245,20 @@ function select(focus: Focus): void {
             v-if="props.view === 'analyses' && pageKeys.length > 0"
             class="page-select"
         >
+            <SelectionCapacityNotice
+                :id="noticeId"
+                :keys="pageKeys"
+            />
             <SelectAllCheckbox
                 :keys="pageKeys"
-                :label="pageSelectLabel"
+                :name="pageSelectName"
+                :described-by="describedBy"
                 :hints="hints"
+            />
+            <BulkStatusLine
+                :status="toggle.lastBulk.value"
+                @undo="toggle.undo"
+                @dismiss="toggle.dismiss"
             />
         </div>
         <template v-if="props.view === 'analyses'">
@@ -258,12 +283,13 @@ function select(focus: Focus): void {
                         class="group-select"
                         :compact="true"
                         :keys="groupKeys(group.items)"
-                        :label="
-                            groupSelectLabel(
+                        :name="
+                            groupSelectName(
                                 group.style.label.value,
                                 group.items.length,
                             )
                         "
+                        :described-by="describedBy"
                         :hints="hints"
                     />
                 </h4>
@@ -420,7 +446,13 @@ function select(focus: Focus): void {
                     class="group-select"
                     :compact="true"
                     :keys="unlocatedKeys"
-                    :label="selectAllLabel(unlocatedKeys.length)"
+                    :name="
+                        groupSelectName(
+                            $gettext('Without a position on the image'),
+                            unlocatedKeys.length,
+                        )
+                    "
+                    :described-by="describedBy"
                     :hints="hints"
                 />
             </h4>
@@ -538,6 +570,11 @@ function select(focus: Focus): void {
     color: var(--ink-muted);
     font-size: 0.6875rem;
     white-space: nowrap;
+}
+
+.on-this-page .page-select {
+    display: grid;
+    gap: 0.5rem;
 }
 
 .on-this-page .hidden-note {

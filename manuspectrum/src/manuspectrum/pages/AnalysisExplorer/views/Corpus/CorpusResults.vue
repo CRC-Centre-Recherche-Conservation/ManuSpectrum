@@ -3,15 +3,19 @@ import {
     computed,
     inject,
     nextTick,
+    onBeforeUnmount,
     ref,
     shallowRef,
+    useId,
     useTemplateRef,
     watch,
 } from "vue";
+import { useResizeObserver } from "@vueuse/core";
 import { useGettext } from "vue3-gettext";
 
 import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
+import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
 import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
@@ -81,6 +85,8 @@ const memo = inject(
 const screenFocus = inject(SCREEN_FOCUS_KEY, null);
 const heading = useTemplateRef<HTMLElement>("heading");
 const list = useTemplateRef<HTMLElement>("list");
+const selectionBar = useTemplateRef<HTMLElement>("selectionBar");
+const noticeId = useId();
 
 // Declared before useSearch, whose source reads `page` at once. A page belongs
 // to one filter set: any filter change reads as page 1 in the same tick.
@@ -259,12 +265,38 @@ const showBar = computed(
         search.status.value !== "error" &&
         search.status.value !== "unavailable",
 );
-const selectAllLabel = computed(() =>
+const selectAllName = computed(() =>
     interpolate(
-        $gettext("Select all (%{n} shown)"),
+        $ngettext(
+            "Select all: the %{n} analysis on this results page",
+            "Select all: the %{n} analyses on this results page",
+            shownKeys.value.length,
+        ),
         { n: shownKeys.value.length },
         true,
     ),
+);
+/** The notice is the reason of the checkbox while it is shown. */
+const describedBy = computed(() =>
+    toggle.lastBulk.value === null ? noticeId : undefined,
+);
+
+/** The sticky bar covers the top of the page: a focused row scrolls clear of it (its height, notice included, and its offset). */
+function padScrollBelowBar(): void {
+    const bar = selectionBar.value;
+    const root = document.documentElement;
+    if (!bar) {
+        root.style.removeProperty("scroll-padding-top");
+        return;
+    }
+    const offset = Number.parseFloat(getComputedStyle(bar).insetBlockStart);
+    root.style.scrollPaddingTop = `${bar.offsetHeight + (offset || 0)}px`;
+}
+
+useResizeObserver(selectionBar, padScrollBelowBar);
+watch(selectionBar, padScrollBelowBar);
+onBeforeUnmount(() =>
+    document.documentElement.style.removeProperty("scroll-padding-top"),
 );
 
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
@@ -439,19 +471,26 @@ function goHome(): void {
             />
             <div
                 v-if="showBar"
+                ref="selectionBar"
                 class="selection-bar"
             >
                 <SelectAllCheckbox
                     :keys="shownKeys"
-                    :label="selectAllLabel"
+                    :name="selectAllName"
+                    :described-by="describedBy"
                     :hints="shownHints"
                 />
-                <BulkStatusLine
-                    class="bulk"
-                    :status="toggle.lastBulk.value"
-                    @undo="toggle.undo"
-                    @dismiss="toggle.dismiss"
-                />
+                <div class="slot">
+                    <SelectionCapacityNotice
+                        :id="noticeId"
+                        :keys="shownKeys"
+                    />
+                    <BulkStatusLine
+                        :status="toggle.lastBulk.value"
+                        @undo="toggle.undo"
+                        @dismiss="toggle.dismiss"
+                    />
+                </div>
             </div>
             <UnavailableState
                 v-if="
@@ -618,8 +657,12 @@ function goHome(): void {
     background: var(--surface);
 }
 
-.corpus-results .selection-bar .bulk {
+.corpus-results .selection-bar .slot {
     flex: 1 1 100%;
+}
+
+.corpus-results .selection-bar .slot:empty {
+    display: none;
 }
 
 .corpus-results .list > li {

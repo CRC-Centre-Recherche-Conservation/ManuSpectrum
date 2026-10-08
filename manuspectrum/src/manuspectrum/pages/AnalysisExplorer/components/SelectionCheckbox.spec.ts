@@ -20,13 +20,14 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
 
 const KEY = analysisKey(uuid(1));
 const hints = ref(new Map<string, SelectionHint>());
+const announce = vi.fn();
 
 function mountBox(props: Record<string, unknown> = {}) {
     return mount(SelectionCheckbox, {
         props: { itemKey: KEY, label: "Add Raman to the Selection", ...props },
         global: {
             provide: {
-                [ANNOUNCE_KEY as symbol]: vi.fn(),
+                [ANNOUNCE_KEY as symbol]: announce,
                 [SELECTION_HINTS_KEY as symbol]: hints,
             },
         },
@@ -34,6 +35,7 @@ function mountBox(props: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+    announce.mockClear();
     setActivePinia(createPinia());
     hints.value = new Map();
 });
@@ -100,10 +102,17 @@ describe("SelectionCheckbox", () => {
         const reasonId = input.attributes("aria-describedby");
         expect(reasonId).toBeTruthy();
         expect(wrapper.get(`#${reasonId}`).text()).toBe(
-            "Selection full (30/30): remove items to add more.",
+            "Selection full (30 / 30)",
+        );
+        expect(wrapper.get("label").attributes("title")).toBe(
+            "Selection full (30 / 30)",
         );
         await input.trigger("click");
         expect(store.basket).toHaveLength(30);
+        expect(announce).toHaveBeenCalledTimes(1);
+        expect(announce).toHaveBeenCalledWith(
+            "Selection full (30 / 30): nothing was added.",
+        );
     });
 
     it("stays usable when the Selection is full but the item is held", () => {

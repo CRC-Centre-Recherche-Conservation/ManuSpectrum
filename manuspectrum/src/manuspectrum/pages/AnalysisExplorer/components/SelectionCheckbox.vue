@@ -11,8 +11,9 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * unchecking removes it. While held the zone takes the `held` class (the
  * `--selection-tint` background) and writes the item's slot (« A3 ») under
  * the box. A full Selection that does not hold the item makes the box
- * `aria-disabled` (still focusable) and gives the reason through
- * `aria-describedby`. `label` is the accessible name; `heldLabel`, when
+ * `aria-disabled` (still focusable), drawn as unavailable, with the reason in
+ * its tooltip and through `aria-describedby`; activating it announces once
+ * that nothing was added. `label` is the accessible name; `heldLabel`, when
  * given, replaces it while the item is held. The state lives in the store:
  * no emit.
  */
@@ -44,7 +45,9 @@ const describedBy = computed(() => {
 });
 
 function onClick(event: Event): void {
-    if (reason.value) event.preventDefault();
+    if (!reason.value) return;
+    event.preventDefault();
+    toggle.announceRefused([props.itemKey]);
 }
 
 function onChange(): void {
@@ -57,6 +60,7 @@ function onChange(): void {
     <label
         class="selection-checkbox"
         :class="{ held: held }"
+        :title="reason ?? undefined"
     >
         <input
             type="checkbox"
@@ -109,8 +113,11 @@ function onChange(): void {
 }
 
 .selection-checkbox input[aria-disabled="true"] {
+    appearance: none;
+    border: 0.09375rem dashed var(--ink-dim);
+    border-radius: 0.1875rem;
+    background: var(--bg-alt);
     cursor: not-allowed;
-    opacity: 0.5;
 }
 
 .selection-checkbox input:focus-visible {

@@ -2,6 +2,7 @@
 import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import { kindOf } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { BASKET_LIMIT } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -15,7 +16,8 @@ const DISMISS_EVENT = "dismiss" as const;
 
 /**
  * The line that stays under a grouped change of the Selection until it is
- * dismissed: what changed and the new size, then « Undo » and « Compare »
+ * dismissed: what changed (the new size is in the header button, and in the spoken
+ * message), « The Selection is full. » when the change filled it, then « Undo » and « Compare »
  * (opens Compare and asks its heading for the focus) and « × ». The change is
  * spoken once by the shell's live region, so the line is a `status` that
  * does not announce itself again.
@@ -56,22 +58,57 @@ const message = computed(() => {
             true,
         );
     }
+    const kind = kindOf(status.keys);
+    const values = {
+        n: count,
+        first: status.slots[0],
+        last: status.slots[status.slots.length - 1],
+    };
+    if (kind === "material") {
+        return interpolate(
+            $ngettext(
+                "%{n} identified material added (%{first}).",
+                "%{n} identified materials added (%{first} to %{last}).",
+                count,
+            ),
+            values,
+            true,
+        );
+    }
+    if (kind === "item") {
+        return interpolate(
+            $ngettext(
+                "%{n} item added (%{first}).",
+                "%{n} items added (%{first} to %{last}).",
+                count,
+            ),
+            values,
+            true,
+        );
+    }
     return interpolate(
         $ngettext(
-            "%{n} analysis added (%{first}). Selection: %{held} / %{limit}.",
-            "%{n} analyses added (%{first} to %{last}). Selection: %{held} / %{limit}.",
+            "%{n} analysis added (%{first}).",
+            "%{n} analyses added (%{first} to %{last}).",
             count,
         ),
-        {
-            n: count,
-            first: status.slots[0],
-            last: status.slots[status.slots.length - 1],
-            held: status.total,
-            limit: BASKET_LIMIT,
-        },
+        values,
         true,
     );
 });
+const filled = computed(
+    () =>
+        props.status !== null &&
+        props.status.kind === "added" &&
+        props.status.total >= BASKET_LIMIT,
+);
+
+/** The message, then « The Selection is full. » when the change filled it. */
+const visibleText = computed(() =>
+    filled.value
+        ? `${message.value} ${$gettext("The Selection is full.")}`
+        : message.value,
+);
 
 function compare(): void {
     if (screenFocus) screenFocus.value = true;
@@ -88,7 +125,7 @@ function compare(): void {
         aria-live="off"
     >
         <p class="message">
-            <span>{{ message }}</span>
+            <span>{{ visibleText }}</span>
         </p>
         <button
             type="button"
@@ -132,6 +169,7 @@ function compare(): void {
 
 .bulk-status-line .message {
     flex: 1 1 auto;
+    padding-block: 0.25rem 0;
 }
 
 .bulk-status-line button {

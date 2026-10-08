@@ -33,8 +33,14 @@ export interface SelectionToggle {
         keys: readonly string[],
         hints?: ReadonlyMap<string, SelectionHint> | null,
     ) => void;
-    /** Why the keys cannot all be added (« 48 analyses to add, 26 places left », or « Selection full » with no place left), else null. */
+    /** How many of the keys the Selection holds. */
+    heldCount: (keys: readonly string[]) => number;
+    /** Why the keys cannot all be added: no place left, or `needed` of them for `free` places; null when they can (or all are held). */
+    refusal: (keys: readonly string[]) => Refusal | null;
+    /** The short reason of a refusal (« 48 analyses to add, 26 places left », or « Selection full (30 / 30) » with no place left), else null. */
     blockedReason: (keys: readonly string[]) => string | null;
+    /** Speaks, once, that a refused action added nothing; does nothing when the keys can be added. */
+    announceRefused: (keys: readonly string[]) => void;
     /** Empties the Selection; `undo()` puts every item back at its slot. */
     clearAll: () => void;
     lastBulk: Ref<BulkStatus | null>;
@@ -42,10 +48,14 @@ export interface SelectionToggle {
     dismiss: () => void;
 }
 
-type Kind = "analysis" | "material" | "item";
+export type Refusal =
+    | { kind: "full" }
+    | { kind: "room"; needed: number; free: number };
+
+export type Kind = "analysis" | "material" | "item";
 
 /** What `keys` are: analyses (`an:`), identified materials (`ch:`), or items when the kinds are mixed, none, or neither (`af:`, `im:`). */
-function kindOf(keys: readonly string[]): Kind {
+export function kindOf(keys: readonly string[]): Kind {
     const kinds = new Set<Kind>(
         keys.map((key) =>
             key.startsWith("an:")
@@ -116,14 +126,52 @@ export function useSelectionToggle(): SelectionToggle {
         return $ngettext("%{n} item to add", "%{n} items to add", n);
     }
 
+    function heldCount(keys: readonly string[]): number {
+        const held = heldKeys();
+        return keys.filter((key) => held.has(key)).length;
+    }
+
+    function refusal(keys: readonly string[]): Refusal | null {
+        const plan = planToggleAll(keys, heldKeys(), store.basketFree);
+        if (plan.action !== "refused") return null;
+        if (plan.free < 1) return { kind: "full" };
+        return { kind: "room", needed: plan.needed, free: plan.free };
+    }
+
+    function announceRefused(keys: readonly string[]): void {
+        const refused = refusal(keys);
+        if (refused === null) return;
+        if (refused.kind === "full") {
+            announce(
+                interpolate(
+                    $gettext(
+                        "Selection full (%{limit} / %{limit}): nothing was added.",
+                    ),
+                    { limit: BASKET_LIMIT },
+                    true,
+                ),
+            );
+            return;
+        }
+        announce(
+            interpolate(
+                $ngettext(
+                    "Not enough room: %{n} to add, %{free} place left. Nothing was added.",
+                    "Not enough room: %{n} to add, %{free} places left. Nothing was added.",
+                    refused.free,
+                ),
+                { n: refused.needed, free: refused.free },
+                true,
+            ),
+        );
+    }
+
     function blockedReason(keys: readonly string[]): string | null {
         const plan = planToggleAll(keys, heldKeys(), store.basketFree);
         if (plan.action !== "refused") return null;
         if (plan.free < 1) {
             return interpolate(
-                $gettext(
-                    "Selection full (%{limit}/%{limit}): remove items to add more.",
-                ),
+                $gettext("Selection full (%{limit} / %{limit})"),
                 { limit: BASKET_LIMIT },
                 true,
             );
@@ -333,7 +381,10 @@ export function useSelectionToggle(): SelectionToggle {
         toggle,
         stateOf,
         toggleAll,
+        heldCount,
+        refusal,
         blockedReason,
+        announceRefused,
         clearAll,
         lastBulk,
         undo,

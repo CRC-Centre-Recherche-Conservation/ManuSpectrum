@@ -29,12 +29,38 @@ describe("BulkStatusLine", () => {
         expect(wrapper.find('[role="status"]').exists()).toBe(false);
     });
 
-    it("says what was added, under which slots, and the Selection size", () => {
+    it("says what was added and under which slots, without the total", () => {
         const wrapper = mount(BulkStatusLine, { props: { status: ADDED } });
-        const line = wrapper.get('[role="status"]');
-        expect(line.text()).toContain(
-            "2 analyses added (A3 to A4). Selection: 4 / 30.",
+        const text = wrapper.get(".message").text();
+        expect(text).toBe("2 analyses added (A3 to A4).");
+        expect(text).not.toContain("30");
+    });
+
+    it("uses the singular and the kind of the keys", () => {
+        const line = (keys: string[], slots: string[]) =>
+            mount(BulkStatusLine, {
+                props: { status: { kind: "added", keys, slots, total: 3 } },
+            })
+                .get(".message")
+                .text();
+        expect(line(["an:1"], ["A3"])).toBe("1 analysis added (A3).");
+        expect(line(["ch:1:-", "ch:2:-"], ["A1", "A2"])).toBe(
+            "2 identified materials added (A1 to A2).",
         );
+        expect(line(["af:1:2"], ["A1"])).toBe("1 item added (A1).");
+    });
+
+    it("adds that the Selection is full when the change filled it", () => {
+        const wrapper = mount(BulkStatusLine, {
+            props: { status: { ...ADDED, total: 30 } },
+        });
+        expect(wrapper.get(".message").text()).toBe(
+            "2 analyses added (A3 to A4). The Selection is full.",
+        );
+        const below = mount(BulkStatusLine, {
+            props: { status: { ...ADDED, total: 29 } },
+        });
+        expect(below.get(".message").text()).not.toContain("full");
     });
 
     it("says what was removed", () => {

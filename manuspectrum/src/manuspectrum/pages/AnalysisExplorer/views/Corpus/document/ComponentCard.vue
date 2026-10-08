@@ -2,8 +2,10 @@
 import { computed, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
+import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
 import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCheckbox.vue";
 import SelectionActions from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionActions.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
@@ -12,6 +14,7 @@ import {
     analysisKey,
     characterizationKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type { DocumentComponent } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -48,6 +51,8 @@ defineExpose({ focusHeading });
 const store = useExplorerStore();
 const { $gettext, $ngettext, interpolate } = useGettext();
 const sectionId = useId();
+const noticeId = useId();
+const toggle = useSelectionToggle();
 const heading = useTemplateRef<HTMLElement>("heading");
 
 const keys = computed(() =>
@@ -166,9 +171,17 @@ const addAllLabel = computed(() => {
         true,
     );
 });
-const selectAllLabel = computed(() =>
+/** The notice is the reason of the checkbox while it is shown. */
+const describedBy = computed(() =>
+    toggle.lastBulk.value === null ? noticeId : undefined,
+);
+const selectAllName = computed(() =>
     interpolate(
-        $gettext("Select all (%{n} shown)"),
+        $ngettext(
+            "Select all: the %{n} analysis on this page",
+            "Select all: the %{n} analyses on this page",
+            props.analyses.length,
+        ),
         { n: props.analyses.length },
         true,
     ),
@@ -274,12 +287,23 @@ function focusHeading(): void {
                     $gettext("No analysis of this document observes it.")
                 }}</span>
             </p>
-            <SelectAllCheckbox
-                v-else
-                :keys="keys"
-                :label="selectAllLabel"
-                :hints="hints"
-            />
+            <template v-else>
+                <SelectionCapacityNotice
+                    :id="noticeId"
+                    :keys="keys"
+                />
+                <SelectAllCheckbox
+                    :keys="keys"
+                    :name="selectAllName"
+                    :described-by="describedBy"
+                    :hints="hints"
+                />
+                <BulkStatusLine
+                    :status="toggle.lastBulk.value"
+                    @undo="toggle.undo"
+                    @dismiss="toggle.dismiss"
+                />
+            </template>
             <ul v-if="props.analyses.length > 0">
                 <li
                     v-for="entry in props.analyses"
