@@ -857,6 +857,42 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertIn("RandomizedDelaySec=1h", timer)
         self.assertIn("Persistent=true", timer)
 
+    def test_backup_units_run_the_make_targets(self):
+        def unit(name):
+            return (DEPLOY_DIR / f"systemd/manuspectrum-{name}.in").read_text()
+
+        def timeout(text):
+            value = re.search(r"(?m)^TimeoutStartSec=(\S+)$", text)[1]
+            match = re.fullmatch(r"(?:(\d+)h)?(?:(\d+)min)?", value)
+            return int(match[1] or 0) * 60 + int(match[2] or 0)
+
+        for name, target, calendar, limit in (
+            ("backup", "backup TAG=nightly", "OnCalendar=*-*-* 02:00", 150),
+            ("restore-test", "restore-test", "OnCalendar=Sun *-*-* 05:30", 120),
+        ):
+            with self.subTest(unit=name):
+                service = unit(f"{name}.service")
+                timer = unit(f"{name}.timer")
+                self.assertRegex(
+                    service,
+                    rf"(?m)^ExecStart=/usr/bin/make -C @DEPLOY_DIR@ {target}$",
+                )
+                self.assertRegex(service, r"(?m)^Type=oneshot$")
+                self.assertRegex(service, r"(?m)^User=@APP_USER@$")
+                self.assertRegex(service, r"(?m)^Wants=network-online\.target$")
+                self.assertRegex(
+                    service,
+                    r"(?m)^After=docker\.service network-online\.target remote-fs\.target$",
+                )
+                self.assertNotIn("RequiresMountsFor", service)
+                self.assertEqual(timeout(service), limit)
+                self.assertIn(calendar + "\n", timer)
+                self.assertIn("Persistent=true", timer)
+                self.assertNotIn("RandomizedDelaySec", timer)
+                self.assertIn("WantedBy=timers.target", timer)
+        # The unattended reboot is at 04:50: the backup must have stopped.
+        self.assertLess(2 * 60 + timeout(unit("backup.service")), 4 * 60 + 50)
+
     def test_env_example_ships_production_as_the_environment(self):
         text = (COMPOSE_DIR / ".env.example").read_text()
         self.assertRegex(text, r"(?m)^DEPLOY_ENVIRONMENT=production$")

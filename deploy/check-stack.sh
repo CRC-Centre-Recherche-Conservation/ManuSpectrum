@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
 # publish-static, entrypoint guard, load-snapshot, backup, restore-test, restore, restic round trip,
-# secret-set, local CA, nginx edge and logrotate tests, the Compose rules, actionlint, uv.lock freshness and
+# secret-set, local CA, nginx edge, logrotate and systemd unit tests, the Compose rules, actionlint, uv.lock freshness and
 # gitleaks (its tests, then a scan of the whole tree). Builds no image and
 # starts no stack (the tests run small stub containers; logrotate needs the
 # network once): safe on the development VM.
@@ -25,7 +25,7 @@ docker run --rm -v "$ROOT:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" -x \
   deploy/check-stack.sh deploy/docker/*.sh deploy/docker/tests/*.sh deploy/compose/*.sh \
   deploy/compose/certbot/*.sh deploy/compose/nginx/tests/*.sh \
   deploy/scripts/*.sh deploy/scripts/tests/*.sh \
-  deploy/certs/*.sh deploy/certs/tests/*.sh deploy/logrotate/tests/*.sh
+  deploy/certs/*.sh deploy/certs/tests/*.sh deploy/logrotate/tests/*.sh deploy/systemd/tests/*.sh
 echo "shellcheck: no warning"
 
 step "hadolint"
@@ -64,6 +64,9 @@ bash deploy/compose/nginx/tests/test_edge.sh
 
 step "logrotate tests"
 bash deploy/logrotate/tests/test_logrotate.sh
+
+step "systemd unit tests"
+bash deploy/systemd/tests/test_units.sh
 
 step "Compose rules"
 python3 -m unittest discover -s deploy/compose/tests -p 'test_*.py'
