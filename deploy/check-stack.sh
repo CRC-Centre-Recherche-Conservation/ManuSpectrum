@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
-# publish-static, entrypoint guard, load-snapshot, backup, restic round trip,
+# publish-static, entrypoint guard, load-snapshot, backup, restore-test, restic round trip,
 # secret-set, local CA, nginx edge and logrotate tests, the Compose rules, actionlint, uv.lock freshness and
 # gitleaks (its tests, then a scan of the whole tree). Builds no image and
 # starts no stack (the tests run small stub containers; logrotate needs the
@@ -43,6 +43,9 @@ bash deploy/scripts/tests/test_load_snapshot.sh
 
 step "backup tests"
 bash deploy/scripts/tests/test_backup.sh
+
+step "restore-test tests"
+bash deploy/scripts/tests/test_restore_test.sh
 
 step "restic round trip"
 bash deploy/scripts/tests/test_restic_roundtrip.sh

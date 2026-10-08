@@ -13,7 +13,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot backup-init backup restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot backup-init backup restore-test restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -81,6 +81,9 @@ backup-init: ## Once per host: create the restic repository, or check that it op
 
 backup: ## Back up the database, the uploads and the secrets: make -C deploy backup [TAG=nightly|manual|pre-update]
 	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --tag '$(TAG)'
+
+restore-test: ## Prove the latest backup restores into a scratch database: make -C deploy restore-test [RESTIC_SNAPSHOT=<id>]
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/restore-test.sh$(if $(RESTIC_SNAPSHOT), --snapshot '$(RESTIC_SNAPSHOT)')
 
 restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS="snapshots"
 	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --restic $(ARGS)

@@ -715,6 +715,24 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertIn("$(call envval,METRICS_TEXTFILE_DIR)", env)
         self.assertTrue((DEPLOY_DIR / "scripts" / "backup.sh").is_file())
 
+    def test_restore_test_target_passes_the_metrics_directory_and_an_optional_snapshot(
+        self,
+    ):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        self.assertIn("restore-test", phony)
+        self.assertRegex(makefile, r"(?m)^restore-test:.*## \S")
+        recipe = re.search(r"(?ms)^restore-test:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
+        self.assertIn("$(BACKUP_ENV)", recipe)
+        self.assertIn(
+            "scripts/restore-test.sh", recipe.replace("$(SCRIPTS_DIR)/", "scripts/")
+        )
+        self.assertRegex(
+            recipe,
+            r"\$\(if \$\(RESTIC_SNAPSHOT\), --snapshot '\$\(RESTIC_SNAPSHOT\)'\)",
+        )
+        self.assertTrue((DEPLOY_DIR / "scripts" / "restore-test.sh").is_file())
+
     def test_secret_set_needs_a_name_and_forwards_force_only_on_yes(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         recipe = re.search(r"(?ms)^secret-set:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]

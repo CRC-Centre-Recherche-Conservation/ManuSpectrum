@@ -5,8 +5,8 @@
 #
 # Constants: the retention of the restic repository and the paths restic does
 # not back up, in one place for the script, its tests and deploy/BACKUP.md.
-# Functions: usage_die, backup_config, restic_run, restic_run_with, take_lock,
-# write_metrics.
+# Functions: usage_die, backup_config, scratch_database_name, restic_run,
+# restic_run_with, take_lock, write_metrics.
 # shellcheck disable=SC2154,SC2034  # inputs assigned by the sourcing script; constants it reads
 #
 # Inputs set by the caller before calling a function:
@@ -80,6 +80,21 @@ for key, value in values.items():
     [[ "${!name:-}" == /* ]] || die "$name is empty or not an absolute path in the Compose configuration (set it in $ENV_FILE)"
   done
   [ -n "${MANUSPECTRUM_IMAGE:-}" ] || die "the web service has no image in the Compose configuration"
+}
+
+# Prints the name of the scratch database of the restore test for the live
+# database DBNAME. Fails (nothing printed) when DBNAME is itself a scratch
+# name, or when the name does not fit the 63 bytes of a PostgreSQL identifier
+# (PostgreSQL would truncate it, and a 63-character DBNAME would get its own
+# name back).
+scratch_database_name() { # scratch_database_name DBNAME
+  local db="$1" scratch
+  scratch="${db}_restoretest"
+  [[ "$db" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+  [[ "$db" != *_restoretest ]] || return 1
+  [ "${#scratch}" -le 63 ] || return 1
+  [ "$scratch" != "$db" ] || return 1
+  printf '%s' "$scratch"
 }
 
 # One run of the restic service: no local cache, a held repository lock is
