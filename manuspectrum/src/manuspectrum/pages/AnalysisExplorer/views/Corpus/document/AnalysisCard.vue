@@ -15,8 +15,8 @@ import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyBut
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
-import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCheckbox.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
+import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
 
 import {
@@ -167,13 +167,6 @@ const entryHints = computed(() => {
         [key, { title: current.name, kind: $gettext("analysis") }],
     ]);
 });
-const selectionLabel = computed(() =>
-    interpolate(
-        $gettext("In the Selection: %{name}"),
-        { name: analysis.value?.name.value ?? "" },
-        true,
-    ),
-);
 const date = computed(() =>
     analysis.value ? formatDateRange(analysis.value.date) : "",
 );
@@ -319,19 +312,21 @@ function focusHeading(): void {
                         {{ $gettext("Draft") }}
                     </span>
                 </p>
-                <div
+                <AddToSelection
                     v-if="entryKey"
-                    class="selection-line"
-                >
-                    <SelectionCheckbox
-                        :item-key="entryKey"
-                        :label="selectionLabel"
-                        :hint="entryHints?.get(entryKey)"
-                    />
-                    <span class="selection-text">{{
-                        $gettext("In the Selection")
-                    }}</span>
-                </div>
+                    :keys="[entryKey]"
+                    :label="$gettext('+ Selection')"
+                    :aria-label="
+                        interpolate(
+                            $gettext(
+                                'Add the analysis %{name} to the Selection',
+                            ),
+                            { name: analysis.name.value },
+                            true,
+                        )
+                    "
+                    :hints="entryHints"
+                />
             </template>
         </header>
         <template v-if="!failed && analysis">
@@ -897,16 +892,5 @@ function focusHeading(): void {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-}
-
-.analysis-card .selection-line {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.analysis-card .selection-line .selection-text {
-    font-size: 0.875rem;
-    font-weight: 600;
 }
 </style>

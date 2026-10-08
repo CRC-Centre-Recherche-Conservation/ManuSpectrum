@@ -244,17 +244,16 @@ describe("AnalysisCard", () => {
         expect(single.find(".conditions").text()).toContain("40 kV");
     });
 
-    it("offers the Selection as a checkbox in its head and never one per file", () => {
+    it("adds the whole analysis from its head and never a single file", () => {
         const { wrapper } = mountCard(analysisPayload());
-        const head = wrapper.find(".card-head .selection-line");
-        expect(head.text()).toContain("In the Selection");
-        const box = head.find("input[type=checkbox]");
-        expect(box.attributes("aria-label")).toBe(
-            "In the Selection: MS1_f12_XRF_03",
+        const head = wrapper.find(".card-head .add-to-selection button");
+        expect(head.text()).toBe("+ Selection");
+        expect(head.attributes("aria-label")).toBe(
+            "Add the analysis MS1_f12_XRF_03 to the Selection",
         );
-        expect(wrapper.find(".add-to-selection").exists()).toBe(false);
-        expect(wrapper.findAll(".selection-checkbox")).toHaveLength(1);
-        expect(wrapper.find(".files .selection-checkbox").exists()).toBe(false);
+        expect(wrapper.findAll(".add-to-selection")).toHaveLength(1);
+        expect(wrapper.find(".files .add-to-selection").exists()).toBe(false);
+        expect(wrapper.find(".selection-line").exists()).toBe(false);
     });
 
     it("links a DOI dataset to its resolver and writes an unsafe address as plain text", () => {
@@ -293,20 +292,21 @@ describe("AnalysisCard", () => {
         });
     });
 
-    it("adds the whole analysis to the Selection by ticking the box, and removes it by unticking", async () => {
+    it("adds the whole analysis to the Selection", async () => {
         const { wrapper, store } = mountCard(analysisPayload());
-        const box = wrapper.find(".card-head input[type=checkbox]");
-        await box.setValue(true);
+        await wrapper
+            .find(".card-head .add-to-selection button")
+            .trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([
             `an:${uuid(101)}:-`,
         ]);
-        await box.setValue(false);
-        expect(store.basket).toHaveLength(0);
     });
 
     it("adds an analysis with nothing to show all the same", async () => {
         const { wrapper, store } = mountCard(analysisPayload({ files: [] }));
-        await wrapper.find(".card-head input[type=checkbox]").setValue(true);
+        await wrapper
+            .find(".card-head .add-to-selection button")
+            .trigger("click");
         expect(store.basket.map((item) => item.key)).toEqual([
             `an:${uuid(101)}:-`,
         ]);
