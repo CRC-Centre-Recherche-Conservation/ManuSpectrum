@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { defineComponent, h, ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
@@ -8,18 +8,22 @@ import CorpusResults from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/Co
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { INTENT_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import {
     FACET_LABELS_KEY,
     RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     documentHit,
     facet,
     facetValue,
+    rangeFacet,
     searchResponse,
+    uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
@@ -70,6 +74,15 @@ beforeEach(() => {
     pinia = createPinia();
     setActivePinia(pinia);
     labels = ref(new Map());
+    mount(
+        defineComponent({
+            setup() {
+                useSelectionToggle().dismiss();
+                return () => h("div");
+            },
+        }),
+        { global: { plugins: [pinia] } },
+    );
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
 });
@@ -237,6 +250,49 @@ describe("CorpusResults", () => {
         expect(store.filters.technique).toEqual(["technique-1"]);
         await yearSet.findAll("input")[2].setValue(true);
         expect(store.filters.year).toEqual([2021]);
+    });
+
+    it("shows the period facet of the payload, keeps it on a page answered without it, and sends a period change after the debounce", async () => {
+        fetchMock.mockImplementation(async (url: string) =>
+            jsonResponse(
+                searchResponse({
+                    total: 30,
+                    page: { number: 1, size: 10, count: 2 },
+                    facets:
+                        queryOf([url]).get("facets") === "0"
+                            ? null
+                            : [facet("technique", 2)],
+                    period:
+                        queryOf([url]).get("facets") === "0"
+                            ? null
+                            : rangeFacet(),
+                }),
+            ),
+        );
+        const store = useExplorerStore();
+        const wrapper = mountResults();
+        await flushPromises();
+        expect(wrapper.find(".period-facet").exists()).toBe(true);
+        await wrapper.find(".pagination .next").trigger("click");
+        await flushPromises();
+        expect(wrapper.find(".pagination").text()).toContain("Page 2 of 3");
+        expect(wrapper.find(".period-facet").exists()).toBe(true);
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const callsBefore = fetchMock.mock.calls.length;
+        await wrapper.findAll("button.century")[3].trigger("click");
+        expect(store.filters).toMatchObject({
+            period: [1301, 1400],
+            periodMatch: "overlap",
+            undated: false,
+        });
+        await flushPromises();
+        expect(fetchMock.mock.calls.length).toBe(callsBefore);
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(queryOf(fetchMock.mock.calls[callsBefore]).get("period")).toBe(
+            "1301,1400",
+        );
+        vi.useRealTimers();
     });
 
     it("opens a document from its card", async () => {
@@ -413,5 +469,180 @@ describe("CorpusResults", () => {
         expect(list.attributes("aria-busy")).toBe("true");
         expect(list.findAll(".document-card")).toHaveLength(2);
         expect(wrapper.find("[role=status]").text()).toBe("Updating…");
+    });
+
+    describe("selection bar", () => {
+        async function mountAnalyses(count = 3) {
+            const hits = Array.from({ length: count }, (_, index) =>
+                analysisHit(index + 1),
+            );
+            fetchMock.mockResolvedValue(
+                jsonResponse(searchResponse({ results: hits, total: count })),
+            );
+            useExplorerStore().setFilter("grain", "analyses");
+            const wrapper = mountResults();
+            await flushPromises();
+            return { wrapper, hits };
+        }
+
+        it("has a select-all only in the Analyses grain, covering the shown page", async () => {
+            const { wrapper } = await mountAnalyses(3);
+            const bar = wrapper.get(".selection-bar");
+            expect(bar.find(".select-all-checkbox input").exists()).toBe(true);
+            expect(bar.get(".text").text()).toBe("Select all");
+            expect(bar.get(".chip").text()).toBe("3");
+            expect(bar.get("input").attributes("aria-label")).toBe(
+                "Select all: the 3 analyses on this results page",
+            );
+            expect(
+                wrapper.findAll(".analysis-row .selection-checkbox"),
+            ).toHaveLength(3);
+        });
+
+        it("has no checkbox in the Documents grain", async () => {
+            fetchMock.mockResolvedValue(
+                jsonResponse(
+                    searchResponse({ results: [documentHit(1)], total: 1 }),
+                ),
+            );
+            const wrapper = mountResults();
+            await flushPromises();
+            expect(wrapper.find(".selection-bar").exists()).toBe(false);
+            expect(wrapper.find(".selection-checkbox").exists()).toBe(false);
+            expect(wrapper.find(".select-all-checkbox").exists()).toBe(false);
+        });
+
+        it("adds every analysis of the page at once", async () => {
+            const { wrapper, hits } = await mountAnalyses(3);
+            const store = useExplorerStore();
+            expect(wrapper.find(".held-count").exists()).toBe(false);
+            await wrapper
+                .get(".selection-bar .select-all-checkbox input")
+                .setValue(true);
+            expect(store.basket.map((item) => item.key)).toEqual(
+                hits.map((hit) => analysisKey(hit.id)),
+            );
+            expect(wrapper.get(".bulk-status-line").text()).toContain(
+                "3 analyses added",
+            );
+        });
+
+        it("holds the checkbox and one slot: the notice or the status line, never both", async () => {
+            const { wrapper } = await mountAnalyses(3);
+            const store = useExplorerStore();
+            const bar = wrapper.get(".selection-bar");
+            expect(
+                [...bar.element.children].map((node) => node.className),
+            ).toEqual(["select-all-checkbox", "slot"]);
+            expect(bar.find(".selection-capacity-notice").exists()).toBe(false);
+            store.addManyToBasket(
+                Array.from({ length: 28 }, (_, n) =>
+                    analysisKey(uuid(900 + n)),
+                ),
+            );
+            await flushPromises();
+            expect(bar.find(".slot .selection-capacity-notice").exists()).toBe(
+                true,
+            );
+            expect(bar.get("input").attributes("aria-describedby")).toBe(
+                bar.get(".selection-capacity-notice").attributes("id"),
+            );
+            expect(bar.find(".bulk-status-line").exists()).toBe(false);
+        });
+
+        it("pads the scroll of the page by the height of the bar as it changes", async () => {
+            const observers: ResizeObserverCallback[] = [];
+            vi.stubGlobal(
+                "ResizeObserver",
+                class {
+                    constructor(callback: ResizeObserverCallback) {
+                        observers.push(callback);
+                    }
+                    observe(): void {}
+                    unobserve(): void {}
+                    disconnect(): void {}
+                },
+            );
+            const height = vi
+                .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+                .mockReturnValue(64);
+            const { wrapper } = await mountAnalyses(3);
+            expect(document.documentElement.style.scrollPaddingTop).toBe(
+                "64px",
+            );
+            height.mockReturnValue(100);
+            observers.forEach((callback) => callback([], {} as ResizeObserver));
+            expect(document.documentElement.style.scrollPaddingTop).toBe(
+                "100px",
+            );
+            wrapper.unmount();
+            expect(document.documentElement.style.scrollPaddingTop).toBe("");
+            height.mockRestore();
+        });
+
+        it("undoes the grouped addition from the status line", async () => {
+            const { wrapper } = await mountAnalyses(2);
+            await wrapper
+                .get(".selection-bar .select-all-checkbox input")
+                .setValue(true);
+            await wrapper.get("[data-action=undo]").trigger("click");
+            expect(useExplorerStore().basket).toEqual([]);
+        });
+
+        it("drops the status line when the page, the filters or the grain change", async () => {
+            const hits = [analysisHit(1), analysisHit(2)];
+            fetchMock.mockResolvedValue(
+                jsonResponse(
+                    searchResponse({
+                        results: hits,
+                        total: 120,
+                        page: { number: 1, size: 50, count: 2 },
+                    }),
+                ),
+            );
+            const store = useExplorerStore();
+            store.setFilter("grain", "analyses");
+            const wrapper = mountResults();
+            await flushPromises();
+            async function addPage(): Promise<void> {
+                store.$patch((state) => {
+                    state.basket = [];
+                });
+                await flushPromises();
+                await wrapper
+                    .get(".selection-bar .select-all-checkbox input")
+                    .setValue(true);
+                expect(wrapper.find(".bulk-status-line").exists()).toBe(true);
+            }
+            await addPage();
+            await wrapper.find(".pagination .next").trigger("click");
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+            await addPage();
+            store.setFilter("colour", ["c1"]);
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+            await addPage();
+            store.setFilter("grain", "documents");
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+        });
+
+        it("follows a Selection changed elsewhere (another tab's storage event)", async () => {
+            const { wrapper, hits } = await mountAnalyses(3);
+            const store = useExplorerStore();
+            store.$patch((state) => {
+                state.basket = [
+                    { key: analysisKey(hits[0].id), kind: "analysis", slot: 0 },
+                ];
+            });
+            await flushPromises();
+            const rows = wrapper.findAll(".analysis-row");
+            expect(rows[0].classes()).toContain("held");
+            expect(rows[1].classes()).not.toContain("held");
+            const all = wrapper.get(".selection-bar .select-all-checkbox input")
+                .element as HTMLInputElement;
+            expect(all.indeterminate).toBe(true);
+        });
     });
 });

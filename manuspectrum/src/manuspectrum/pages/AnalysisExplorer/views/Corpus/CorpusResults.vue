@@ -3,14 +3,20 @@ import {
     computed,
     inject,
     nextTick,
+    onBeforeUnmount,
     ref,
     shallowRef,
+    useId,
     useTemplateRef,
     watch,
 } from "vue";
+import { useResizeObserver } from "@vueuse/core";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
+import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
+import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
 import AnalysisRow from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue";
@@ -20,6 +26,7 @@ import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/compon
 
 import { peekJson } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useDocumentPrefetch } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
 import {
     RESULTS_MEMO_KEY,
@@ -38,16 +45,19 @@ import {
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
     documentHref,
     snapshotOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type {
     AnalysisHit,
     DocumentHit,
     Facet,
     FacetKey,
+    RangeFacet,
     SearchResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -75,6 +85,8 @@ const memo = inject(
 const screenFocus = inject(SCREEN_FOCUS_KEY, null);
 const heading = useTemplateRef<HTMLElement>("heading");
 const list = useTemplateRef<HTMLElement>("list");
+const selectionBar = useTemplateRef<HTMLElement>("selectionBar");
+const noticeId = useId();
 
 // Declared before useSearch, whose source reads `page` at once. A page belongs
 // to one filter set: any filter change reads as page 1 in the same tick.
@@ -91,14 +103,21 @@ const page = computed(() =>
 );
 
 /** The facets last received, with the filters (`filtersOf`) they count; at first, those of the first page the tab holds. */
-const heldFacets = shallowRef<{ filters: string; facets: Facet[] } | null>(
-    heldFirstPage(),
-);
+const heldFacets = shallowRef<{
+    filters: string;
+    facets: Facet[];
+    period: RangeFacet | null;
+} | null>(heldFirstPage());
 
 useScreenHeading(() => (restoring.value ? null : heading.value));
 const search = useSearch(() => searchQuery(store.filters, page.value), {
     holdsFacets: (filters) => heldFacets.value?.filters === filters,
     debounceFilters: true,
+});
+const toggle = useSelectionToggle();
+/** A grouped change speaks of the page it was made on: another page, filter set or grain dismisses it (an emptied Selection keeps its Undo). */
+watch([page, filterKey], () => {
+    if (toggle.lastBulk.value?.kind !== "emptied") toggle.dismiss();
 });
 const prefetch = useDocumentPrefetch(() => filterQuery(store.filters));
 
@@ -112,6 +131,14 @@ const facets = computed<Facet[]>(() => {
         : [];
 });
 useFacetLabels(() => facets.value);
+/** The period facet follows the facets: the payload's when it carries them, else the one held for these filters. */
+const period = computed<RangeFacet | null>(() => {
+    const payload = search.data.value;
+    if (payload?.facets) return payload.period;
+    return heldFacets.value?.filters === shownFilters.value
+        ? heldFacets.value.period
+        : null;
+});
 
 const total = computed(() => search.data.value?.total ?? 0);
 const pageCount = computed(() => {
@@ -177,6 +204,7 @@ watch(
             heldFacets.value = {
                 filters: filtersOf(query),
                 facets: payload.facets,
+                period: payload.period,
             };
         }
         memo.value = {
@@ -211,16 +239,86 @@ async function restore(): Promise<void> {
     restoring.value = false;
 }
 
+/** The analyses of the page shown, in the Analyses grain: what the select-all covers. */
+const shownAnalyses = computed<AnalysisHit[]>(() =>
+    store.filters.grain === "analyses"
+        ? (search.data.value?.results ?? []).filter(
+              (hit): hit is AnalysisHit => hit.type === "analysis",
+          )
+        : [],
+);
+const shownKeys = computed(() =>
+    shownAnalyses.value.map((hit) => analysisKey(hit.id)),
+);
+const shownHints = computed(
+    () =>
+        new Map<string, SelectionHint>(
+            shownAnalyses.value.map((hit) => [
+                analysisKey(hit.id),
+                { title: hit.name, kind: $gettext("analysis") },
+            ]),
+        ),
+);
+const showBar = computed(
+    () =>
+        shownKeys.value.length > 0 &&
+        search.status.value !== "error" &&
+        search.status.value !== "unavailable",
+);
+const selectAllName = computed(() =>
+    interpolate(
+        $ngettext(
+            "Select all: the %{n} analysis on this results page",
+            "Select all: the %{n} analyses on this results page",
+            shownKeys.value.length,
+        ),
+        { n: shownKeys.value.length },
+        true,
+    ),
+);
+/** The notice is the reason of the checkbox while it is shown. */
+const describedBy = computed(() =>
+    toggle.lastBulk.value === null ? noticeId : undefined,
+);
+
+/** The sticky bar covers the top of the page: a focused row scrolls clear of it (its height, notice included, and its offset). */
+function padScrollBelowBar(): void {
+    const bar = selectionBar.value;
+    const root = document.documentElement;
+    if (!bar) {
+        root.style.removeProperty("scroll-padding-top");
+        return;
+    }
+    const offset = Number.parseFloat(getComputedStyle(bar).insetBlockStart);
+    root.style.scrollPaddingTop = `${bar.offsetHeight + (offset || 0)}px`;
+}
+
+useResizeObserver(selectionBar, padScrollBelowBar);
+watch(selectionBar, padScrollBelowBar);
+onBeforeUnmount(() =>
+    document.documentElement.style.removeProperty("scroll-padding-top"),
+);
+
 function isDocument(hit: DocumentHit | AnalysisHit): hit is DocumentHit {
     return hit.type === "document";
 }
 
-function heldFirstPage(): { filters: string; facets: Facet[] } | null {
+function heldFirstPage(): {
+    filters: string;
+    facets: Facet[];
+    period: RangeFacet | null;
+} | null {
     const query = searchQuery(store.filters, 1);
-    const facets = peekJson<SearchResponse>("manuspectrum:explorer-search", {
+    const held = peekJson<SearchResponse>("manuspectrum:explorer-search", {
         query,
-    })?.facets;
-    return facets ? { filters: filtersOf(query.toString()), facets } : null;
+    });
+    return held?.facets
+        ? {
+              filters: filtersOf(query.toString()),
+              facets: held.facets,
+              period: held.period,
+          }
+        : null;
 }
 
 function documentOf(hit: DocumentHit | AnalysisHit): string {
@@ -289,7 +387,9 @@ function goHome(): void {
                 :facets="facets"
                 :selected="selectedFacets(store.filters)"
                 :facet-query="shownFilters"
+                :period="period"
                 @change="onFacetChange"
+                @period-change="store.setPeriod"
             />
         </RailPanel>
         <section
@@ -369,6 +469,29 @@ function goHome(): void {
                 scope="results"
                 :count="search.data.value?.unpublishedCount ?? 0"
             />
+            <div
+                v-if="showBar"
+                ref="selectionBar"
+                class="selection-bar"
+            >
+                <SelectAllCheckbox
+                    :keys="shownKeys"
+                    :name="selectAllName"
+                    :described-by="describedBy"
+                    :hints="shownHints"
+                />
+                <div class="slot">
+                    <SelectionCapacityNotice
+                        :id="noticeId"
+                        :keys="shownKeys"
+                    />
+                    <BulkStatusLine
+                        :status="toggle.lastBulk.value"
+                        @undo="toggle.undo"
+                        @dismiss="toggle.dismiss"
+                    />
+                </div>
+            </div>
             <UnavailableState
                 v-if="
                     search.status.value === 'error' ||
@@ -521,6 +644,31 @@ function goHome(): void {
     border-block-end: 0.0625rem solid var(--border);
 }
 
+.corpus-results .selection-bar {
+    position: sticky;
+    inset-block-start: var(--explorer-top, 0);
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1rem;
+    padding-block: 0.25rem;
+    border-block-end: 0.0625rem solid var(--border);
+    background: var(--surface);
+}
+
+.corpus-results .selection-bar .slot {
+    flex: 1 1 100%;
+}
+
+.corpus-results .selection-bar .slot:empty {
+    display: none;
+}
+
+.corpus-results .list > li {
+    scroll-margin-block-start: 4rem;
+}
+
 .corpus-results .grain {
     display: flex;
     gap: 1rem;
@@ -666,6 +814,17 @@ function goHome(): void {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+    .corpus-results .selection-bar :deep(.select-all-checkbox .text) {
+        position: absolute;
+        inline-size: 0.0625rem;
+        block-size: 0.0625rem;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
 }
 
 @media (max-width: 80rem) {

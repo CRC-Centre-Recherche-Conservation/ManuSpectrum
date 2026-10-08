@@ -91,6 +91,7 @@ describe("folio geometry", () => {
                 {
                     id: uuid(901),
                     name: label("Initial"),
+                    unpublished: false,
                     zones: [
                         { canvas: 1, shape: rect, feature: "k1" },
                         { canvas: 0, shape: rect, feature: "k2" },
@@ -99,11 +100,13 @@ describe("folio geometry", () => {
                 {
                     id: uuid(902),
                     name: label("Point only"),
+                    unpublished: false,
                     zones: [{ canvas: 0, shape: point, feature: "k3" }],
                 },
                 {
                     id: uuid(903),
                     name: label("Border"),
+                    unpublished: false,
                     zones: [{ canvas: 0, shape: rect, feature: "k4" }],
                 },
             ],

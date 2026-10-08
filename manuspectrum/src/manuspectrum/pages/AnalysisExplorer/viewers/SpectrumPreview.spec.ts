@@ -274,14 +274,14 @@ describe("SpectrumPreview", () => {
         missing.unmount();
     });
 
-    it("says which file has nothing to draw", async () => {
+    it("says which file has no preview", async () => {
         const { wrapper } = mountPreview(
             [readable(1)],
             () =>
                 ({ ok: true, status: 204, json: async () => ({}) }) as Response,
         );
         await flushPromises();
-        expect(wrapper.text()).toContain("P1.csv: nothing to draw.");
+        expect(wrapper.text()).toContain("P1.csv: no preview available.");
         expect(plotly.react).not.toHaveBeenCalled();
         wrapper.unmount();
     });

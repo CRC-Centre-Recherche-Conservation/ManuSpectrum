@@ -117,6 +117,20 @@ describe("useBasketPersistence", () => {
         ]);
     });
 
+    it("writes once for a grouped add and once for a grouped removal", async () => {
+        const { store } = mountPersistence();
+        const setItem = vi.spyOn(Storage.prototype, "setItem");
+        store.addManyToBasket(Array.from({ length: 8 }, (_, n) => key(n + 1)));
+        await nextTick();
+        expect(basketWrites(setItem)).toBe(1);
+        const removed = store.removeManyFromBasket([key(1), key(2), key(3)]);
+        await nextTick();
+        expect(basketWrites(setItem)).toBe(2);
+        store.restoreBasketItems(removed);
+        await nextTick();
+        expect(basketWrites(setItem)).toBe(3);
+    });
+
     it("writes a change once and never an unchanged value", async () => {
         const { store } = mountPersistence();
         const setItem = vi.spyOn(Storage.prototype, "setItem");

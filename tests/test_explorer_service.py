@@ -8,10 +8,12 @@ from unittest.mock import patch
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from django.core.cache import cache
+from django.db import connection
 from django.http import QueryDict
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
-from arches.app.models.models import IIIFManifest
+from arches.app.models.models import IIIFManifest, Node, TileModel
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
@@ -19,19 +21,29 @@ from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
     TECHNIQUE_PALETTE,
+    analysis_payload,
     ancestor_terms,
     build_bundle,
+    cited_analysis,
     corpus_rows,
     document_payload,
+    place_closure,
     family_colours,
     fold,
     manifest_json,
+    facet_payload,
     match_payload,
+    meets,
     row_filter,
     search_payload,
 )
-from tests.explorer_fixtures import ExplorerCase
+from tests.explorer_fixtures import DRAFT, ExplorerCase
 
+INHA = "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/"
+INHA_BLUE = (
+    "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/"
+    "d549884f-ed29-4a28-87c8-07311d9a14ad"
+)
 XRF, FORS, AZURITE, BLUE = (
     "http://vocab/pxrf",
     "http://vocab/fors",
@@ -189,6 +201,16 @@ class AncestorTermsTests(ServiceCase):
         self.assertIn("XRF", ancestor_terms([str(child.pk)])[str(child.pk)])
 
 
+class FacetGroupTests(SimpleTestCase):
+    def test_layer_is_drawn_with_the_component_but_filters_with_the_material(self):
+        self.assertEqual(explorer_service.GROUP_OF["layer"], "part")
+        self.assertEqual(
+            [k for k in explorer_service.FACET_KEYS if k in ("part", "layer")],
+            ["part", "layer"],
+        )
+        self.assertIn("layer", explorer_service.CHARACTERIZATION_KEYS)
+
+
 class RowFilterTests(SimpleTestCase):
     def rows(self):
         return [
@@ -205,6 +227,8 @@ class RowFilterTests(SimpleTestCase):
                 "partTypes": [],
                 "partColours": [],
                 "characterizations": [],
+                "places": [],
+                "periods": {"production": None, "modification": None},
                 "text": "ms 59 xrf",
             },
             {
@@ -220,6 +244,8 @@ class RowFilterTests(SimpleTestCase):
                 "partTypes": [],
                 "partColours": [],
                 "characterizations": [],
+                "places": [],
+                "periods": {"production": None, "modification": None},
                 "text": "ms 59 fors",
             },
         ]
@@ -235,6 +261,15 @@ class RowFilterTests(SimpleTestCase):
     def test_matches_the_folded_text(self):
         keep, *_ = row_filter(self.rows(), QueryDict("q=FORS"))
         self.assertEqual([keep(r) for r in self.rows()], [False, True])
+
+    def test_meets_holds_each_wanted_key_and_nothing_else(self):
+        values = {"material": {"a"}, "colour": {"x", "y"}, "layer": set()}
+
+        self.assertTrue(meets(values, []))
+        self.assertTrue(meets(values, [("colour", {"y", "z"})]))
+        self.assertTrue(meets(values, [("material", {"a"}), ("colour", {"x"})]))
+        self.assertFalse(meets(values, [("layer", {"x"})]))
+        self.assertFalse(meets(values, [("material", {"b"}), ("colour", {"x"})]))
 
 
 class DocumentMatchTests(ServiceCase):
@@ -418,12 +453,6 @@ class DocumentHitTests(ServiceCase):
             ),
         )
         cls.tile(document, "current_owner", cls.refs(cls.operator))
-        cls.tile_values(
-            document,
-            "document",
-            date_start_of_production_time="1301-01-01",
-            date_end_of_production_time="1400-12-31",
-        )
         cls.tile(
             document,
             "content_of_statement",
@@ -454,7 +483,9 @@ class DocumentHitTests(ServiceCase):
 
         self.assertEqual(hit["shelfmark"], {"value": "Latin 8055", "lang": "en"})
         self.assertEqual(hit["holding"]["value"], "Robinet, L.")
-        self.assertEqual(hit["dates"], {"start": "1301-01-01", "end": "1400-12-31"})
+        self.assertEqual(
+            hit["dates"], {"start": "1401-01", "end": "1500-12", "approximate": True}
+        )
         self.assertEqual(hit["documentType"], {"value": "Manuscript", "lang": "en"})
         self.assertEqual(self.hit("fr")["documentType"]["value"], "Manuscrit")
 
@@ -502,6 +533,7 @@ LEAD_WHITE, RED, LAPIS = (
     "http://vocab/red",
     "http://vocab/lapis",
 )
+GREEN = "http://vocab/green"
 ILLUMINATION, INITIAL, PART_BLUE = (
     "http://vocab/illumination",
     "http://vocab/initial",
@@ -609,6 +641,390 @@ class CharacterizationLevelTests(LevelCase):
         self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
 
 
+class ColourTests(LevelCase):
+    """One colour facet: the part's colour extends to its identified materials, in OR."""
+
+    def kept(self, text):
+        return set(
+            match_payload(
+                self.documents["open"].pk, self.query(text), self.anonymous, "en"
+            )["kept"]["characterizations"]
+        )
+
+    def test_a_part_colour_alone_keeps_the_row(self):
+        payload = self.search(f"colour={PART_BLUE}")
+
+        self.assertEqual(
+            self.ids(payload),
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+        )
+
+    def test_an_identified_colour_alone_keeps_the_row(self):
+        payload = self.search(f"colour={RED}")
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+
+    def test_colour_and_material_hold_on_the_same_identified_material_with_the_part_colour_extended(
+        self,
+    ):
+        self.assertEqual(
+            self.ids(self.search(f"material={LEAD_WHITE}&colour={BLUE}")), set()
+        )
+        self.tile(
+            self.components["open"],
+            "color_features",
+            self.reference_value(BLUE, "Blue", "Bleu"),
+        )
+
+        payload = self.search(f"material={LEAD_WHITE}&colour={BLUE}")
+
+        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+
+    def test_a_colour_scope_parameter_is_ignored(self):
+        for text in (f"colour={PART_BLUE}", f"colour={RED}&material={AZURITE}", ""):
+            self.assertEqual(
+                self.search(f"{text}&colourScope=part"), self.search(text), text
+            )
+            self.assertEqual(
+                self.search(f"{text}&colourScope=material"), self.search(text), text
+            )
+
+    def test_counts_of_material_under_a_colour_follow_the_other_filters(self):
+        def counts(text):
+            return {
+                uri: value["count"]
+                for uri, value in self.facet(self.search(text), "material").items()
+            }
+
+        self.assertEqual(counts(f"colour={BLUE}"), {AZURITE: 2})
+        self.assertEqual(counts(f"colour={PART_BLUE}"), {AZURITE: 1, LEAD_WHITE: 1})
+
+    def test_counts_of_colour_are_values_of_the_kept_entries(self):
+        colours = self.facet(self.search(""), "colour")
+
+        self.assertEqual(
+            {uri: colours[uri]["count"] for uri in (BLUE, RED, PART_BLUE)},
+            {BLUE: 2, RED: 1, PART_BLUE: 2},
+        )
+
+    def test_an_analysis_off_the_blue_part_is_not_kept_by_its_material_observing_it(
+        self,
+    ):
+        self.assertNotIn(
+            str(self.analyses["on_document"].pk),
+            self.ids(self.search(f"colour={PART_BLUE}")),
+        )
+
+    def test_kept_characterizations_extend_the_part_colour(self):
+        azurite, lead_white = str(self.characterization.pk), str(self.second.pk)
+
+        self.assertEqual(self.kept(f"colour={PART_BLUE}"), {azurite, lead_white})
+        self.assertEqual(self.kept(f"colour={PART_BLUE}&material={AZURITE}"), {azurite})
+
+
+class MaterialComponentTests(ServiceCase):
+    """A material is linked to a component it observes or whose analysis it cites; rows, kept materials and payload agree."""
+
+    SHEET, TUBE = "http://vocab/sheet-pigment", "http://vocab/tube-pigment"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref, tile = cls.reference_value, cls.tile
+        document = cls.documents["open"]
+
+        def component(name, colour):
+            made = cls.new_resource("component", name)
+            tile(made, "item_visual_is_part_of_document", cls.refs(document))
+            tile(made, "color_features", ref(*colour))
+            return made
+
+        def analysis(name, observed):
+            made = cls.new_resource("analysis", name)
+            tile(made, "component_observed", cls.refs(observed))
+            return made
+
+        cls.blue_part = component("Blue part", (BLUE, "Blue", "Bleu"))
+        cls.red_part = component("Red part", (RED, "Red", "Rouge"))
+        cls.blue_analysis = analysis("A on blue", cls.blue_part)
+        cls.red_analysis = analysis("B on red", cls.red_part)
+        cls.cites_blue = cls.new_resource("characterization", "Sheet, cites blue")
+        tile(cls.cites_blue, "object_observed", cls.refs(document))
+        tile(cls.cites_blue, "evidence_analyses", cls.refs(cls.blue_analysis))
+        tile(cls.cites_blue, "identified_material", ref(cls.SHEET, "Sheet"))
+        cls.sees_blue = cls.new_resource("characterization", "Tube, sees blue")
+        tile(cls.sees_blue, "object_observed", cls.refs(cls.blue_part))
+        tile(cls.sees_blue, "evidence_analyses", cls.refs(cls.red_analysis))
+        tile(cls.sees_blue, "identified_material", ref(cls.TUBE, "Tube"))
+
+    def search_ids(self, text):
+        payload = search_payload(self.query(f"{text}&size=50"), self.anonymous, "en")
+        return {r["id"] for r in payload["results"]}
+
+    def match(self, text):
+        return match_payload(
+            self.documents["open"].pk, self.query(text), self.anonymous, "en"
+        )
+
+    def test_a_material_citing_an_analysis_takes_the_colour_of_its_component(self):
+        a, m = str(self.blue_analysis.pk), str(self.cites_blue.pk)
+
+        for text in (f"colour={BLUE}", f"colour={BLUE}&material={self.SHEET}"):
+            found = self.match(text)
+            self.assertIn(a, found["kept"]["analyses"], text)
+            self.assertIn(m, found["kept"]["characterizations"], text)
+            self.assertIn(a, self.search_ids(text), text)
+
+    def test_a_material_observing_a_blue_part_and_citing_a_red_one_colours_its_row_red(
+        self,
+    ):
+        b, m = str(self.red_analysis.pk), str(self.sees_blue.pk)
+
+        found = self.match(f"colour={RED}&material={self.TUBE}")
+        self.assertIn(b, found["kept"]["analyses"])
+        self.assertIn(m, found["kept"]["characterizations"])
+        self.assertIn(b, self.search_ids(f"colour={RED}&material={self.TUBE}"))
+
+    def test_the_observed_blue_part_keeps_the_material_but_not_the_red_row(self):
+        b, m = str(self.red_analysis.pk), str(self.sees_blue.pk)
+        text = f"colour={BLUE}&material={self.TUBE}"
+
+        found = self.match(text)
+        self.assertEqual(found["kept"]["analyses"], [])
+        self.assertIn(m, found["kept"]["characterizations"])
+        self.assertNotIn(b, self.search_ids(text))
+
+    def test_search_and_match_keep_the_same_analyses(self):
+        document = str(self.documents["open"].pk)
+        for text in (
+            f"colour={BLUE}",
+            f"colour={BLUE}&material={self.SHEET}",
+            f"colour={BLUE}&material={self.TUBE}",
+            f"colour={RED}&material={self.SHEET}",
+        ):
+            found = {
+                r["id"]
+                for r in search_payload(
+                    self.query(f"{text}&size=50"), self.anonymous, "en"
+                )["results"]
+                if r["document"]["id"] == document
+            }
+            self.assertEqual(set(self.match(text)["kept"]["analyses"]), found, text)
+
+    def test_the_payload_lists_the_linked_components_as_named_refs(self):
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+        summaries = {s["id"]: s for s in payload["characterizations"]}
+
+        def ref(part, name):
+            return {"id": str(part.pk), "model": "component", "name": name}
+
+        cites = summaries[str(self.cites_blue.pk)]["components"]
+        self.assertEqual(cites, [ref(self.blue_part, cites[0]["name"])])
+        self.assertEqual(cites[0]["name"]["value"], "Blue part")
+        sees = summaries[str(self.sees_blue.pk)]["components"]
+        self.assertEqual(
+            [(c["id"], c["model"], c["name"]["value"]) for c in sees],
+            sorted(
+                [
+                    (str(self.blue_part.pk), "component", "Blue part"),
+                    (str(self.red_part.pk), "component", "Red part"),
+                ]
+            ),
+        )
+
+    def test_rows_of_one_material_and_component_share_one_entry(self):
+        rows = {r["id"]: r for r in corpus_rows(self.anonymous, "en")}
+        entry = rows[str(self.blue_analysis.pk)]["characterizations"][0]
+
+        self.assertEqual(entry["colour"], {BLUE})
+        self.assertNotIn("colourOwn", entry)
+
+
+class CitedColourTests(ServiceCase):
+    """A row is kept by a colour its own component or a material it cites carries as its own."""
+
+    M_URI = "http://vocab/shared-pigment"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref, tile = cls.reference_value, cls.tile
+        document = cls.documents["open"]
+
+        def part(name, colour):
+            made = cls.new_resource("component", name)
+            tile(made, "item_visual_is_part_of_document", cls.refs(document))
+            tile(made, "color_features", ref(*colour))
+            return made
+
+        def analysis(name, observed):
+            made = cls.new_resource("analysis", name)
+            tile(made, "component_observed", cls.refs(observed))
+            return made
+
+        cls.a1 = analysis("A1", part("Red part", (RED, "Red", "Rouge")))
+        cls.a2 = analysis("A2", part("Green part", (GREEN, "Green", "Vert")))
+        cls.shared = cls.new_resource("characterization", "Shared, no colour")
+        tile(cls.shared, "object_observed", cls.refs(document))
+        tile(cls.shared, "evidence_analyses", cls.refs(cls.a1, cls.a2))
+        tile(cls.shared, "identified_material", ref(cls.M_URI, "Shared"))
+
+    def ids(self, text):
+        payload = search_payload(self.query(f"{text}&size=50"), self.anonymous, "en")
+        return {r["id"] for r in payload["results"]}
+
+    def facet(self, payload, key):
+        return {
+            v["id"]: v
+            for f in payload["facets"]
+            if f["key"] == key
+            for v in f["values"]
+        }
+
+    def match(self, text):
+        return match_payload(
+            self.documents["open"].pk, self.query(text), self.anonymous, "en"
+        )
+
+    def test_a_colour_keeps_the_row_on_that_colour_only(self):
+        a1, a2 = str(self.a1.pk), str(self.a2.pk)
+
+        for text in (f"colour={RED}", f"colour={RED}&material={self.M_URI}"):
+            found = self.ids(text)
+            self.assertIn(a1, found, text)
+            self.assertNotIn(a2, found, text)
+            kept = self.match(text)["kept"]["analyses"]
+            self.assertIn(a1, kept, text)
+            self.assertNotIn(a2, kept, text)
+
+    def test_the_red_count_does_not_count_the_green_row(self):
+        colours = self.facet(
+            search_payload(self.query(), self.anonymous, "en"), "colour"
+        )
+
+        self.assertEqual(colours[RED]["count"], 1)
+        self.assertEqual(colours[GREEN]["count"], 1)
+
+    def test_match_keeps_the_material_through_each_cited_colour(self):
+        shared = str(self.shared.pk)
+
+        for colour in (RED, GREEN):
+            kept = self.match(f"colour={colour}&material={self.M_URI}")["kept"]
+            self.assertIn(shared, kept["characterizations"], colour)
+        self.assertNotIn(
+            shared, self.match(f"colour={BLUE}")["kept"]["characterizations"]
+        )
+
+    def test_a_kept_material_has_a_kept_row_unless_it_observes_a_component(self):
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+        summaries = {s["id"]: s for s in payload["characterizations"]}
+        for text in (
+            f"colour={RED}",
+            f"colour={GREEN}",
+            f"colour={BLUE}",
+            f"colour={RED}&material={self.M_URI}",
+            f"colour={BLUE}&material={AZURITE}",
+        ):
+            rows = self.ids(text)
+            for c in self.match(text)["kept"]["characterizations"]:
+                cited = {e["id"] for e in summaries[c]["evidence"]}
+                observes = any(
+                    o["model"] == "component" for o in summaries[c]["objects"]
+                )
+                self.assertTrue(cited & rows or observes, (text, c))
+
+
+class ColourListTests(LevelCase):
+    """The colour facet lists every item of the color_aspect list, in a fixed order."""
+
+    WHITE = INHA + "2259f089-935b-46ec-af76-cdb5156ee311"
+    GOLD = INHA + "c1e1850f-9eb1-48f4-b8b8-6154a3a1623c"
+    ODD = "http://vocab/odd"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        controlled = List.objects.create(name="colours")
+        for order, (uri, en, fr) in enumerate(
+            (
+                (cls.ODD, "Odd", "Bizarre"),
+                (INHA_BLUE, "Blue", "Bleu"),
+                (cls.GOLD, "Gold", "Doré"),
+                (cls.WHITE, "White", "Blanc"),
+            )
+        ):
+            item = ListItem.objects.create(list=controlled, uri=uri, sortorder=order)
+            for language, value in (("en", en), ("fr", fr)):
+                ListItemValue.objects.create(
+                    list_item=item,
+                    valuetype_id="prefLabel",
+                    language_id=language,
+                    value=value,
+                )
+        Node.objects.filter(
+            pk=cls.nodes[("characterization", "color_aspect")].pk
+        ).update(config={"controlledList": str(controlled.pk)})
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def order(self, language):
+        payload = search_payload(self.query(), self.anonymous, language)
+        return [
+            v["id"]
+            for f in payload["facets"]
+            if f["key"] == "colour"
+            for v in f["values"]
+        ]
+
+    def test_the_colour_facet_lists_every_item_in_swatch_order_with_zero_counts(self):
+        payload = search_payload(self.query(), self.anonymous, "en")
+        colour = self.facet(payload, "colour")
+
+        expected = [self.WHITE, INHA_BLUE, self.GOLD, self.ODD, BLUE, PART_BLUE, RED]
+        self.assertEqual(self.order("en"), expected)
+        self.assertEqual(self.order("fr"), expected)
+        self.assertEqual(
+            [colour[u]["count"] for u in (self.WHITE, INHA_BLUE, self.GOLD, self.ODD)],
+            [0, 0, 0, 0],
+        )
+        self.assertEqual(colour[self.WHITE]["label"]["value"], "White")
+        self.assertEqual(colour[self.WHITE]["swatch"], "#f5f0e4")
+        self.assertEqual(colour[INHA_BLUE]["swatch"], "#2f55a4")
+        self.assertIsNone(colour[self.ODD]["swatch"])
+
+    def test_a_selection_keeps_every_item_listed(self):
+        payload = search_payload(self.query(f"colour={RED}"), self.anonymous, "en")
+
+        self.assertEqual(
+            {
+                v["id"]
+                for f in payload["facets"]
+                if f["key"] == "colour"
+                for v in f["values"]
+            },
+            {self.WHITE, INHA_BLUE, self.GOLD, self.ODD, BLUE, PART_BLUE, RED},
+        )
+
+    def test_the_facet_route_lists_the_same_items_and_a_document_lists_what_it_carries(
+        self,
+    ):
+        from manuspectrum.views.explorer.service import facet_payload
+
+        whole = facet_payload("colour", self.query(), self.anonymous, "en")
+        document = facet_payload(
+            "colour",
+            self.query(f"document={self.documents['open'].pk}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(len(whole["values"]), 7)
+        self.assertEqual([v["id"] for v in document["values"]], [BLUE, PART_BLUE, RED])
+
+
 class PartLevelTests(LevelCase):
     def test_part_type_and_part_colour_filter_the_analyses_of_the_part(self):
         payload = self.search(f"partType={ILLUMINATION}&partColour={PART_BLUE}")
@@ -621,10 +1037,13 @@ class PartLevelTests(LevelCase):
         self.assertEqual(types[ILLUMINATION]["count"], 2)
         self.assertEqual(types[ILLUMINATION]["label"]["value"], "Illumination")
 
-    def test_part_colour_and_identified_colour_are_two_facets(self):
+    def test_part_colour_and_identified_colour_are_one_facet(self):
         payload = self.search(f"partColour={PART_BLUE}&colour={RED}")
 
-        self.assertEqual(self.ids(payload), {str(self.analyses["open"].pk)})
+        self.assertEqual(
+            self.ids(payload),
+            {str(self.analyses["open"].pk), str(self.analyses["draft"].pk)},
+        )
 
     def test_each_facet_names_its_group_in_rail_order(self):
         payload = self.search("")
@@ -632,8 +1051,8 @@ class PartLevelTests(LevelCase):
         self.assertEqual(
             [(f["key"], f["group"]) for f in payload["facets"]],
             [
+                ("place", "document"),
                 ("partType", "part"),
-                ("partColour", "part"),
                 ("part", "part"),
                 ("project", "analysis"),
                 ("technique", "analysis"),
@@ -651,10 +1070,20 @@ class PartLevelTests(LevelCase):
             "color_aspect",
             self.reference_value(gilded, "Gilded", "Doré"),
         )
+        self.tile(
+            self.characterization,
+            "color_aspect",
+            self.reference_value(INHA_BLUE, "Bleu", "Bleu"),
+        )
+        self.tile(
+            self.components["open"],
+            "color_features",
+            self.reference_value(INHA_BLUE, "Bleu", "Bleu"),
+        )
         swatches = {
             language: {
                 key: {v: facet[v]["swatch"] for v in facet}
-                for key in ("colour", "partColour", "material")
+                for key in ("colour", "material")
                 for facet in [
                     self.facet(
                         search_payload(self.query(), self.anonymous, language), key
@@ -667,7 +1096,8 @@ class PartLevelTests(LevelCase):
         self.assertEqual(swatches["en"], swatches["fr"])
         self.assertEqual(swatches["en"]["colour"][gilded], "goldenrod")
         self.assertEqual(swatches["en"]["colour"][BLUE], "royalblue")
-        self.assertEqual(swatches["en"]["partColour"][PART_BLUE], "royalblue")
+        self.assertEqual(swatches["en"]["colour"][INHA_BLUE], "#2f55a4")
+        self.assertEqual(swatches["en"]["colour"][PART_BLUE], "royalblue")
         self.assertEqual(set(swatches["en"]["material"].values()), {None})
 
     def test_the_french_label_of_a_part_type(self):
@@ -932,3 +1362,697 @@ class UnresolvedRoleWarningTests(SimpleTestCase):
             self.values(["files"])
             self.values(["files"])
         self.assertEqual(len(logged.records), 2)
+
+
+class AuthorTests(ServiceCase):
+    def authors_of_summary(self, *authors):
+        self.tile(self.characterization, "authors_of_inference", self.refs(*authors))
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+        summary = next(
+            s
+            for s in payload["characterizations"]
+            if s["id"] == str(self.characterization.pk)
+        )
+        return [(a["id"], a["model"], a["name"]["value"]) for a in summary["authors"]]
+
+    def test_authors_keep_the_stored_order_and_their_model(self):
+        project, group, person = self.projects["main"], self.group, self.operator
+
+        authors = self.authors_of_summary(project, group, person)
+
+        self.assertEqual(
+            authors,
+            [
+                (str(project.pk), "project", "EMMA"),
+                (str(group.pk), "group", "CNRS, CRC"),
+                (str(person.pk), "person", "Robinet, L."),
+            ],
+        )
+
+    def test_a_project_author_is_listed_with_its_model(self):
+        authors = self.authors_of_summary(self.projects["side"])
+
+        self.assertEqual(
+            authors, [(str(self.projects["side"].pk), "project", "Side project")]
+        )
+
+    def test_a_group_author_with_a_comma_is_cited_literally(self):
+        row = {
+            "id": str(self.analyses["open"].pk),
+            "name": {"value": "X01"},
+            "date": "2024-05-14",
+        }
+        label_of = {
+            str(self.group.pk): {"value": "CNRS, CRC"},
+            str(self.operator.pk): {"value": "Robinet, L."},
+        }
+        slug_of = {str(self.group.pk): "group", str(self.operator.pk): "person"}
+
+        cited = cited_analysis(
+            row,
+            None,
+            label_of,
+            [str(self.group.pk), str(self.operator.pk)],
+            [],
+            slug_of,
+        )
+
+        self.assertEqual(
+            cited.authors,
+            ({"literal": "CNRS, CRC"}, {"family": "Robinet", "given": "L."}),
+        )
+
+    def test_operators_keep_the_stored_order(self):
+        self.tile(
+            self.analyses["on_document"],
+            "performed_by_actor",
+            self.refs(self.projects["main"], self.group, self.operator),
+        )
+
+        rows = {r["id"]: r for r in corpus_rows(self.anonymous, "en")}
+
+        self.assertEqual(
+            rows[str(self.analyses["on_document"].pk)]["operators"],
+            [str(self.projects["main"].pk), str(self.group.pk), str(self.operator.pk)],
+        )
+
+    def test_the_analysis_cites_a_group_operator_literally(self):
+        self.tile(self.analyses["open"], "performed_by_actor", self.refs(self.group))
+
+        payload = analysis_payload(self.analyses["open"].pk, self.anonymous, "en")
+
+        self.assertIn("CNRS, CRC", payload["citation"]["text"])
+        self.assertIn("{CNRS, CRC}", payload["citation"]["bibtex"])
+
+
+ROW_KEYS = {
+    "id",
+    "name",
+    "technique",
+    "document",
+    "component",
+    "canvas",
+    "date",
+    "year",
+    "projects",
+    "operators",
+    "materials",
+    "colours",
+    "layers",
+    "elements",
+    "characterizations",
+    "partTypes",
+    "partColours",
+    "swatches",
+    "dataKinds",
+    "unpublished",
+    "text",
+    "places",
+    "periods",
+}
+
+
+class PlaceTests(ServiceCase):
+    def place_ids(self, *keys):
+        return sorted(str(self.places[k].pk) for k in keys)
+
+    def row(self, key="open"):
+        rows = {r["id"]: r for r in corpus_rows(self.anonymous, "en")}
+        return rows[str(self.analyses[key].pk)]
+
+    def chain(self, count):
+        """*count* places, each within the next; returns them from the bottom."""
+        made = [self.new_resource("place", f"Level {i}") for i in range(count)]
+        for child, parent in zip(made, made[1:]):
+            self.tile(child, "part_of_places", self.refs(parent))
+        return made
+
+    def test_a_row_carries_its_places_and_their_ancestors(self):
+        self.assertEqual(
+            self.row("on_document")["places"],
+            self.place_ids("paris", "france", "europe"),
+        )
+
+    def test_component_and_document_places_are_united(self):
+        self.assertEqual(
+            self.row("open")["places"],
+            self.place_ids("paris", "france", "europe", "lyon"),
+        )
+
+    def test_a_hidden_place_cuts_the_chain(self):
+        self.embargo(self.places["france"])
+
+        self.assertEqual(self.row("on_document")["places"], self.place_ids("paris"))
+
+    def test_a_hidden_ancestor_keeps_what_lies_below_it(self):
+        self.embargo(self.places["europe"])
+
+        self.assertEqual(
+            self.row("on_document")["places"], self.place_ids("paris", "france")
+        )
+
+    def test_a_hidden_own_place_is_left_out(self):
+        self.embargo(self.places["paris"])
+
+        self.assertEqual(self.row("on_document")["places"], [])
+
+    def test_a_draft_place_is_listed_unpublished(self):
+        bundle = build_bundle(self.anonymous, "en", visible_set(self.anonymous))
+
+        france, paris = (str(self.places[k].pk) for k in ("france", "paris"))
+        self.assertIs(bundle.places[france]["unpublished"], True)
+        self.assertIs(bundle.places[paris]["unpublished"], False)
+        self.assertEqual(bundle.places[paris]["parent"], france)
+        self.assertIsNone(bundle.places[str(self.places["europe"].pk)]["parent"])
+        self.assertEqual(
+            set(bundle.places), set(self.place_ids("paris", "france", "europe", "lyon"))
+        )
+
+    def test_an_unreadable_part_of_nodegroup_flattens_the_tree(self):
+        self.restrict_nodegroup(
+            self.nodes[("place", "part_of_places")].nodegroup_id, self.editor
+        )
+
+        self.assertEqual(self.row("on_document")["places"], self.place_ids("paris"))
+
+    def test_an_unreadable_production_nodegroup_leaves_dates_and_places_out(self):
+        self.restrict_nodegroup(
+            self.nodes[("document", "production_at_place")].nodegroup_id, self.editor
+        )
+        row = self.row("on_document")
+
+        self.assertEqual(row["places"], [])
+        self.assertIsNone(row["periods"]["production"])
+
+    def test_the_closure_stops_at_depth(self):
+        made = self.chain(20)
+        depth = explorer_service.PLACE_DEPTH
+
+        reach, parents = place_closure([made[0].pk], self.anonymous)
+
+        self.assertEqual(reach[str(made[0].pk)], {str(p.pk) for p in made[: depth + 1]})
+        self.assertIsNone(parents[str(made[depth].pk)])
+
+    def test_the_closure_survives_a_cycle(self):
+        a, b, c = self.chain(3)
+        self.tile(c, "part_of_places", self.refs(a))
+
+        reach, parents = place_closure([a.pk], self.anonymous)
+
+        self.assertEqual(reach[str(a.pk)], {str(a.pk), str(b.pk), str(c.pk)})
+        self.assertEqual(set(parents), set(reach[str(a.pk)]))
+
+    def test_a_place_with_several_parents_hangs_under_the_smallest_id(self):
+        self.tile(
+            self.places["paris"], "part_of_places", self.refs(self.places["lyon"])
+        )
+
+        _, parents = place_closure([self.places["paris"].pk], self.anonymous)
+
+        expected = min(str(self.places[k].pk) for k in ("france", "lyon"))
+        self.assertEqual(parents[str(self.places["paris"].pk)], expected)
+
+    def test_reading_places_costs_the_same_queries_for_one_place_or_many(self):
+        counts = []
+        place_closure([self.places["paris"].pk], self.anonymous)
+        for own in ([self.places["paris"].pk], [p.pk for p in self.places.values()]):
+            with CaptureQueriesContext(connection) as queries:
+                place_closure(own, self.anonymous)
+            counts.append(len(queries))
+
+        self.assertEqual(counts[0], counts[1])
+        self.assertLessEqual(counts[0], 10)
+
+
+class PeriodTests(ServiceCase):
+    def production(self, key="open"):
+        rows = {r["id"]: r for r in corpus_rows(self.anonymous, "en")}
+        return rows[str(self.analyses[key].pk)]["periods"]["production"]
+
+    def test_a_row_carries_the_document_production_in_years(self):
+        self.assertEqual(self.production("on_document"), (1401, 1500, True))
+        for row in corpus_rows(self.anonymous, "en"):
+            self.assertIsNone(row["periods"]["modification"])
+
+    def test_the_component_production_wins_over_the_document_s(self):
+        self.tile_values(
+            self.components["open"],
+            "component",
+            date_start_of_production_time="1250-05-02",
+            date_end_of_production_time="1275",
+            type_of_production_time=False,
+        )
+
+        self.assertEqual(self.production("open"), (1250, 1275, False))
+        self.assertEqual(self.production("on_document"), (1401, 1500, True))
+
+    def test_the_approximate_flag_is_read_from_the_same_tile(self):
+        document = self.documents["embargoed"]
+        self.tile_values(
+            document,
+            "document",
+            date_start_of_production_time="1301",
+            type_of_production_time=False,
+        )
+        self.tile_values(document, "document", type_of_production_time=True)
+
+        self.assertEqual(self.production("embargoed"), (1301, 1301, False))
+
+    def test_a_row_without_a_bound_has_no_period(self):
+        self.assertIsNone(self.production("embargoed"))
+
+    def test_a_single_bound_stands_for_both(self):
+        self.tile_values(
+            self.documents["embargoed"],
+            "document",
+            date_end_of_production_time="1350-06-01",
+        )
+
+        self.assertEqual(self.production("embargoed"), (1350, 1350, False))
+
+    def test_a_bound_that_is_not_a_year_is_ignored(self):
+        self.tile_values(
+            self.documents["embargoed"],
+            "document",
+            date_start_of_production_time="[..1350]",
+            date_end_of_production_time="1350-06-01",
+        )
+
+        self.assertEqual(self.production("embargoed"), (1350, 1350, False))
+
+    def test_the_bundle_keeps_the_bounds_of_its_dated_rows(self):
+        bundle = build_bundle(self.anonymous, "en", visible_set(self.anonymous))
+
+        self.assertEqual(
+            bundle.period_bounds, {"production": (1401, 1500), "modification": None}
+        )
+
+    def test_the_bundle_has_no_bounds_without_a_dated_row(self):
+        TileModel.objects.filter(
+            resourceinstance=self.documents["open"],
+            nodegroup_id=self.nodes[
+                ("document", "date_start_of_production_time")
+            ].nodegroup_id,
+        ).delete()
+        bundle = build_bundle(self.anonymous, "en", visible_set(self.anonymous))
+
+        self.assertEqual(
+            bundle.period_bounds, {"production": None, "modification": None}
+        )
+
+    def test_the_corpus_rows_shape(self):
+        rows = corpus_rows(self.anonymous, "en")
+
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertEqual(set(row), ROW_KEYS)
+            self.assertIsInstance(row["places"], list)
+            self.assertEqual(set(row["periods"]), {"production", "modification"})
+
+    def test_history_carries_the_production_line(self):
+        payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
+
+        self.assertEqual(
+            payload["history"],
+            [
+                {
+                    "type": "production",
+                    "places": [
+                        {
+                            "id": str(self.places["paris"].pk),
+                            "name": {"value": "Paris", "lang": "en"},
+                        }
+                    ],
+                    "date": {"start": "1401-01", "end": "1500-12", "approximate": True},
+                }
+            ],
+        )
+
+    def test_history_is_empty_without_a_bound_or_a_readable_place(self):
+        payload = document_payload(self.documents["embargoed"].pk, self.anonymous, "en")
+
+        self.assertEqual(payload["history"], [])
+
+    def test_history_lists_a_draft_place_and_leaves_a_hidden_one_out(self):
+        self.tile_values(
+            self.documents["embargoed"],
+            "document",
+            production_at_place=self.refs(
+                self.places["hidden"], self.places["france"], self.places["lyon"]
+            ),
+        )
+        self.embargo(self.places["hidden"])
+
+        payload = document_payload(self.documents["embargoed"].pk, self.anonymous, "en")
+
+        self.assertEqual(
+            [p["name"]["value"] for p in payload["history"][0]["places"]],
+            ["France", "Lyon"],
+        )
+        self.assertEqual(
+            payload["history"][0]["date"],
+            {"start": None, "end": None, "approximate": False},
+        )
+
+    def test_a_document_hit_carries_approximate(self):
+        def hits():
+            payload = search_payload(
+                self.query("grain=documents"), self.anonymous, "en"
+            )
+            return {r["id"]: r for r in payload["results"]}
+
+        self.assertEqual(
+            hits()[str(self.documents["open"].pk)]["dates"],
+            {"start": "1401-01", "end": "1500-12", "approximate": True},
+        )
+        self.tile_values(
+            self.documents["embargoed"],
+            "document",
+            date_start_of_production_time="1301-01-01",
+        )
+        self.assertEqual(
+            hits()[str(self.documents["embargoed"].pk)]["dates"],
+            {"start": "1301-01-01", "end": None, "approximate": False},
+        )
+
+
+class PlaceFilterTests(ServiceCase):
+    facet = FacetTests.facet
+
+    def place(self, key):
+        return str(self.places[key].pk)
+
+    def search(self, text=""):
+        return search_payload(self.query(text), self.anonymous, "en")
+
+    def found(self, text):
+        return {r["id"] for r in self.search(text)["results"]}
+
+    def rows(self, *keys):
+        return {str(self.analyses[k].pk) for k in keys}
+
+    def test_a_place_keeps_the_rows_carrying_it_as_their_own_or_as_an_ancestor(self):
+        self.assertEqual(
+            self.found(f"place={self.place('europe')}"),
+            self.rows("open", "on_document", "draft"),
+        )
+        self.assertEqual(
+            self.found(f"place={self.place('lyon')}"), self.rows("open", "draft")
+        )
+
+    def test_several_places_are_ored(self):
+        self.assertEqual(
+            self.found(f"place={self.place('lyon')}&place={self.place('paris')}"),
+            self.rows("open", "on_document", "draft"),
+        )
+        self.assertEqual(
+            self.found(f"place={self.place('lyon')},{self.place('paris')}"),
+            self.rows("open", "on_document", "draft"),
+        )
+
+    def test_a_place_combines_with_another_facet_by_and(self):
+        self.assertEqual(
+            self.found(f"place={self.place('europe')}&technique={FORS}"),
+            self.rows("on_document"),
+        )
+
+    def test_a_place_no_row_carries_is_ignored(self):
+        self.assertEqual(
+            self.found("place=00000000-0000-4000-8000-000000000001"),
+            self.rows("open", "on_document", "draft", "embargoed"),
+        )
+
+    def test_a_parent_counts_each_row_once_and_a_child_only_its_own(self):
+        places = self.facet(self.search(), "place")
+
+        self.assertEqual(places[self.place("europe")]["count"], 3)
+        self.assertEqual(places[self.place("france")]["count"], 3)
+        self.assertEqual(places[self.place("paris")]["count"], 3)
+        self.assertEqual(places[self.place("lyon")]["count"], 2)
+
+    def test_a_place_facet_is_open_to_the_other_selections(self):
+        places = self.facet(self.search(f"technique={FORS}"), "place")
+
+        self.assertEqual(places[self.place("europe")]["count"], 1)
+        self.assertNotIn(self.place("lyon"), places)
+
+    def test_a_place_value_names_its_parent_and_its_state(self):
+        places = self.facet(self.search(), "place")
+
+        self.assertIsNone(places[self.place("europe")]["parent"])
+        self.assertEqual(places[self.place("france")]["parent"], self.place("europe"))
+        self.assertEqual(places[self.place("paris")]["parent"], self.place("france"))
+        self.assertIs(places[self.place("france")]["unpublished"], True)
+        self.assertIs(places[self.place("paris")]["unpublished"], False)
+        self.assertEqual(
+            places[self.place("paris")]["label"], {"value": "Paris", "lang": "en"}
+        )
+
+    def test_the_other_facets_carry_no_parent_and_are_published(self):
+        for value in self.facet(self.search(), "technique").values():
+            self.assertIsNone(value["parent"])
+            self.assertIs(value["unpublished"], False)
+
+    def test_find_on_place_returns_matches_with_their_ancestors(self):
+        facet = facet_payload("place", self.query("find=pari"), self.anonymous, "en")
+
+        self.assertEqual(
+            {v["id"] for v in facet["values"]},
+            {self.place("paris"), self.place("france"), self.place("europe")},
+        )
+        self.assertEqual(facet["total"], 4)
+
+    def test_find_on_place_keeps_the_selected_ones_with_their_ancestors(self):
+        facet = facet_payload(
+            "place",
+            self.query(f"find=lyon&place={self.place('paris')}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(
+            {v["id"] for v in facet["values"]},
+            {
+                self.place("lyon"),
+                self.place("paris"),
+                self.place("france"),
+                self.place("europe"),
+            },
+        )
+
+    def test_find_on_a_technique_keeps_only_the_selected_ones_besides_the_matches(self):
+        facet = facet_payload(
+            "technique",
+            self.query(f"find=zzz&technique={FORS}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual({v["id"] for v in facet["values"]}, {FORS})
+
+    def test_a_match_applies_the_place_rule_of_the_search(self):
+        payload = match_payload(
+            self.documents["open"].pk,
+            self.query(f"place={self.place('lyon')}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(set(payload["kept"]["analyses"]), self.rows("open", "draft"))
+        self.assertEqual(payload["total"], 2)
+
+    def test_a_restricted_place_nodegroup_leaves_the_facet_out(self):
+        for slug in ("document", "component"):
+            self.restrict_nodegroup(
+                self.nodes[(slug, "production_at_place")].nodegroup_id, self.editor
+            )
+
+        self.assertNotIn("place", [f["key"] for f in self.search()["facets"]])
+
+
+class PeriodFilterTests(ServiceCase):
+    """Open, on_document and draft rows are produced 1401-1500 (the Document's); embargoed is undated."""
+
+    facet = FacetTests.facet
+
+    def search(self, text=""):
+        return search_payload(self.query(text), self.anonymous, "en")
+
+    def found(self, text):
+        return {r["id"] for r in self.search(text)["results"]}
+
+    def rows(self, *keys):
+        return {str(self.analyses[k].pk) for k in keys}
+
+    DATED = ("open", "on_document", "draft")
+
+    def test_overlap_keeps_a_row_touching_the_bounds(self):
+        for text in ("1500,1600", "1300,1401", "1450,1460", "1000,2000"):
+            self.assertEqual(self.found(f"period={text}"), self.rows(*self.DATED), text)
+        for text in ("1501,1600", "1300,1400"):
+            self.assertEqual(self.found(f"period={text}"), set(), text)
+
+    def test_within_keeps_only_rows_inside(self):
+        self.assertEqual(
+            self.found("period=1401,1500&periodMatch=within"), self.rows(*self.DATED)
+        )
+        self.assertEqual(self.found("period=1402,1500&periodMatch=within"), set())
+        self.assertEqual(self.found("period=1401,1499&periodMatch=within"), set())
+
+    def test_undated_rows_are_excluded_unless_asked(self):
+        self.assertNotIn(
+            str(self.analyses["embargoed"].pk), self.found("period=1000,2000")
+        )
+        self.assertEqual(
+            self.found("period=1000,2000&undated=1"),
+            self.rows(*self.DATED, "embargoed"),
+        )
+        self.assertEqual(
+            self.found("period=1501,1600&undated=1"), self.rows("embargoed")
+        )
+
+    def test_undated_alone_filters_nothing(self):
+        self.assertEqual(self.found("undated=1"), self.rows(*self.DATED, "embargoed"))
+
+    def test_the_component_production_wins_over_the_document_s(self):
+        self.tile_values(
+            self.components["open"],
+            "component",
+            date_start_of_production_time="1250",
+            date_end_of_production_time="1275",
+        )
+
+        self.assertEqual(self.found("period=1260,1270"), self.rows("open", "draft"))
+        self.assertEqual(self.found("period=1450,1460"), self.rows("on_document"))
+
+    def test_an_invalid_period_is_ignored_without_400(self):
+        everything = self.rows(*self.DATED, "embargoed")
+        for text in ("abc", "1600,1500", "1400", "1400,1500,1600", ",", "12345,99999"):
+            self.assertEqual(self.found(f"period={text}"), everything, text)
+
+    def test_an_invalid_option_falls_back_to_its_default(self):
+        self.assertEqual(
+            self.found("period=1500,1600&periodMatch=bogus&periodEvent=bogus"),
+            self.rows(*self.DATED),
+        )
+
+    def test_period_event_modification_dates_nothing(self):
+        everything = self.rows(*self.DATED, "embargoed")
+        self.assertEqual(self.found("period=1000,2000&periodEvent=modification"), set())
+        self.assertEqual(
+            self.found("period=1000,2000&periodEvent=modification&undated=1"),
+            everything,
+        )
+
+    def test_the_range_facet_counts_each_century_a_row_overlaps_open_to_the_other_selections(
+        self,
+    ):
+        self.tile_values(
+            self.documents["embargoed"],
+            "document",
+            date_start_of_production_time="1390",
+            date_end_of_production_time="1410",
+        )
+
+        facet = self.search()["period"]
+        self.assertEqual(
+            facet,
+            {
+                "key": "period",
+                "group": "document",
+                "event": "production",
+                "min": 1390,
+                "max": 1500,
+                "buckets": [
+                    {"from": 1301, "to": 1400, "count": 1},
+                    {"from": 1401, "to": 1500, "count": 4},
+                ],
+                "undated": 0,
+            },
+        )
+        narrowed = self.search(f"technique={FORS}&period=1000,1100")["period"]
+        self.assertEqual([b["count"] for b in narrowed["buckets"]], [0, 1])
+        self.assertEqual(narrowed["undated"], 0)
+
+    def test_the_range_facet_counts_the_undated_rows_the_other_filters_keep(self):
+        facet = self.search()["period"]
+        self.assertEqual(facet["undated"], 1)
+        self.assertEqual(
+            [(b["from"], b["to"], b["count"]) for b in facet["buckets"]],
+            [(1401, 1500, 3)],
+        )
+        self.assertEqual(self.search(f"technique={FORS}")["period"]["undated"], 0)
+
+    def test_the_range_facet_is_absent_without_a_dated_row_or_facets(self):
+        self.assertIsNone(self.search("facets=0")["period"])
+        TileModel.objects.filter(
+            resourceinstance=self.documents["open"],
+            nodegroup_id=self.nodes[
+                ("document", "date_start_of_production_time")
+            ].nodegroup_id,
+        ).delete()
+
+        self.assertIsNone(self.search()["period"])
+        self.assertIsNone(facet_payload("period", self.query(), self.anonymous, "en"))
+
+    def test_the_range_facet_of_the_modification_event_is_absent(self):
+        self.assertIsNone(self.search("periodEvent=modification")["period"])
+
+    def test_the_facet_route_answers_the_range_facet_of_the_corpus_or_a_document(self):
+        corpus = facet_payload("period", self.query(), self.anonymous, "en")
+        own = facet_payload(
+            "period",
+            self.query(f"document={self.documents['open'].pk}&find=zzz"),
+            self.anonymous,
+            "en",
+        )
+        none = facet_payload(
+            "period",
+            self.query(f"document={self.documents['embargoed'].pk}"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(corpus, self.search()["period"])
+        self.assertEqual(own["undated"], 0)
+        self.assertEqual(own["buckets"], [{"from": 1401, "to": 1500, "count": 3}])
+        self.assertIsNone(none)
+
+    def test_a_match_applies_the_period_rule_and_carries_the_range_facet(self):
+        payload = match_payload(
+            self.documents["open"].pk,
+            self.query("period=1501,1600"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(payload["kept"]["analyses"], [])
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["period"]["min"], 1401)
+        self.assertEqual(payload["period"]["buckets"][0]["count"], 3)
+        self.assertIsNone(
+            match_payload(
+                self.documents["embargoed"].pk, self.query(), self.anonymous, "en"
+            )["period"]
+        )
+
+    def test_a_period_makes_a_match_filtered(self):
+        payload = match_payload(
+            self.documents["open"].pk,
+            self.query("period=1000,2000"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(len(payload["kept"]["analyses"]), 3)
+
+    def test_the_documents_grain_lists_the_documents_with_a_kept_row(self):
+        payload = search_payload(
+            self.query("grain=documents&period=1000,2000"),
+            self.anonymous,
+            "en",
+        )
+
+        self.assertEqual(
+            [r["id"] for r in payload["results"]], [str(self.documents["open"].pk)]
+        )

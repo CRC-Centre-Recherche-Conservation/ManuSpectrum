@@ -58,22 +58,30 @@ const allHeld = computed(
 );
 const tooMany = computed(() => fresh.value.length > store.basketFree);
 const reason = computed(() =>
-    [
-        interpolate(
-            $ngettext("%{n} item", "%{n} items", fresh.value.length),
-            { n: fresh.value.length },
-            true,
-        ),
-        interpolate(
-            $ngettext(
-                "%{free} place left",
-                "%{free} places left",
-                store.basketFree,
-            ),
-            { free: store.basketFree },
-            true,
-        ),
-    ].join(", "),
+    store.basketFree < 1
+        ? interpolate(
+              $gettext(
+                  "Selection full (%{limit}/%{limit}): remove items to add more.",
+              ),
+              { limit: BASKET_LIMIT },
+              true,
+          )
+        : [
+              interpolate(
+                  $ngettext("%{n} item", "%{n} items", fresh.value.length),
+                  { n: fresh.value.length },
+                  true,
+              ),
+              interpolate(
+                  $ngettext(
+                      "%{free} place left",
+                      "%{free} places left",
+                      store.basketFree,
+                  ),
+                  { free: store.basketFree },
+                  true,
+              ),
+          ].join(", "),
 );
 const heldText = computed(() =>
     interpolate(

@@ -267,6 +267,24 @@ def draft_state_id_set():
     )
 
 
+def unpublished_resource_ids(resource_ids):
+    """The ids among *resource_ids*, as strings, whose lifecycle state is a Draft (D50).
+
+    Reads the lifecycle state of every id in one query; an id without a
+    resource is not in the result.
+    """
+    wanted = [str(i) for i in resource_ids if i]
+    drafts = draft_state_id_set()
+    if not wanted or not drafts:
+        return frozenset()
+    return frozenset(
+        str(rid)
+        for rid in ResourceInstance.objects.filter(
+            pk__in=wanted, resource_instance_lifecycle_state_id__in=list(drafts)
+        ).values_list("resourceinstanceid", flat=True)
+    )
+
+
 EXPLORER_MODELS = (
     "document",
     "component",

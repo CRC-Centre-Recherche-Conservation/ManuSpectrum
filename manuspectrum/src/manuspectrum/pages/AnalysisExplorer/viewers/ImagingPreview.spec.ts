@@ -4,6 +4,11 @@ import PrimeVue from "primevue/config";
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
 
+import type {
+    FileEntry,
+    FileLayer,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
 import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue";
 
 import {
@@ -14,19 +19,21 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     analysisPayload,
     imagingEntry,
+    layerOf,
     uuid,
+    valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 function mountPreview(
     zones: string[] = [uuid(101)],
     prepare: (store: ReturnType<typeof useExplorerStore>) => void = () =>
         undefined,
+    file = imagingEntry(),
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
     prepare(useExplorerStore());
     const curtain = ref<string | null>(null);
-    const file = imagingEntry();
     const wrapper = mount(ImagingPreview, {
         props: { file, analysis: analysisPayload({ files: [file] }) },
         global: {
@@ -38,6 +45,34 @@ function mountPreview(
         },
     });
     return { wrapper, curtain, store: useExplorerStore() };
+}
+
+const ELEMENT_MAP = valueRef("http://example.org/element-map", "Element map");
+
+function elementLayer(index: number, symbol: string): FileLayer {
+    return layerOf({
+        index,
+        label: `${symbol} map`,
+        content: ELEMENT_MAP,
+        elements: [
+            {
+                value: valueRef(`http://example.org/el-${symbol}`, symbol),
+                symbol,
+            },
+        ],
+    });
+}
+
+function manyLayers(count: number): FileEntry {
+    return imagingEntry({
+        layers: Array.from({ length: count }, (_, index) =>
+            layerOf({ index, label: `L${index}` }),
+        ),
+    });
+}
+
+function thumbs(wrapper: ReturnType<typeof mountPreview>["wrapper"]) {
+    return wrapper.findAll(".strip .layer-thumb");
 }
 
 describe("ImagingPreview", () => {
@@ -67,7 +102,7 @@ describe("ImagingPreview", () => {
 
     it("names the current layer by its stored label", () => {
         const { wrapper } = mountPreview();
-        expect(wrapper.find(".current").text()).toBe("Pb");
+        expect(wrapper.find(".current .value").text()).toBe("Pb");
     });
 
     it("lays the current layer on the page and keeps its opacity", async () => {
@@ -83,18 +118,98 @@ describe("ImagingPreview", () => {
         );
     });
 
-    it("moves the laid map to the next layer when the layer scroll moves", async () => {
+    it("moves the laid map to the next layer with the next button", async () => {
         const { wrapper, store } = mountPreview();
         await wrapper.find("input.lay").setValue(true);
-        wrapper
-            .findComponent({ name: "Slider" })
-            .vm.$emit("update:modelValue", 1);
-        await wrapper.vm.$nextTick();
+        await wrapper.find("[data-action=next]").trigger("click");
         expect(store.overlays[`${uuid(101)}:0`]?.on).toBe(false);
         expect(store.overlays[`${uuid(101)}:1`]).toMatchObject({
             element: "Hg",
             on: true,
         });
+    });
+
+    it("carries a laid map to the layer whose thumbnail is clicked", async () => {
+        const { wrapper, store } = mountPreview(
+            [uuid(101)],
+            undefined,
+            manyLayers(5),
+        );
+        await wrapper.find("input.lay").setValue(true);
+        await thumbs(wrapper)[3].trigger("click");
+        expect(store.overlays[`${uuid(101)}:0`]?.on).toBe(false);
+        expect(store.overlays[`${uuid(101)}:3`]).toMatchObject({
+            element: "L3",
+            on: true,
+        });
+        expect(wrapper.find(".current").text()).toContain("4 / 5");
+    });
+
+    it("disables the arrows at the ends and does not wrap", async () => {
+        const { wrapper } = mountPreview();
+        const previous = wrapper.find("[data-action=previous]");
+        const next = wrapper.find("[data-action=next]");
+        expect(previous.attributes("aria-disabled")).toBe("true");
+        expect(next.attributes("aria-disabled")).toBeUndefined();
+        expect(wrapper.find(".current").text()).toContain("1 / 2");
+        await next.trigger("click");
+        expect(wrapper.find(".current").text()).toContain("2 / 2");
+        expect(next.attributes("aria-disabled")).toBe("true");
+        await next.trigger("click");
+        expect(wrapper.find(".current").text()).toContain("2 / 2");
+        expect(previous.attributes("aria-disabled")).toBeUndefined();
+    });
+
+    it("marks the current thumbnail and keeps one tab stop moved by the arrow keys", async () => {
+        const { wrapper } = mountPreview([uuid(101)], undefined, manyLayers(4));
+        const list = thumbs(wrapper);
+        expect(list).toHaveLength(4);
+        expect(list.map((item) => item.attributes("aria-current"))).toEqual([
+            "true",
+            undefined,
+            undefined,
+            undefined,
+        ]);
+        expect(list.map((item) => item.attributes("tabindex"))).toEqual([
+            "0",
+            "-1",
+            "-1",
+            "-1",
+        ]);
+        await list[0].trigger("keydown", { key: "ArrowRight" });
+        expect(
+            thumbs(wrapper).map((item) => item.attributes("tabindex")),
+        ).toEqual(["-1", "0", "-1", "-1"]);
+        await list[1].trigger("keydown", { key: "End" });
+        expect(thumbs(wrapper)[3].attributes("tabindex")).toBe("0");
+    });
+
+    it("shows group headings only when the layers fall in two groups or more", () => {
+        const plain = mountPreview();
+        expect(plain.wrapper.find(".group-title").exists()).toBe(false);
+        const grouped = mountPreview(
+            [uuid(101)],
+            undefined,
+            imagingEntry({
+                layers: [
+                    elementLayer(0, "Pb"),
+                    layerOf({ index: 1, label: "Raw" }),
+                    elementLayer(2, "Fe"),
+                    elementLayer(3, "Pb"),
+                ],
+            }),
+        );
+        const titles = grouped.wrapper
+            .findAll(".group-title")
+            .map((item) => item.text());
+        expect(titles).toEqual(["Fe", "Pb", "Unclassified · 1"]);
+    });
+
+    it("shows no navigation and no strip for a file with one layer", () => {
+        const { wrapper } = mountPreview([uuid(101)], undefined, manyLayers(1));
+        expect(wrapper.find("[data-action=next]").exists()).toBe(false);
+        expect(wrapper.find(".strip").exists()).toBe(false);
+        expect(wrapper.find(".current .value").text()).toBe("L0");
     });
 
     it("puts the laid layer under the curtain", async () => {
@@ -114,15 +229,6 @@ describe("ImagingPreview", () => {
         const { wrapper } = mountPreview();
         expect(wrapper.find(".add-to-selection").exists()).toBe(false);
         expect(wrapper.text()).not.toContain("Add the map");
-    });
-
-    it("shows the ends of the layer scale and says where the handle is", () => {
-        const { wrapper } = mountPreview();
-        expect(wrapper.find(".scroll .ends").text()).toContain("Pb");
-        expect(wrapper.find(".scroll .ends").text()).toContain("Hg");
-        expect(
-            wrapper.find(".scroll [role=slider]").attributes("aria-valuetext"),
-        ).toBe("Pb, layer 1 of 2");
     });
 
     it("opens on the layer of this file that is laid on the page", () => {

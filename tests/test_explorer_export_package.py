@@ -356,6 +356,13 @@ class CitationFilesTests(PackageCase):
         self.assertEqual(self.text(members["citations.bib"]).count("@dataset"), 3)
         self.assertEqual(self.text(members["citations.ris"]).count("TY  - DATA"), 3)
 
+    def test_a_group_operator_is_a_literal_author_in_the_bibtex(self):
+        self.tile(self.analyses["open"], "performed_by_actor", self.refs(self.group))
+
+        members = self.members(f"ids=an:{self.pk('open')}:-")
+
+        self.assertIn("{CNRS, CRC}", self.text(members["citations.bib"]))
+
     def test_a_grouped_citation_lists_its_analyses_in_the_package(self):
         side = self.projects["side"]
         self.tile(self.analyses["draft"], "analysis_by_project", self.refs(side))

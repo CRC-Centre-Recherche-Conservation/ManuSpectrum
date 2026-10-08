@@ -17,7 +17,8 @@ const THUMBNAIL_SIZE = "!120,150";
  * as a badge when it says something else, the panes holding it (A to D) and a
  * gold outline while it is in the stack. A failed image becomes a flat with
  * the label and is not asked again, at no other size. A click emits `pick`;
- * a drag carries the canvas id (`LAYER_DRAG_TYPE`).
+ * a drag carries the canvas id (`LAYER_DRAG_TYPE`). `current` marks the one
+ * being looked at (`aria-current`, an outline).
  */
 const props = defineProps<{
     canvas: string;
@@ -27,6 +28,7 @@ const props = defineProps<{
     panes: readonly string[];
     inStack: boolean;
     stop: boolean;
+    current?: boolean;
 }>();
 const emit = defineEmits<{ pick: [] }>();
 
@@ -71,12 +73,14 @@ function onDragStart(event: DragEvent): void {
         :class="{
             'in-stack': props.inStack,
             placed: props.panes.length > 0,
+            current: props.current,
         }"
         :data-pane="props.panes[0]?.toLowerCase()"
         draggable="true"
         :data-canvas="props.canvas"
         :tabindex="props.stop ? 0 : -1"
         :aria-label="name"
+        :aria-current="props.current ? 'true' : undefined"
         @click="emit('pick')"
         @dragstart="onDragStart"
     >
@@ -170,6 +174,12 @@ function onDragStart(event: DragEvent): void {
 
 .layer-thumb.placed {
     outline: 0.125rem solid var(--pane);
+    outline-offset: -0.0625rem;
+}
+
+.layer-thumb.current {
+    border-color: var(--blue-text);
+    outline: 0.125rem solid var(--blue-text);
     outline-offset: -0.0625rem;
 }
 

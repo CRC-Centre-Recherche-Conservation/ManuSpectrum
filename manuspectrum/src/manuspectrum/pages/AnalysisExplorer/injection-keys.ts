@@ -25,6 +25,10 @@ export interface ResultsMemo {
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
     Symbol("facet-labels");
 
+/** Number of documents of the whole corpus, or null while it is unknown; provided by the shell from the home payload. */
+export const CORPUS_COUNT_KEY: InjectionKey<Ref<number | null>> =
+    Symbol("corpus-count");
+
 /** Set when the heading of the screen or view shown next should take the focus; cleared by the heading that takes it. */
 export const SCREEN_FOCUS_KEY: InjectionKey<Ref<boolean>> =
     Symbol("screen-focus");
@@ -74,6 +78,9 @@ export const SELECTION_HINTS_KEY: InjectionKey<
     Ref<Map<string, SelectionHint>>
 > = Symbol("selection-hints");
 
+/** Whether the « Cite » block of the Analysis card is unfolded; kept by the shell for the tab (memory only), provided by the shell. */
+export const CITE_OPEN_KEY: InjectionKey<Ref<boolean>> = Symbol("cite-open");
+
 /** Address of the Mirador viewer the IIIF products open in (`EXPLORER_MIRADOR_URL`); empty: no viewer. */
 export const MIRADOR_URL_KEY: InjectionKey<string> = Symbol("mirador-url");
 
@@ -96,3 +103,11 @@ export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
 /** How the Compare window holding a body is framed (its preset size, enlarged or not); provided by the window. */
 export const WINDOW_FRAME_KEY: InjectionKey<Readonly<Ref<TableFrame>>> =
     Symbol("window-frame");
+
+/** Opens the Selection drawer; provided by the shell, whose drawer holds the state. */
+export interface SelectionDrawerHandle {
+    open: () => void;
+}
+
+export const SELECTION_DRAWER_KEY: InjectionKey<SelectionDrawerHandle> =
+    Symbol("selection-drawer");

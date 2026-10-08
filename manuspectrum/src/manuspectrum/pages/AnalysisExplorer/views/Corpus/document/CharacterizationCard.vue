@@ -2,8 +2,10 @@
 import { computed, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
+
 import SafeHtml from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SafeHtml.vue";
+import SelectionActions from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SelectionActions.vue";
 import TechniqueCode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/TechniqueCode.vue";
 
 import {
@@ -19,6 +21,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import type {
     CertaintyScale,
     CharacterizationSummary,
+    DocumentComponent,
     ValueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -32,7 +35,8 @@ type Source = CharacterizationSummary["sources"][number];
  * false` hides « Close » where the container has its own. `analysisStyles`
  * holds the technique style of the document's analyses by id: an evidence
  * analysis found there carries its technique code in its family colour, as
- * on the folio.
+ * on the folio. `components` are the document's Components it is linked to
+ * (`characterizationComponents`), each a link to its card.
  */
 const props = withDefaults(
     defineProps<{
@@ -41,8 +45,10 @@ const props = withDefaults(
         headingId?: string;
         closable?: boolean;
         analysisStyles?: ReadonlyMap<string, TechniqueStyle>;
+        components?: DocumentComponent[];
     }>(),
     {
+        components: () => [],
         headingId: undefined,
         closable: true,
         analysisStyles: () => new Map<string, TechniqueStyle>(),
@@ -53,7 +59,7 @@ const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const sectionId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
 
@@ -98,6 +104,33 @@ const withEvidenceHints = computed(() => {
     }
     return hints;
 });
+const withEvidenceLabel = computed(() =>
+    interpolate(
+        $ngettext(
+            "With its %{n} analysis",
+            "With its %{n} analyses",
+            props.summary.evidence.length,
+        ),
+        { n: props.summary.evidence.length },
+        true,
+    ),
+);
+const authors = computed(() =>
+    props.summary.authors.map((author) => {
+        if (author.model === "group") {
+            return interpolate($gettext("%{name} (group)"), {
+                name: author.name.value,
+            });
+        }
+        if (author.model === "project") {
+            return interpolate($gettext("%{name} (project)"), {
+                name: author.name.value,
+            });
+        }
+        return author.name.value;
+    }),
+);
+
 const date = computed(() => formatDateRange(props.summary.date));
 /** Each evidence analysis with its technique style, null outside `analysisStyles`. */
 const evidence = computed(() =>
@@ -140,6 +173,10 @@ function sourceText(source: Source): string {
     return source.title?.value ?? source.ref?.name.value ?? source.url ?? "";
 }
 
+function openComponent(id: string): void {
+    store.focusOn({ kind: "component", id });
+}
+
 function openAnalysis(id: string): void {
     store.focusOn({ kind: "analysis", id });
 }
@@ -165,14 +202,14 @@ function focusHeading(): void {
             >
                 <span>{{ props.summary.name.value }}</span>
             </h3>
-            <button
+            <IconButton
                 v-if="props.closable"
-                type="button"
                 class="close"
+                icon="times"
+                :label="$gettext('Close the card')"
+                :description="$gettext('Escape')"
                 @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
+            />
             <p class="meta">
                 <span>{{ $gettext("Identified material") }}</span>
                 <span
@@ -188,7 +225,7 @@ function focusHeading(): void {
             v-if="props.summary.zone?.source === 'component'"
             class="note-line"
         >
-            <span>{{ $gettext("Zone of the observed part.") }}</span>
+            <span>{{ $gettext("Zone of the observed component.") }}</span>
         </p>
 
         <section
@@ -224,6 +261,28 @@ function focusHeading(): void {
         </section>
 
         <dl class="details">
+            <template v-if="props.components.length > 0">
+                <dt>
+                    <span>{{ $gettext("Component") }}</span>
+                </dt>
+                <dd>
+                    <ul class="component-links">
+                        <li
+                            v-for="component in props.components"
+                            :key="component.id"
+                        >
+                            <button
+                                type="button"
+                                class="component-link"
+                                :lang="component.name.lang"
+                                @click="openComponent(component.id)"
+                            >
+                                <span>{{ component.name.value }}</span>
+                            </button>
+                        </li>
+                    </ul>
+                </dd>
+            </template>
             <template v-if="props.summary.colours.length > 0">
                 <dt>
                     <span>{{ $gettext("Colour") }}</span>
@@ -256,13 +315,7 @@ function focusHeading(): void {
                     <span>{{ $gettext("Authors of the identification") }}</span>
                 </dt>
                 <dd>
-                    <span>
-                        {{
-                            props.summary.authors
-                                .map((author) => author.name.value)
-                                .join(", ")
-                        }}
-                    </span>
+                    <span>{{ authors.join(", ") }}</span>
                 </dd>
             </template>
             <template v-if="date">
@@ -375,23 +428,29 @@ function focusHeading(): void {
             </ul>
         </section>
 
-        <div class="alone">
-            <AddToSelection
-                :keys="[ownKey]"
-                :label="$gettext('+ Selection (the material alone)')"
-                :hints="ownHints"
-            />
-        </div>
-        <div
+        <SelectionActions
             v-if="props.summary.evidence.length > 0"
-            class="with-evidence"
-        >
-            <AddToSelection
-                :keys="withEvidenceKeys"
-                :label="$gettext('+ Selection with its supporting analyses')"
-                :hints="withEvidenceHints"
-            />
-        </div>
+            :title="$gettext('Add to the Selection')"
+            :primary="{
+                keys: withEvidenceKeys,
+                label: withEvidenceLabel,
+                hints: withEvidenceHints,
+            }"
+            :secondary="{
+                keys: [ownKey],
+                label: $gettext('The material alone'),
+                hints: ownHints,
+            }"
+        />
+        <SelectionActions
+            v-else
+            :title="$gettext('Add to the Selection')"
+            :primary="{
+                keys: [ownKey],
+                label: $gettext('Add the material'),
+                hints: ownHints,
+            }"
+        />
     </article>
 </template>
 
@@ -418,7 +477,7 @@ function focusHeading(): void {
     font-weight: 600;
 }
 
-.characterization-card .card-head .close {
+.characterization-card .card-head .icon-button {
     grid-column: 2;
     grid-row: 1;
 }
@@ -487,7 +546,6 @@ function focusHeading(): void {
     color: var(--blue-text);
 }
 
-.characterization-card .card-head .close,
 .characterization-card .evidence button {
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
@@ -495,6 +553,17 @@ function focusHeading(): void {
     background: var(--surface);
     color: var(--ink);
     font: inherit;
+    cursor: pointer;
+}
+
+.characterization-card .component-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--blue-text);
+    font: inherit;
+    text-align: start;
+    text-decoration: underline;
     cursor: pointer;
 }
 

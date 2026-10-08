@@ -13,7 +13,7 @@ describe("DocumentCard", () => {
         const hit = documentHit(3, {
             shelfmark: label("Latin 8055"),
             holding: label("BnF"),
-            dates: { start: "1301", end: "1400" },
+            dates: { start: "1301", end: "1400", approximate: false },
             documentType: label("Manuscript"),
             description: label("Psalter with gilded initials."),
             unpublished: true,
@@ -22,13 +22,21 @@ describe("DocumentCard", () => {
         expect(wrapper.find(".name").text()).toBe("Manuscript 3");
         expect(wrapper.find(".shelfmark").text()).toBe("Latin 8055");
         expect(wrapper.find(".facts").text()).toContain("BnF");
-        expect(wrapper.find(".facts").text()).toContain("1301 – 1400");
+        expect(wrapper.find(".facts").text()).toContain("14th century");
         expect(wrapper.find(".facts").text()).toContain("Manuscript");
         expect(wrapper.find(".description").text()).toBe(
             "Psalter with gilded initials.",
         );
         expect(wrapper.find(".meta").text()).toContain("3 analyses");
         expect(wrapper.find(".meta").text()).toContain("Draft");
+    });
+
+    it("writes an approximate date with its mark", () => {
+        const hit = documentHit(3, {
+            dates: { start: "1455-03", end: "1465", approximate: true },
+        });
+        const wrapper = mount(DocumentCard, { props: { hit, href: "?doc=x" } });
+        expect(wrapper.find(".facts").text()).toBe("c. 1455 – 1465");
     });
 
     it("opens the document through one link named by its title", async () => {

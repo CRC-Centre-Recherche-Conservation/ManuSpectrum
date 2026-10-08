@@ -5,6 +5,7 @@ import {
 
 import type {
     CharacterizationSummary,
+    ColourRef,
     Label,
     NamedRef,
     RankedValue,
@@ -37,6 +38,8 @@ export interface MaterialRecord {
     cites: readonly string[];
     /** Ids of the canvases it is placed on, in document then page order. */
     canvases: readonly string[];
+    /** The components linked to it (`summary.components`). */
+    components: readonly Ref[];
 }
 
 /** Elements named at one level (null: none stated), each element once. */
@@ -50,7 +53,7 @@ export interface MaterialGroup {
     node: NodeId;
     name: Label;
     /** The pair's colour; null for a pair without colour and for a component. */
-    colour: ValueRef | null;
+    colour: ColourRef | null;
     records: MaterialRecord[];
 }
 
@@ -102,6 +105,7 @@ export function materialRecords(
             firstSlot.has(material.id),
         cites: material.evidence,
         canvases: material.canvases,
+        components: material.summary.components,
     }));
     const known = new Set(records.map((record) => record.id));
     for (const row of rows) {
@@ -114,6 +118,7 @@ export function materialRecords(
             selected: true,
             cites: [],
             canvases: summary.zone ? [summary.zone.canvas] : [],
+            components: summary.components,
         });
     }
     const order = (record: MaterialRecord): number =>
@@ -188,7 +193,7 @@ export function groupByComponent(
     const groups = new Map<string, MaterialGroup>();
     const rest: MaterialRecord[] = [];
     for (const record of records) {
-        const components = componentsOf(record.summary);
+        const components = record.components;
         if (components.length === 0) rest.push(record);
         for (const component of components) {
             const group = groups.get(component.id) ?? {
@@ -211,11 +216,6 @@ function sortedLike(
     return [...members].sort(
         (left, right) => order.indexOf(left) - order.indexOf(right),
     );
-}
-
-/** The components an identified material observes. */
-export function componentsOf(summary: CharacterizationSummary): Ref[] {
-    return summary.objects.filter((object) => object.model === "component");
 }
 
 /** Values of `lists` once each (by id), in first-seen order. */
@@ -241,13 +241,13 @@ export function unionEvidence(records: readonly MaterialRecord[]): NamedRef[] {
     return unionById(records.map((record) => record.summary.evidence));
 }
 
-/** The components `records` observe, once each. */
+/** The components `records` link to, once each. */
 export function unionComponents(records: readonly MaterialRecord[]): Ref[] {
-    return unionById(records.map((record) => componentsOf(record.summary)));
+    return unionById(records.map((record) => record.components));
 }
 
 /** The colours `records` carry, once each. */
-export function unionColours(records: readonly MaterialRecord[]): ValueRef[] {
+export function unionColours(records: readonly MaterialRecord[]): ColourRef[] {
     return unionById(records.map((record) => record.summary.colours));
 }
 

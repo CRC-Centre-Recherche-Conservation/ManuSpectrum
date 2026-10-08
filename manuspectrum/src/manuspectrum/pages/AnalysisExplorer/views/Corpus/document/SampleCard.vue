@@ -2,6 +2,8 @@
 import { computed, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
+
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type {
@@ -9,7 +11,7 @@ import type {
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-/** `headingId` names the heading (a drawer is labelled by it); `closable: false` hides « Close » where the container has its own. */
+/** `headingId` names the heading (a drawer is labelled by it); `closable: false` hides « Close the card » where the container has its own. */
 const props = withDefaults(
     defineProps<{
         sample: SampleSummary;
@@ -83,14 +85,14 @@ function focusHeading(): void {
                     {{ $gettext("Draft") }}
                 </span>
             </p>
-            <button
+            <IconButton
                 v-if="props.closable"
-                type="button"
                 class="close"
+                icon="times"
+                :label="$gettext('Close the card')"
+                :description="$gettext('Escape')"
                 @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
+            />
         </header>
 
         <section
@@ -137,7 +139,7 @@ function focusHeading(): void {
     font-weight: 600;
 }
 
-.sample-card .card-head .close {
+.sample-card .card-head .icon-button {
     margin-inline-start: auto;
 }
 

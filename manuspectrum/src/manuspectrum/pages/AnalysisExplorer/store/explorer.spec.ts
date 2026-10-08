@@ -5,6 +5,7 @@ import { BASKET_LIMIT } from "@/manuspectrum/pages/AnalysisExplorer/store/basket
 import {
     emptyFilters,
     hasActiveFilters,
+    LIST_FILTER_KEYS,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
@@ -60,6 +61,129 @@ describe("filters", () => {
         store.setFilter("technique", ["a", "b"]);
         store.setFilter("eventType", ["production"]);
         expect(store.activeFilterCount).toBe(2);
+    });
+
+    it("holds the places as a sorted list and counts each of them", () => {
+        const store = useExplorerStore();
+        expect(store.filters.place).toEqual([]);
+        store.setFilter("place", ["b", "a", "b"]);
+        expect(store.filters.place).toEqual(["a", "b"]);
+        expect(store.activeFilterCount).toBe(2);
+        store.clearFilter("place", "a");
+        expect(store.filters.place).toEqual(["b"]);
+        store.clearFilters();
+        expect(store.filters.place).toEqual([]);
+    });
+});
+
+describe("colour filters", () => {
+    it("holds one colour list, no scope and no part colour", () => {
+        const store = useExplorerStore();
+        expect("colourScope" in store.filters).toBe(false);
+        expect("partColour" in store.filters).toBe(false);
+        expect(LIST_FILTER_KEYS).not.toContain("partColour");
+        expect(LIST_FILTER_KEYS).toContain("colour");
+        expect("colourLevel" in store).toBe(false);
+        expect("setColourLevel" in store).toBe(false);
+    });
+
+    it("counts each ticked colour as a filter, and resets them with the others", () => {
+        const store = useExplorerStore();
+        expect(store.activeFilterCount).toBe(0);
+        store.setFilter("colour", ["c1"]);
+        expect(store.activeFilterCount).toBe(1);
+        store.clearFilters();
+        expect(store.filters.colour).toEqual([]);
+    });
+
+    it("keeps the colour list sorted from the facet ticks", () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", ["c2", "c1"]);
+        expect(store.filters.colour).toEqual(["c1", "c2"]);
+    });
+});
+
+describe("period filter", () => {
+    it("holds the options of the period, none of which counts as a filter", () => {
+        const store = useExplorerStore();
+        expect(store.filters).toMatchObject({
+            period: null,
+            periodMatch: "overlap",
+            periodEvent: "production",
+            undated: false,
+        });
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        store.setFilter("periodEvent", "modification");
+        expect(store.activeFilterCount).toBe(0);
+        store.setFilter("period", [1300, 1400]);
+        expect(store.activeFilterCount).toBe(1);
+        expect(hasActiveFilters(store.filters)).toBe(true);
+    });
+
+    it("clearing the period restores its match and its undated option, and keeps the event", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 1400]);
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        store.setFilter("periodEvent", "modification");
+        store.clearFilter("period");
+        expect(store.filters).toMatchObject({
+            period: null,
+            periodMatch: "overlap",
+            undated: false,
+            periodEvent: "modification",
+        });
+        store.clearFilters();
+        expect(store.filters.periodEvent).toBe("production");
+    });
+});
+
+describe("period normalisation", () => {
+    it("orders the bounds numerically, not as text", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 801]);
+        expect(store.filters.period).toEqual([801, 1300]);
+    });
+
+    it("keeps a one-year period", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1000, 1000]);
+        expect(store.filters.period).toEqual([1000, 1000]);
+    });
+
+    it("drops a period with a bound that is not a finite number", () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1300, 1400]);
+        store.setFilter("period", [Number.NaN, 1300]);
+        expect(store.filters.period).toBeNull();
+        store.setFilter("period", [1300, Number.POSITIVE_INFINITY]);
+        expect(store.filters.period).toBeNull();
+    });
+});
+
+describe("setPeriod", () => {
+    it("sets the period and its three options at once", () => {
+        const store = useExplorerStore();
+        store.setPeriod({
+            period: [1300, 1400],
+            match: "within",
+            event: "production",
+            undated: true,
+        });
+        expect(store.filters).toMatchObject({
+            period: [1300, 1400],
+            periodMatch: "within",
+            periodEvent: "production",
+            undated: true,
+        });
+        store.setPeriod({
+            period: null,
+            match: "overlap",
+            event: "production",
+            undated: false,
+        });
+        expect(store.filters.period).toBeNull();
     });
 });
 
@@ -138,6 +262,19 @@ describe("document screen", () => {
         store.focusOn({ kind: "file", id: uuid(5) });
         store.focusOn(null);
         expect(store.folioView).toBe("characterizations");
+        store.focusOn({ kind: "component", id: uuid(6) });
+        expect(store.folioView).toBe("analyses");
+    });
+
+    it("shows the analyses outside the filters by default and keeps the choice from one document to the next", () => {
+        const store = useExplorerStore();
+        expect(store.showOutside).toBe(true);
+        store.openDocument(uuid(1));
+        store.setShowOutside(false);
+        store.openDocument(uuid(2));
+        expect(store.showOutside).toBe(false);
+        store.setShowOutside(true);
+        expect(store.showOutside).toBe(true);
     });
 
     it("switches one folio layer", () => {
@@ -245,6 +382,80 @@ describe("Selection", () => {
         expect(
             store.basket.find((item) => item.key === characterization(0))?.slot,
         ).toBe(0);
+    });
+
+    it("removes several keys in one assignment, keeps the holes and returns the removed items with their slots", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 5; n += 1) store.addToBasket(characterization(n));
+        const before = store.basket;
+        const removed = store.removeManyFromBasket([
+            characterization(1),
+            characterization(3),
+            characterization(99),
+        ]);
+        expect(removed.map((item) => [item.key, item.slot])).toEqual([
+            [characterization(1), 1],
+            [characterization(3), 3],
+        ]);
+        expect(store.basket.map((item) => item.slot)).toEqual([0, 2, 4]);
+        expect(store.basket).not.toBe(before);
+    });
+
+    it("leaves the basket object alone when no key is held", () => {
+        const store = useExplorerStore();
+        store.addToBasket(characterization(1));
+        const before = store.basket;
+        expect(store.removeManyFromBasket([characterization(9)])).toEqual([]);
+        expect(store.basket).toBe(before);
+    });
+
+    it("restores removed items at their own slots", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 5; n += 1) store.addToBasket(characterization(n));
+        const removed = store.removeManyFromBasket([
+            characterization(1),
+            characterization(3),
+        ]);
+        const result = store.restoreBasketItems(removed);
+        expect(result).toEqual({
+            kept: [characterization(1), characterization(3)],
+            truncated: 0,
+        });
+        expect(
+            store.basket.map((item) => [item.key, item.slot]).sort(),
+        ).toEqual([0, 1, 2, 3, 4].map((n) => [characterization(n), n]).sort());
+    });
+
+    it("restores into the lowest hole when the slot was taken meanwhile", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 3; n += 1) store.addToBasket(characterization(n));
+        const removed = store.removeManyFromBasket([characterization(0)]);
+        store.addToBasket(characterization(50));
+        expect(
+            store.basket.find((item) => item.key === characterization(50))
+                ?.slot,
+        ).toBe(0);
+        store.restoreBasketItems(removed);
+        expect(
+            store.basket.find((item) => item.key === characterization(0))?.slot,
+        ).toBe(3);
+    });
+
+    it("skips items already held when restoring and truncates beyond 30", () => {
+        const store = useExplorerStore();
+        for (let n = 0; n < 29; n += 1) store.addToBasket(characterization(n));
+        const removed = store.removeManyFromBasket([characterization(5)]);
+        store.addToBasket(characterization(60));
+        const result = store.restoreBasketItems([
+            ...removed,
+            { key: characterization(70), kind: "characterization", slot: 31 },
+            { key: characterization(60), kind: "characterization", slot: 0 },
+        ]);
+        expect(result).toEqual({
+            kept: [characterization(5)],
+            truncated: 1,
+        });
+        expect(store.basket).toHaveLength(30);
     });
 
     it("clears the Selection", () => {

@@ -9,14 +9,11 @@ may read, links off the tiles by role (D6), and a resource outside
 """
 
 import datetime
-import functools
 import hashlib
 import html
 import logging
 import re
-import sys
 import textwrap
-import unicodedata
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -54,6 +51,7 @@ from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
     readable_graph_ids,
     readable_nodegroup_ids,
+    unpublished_resource_ids,
     visible_set,
 )
 from manuspectrum.utils.role_links import readable_links, role_node
@@ -73,6 +71,7 @@ from manuspectrum.views.explorer.values import (
     dataset_of,
     element_symbols,
     file_entries,
+    fold,
     label,
     name_of,
     plots,
@@ -81,23 +80,31 @@ from manuspectrum.views.explorer.values import (
     string_texts,
     value_refs,
 )
+from manuspectrum.views.explorer.swatches import (
+    SWATCH_ORDER,
+    colour_rank,
+    colour_refs,
+    colour_swatch,
+)
 from manuspectrum.views.summary_service import GraphIndex, _date
 
 FACET_GROUPS = (
-    ("part", ("partType", "partColour", "part")),
+    ("document", ("place",)),
+    ("part", ("partType", "part", "layer")),
     ("analysis", ("project", "technique", "operator", "year")),
-    ("characterization", ("material", "colour", "layer", "element")),
+    ("characterization", ("material", "colour", "element")),
 )
 FACET_KEYS = tuple(key for _, keys in FACET_GROUPS for key in keys)
 GROUP_OF = {key: group for group, keys in FACET_GROUPS for key in keys}
-CHARACTERIZATION_KEYS = dict(FACET_GROUPS)["characterization"]
+# The facets that must hold on one identified material; `layer` is drawn in the
+# component group but filters with these.
+CHARACTERIZATION_KEYS = ("material", "colour", "layer", "element")
 REF_FACETS = {
-    "partType": "partTypes",
-    "partColour": "partColours",
-    "material": "materials",
-    "colour": "colours",
-    "element": "elements",
-    "layer": "layers",
+    "partType": ("partTypes",),
+    "material": ("materials",),
+    "colour": ("colours", "partColours"),
+    "element": ("elements",),
+    "layer": ("layers",),
 }
 CHARACTERIZATION_ROLES = {
     "material": "material",
@@ -106,48 +113,12 @@ CHARACTERIZATION_ROLES = {
     "element": "elements",
 }
 TECHNIQUE_PALETTE = 10
-SWATCHES = {
-    "blue": "royalblue",
-    "bleu": "royalblue",
-    "azur": "royalblue",
-    "red": "firebrick",
-    "rouge": "firebrick",
-    "vermillon": "orangered",
-    "vermilion": "orangered",
-    "green": "forestgreen",
-    "vert": "forestgreen",
-    "gold": "goldenrod",
-    "golden": "goldenrod",
-    "or": "goldenrod",
-    "dore": "goldenrod",
-    "silver": "silver",
-    "argent": "silver",
-    "argente": "silver",
-    "white": "white",
-    "blanc": "white",
-    "black": "black",
-    "noir": "black",
-    "yellow": "gold",
-    "jaune": "gold",
-    "brown": "saddlebrown",
-    "brun": "saddlebrown",
-    "marron": "saddlebrown",
-    "beige": "beige",
-    "ochre": "peru",
-    "ocre": "peru",
-    "grey": "grey",
-    "gray": "grey",
-    "gris": "grey",
-    "purple": "purple",
-    "violet": "purple",
-    "pourpre": "purple",
-    "pink": "hotpink",
-    "rose": "hotpink",
-    "orange": "darkorange",
-}
-SWATCH_FACETS = ("colour", "partColour")
+SWATCH_FACETS = ("colour",)
 LAZY_FACETS = ("part",)
+PERIOD_EVENTS = ("production", "modification")
+PERIOD_BOUND = re.compile(r"-?\d{1,4}")
 PREVIEW_SIZE = 6
+PLACE_DEPTH = 16
 _EMPTY = (None, "", [], {})
 PAGE_SIZES = (10, 25, 50)
 DESCRIPTION_LENGTH = 220
@@ -277,26 +248,6 @@ class Values:
         return self._tiles[str(rid)][key]
 
 
-@functools.cache
-def _combining_marks():
-    return dict.fromkeys(
-        code for code in range(sys.maxunicode + 1) if unicodedata.combining(chr(code))
-    )
-
-
-def fold(text):
-    """*text* without accents, casefolded, for free-text matching.
-
-    The accents are the characters of non-zero canonical combining class
-    left by the NFKD decomposition.
-    """
-    text = text or ""
-    if text.isascii():
-        return text.casefold()
-    decomposed = unicodedata.normalize("NFKD", text)
-    return decomposed.translate(_combining_marks()).casefold()
-
-
 def names(resource_ids, language, user):
     """``{id: Label}`` of the existing resources among *resource_ids*, of any model.
 
@@ -360,6 +311,17 @@ def _resource_refs(values):
     }
 
 
+def _ordered_refs(values):
+    """The resource ids of *values* in the order stored, each once."""
+    return list(
+        dict.fromkeys(
+            str(v.get("resourceId"))
+            for v in values
+            if isinstance(v, dict) and v.get("resourceId")
+        )
+    )
+
+
 def model_of(resource_ids):
     """``{id: model slug}``."""
     return {
@@ -415,6 +377,104 @@ def ancestor_terms(item_ids, chains=None):
 _links = readable_links
 
 
+def place_closure(own_ids, user):
+    """``(reach, parents)`` of the places *own_ids* and their ancestors.
+
+    ``reach`` maps each own place the reader may see to the frozenset of
+    itself and its visible ancestors along ``part_of_places``, at most
+    ``PLACE_DEPTH`` levels up; a cycle is walked once. A place outside
+    ``linkable`` (hidden, or of an unreadable model) is dropped and cuts the
+    chain: what lies above it is not reached through it. ``parents`` maps
+    every place of ``reach`` to its visible parent, the smallest id when
+    there are several, or None. An unreadable ``part_of_places`` nodegroup
+    reads as no parent. A Draft place stays visible (D50).
+    """
+    own = {str(i) for i in own_ids if i}
+    if not own:
+        return {}, {}
+    parent_of = _links(*ROLES["place_parent"], readable_nodegroup_ids(user))
+    seen, frontier = set(own), set(own)
+    for _ in range(PLACE_DEPTH):
+        frontier = {p for i in frontier for p in parent_of.get(i, ())} - seen
+        if not frontier:
+            break
+        seen |= frontier
+    shown = set(linkable(seen, user))
+    reach = {}
+    for place in sorted(own & shown):
+        found, frontier = {place}, {place}
+        for _ in range(PLACE_DEPTH):
+            frontier = {
+                p for i in frontier for p in parent_of.get(i, ()) if p in shown
+            } - found
+            if not frontier:
+                break
+            found |= frontier
+        reach[place] = frozenset(found)
+    reached = set().union(*reach.values())
+    parents = {}
+    for place in reached:
+        above = sorted(p for p in parent_of.get(place, ()) if p in reached)
+        parents[place] = above[0] if above else None
+    return reach, parents
+
+
+def _bound_year(value):
+    return int(value[:4]) if isinstance(value, str) and value[:4].isdigit() else None
+
+
+def production_tile(values, rid, prefix):
+    """``(start, end, approximate)`` of the first Production tile of *rid* holding a bound, as stored, or None.
+
+    *prefix* is ``doc`` or ``comp``; *values* read its ``_start``, ``_end``
+    and ``_approx`` roles. ``type_of_production_time`` true means
+    approximate, and is read from the tile that holds the bounds.
+    """
+    start_node, end_node = values.node(f"{prefix}_start"), values.node(f"{prefix}_end")
+    approx_node = values.node(f"{prefix}_approx")
+    for data in values.tiles(rid, f"{prefix}_start") or values.tiles(
+        rid, f"{prefix}_end"
+    ):
+        start = data.get(start_node.nodeid) if start_node else None
+        end = data.get(end_node.nodeid) if end_node else None
+        if start or end:
+            approximate = data.get(approx_node.nodeid) if approx_node else None
+            return start, end, approximate is True
+    return None
+
+
+def _production_of(values, rid, prefix):
+    """``(start year, end year, approximate)`` of the Production of *rid*, or None.
+
+    A bound that does not start with a year is ignored; a single known
+    bound stands for both.
+    """
+    found = production_tile(values, rid, prefix)
+    if found is None:
+        return None
+    start, end = _bound_year(found[0]), _bound_year(found[1])
+    if start is None and end is None:
+        return None
+    return (
+        start if start is not None else end,
+        end if end is not None else start,
+        found[2],
+    )
+
+
+def production_dates(values, rid):
+    """``ProductionDates`` of the document *rid* (``doc_*`` roles), or None without a bound."""
+    found = production_tile(values, rid, "doc")
+    if found is None:
+        return None
+    start, end, approximate = found
+    return {
+        "start": _date(start) if isinstance(start, str) else None,
+        "end": _date(end) if isinstance(end, str) else None,
+        "approximate": approximate,
+    }
+
+
 def structure(visible, user, part_of=None):
     """``{analysis id: (document id, component id or None)}`` along the first visible chain, sorted.
 
@@ -445,35 +505,6 @@ def _canvas_of(annotation):
         canvas = (feature.get("properties") or {}).get("canvas")
         if canvas:
             return canvas
-    return None
-
-
-def colour_swatch(value):
-    """Display colour of a colour concept (``SWATCHES``), the same in every language; None when no label names one.
-
-    Labels are tried in a fixed order whatever the request language: English
-    preferred label, other preferred labels by language, then alternative
-    labels by language; the first colour word found wins.
-    """
-    entries = [
-        entry
-        for item in (value if isinstance(value, list) else [value])
-        if isinstance(item, dict)
-        for entry in item.get("labels") or []
-        if isinstance(entry, dict) and isinstance(entry.get("value"), str)
-    ]
-    entries.sort(
-        key=lambda e: (
-            e.get("valuetype_id") != "prefLabel",
-            e.get("language_id") != FALLBACK_LANGUAGE,
-            e.get("language_id") or "",
-            e["value"],
-        )
-    )
-    for entry in entries:
-        for word in re.split(r"[^a-z]+", fold(entry["value"])):
-            if word in SWATCHES:
-                return SWATCHES[word]
     return None
 
 
@@ -598,10 +629,53 @@ def corpus_rows(user, language, chains=None):
     return _corpus_rows(user, language, visible, chains, projects_of)[0]
 
 
-def _corpus_rows(user, language, visible, chains, projects_of):
-    """``(rows, values)``: the ``corpus_rows`` and, per visible identified
-    material, ``{facet key: set of uris}`` of the characterization facets."""
+def material_components(visible, chains, objects_of):
+    """``{identified material: sorted ids of the visible components linked to it}``.
+
+    A material is linked to a component it observes (``object_observed``) or
+    that is observed by a visible analysis it cites as evidence. Every
+    surface that relates a material to a component reads this one rule: the
+    kept materials of ``match_payload``, the ``components`` of the payload.
+    The colour of a row never reads it: a row carries the material's own
+    colour and its own component's.
+    """
+    found = {}
+    for c in visible.characterizations:
+        linked = set(objects_of.get(c, ())) & visible.components
+        for analysis in visible.evidence.get(c, ()):
+            component = chains.get(analysis, (None, None))[1]
+            if component in visible.components:
+                linked.add(component)
+        found[c] = tuple(sorted(linked))
+    return found
+
+
+def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
+    """``(rows, values, parents, linked)``: the ``corpus_rows``, per visible
+    identified material ``{key: set of uris}`` of the characterization facets
+    for ``match_payload``,
+    the ``place_closure`` parents of the places the rows carry and the
+    ``material_components``.
+
+    A row's ``places`` are the production places of its component and of its
+    document with their visible ancestors (sorted ids); its ``periods`` hold
+    the production bounds in years, the component's when it has one, else the
+    document's.
+
+    A row's ``characterizations`` hold one entry per identified material it
+    cites, plus one without material when its component has a colour and
+    nothing cites it. The entry of a cited material holds its own
+    ``color_aspect`` extended with the ``color_features`` of the row's
+    component, one object per (material, component); *objects_of* is read
+    when omitted. The second value holds, per material, the values of the
+    kept-materials rule of ``match_payload``: ``colour`` is its own colour
+    plus those of every component linked to it (``material_components``).
+    """
     memo = _BuildMemo(language)
+    if objects_of is None:
+        objects_of = _links(
+            "characterization", "object_observed", readable_nodegroup_ids(user)
+        )
     analyses = sorted(chains)
     values = Values(
         analyses,
@@ -620,8 +694,74 @@ def _corpus_rows(user, language, visible, chains, projects_of):
     characterizations = Values(
         visible.characterizations, ["material", "colour", "layer", "elements"], user
     )
-    value_sets = {
-        c: {
+    linked = material_components(visible, chains, objects_of)
+    parts = Values(
+        {c for _, c in chains.values() if c}
+        | {k for components in linked.values() for k in components},
+        ["comp_type", "comp_colour"],
+        user,
+    )
+
+    documents = {d for d, _ in chains.values()}
+    components = {c for _, c in chains.values() if c}
+    produced = {
+        "doc": Values(
+            documents,
+            ["doc_start", "doc_end", "doc_approx", "doc_place"],
+            user,
+        ),
+        "comp": Values(
+            components,
+            ["comp_start", "comp_end", "comp_approx", "comp_place"],
+            user,
+        ),
+    }
+    own_places = {
+        rid: _ordered_refs(produced[prefix].get(rid, f"{prefix}_place"))
+        for prefix, ids in (("doc", documents), ("comp", components))
+        for rid in ids
+    }
+    reach, place_parents = place_closure(
+        {p for found in own_places.values() for p in found}, user
+    )
+
+    produced_by_chain = {}
+
+    def production_of(document, component):
+        """``(places, periods)`` of a chain, one object shared by its rows."""
+        key = (document, component)
+        if key not in produced_by_chain:
+            places = set()
+            for own in (own_places[document], own_places.get(component, ())):
+                for place in own:
+                    places |= reach.get(place, set())
+            period = (
+                _production_of(produced["comp"], component, "comp")
+                if component
+                else None
+            ) or _production_of(produced["doc"], document, "doc")
+            produced_by_chain[key] = (
+                sorted(places),
+                {"production": period, "modification": None},
+            )
+        return produced_by_chain[key]
+
+    colours_memo = {}
+
+    def colours_of(component):
+        """The ``color_features`` uris of *component*, one frozenset per component."""
+        if component not in colours_memo:
+            colours_memo[component] = frozenset(
+                ref["uri"]
+                for v in (parts.get(component, "comp_colour") if component else [])
+                for ref in memo.refs(v)
+            )
+        return colours_memo[component]
+
+    value_sets = {}
+    match_sets = {}
+    for c in visible.characterizations:
+        value_sets[c] = {
             key: {
                 ref["uri"]
                 for v in characterizations.get(c, role)
@@ -629,16 +769,43 @@ def _corpus_rows(user, language, visible, chains, projects_of):
             }
             for key, role in CHARACTERIZATION_ROLES.items()
         }
-        for c in visible.characterizations
-    }
-    parts = Values(
-        {c for _, c in chains.values() if c}, ["comp_type", "comp_colour"], user
-    )
+        match_sets[c] = {
+            **value_sets[c],
+            "colour": value_sets[c]["colour"]
+            | set().union(*(colours_of(k) for k in linked[c])),
+        }
+    entries = {}
+
+    def entry_of(material, component):
+        """The values of *material* as a row on *component* carries them: its own colour and the component's."""
+        key = (material, component)
+        if key not in entries:
+            own, part = value_sets[material], colours_of(component)
+            entries[key] = (
+                own
+                if part <= own["colour"]
+                else {**own, "colour": own["colour"] | part}
+            )
+        return entries[key]
+
+    part_only = {}
+
+    def part_entry(component):
+        """The entry of a row that cites no material, shared by the rows of *component*."""
+        if component not in part_only:
+            part_only[component] = {
+                "material": set(),
+                "layer": set(),
+                "element": set(),
+                "colour": colours_of(component),
+            }
+        return part_only[component]
+
     cited_by = defaultdict(list)
     for characterization, evidence in visible.evidence.items():
         for analysis in evidence:
             cited_by[analysis].append(characterization)
-    operators_of = {a: _resource_refs(values.get(a, "operators")) for a in analyses}
+    operators_of = {a: _ordered_refs(values.get(a, "operators")) for a in analyses}
     shown_operators = set(
         linkable({o for ops in operators_of.values() for o in ops}, user)
     )
@@ -724,12 +891,15 @@ def _corpus_rows(user, language, visible, chains, projects_of):
                 "projects": sorted(
                     p for p in projects_of.get(a, ()) if p in visible.projects
                 ),
-                "operators": sorted(operators_of[a] & shown_operators),
+                "operators": [o for o in operators_of[a] if o in shown_operators],
                 "materials": _unique(materials),
                 "colours": _unique(colours),
                 "layers": _unique(refs_of("layer")),
                 "elements": _unique(refs_of("elements")),
-                "characterizations": [value_sets[c] for c in cited],
+                "characterizations": (
+                    [entry_of(c, component) for c in cited]
+                    or ([part_entry(component)] if colours_of(component) else [])
+                ),
                 "partTypes": _unique(
                     [
                         r
@@ -760,9 +930,11 @@ def _corpus_rows(user, language, visible, chains, projects_of):
                 "dataKinds": kinds,
                 "unpublished": a in visible.unpublished,
                 "text": " ".join(memo.fold(t) for t in texts),
+                "places": production_of(document, component)[0],
+                "periods": production_of(document, component)[1],
             }
         )
-    return rows, value_sets
+    return rows, match_sets, place_parents, linked
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -778,7 +950,16 @@ class CorpusBundle:
     in name order. ``order`` is the analyses-grain sort key of each row.
     ``links`` holds the role maps the payloads follow, keyed by source id.
     ``characterization_values`` holds, per visible identified material, the
-    uris it carries for each facet of the characterization group.
+    uris it carries for each facet of the characterization group, as
+    ``match_payload`` keeps materials (its ``colour`` adds the colours of the
+    components linked to it);
+    ``material_components`` the sorted ids of the visible components linked to
+    each (``material_components``).
+    ``colour_items`` is ``[(uri, rank)]`` of the items of the colour list, in
+    the order the colour facet shows them. ``places`` maps every place the rows
+    carry, ancestors included, to ``{"parent": id or None, "unpublished":
+    bool}``; ``period_bounds`` holds per event the ``(min start, max end)``
+    years of the dated rows, or None.
     """
 
     visible: VisibleSet
@@ -796,6 +977,15 @@ class CorpusBundle:
     documents: list
     order: dict
     characterization_values: dict
+    material_components: dict
+    colour_items: list
+    places: dict
+    period_bounds: dict
+
+    @property
+    def colour_ranks(self):
+        """``{uri: rank}`` of ``colour_items``."""
+        return dict(self.colour_items)
 
 
 LINK_ROLES = {
@@ -823,9 +1013,10 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows, characterization_values = _corpus_rows(
-        user, language, visible, chains, links["projects"]
+    rows, characterization_values, place_parents, linked = _corpus_rows(
+        user, language, visible, chains, links["projects"], links["objects"]
     )
+    colour_items, colour_labels, colour_swatches = colour_list(language)
     label_of = names(
         {r["document"] for r in rows}
         | {r["component"] for r in rows if r["component"]}
@@ -851,6 +1042,9 @@ def build_bundle(user, language, visible):
         return folds[text]
 
     names_folded = {d: folded(label_of[d]["value"]) for d in documents}
+    placed = {place for row in rows for place in row["places"]}
+    drafts = unpublished_resource_ids(placed)
+    produced = [r["periods"]["production"] for r in rows if r["periods"]["production"]]
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -859,10 +1053,7 @@ def build_bundle(user, language, visible):
         by_id={row["id"]: row for row in rows},
         by_document=dict(by_document),
         universe=facet_universe(rows),
-        labels={
-            key: dict(values)
-            for key, values in _facet_labels(rows, language, user).items()
-        },
+        labels=_with_colour_labels(_facet_labels(rows, language, user), colour_labels),
         marks={
             row["technique"]["uri"]: {
                 k: row["technique"][k] for k in ("code", "colour", "family")
@@ -871,7 +1062,8 @@ def build_bundle(user, language, visible):
             if row["technique"]
         },
         swatches={
-            uri: swatch for row in rows for uri, swatch in row["swatches"].items()
+            **colour_swatches,
+            **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
         },
         label_of=label_of,
         folded=names_folded,
@@ -886,7 +1078,75 @@ def build_bundle(user, language, visible):
             for row in rows
         },
         characterization_values=characterization_values,
+        material_components=linked,
+        colour_items=colour_items,
+        places={
+            place: {"parent": place_parents.get(place), "unpublished": place in drafts}
+            for place in sorted(placed)
+        },
+        period_bounds={
+            "production": (
+                (min(p[0] for p in produced), max(p[1] for p in produced))
+                if produced
+                else None
+            ),
+            "modification": None,
+        },
     )
+
+
+def _with_colour_labels(labels, colour_labels):
+    """*labels* as plain dicts, the ``colour`` one completed with the labels of the list items no row carries."""
+    labels = {key: dict(values) for key, values in labels.items()}
+    for uri, text in colour_labels.items():
+        labels.setdefault("colour", {}).setdefault(uri, text)
+    return labels
+
+
+def colour_list(language):
+    """``(items, labels, swatches)`` of the colour list of the ``color_aspect`` node.
+
+    *items* is ``[(uri, rank)]`` in display order: the concepts of
+    ``SWATCH_ORDER`` first, then the others by the list's ``sortorder``;
+    *labels* and *swatches* are by uri. All empty when the node has no list.
+    """
+    index = GraphIndex.for_slug("characterization")
+    list_id = index.lists.get("color_aspect") if index else None
+    if not list_id:
+        return [], {}, {}
+    items = list(
+        ListItem.objects.filter(list_id=list_id).values_list("id", "uri", "sortorder")
+    )
+    entries = defaultdict(list)
+    for item, valuetype, lang, value in ListItemValue.objects.filter(
+        list_item_id__in=[i for i, _, _ in items]
+    ).values_list("list_item_id", "valuetype_id", "language_id", "value"):
+        entries[item].append(
+            {"value": value, "valuetype_id": valuetype, "language_id": lang}
+        )
+    known = sorted(
+        (colour_rank(uri), uri) for _, uri, _ in items if colour_rank(uri) is not None
+    )
+    other = sorted(
+        (order or 0, uri) for _, uri, order in items if colour_rank(uri) is None and uri
+    )
+    ranked = [(uri, rank) for rank, uri in known] + [
+        (uri, len(SWATCH_ORDER) + position) for position, (_, uri) in enumerate(other)
+    ]
+    labels, swatches = {}, {}
+    for item, uri, _ in items:
+        if not uri:
+            continue
+        prefs = {
+            e["language_id"]: e["value"]
+            for e in entries[item]
+            if e["valuetype_id"] == "prefLabel" and e["value"]
+        }
+        labels[uri] = label(prefs, language) or {"value": uri, "lang": language}
+        swatch = colour_swatch({"uri": uri, "labels": entries[item]})
+        if swatch:
+            swatches[uri] = swatch
+    return ranked, labels, swatches
 
 
 def corpus_bundle(user, language, ticket=None):
@@ -906,11 +1166,26 @@ def _unique(refs):
     return kept
 
 
+def parse_period(raw):
+    """``(low, high)`` years of ``YYYY,YYYY``; None when *raw* is not two whole years in order."""
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 2 or not all(PERIOD_BOUND.fullmatch(part) for part in parts):
+        return None
+    low, high = int(parts[0]), int(parts[1])
+    return (low, high) if low <= high else None
+
+
 def parse_filters(query):
     """Filters and page number of a search query; lists come as repeated or comma-separated parameters.
 
     ``size`` is one of ``PAGE_SIZES``, else the first; ``empty`` asks for the
-    documents without analyses.
+    documents without analyses. ``colour`` is the union of the ``colour`` and
+    ``partColour`` values: ``partColour`` is the alias of the two colour facets
+    merged in 2026-10, still read for one release. ``period`` is ``(low, high)`` from
+    ``YYYY,YYYY`` (whole years, low <= high), else None; ``periodMatch`` is
+    ``within``, else ``overlap``; ``periodEvent`` is ``modification``, else
+    ``production``; ``undated`` asks to keep the rows without a date for the
+    event. An invalid value is ignored, never an error.
     """
     filters = {
         key: sorted(
@@ -923,6 +1198,25 @@ def parse_filters(query):
         )
         for key in FACET_KEYS
     }
+    filters["colour"] = sorted(
+        set(filters["colour"])
+        | {
+            v.strip()
+            for raw in query.getlist("partColour")
+            for v in raw.split(",")
+            if v.strip()
+        }
+    )
+    filters["period"] = parse_period(query.get("period", ""))
+    filters["periodMatch"] = (
+        "within" if query.get("periodMatch") == "within" else "overlap"
+    )
+    filters["periodEvent"] = (
+        query.get("periodEvent")
+        if query.get("periodEvent") in PERIOD_EVENTS
+        else PERIOD_EVENTS[0]
+    )
+    filters["undated"] = query.get("undated", "").lower() in ("1", "true", "yes")
     filters["q"] = query.get("q", "").strip()
     filters["grain"] = "documents" if query.get("grain") == "documents" else "analyses"
     filters["empty"] = query.get("empty", "").lower() in ("1", "true", "yes")
@@ -945,9 +1239,13 @@ def _facet_values(row, key):
         return [row["component"]] if row["component"] else []
     if key == "year":
         return [str(row["year"])] if row["year"] else []
+    if key == "place":
+        return row["places"]
     if key in ("project", "operator"):
         return row[f"{key}s"]
-    return [ref["uri"] for ref in row[REF_FACETS[key]]]
+    return list(
+        dict.fromkeys(ref["uri"] for field in REF_FACETS[key] for ref in row[field])
+    )
 
 
 def _facet_labels(rows, language, user):
@@ -955,9 +1253,10 @@ def _facet_labels(rows, language, user):
     for row in rows:
         if row["technique"]:
             labels["technique"][row["technique"]["uri"]] = row["technique"]["label"]
-        for key, plural in REF_FACETS.items():
-            for ref in row[plural]:
-                labels[key][ref["uri"]] = ref["label"]
+        for key, fields in REF_FACETS.items():
+            for field in fields:
+                for ref in row[field]:
+                    labels[key][ref["uri"]] = ref["label"]
         if row["year"]:
             labels["year"][str(row["year"])] = {
                 "value": str(row["year"]),
@@ -966,12 +1265,12 @@ def _facet_labels(rows, language, user):
     ids = {
         v
         for row in rows
-        for key in ("part", "project", "operator")
+        for key in ("place", "part", "project", "operator")
         for v in _facet_values(row, key)
     }
     named = names(ids, language, user)
     for row in rows:
-        for key in ("part", "project", "operator"):
+        for key in ("place", "part", "project", "operator"):
             for v in _facet_values(row, key):
                 labels[key][v] = named.get(v, {"value": v[:8], "lang": language})
     return labels
@@ -1020,12 +1319,31 @@ def meets(values, wanted):
     return all(values[key] & selected for key, selected in wanted)
 
 
+def in_period(row, filters):
+    """Whether *row* meets the ``period`` of *filters*: true without one.
+
+    The row's years for the ``periodEvent`` overlap the period, or lie within
+    it with ``periodMatch=within``; a row without a date for the event is kept
+    only with ``undated``.
+    """
+    if not filters["period"]:
+        return True
+    bounds = row["periods"].get(filters["periodEvent"])
+    if bounds is None:
+        return filters["undated"]
+    low, high = filters["period"]
+    start, end, _ = bounds
+    if filters["periodMatch"] == "within":
+        return start >= low and end <= high
+    return start <= high and end >= low
+
+
 def row_filter(rows, query, universe=None):
     """The Corpus filter rule over *rows*: ``(keep, active, filters, page, needle, universe, carried)``.
 
     ``keep(row, skip=None)`` is OR inside a facet, AND across facets, and the
     folded free text ``needle``; ``skip`` leaves one facet out (open facet
-    counts). The facets of the characterization group hold on one identified
+    counts; ``"period"`` leaves the period out). The facets of the characterization group hold on one identified
     material: a row is kept when one characterization citing it carries a
     selected value of each of them. ``carried(row, key)`` is the set of
     values of *key* a row counts for under the other selections: in that
@@ -1041,45 +1359,75 @@ def row_filter(rows, query, universe=None):
         key: [v for v in filters[key] if v in universe[key]] for key in FACET_KEYS
     }
     needle = fold(filters["q"])
+    selected = {key: set(values) for key, values in active.items()}
+    plain = [
+        key for key in FACET_KEYS if key not in CHARACTERIZATION_KEYS and active[key]
+    ]
+    wanted_of = {
+        skip: characterization_wanted(active, skip)
+        for skip in (None, *CHARACTERIZATION_KEYS)
+    }
+    meetings = {}
 
     def meeting(row, skip):
-        wanted = characterization_wanted(active, skip)
+        skip = skip if skip in CHARACTERIZATION_KEYS else None
+        wanted = wanted_of[skip]
         if not wanted:
             return None
-        return [c for c in row["characterizations"] if meets(c, wanted)]
+        key = (row["id"], skip)
+        if key not in meetings:
+            meetings[key] = [c for c in row["characterizations"] if meets(c, wanted)]
+        return meetings[key]
 
     def keep(row, skip=None):
-        for key in FACET_KEYS:
-            if (
-                key != skip
-                and key not in CHARACTERIZATION_KEYS
-                and active[key]
-                and not set(_facet_values(row, key)) & set(active[key])
-            ):
+        for key in plain:
+            if key != skip and not set(_facet_values(row, key)) & selected[key]:
                 return False
         if meeting(row, skip) == []:
+            return False
+        if skip != "period" and not in_period(row, filters):
             return False
         return not needle or needle in row["text"]
 
     def carried(row, key):
         if not keep(row, key):
             return set()
-        found = meeting(row, key) if key in CHARACTERIZATION_KEYS else None
-        if found is None:
+        if key not in CHARACTERIZATION_KEYS:
             return set(_facet_values(row, key))
+        found = meeting(row, key)
+        if found is None and key != "colour":
+            return set(_facet_values(row, key))
+        if found is None:
+            found = row["characterizations"]
         return set().union(*(c[key] for c in found))
 
     return keep, active, filters, page, needle, universe, carried
 
 
-def facet_entry(key, rows, active, counted, labels, marks, swatches, offered):
+def facet_entry(
+    key,
+    rows,
+    active,
+    counted,
+    labels,
+    marks,
+    swatches,
+    offered,
+    ranks=None,
+    complete=False,
+    places=None,
+):
     """One ``Facet`` over *rows*: the values of *offered* with a count and the selected ones.
 
     Counts are "open to the other selections" (``counted``, the ``carried`` of
     ``row_filter``). A selected value is listed at count 0 when no row counts
     for it. Values are in label order, years in numeric order; ``total`` is
-    the number of values.
+    the number of values. ``colour`` is in the fixed order of ``colour_order``
+    (*ranks*); with *complete*, every offered value is listed, at count 0 when
+    no row counts for it. *places* is ``CorpusBundle.places``: ``place``
+    values name their ``parent`` and whether they are ``unpublished``.
     """
+    places = (places or {}) if key == "place" else {}
     counts = Counter(v for row in rows for v in counted(row, key))
     values = [
         {
@@ -1088,18 +1436,99 @@ def facet_entry(key, rows, active, counted, labels, marks, swatches, offered):
             "count": counts[v],
             "mark": marks.get(v) if key == "technique" else None,
             "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
+            "parent": places.get(v, {}).get("parent"),
+            "unpublished": places.get(v, {}).get("unpublished", False),
         }
         for v in offered | set(active[key])
-        if counts[v] > 0 or v in active[key]
+        if complete or counts[v] > 0 or v in active[key]
     ]
-    values.sort(
-        key=(
-            (lambda item: item["id"])
-            if key == "year"
-            else (lambda item: (fold(item["label"]["value"]), item["id"]))
+    if key == "colour":
+        order = colour_order(ranks or {})
+        values.sort(key=lambda item: order(item["id"], item["label"]["value"]))
+    else:
+        values.sort(
+            key=(
+                (lambda item: item["id"])
+                if key == "year"
+                else (lambda item: (fold(item["label"]["value"]), item["id"]))
+            )
         )
-    )
     return {"key": key, "group": GROUP_OF[key], "values": values, "total": len(values)}
+
+
+def colour_order(ranks):
+    """Sort key ``(uri, label) -> tuple`` of the colour facet: the colours of the list by *ranks*, else by ``SWATCH_ORDER``, the rest by label."""
+
+    def order(uri, text):
+        rank = ranks.get(uri)
+        if rank is None:
+            rank = colour_rank(uri)
+        return (0, rank, "", uri) if rank is not None else (1, 0, fold(text), uri)
+
+    return order
+
+
+def century(year):
+    """Index ``k`` of the century ``100k + 1`` to ``100(k + 1)`` holding *year*."""
+    return (year - 1) // 100
+
+
+def period_bounds_of(rows, event):
+    """``(min start, max end)`` years of the *rows* dated for *event*; None without one."""
+    dated = [row["periods"][event] for row in rows if row["periods"].get(event)]
+    if not dated:
+        return None
+    return min(p[0] for p in dated), max(p[1] for p in dated)
+
+
+def period_facet(rows, keep, event, bounds):
+    """The ``RangeFacet`` of *rows* for *event*, spanning *bounds* (``(min, max)`` years); None without bounds.
+
+    One bucket per century from the one of ``min`` to the one of ``max``. A row
+    kept by ``keep(row, skip="period")`` (the other selections, the period
+    left out) counts in every century its years overlap; ``undated`` counts
+    the kept rows without a date for *event*.
+    """
+    if bounds is None:
+        return None
+    low, high = bounds
+    first, last = century(low), century(high)
+    counts = Counter()
+    undated = 0
+    for row in rows:
+        if not keep(row, "period"):
+            continue
+        years = row["periods"].get(event)
+        if years is None:
+            undated += 1
+            continue
+        for index in range(
+            max(first, century(years[0])), min(last, century(years[1])) + 1
+        ):
+            counts[index] += 1
+    return {
+        "key": "period",
+        "group": "document",
+        "event": event,
+        "min": low,
+        "max": high,
+        "buckets": [
+            {"from": 100 * k + 1, "to": 100 * (k + 1), "count": counts[k]}
+            for k in range(first, last + 1)
+        ],
+        "undated": undated,
+    }
+
+
+def place_ancestors(ids, places):
+    """The ids above *ids* in the ``parent`` links of *places* (``CorpusBundle.places``), cycles cut."""
+    found = set()
+    for place in ids:
+        parent = places.get(place, {}).get("parent")
+        while parent and parent not in found:
+            found.add(parent)
+            parent = places.get(parent, {}).get("parent")
+    return found
 
 
 def preview(facet, active):
@@ -1113,6 +1542,13 @@ def preview(facet, active):
             if index < PREVIEW_SIZE or value["id"] in selected
         ],
     }
+
+
+def offered_values(bundle, key):
+    """The values a corpus facet offers: the universe, and for ``colour`` every item of its list as well."""
+    if key == "colour":
+        return bundle.universe[key] | set(bundle.colour_ranks)
+    return bundle.universe[key]
 
 
 def corpus_facets(bundle, rows, active, counted):
@@ -1129,7 +1565,10 @@ def corpus_facets(bundle, rows, active, counted):
             bundle.labels,
             bundle.marks,
             bundle.swatches,
-            bundle.universe[key],
+            offered_values(bundle, key),
+            bundle.colour_ranks,
+            complete=key == "colour",
+            places=bundle.places,
         )
         facets.append(preview(facet, active) if key in LAZY_FACETS else facet)
     return facets
@@ -1148,7 +1587,9 @@ def search_payload(query, user, language, ticket=None):
     visible set; a selected value that is not in the visible set is ignored
     without a word. ``facets`` is None with ``facets=0``; a facet of
     ``LAZY_FACETS`` lists its first ``PREVIEW_SIZE`` values and the selected
-    ones, ``facet_payload`` gives all of them.
+    ones, ``facet_payload`` gives all of them. ``period`` is the ``RangeFacet``
+    of the corpus for the queried event, counted open to the other selections;
+    None with ``facets=0`` or when no visible analysis is dated for the event.
 
     In the documents grain, a visible document without any visible analysis
     is listed only with ``empty``, when no facet filter is active and the
@@ -1161,9 +1602,11 @@ def search_payload(query, user, language, ticket=None):
         rows, query, universe=bundle.universe
     )
     matching = [row for row in rows if keep(row)]
-    facets = (
-        corpus_facets(bundle, rows, active, counted) if wants_facets(query) else None
-    )
+    facets = period = None
+    if wants_facets(query):
+        facets = corpus_facets(bundle, rows, active, counted)
+        event = filters["periodEvent"]
+        period = period_facet(rows, keep, event, bundle.period_bounds[event])
 
     visible, label_of = bundle.visible, bundle.label_of
     size = filters["size"]
@@ -1174,7 +1617,7 @@ def search_payload(query, user, language, ticket=None):
         candidates = bundle.documents
         bare = (
             set()
-            if any(active.values())
+            if any(active.values()) or filters["period"]
             else {
                 d
                 for d in candidates
@@ -1208,6 +1651,7 @@ def search_payload(query, user, language, ticket=None):
         "facets": facets,
         "unpublishedCount": unpublished,
         "withoutAnalyses": without_analyses,
+        "period": period,
     }
 
 
@@ -1239,8 +1683,26 @@ def document_facet(key, bundle, rows, active, counted):
         bundle.marks,
         bundle.swatches,
         {v for row in rows for v in _facet_values(row, key)},
+        bundle.colour_ranks,
+        places=bundle.places,
     )
     return facet if facet["values"] else None
+
+
+def range_facet(bundle, document_id, query):
+    """The ``RangeFacet`` of the corpus, or of the visible document *document_id* when given; None when absent."""
+    if document_id:
+        rows = document_rows(bundle, document_id)
+        if rows is None:
+            return None
+    else:
+        rows = bundle.rows
+    keep, _, filters, *_ = row_filter(rows, query, universe=bundle.universe)
+    event = filters["periodEvent"]
+    bounds = (
+        period_bounds_of(rows, event) if document_id else bundle.period_bounds[event]
+    )
+    return period_facet(rows, keep, event, bounds)
 
 
 def facet_payload(key, query, user, language, ticket=None):
@@ -1250,14 +1712,18 @@ def facet_payload(key, query, user, language, ticket=None):
     ``document`` names it: then the facet is the one ``match_payload`` lists
     for that document. ``find`` narrows the values to those whose folded
     label holds its folded text, the selected ones kept; ``total`` stays the
-    number of values without it. A key outside ``FACET_KEYS``, a facet the
-    search or the match would not show (no value), or a ``document`` that is
-    not a UUID or not visible, is None.
+    number of values without it. ``find`` on ``place`` keeps the ancestors of
+    the matches and of the selected places as well. The key ``period`` answers the ``RangeFacet`` (``find``
+    ignored). A key outside ``FACET_KEYS`` and ``period``, a facet the search
+    or the match would not show (no value), or a ``document`` that is not a
+    UUID or not visible, is None.
     """
     document_id = document_scope(query)
-    if key not in FACET_KEYS or document_id is None:
+    if (key not in FACET_KEYS and key != "period") or document_id is None:
         return None
     bundle = corpus_bundle(user, language, ticket)
+    if key == "period":
+        return range_facet(bundle, document_id, query)
     if document_id:
         rows = document_rows(bundle, document_id)
         if rows is None:
@@ -1280,15 +1746,25 @@ def facet_payload(key, query, user, language, ticket=None):
             bundle.labels,
             bundle.marks,
             bundle.swatches,
-            bundle.universe[key],
+            offered_values(bundle, key),
+            bundle.colour_ranks,
+            complete=key == "colour",
+            places=bundle.places,
         )
     needle = fold(query.get("find", "").strip())
     if needle:
         selected = set(active[key])
+        matching = {
+            value["id"]
+            for value in facet["values"]
+            if needle in fold(value["label"]["value"])
+        }
+        if key == "place":
+            matching |= place_ancestors(matching | selected, bundle.places)
         facet["values"] = [
             value
             for value in facet["values"]
-            if needle in fold(value["label"]["value"]) or value["id"] in selected
+            if value["id"] in matching or value["id"] in selected
         ]
     return facet
 
@@ -1314,16 +1790,19 @@ def match_payload(document_id, query, user, language, ticket=None):
     absent. ``kept.analyses`` are the document's analyses ``row_filter``
     keeps, with the facet universe of the whole corpus, or None when no
     filter is active (every analysis kept); ``total`` counts them. ``kept.characterizations`` are its identified materials carrying a
-    selected value of each active facet of the characterization group; the
-    other facets and the free text leave them kept. Grain, page and size are
-    not read.
+    selected value of each active facet of the characterization group (a
+    colour is carried by the material itself, a component it observes or the
+    component of an analysis it cites); the
+    other facets, the place, the period and the free text leave them kept.
+    ``period`` is the ``RangeFacet`` of the document's analyses (None when none
+    is dated). Grain, page and size are not read.
     """
     bundle = corpus_bundle(user, language, ticket)
     document_id = str(document_id)
     rows = document_rows(bundle, document_id)
     if rows is None:
         return None
-    keep, active, _, _, needle, _, counted = row_filter(
+    keep, active, filters, _, needle, _, counted = row_filter(
         rows, query, universe=bundle.universe
     )
     facets = [
@@ -1332,7 +1811,8 @@ def match_payload(document_id, query, user, language, ticket=None):
         if (facet := document_facet(key, bundle, rows, active, counted))
     ]
     kept = sorted(row["id"] for row in rows if keep(row))
-    filtered = bool(needle) or any(active.values())
+    filtered = bool(needle) or any(active.values()) or bool(filters["period"])
+    event = filters["periodEvent"]
     wanted = characterization_wanted(active)
     return {
         "facets": facets,
@@ -1345,6 +1825,7 @@ def match_payload(document_id, query, user, language, ticket=None):
             ],
         },
         "total": len(kept),
+        "period": period_facet(rows, keep, event, period_bounds_of(rows, event)),
     }
 
 
@@ -1446,6 +1927,7 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
             "doc_identifier_type",
             "doc_start",
             "doc_end",
+            "doc_approx",
             "doc_description",
             "doc_type",
         ],
@@ -1464,19 +1946,9 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
     owner_names = names({o for v in owner_of.values() for o in v}, language, user)
     identifier_node = values.node("doc_identifier")
     type_node = values.node("doc_identifier_type")
-    start_node, end_node = values.node("doc_start"), values.node("doc_end")
     hits = []
     for d in document_ids:
-        dates = None
-        for data in values.tiles(d, "doc_start") or values.tiles(d, "doc_end"):
-            start = data.get(start_node.nodeid) if start_node else None
-            end = data.get(end_node.nodeid) if end_node else None
-            if start or end:
-                dates = {
-                    "start": _date(start) if isinstance(start, str) else None,
-                    "end": _date(end) if isinstance(end, str) else None,
-                }
-                break
+        dates = production_dates(values, d)
         description = next(
             (
                 found
@@ -1615,7 +2087,14 @@ def qualified_values(values, ids, language):
 
 
 def characterization_summaries(
-    ids, visible, user, language, source=None, objects_of=None, analysis_rows=None
+    ids,
+    visible,
+    user,
+    language,
+    components_of,
+    source=None,
+    objects_of=None,
+    analysis_rows=None,
 ):
     """``CharacterizationSummary`` of the visible identified materials among *ids*.
 
@@ -1625,6 +2104,8 @@ def characterization_summaries(
     ``evidence`` names each visible analysis cited, in id order. *objects_of*
     is the characterization → objects observed map the caller already holds,
     *analysis_rows* the corpus rows by analysis id, whose names it reuses.
+    ``components`` are the references to the material's entry of *components_of*
+    (``CorpusBundle.material_components``), named like ``objects``.
     """
     ids = sorted(i for i in ids if i in visible.characterizations)
     if not ids:
@@ -1654,14 +2135,16 @@ def characterization_summaries(
         )
         for c in ids
     }
-    authors_of = {c: _resource_refs(values.get(c, "ch_authors")) for c in ids}
+    authors_of = {c: _ordered_refs(values.get(c, "ch_authors")) for c in ids}
     shown_authors = set(linkable({a for v in authors_of.values() for a in v}, user))
-    authors = {c: sorted(authors_of[c] & shown_authors) for c in ids}
+    authors = {c: [a for a in authors_of[c] if a in shown_authors] for c in ids}
     rows = analysis_rows or {}
     cited = {a for c in ids for a in visible.evidence.get(c, ())}
+    linked = {c: list(components_of.get(c, ())) for c in ids}
     label_of = names(
         set(ids)
         | {o for v in objects.values() for o in v}
+        | {k for v in linked.values() for k in v}
         | {a for v in authors.values() for a in v}
         | {a for a in cited if a not in rows},
         language,
@@ -1706,12 +2189,17 @@ def characterization_summaries(
                     {"id": o, "model": slug_of.get(o, ""), "name": label_of[o]}
                     for o in objects[c]
                 ],
+                "components": [
+                    {"id": k, "model": "component", "name": label_of[k]}
+                    for k in linked[c]
+                    if k in label_of
+                ],
                 "materials": materials,
                 "colours": _unique(
                     [
                         r
                         for v in values.get(c, "colour")
-                        for r in value_refs(v, language)
+                        for r in colour_refs(v, language)
                     ]
                 ),
                 "layers": _unique(
@@ -1809,6 +2297,24 @@ def component_zones(document_id, bundle, dims, position, readable):
     return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
 
 
+def history_of(values, document_id, places, label_of):
+    """The ``HistoryLine`` list of a document: its Production, or none without a bound or a place.
+
+    *places* are the production places a reference may show, in stored
+    order; *label_of* names them.
+    """
+    dates = production_dates(values, document_id)
+    if dates is None and not places:
+        return []
+    return [
+        {
+            "type": "production",
+            "places": [{"id": p, "name": label_of[p]} for p in places if p in label_of],
+            "date": dates or {"start": None, "end": None, "approximate": False},
+        }
+    ]
+
+
 def document_payload(document_id, user, language, ticket=None):
     """``DocumentPayload`` of a visible document, the same whatever the filters; None when it is unknown or not visible.
 
@@ -1816,11 +2322,13 @@ def document_payload(document_id, user, language, ticket=None):
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases`` and named by its ``feature`` id.
     A zone on a canvas the manifest does not list is left out; an analysis
-    without zones is not located on a page. ``components`` lists the visible
-    Components placed on its pages (``component_zones``), by first page then
-    name. ``document_match`` says what the filters keep. ``history`` (the
-    document's dated and placed events, spec §5) is empty until the map and
-    timeline API fills it.
+    without zones is not located on a page and names the Component it
+    observed (``component``, None on the document). ``components`` lists the
+    visible Components placed on its pages (``component_zones``) or observed
+    by one of its analyses, the placed ones by first page then name, the
+    others by name after them. ``document_match`` says what the filters keep. ``history`` holds
+    the document's Production line when it has a bound or a place a linked
+    reference may show (a Draft place included, a hidden one left out).
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible
@@ -1829,7 +2337,19 @@ def document_payload(document_id, user, language, ticket=None):
         return None
     rows = bundle.by_document.get(document_id, [])
     readable = readable_nodegroup_ids(user)
-    values = Values([document_id], ["doc_name", "doc_manifest", "doc_owner"], user)
+    values = Values(
+        [document_id],
+        [
+            "doc_name",
+            "doc_manifest",
+            "doc_owner",
+            "doc_start",
+            "doc_end",
+            "doc_approx",
+            "doc_place",
+        ],
+        user,
+    )
     manifest_url = (
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
     )
@@ -1859,6 +2379,7 @@ def document_payload(document_id, user, language, ticket=None):
                 "dataKind": (row["dataKinds"] or ["file"])[0],
                 "unpublished": row["unpublished"],
                 "zones": zones.get(row["id"], []),
+                "component": row["component"],
             }
         )
     summaries = characterization_summaries(
@@ -1866,7 +2387,8 @@ def document_payload(document_id, user, language, ticket=None):
         visible,
         user,
         language,
-        listed_source(manifest_url or "", canvases),
+        components_of=bundle.material_components,
+        source=listed_source(manifest_url or "", canvases),
         objects_of=bundle.links["objects"],
         analysis_rows=bundle.by_id,
     )
@@ -1876,10 +2398,22 @@ def document_payload(document_id, user, language, ticket=None):
         for v in values.get(document_id, "doc_owner")
         if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    label_of = names({document_id} | set(owners[:1]) | set(placed), language, user)
+    produced = _ordered_refs(values.get(document_id, "doc_place"))
+    shown_places = set(linkable(produced, user))
+    produced_at = [p for p in produced if p in shown_places]
+    observed = {row["component"] for row in rows if row["component"]}
+    label_of = names(
+        {document_id} | set(owners[:1]) | set(placed) | observed | set(produced_at),
+        language,
+        user,
+    )
     components = sorted(
-        (c for c in placed if c in label_of),
-        key=lambda c: (placed[c][0]["canvas"], fold(label_of[c]["value"]), c),
+        (c for c in set(placed) | observed if c in label_of),
+        key=lambda c: (
+            (0, placed[c][0]["canvas"]) if c in placed else (1, 0),
+            fold(label_of[c]["value"]),
+            c,
+        ),
     )
     per_canvas = Counter(
         zone["canvas"]
@@ -1903,10 +2437,16 @@ def document_payload(document_id, user, language, ticket=None):
         "techniques": techniques,
         "analyses": analyses,
         "components": [
-            {"id": c, "name": label_of[c], "zones": placed[c]} for c in components
+            {
+                "id": c,
+                "name": label_of[c],
+                "zones": placed.get(c, []),
+                "unpublished": c in visible.unpublished,
+            }
+            for c in components
         ],
         "characterizations": summaries,
-        "history": [],
+        "history": history_of(values, document_id, produced_at, label_of),
         "unpublishedCount": sum(1 for row in rows if row["unpublished"])
         + sum(1 for s in summaries if s["unpublished"]),
         "unpublished": document_id in visible.unpublished,
@@ -2165,8 +2705,13 @@ def product_link(route, query, language):
     return {"url": f"{settings.PUBLIC_SERVER_ADDRESS}{path.lstrip('/')}", "path": path}
 
 
-def cited_analysis(row, end, label_of, operators, projects):
-    """``CitedAnalysis`` of a corpus *row*; *operators* and *projects* are the ids the citation may name."""
+def cited_analysis(row, end, label_of, operators, projects, slug_of):
+    """``CitedAnalysis`` of a corpus *row*; *operators* and *projects* are the ids the citation may name.
+
+    Operators are cited in the order given. Only a Person (*slug_of* model
+    ``person``) is split into family and given name at its comma; a Group or a
+    Project name is cited literally.
+    """
     return CitedAnalysis(
         id=row["id"],
         name=row["name"]["value"],
@@ -2174,7 +2719,13 @@ def cited_analysis(row, end, label_of, operators, projects):
         start=row["date"],
         end=end,
         authors=tuple(
-            person_name(label_of[o]["value"]) for o in operators if o in label_of
+            (
+                person_name(label_of[o]["value"])
+                if slug_of.get(o) == "person"
+                else {"literal": label_of[o]["value"].strip()}
+            )
+            for o in operators
+            if o in label_of
         ),
         projects=tuple(label_of[p]["value"] for p in projects if p in label_of),
     )
@@ -2304,7 +2855,7 @@ def analysis_payload(analysis_id, user, language):
     dataset = dataset_of(values.first(analysis_id, "dataset"))
     citation = citation_entry(
         dataset,
-        [cited_analysis(row, end, label_of, row["operators"], projects)],
+        [cited_analysis(row, end, label_of, row["operators"], projects, slug_of)],
         licences=licence_labels(files),
         language=language,
         accessed=datetime.date.today(),
@@ -2397,6 +2948,7 @@ def items_payload(keys, user, language):
             visible,
             user,
             language,
+            components_of=bundle.material_components,
             objects_of=bundle.links["objects"],
             analysis_rows=rows,
         )

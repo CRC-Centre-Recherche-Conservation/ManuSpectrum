@@ -11,6 +11,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import {
     facet,
     facetValue,
+    rangeFacet,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
@@ -152,7 +153,7 @@ describe("FacetRail", () => {
         });
         const titles = wrapper.findAll(".group-title button");
         expect(titles.map((title) => title.text())).toEqual([
-            "▾Studied part",
+            "▾Studied component",
             "▾Analysis",
             "▾Identified material",
         ]);
@@ -164,55 +165,134 @@ describe("FacetRail", () => {
         expect(body.isVisible()).toBe(false);
     });
 
-    it("shows one Colour facet whose toggle picks the level the ticks apply to", async () => {
+    it("draws the Layer facet in the studied component group, after the component facets", () => {
         const wrapper = mountRail({
-            facets: [facet("partColour", 2), facet("colour", 3)],
-            selected: { partColour: ["partColour-1"] },
+            facets: [facet("material", 1), facet("layer", 2), facet("part", 1)],
+            selected: {},
+        });
+        const groups = wrapper.findAll(".group");
+        expect(
+            groups.map((group) => group.find(".group-title").text()),
+        ).toEqual(["▾Studied component", "▾Identified material"]);
+        expect(groups[0].findAll(".facet")).toHaveLength(2);
+        expect(groups[1].findAll(".facet")).toHaveLength(1);
+    });
+
+    it("shows one Colour facet of every colour in the order served, with no level toggle", async () => {
+        const colour = facet("colour", 15);
+        const wrapper = mountRail({
+            facets: [colour],
+            selected: { colour: ["colour-3"] },
+            facetQuery: "",
         });
         expect(wrapper.findAll(".facet")).toHaveLength(1);
         expect(wrapper.find(".facet legend").text()).toBe("Colour");
-        const levels = wrapper.findAll(".level-button");
+        expect(wrapper.find(".levels").exists()).toBe(false);
+        expect(wrapper.find(".level-button").exists()).toBe(false);
         expect(
-            levels.map((level) => level.find(".level-label").text()),
-        ).toEqual(["Part", "Analysis"]);
-        expect(levels[1].attributes("aria-pressed")).toBe("true");
-        expect(wrapper.findAll(".value")).toHaveLength(3);
-        expect(levels[0].find(".ticks").text()).toBe("1");
-        const hint = wrapper.find(
-            `#${levels[0].attributes("aria-describedby")}`,
-        );
-        expect(hint.text()).toBe(
-            "Colours described on the studied part, even without analysis",
-        );
-
-        await levels[0].trigger("click");
-
-        expect(useExplorerStore().colourLevel).toBe("partColour");
-        expect(wrapper.findAll(".value")).toHaveLength(2);
-        expect(
-            wrapper.findAll<HTMLInputElement>(".value input")[1].element
-                .checked,
-        ).toBe(true);
+            wrapper.findAll(".value .label").map((item) => item.text()),
+        ).toEqual(colour.values.map((value) => value.label.value));
+        expect(wrapper.find(".more").exists()).toBe(false);
+        expect(wrapper.find("input[type=search]").exists()).toBe(false);
+        expect(checkedIds(wrapper)).toEqual(["colour-3"]);
         await wrapper.findAll(".value input")[0].setValue(true);
         expect(wrapper.emitted("change")?.[0]).toEqual([
-            "partColour",
-            ["partColour-1", "partColour-0"],
+            "colour",
+            ["colour-3", "colour-0"],
         ]);
     });
 
-    it("names the ticked values and their colour level on the facet title", () => {
+    it("greys a colour the corpus does not hold without dropping it", () => {
+        const colour = facet("colour", 3);
+        colour.values[1] = { ...colour.values[1], count: 0 };
+        const wrapper = mountRail({ facets: [colour], selected: {} });
+        const rows = wrapper.findAll(".value");
+        expect(rows).toHaveLength(3);
+        expect(rows[1].classes()).toContain("zero");
+    });
+
+    it("keeps the other facets searchable and cut to a preview", () => {
         const wrapper = mountRail({
-            facets: [facet("partColour", 2), facet("colour", 2)],
-            selected: { partColour: ["partColour-0"], colour: ["colour-1"] },
+            facets: [facet("material", 12)],
+            selected: {},
+            facetQuery: "",
+        });
+        expect(wrapper.find("input[type=search]").exists()).toBe(true);
+        expect(wrapper.find(".more").exists()).toBe(true);
+    });
+
+    it("draws no colour scope option under the colour list", () => {
+        const wrapper = mountRail({
+            facets: [facet("material", 2), facet("colour", 3)],
+            selected: {},
+        });
+        expect(wrapper.find(".colour-scope").exists()).toBe(false);
+    });
+
+    it("names the ticked values on the facet title, without any colour level", () => {
+        const wrapper = mountRail({
+            facets: [facet("colour", 3)],
+            selected: { colour: ["colour-0", "colour-2"] },
         });
         const fieldset = wrapper.find(".facet");
         const summary = wrapper.find(
             `#${fieldset.attributes("aria-describedby")}`,
         );
-        expect(summary.text()).toBe(
-            "Selection: partColour 0 (seen on the part) · colour 1 (identified by analysis)",
-        );
+        expect(summary.text()).toBe("Selection: colour 0, colour 2");
         expect(fieldset.find(".title-text").attributes("tabindex")).toBe("0");
+    });
+
+    it("puts the Document group first, with the place as a tree of native checkboxes", () => {
+        const place: Facet = {
+            key: "place",
+            group: "document",
+            values: [
+                facetValue("europe", "Europe", { count: 3 }),
+                facetValue("france", "France", { parent: "europe" }),
+            ],
+            total: 2,
+        };
+        const wrapper = mountRail({
+            facets: [facet("technique", 1), place],
+            selected: {},
+        });
+        const titles = wrapper.findAll(".group-title button");
+        expect(titles.map((title) => title.text())).toEqual([
+            "▾Document",
+            "▾Analysis",
+        ]);
+        expect(wrapper.find(".facet legend").text()).toBe(
+            "Place of production",
+        );
+        expect(wrapper.find("ul.tree").exists()).toBe(true);
+        expect(wrapper.find("[role=tree]").exists()).toBe(false);
+        expect(wrapper.find(".more").exists()).toBe(false);
+        expect(wrapper.find("input[value=europe]").exists()).toBe(true);
+        expect(wrapper.find("input[value=france]").exists()).toBe(false);
+    });
+
+    it("emits the list of places the tree computes", async () => {
+        const place: Facet = {
+            key: "place",
+            group: "document",
+            values: [
+                facetValue("europe", "Europe"),
+                facetValue("france", "France", { parent: "europe" }),
+                facetValue("italy", "Italie", { parent: "europe" }),
+            ],
+            total: 3,
+        };
+        const wrapper = mountRail({
+            facets: [place],
+            selected: { place: ["europe"] },
+        });
+        await wrapper.find("button.expander").trigger("click");
+        expect(
+            wrapper.find<HTMLInputElement>("input[value=france]").element
+                .checked,
+        ).toBe(true);
+        await wrapper.find("input[value=france]").setValue(false);
+        expect(wrapper.emitted("change")?.[0]).toEqual(["place", ["italy"]]);
     });
 
     it("keeps the whole label for a label cut on screen", () => {
@@ -390,5 +470,205 @@ describe("FacetRail with a facet the server cut short", () => {
         await flushPromises();
         expect(fetchMock).not.toHaveBeenCalled();
         expect(wrapper.findAll("input[type=checkbox]")).toHaveLength(7);
+    });
+});
+
+describe("FacetRail with a place tree the server cut short", () => {
+    const fetchMock = vi.fn();
+    const everything: Facet = {
+        key: "place",
+        group: "document",
+        values: [
+            facetValue("europe", "Europe", { count: 9 }),
+            ...Array.from({ length: 10 }, (_, n) =>
+                facetValue(`city-${n}`, `City ${n}`, { parent: "europe" }),
+            ),
+        ],
+        total: 11,
+    };
+    const cut: Facet = { ...everything, values: everything.values.slice(0, 3) };
+
+    function asked(): string[] {
+        return fetchMock.mock.calls.map(([url]) => String(url));
+    }
+
+    beforeEach(() => {
+        forgetPayloads();
+        fetchMock.mockReset();
+        fetchMock.mockImplementation(async (url: string) => {
+            const find = new URL(url, "http://x").searchParams.get("find");
+            return jsonResponse(
+                find
+                    ? {
+                          ...everything,
+                          values: everything.values.filter(
+                              (value) =>
+                                  value.id === "europe" ||
+                                  value.label.value.endsWith(find),
+                          ),
+                      }
+                    : everything,
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+
+    it("asks for every place at once, since a tree needs the parents, and offers a search past eight", async () => {
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: { place: ["city-7"] },
+            facetQuery: "technique=t1",
+        });
+        await flushPromises();
+        expect(asked()).toEqual([
+            "/en/manuspectrum:explorer-facet/place?technique=t1",
+        ]);
+        expect(wrapper.find("input[type=search]").exists()).toBe(true);
+        expect(wrapper.find("input[value=city-7]").exists()).toBe(true);
+        expect(wrapper.find(".more").exists()).toBe(false);
+    });
+
+    it("lists the matches flat with their path while a text is typed, and says when none matches", async () => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        const wrapper = mountRail({
+            facets: [cut],
+            selected: {},
+            facetQuery: "",
+        });
+        await flushPromises();
+        await wrapper.find("input[type=search]").setValue("3");
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(wrapper.findAll(".tree.flat .node")).toHaveLength(1);
+        expect(wrapper.find(".tree.flat .path").text()).toBe("Europe");
+        await wrapper.find("input[type=search]").setValue("zzz");
+        await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+        await flushPromises();
+        expect(wrapper.find(".no-match").exists()).toBe(true);
+    });
+});
+
+describe("FacetRail with the period facet", () => {
+    const place: Facet = {
+        key: "place",
+        group: "document",
+        total: 1,
+        values: [facetValue("paris", "Paris", { count: 3 })],
+    };
+
+    it("puts the period under the place, in the Document group, titled by the date of production", () => {
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        const titles = wrapper.findAll(".facet .title");
+        expect(titles.map((title) => title.text())).toEqual([
+            "Place of production",
+            "Date of production",
+        ]);
+        expect(wrapper.findAll(".group")).toHaveLength(1);
+        expect(wrapper.find(".period-facet").exists()).toBe(true);
+    });
+
+    it("lays the rule menu on the title line of the period, beside the title", () => {
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        const row = wrapper.get(".title-row");
+        expect(row.get(".title").text()).toBe("Date of production");
+        expect(row.element.lastElementChild).toBe(
+            row.get(".period-rule-menu").element,
+        );
+        expect(
+            wrapper.get(".period-facet").find("[data-action=rule]").exists(),
+        ).toBe(false);
+        expect(wrapper.get("[role=group]").attributes("aria-labelledby")).toBe(
+            row.get(".title").attributes("id"),
+        );
+    });
+
+    it("emits the whole period state when the rule is chosen from the title line", async () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1201, 1400]);
+        store.setFilter("undated", true);
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        await wrapper.get("[data-action=rule]").trigger("click");
+        await wrapper.findAll("[role=menuitemradio]")[1].trigger("click");
+        expect(wrapper.emitted("period-change")).toEqual([
+            [
+                {
+                    period: [1201, 1400],
+                    match: "within",
+                    event: "production",
+                    undated: true,
+                },
+            ],
+        ]);
+    });
+
+    it("leaves the Document group out on a document's own rail", () => {
+        const wrapper = mountRail({
+            facets: [place, facet("technique", 2)],
+            selected: {},
+            period: rangeFacet(),
+            documentGroup: false,
+        });
+        expect(wrapper.find(".period-facet").exists()).toBe(false);
+        expect(wrapper.find(".tree").exists()).toBe(false);
+        expect(wrapper.findAll(".group")).toHaveLength(1);
+    });
+
+    it("shows the group for a period alone, and nothing without one", () => {
+        expect(
+            mountRail({ facets: [], selected: {}, period: rangeFacet() })
+                .find(".period-facet")
+                .exists(),
+        ).toBe(true);
+        const none = mountRail({ facets: [place], selected: {}, period: null });
+        expect(none.find(".period-facet").exists()).toBe(false);
+        expect(
+            mountRail({ facets: [place], selected: {} })
+                .find(".period-facet")
+                .exists(),
+        ).toBe(false);
+    });
+
+    it("reads the period options from the filters and emits what the facet changes", async () => {
+        const store = useExplorerStore();
+        store.setFilter("period", [1201, 1400]);
+        store.setFilter("periodMatch", "within");
+        store.setFilter("undated", true);
+        const wrapper = mountRail({
+            facets: [place],
+            selected: {},
+            period: rangeFacet(),
+        });
+        expect(
+            wrapper.find<HTMLInputElement>("input.field-from").element.value,
+        ).toBe("1201");
+        expect(
+            wrapper.find<HTMLInputElement>("input.undated").element.checked,
+        ).toBe(true);
+        await wrapper.find("input.undated").setValue(false);
+        expect(wrapper.emitted("period-change")?.[0]).toEqual([
+            {
+                period: [1201, 1400],
+                match: "within",
+                event: "production",
+                undated: false,
+            },
+        ]);
     });
 });

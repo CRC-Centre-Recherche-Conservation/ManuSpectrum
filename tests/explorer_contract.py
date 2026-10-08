@@ -8,6 +8,12 @@ payload and the TypeScript types cannot drift silently.
 LABEL = {"value": str, "lang": str}
 REF = {"id": str, "model": str, "name": "Label"}
 VALUE_REF = {"id": str, "uri": str, "label": "Label"}
+COLOUR_REF = {
+    "id": str,
+    "uri": str,
+    "label": "Label",
+    "swatch": (str, type(None)),
+}
 TECHNIQUE = {
     "id": str,
     "uri": str,
@@ -19,6 +25,11 @@ TECHNIQUE = {
 TECHNIQUE_MARK = {"code": str, "colour": (int, type(None)), "family": str}
 RANKED_VALUE = {"id": str, "uri": str, "label": "Label", "rank": int}
 NAMED_REF = {"id": str, "name": "Label"}
+PRODUCTION_DATES = {
+    "start": (str, type(None)),
+    "end": (str, type(None)),
+    "approximate": bool,
+}
 CITATION = {"text": str, "bibtex": str}
 IMAGE_REF = {
     "service": (str, type(None)),
@@ -62,6 +73,7 @@ SHAPES = {
     "Label": LABEL,
     "Ref": REF,
     "ValueRef": VALUE_REF,
+    "ColourRef": COLOUR_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
     "FileLayer": FILE_LAYER,
@@ -76,6 +88,8 @@ SHAPES = {
     },
     "LayerProcessing": LAYER_PROCESSING,
     "NamedRef": NAMED_REF,
+    "ProductionDates": PRODUCTION_DATES,
+    "HistoryLine": {"type": str, "places": list, "date": "ProductionDates"},
     "Citation": CITATION,
     "Technique": TECHNIQUE,
     "TechniqueMark": TECHNIQUE_MARK,
@@ -86,6 +100,17 @@ SHAPES = {
         "count": int,
         "mark": ("TechniqueMark", None),
         "swatch": (str, type(None)),
+        "parent": (str, type(None)),
+        "unpublished": bool,
+    },
+    "RangeFacet": {
+        "key": str,
+        "group": str,
+        "event": str,
+        "min": int,
+        "max": int,
+        "buckets": list,
+        "undated": int,
     },
     "SearchResponse": {
         "total": int,
@@ -94,6 +119,7 @@ SHAPES = {
         "facets": (list, type(None)),
         "unpublishedCount": int,
         "withoutAnalyses": int,
+        "period": ("RangeFacet", None),
     },
     "HomeResponse": {
         "documentCount": int,
@@ -111,7 +137,7 @@ SHAPES = {
         "thumbnail": (str, type(None)),
         "unpublished": bool,
         "shelfmark": ("Label", None),
-        "dates": (dict, type(None)),
+        "dates": ("ProductionDates", None),
         "description": ("Label", None),
         "documentType": ("Label", None),
     },
@@ -151,11 +177,22 @@ SHAPES = {
         "dataKind": str,
         "unpublished": bool,
         "zones": list,
+        "component": (str, type(None)),
     },
     "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
-    "DocumentComponent": {"id": str, "name": "Label", "zones": list},
+    "DocumentComponent": {
+        "id": str,
+        "name": "Label",
+        "zones": list,
+        "unpublished": bool,
+    },
     "ContentStateLink": {"feature": str, "url": str},
-    "DocumentMatch": {"facets": list, "kept": "MatchKept", "total": int},
+    "DocumentMatch": {
+        "facets": list,
+        "kept": "MatchKept",
+        "total": int,
+        "period": ("RangeFacet", None),
+    },
     "MatchKept": {"analyses": (list, type(None)), "characterizations": list},
     "SampleSummary": {
         "id": str,
@@ -168,6 +205,7 @@ SHAPES = {
         "id": str,
         "name": "Label",
         "objects": list,
+        "components": list,
         "materials": list,
         "colours": list,
         "layers": list,
@@ -275,7 +313,7 @@ SHAPES = {
         "materials": list,
     },
     "SynthesisPair": {
-        "colour": ("ValueRef", None),
+        "colour": ("ColourRef", None),
         "material": "ValueRef",
         "elements": list,
         "count": int,
@@ -324,6 +362,12 @@ def _matches(value, expected):
     )
 
 
+ITEM_SHAPES = {
+    ("CharacterizationSummary", "objects"): "Ref",
+    ("CharacterizationSummary", "components"): "Ref",
+}
+
+
 def assert_shape(testcase, payload, shape_name):
     """Fail when *payload* misses a key of *shape_name*, carries an extra one, or a value has the wrong type."""
     shape = SHAPES[shape_name]
@@ -345,3 +389,5 @@ def assert_shape(testcase, payload, shape_name):
         )
         if nested and isinstance(value, dict):
             assert_shape(testcase, value, nested)
+        for item in value if (shape_name, key) in ITEM_SHAPES else ():
+            assert_shape(testcase, item, ITEM_SHAPES[(shape_name, key)])
