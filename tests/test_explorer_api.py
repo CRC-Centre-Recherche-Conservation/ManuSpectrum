@@ -192,7 +192,6 @@ MANIFEST_JSON = {
         }
     ],
 }
-ITEMS_QUERIES = 17
 FETCH = "manuspectrum.utils.iiif_tools.CanvasIIIF.fetch_manifest"
 
 
@@ -1113,15 +1112,20 @@ class ItemsRouteTests(CorpusCase):
 
     def test_reading_the_excitation_adds_no_query(self):
         analysis = self.analyses["open"]
-        self.statement(analysis, "<p>Tube Ag, 40 kV</p>")
         keys = [f"an:{analysis.pk}:-", f"af:{analysis.pk}:{self.CSV}"]
-        self.get(keys)
 
-        with CaptureQueriesContext(connection) as captured:
+        def warm_queries():
             self.get(keys)
+            with CaptureQueriesContext(connection) as captured:
+                payload = self.get(keys).json()
+            return payload, [q["sql"] for q in captured if "silk_" not in q["sql"]]
 
-        queries = [q["sql"] for q in captured if "silk_" not in q["sql"]]
-        self.assertEqual(len(queries), ITEMS_QUERIES, "\n".join(queries))
+        _, without = warm_queries()
+        self.statement(analysis, "<p>Tube Ag, 40 kV</p>")
+        payload, with_excitation = warm_queries()
+
+        self.assertEqual(payload["items"][0]["excitation"]["anode"], "Ag")
+        self.assertEqual(len(with_excitation), len(without), "\n".join(with_excitation))
 
     def test_an_analysis_with_nothing_to_show_is_still_an_item(self):
         key = f"an:{self.analyses['on_document'].pk}:-"

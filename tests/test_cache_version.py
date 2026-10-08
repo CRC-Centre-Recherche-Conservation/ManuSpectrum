@@ -77,6 +77,7 @@ NOT_SHAPING = {
     "constants/xy_presets.py": "renderer presets of file entries in per-request payloads",
     "views/explorer/citations.py": "citations of the analysis payload, never memoised",
     "views/explorer/conditions.py": "conditions and notes of per-request payloads",
+    "views/explorer/excitation.py": "the inferred excitation of items, a per-request payload",
     "views/explorer/scopes.py": "the analysis payload's manifest link, never memoised",
     "views/explorer/manifest.py": "the analysis payload's manifest link, never memoised",
     "iiif/manifest.py": "the Explorer manifest, built per request, never memoised",
