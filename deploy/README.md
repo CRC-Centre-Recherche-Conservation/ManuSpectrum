@@ -17,14 +17,15 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/compose.prod.yaml` | Sizing of the production host only |
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README) |
+| `BACKUP.md` | Backups: what is kept where, the schedule, the restore test, restore of a file or of the stack, moving day, personal data |
 | `SECRETS.md` | Secret inventory, the vault item, restore and rotation of each secret, scanning |
-| `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh` and their tests |
+| `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh`, `backup.sh`, `restore-test.sh`, `restore.sh`, `restore-files.sh`, the libraries they share and their tests |
 | `compose/postgres/init/` | Creates `template_postgis` the way Arches does |
 | `compose/nginx/` | nginx configuration: `nginx.conf`, the server template (names, HSTS), `snippets/` (TLS, headers, edge rules, rate limits, media, IIIF image server, logs), error pages, `tests/test_edge.sh` |
 | `compose/certbot/` | Deploy hook of the `certbot` service (`CERT_MODE=acme`) |
 | `certs/` | `make-local-ca.sh` (rehearsal CA, self-signed placeholder), `README.md` (modes, trust), tests |
 | `logrotate/` | Host `logrotate` template for the nginx logs (thirty days) |
-| `systemd/` | Certificate renewal service and timer templates |
+| `systemd/` | Service and timer templates: certificate renewal, nightly backup (02:00), weekly restore test (Sunday 05:30) |
 | `compose/smoke.sh` | Checks of a running stack |
 | `compose/tests/` | Rules of the rendered Compose files (no container is started) |
 | `Makefile` | Operator commands |
@@ -57,6 +58,12 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `secrets` | Create the secrets directory (`0700`) and the missing secret files |
 | `secret-set` | `NAME=<secret> [FORCE=yes]`: write one secret file from a value typed twice without echo, or piped on stdin; never an argument |
 | `secrets-check` | Presence, modes and lengths of the secret files, one line each, no value printed |
+| `backup-init` | Once per host: create the restic repository, or check that it opens with `restic_password` (idempotent) |
+| `backup` | `[TAG=nightly\|manual\|pre-update]`: dump, uploads and secrets into copy A and the restic repository; `nightly` also applies the retention and checks; exit 0 only when saved |
+| `restore-test` | `[RESTIC_SNAPSHOT=<id>]`: restore the latest backup into a scratch database and compare every table with the manifest |
+| `restore` | `RESTIC_SNAPSHOT=<id\|latest>` or `ASIDE=<dir>`, `CONFIRM=yes ERASURES_CHECKED=yes`: replace the database and the uploads from a backup |
+| `restore-files` | `INCLUDE=/backup/... TARGET=<dir> [RESTIC_SNAPSHOT=<id>]`: pull files from a backup into a separate directory |
+| `restic` | `ARGS="snapshots"`: run restic on the repository, interactive |
 
 ## Rules
 
@@ -88,6 +95,14 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `secret-set` and `secrets-check` restore and verify them; the off-host copy
   is one item of the project's password manager, never a file in Git, and the
   rotation of each secret is in `SECRETS.md`.
+- Backups (`BACKUP.md`): a nightly dump of the whole database (copy A, two
+  generations) and a restic repository (copy B: dump, `MEDIA_HOST_DIR`,
+  `SECRETS_DIR`) kept 7 daily, 4 weekly and 6 monthly; a weekly restore test into
+  a scratch database. One lock serialises backup, restore test and restore.
+  `make restore` needs `CONFIRM=yes` and `ERASURES_CHECKED=yes`, and never writes
+  `SECRETS_DIR` or `.env`: on a new host `restic_password` comes from the vault
+  first, the rest is pulled with `restore-files`. Elasticsearch, Redis, the
+  Cantaloupe cache, static files, certificates and nginx logs are not backed up.
 - `web` and `init` run Django's deployment checks first
   (`check --deploy --tag security --fail-level WARNING`) and refuse to start
   on any warning.
@@ -181,6 +196,5 @@ every commit for secrets with a pinned image, so it needs Docker
 ## What comes next
 
 - PP-5: `/readyz` and JSON logs.
-- PP-7: backups.
 - PP-8: Ansible writes `.env` and creates the volumes.
 - PP-10: image publication and the update command.

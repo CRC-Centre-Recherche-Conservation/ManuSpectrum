@@ -775,6 +775,36 @@ class RepositoryRulesTests(unittest.TestCase):
             with self.subTest(secret=name):
                 self.assertRegex(text, rf"(?m)^\| `{name}` \|")
 
+    def test_backup_doc_covers_every_target(self):
+        doc = (DEPLOY_DIR / "BACKUP.md").read_text(encoding="utf-8")
+        readme = (DEPLOY_DIR / "README.md").read_text(encoding="utf-8")
+        for target in (
+            "backup-init",
+            "backup",
+            "restore-test",
+            "restore",
+            "restore-files",
+            "restic",
+        ):
+            with self.subTest(target=target):
+                self.assertIn(f"make -C deploy {target}", doc)
+                self.assertRegex(readme, rf"(?m)^\| `{target}` \|")
+
+    def test_backup_doc_states_the_retention_of_the_script(self):
+        lib = (DEPLOY_DIR / "scripts" / "lib-backup.sh").read_text(encoding="utf-8")
+        kept = [
+            re.search(rf"(?m)^RETENTION_KEEP_{period}=(\d+)$", lib)[1]
+            for period in ("DAILY", "WEEKLY", "MONTHLY")
+        ]
+        doc = (DEPLOY_DIR / "BACKUP.md").read_text(encoding="utf-8")
+        self.assertIn("{} daily, {} weekly, {} monthly".format(*kept), doc)
+
+    def test_scripts_point_to_a_heading_of_the_backup_doc(self):
+        doc = (DEPLOY_DIR / "BACKUP.md").read_text(encoding="utf-8")
+        self.assertRegex(doc, r"(?m)^## Personal data$")
+        restore = (DEPLOY_DIR / "scripts" / "restore.sh").read_text(encoding="utf-8")
+        self.assertIn("deploy/BACKUP.md", restore)
+
     def test_cert_renew_reloads_on_a_change_and_exits_with_certbots_status(self):
         cases = [
             ("changed, certbot fails", "echo new > $$CERT; exit 3", True, False),

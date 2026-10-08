@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Restore test: proves that the latest backup (or SNAPSHOT) can be restored.
+# Restore test: proves that the latest backup (or RESTIC_SNAPSHOT) can be restored.
 # Run on the host of the Compose stack as the service account (APP_UID), weekly
 # by the systemd timer or by hand:
-#   make -C deploy restore-test [SNAPSHOT=<restic snapshot id>]
+#   make -C deploy restore-test [RESTIC_SNAPSHOT=<restic snapshot id>]
 #
 # Restores /backup/db of the restic snapshot into a staging directory under
 # BACKUP_DUMP_DIR, checks the files against the checksums of manifest.json,
