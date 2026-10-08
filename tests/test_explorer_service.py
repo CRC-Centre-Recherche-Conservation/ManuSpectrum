@@ -932,3 +932,17 @@ class UnresolvedRoleWarningTests(SimpleTestCase):
             self.values(["files"])
             self.values(["files"])
         self.assertEqual(len(logged.records), 2)
+
+
+class LettersCodeTests(SimpleTestCase):
+    def test_takes_the_shortest_free_prefix(self):
+        self.assertEqual(explorer_service._letters_code("Raman", set()), "R")
+        self.assertEqual(explorer_service._letters_code("Raman", {"R"}), "RA")
+        self.assertEqual(explorer_service._letters_code("Raman", {"R", "RA"}), "RAM")
+
+    def test_numbers_the_first_letter_when_every_prefix_is_taken(self):
+        taken = {"R", "RA", "RAM", "R2"}
+        self.assertEqual(explorer_service._letters_code("Raman", taken), "R3")
+
+    def test_falls_back_to_a_question_mark_without_letters(self):
+        self.assertEqual(explorer_service._letters_code("—", set()), "?")
