@@ -6,7 +6,7 @@
 # Constants: the retention of the restic repository and the paths restic does
 # not back up, in one place for the script, its tests and deploy/BACKUP.md.
 # Functions: usage_die, backup_config, scratch_database_name, restic_run,
-# restic_run_with, take_lock, write_metrics.
+# restic_run_with, take_lock, verify_backup_files, write_metrics.
 # shellcheck disable=SC2154,SC2034  # inputs assigned by the sourcing script; constants it reads
 #
 # Inputs set by the caller before calling a function:
@@ -136,4 +136,28 @@ write_metrics() { # write_metrics FILE NAME VALUE [NAME VALUE ...]
       "$name" "${name#manuspectrum_}" "$name" "$name" "$value" >>"$file.tmp" || return 1
   done
   chmod 0644 "$file.tmp" && mv -f "$file.tmp" "$file"
+}
+
+# Checks the files listed in DIR/manifest.json (sha256 and size) and prints
+# the names that are missing or differ on stderr; status 1 when there are any,
+# or when the manifest has no `counts` or no `db.dump` entry.
+verify_backup_files() { # verify_backup_files DIR
+  python3 - "$1" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+directory = sys.argv[1]
+manifest = json.load(open(os.path.join(directory, "manifest.json"), encoding="utf-8"))
+bad = []
+for name, expected in manifest["files"].items():
+    path = os.path.join(directory, name)
+    data = open(path, "rb").read() if os.path.isfile(path) else None
+    if data is None or hashlib.sha256(data).hexdigest() != expected["sha256"] or len(data) != expected["bytes"]:
+        bad.append(name)
+if bad or "counts" not in manifest or "db.dump" not in manifest["files"]:
+    print("checksum or size mismatch: " + ", ".join(bad or ["manifest"]), file=sys.stderr)
+    sys.exit(1)
+PY
 }

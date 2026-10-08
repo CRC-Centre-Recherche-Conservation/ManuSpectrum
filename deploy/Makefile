@@ -13,7 +13,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot backup-init backup restore-test restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -84,6 +84,14 @@ backup: ## Back up the database, the uploads and the secrets: make -C deploy bac
 
 restore-test: ## Prove the latest backup restores into a scratch database: make -C deploy restore-test [RESTIC_SNAPSHOT=<id>]
 	$(BACKUP_ENV) $(SCRIPTS_DIR)/restore-test.sh$(if $(RESTIC_SNAPSHOT), --snapshot '$(RESTIC_SNAPSHOT)')
+
+restore: ## Replace the database and the uploads from a backup: make -C deploy restore RESTIC_SNAPSHOT=<id|latest> | ASIDE=<dir> CONFIRM=yes ERASURES_CHECKED=yes
+	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' ERASURES_CHECKED='$(ERASURES_CHECKED)' \
+		RESTIC_SNAPSHOT='$(RESTIC_SNAPSHOT)' ASIDE='$(ASIDE)' $(SCRIPTS_DIR)/restore.sh
+
+restore-files: ## Pull files from a backup into a separate directory: make -C deploy restore-files INCLUDE=/backup/... TARGET=/path [RESTIC_SNAPSHOT=<id>]
+	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' RESTIC_SNAPSHOT='$(RESTIC_SNAPSHOT)' INCLUDE='$(INCLUDE)' \
+		TARGET='$(TARGET)' $(SCRIPTS_DIR)/restore-files.sh
 
 restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS="snapshots"
 	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --restic $(ARGS)

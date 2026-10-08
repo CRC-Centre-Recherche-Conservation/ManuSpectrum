@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Data replacement steps shared by the scripts that swap the database and the
-# uploads of the stack (load-snapshot.sh today). Sourced, never executed;
+# uploads of the stack (load-snapshot.sh, restore.sh). Sourced, never executed;
 # `set -euo pipefail` is the caller's.
 #
 # Provides: log, die, step, compose, as_app, manifest_value, psql_admin, then
@@ -13,7 +13,12 @@
 #   LOG_NAME        log prefix
 #   TOTAL           number of steps announced by `step`
 #   STAMP           UTC stamp naming the aside directory
-#   MODE            load | restore
+#   MODE            load | restore | move
+#                   load: db.dump, media.tar and manifest.json in SNAPSHOT
+#                   (rehearsal snapshot); restore: the aside directory of an
+#                   earlier run, no manifest; move: db.dump and manifest.json
+#                   in SNAPSHOT, the uploads staged in RESTORE_UPLOADS on the
+#                   same filesystem as uploadedfiles/ and moved, not copied
 #   DB_DUMP         the dump to restore
 #   ASIDE_DUMP      file name of the dump of the replaced database, kept in the
 #                   aside directory
@@ -21,7 +26,12 @@
 #   KEEP_ASIDE      number of complete aside directories kept
 #   PGDBNAME, PGUSERNAME, APP_UID, APP_GID, MEDIA_HOST_DIR
 #   SNAPSHOT        directory of the snapshot (manifest.json, media.tar), or empty
-#   RESTORE_UPLOADS directory the uploads are copied from (restore mode)
+#   RESTORE_UPLOADS directory the uploads come from (restore: copied; move:
+#                   moved out of it); empty = no uploads
+#   RUN_HINT        optional: the command line shown when the identity is wrong
+#                   (default: the load-snapshot one)
+#   UNDO_COMMAND    optional: the command that undoes the run, `{aside}` standing
+#                   for the aside directory (default: the load-snapshot one)
 #   uploads         $MEDIA_HOST_DIR/uploadedfiles
 #   facts, restore_log   writable scratch files, removed by the caller
 #   compose_cmd, make_cmd   arrays: the Compose and Make invocations
@@ -52,11 +62,14 @@ print(value)
 PY
 }
 
+# Whether SNAPSHOT/manifest.json describes the data being restored.
+has_manifest() { [ "$MODE" != restore ]; }
+
 psql_admin() { compose exec -T postgres psql -U "$PGUSERNAME" -v ON_ERROR_STOP=1 -Atq "$@"; }
 
 # ------------------------------------------------------------------- step 3
 check_migrations() {
-  [ "$MODE" = load ] || { log "restore mode: no manifest, migration check skipped (migrate runs later)"; return 0; }
+  has_manifest || { log "restore mode: no manifest, migration check skipped (migrate runs later)"; return 0; }
   local image_script='
 import django
 
@@ -124,7 +137,7 @@ PY
 check_identity() {
   [ "$(id -u)" = "$APP_UID" ] && return 0
   if [ "$(id -u)" = 0 ] && command -v setpriv >/dev/null 2>&1; then return 0; fi
-  die "run as the service account (uid $APP_UID), or as root with setpriv installed; sudo from another account is not supported (its timestamp can expire after the database is dropped): sudo -u '#$APP_UID' make -C deploy load-snapshot ..."
+  die "run as the service account (uid $APP_UID), or as root with setpriv installed; sudo from another account is not supported (its timestamp can expire after the database is dropped): sudo -u '#$APP_UID' ${RUN_HINT:-make -C deploy load-snapshot ...}"
 }
 
 avail_kb() { df -Pk "$1" 2>/dev/null | awk 'NR == 2 {print $4}'; }
@@ -261,7 +274,11 @@ swap_media() {
   if [ "$MODE" = load ]; then
     as_app tar -C "$MEDIA_HOST_DIR" --no-same-owner --no-same-permissions -xf "$SNAPSHOT/media.tar"
   elif [ -n "$RESTORE_UPLOADS" ]; then
-    as_app cp -a --no-preserve=ownership "$RESTORE_UPLOADS/." "$uploads/"
+    if [ "$MODE" = move ]; then
+      as_app find "$RESTORE_UPLOADS" -mindepth 1 -maxdepth 1 -exec mv -t "$uploads" {} +
+    else
+      as_app cp -a --no-preserve=ownership "$RESTORE_UPLOADS/." "$uploads/"
+    fi
   fi
   as_app find "$uploads" -type d -exec chmod 0750 {} +
   as_app find "$uploads" -type f -exec chmod 0640 {} +
@@ -289,7 +306,7 @@ rebuild_derived_state() {
 
 compare_counts() {
   step 13 "comparing the counts with the manifest"
-  [ "$MODE" = load ] || { log "restore mode: no manifest, counts not compared"; return 0; }
+  has_manifest || { log "restore mode: no manifest, counts not compared"; return 0; }
   local table expected actual
   for table in resource_instances tiles; do
     expected="$(manifest_value "counts/$table")"
@@ -342,5 +359,8 @@ finish() {
 
   if [ -n "$aside" ]; then as_app touch "$aside/.complete"; fi
   prune_asides
-  if [ -n "$aside" ]; then log "this run's aside: $aside ($(as_app du -sh "$aside" | cut -f1)); to undo this run: make -C deploy load-snapshot RESTORE_BEFORE=$aside CONFIRM=yes"; fi
+  if [ -n "$aside" ]; then
+    local undo="${UNDO_COMMAND:-make -C deploy load-snapshot RESTORE_BEFORE={aside} CONFIRM=yes}"
+    log "this run's aside: $aside ($(as_app du -sh "$aside" | cut -f1)); to undo this run: ${undo//\{aside\}/$aside}"
+  fi
 }

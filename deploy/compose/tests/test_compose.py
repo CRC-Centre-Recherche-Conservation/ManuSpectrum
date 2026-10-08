@@ -733,6 +733,34 @@ class RepositoryRulesTests(unittest.TestCase):
         )
         self.assertTrue((DEPLOY_DIR / "scripts" / "restore-test.sh").is_file())
 
+    def test_restore_targets_forward_their_variables(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        for target, script, variables in (
+            (
+                "restore",
+                "restore.sh",
+                ("CONFIRM", "ERASURES_CHECKED", "RESTIC_SNAPSHOT", "ASIDE"),
+            ),
+            (
+                "restore-files",
+                "restore-files.sh",
+                ("RESTIC_SNAPSHOT", "INCLUDE", "TARGET"),
+            ),
+        ):
+            with self.subTest(target=target):
+                self.assertIn(target, phony)
+                self.assertRegex(makefile, rf"(?m)^{target}:.*## \S")
+                recipe = re.search(rf"(?ms)^{target}:.*?\n(.*?)(?:\n\n|\Z)", makefile)[
+                    1
+                ]
+                self.assertIn(
+                    f"scripts/{script}", recipe.replace("$(SCRIPTS_DIR)/", "scripts/")
+                )
+                for variable in ("COMPOSE", "ENV_FILE") + variables:
+                    self.assertIn(f"{variable}='$({variable})'", recipe)
+                self.assertTrue((DEPLOY_DIR / "scripts" / script).is_file())
+
     def test_secret_set_needs_a_name_and_forwards_force_only_on_yes(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         recipe = re.search(r"(?ms)^secret-set:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
