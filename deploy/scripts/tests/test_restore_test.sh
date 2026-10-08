@@ -62,6 +62,11 @@ cat >"$TMP/bin/docker" <<'STUB'
 printf 'docker %s\n' "$*" >>"$CALLS"
 case "$*" in
   *"config --format json"*) cat "$TMP/config.json" ;;
+  *"ps --format json"*)
+    polls="$(cat "$TMP/pgpolls" 2>/dev/null || echo 0)"
+    echo $((polls + 1)) >"$TMP/pgpolls"
+    if [ "$polls" -lt "${STUB_PG_STARTING_POLLS:-0}" ]; then echo '{"Service":"postgres","State":"running","Health":"starting"}'
+    else echo '{"Service":"postgres","State":"running","Health":"healthy"}'; fi ;;
   *"exec -T postgres psql"*" -c "*) ;;
   *"exec -T postgres psql"*)
     while IFS= read -r line; do
@@ -80,6 +85,7 @@ case "$*" in
     sub="${*#*--retry-lock 30m }"
     sub="${sub%% *}"
     [ "$STUB_RESTIC_FAIL" != "$sub" ] || { echo "restic: stub failure" >&2; exit 1; }
+    [ "$STUB_RESTIC_BLOCK" != "$sub" ] || { touch "$TMP/blocked"; exec sleep 30; }
     if [ "$sub" = restore ]; then
       mount="${*#* -v }"
       mount="${mount%% *}"
@@ -103,8 +109,10 @@ run_test() { # run_test [VAR=value ...] -- [ARGS...]: fresh calls file; output i
   while [ "$#" -gt 0 ] && [ "$1" != -- ]; do envs+=("$1"); shift; done
   [ "$#" -eq 0 ] || shift
   : >"$TMP/calls"
+  rm -f "$TMP/pgpolls"
   env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
-    METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 "${envs[@]}" bash "$SCRIPT" "$@" >"$TMP/out" 2>&1
+    METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 POSTGRES_WAIT=1 POSTGRES_WAIT_INTERVAL=0.2 \
+    "${envs[@]}" bash "$SCRIPT" "$@" >"$TMP/out" 2>&1
 }
 sql_calls() { grep -c 'exec -T postgres \(psql\|pg_restore\)' "$TMP/calls"; }
 restic_subs() { grep ' restic --no-cache' "$TMP/calls" | sed 's/.*--retry-lock 30m //'; }
@@ -211,6 +219,31 @@ assert "restic check fails: the scratch database is dropped" $?
 failure_case "restic restore fails" "restic restore failed" STUB_RESTIC_FAIL=restore
 [ "$(sql_calls)" -eq 0 ]
 assert "restic restore fails: no SQL at all, no scratch database to drop" $?
+
+failure_case "postgres never becomes healthy" "after 1s" STUB_PG_STARTING_POLLS=9999
+[ "$(sql_calls)" -eq 0 ] && ! restic_subs | grep -q .
+assert "postgres never healthy: nothing ran after the refusal" $?
+reset
+run_test STUB_PG_STARTING_POLLS=2 -- && status=0 || status=$?
+[ "$status" -eq 0 ] && [ "$(cat "$TMP/pgpolls")" -eq 3 ]
+assert "postgres starting then healthy: the run waits and succeeds" $?
+
+# --- a run stopped by a signal records a failure
+reset
+printf 'manuspectrum_restore_test_last_success_timestamp_seconds 111\n' >"$TMP/metrics/manuspectrum_restore_test_success.prom"
+: >"$TMP/calls"
+rm -f "$TMP/pgpolls" "$TMP/blocked"
+setsid env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+  METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 STUB_RESTIC_BLOCK=restore bash "$SCRIPT" >"$TMP/out" 2>&1 &
+pid=$!
+waited=0
+while [ ! -e "$TMP/blocked" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+kill -TERM -- "-$pid"
+wait "$pid" && status=0 || status=$?
+[ "$status" -eq 143 ] && grep -q '^manuspectrum_restore_test_failed 1$' "$TMP/metrics/manuspectrum_restore_test.prom" \
+  && [ "$(cat "$TMP/metrics/manuspectrum_restore_test_success.prom")" = "manuspectrum_restore_test_last_success_timestamp_seconds 111" ] \
+  && clean_dump_dir
+assert "TERM while blocked in restic restore: exit 143, failed 1 written, success file untouched, staging removed" $?
 
 # --- scratch name guard
 reset

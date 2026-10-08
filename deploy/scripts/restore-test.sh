@@ -16,13 +16,15 @@
 # database, which is dropped on exit whatever happened.
 #
 # Exit status: 0 when every table matches and the repository check passes; 1 on
-# any failed step; 2 on a wrong invocation or configuration found before any
-# command ran. Every run that got past the configuration writes
+# any failed step (a Compose configuration found wrong included); 2 on a wrong
+# invocation or METRICS_TEXTFILE_DIR found before any command ran. Every run that got past the configuration writes
 # manuspectrum_restore_test.prom (failed 0|1, attempt time) in
 # METRICS_TEXTFILE_DIR; a success also writes manuspectrum_restore_test_success.prom.
 #
 # Environment: as backup.sh (ENV_FILE, COMPOSE, METRICS_TEXTFILE_DIR,
-# BACKUP_LOCK_WAIT); the lock is shared with backup.sh and restore.sh.
+# BACKUP_LOCK_WAIT, POSTGRES_WAIT); the lock is shared with backup.sh and
+# restore.sh. A run stopped by SIGTERM, SIGINT or SIGHUP exits 143, 130 or 129
+# and records a failure like any other.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,6 +35,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_NAME=restore-test
 TOTAL=7
 BACKUP_LOCK_WAIT="${BACKUP_LOCK_WAIT:-3600}"
+POSTGRES_WAIT="${POSTGRES_WAIT:-600}"
 
 # shellcheck source=lib-replace-data.sh
 # shellcheck source-path=SCRIPTDIR
@@ -91,15 +94,19 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
 
 umask 077
 
-step 1 "configuration and lock"
+step 1 "configuration, lock and PostgreSQL health"
 backup_config
 scratch="$(scratch_database_name "$PGDBNAME")" \
   || usage_die "no safe scratch database name for '$PGDBNAME' (it must not end in _restoretest, and <name>_restoretest must fit 63 characters)"
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: run make backup-init"
 take_lock "$BACKUP_LOCK_WAIT"
+wait_for_postgres "$POSTGRES_WAIT"
 
 step 2 "restoring the backup files of snapshot $SNAPSHOT_ID into a staging directory"
 staging="$BACKUP_DUMP_DIR/.restore-test-$STAMP"
@@ -112,24 +119,7 @@ for name in db.dump globals.sql manifest.json; do
 done
 
 step 3 "checking the restored files against the manifest"
-python3 - "$DUMP_DIR" <<'PY' || die "the restored files do not match manifest.json"
-import hashlib
-import json
-import os
-import sys
-
-directory = sys.argv[1]
-manifest = json.load(open(os.path.join(directory, "manifest.json"), encoding="utf-8"))
-bad = []
-for name, expected in manifest["files"].items():
-    path = os.path.join(directory, name)
-    data = open(path, "rb").read() if os.path.isfile(path) else None
-    if data is None or hashlib.sha256(data).hexdigest() != expected["sha256"] or len(data) != expected["bytes"]:
-        bad.append(name)
-if bad or "counts" not in manifest or "db.dump" not in manifest["files"]:
-    print("checksum or size mismatch: " + ", ".join(bad or ["manifest"]), file=sys.stderr)
-    sys.exit(1)
-PY
+verify_backup_files "$DUMP_DIR" || die "the restored files do not match manifest.json"
 
 step 4 "free space for the scratch database"
 dump_bytes="$(stat -c %s "$DUMP_DIR/db.dump")"

@@ -146,6 +146,8 @@ check_space() {
   dump_bytes="$(stat -c %s "$DB_DUMP")"
   if [ "$MODE" = load ]; then
     media_kb=$(($(stat -c %s "$SNAPSHOT/media.tar") * 11 / 10 / 1024 + 1))
+  elif [ "$MODE" = move ]; then
+    media_kb=0 # already staged on this filesystem, and moved, not copied
   elif [ -n "$RESTORE_UPLOADS" ]; then
     media_kb=$(($(as_app du -sk "$RESTORE_UPLOADS" | cut -f1) * 11 / 10 + 1))
   else

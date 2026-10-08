@@ -9,7 +9,8 @@
 # /backup/media/uploadedfiles/<path>, /backup/secrets/<name>), without a `..`
 # segment. TARGET is an absolute path that does not exist or is an empty
 # directory, and is neither inside nor equal to MEDIA_HOST_DIR/uploadedfiles,
-# SECRETS_DIR or BACKUP_DUMP_DIR/latest. restic restores the path under
+# SECRETS_DIR, RESTIC_REPOSITORY_DIR or BACKUP_DUMP_DIR (the whole directory,
+# staging directories and lock included). restic restores the path under
 # TARGET/backup/... with --verify. TARGET is created 0700.
 #
 # Environment: ENV_FILE (default deploy/compose/.env), COMPOSE (exported by the
@@ -53,7 +54,7 @@ check_identity
 
 # A path is inside PROTECTED when, once normalised, it equals it or starts with it.
 target_real="$(realpath -m -- "$TARGET")"
-for protected in "$MEDIA_HOST_DIR/uploadedfiles" "$SECRETS_DIR" "$BACKUP_DUMP_DIR/latest"; do
+for protected in "$MEDIA_HOST_DIR/uploadedfiles" "$SECRETS_DIR" "$RESTIC_REPOSITORY_DIR" "$BACKUP_DUMP_DIR"; do
   protected_real="$(realpath -m -- "$protected")"
   case "$target_real/" in
     "$protected_real"/*) die "TARGET $TARGET is inside $protected: it would overwrite live data; use a separate directory" ;;

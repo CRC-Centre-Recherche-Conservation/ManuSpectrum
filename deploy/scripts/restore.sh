@@ -19,6 +19,11 @@
 # the snapshot's media (concepts/, ...) are listed, not restored; restore-files.sh
 # pulls them.
 #
+# `latest` is resolved once to a snapshot id at the start (logged), and the
+# database, the uploads and the listing all name that id. A run stopped by
+# SIGTERM, SIGINT or SIGHUP exits 143, 130 or 129: before the first change it
+# removes its staging directories, after it keeps them and names the aside.
+#
 # Steps: restic restore of /backup/db into a staging directory under
 # BACKUP_DUMP_DIR and of /backup/media/uploadedfiles into a staging directory
 # under MEDIA_HOST_DIR (same filesystem as uploadedfiles/, so the swap is a
@@ -96,6 +101,7 @@ take_lock 0
 uploads="$MEDIA_HOST_DIR/uploadedfiles"
 DB_DUMP=""
 SNAPSHOT=""
+SNAPSHOT_ID=""
 RESTORE_UPLOADS=""
 db_stage=""
 media_stage=""
@@ -116,14 +122,36 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
 umask 077
 
 # ---------------------------------------------------------------- step 1, 2
+resolve_snapshot() { # prints the id of the snapshot RESTIC_SNAPSHOT names
+  [ "$RESTIC_SNAPSHOT" = latest ] || { printf '%s' "$RESTIC_SNAPSHOT"; return 0; }
+  local listing
+  listing="$(restic_run snapshots latest --json)" || return 1
+  python3 -c '
+import json
+import re
+import sys
+
+rows = json.loads(sys.stdin.read())
+newest = max(rows, key=lambda row: row["time"])["id"]
+if not re.fullmatch(r"[0-9a-f]{64}", newest):
+    sys.exit(1)
+print(newest)
+' <<<"$listing"
+}
+
 fetch_snapshot() {
-  step 1 "restoring /backup/db of snapshot $RESTIC_SNAPSHOT from the repository and checking it against the manifest"
+  SNAPSHOT_ID="$(resolve_snapshot)" || die "could not resolve snapshot $RESTIC_SNAPSHOT in the repository"
+  log "snapshot $RESTIC_SNAPSHOT is $SNAPSHOT_ID"
+  step 1 "restoring /backup/db of snapshot $SNAPSHOT_ID from the repository and checking it against the manifest"
   db_stage="$BACKUP_DUMP_DIR/.restore-$STAMP"
   as_app mkdir -m 0700 "$db_stage"
-  restic_run_with "$db_stage:/restore" restore "$RESTIC_SNAPSHOT" --target /restore --include /backup/db --verify \
+  restic_run_with "$db_stage:/restore" restore "$SNAPSHOT_ID" --target /restore --include /backup/db --verify \
     || die "restic restore of the database failed"
   SNAPSHOT="$db_stage/backup/db"
   local name
@@ -144,19 +172,19 @@ fetch_snapshot() {
   fi
   media_stage="$MEDIA_HOST_DIR/.restore-$STAMP"
   as_app mkdir -m 0700 "$media_stage"
-  restic_run_with "$media_stage:/restore" restore "$RESTIC_SNAPSHOT" --target /restore --include /backup/media/uploadedfiles --verify \
-    || die "restic restore of the uploads failed"
   local reference="$uploads"
   [ -d "$reference" ] || reference="$MEDIA_HOST_DIR"
   [ "$(stat -c %d "$media_stage")" = "$(stat -c %d "$reference")" ] \
     || die "the staging directory $media_stage is on another filesystem than $reference: the swap would copy the uploads instead of renaming them"
+  restic_run_with "$media_stage:/restore" restore "$SNAPSHOT_ID" --target /restore --include /backup/media/uploadedfiles --verify \
+    || die "restic restore of the uploads failed"
   if [ -d "$media_stage/backup/media/uploadedfiles" ]; then
     RESTORE_UPLOADS="$media_stage/backup/media/uploadedfiles"
   else
     log "the snapshot holds no uploadedfiles/: the uploads will be empty"
   fi
   local listing others
-  listing="$(restic_run ls "$RESTIC_SNAPSHOT" /backup/media)" || die "restic ls failed"
+  listing="$(restic_run ls "$SNAPSHOT_ID" /backup/media)" || die "restic ls failed"
   others="$(grep -E '^/backup/media/[^/]+$' <<<"$listing" | grep -vx '/backup/media/uploadedfiles' | sed 's,^/backup/media/,,' || true)"
   if [ -n "$others" ]; then
     log "not restored by this command (use restore-files, INCLUDE=/backup/media/<name>): $(tr '\n' ' ' <<<"$others")"
@@ -199,7 +227,7 @@ compare_counts
 finish
 log "SECRETS_DIR and .env were not touched: bring back a secret or the env file with restore-files if this is a new host"
 if [ "$MODE" = move ]; then
-  log "done: snapshot $RESTIC_SNAPSHOT is restored. Replay the erasure requests received since $(manifest_value created_at 2>/dev/null || echo "the snapshot date") before reopening the site (deploy/BACKUP.md, \"Personal data\")"
+  log "done: snapshot $SNAPSHOT_ID is restored. Replay the erasure requests received since $(manifest_value created_at 2>/dev/null || echo "the snapshot date") before reopening the site (deploy/BACKUP.md, \"Personal data\")"
 else
   log "done: $ASIDE is restored. Replay the erasure requests received since the restored state was taken before reopening the site (deploy/BACKUP.md, \"Personal data\")"
 fi

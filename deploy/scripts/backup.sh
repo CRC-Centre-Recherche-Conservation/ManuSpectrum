@@ -32,15 +32,19 @@
 #
 # Exit status (the contract of the update procedure, which stops on non-zero):
 # 0 only when the dump is verified and the restic snapshot is saved; 1 on any
-# failed step; 2 on a wrong invocation or configuration found before any
-# command ran. Every run that got past the configuration writes
+# failed step (a Compose configuration found wrong included); 2 on a wrong
+# invocation or METRICS_TEXTFILE_DIR found before any command ran. Every run that got past the configuration writes
 # manuspectrum_backup.prom (failed 0|1, attempt time) in METRICS_TEXTFILE_DIR;
 # a success also writes manuspectrum_backup_success.prom.
 #
 # Environment: ENV_FILE (default deploy/compose/.env), COMPOSE (the compose
 # invocation, exported by the Makefile), METRICS_TEXTFILE_DIR (absolute,
 # existing), BACKUP_LOCK_WAIT (seconds to wait for another backup, restore
-# test or restore; default 3600).
+# test or restore; default 3600), POSTGRES_WAIT (seconds to wait for postgres to
+# be running and healthy before refusing, for a catch-up run at boot; default 600).
+#
+# A run stopped by SIGTERM, SIGINT or SIGHUP exits 143, 130 or 129 and records
+# a failure like any other.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,6 +55,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_NAME=backup
 TOTAL=9
 BACKUP_LOCK_WAIT="${BACKUP_LOCK_WAIT:-3600}"
+POSTGRES_WAIT="${POSTGRES_WAIT:-600}"
 
 # shellcheck source=lib-replace-data.sh
 # shellcheck source-path=SCRIPTDIR
@@ -92,7 +97,7 @@ metrics_ready=0
 on_exit() {
   local rc=$? now
   trap - EXIT
-  [ -z "${PSQL_PID:-}" ] || kill "$PSQL_PID" 2>/dev/null || true
+  [ -z "${session_pid:-}" ] || kill "$session_pid" 2>/dev/null || true
   if [ "$mode" = backup ] && [ "$metrics_ready" = 1 ]; then
     now="$(date +%s)"
     [ -z "$new" ] || rm -rf "$new"
@@ -114,6 +119,9 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
 trap : PIPE
 
 [ -f "$ENV_FILE" ] || die "no $ENV_FILE"
@@ -128,8 +136,9 @@ if [ "$mode" = init ]; then
     die "RESTIC_REPOSITORY_DIR $RESTIC_REPOSITORY_DIR does not exist or is not writable by $(id -un)"
   fi
   take_lock "$BACKUP_LOCK_WAIT"
-  # The restic service binds latest/ and refuses to create a missing host path.
-  install -d -m 0700 "$BACKUP_DUMP_DIR/latest"
+  # The restic service binds latest/ (the sources) and tmp/ (its temporary
+  # packs) and refuses to create a missing host path.
+  install -d -m 0700 "$BACKUP_DUMP_DIR/latest" "$BACKUP_DUMP_DIR/tmp"
   if [ -f "$RESTIC_REPOSITORY_DIR/config" ]; then
     restic_run cat config >/dev/null || die "the repository in $RESTIC_REPOSITORY_DIR does not open: wrong restic_password?"
     log "repository exists and opens"
@@ -147,16 +156,7 @@ backup_config
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: create it (0700) as the service account"
 [ -d "$MEDIA_HOST_DIR" ] || die "MEDIA_HOST_DIR $MEDIA_HOST_DIR does not exist"
 take_lock "$BACKUP_LOCK_WAIT"
-postgres_state="$(compose ps --format json postgres | python3 -c '
-import json
-import sys
-
-text = sys.stdin.read().strip()
-rows = json.loads(text) if text.startswith("[") else [json.loads(l) for l in text.splitlines() if l.strip()]
-row = next((r for r in rows if r.get("Service") == "postgres"), None)
-print("healthy" if row and row.get("State") == "running" and row.get("Health") in ("healthy", "") else "down")
-')" || die "could not read the state of postgres"
-[ "$postgres_state" = healthy ] || die "postgres is not running and healthy: start the stack first"
+wait_for_postgres "$POSTGRES_WAIT"
 
 step 2 "staging directory"
 new="$BACKUP_DUMP_DIR/.new-$STAMP"
@@ -166,15 +166,18 @@ mkdir -m 0700 "$new"
 step 3 "consistent dump and counts"
 END_MARK=__MS_END__
 psql_ask() { # psql_ask SQL-ON-ONE-LINE: prints the answer, ends at the marker
-  printf '%s\n\\echo %s\n' "$1" "$END_MARK" >&"${PSQL[1]}" || return 1
+  printf '%s\n\\echo %s\n' "$1" "$END_MARK" >&"$to_psql" || return 1
   local line out=""
-  while IFS= read -r -t 900 -u "${PSQL[0]}" line; do
+  while IFS= read -r -t 900 -u "$from_psql" line; do
     if [ "$line" = "$END_MARK" ]; then printf '%s' "$out"; return 0; fi
     out+="${out:+$'\n'}$line"
   done
   return 1
 }
 coproc PSQL { compose exec -T postgres psql -U "$PGUSERNAME" -d "$PGDBNAME" -X -Atq -v ON_ERROR_STOP=1; }
+# Bash unsets PSQL and closes its descriptors when the coprocess ends: keep a pid and descriptors of our own.
+session_pid=$PSQL_PID
+exec {to_psql}>&"${PSQL[1]}" {from_psql}<&"${PSQL[0]}"
 psql_ask 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;' >/dev/null || die "could not open the dump transaction"
 snapshot_id="$(psql_ask 'SELECT pg_export_snapshot();')" || die "could not export the snapshot"
 [[ "$snapshot_id" =~ ^[0-9A-F-]+$ ]] || die "unexpected snapshot id"
@@ -186,10 +189,10 @@ if [ -z "$counts_json" ] || [ -z "$migrations_json" ]; then die "empty counts or
 compose exec -T postgres pg_dump -Fc --no-owner --no-privileges --snapshot="$snapshot_id" -U "$PGUSERNAME" -d "$PGDBNAME" >"$new/db.dump" \
   || die "pg_dump failed"
 psql_ask 'COMMIT;' >/dev/null || die "could not close the dump transaction"
-printf '\\q\n' >&"${PSQL[1]}" || true
-eval "exec ${PSQL[1]}>&-"
-wait "$PSQL_PID" || die "the psql session ended with an error"
-PSQL_PID=""
+exec {to_psql}>&- {from_psql}<&-
+[ -z "${PSQL[1]:-}" ] || eval "exec ${PSQL[1]}>&- ${PSQL[0]}<&-"
+wait "$session_pid" || die "the psql session ended with an error"
+session_pid=""
 
 step 4 "database roles and settings"
 compose exec -T postgres pg_dumpall --globals-only --no-role-passwords -U "$PGUSERNAME" >"$new/globals.sql" \

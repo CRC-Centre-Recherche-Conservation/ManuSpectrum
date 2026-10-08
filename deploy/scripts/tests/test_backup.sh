@@ -58,7 +58,10 @@ printf 'docker %s\n' "$*" >>"$CALLS"
 case "$*" in
   *"config --format json"*) cat "$TMP/config.json" ;;
   *"ps --format json"*)
+    polls="$(cat "$TMP/pgpolls" 2>/dev/null || echo 0)"
+    echo $((polls + 1)) >"$TMP/pgpolls"
     if [ -n "$STUB_PG_DOWN" ]; then echo '{"Service":"postgres","State":"exited","Health":""}'
+    elif [ "$polls" -lt "${STUB_PG_STARTING_POLLS:-0}" ]; then echo '{"Service":"postgres","State":"running","Health":"starting"}'
     else echo '{"Service":"postgres","State":"running","Health":"healthy"}'; fi ;;
   *"exec -T postgres psql"*)
     while IFS= read -r line; do
@@ -85,7 +88,8 @@ case "$*" in
   *" restic --no-cache"*)
     sub="${*#*--retry-lock 30m }"
     sub="${sub%% *}"
-    [ "$STUB_RESTIC_FAIL" != "$sub" ] || { echo "restic: stub failure" >&2; exit 1; } ;;
+    [ "$STUB_RESTIC_FAIL" != "$sub" ] || { echo "restic: stub failure" >&2; exit 1; }
+    [ "$STUB_RESTIC_BLOCK" != "$sub" ] || { touch "$TMP/blocked"; exec sleep 30; } ;;
   *"python -c"*) echo "noise"; echo "8.1.4" ;;
 esac
 exit 0
@@ -103,8 +107,20 @@ run_backup() { # run_backup [VAR=value ...] -- [ARGS...]: fresh calls file; outp
   while [ "$#" -gt 0 ] && [ "$1" != -- ]; do envs+=("$1"); shift; done
   [ "$#" -eq 0 ] || shift
   : >"$TMP/calls"
+  rm -f "$TMP/pgpolls"
   env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
-    METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 "${envs[@]}" bash "$BACKUP" "$@" >"$TMP/out" 2>&1
+    METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 POSTGRES_WAIT=1 POSTGRES_WAIT_INTERVAL=0.2 \
+    "${envs[@]}" bash "$BACKUP" "$@" >"$TMP/out" 2>&1
+}
+run_backup_signalled() { # run_backup_signalled SIGNAL: the run is blocked in restic backup when SIGNAL reaches its process group
+  : >"$TMP/calls"
+  rm -f "$TMP/pgpolls" "$TMP/blocked"
+  setsid env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+    METRICS_TEXTFILE_DIR="$TMP/metrics" BACKUP_LOCK_WAIT=2 STUB_RESTIC_BLOCK=backup bash "$BACKUP" --tag nightly >"$TMP/out" 2>&1 &
+  local pid=$! waited=0
+  while [ ! -e "$TMP/blocked" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+  kill -"$1" -- "-$pid"
+  wait "$pid"
 }
 restic_calls() { grep -c ' restic --no-cache' "$TMP/calls"; }
 tree_sum() { (cd "$1" && find . | sort && find . -type f | sort | xargs -r sha256sum) | sha256sum; }
@@ -151,12 +167,13 @@ backup = sub[0].split()
 assert backup[backup.index("--tag") + 1] == "nightly", sub[0]
 excludes = [backup[i + 1] for i, w in enumerate(backup) if w == "--exclude"]
 assert excludes == ["/backup/media/previous-*", "/backup/media/.restore-*", "/backup/media/archestemp",
-                    "/backup/media/export_deliverables", "/backup/secrets/*.new", "/backup/secrets/aside"], excludes
+                    "/backup/media/export_deliverables", "/backup/secrets/*.new", "/backup/secrets/aside",
+                    "/backup/secrets/restic_password"], excludes
 assert backup[-1] == "/backup", backup
 assert sub[1] == "forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune", sub[1]
 assert sub[2] == "check", sub[2]
 PY
-assert "nightly: restic backup (tag, six excludes, /backup), then forget 7/4/6 --prune, then check" $?
+assert "nightly: restic backup (tag, seven excludes, /backup), then forget 7/4/6 --prune, then check" $?
 
 grep -q '^manuspectrum_backup_failed 0$' "$TMP/metrics/manuspectrum_backup.prom" \
   && grep -q '^manuspectrum_backup_last_attempt_timestamp_seconds [0-9]' "$TMP/metrics/manuspectrum_backup.prom" \
@@ -234,6 +251,35 @@ failure_case "dump without the two TABLE DATA entries" STUB_LIST_BAD=1
 failure_case "empty globals.sql" STUB_GLOBALS_EMPTY=1
 failure_case "postgres not running" STUB_PG_DOWN=1
 
+# --- postgres still coming up (catch-up at boot)
+reset
+run_backup STUB_PG_STARTING_POLLS=2 -- --tag manual && status=0 || status=$?
+[ "$status" -eq 0 ] && [ "$(cat "$TMP/pgpolls")" -eq 3 ] && [ -f "$TMP/dump/latest/manifest.json" ]
+assert "postgres starting then healthy: the run waits and succeeds" $?
+failure_case "postgres never becomes healthy within POSTGRES_WAIT" STUB_PG_STARTING_POLLS=9999
+grep -q "after 1s" "$TMP/out"
+assert "postgres never healthy: the refusal names the wait" $?
+
+# --- a run stopped by a signal records a failure
+signal_case() { # signal_case SIGNAL EXPECTED-STATUS
+  reset
+  printf 'manuspectrum_backup_last_success_timestamp_seconds 111\n' >"$TMP/metrics/manuspectrum_backup_success.prom"
+  run_backup_signalled "$1" && status=0 || status=$?
+  [ "$status" -eq "$2" ] \
+    && grep -q '^manuspectrum_backup_failed 1$' "$TMP/metrics/manuspectrum_backup.prom" \
+    && [ "$(cat "$TMP/metrics/manuspectrum_backup_success.prom")" = "manuspectrum_backup_last_success_timestamp_seconds 111" ] \
+    && [ -z "$(find "$TMP/dump" -maxdepth 1 -name '.new-*')" ]
+  assert "$1 while blocked in restic: exit $2, failed 1 written, success file untouched" $?
+}
+signal_case TERM 143
+signal_case HUP 129
+
+# --- the psql session ends by EOF, not by a command
+reset
+run_backup -- --tag manual
+! grep -q '^psql< .q$' "$TMP/calls" && grep -q '^psql< COMMIT' "$TMP/calls"
+assert "the psql coprocess is closed by EOF, no \\q is sent" $?
+
 # --- restic fails: copy A is already good
 reset
 run_backup STUB_RESTIC_FAIL=backup -- --tag nightly && status=0 || status=$?
@@ -274,8 +320,9 @@ assert "missing METRICS_TEXTFILE_DIR directory: exit 2, no docker call" $?
 reset
 run_backup -- --init && status=0 || status=$?
 [ "$status" -eq 0 ] && grep -q ' restic --no-cache --retry-lock 30m init$' "$TMP/calls" \
-  && [ -d "$TMP/dump/latest" ] && [ "$(stat -c %a "$TMP/dump/latest")" = 700 ] && grep -q "vault" "$TMP/out" && no_leak
-assert "init on a new repository: restic init, latest/ made for the bind mount, vault reminder" $?
+  && [ -d "$TMP/dump/latest" ] && [ "$(stat -c %a "$TMP/dump/latest")" = 700 ] \
+  && [ -d "$TMP/dump/tmp" ] && [ "$(stat -c %a "$TMP/dump/tmp")" = 700 ] && grep -q "vault" "$TMP/out" && no_leak
+assert "init on a new repository: restic init, latest/ and tmp/ made 0700 for the bind mounts, vault reminder" $?
 touch "$TMP/repo/config"
 run_backup -- --init && status=0 || status=$?
 [ "$status" -eq 0 ] && grep -q ' restic --no-cache --retry-lock 30m cat config$' "$TMP/calls" \

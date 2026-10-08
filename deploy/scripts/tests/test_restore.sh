@@ -19,6 +19,8 @@ GID_NOW="$(id -g)"
 PW_RESTIC="$(head -c 36 /dev/urandom | base64 | tr -d '\n=+/')"
 PW_PG="$(head -c 36 /dev/urandom | base64 | tr -d '\n=+/')"
 ASIDE_OLD="$TMP/media/previous-20260101T000000Z-abcdef"
+export OLDER_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+export LATEST_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 mkdir -p "$TMP/bin" "$TMP/secrets" "$TMP/dockerroot"
 printf '%s' "$PW_RESTIC" >"$TMP/secrets/restic_password"
@@ -77,6 +79,8 @@ cat >"$TMP/bin/docker" <<'STUB'
 echo "docker $*" | sed -n 1p >>"$CALLS"
 case "$*" in
   *"config --format json"*) cat "$TMP/config.json" ;;
+  *"--entrypoint sh cantaloupe"*)
+    [ -z "$STUB_BLOCK_SWAP" ] || { touch "$TMP/blocked"; exec sleep 30; } ;;
   "info "*) echo "$TMP/dockerroot" ;;
   *"python -c"*) echo "noise"; cat "$TMP/facts" ;;
   *" restic --no-cache"*)
@@ -84,6 +88,8 @@ case "$*" in
     sub="${sub%% *}"
     [ "$STUB_RESTIC_FAIL" != "$sub" ] || { echo "restic: stub failure" >&2; exit 1; }
     case "$sub" in
+      snapshots)
+        printf '[{"id":"%s","time":"2026-10-06T02:00:00Z"},{"id":"%s","time":"2026-10-07T02:00:00Z"}]\n' "$OLDER_ID" "$LATEST_ID" ;;
       ls)
         echo "snapshot 4a5909c7 of [/backup] filtered by [/backup/media]:"
         printf '%s\n' /backup/media /backup/media/uploadedfiles /backup/media/concepts ;;
@@ -95,6 +101,7 @@ case "$*" in
             mkdir -p "$mount/backup/db" && cp "$TMP"/snapshot/* "$mount/backup/db/"
             [ -z "$STUB_BAD_FILE" ] || printf 'tampered' >"$mount/backup/db/db.dump" ;;
           *"--include /backup/media/uploadedfiles "*)
+            [ -z "$STUB_DF_DROP" ] || echo 10 >"$TMP/df_avail"
             mkdir -p "$mount/backup/media" && cp -r "$TMP/snapshot-media/uploadedfiles" "$mount/backup/media/" ;;
           *)
             inc="${*#*--include }"
@@ -118,7 +125,7 @@ STUB
 cat >"$TMP/bin/df" <<'STUB'
 #!/bin/sh
 echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
-echo "stub 99999999 1 99999999 1% /"
+echo "stub 99999999 1 $(cat "$TMP/df_avail" 2>/dev/null || echo 99999999) 1% /"
 STUB
 # stat: the device of a staging directory differs when STUB_OTHER_FS is set.
 cat >"$TMP/bin/stat" <<'STUB'
@@ -141,6 +148,7 @@ run_script() { # run_script SCRIPT [VAR=value ...]: fresh calls file; output in 
   local script="$1"
   shift
   : >"$TMP/calls"
+  rm -f "$TMP/df_avail" "$TMP/blocked"
   env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
     MAKE_CMD="make" BACKUP_LOCK_WAIT=2 "$@" bash "$script" >"$TMP/out" 2>&1
 }
@@ -197,8 +205,9 @@ assert "unknown-migration: refused before step 4, only reads, staging removed" $
 
 write_fixture
 run_restore "${OK_ENV[@]}" RESTIC_SNAPSHOT=latest STUB_OTHER_FS=1 && status=0 || status=$?
-[ "$status" -eq 1 ] && grep -q "another filesystem" "$TMP/out" && no_mutation && no_staging
-assert "other-filesystem: refused before step 4, only reads, staging removed" $?
+[ "$status" -eq 1 ] && grep -q "another filesystem" "$TMP/out" && no_mutation && no_staging \
+  && ! grep -q 'include /backup/media/uploadedfiles' "$TMP/calls"
+assert "other-filesystem: refused on the empty staging directory, before the uploads are restored, staging removed" $?
 
 write_fixture
 run_restore "${OK_ENV[@]}" RESTIC_SNAPSHOT=latest STUB_RESTIC_FAIL=restore && status=0 || status=$?
@@ -220,19 +229,22 @@ run_restore "${OK_ENV[@]}" RESTIC_SNAPSHOT=latest && status=0 || status=$?
 assert "ok-snapshot: exit 0" $?
 
 python3 - "$TMP/calls" "$TMP/out" <<'PY'
+import os
 import re
 import sys
 
 calls = [line.rstrip("\n") for line in open(sys.argv[1])]
 out = open(sys.argv[2]).read()
+latest = os.environ["LATEST_ID"]
 
 def first(pattern):
     return next(i for i, c in enumerate(calls) if re.search(pattern, c))
 
 order = [
-    first(r"restic --no-cache .*restore latest --target /restore --include /backup/db --verify"),
-    first(r"restic --no-cache .*restore latest --target /restore --include /backup/media/uploadedfiles --verify"),
-    first(r"restic --no-cache .*ls latest /backup/media"),
+    first(r"restic --no-cache .*snapshots latest --json"),
+    first(rf"restic --no-cache .*restore {latest} --target /restore --include /backup/db --verify"),
+    first(rf"restic --no-cache .*restore {latest} --target /restore --include /backup/media/uploadedfiles --verify"),
+    first(rf"restic --no-cache .*ls {latest} /backup/media"),
     first(r"python -c"),
     first(r"up -d --wait postgres"),
     first(r" stop web worker beat cantaloupe"),
@@ -254,6 +266,11 @@ steps = re.findall(r"restore: step (\d+)/14", out)
 assert steps == [str(i) for i in range(1, 15)], steps
 PY
 assert "ok-snapshot: restic restore of the dump and the uploads, then the 14 steps in order, make up and smoke called" $?
+
+grep -c "restic --no-cache.* \(restore\|ls\) $LATEST_ID " "$TMP/calls" | grep -qx 3 \
+  && [ "$(grep -c 'snapshots latest --json' "$TMP/calls")" -eq 1 ] \
+  && ! grep -qE 'restic --no-cache.* (restore|ls) latest ' "$TMP/calls" && grep -q "snapshot latest is $LATEST_ID" "$TMP/out"
+assert "ok-snapshot: latest is resolved once to the newest id, and the db restore, the uploads restore and the listing name it" $?
 
 before="$(find "$TMP/media" -maxdepth 1 -name 'previous-*' | head -n 1)"
 [ -f "$before/before-restore.dump" ] && [ "$(cat "$before/before-restore.dump")" = BEFORE ] \
@@ -277,6 +294,29 @@ grep -q "erasure" "$TMP/out" && grep -q "2026-10-07" "$TMP/out"
 assert "ok-snapshot: the output reminds to replay the erasures made since the snapshot date" $?
 no_leak
 assert "ok-snapshot: neither fake password appears in output or calls" $?
+
+# --- the staged uploads are not counted twice in the free-space check
+write_fixture
+run_restore "${OK_ENV[@]}" RESTIC_SNAPSHOT=latest STUB_DF_DROP=1 && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q "preflight: ok" "$TMP/out"
+assert "move mode: the preflight does not count the already staged uploads again (free space is 10 KiB after staging)" $?
+
+# --- a run stopped by a signal during the swap
+write_fixture
+: >"$TMP/calls"
+rm -f "$TMP/blocked" "$TMP/df_avail"
+setsid env PATH="$TMP/bin:$PATH" TMP="$TMP" CALLS="$TMP/calls" ENV_FILE="$TMP/.env" COMPOSE="docker compose" \
+  MAKE_CMD="make" BACKUP_LOCK_WAIT=2 CONFIRM=yes ERASURES_CHECKED=yes RESTIC_SNAPSHOT=latest STUB_BLOCK_SWAP=1 \
+  bash "$RESTORE" >"$TMP/out" 2>&1 &
+pid=$!
+waited=0
+while [ ! -e "$TMP/blocked" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+kill -TERM -- "-$pid"
+wait "$pid" && status=0 || status=$?
+[ "$status" -eq 143 ] && ! no_staging && grep -q "staging directories are kept" "$TMP/out" \
+  && grep -q "the data this run replaced is in $TMP/media/previous-" "$TMP/out" \
+  && [ "$(cat "$TMP/media/previous-"*/uploadedfiles/old.txt)" = old ]
+assert "TERM mid-swap: exit 143, the staging directories are kept and the aside is named" $?
 
 # --- success from an aside directory
 write_fixture
@@ -326,6 +366,11 @@ files_refused "TARGET inside uploadedfiles" "${FILES_OK[@]}" TARGET="$TMP/media/
 files_refused "TARGET is uploadedfiles" "${FILES_OK[@]}" TARGET="$TMP/media/uploadedfiles"
 files_refused "TARGET inside SECRETS_DIR" "${FILES_OK[@]}" TARGET="$TMP/secrets/out"
 files_refused "TARGET inside BACKUP_DUMP_DIR/latest" "${FILES_OK[@]}" TARGET="$TMP/dump/latest/out"
+files_refused "TARGET is RESTIC_REPOSITORY_DIR" "${FILES_OK[@]}" TARGET="$TMP/repo"
+files_refused "TARGET inside RESTIC_REPOSITORY_DIR" "${FILES_OK[@]}" TARGET="$TMP/repo/out"
+files_refused "TARGET is BACKUP_DUMP_DIR" "${FILES_OK[@]}" TARGET="$TMP/dump"
+files_refused "TARGET inside BACKUP_DUMP_DIR (a staging directory)" "${FILES_OK[@]}" TARGET="$TMP/dump/.restore-1/out"
+files_refused "TARGET inside BACKUP_DUMP_DIR/previous" "${FILES_OK[@]}" TARGET="$TMP/dump/previous"
 mkdir -p "$TMP/full" && echo x >"$TMP/full/f"
 files_refused "non-empty TARGET" "${FILES_OK[@]}" TARGET="$TMP/full"
 files_refused "malformed snapshot id" RESTIC_SNAPSHOT='x y' INCLUDE=/backup/db TARGET="$TMP/out1"

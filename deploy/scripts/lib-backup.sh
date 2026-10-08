@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Shared parts of the backup scripts (backup.sh today). Sourced, never
-# executed; `set -euo pipefail` is the caller's. Needs log, die, compose and
-# as_app from lib-replace-data.sh (sourced first by the caller).
+# Shared parts of the backup scripts (backup.sh, restore-test.sh, restore.sh,
+# restore-files.sh). Sourced, never executed; `set -euo pipefail` is the
+# caller's. Needs log, die, compose and as_app from lib-replace-data.sh
+# (sourced first by the caller).
 #
 # Constants: the retention of the restic repository and the paths restic does
 # not back up, in one place for the script, its tests and deploy/BACKUP.md.
 # Functions: usage_die, backup_config, scratch_database_name, restic_run,
-# restic_run_with, take_lock, verify_backup_files, write_metrics.
+# restic_run_with, take_lock, wait_for_postgres, verify_backup_files,
+# write_metrics.
 # shellcheck disable=SC2154,SC2034  # inputs assigned by the sourcing script; constants it reads
 #
 # Inputs set by the caller before calling a function:
@@ -25,6 +27,7 @@ RESTIC_EXCLUDES=(
   '/backup/media/export_deliverables'
   '/backup/secrets/*.new'
   '/backup/secrets/aside'
+  '/backup/secrets/restic_password'
 )
 
 # A wrong invocation or configuration, found before anything ran: exit 2.
@@ -118,6 +121,30 @@ take_lock() { # take_lock WAIT_SECONDS
   [ "$wait" = 0 ] || flags=(-w "$wait")
   exec 9>"$BACKUP_DUMP_DIR/.lock" || die "cannot open $BACKUP_DUMP_DIR/.lock"
   flock "${flags[@]}" 9 || die "another backup or restore is running (lock $BACKUP_DUMP_DIR/.lock)"
+}
+
+# Waits up to WAIT_SECONDS (polling every POSTGRES_WAIT_INTERVAL seconds,
+# default 5) for the postgres service to be running and healthy, so that a
+# catch-up run started at boot (Persistent timers) does not refuse while the
+# stack is still coming up. Dies when it never is.
+wait_for_postgres() { # wait_for_postgres WAIT_SECONDS
+  local wait="$1" interval="${POSTGRES_WAIT_INTERVAL:-5}" deadline state
+  deadline=$((SECONDS + wait))
+  while :; do
+    state="$(compose ps --format json postgres | python3 -c '
+import json
+import sys
+
+text = sys.stdin.read().strip()
+rows = json.loads(text) if text.startswith("[") else [json.loads(l) for l in text.splitlines() if l.strip()]
+row = next((r for r in rows if r.get("Service") == "postgres"), None)
+print("healthy" if row and row.get("State") == "running" and row.get("Health") in ("healthy", "") else "down")
+')" || die "could not read the state of postgres"
+    [ "$state" != healthy ] || return 0
+    [ "$SECONDS" -lt "$deadline" ] || break
+    sleep "$interval"
+  done
+  die "postgres is not running and healthy after ${wait}s: start the stack first"
 }
 
 # Writes a Prometheus textfile of gauges for the node_exporter textfile
