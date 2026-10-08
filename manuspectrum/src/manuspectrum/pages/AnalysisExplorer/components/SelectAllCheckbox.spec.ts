@@ -21,9 +21,9 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
 const KEYS = [1, 2, 3].map((n) => analysisKey(uuid(n)));
 const hints = ref(new Map<string, SelectionHint>());
 
-function mountAll(keys: string[] = KEYS) {
+function mountAll(keys: string[] = KEYS, compact = false) {
     return mount(SelectAllCheckbox, {
-        props: { keys, label: "Select all (3 shown)" },
+        props: { keys, label: "Select all (3 shown)", compact },
         attachTo: document.body,
         global: {
             provide: {
@@ -105,6 +105,33 @@ describe("SelectAllCheckbox", () => {
         await input.trigger("click");
         expect(store.basket).toHaveLength(29);
         expect(document.activeElement).toBe(input.element);
+    });
+
+    describe("when the Selection cannot take the keys", () => {
+        beforeEach(() => {
+            useExplorerStore().addManyToBasket(
+                Array.from({ length: 29 }, (_, n) => analysisKey(uuid(n + 10))),
+            );
+        });
+
+        it("prints the reason next to a full-size checkbox", () => {
+            const wrapper = mountAll();
+            const reason = wrapper.get(".reason");
+            expect(reason.classes()).not.toContain("visually-hidden");
+            expect(wrapper.get("label").attributes("title")).toBeUndefined();
+        });
+
+        it("hides the reason of a compact checkbox but keeps it described and in the tooltip", () => {
+            const wrapper = mountAll(KEYS, true);
+            const reason = wrapper.get(".reason");
+            expect(reason.classes()).toContain("visually-hidden");
+            expect(wrapper.get("input").attributes("aria-describedby")).toBe(
+                reason.attributes("id"),
+            );
+            expect(wrapper.get("label").attributes("title")).toBe(
+                `Select all (3 shown)\n${reason.text()}`,
+            );
+        });
     });
 
     it("keeps the focus on the checkbox after an action", async () => {

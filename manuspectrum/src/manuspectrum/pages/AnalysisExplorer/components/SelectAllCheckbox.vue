@@ -13,8 +13,8 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * box is `aria-disabled` (focusable) and says why. The focus stays on the
  * box after every action. `label` names it (« Select all (6 shown) »);
  * `hints` tell the Selection what the added keys are. `compact` keeps the
- * label for assistive technology and the tooltip only, where a column is too
- * narrow to print it.
+ * label and the reason for assistive technology and the tooltip only, where a
+ * column is too narrow to print them.
  */
 const props = withDefaults(
     defineProps<{
@@ -32,6 +32,10 @@ const input = useTemplateRef<HTMLInputElement>("input");
 
 const state = computed(() => toggle.stateOf(props.keys));
 const reason = computed(() => toggle.blockedReason(props.keys));
+const tooltip = computed(() => {
+    if (!props.compact) return undefined;
+    return reason.value ? [props.label, reason.value].join("\n") : props.label;
+});
 const unavailable = computed(
     () => props.keys.length === 0 || reason.value !== null,
 );
@@ -58,7 +62,7 @@ function onChange(): void {
 <template>
     <label
         class="select-all-checkbox"
-        :title="props.compact ? props.label : undefined"
+        :title="tooltip"
     >
         <input
             ref="input"
@@ -77,6 +81,7 @@ function onChange(): void {
             v-if="reason"
             :id="reasonId"
             class="reason"
+            :class="{ 'visually-hidden': props.compact }"
         >
             {{ reason }}
         </span>
