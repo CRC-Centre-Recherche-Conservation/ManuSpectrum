@@ -142,6 +142,33 @@ if command -v pre-commit >/dev/null 2>&1; then
   OUT="$(cd "$TMP/r8" && pre-commit run gitleaks 2>&1)"
   RC=$?
   check "pre-commit: the hook passes a clean change" zero "$RC" "$OUT"
+  # git hands the hook its index through GIT_INDEX_FILE for `commit -a` and `commit <path>`.
+  new_repo "$TMP/r10"
+  mkdir -p "$TMP/r10/deploy/scripts"
+  cp -p "$GL" "$TMP/r10/deploy/scripts/"
+  cat >"$TMP/r10/.pre-commit-config.yaml" <<'CFG'
+repos:
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks
+        entry: deploy/scripts/gitleaks.sh staged
+        language: system
+        pass_filenames: false
+CFG
+  echo base >"$TMP/r10/tracked.txt"
+  (cd "$TMP/r10" && git add -A && "${GIT[@]}" commit -q -m base --no-verify && pre-commit install >/dev/null 2>&1)
+  BEFORE="$(cd "$TMP/r10" && git rev-parse HEAD)"
+  echo "token = \"$TOKEN\"" >"$TMP/r10/tracked.txt"
+  OUT="$(cd "$TMP/r10" && "${GIT[@]}" commit -q -a -m leak 2>&1)"
+  RC=$?
+  check "pre-commit: commit -a with a token in a modified file is refused" nonzero "$RC" "$OUT" "$TOKEN"
+  [ "$(cd "$TMP/r10" && git rev-parse HEAD)" = "$BEFORE" ] && ok "pre-commit: commit -a made no commit" || not_ok "pre-commit: commit -a made no commit"
+  (cd "$TMP/r10" && git reset -q --hard "$BEFORE" && echo "token = \"$TOKEN\"" >tracked.txt)
+  OUT="$(cd "$TMP/r10" && "${GIT[@]}" commit -q -m leak tracked.txt 2>&1)"
+  RC=$?
+  check "pre-commit: commit <path> with a token in a modified file is refused" nonzero "$RC" "$OUT" "$TOKEN"
+  [ "$(cd "$TMP/r10" && git rev-parse HEAD)" = "$BEFORE" ] && ok "pre-commit: commit <path> made no commit" || not_ok "pre-commit: commit <path> made no commit"
 elif [ "${REQUIRE_PRE_COMMIT:-}" = 1 ]; then
   not_ok "pre-commit: pre-commit is required and missing"
 else
@@ -159,6 +186,10 @@ grep -q 'docker is required' <<<"$OUT" && ok "no-docker: the message says what i
 OUT="$(bash "$GL" bogus 2>&1)"
 RC=$?
 [ "$RC" -eq 2 ] && ok "usage: an unknown mode exits 2" || not_ok "usage: an unknown mode exits 2 (exit $RC)" "$OUT"
+
+OUT="$(cd "$TMP/r2" && GIT_INDEX_FILE="$TMP/outside-index" bash "$GL" staged 2>&1)"
+RC=$?
+[ "$RC" -eq 2 ] && ok "staged: an index outside the repository is refused" || not_ok "staged: an index outside the repository is refused (exit $RC)" "$OUT"
 
 new_repo "$TMP/r9"
 rm -f "$TMP/r9/.gitignore"

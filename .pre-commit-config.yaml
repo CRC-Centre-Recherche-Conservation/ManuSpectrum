@@ -47,3 +47,4 @@ repos:
         entry: deploy/scripts/gitleaks.sh staged
         language: system
         pass_filenames: false
+        stages: [commit]

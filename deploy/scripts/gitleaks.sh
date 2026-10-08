@@ -43,7 +43,19 @@ COMMON_FLAGS=(--config "$CONFIG" --redact --verbose --no-banner)
 git_scan() {
   local mounts=(-v "$TOP:$TOP:ro")
   case "$COMMON/" in "$TOP/"*) ;; *) mounts+=(-v "$COMMON:$COMMON:ro") ;; esac
-  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp "${mounts[@]}" -w "$TOP" \
+  # `git commit -a` and `git commit <path>` hand the hook a temporary index.
+  local env=()
+  if [ -n "${GIT_INDEX_FILE:-}" ]; then
+    case "$GIT_INDEX_FILE" in
+      /*) env+=(-e "GIT_INDEX_FILE=$GIT_INDEX_FILE") ;;
+      *) env+=(-e "GIT_INDEX_FILE=$PWD/$GIT_INDEX_FILE") ;;
+    esac
+    case "${env[1]#GIT_INDEX_FILE=}" in
+      "$TOP/"* | "$COMMON/"*) ;;
+      *) echo "gitleaks.sh: GIT_INDEX_FILE is outside the repository; cannot scan it" >&2; exit 2 ;;
+    esac
+  fi
+  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp ${env[@]+"${env[@]}"} "${mounts[@]}" -w "$TOP" \
     "$GITLEAKS_IMAGE" git "$@" "${COMMON_FLAGS[@]}" "$TOP"
 }
 
