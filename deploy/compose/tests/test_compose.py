@@ -597,6 +597,14 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertIn("$(NAME)", recipe)
         self.assertRegex(recipe, r"\$\(if \$\(filter yes,\$\(FORCE\)\),--force\)")
 
+    def test_every_secret_is_documented(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        names = re.search(r"^SECRET_FILES := (.+)$", makefile, re.M)[1].split()
+        text = (DEPLOY_DIR / "SECRETS.md").read_text(encoding="utf-8")
+        for name in names:
+            with self.subTest(secret=name):
+                self.assertRegex(text, rf"(?m)^\| `{name}` \|")
+
     def test_cert_renew_reloads_on_a_change_and_exits_with_certbots_status(self):
         cases = [
             ("changed, certbot fails", "echo new > $$CERT; exit 3", True, False),

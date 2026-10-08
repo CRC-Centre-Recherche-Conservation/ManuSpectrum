@@ -33,8 +33,8 @@ inside the container, so the host file stays `0444`.
 Rotating `pg_password` or `elastic_password` after the first start does not
 change what PostgreSQL and Elasticsearch already store: the services keep the
 old password and the applications, given the new one, fail to authenticate.
-Change the password inside the service first (`ALTER USER`, the Elasticsearch
-security API), then the file.
+Change the password inside the service first, then the file: the exact
+commands are in `deploy/SECRETS.md`.
 
 Operator procedure for `admin_password` (the break-glass account):
 
@@ -50,8 +50,11 @@ Operator procedure for `admin_password` (the break-glass account):
    new value into the file (deliberately; `make secrets` never replaces it),
    then `make -C deploy admin-password`.
 
-PP-2 (sops) will keep an encrypted copy of the secrets in Git.
+The off-host copy of the secrets is one item of the project's password manager,
+and `make -C deploy secret-set NAME=<name>` puts a value back from it without
+echo or argument; `make -C deploy secrets-check` verifies the directory. Both,
+the rotation of each secret and the restore are in `deploy/SECRETS.md`.
 
-The files are never committed (`.gitignore` here ignores everything but this
-README), never put in an image, a log or a clear-text backup. PP-2 replaces
-this manual step with sops.
+The files are never committed, encrypted or not (`.gitignore` here ignores
+everything but this README), never put in an image, a log or a clear-text
+backup.

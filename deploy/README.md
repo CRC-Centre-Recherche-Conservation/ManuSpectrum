@@ -17,6 +17,8 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/compose.prod.yaml` | Sizing of the production host only |
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README) |
+| `SECRETS.md` | Secret inventory, the vault item, restore and rotation of each secret, scanning |
+| `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh` and their tests |
 | `compose/postgres/init/` | Creates `template_postgis` the way Arches does |
 | `compose/nginx/` | nginx configuration: `nginx.conf`, the server template (names, HSTS), `snippets/` (TLS, headers, edge rules, rate limits, media, IIIF image server, logs), error pages, `tests/test_edge.sh` |
 | `compose/certbot/` | Deploy hook of the `certbot` service (`CERT_MODE=acme`) |
@@ -53,6 +55,8 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `cert-init` | `CERT_MODE=acme`: placeholder certificate, nginx up, first certificate, reload (`CERTBOT_ARGS=--force-renewal` to replace one) |
 | `cert-renew` | `CERT_MODE=acme`: renew when due, reload nginx only if the certificate changed |
 | `secrets` | Create the secrets directory (`0700`) and the missing secret files |
+| `secret-set` | `NAME=<secret> [FORCE=yes]`: write one secret file from a value typed twice without echo, or piped on stdin; never an argument |
+| `secrets-check` | Presence, modes and lengths of the secret files, one line each, no value printed |
 
 ## Rules
 
@@ -81,6 +85,12 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   missing files, including an empty `email_password` (a relay without
   authentication) and `admin_password`, the password `init` gives the
   superuser `admin` in place of Arches' public default `admin`.
+  `secret-set` and `secrets-check` restore and verify them; the off-host copy
+  is one item of the project's password manager, never a file in Git, and the
+  rotation of each secret is in `SECRETS.md`.
+- `web` and `init` run Django's deployment checks first
+  (`check --deploy --tag security --fail-level WARNING`) and refuse to start
+  on any warning.
 - `web` runs gunicorn `gthread`: `GUNICORN_WORKERS` processes of
   `GUNICORN_THREADS` threads each; production sets 5 x 4, a ceiling of 20
   concurrent requests.
@@ -164,9 +174,12 @@ Set in `compose/.env` (`compose/.env.example` documents each one):
 lints the shell scripts and checks `uv.lock`. The smoke checks run in CI
 with `compose/smoke.sh`.
 
+Developers run `pre-commit install` once per clone: the `gitleaks` hook scans
+every commit for secrets with a pinned image, so it needs Docker
+(`SKIP=gitleaks` bypasses it deliberately, see `SECRETS.md`).
+
 ## What comes next
 
-- PP-2: secrets managed with sops instead of manual files.
 - PP-5: `/readyz` and JSON logs.
 - PP-7: backups.
 - PP-8: Ansible writes `.env` and creates the volumes.
