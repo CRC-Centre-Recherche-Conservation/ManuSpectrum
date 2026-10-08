@@ -46,6 +46,25 @@ describe("FacetTree", () => {
         expect(wrapper.find("[role=tree]").exists()).toBe(false);
     });
 
+    it("starts a row with its checkbox and ends it with the unfold button", () => {
+        const wrapper = mountTree({});
+        const row = wrapper.find(".node .row");
+        const parts = [...row.element.children];
+        expect(parts[0].tagName).toBe("LABEL");
+        expect(parts[0].querySelector("input[type=checkbox]")).not.toBeNull();
+        expect(parts[parts.length - 1].classList.contains("expander")).toBe(
+            true,
+        );
+    });
+
+    it("gives the label and, in the flat list, the path a title for a truncated text", () => {
+        const wrapper = mountTree({});
+        expect(wrapper.find(".node .label").attributes("title")).toBe("Europe");
+        const flat = mountTree({ query: "par" });
+        expect(flat.find(".label").attributes("title")).toBe("Paris");
+        expect(flat.find(".path").attributes("title")).toBe("France — Europe");
+    });
+
     it("unfolds a node with its button, naming what it controls", async () => {
         const wrapper = mountTree({});
         const toggle = wrapper.find("button.expander");

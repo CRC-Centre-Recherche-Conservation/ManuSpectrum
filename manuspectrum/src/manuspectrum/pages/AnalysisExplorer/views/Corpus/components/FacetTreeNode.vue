@@ -13,8 +13,9 @@ import { FACET_TREE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/views/Corp
 import type { TreeNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 /**
- * One place of `FacetTree`: its unfold button (when it has children), its
- * native checkbox, label, « unpublished » badge and count, then, once
+ * One place of `FacetTree`: its native checkbox, label, « unpublished » badge
+ * and count, then its unfold button at the end of the row when it has
+ * children (a leaf row is laid like a `FacetValues` row), then, once
  * unfolded, the list of its children. In the flat list (`path` given, `flat`)
  * it shows the path of the place under its label and never unfolds.
  */
@@ -48,6 +49,40 @@ const isDisabled = computed(
         }"
     >
         <div class="row">
+            <label class="value">
+                <input
+                    type="checkbox"
+                    :value="props.node.value.id"
+                    :checked="state === 'checked' || state === 'implicit'"
+                    :indeterminate="state === 'mixed'"
+                    :disabled="isDisabled"
+                    @change="tree.change(props.node)"
+                />
+                <span class="text">
+                    <span
+                        class="label"
+                        :lang="props.node.value.label.lang"
+                        :title="props.node.value.label.value"
+                        >{{ props.node.value.label.value }}</span
+                    >
+                    <span
+                        v-if="props.path"
+                        class="path"
+                        :title="props.path"
+                        >{{ props.path }}</span
+                    >
+                </span>
+                <span
+                    v-if="props.node.value.unpublished"
+                    class="unpublished"
+                    >{{ $gettext("unpublished") }}</span
+                >
+                <span
+                    class="count"
+                    :title="tree.countTitle(props.node.value)"
+                    >{{ props.node.value.count }}</span
+                >
+            </label>
             <button
                 v-if="hasChildren"
                 type="button"
@@ -72,43 +107,6 @@ const isDisabled = computed(
                     />
                 </svg>
             </button>
-            <span
-                v-else
-                class="expander-gap"
-                aria-hidden="true"
-            ></span>
-            <label class="value">
-                <input
-                    type="checkbox"
-                    :value="props.node.value.id"
-                    :checked="state === 'checked' || state === 'implicit'"
-                    :indeterminate="state === 'mixed'"
-                    :disabled="isDisabled"
-                    @change="tree.change(props.node)"
-                />
-                <span class="text">
-                    <span
-                        class="label"
-                        :lang="props.node.value.label.lang"
-                        >{{ props.node.value.label.value }}</span
-                    >
-                    <span
-                        v-if="props.path"
-                        class="path"
-                        >{{ props.path }}</span
-                    >
-                </span>
-                <span
-                    v-if="props.node.value.unpublished"
-                    class="unpublished"
-                    >{{ $gettext("unpublished") }}</span
-                >
-                <span
-                    class="count"
-                    :title="tree.countTitle(props.node.value)"
-                    >{{ props.node.value.count }}</span
-                >
-            </label>
         </div>
         <ul
             v-if="isOpen"
@@ -128,18 +126,14 @@ const isDisabled = computed(
 .node .row {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-}
-
-.node .expander,
-.node .expander-gap {
-    flex: none;
-    inline-size: var(--explorer-target, 2.75rem);
-    min-block-size: var(--explorer-target, 2.75rem);
+    gap: 0.5rem;
 }
 
 .node .expander {
     display: inline-flex;
+    flex: none;
+    inline-size: 2rem;
+    min-block-size: var(--explorer-target, 2.75rem);
     align-items: center;
     justify-content: center;
     padding: 0;
