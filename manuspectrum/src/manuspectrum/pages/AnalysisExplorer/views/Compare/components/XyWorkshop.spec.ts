@@ -25,11 +25,14 @@ import {
     resetPlotly,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+import { reloadXrfSettings } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfSettings.ts";
 import {
     analysisNode,
     canvasNode,
+    elementNode,
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import { loadLineTable } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/line-table.ts";
 
 import type { DOMWrapper, VueWrapper } from "@vue/test-utils";
 import type {
@@ -76,6 +79,7 @@ interface LayoutCall {
 interface FakeLinked {
     linked: LinkedSelection;
     selection: { value: NodeId[] };
+    slots: { value: (NodeId | null)[] };
     levels: { value: Map<NodeId, RelationLevel> };
     previewLevels: { value: Map<NodeId, RelationLevel> };
     toggle: ReturnType<typeof vi.fn>;
@@ -141,12 +145,15 @@ const FOLIO_CANVAS = "https://iiif.example/f12r";
 /** The part of Compare's linked selection the workshop reads, its state set by each spec. */
 function fakeLinked(): FakeLinked {
     const selection = ref<NodeId[]>([]);
+    const slots = ref<(NodeId | null)[]>([]);
     const levels = shallowRef(new Map<NodeId, RelationLevel>());
     const previewLevels = shallowRef(new Map<NodeId, RelationLevel>());
     const toggle = vi.fn();
     const preview = vi.fn();
     const linked = {
         selection: computed(() => selection.value),
+        slots: computed(() => slots.value),
+        graph: computed(() => ({ symbols: new Map<string, string>() })),
         levels: computed(() => levels.value),
         relations: computed(
             () =>
@@ -169,7 +176,7 @@ function fakeLinked(): FakeLinked {
         toggle,
         preview,
     } as unknown as LinkedSelection;
-    return { linked, selection, levels, previewLevels, toggle, preview };
+    return { linked, selection, slots, levels, previewLevels, toggle, preview };
 }
 
 function nextFrame(): Promise<void> {
@@ -1589,5 +1596,301 @@ describe("XyWorkshop", () => {
         expect(revoke).not.toHaveBeenCalled();
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(revoke).toHaveBeenCalledWith("blob:csv");
+    });
+});
+
+describe("XyWorkshop XRF lens", () => {
+    const FOCUS_1 = "#123456";
+
+    /** Pins an element and lights every curve of the window through its analysis. */
+    function pinElement(symbol: string, lit: number[] = [1, 2]): void {
+        const node = elementNode(symbol);
+        fake.slots.value = [node];
+        fake.selection.value = [node];
+        fake.levels.value = new Map<NodeId, RelationLevel>([
+            [node, "self"],
+            ...lit.map(
+                (slot) =>
+                    [analysisNode(analysisHit(slot).id), "evidence"] as [
+                        NodeId,
+                        RelationLevel,
+                    ],
+            ),
+        ]);
+    }
+
+    async function settle(): Promise<void> {
+        await loadLineTable();
+        await flushPromises();
+        await nextFrame();
+        await flushPromises();
+    }
+
+    function shapeCalls(): Record<string, unknown>[] {
+        return plotly.relayout.mock.calls
+            .map(([, update]) => update)
+            .filter((update) => "shapes" in update);
+    }
+
+    beforeEach(() => {
+        localStorage.clear();
+        reloadXrfSettings();
+        document.documentElement.style.setProperty("--focus-1", FOCUS_1);
+    });
+
+    afterEach(() => {
+        localStorage.clear();
+        reloadXrfSettings();
+    });
+
+    it("draws an element pin as one relayout of the shapes alone, no redraw", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.react.mockClear();
+        plotly.relayout.mockClear();
+        pinElement("Pb");
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(plotly.relayout).toHaveBeenCalledTimes(1);
+        const [, update] = plotly.relayout.mock.calls[0];
+        expect(Object.keys(update)).toEqual(["shapes"]);
+        const shapes = update.shapes as {
+            x0: number;
+            line: { color: string };
+        }[];
+        // Pb Mα1 is the one Pb line inside the 1–3 keV of the fixture's spectra.
+        const line = shapes.find((shape) => Math.abs(shape.x0 - 2.346) < 0.01);
+        expect(line?.line.color).toBe(FOCUS_1);
+    });
+
+    it("shows the same shapes again after another redraw, so a redraw never loses the lines", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        plotly.react.mockClear();
+        await view.find('[data-layout="offset"]').trigger("click");
+        await flushPromises();
+        const layout = lastDrawing().layout as unknown as {
+            shapes: { x0: number }[];
+        };
+        expect(layout.shapes.some((s) => Math.abs(s.x0 - 2.346) < 0.01)).toBe(
+            true,
+        );
+    });
+
+    it("makes no shapes relayout for a pin of an analysis", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.relayout.mockClear();
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.slots.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+            [fileNode(uuid(701)), "direct"],
+        ]);
+        await nextFrame();
+        await flushPromises();
+        expect(shapeCalls()).toEqual([]);
+    });
+
+    it("draws an element added to the lens without touching the focus", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        plotly.relayout.mockClear();
+        const input = view.find(".xrf-strip input");
+        await input.setValue("Pb");
+        await input.trigger("keydown", { key: "Enter" });
+        await nextFrame();
+        await flushPromises();
+        expect(shapeCalls()).toHaveLength(1);
+        expect(fake.toggle).not.toHaveBeenCalled();
+        expect(fake.selection.value).toEqual([]);
+        expect(view.find(".xrf-strip li.element").text()).toContain("Pb");
+    });
+
+    it("shows no lens controls, strip or shapes for a spectrum that is not XRF", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1, {
+                presetKey: "ftir",
+                axisKey: "transmittance|wavenumber (cm-1)|desc",
+            }),
+        ]);
+        await flushPromises();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        expect(view.find(".xrf-lens-controls").exists()).toBe(false);
+        expect(view.find(".xrf-strip").exists()).toBe(false);
+        expect(
+            (lastDrawing().layout as unknown as { shapes?: unknown }).shapes,
+        ).toBeUndefined();
+        expect(shapeCalls()).toEqual([]);
+    });
+
+    it("lays the Y axis on a log scale through a redraw, the hover reading the real values", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.react.mockClear();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+        const { traces, layout } = lastDrawing();
+        expect(layout.yaxis).toMatchObject({ type: "log" });
+        expect(traces[0].customdata).toEqual([10, 30, 20]);
+        expect(traces[0].hovertemplate).toContain("%{customdata:");
+        expect(view.find('[data-scale="log"]').attributes("aria-pressed")).toBe(
+            "true",
+        );
+        plotly.restyle.mockClear();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls[0][1] as {
+            hovertemplate: string[];
+        };
+        expect(update.hovertemplate[0]).toContain("%{customdata:");
+    });
+
+    it("does not offer the log scale with Offset, and says why", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        await view.find('[data-layout="offset"]').trigger("click");
+        await flushPromises();
+        expect(lastDrawing().layout.yaxis).not.toHaveProperty("type");
+        plotly.react.mockClear();
+        const log = view.find('[data-scale="log"]');
+        expect(log.attributes("aria-disabled")).toBe("true");
+        expect(log.attributes("aria-pressed")).toBe("false");
+        expect(view.find(".xrf-lens-controls").text()).toContain(
+            "Not available with Offset",
+        );
+        await log.trigger("click");
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+    });
+
+    it("sets an energy range by a relayout of the X axis, which counts as a zoom", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        plotly.relayout.mockClear();
+        plotly.react.mockClear();
+        await view.find('[data-range="5-15"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.range": [5, 15],
+        });
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(
+            view.find('[data-range="5-15"]').attributes("aria-pressed"),
+        ).toBe("true");
+        expect(view.find('[data-action="reset"]').exists()).toBe(true);
+        await view.find('[data-range="full"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenLastCalledWith(
+            expect.any(HTMLElement),
+            { "xaxis.autorange": true },
+        );
+        expect(view.find('[data-action="reset"]').exists()).toBe(false);
+    });
+
+    it("shows « Custom » once the reader zooms by hand, and « Reset the zoom » goes back to the full range", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        emitPlotly(view.find(".chart").element, "plotly_relayout", {
+            "xaxis.range[0]": 1.5,
+            "xaxis.range[1]": 2.5,
+        });
+        await flushPromises();
+        const custom = view.find('[data-range="custom"]');
+        expect(custom.attributes("aria-pressed")).toBe("true");
+        expect(custom.text()).toBe("Custom");
+        await view.find('[data-action="reset"]').trigger("click");
+        await flushPromises();
+        expect(view.find('[data-range="custom"]').exists()).toBe(false);
+        expect(
+            view.find('[data-range="full"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("exports the PNG with the lens shapes shown now and the line table's source", async () => {
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+            () => undefined,
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        await view.find('[data-action="png"]').trigger("click");
+        await flushPromises();
+        const [figure] = plotly.toImage.mock.calls[0] as unknown as [
+            {
+                layout: LayoutCall & { shapes: { x0: number }[] };
+            },
+        ];
+        expect(
+            figure.layout.shapes.some((s) => Math.abs(s.x0 - 2.346) < 0.01),
+        ).toBe(true);
+        expect(figure.layout.title?.subtitle.text).toMatch(
+            /Lines: XrayDB .* \(CC0\), Elam, Ravel &amp; Sieber 2002$/,
+        );
+    });
+
+    it("names the elements drawn in the chart's label", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        pinElement("Pb", [1]);
+        await flushPromises();
+        expect(view.find(".chart").attributes("aria-label")).toContain(
+            "XRF lines drawn: Pb; listed below the chart.",
+        );
+    });
+
+    it("dims the curves an element focus does not light instead of hiding them, and keeps the Hide switch off", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1),
+            curve(1, 2),
+            curve(9, 3),
+        ]);
+        await settle();
+        plotly.restyle.mockClear();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls[0][1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity).toEqual([1, 0.35, 0.35]);
+        expect(update["line.color"]).toEqual([COLOURS[0], CONTEXT, CONTEXT]);
+        const hide = view.find('[data-mode="hide"]');
+        expect(hide.attributes("aria-disabled")).toBe("true");
+        expect(view.find('[data-mode="dim"]').attributes("aria-pressed")).toBe(
+            "true",
+        );
+        await hide.trigger("click");
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+    });
+
+    it("still hides the curves an analysis focus does not light", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.restyle.mockClear();
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls[0][1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity).toEqual([1, 0]);
     });
 });

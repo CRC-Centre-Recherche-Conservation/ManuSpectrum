@@ -17,9 +17,13 @@ import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconBut
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import XyCurveList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue";
 import XyLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
+import XrfLensControls from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue";
+import XrfLensMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue";
+import XrfLensStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue";
 
 import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
+import { useXrfLens } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import {
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
@@ -30,6 +34,7 @@ import {
     analysisNode,
     canvasNode,
     fileNode,
+    kindOfNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     annotationLabels,
@@ -40,6 +45,7 @@ import {
     annotationOpacities,
     exportFigure,
     hoverTemplatesFor,
+    hoverValueFor,
     multiplesFigure,
     paintOf,
     stackedFigure,
@@ -51,6 +57,7 @@ import {
     hoverModeFor,
     openingLayout,
     outOfRange,
+    rangeUpdate,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -61,6 +68,12 @@ import {
     workshopCsv,
     zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
+import {
+    CUSTOM_RANGE,
+    rangePresetOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-range.ts";
+import { shapesKey } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
+import { isXrfViewer } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/recognise.ts";
 import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
 import {
@@ -70,7 +83,7 @@ import {
     whenFontsReady,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
-import type { PlotMouseEvent } from "plotly.js";
+import type { PlotMouseEvent, Shape } from "plotly.js";
 import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type { XyView } from "utils/xy-views";
 import type { SeriesResult } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
@@ -83,6 +96,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
+import type { LensCurve } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
     Figure,
@@ -103,6 +117,8 @@ type PlotlyModule = Awaited<ReturnType<typeof loadPlotly>>;
 
 interface Curve extends FigureCurve {
     line: FileLine;
+    /** The series as stored: before the treatment. */
+    rawY: number[];
     xRange: Extent | null;
     xReversed: boolean;
 }
@@ -120,6 +136,8 @@ interface DrawnAxis {
 }
 
 const AXIS_NAME = /^[xy]axis\d*$/;
+/** An update that sets or releases the range of an X axis. */
+const TOUCHES_X_AXIS = /xaxis\d*\.(range|autorange)/;
 
 /** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
 const CHART_LAYOUTS: Readonly<
@@ -241,6 +259,11 @@ let shownOpacities: number[] = [];
 let shownHoverMode: "x unified" | "closest" = "x unified";
 let drawing = false;
 let restyleFrame: number | null = null;
+/** The lens shapes the chart shows, serialised (`shapesKey`); a relayout is made only when they differ. */
+let shownShapesKey = "";
+let shapesFrame: number | null = null;
+/** Set while the range select's own relayout runs, so its echo is not read as a zoom by hand. */
+let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
@@ -267,6 +290,10 @@ const drawFailed = ref(false);
 const chartHeight = ref<string | null>(null);
 /** How an unrelated curve shows while a focus is active; shown only then, defaults to Hide. */
 const unrelatedMode = ref<"hide" | "dim">("hide");
+/** The XRF lens draws the Y axis on a log scale (never in Offset). */
+const logScale = ref(false);
+/** The energy range shown: a preset key, or `CUSTOM_RANGE` after a zoom by hand. */
+const rangeKey = ref("full");
 
 /** Each readable file's answer, by preview URL, once the answer is for the files shown. */
 const answers = computed(() => {
@@ -312,6 +339,7 @@ const drawn = computed<Curve[]>(() => {
             order,
             x: series.x,
             y,
+            rawY: series.y,
             xRange: extent(series.x),
             yRange: extent(y),
             xReversed: series.x_reversed,
@@ -378,6 +406,26 @@ const flags = computed(() =>
 );
 const selecting = computed(() => (linked?.selection.value.length ?? 0) > 0);
 const selected = computed(() => new Set(linked?.selection.value ?? []));
+/** An XRF window: every curve drawn is an energy-dispersive spectrum. */
+const xrfWindow = computed(
+    () =>
+        drawn.value.length > 0 &&
+        drawn.value.every((curve) => isXrfViewer(curve.line.file.viewer)),
+);
+/** In an XRF window a focus of element pins alone dims the unrelated curves: the lens draws the elements on every spectrum, hiding would empty the window. */
+const elementFocusOnly = computed(
+    () =>
+        xrfWindow.value &&
+        selecting.value &&
+        (linked?.selection.value ?? []).every((id) => kindOfNode(id) === "el"),
+);
+const dimUnrelated = computed(
+    () => unrelatedMode.value === "dim" || elementFocusOnly.value,
+);
+/** The mode the « Unlinked spectra » switch shows: forced to Dim while an element focus dims. */
+const unrelatedShown = computed(() =>
+    elementFocusOnly.value ? "dim" : unrelatedMode.value,
+);
 /** How the selection links each drawn curve, through its file or its analysis. */
 const levels = computed<(RelationLevel | null)[]>(() =>
     drawn.value.map((curve) => levelIn(linked?.levels.value, curve)),
@@ -388,7 +436,7 @@ const states = computed<CurveState[]>(() =>
             levels.value[index],
             selecting.value,
             levelIn(linked?.previewLevels.value, curve) !== null,
-            unrelatedMode.value === "dim",
+            dimUnrelated.value,
         ),
     ),
 );
@@ -406,6 +454,29 @@ const effectiveStates = computed<CurveState[]>(() =>
     states.value.map((state, index) =>
         hiddenIds.value.has(curveId(drawn.value[index])) ? "hidden" : state,
     ),
+);
+const lensCurves = computed<LensCurve[]>(() =>
+    drawn.value.map((curve) => ({
+        xrf: isXrfViewer(curve.line.file.viewer),
+        analysis: curve.line.analysis.id,
+        analysisName: curve.line.analysis.name.value,
+        slot: curve.line.slot,
+        order: curve.order,
+        x: curve.x,
+        rawY: curve.rawY,
+        extent: curve.xRange,
+        excitation: curve.line.excitation ?? null,
+    })),
+);
+const lens = useXrfLens({
+    curves: () => lensCurves.value,
+    hidden: () => effectiveStates.value.map((state) => state === "hidden"),
+    layout: () => layout.value,
+    slots: () => slots.value,
+});
+/** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
+const logShown = computed(
+    () => xrfWindow.value && logScale.value && layout.value !== "offset",
 );
 const rows = computed<CurveRow[]>(() =>
     drawn.value.map((curve, index) => ({
@@ -515,8 +586,8 @@ const canRetry = computed(() =>
 const loading = computed(
     () => results.status.value === "loading" && drawn.value.length === 0,
 );
-const chartLabel = computed(() =>
-    interpolate(
+const chartLabel = computed(() => {
+    const label = interpolate(
         $ngettext(
             "Chart of %{n} spectrum; the Table layout lists its range.",
             "Chart of %{n} spectra; the Table layout lists their ranges.",
@@ -524,8 +595,15 @@ const chartLabel = computed(() =>
         ),
         { n: drawn.value.length },
         true,
-    ),
-);
+    );
+    if (!xrfWindow.value || lens.drawnSymbols.value.length === 0) return label;
+    const lines = interpolate(
+        $gettext("XRF lines drawn: %{elements}; listed below the chart."),
+        { elements: lens.drawnSymbols.value.join(", ") },
+        true,
+    );
+    return `${label} ${lines}`;
+});
 /** Whether every curve drawn is hidden, by the selection or by the legend's eye. */
 const allHidden = computed(
     () =>
@@ -587,11 +665,12 @@ useWindowActions(() => {
     return actions;
 });
 
-watch([drawn, layout, chart], () => void draw());
+watch([drawn, layout, chart, logShown], () => void draw());
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
 watch(effectiveStates, () => scheduleRestyle());
+watch(lens.model, () => scheduleShapes());
 watch(
     () => resizeTick?.value,
     () => followSize(),
@@ -604,6 +683,7 @@ watch(drawn, (curves) => {
 onBeforeUnmount(() => {
     disposed = true;
     if (restyleFrame !== null) cancelAnimationFrame(restyleFrame);
+    if (shapesFrame !== null) cancelAnimationFrame(shapesFrame);
     purgeChart();
 });
 
@@ -662,6 +742,7 @@ function purgeChart(): void {
     drawnOn = null;
     lastFigure = null;
     shownStates = "";
+    shownShapesKey = "";
     hovered = null;
     press = null;
     if (previewing) linked?.preview(null);
@@ -696,7 +777,13 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
         xReversed: xReversed.value,
         width: element.clientWidth,
         height: element.clientHeight,
+        yLog: logShown.value,
     };
+}
+
+/** The lens shapes for `theme`; none outside an XRF window. */
+function lensShapesFor(theme: PlotTheme): Partial<Shape>[] {
+    return xrfWindow.value ? lens.shapes(theme) : [];
 }
 
 async function draw(): Promise<void> {
@@ -714,7 +801,11 @@ async function draw(): Promise<void> {
         if (disposed) return;
         if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
-        const input = figureInput(theme, element);
+        const shapes = lensShapesFor(theme);
+        const input = {
+            ...figureInput(theme, element),
+            ...(shapes.length > 0 ? { shapes } : {}),
+        };
         const figure =
             layout.value === "multiples"
                 ? multiplesFigure(input)
@@ -731,6 +822,7 @@ async function draw(): Promise<void> {
         drawnTheme = theme;
         drawnSize = sizeOf(element);
         shownStates = effectiveStates.value.join();
+        shownShapesKey = shapesKey(shapes);
         shownOpacities = opacities;
         shownHoverMode = hoverModeFor(visibleCurveCount(effectiveStates.value));
         await plotly.react(
@@ -740,6 +832,7 @@ async function draw(): Promise<void> {
             WORKSHOP_CONFIG,
         );
         zoomed.value = false;
+        rangeKey.value = "full";
         if (disposed) {
             plotly.purge(element);
             return;
@@ -752,7 +845,10 @@ async function draw(): Promise<void> {
         console.error("Spectra comparison could not be drawn", error);
     } finally {
         drawing = false;
-        if (!disposed) scheduleRestyle();
+        if (!disposed) {
+            scheduleRestyle();
+            scheduleShapes();
+        }
     }
     if (released && !disposed) {
         await nextTick();
@@ -772,6 +868,35 @@ function scheduleRestyle(): void {
         restyleFrame = null;
         void restyle();
     });
+}
+
+function scheduleShapes(): void {
+    if (shapesFrame !== null) return;
+    shapesFrame = requestAnimationFrame(() => {
+        shapesFrame = null;
+        void relayoutShapes();
+    });
+}
+
+/**
+ * Shows the lens shapes now due on the drawn chart by replacing the layout's
+ * `shapes` (`editType: "arraydraw"` in plotly.js-cartesian-dist 4.0.0: the
+ * shapes layer alone is drawn again, no calc, no trace), only when they are
+ * not the ones shown. A focus change that moves no line makes no call.
+ */
+async function relayoutShapes(): Promise<void> {
+    const element = drawnOn;
+    const theme = drawnTheme;
+    if (drawing || !plotly || !element || !lastFigure || !theme) return;
+    const shapes = lensShapesFor(theme);
+    const key = shapesKey(shapes);
+    if (key === shownShapesKey) return;
+    try {
+        await plotly.relayout(element, { shapes });
+        shownShapesKey = key;
+    } catch (error: unknown) {
+        console.error("The XRF lines could not be drawn", error);
+    }
 }
 
 /**
@@ -799,7 +924,7 @@ async function restyle(): Promise<void> {
     const templates = hoverTemplatesFor(
         input,
         figure.order,
-        layout.value === "offset" ? "customdata" : "y",
+        hoverValueFor(input, layout.value === "offset"),
         mode,
     );
     try {
@@ -848,6 +973,9 @@ function bindEvents(element: HTMLElement): void {
             return;
         }
         zoomed.value = zoomedAfter(update, zoomed.value);
+        if (!applyingRange && TOUCHES_X_AXIS.test(Object.keys(update).join())) {
+            rangeKey.value = zoomed.value ? CUSTOM_RANGE : "full";
+        }
     });
     target.on("plotly_hover", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
@@ -950,6 +1078,7 @@ function preview(node: NodeId | null, event: PreviewEvent): void {
 
 async function reset(): Promise<void> {
     zoomed.value = false;
+    rangeKey.value = "full";
     if (plotly && chart.value) {
         await resetAxes(
             plotly,
@@ -965,6 +1094,31 @@ function save(href: string, name: string): void {
     link.href = href;
     link.download = name;
     link.click();
+}
+
+/** The energy range of a preset, as a relayout of the X axis; a zoom for every preset but « full ». */
+async function chooseRange(key: string): Promise<void> {
+    const preset = rangePresetOf(key);
+    const element = drawnOn;
+    if (!preset || !plotly || !element) return;
+    const update = rangeUpdate(preset, xReversed.value);
+    rangeKey.value = key;
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, update);
+    } catch (error: unknown) {
+        console.error("The energy range could not be set", error);
+    } finally {
+        applyingRange = false;
+    }
+    zoomed.value = zoomedAfter(update, zoomed.value);
+}
+
+function onLayer(event: {
+    name: keyof typeof lens.layers.value;
+    value: boolean;
+}): void {
+    lens.layers.value = { ...lens.layers.value, [event.name]: event.value };
 }
 
 function exportTitle(): string {
@@ -992,6 +1146,19 @@ function sourceLine(): string {
     );
 }
 
+/** The source line of the PNG, with the line table's source when the lens drew lines. */
+function exportSource(shapes: readonly Partial<Shape>[]): string {
+    const source = sourceLine();
+    const version = lens.table.value?.version;
+    if (!version || shapes.length === 0) return source;
+    const lines = interpolate(
+        $gettext("Lines: XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"),
+        { version },
+        true,
+    );
+    return `${source} · ${lines}`;
+}
+
 /**
  * The chart as a PNG, on the page's background rather than the transparent
  * one of the screen: the curves as shown (a hidden curve left out), Plotly's
@@ -1004,12 +1171,16 @@ async function downloadPng(): Promise<void> {
     if (!plotly || !element || !figure || !theme) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
+    const shapes = lensShapesFor(theme);
     try {
         const url = await plotly.toImage(
-            exportFigure(figure, paints, theme, {
-                title: exportTitle(),
-                source: sourceLine(),
-            }),
+            exportFigure(
+                figure,
+                paints,
+                theme,
+                { title: exportTitle(), source: exportSource(shapes) },
+                xrfWindow.value ? shapes : undefined,
+            ),
             {
                 format: "png",
                 width:
@@ -1057,6 +1228,11 @@ function toggleTable(): void {
     }
     layoutBeforeTable.value = chosenLayout.value;
     chosenLayout.value = "table";
+}
+
+function chooseUnrelated(mode: "hide" | "dim"): void {
+    if (elementFocusOnly.value && mode === "hide") return;
+    unrelatedMode.value = mode;
 }
 
 function chooseView(event: Event): void {
@@ -1133,16 +1309,45 @@ function chooseView(event: Event): void {
                             type="button"
                             :data-mode="option.value"
                             :aria-pressed="
-                                unrelatedMode === option.value
+                                unrelatedShown === option.value
                                     ? 'true'
                                     : 'false'
                             "
-                            @click="unrelatedMode = option.value"
+                            :aria-disabled="
+                                elementFocusOnly && option.value === 'hide'
+                                    ? 'true'
+                                    : undefined
+                            "
+                            @click="chooseUnrelated(option.value)"
                         >
                             <span>{{ option.label }}</span>
                         </button>
                     </span>
                 </div>
+                <XrfLensControls
+                    v-if="xrfWindow && layout !== 'table'"
+                    :log="logScale"
+                    :log-disabled="layout === 'offset'"
+                    :range="rangeKey"
+                    @update-log="logScale = $event.log"
+                    @update-range="chooseRange($event.key)"
+                >
+                    <template #settings>
+                        <XrfLensMenu
+                            :declared="lens.layers.value.declared"
+                            :instrument="lens.layers.value.instrument"
+                            :overlaps="lens.layers.value.overlaps"
+                            :detector="lens.settings.value.detector"
+                            :anodes="lens.anodeRows.value"
+                            :version="lens.table.value?.version ?? ''"
+                            @update-layer="onLayer"
+                            @update-detector="lens.setDetector($event.detector)"
+                            @update-anode="
+                                lens.setAnode($event.analysis, $event.anode)
+                            "
+                        />
+                    </template>
+                </XrfLensControls>
             </div>
             <p
                 v-if="treatments.mixed"
@@ -1197,6 +1402,18 @@ function chooseView(event: Event): void {
                     @show-all="onLegendShowAll"
                 />
             </div>
+            <XrfLensStrip
+                v-if="xrfWindow && layout !== 'table'"
+                :elements="lens.stripElements.value"
+                :declared-slots="lens.declaredSlots.value"
+                :overlaps="lens.overlapNotes.value"
+                :symbols="lens.symbols.value"
+                :lens-symbols="lens.settings.value.elements"
+                :lang="lang"
+                @add-element="lens.addElement($event.symbol)"
+                @remove-element="lens.removeElement($event.symbol)"
+                @toggle-element="lens.toggleElement($event.symbol)"
+            />
             <p class="note">
                 <span>{{
                     $gettext(

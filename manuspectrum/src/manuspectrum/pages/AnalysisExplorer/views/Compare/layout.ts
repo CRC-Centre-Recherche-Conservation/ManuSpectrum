@@ -88,8 +88,9 @@ export const XRF_ANODES = [
 ] as const;
 export type XrfAnode = (typeof XRF_ANODES)[number];
 
-const XRF_MAX_ANODES = 200;
-const XRF_MAX_ELEMENTS = 30;
+/** Most analyses and lens elements a stored record may hold; a longer one is dropped whole on read. */
+export const XRF_MAX_ANODES = 200;
+export const XRF_MAX_ELEMENTS = 30;
 
 /** The XRF settings of the reader: the detector, the anode chosen per analysis (`none` = no tube line drawn) and the lens elements shared by every XRF window. */
 export interface XrfSettings {

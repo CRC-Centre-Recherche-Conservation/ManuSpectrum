@@ -9,6 +9,18 @@ msgstr ""
 msgid "(new tab)"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:133
+msgid "%{a} overlaps %{b}"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:136
+msgid "%{a} overlaps %{b}: tell apart with %{c} vs %{d}"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:99
+msgid "%{anode}, inferred from the conditions"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CoverageMatrix.vue:119
 msgid "%{canvas}, %{component}, %{technique}: %{n} analysis"
 msgid_plural "%{canvas}, %{component}, %{technique}: %{n} analyses"
@@ -29,6 +41,10 @@ msgstr ""
 msgid "%{direct} direct · %{evidence} evidence"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:169
+msgid "%{element} (Z %{number})"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts:42
 msgid "%{facet}: %{value}"
 msgstr ""
@@ -41,6 +57,10 @@ msgstr[1] ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:34
 msgid "%{from} to %{to}"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:42
+msgid "%{from}–%{to} keV"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:71
@@ -83,7 +103,7 @@ msgstr ""
 msgid "%{n} analyses here, zoom in"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:363
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:369
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ComponentStrip.vue:35
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:241
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialEvidence.vue:52
@@ -95,7 +115,7 @@ msgid_plural "%{n} analyses"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:368
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:374
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:200
 msgid "%{n} canvas"
 msgid_plural "%{n} canvases"
@@ -135,7 +155,7 @@ msgid_plural "%{n} identified materials"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:395
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:401
 msgid "%{n} image"
 msgid_plural "%{n} images"
 msgstr[0] ""
@@ -151,7 +171,7 @@ msgstr[1] ""
 msgid "%{n} in this document"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:399
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:405
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue:63
 msgid "%{n} item"
 msgid_plural "%{n} items"
@@ -256,7 +276,7 @@ msgid "%{n} samples here, zoom in"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:67
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:391
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:397
 msgid "%{n} spectrum"
 msgid_plural "%{n} spectra"
 msgstr[0] ""
@@ -287,7 +307,7 @@ msgid "%{name} appears on %{folios}."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:100
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:484
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:555
 msgid "%{name} could not be drawn."
 msgstr ""
 
@@ -310,11 +330,11 @@ msgid "%{name}: %{n} points from %{from} to %{to}."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:109
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:492
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:563
 msgid "%{name}: nothing to draw."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:503
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:574
 msgid "%{name}: out of the shared X range."
 msgstr ""
 
@@ -322,11 +342,11 @@ msgstr ""
 msgid "%{name}: quick view drawn from %{shown} of the file's %{total} points; the workshop works on every point."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:474
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:545
 msgid "%{name}: too large to draw in full; download the file to read it."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:483
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:489
 msgid "%{summary}. %{message}"
 msgstr ""
 
@@ -335,19 +355,19 @@ msgstr ""
 msgid "%{tag} also in %{analysis} →"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:370
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:398
 msgid "%{title} (offset)"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:453
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:459
 msgid "%{title} closed."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:462
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:468
 msgid "%{title} hidden. Show it again from « Hidden windows »."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:308
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:314
 msgid "%{title}: %{n} spectrum added while the window was hidden."
 msgid_plural "%{title}: %{n} spectra added while the window was hidden."
 msgstr[0] ""
@@ -377,8 +397,8 @@ msgstr ""
 msgid "%{width} × %{height} px against %{otherWidth} × %{otherHeight} px"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:327
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:974
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:333
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1128
 msgid "%{y} against %{x}"
 msgstr ""
 
@@ -437,6 +457,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:478
 msgid "Add a related count"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:242
+msgid "Add an element"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:304
@@ -586,13 +610,13 @@ msgstr ""
 msgid "Certainty"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:520
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:591
 msgid "Chart of %{n} spectrum; the Table layout lists its range."
 msgid_plural "Chart of %{n} spectra; the Table layout lists their ranges."
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1083
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1259
 msgid "Chart tools"
 msgstr ""
 
@@ -610,6 +634,7 @@ msgid "cited as evidence"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:322
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts:184
 msgid "cites %{slots}"
 msgstr ""
 
@@ -688,7 +713,7 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:256
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:121
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:518
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:524
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:648
 msgid "Compare"
 msgstr ""
@@ -821,6 +846,10 @@ msgstr ""
 msgid "Curves, by slot"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:52
+msgid "Custom"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:297
 msgid "Data"
 msgstr ""
@@ -842,6 +871,22 @@ msgstr ""
 msgid "Date of the identification"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts:180
+msgid "declared %{level} in %{material}"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:70
+msgid "Declared elements"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts:181
+msgid "declared in %{material}"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:153
+msgid "Declared on %{slot}"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:690
 msgid "Default"
 msgstr ""
@@ -859,11 +904,15 @@ msgstr ""
 msgid "Details"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:186
+msgid "Detector resolution"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ScaleBadge.vue:72
 msgid "Different scale"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:346
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:374
 msgid "Dim"
 msgstr ""
 
@@ -902,11 +951,11 @@ msgstr ""
 msgid "Download %{name}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:575
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:653
 msgid "Download CSV"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:567
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:645
 msgid "Download PNG"
 msgstr ""
 
@@ -959,6 +1008,7 @@ msgid "Element or band"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:543
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:269
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:124
 msgid "Elements"
 msgstr ""
@@ -989,6 +1039,10 @@ msgstr ""
 msgid "Empty the Selection"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:121
+msgid "Energy range"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:131
 msgid "English label"
 msgstr ""
@@ -1009,7 +1063,7 @@ msgstr ""
 msgid "Event"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:541
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:619
 msgid "Every curve is hidden; « Show all spectra » brings them back."
 msgstr ""
 
@@ -1152,7 +1206,7 @@ msgstr ""
 msgid "Folio › component"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:225
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:231
 msgid "folio › component × technique"
 msgstr ""
 
@@ -1178,6 +1232,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:138
 msgid "French label override"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:49
+msgid "Full range"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:675
@@ -1219,7 +1277,7 @@ msgstr ""
 msgid "Greyscale"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:678
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:759
 msgid "Grid"
 msgstr ""
 
@@ -1237,7 +1295,7 @@ msgstr ""
 msgid "Hidden windows (%{n})"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:345
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:373
 msgid "Hide"
 msgstr ""
 
@@ -1325,7 +1383,7 @@ msgid_plural "images"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:344
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:350
 msgid "Imaging"
 msgstr ""
 
@@ -1377,11 +1435,15 @@ msgstr ""
 msgid "Instrument file: download only."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1202
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:71
+msgid "Instrument peaks"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1419
 msgid "Intensities are not comparable in absolute value across instruments."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:374
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:402
 msgid "Intensity (offset)"
 msgstr ""
 
@@ -1436,6 +1498,7 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:498
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:502
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:169
 msgid "Layers"
 msgstr ""
 
@@ -1449,7 +1512,7 @@ msgid "Layers, in order: %{label}"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue:567
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1088
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1264
 msgid "Layout"
 msgstr ""
 
@@ -1459,6 +1522,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue:489
 msgid "Layout: Curtain"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:306
+msgid "Lens elements"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:614
@@ -1475,6 +1542,15 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:176
 msgid "Lime"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:34
+msgid "Linear"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:85
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1155
+msgid "Lines: XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue:61
@@ -1502,13 +1578,21 @@ msgid "Loading the configuration…"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:254
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1077
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1253
 msgid "Loading the spectra…"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue:20
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:226
 msgid "Loading…"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:35
+msgid "Log"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:81
+msgid "Log scale"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:178
@@ -1578,7 +1662,7 @@ msgstr ""
 msgid "micro-image"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:346
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:352
 msgid "Micro-images"
 msgstr ""
 
@@ -1661,7 +1745,7 @@ msgstr ""
 msgid "No analysis published"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:538
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:616
 msgid "No curve here is linked to the selection; press a legend entry to add it."
 msgstr ""
 
@@ -1700,6 +1784,14 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:580
 msgid "No layer of the Selection has a declared element or band."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:352
+msgid "No line in the energy range shown"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:124
+msgid "No line in the table for %{element} (Z 11–92)"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:209
@@ -1744,12 +1836,20 @@ msgstr ""
 msgid "No visualisation for this file: it can be downloaded."
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:240
+msgid "None (no tube)"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts:15
 msgid "Normalised to maximum"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/treatment-labels.ts:16
 msgid "Normalised to total (TIC)"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:93
+msgid "Not available with Offset"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:406
@@ -1789,7 +1889,7 @@ msgstr ""
 msgid "Number"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:676
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:757
 msgid "Offset"
 msgstr ""
 
@@ -1870,7 +1970,11 @@ msgstr ""
 msgid "outside the filters"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:674
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:72
+msgid "Overlaps"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:755
 msgid "Overlay"
 msgstr ""
 
@@ -1941,6 +2045,7 @@ msgstr ""
 msgid "Period: %{start}–%{end}"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:292
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/tool-labels.ts:9
 msgid "Periodic table"
 msgstr ""
@@ -2026,7 +2131,7 @@ msgstr ""
 msgid "Reading the document…"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:542
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:548
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolMenu.vue:71
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ToolWindowBody.vue:85
 msgid "Reading the Selection…"
@@ -2062,6 +2167,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:130
 msgid "Remove"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:161
+msgid "Remove %{element}"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:128
@@ -2111,7 +2220,7 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:269
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:270
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:559
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:637
 msgid "Reset the zoom"
 msgstr ""
 
@@ -2146,7 +2255,7 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:298
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:822
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:436
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1225
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1442
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:839
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:853
 msgid "Retry"
@@ -2173,6 +2282,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/functions/SummaryConfigForm/SummaryConfigForm.vue:488
 msgid "Save this configuration"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:80
+msgid "SDD (≈ 140 eV at Mn Kα)"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:146
@@ -2295,6 +2408,10 @@ msgstr[1] ""
 msgid "Shown enlarged"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:81
+msgid "Si-PIN (≈ 180 eV at Mn Kα)"
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue:500
 msgid "Side %{letter} is empty"
 msgstr ""
@@ -2327,7 +2444,7 @@ msgstr ""
 msgid "Someone else changed this configuration since you opened it. Your changes are not saved: reload it to see their version."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:986
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1140
 msgid "Source: ManuSpectrum, %{url}, %{date}"
 msgstr ""
 
@@ -2335,7 +2452,7 @@ msgstr ""
 msgid "Sources"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:204
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:210
 msgid "Spectra"
 msgstr ""
 
@@ -2343,7 +2460,7 @@ msgstr ""
 msgid "Spectra (CSV)"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:335
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:341
 msgid "Spectra without axis titles"
 msgstr ""
 
@@ -2405,8 +2522,8 @@ msgstr ""
 msgid "Sync zoom and pan across panes"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:582
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:680
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:660
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:761
 msgid "Table"
 msgstr ""
 
@@ -2448,11 +2565,11 @@ msgstr ""
 msgid "The canvas has no “Imaging layers” tile: the stored label is shown as is."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1168
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1373
 msgid "The chart could not be drawn."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:546
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:624
 msgid "The CSV holds the values drawn, treatment included and offset left out: two columns per curve."
 msgstr ""
 
@@ -2464,7 +2581,7 @@ msgstr ""
 msgid "The focus holds %{n} items at most. Unpin one to add another."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:487
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:493
 msgid "The folio image shows %{folio}."
 msgstr ""
 
@@ -2502,7 +2619,7 @@ msgstr[1] ""
 msgid "These data are no longer available."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1152
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1357
 msgid "These spectra come from different configurations: only the treatments they share are offered."
 msgstr ""
 
@@ -2574,7 +2691,7 @@ msgstr ""
 msgid "Too many folios for one IIIF manifest."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:222
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:228
 msgid "Tool"
 msgstr ""
 
@@ -2582,8 +2699,12 @@ msgstr ""
 msgid "Tools of « %{title} »"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1106
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1282
 msgid "Treatment"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:205
+msgid "Tube anode"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue:246
@@ -2602,8 +2723,12 @@ msgstr ""
 msgid "Unfold"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1124
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1128
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:230
+msgid "Unknown"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1300
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1304
 msgid "Unlinked spectra"
 msgstr ""
 
@@ -2649,13 +2774,31 @@ msgstr[1] ""
 msgid "Without a position on the image (%{n})"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:350
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:356
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:384
 msgid "Without visualisation"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:65
 msgid "X range"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue:76
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:235
+msgid "XRF lens"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:152
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:163
+msgid "XRF lens settings"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:324
+msgid "XRF lines"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:601
+msgid "XRF lines drawn: %{elements}; listed below the chart."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:68
@@ -2667,7 +2810,7 @@ msgid "Year"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:157
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:525
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:531
 msgid "Your Selection is empty. Add analyses or identified materials with « + Selection »."
 msgstr ""
 

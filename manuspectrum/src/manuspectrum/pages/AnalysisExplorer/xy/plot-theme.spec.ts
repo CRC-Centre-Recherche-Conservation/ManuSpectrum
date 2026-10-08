@@ -41,6 +41,20 @@ describe("plot theme", () => {
         expect(theme.background).toBe("#faf9f7");
     });
 
+    it("reads the four focus hues, with the tokens' own values as fallback", () => {
+        expect(readPlotTheme().focus).toEqual([
+            "#3d2e8d",
+            "#1e6256",
+            "#93499e",
+            "#760a03",
+        ]);
+        setTokens({ "--focus-2": "#00aa00", "--focus-4": "#aa0000" });
+        const { focus } = readPlotTheme();
+        expect(focus).toHaveLength(4);
+        expect(focus[1]).toBe("#00aa00");
+        expect(focus[3]).toBe("#aa0000");
+    });
+
     it("reads the grey of context curves", () => {
         setTokens({ "--series-context": "#8a8999" });
         expect(readPlotTheme().context).toBe("#8a8999");

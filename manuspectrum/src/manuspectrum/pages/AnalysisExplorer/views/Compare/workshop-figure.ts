@@ -217,6 +217,15 @@ function logY(input: FigureInput, offset: boolean): boolean {
     );
 }
 
+/**
+ * The field a hovertemplate reads its value from: `customdata` where the
+ * traces carry the real values apart from the laid ones (Offset, a log axis),
+ * else `y`.
+ */
+export function hoverValueFor(input: FigureInput, offset: boolean): string {
+    return offset || logY(input, offset) ? "customdata" : "y";
+}
+
 /** A trace laid on a log axis by the shared rule: non-positive values clamped, the real ones in `customdata` for the hover template. */
 function logTrace(trace: Trace): Trace {
     const [laid] = logScaleFigure([{ y: trace.y as number[] }]).traces;

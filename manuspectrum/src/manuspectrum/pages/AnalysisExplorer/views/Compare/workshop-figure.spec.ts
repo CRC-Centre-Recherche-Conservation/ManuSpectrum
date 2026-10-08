@@ -20,6 +20,7 @@ const SERIES = Array.from({ length: 12 }, (_, index) => `#s${index}`);
 
 const THEME: PlotTheme = {
     series: SERIES,
+    focus: ["#f1", "#f2", "#f3", "#f4"],
     context: "#999999",
     ink: "#000000",
     inkMuted: "#444444",
