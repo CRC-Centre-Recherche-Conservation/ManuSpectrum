@@ -40,6 +40,7 @@ import type {
     Item,
     RankedValue,
     Ref,
+    SynthesisPair,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { MaterialRecord } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
@@ -127,6 +128,7 @@ afterEach(() => {
 function mountLinked(
     records: MaterialRecord[] = linkedRecords(),
     attachTo: HTMLElement | undefined = undefined,
+    pairs: SynthesisPair[] = SYNTHESIS.pairs,
 ): {
     view: VueWrapper;
     linked: LinkedSelection;
@@ -137,7 +139,7 @@ function mountLinked(
         attachTo,
         props: {
             records,
-            pairs: SYNTHESIS.pairs,
+            pairs,
             canvases: SYNTHESIS.canvases,
             analyses: ANALYSES,
         },
@@ -243,10 +245,8 @@ describe("MaterialsTable", () => {
         expect(column(view, 2)[2]).toBe("—Not stated");
     });
 
-    it("shows a colour of the colour list with its swatch, a pair group's before its name", async () => {
-        const inha =
-            "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/d549884f-ed29-4a28-87c8-07311d9a14ad";
-        const blue = { ...valueRef(inha, "Blue"), id: BLUE.id };
+    it("shows a colour with the swatch the payload carries, a pair group's before its name", async () => {
+        const blue = { ...BLUE, swatch: "#2f55a4" };
         const records = linkedRecords().map((record) => ({
             ...record,
             summary: {
@@ -254,14 +254,22 @@ describe("MaterialsTable", () => {
                 colours: record.summary.colours.map(() => blue),
             },
         }));
-        const { view } = mountLinked(records);
+        const pairs = SYNTHESIS.pairs.map((pair) =>
+            pair.colour ? { ...pair, colour: blue } : pair,
+        );
+        const { view } = mountLinked(records, undefined, pairs);
         expect(
             chip(view, "Blue").find(".swatch").attributes("style"),
         ).toContain("--swatch: #2f55a4");
         useExplorerStore().setMaterialsGrouping("pair");
         await view.vm.$nextTick();
         const group = view.find("tbody tr.group");
-        expect(group.find("th .swatch.large").exists()).toBe(true);
+        expect(group.find("th .swatch.large").classes()).not.toContain(
+            "unknown",
+        );
+        expect(group.find("th .swatch.large").attributes("style")).toContain(
+            "--swatch: #2f55a4",
+        );
         expect(group.find("th .main .times").text()).toBe("×");
     });
 
@@ -321,6 +329,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [],
                 canvases: [],
+                components: [],
             },
         ]);
         expect(view.find(".citing").exists()).toBe(false);
@@ -383,7 +392,12 @@ describe("MaterialsTable", () => {
         const border = (n: number, name: string): MaterialRecord => {
             const summary = characterization(n, {
                 objects: [BORDER],
-                colours: [valueRef(`http://example.org/c${n}`, `C${n}`)],
+                colours: [
+                    {
+                        ...valueRef(`http://example.org/c${n}`, `C${n}`),
+                        swatch: null,
+                    },
+                ],
                 materials: [
                     {
                         value: valueRef(`http://example.org/m${n}`, name),
@@ -398,6 +412,7 @@ describe("MaterialsTable", () => {
                 selected: n === 1,
                 cites: [],
                 canvases: [],
+                components: [BORDER],
             };
         };
         const loose = characterization(3, { objects: [] });
@@ -410,6 +425,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [],
                 canvases: [],
+                components: [],
             },
         ]);
         expect(names(view)).toEqual(["Border", "Vermilion"]);
@@ -453,6 +469,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [],
                 canvases: [],
+                components: [BORDER],
             },
         ]);
         const group = view.find("tbody tr.group");
@@ -513,6 +530,7 @@ describe("MaterialsTable", () => {
                 selected: false,
                 cites: [],
                 canvases: [],
+                components: [],
             },
         ]);
         const copper = view
@@ -557,6 +575,7 @@ describe("MaterialsTable", () => {
                 selected: true,
                 cites: [AN1],
                 canvases: [],
+                components: [],
             },
         ]);
         await view.find(".expander").trigger("click");
@@ -595,6 +614,7 @@ describe("MaterialsTable", () => {
                 selected: false,
                 cites: [],
                 canvases: ["c9"],
+                components: [],
             },
         ]);
         expect(view.find("tbody .rest .draft").text()).toBe("Draft");
@@ -614,6 +634,7 @@ describe("MaterialsTable", () => {
                         selected: true,
                         cites: [],
                         canvases: ["c1", "c2"],
+                        components: [],
                     },
                 ],
                 pairs: [],
@@ -639,6 +660,7 @@ describe("MaterialsTable", () => {
                         selected: true,
                         cites: [],
                         canvases,
+                        components: [],
                     },
                 ],
                 pairs: [],

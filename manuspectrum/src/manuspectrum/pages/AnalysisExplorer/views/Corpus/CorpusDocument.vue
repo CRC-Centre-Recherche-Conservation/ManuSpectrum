@@ -14,15 +14,18 @@ import { useGettext } from "vue3-gettext";
 
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
+import ReturnPill from "@/manuspectrum/pages/AnalysisExplorer/components/ReturnPill.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue";
 import CanvasStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue";
+import ComponentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue";
 import CharacterizationCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue";
 import FolioLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
 import FolioViewSwitch from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue";
+import OutsideFiltersToggle from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OutsideFiltersToggle.vue";
 import OnThisPage from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue";
 import SampleCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue";
 
@@ -36,7 +39,13 @@ import {
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
+import {
+    characterizationComponents,
+    componentAnalyses,
+    componentMaterials,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
     firstMatchingPage,
@@ -69,6 +78,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
 import type {
+    CharacterizationSummary,
     DocumentCanvas,
     FacetKey,
     Label,
@@ -89,7 +99,8 @@ const CARD_HEADING_ID = "explorer-card-heading";
 const props = defineProps<{ documentId: string }>();
 
 const store = useExplorerStore();
-const { $gettext, $ngettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, $ngettext, interpolate } = gettext;
 const payload = useDocument(() => props.documentId);
 const match = useDocumentMatch(
     () => props.documentId,
@@ -119,7 +130,7 @@ const analysis = useAnalysis(() => focusedAnalysis.value);
 const narrow = useMediaQuery(NARROW_QUERY);
 const phone = useMediaQuery(PHONE_QUERY);
 const heading = useTemplateRef<HTMLElement>("heading");
-const backButton = useTemplateRef<HTMLElement>("back-button");
+const backPill = useTemplateRef<{ element: HTMLElement | null }>("back-pill");
 const folio = useTemplateRef<{
     focusTarget: (id: string) => void;
     focusCurrent: () => void;
@@ -210,13 +221,86 @@ const pageAnnotations = computed(() =>
         (entry) => entry.canvas === currentCanvas.value?.id,
     ),
 );
+/** Whether the analyses and identified materials the filters leave out are left out of the folio and the lists. */
+const hideOutside = computed(() => filtered.value && !store.showOutside);
+/** The analyses of this page and those without a position that the filters leave out, once each. */
+const excludedAnalyses = computed(
+    () =>
+        new Set(
+            [...pageAnnotations.value, ...(data.value?.unlocated ?? [])]
+                .filter((entry) => !entry.match)
+                .map((entry) => entry.analysis),
+        ),
+);
+const excludedCount = computed(() => excludedAnalyses.value.size);
+/** The identified materials of this page and without a zone that the filters leave out. */
+const excludedMaterialsCount = computed(
+    () =>
+        (data.value?.characterizations ?? []).filter(
+            (summary) =>
+                (!summary.zone ||
+                    summary.zone.canvas === currentCanvas.value?.id) &&
+                !(data.value?.keptCharacterizations.has(summary.id) ?? true),
+        ).length,
+);
+/** Whether the switch is offered: a filter is active and something is left out, or the outside is hidden (it must stay reachable). Without a filter the outside is shown, whatever `outside=hide` says. */
+const outsideSwitchShown = computed(
+    () =>
+        filtered.value &&
+        (excludedCount.value > 0 ||
+            excludedMaterialsCount.value > 0 ||
+            !store.showOutside),
+);
+/** Whether an analysis is listed and drawn: kept by the filters, shown while outside ones are shown, or the one in focus. */
+function isShownAnalysis(entry: { analysis: string; match: boolean }): boolean {
+    return (
+        entry.match ||
+        !hideOutside.value ||
+        entry.analysis === focusedAnalysis.value
+    );
+}
+function isShownMaterial(summary: CharacterizationSummary): boolean {
+    return (
+        !hideOutside.value ||
+        (data.value?.keptCharacterizations.has(summary.id) ?? true) ||
+        (store.focus?.kind === "characterization" &&
+            store.focus.id === summary.id)
+    );
+}
+const shownAnnotations = computed(() =>
+    pageAnnotations.value.filter(isShownAnalysis),
+);
+const shownUnlocated = computed(() =>
+    (data.value?.unlocated ?? []).filter(isShownAnalysis),
+);
+/** How many analyses outside the filters the lists leave out. */
+const hiddenCount = computed(
+    () =>
+        [...excludedAnalyses.value].filter(
+            (id) =>
+                ![...shownAnnotations.value, ...shownUnlocated.value].some(
+                    (entry) => entry.analysis === id,
+                ),
+        ).length,
+);
 const pageCharacterizations = computed(() =>
     (data.value?.characterizations ?? []).filter(
-        (summary) => summary.zone?.canvas === currentCanvas.value?.id,
+        (summary) =>
+            summary.zone?.canvas === currentCanvas.value?.id &&
+            isShownMaterial(summary),
     ),
 );
 /** The identified materials drawn on this page and those without a zone. */
 const listedCharacterizations = computed(() =>
+    (data.value?.characterizations ?? []).filter(
+        (summary) =>
+            (!summary.zone ||
+                summary.zone.canvas === currentCanvas.value?.id) &&
+            isShownMaterial(summary),
+    ),
+);
+/** Every identified material of this page and without a zone, shown or not: what the views offered depend on. */
+const availableCharacterizations = computed(() =>
     (data.value?.characterizations ?? []).filter(
         (summary) =>
             !summary.zone || summary.zone.canvas === currentCanvas.value?.id,
@@ -234,6 +318,31 @@ const listedSamples = computed(() =>
         (entry) => !entry.zone || entry.zone.canvas === currentCanvas.value?.id,
     ),
 );
+/** The index of the page shown among the document's pages, -1 without one. */
+const currentCanvasIndex = computed(() =>
+    currentCanvas.value ? canvases.value.indexOf(currentCanvas.value) : -1,
+);
+/** The Components with a zone on this page, each reduced to its zones here: what the folio outlines. */
+const pageComponents = computed(() =>
+    (data.value?.components ?? []).flatMap((entry) => {
+        const zones = entry.zones.filter(
+            (zone) => zone.canvas === currentCanvasIndex.value,
+        );
+        return zones.length > 0 ? [{ ...entry, zones }] : [];
+    }),
+);
+/** The Components of this page and those observed by one of its analyses (or an analysis without a position), in the payload's order. */
+const listedComponents = computed(() => {
+    const observed = new Set(
+        [...pageAnnotations.value, ...(data.value?.unlocated ?? [])].flatMap(
+            (entry) => (entry.component ? [entry.component] : []),
+        ),
+    );
+    const placed = new Set(pageComponents.value.map((entry) => entry.id));
+    return (data.value?.components ?? []).filter(
+        (entry) => placed.has(entry.id) || observed.has(entry.id),
+    );
+});
 /** The folio views that have something on this page, in the order of the switch. */
 const availableViews = computed(() => {
     const views: FolioView[] = [];
@@ -242,7 +351,7 @@ const availableViews = computed(() => {
         (data.value?.unlocated ?? []).length > 0
     )
         views.push("analyses");
-    if (listedCharacterizations.value.length > 0)
+    if (availableCharacterizations.value.length > 0)
         views.push("characterizations");
     if (listedSamples.value.length > 0) views.push("samples");
     return views;
@@ -288,8 +397,8 @@ const analysisStyles = computed(() => {
 const pageLegend = computed<LegendEntry[]>(() => {
     const drawn =
         folioView.value === "analyses"
-            ? pageAnnotations.value
-            : pageAnnotations.value.filter(
+            ? shownAnnotations.value
+            : shownAnnotations.value.filter(
                   (entry) => lit.value?.has(entry.analysis) ?? false,
               );
     const analyses = new Map<string, Set<string>>();
@@ -330,11 +439,37 @@ const openSample = computed(() => {
     if (focus?.kind !== "sample") return null;
     return data.value?.samples.find((entry) => entry.id === focus.id) ?? null;
 });
+const openComponent = computed(() => {
+    const focus = store.focus;
+    if (focus?.kind !== "component") return null;
+    return (
+        data.value?.components.find((entry) => entry.id === focus.id) ?? null
+    );
+});
+/** The analyses of the open Component that this document holds. */
+const openComponentAnalyses = computed(() =>
+    data.value && openComponent.value
+        ? componentAnalyses(data.value, openComponent.value.id, styles.value)
+        : [],
+);
+/** The identified materials linked to the open Component. */
+const openComponentMaterials = computed(() =>
+    data.value && openComponent.value
+        ? componentMaterials(data.value, openComponent.value.id)
+        : [],
+);
+/** The Components the open identified material is linked to. */
+const openCharacterizationComponents = computed(() =>
+    data.value && openCharacterization.value
+        ? characterizationComponents(data.value, openCharacterization.value)
+        : [],
+);
 const cardOpen = computed(
     () =>
         focusedAnalysis.value !== null ||
         openCharacterization.value !== null ||
-        openSample.value !== null,
+        openSample.value !== null ||
+        openComponent.value !== null,
 );
 const lit = computed(() =>
     openCharacterization.value
@@ -383,6 +518,24 @@ const pageCount = computed(() => {
         { n: [...matches.values()].filter(Boolean).length, total },
         true,
     );
+});
+/** « Production: 15th century · Le Mont-Saint-Michel »: the date and the places of the production line, either one alone; empty without a line. */
+const production = computed(() => {
+    const line = data.value?.history.find(
+        (entry) => entry.type === "production",
+    );
+    if (!line) return "";
+    const date = formatProductionDate(
+        line.date,
+        $gettext,
+        interpolate,
+        gettext.current,
+    );
+    const places = line.places.map((place) => place.name.value).join(", ");
+    const text = [date, places].filter((part) => part !== "").join(" · ");
+    return text
+        ? interpolate($gettext("Production: %{text}"), { text }, true)
+        : "";
 });
 const counts = computed(() => {
     const analyses = new Set([
@@ -434,27 +587,29 @@ const folioCaption = computed(() => {
     );
     return [data.value.name.value, canvas.label, position].join(" · ");
 });
-/** « Results », with their number when the results left are known. */
-const backLabel = computed(() => {
-    if (store.documentOrigin !== "results") {
-        return $gettext("Back to the explorer home");
-    }
+/** « Results · n documents » when the results left are known, « Results » when not, « Explorer home » from the home. */
+const resultsLabel = computed(() => {
     const shown = resultsMemo.value;
     if (!shown) return $gettext("Results");
     const text =
         shown.grain === "analyses"
             ? $ngettext(
-                  "Results (%{n} analysis)",
-                  "Results (%{n} analyses)",
+                  "Results · %{n} analysis",
+                  "Results · %{n} analyses",
                   shown.total,
               )
             : $ngettext(
-                  "Results (%{n} document)",
-                  "Results (%{n} documents)",
+                  "Results · %{n} document",
+                  "Results · %{n} documents",
                   shown.total,
               );
     return interpolate(text, { n: shown.total }, true);
 });
+const backLabel = computed(() =>
+    store.documentOrigin === "results"
+        ? resultsLabel.value
+        : $gettext("Explorer home"),
+);
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -466,7 +621,9 @@ provide(CURTAIN_KEY, curtain);
 provide(FOLIO_ZONES_KEY, zones);
 
 useScreenHeading(
-    () => heading.value ?? (isUnavailable.value ? backButton.value : null),
+    () =>
+        heading.value ??
+        (isUnavailable.value ? backPill.value?.element ?? null : null),
 );
 
 /**
@@ -572,9 +729,14 @@ function followFocus(): void {
             ? current.annotations
                   .filter((entry) => entry.analysis === focus.id)
                   .map((entry) => entry.canvas)
-            : [
-                  zoned.find((entry) => entry.id === focus.id)?.zone?.canvas,
-              ].filter((canvas): canvas is string => Boolean(canvas));
+            : focus.kind === "component"
+              ? (
+                    current.components.find((entry) => entry.id === focus.id)
+                        ?.zones ?? []
+                ).flatMap((zone) => current.canvases[zone.canvas]?.id ?? [])
+              : [
+                    zoned.find((entry) => entry.id === focus.id)?.zone?.canvas,
+                ].filter((canvas): canvas is string => Boolean(canvas));
     const here = currentCanvas.value?.id;
     if (pages.length > 0 && !pages.some((canvas) => canvas === here)) {
         store.setCanvas(pages[0]);
@@ -705,14 +867,11 @@ function goHome(): void {
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"
         >
-            <button
-                ref="back-button"
-                type="button"
-                class="explorer-back"
+            <ReturnPill
+                ref="back-pill"
+                :label="backLabel"
                 @click="back"
-            >
-                <span>{{ backLabel }}</span>
-            </button>
+            />
         </Teleport>
         <UnavailableState
             v-if="isUnavailable"
@@ -754,6 +913,11 @@ function goHome(): void {
                 <p class="chips">
                     <span class="chip counts">{{ counts }}</span>
                     <span
+                        v-if="production"
+                        class="chip production"
+                        >{{ production }}</span
+                    >
+                    <span
                         v-if="currentCanvas"
                         class="chip page"
                         >{{ currentCanvas.label }}</span
@@ -783,6 +947,7 @@ function goHome(): void {
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
                         :facet-query="facetQuery"
+                        :document-group="false"
                         @change="onFacetChange"
                     />
                     <p
@@ -808,6 +973,13 @@ function goHome(): void {
                             :available="availableViews"
                             @change="onFolioView"
                         />
+                        <OutsideFiltersToggle
+                            v-if="outsideSwitchShown"
+                            :shown="store.showOutside"
+                            :hidden-count="excludedCount"
+                            :hidden-materials="excludedMaterialsCount"
+                            @change="store.setShowOutside"
+                        />
                         <p
                             class="page-count"
                             aria-live="polite"
@@ -819,7 +991,7 @@ function goHome(): void {
                         <FolioMap
                             ref="folio"
                             :canvas="currentCanvas"
-                            :annotations="pageAnnotations"
+                            :annotations="shownAnnotations"
                             :characterizations="pageCharacterizations"
                             :styles="styles"
                             :focus="store.focus"
@@ -829,9 +1001,11 @@ function goHome(): void {
                             :layers="store.layers"
                             :view="folioView"
                             :samples="pageSamples"
+                            :components="pageComponents"
                             :overlays="overlays"
                             :curtain="curtain"
                             :caption="folioCaption"
+                            stage="soft"
                             @select="onSelect"
                         />
                         <FolioLegend
@@ -867,6 +1041,7 @@ function goHome(): void {
                         :summary="openCharacterization"
                         :scale="certaintyScale"
                         :analysis-styles="analysisStyles"
+                        :components="openCharacterizationComponents"
                         :heading-id="CARD_HEADING_ID"
                         @close="closeCard"
                     />
@@ -878,12 +1053,23 @@ function goHome(): void {
                         :heading-id="CARD_HEADING_ID"
                         @close="closeCard"
                     />
+                    <ComponentCard
+                        v-else-if="!narrow && openComponent"
+                        ref="card"
+                        :component="openComponent"
+                        :analyses="openComponentAnalyses"
+                        :materials="openComponentMaterials"
+                        :heading-id="CARD_HEADING_ID"
+                        @close="closeCard"
+                    />
                     <OnThisPage
                         v-else
-                        :annotations="pageAnnotations"
-                        :unlocated="data.unlocated"
+                        :annotations="shownAnnotations"
+                        :unlocated="shownUnlocated"
+                        :hidden-count="hiddenCount"
                         :characterizations="listedCharacterizations"
                         :samples="listedSamples"
+                        :components="listedComponents"
                         :styles="styles"
                         :view="folioView"
                         :page-label="currentCanvas?.label ?? ''"
@@ -918,6 +1104,7 @@ function goHome(): void {
                     :summary="openCharacterization"
                     :scale="certaintyScale"
                     :analysis-styles="analysisStyles"
+                    :components="openCharacterizationComponents"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
                     @close="closeCard"
@@ -926,6 +1113,15 @@ function goHome(): void {
                     v-else-if="openSample"
                     :sample="openSample"
                     :analysis-names="analysisNames"
+                    :heading-id="CARD_HEADING_ID"
+                    :closable="false"
+                    @close="closeCard"
+                />
+                <ComponentCard
+                    v-else-if="openComponent"
+                    :component="openComponent"
+                    :analyses="openComponentAnalyses"
+                    :materials="openComponentMaterials"
                     :heading-id="CARD_HEADING_ID"
                     :closable="false"
                     @close="closeCard"
@@ -974,33 +1170,6 @@ function goHome(): void {
     color: var(--ink);
     font: inherit;
     font-weight: 600;
-}
-
-.explorer-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    min-block-size: var(--explorer-target);
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--blue-text);
-    font: inherit;
-    font-size: 0.8125rem;
-    cursor: pointer;
-}
-
-.explorer-back::before {
-    content: "←" / "";
-}
-
-.explorer-back:hover {
-    text-decoration: underline;
-}
-
-.explorer-back:focus-visible {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
 }
 
 .corpus-document .document-bar {

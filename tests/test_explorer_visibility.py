@@ -5,6 +5,7 @@ Usage:
 """
 
 import pickle
+from unittest import mock
 
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.cache import cache
@@ -19,6 +20,7 @@ from manuspectrum.utils.public_visibility import (
     is_connected,
     reader_scope,
     request_memo,
+    unpublished_resource_ids,
     visible_set,
 )
 from tests.explorer_fixtures import ACTIVE, ExplorerCase
@@ -90,6 +92,29 @@ class ReaderTests(TestCase):
 class VisibleSetTests(ExplorerCase):
     def ids(self, **named):
         return {str(r.pk) for r in named.values()}
+
+    def test_unpublished_resource_ids_reads_the_draft_states_in_one_query(self):
+        asked = [
+            self.places["france"].pk,
+            self.places["paris"].pk,
+            self.analyses["draft"].pk,
+            "00000000-0000-4000-8000-000000000001",
+        ]
+        drafts = draft_state_id_set()
+
+        with (
+            mock.patch(
+                "manuspectrum.utils.public_visibility.draft_state_id_set",
+                return_value=drafts,
+            ),
+            self.assertNumQueries(1),
+        ):
+            found = unpublished_resource_ids(asked)
+
+        self.assertEqual(
+            found, self.ids(a=self.places["france"], b=self.analyses["draft"])
+        )
+        self.assertEqual(unpublished_resource_ids([]), frozenset())
 
     def test_every_open_chain_is_visible_to_the_visitor(self):
         vs = visible_set(self.anonymous)

@@ -63,6 +63,7 @@ class SearchRouteTests(ServiceCase):
             assert_shape(self, facet, "Facet")
             for value in facet["values"]:
                 assert_shape(self, value, "FacetValue")
+        assert_shape(self, response.json()["period"], "RangeFacet")
         techniques = [r["technique"] for r in response.json()["results"]]
         self.assertTrue(any(techniques))
         for technique in filter(None, techniques):
@@ -78,6 +79,8 @@ class SearchRouteTests(ServiceCase):
         self.assertTrue(results)
         for hit in results:
             assert_shape(self, hit, "DocumentHit")
+            if hit["dates"]:
+                assert_shape(self, hit["dates"], "ProductionDates")
             self.assertTrue(
                 hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
             )
@@ -272,6 +275,24 @@ class ReadRightsCase(CorpusCase):
 
 
 class ReadRightsTests(ReadRightsCase):
+    def test_a_restricted_production_nodegroup_leaves_dates_and_places_out(self):
+        document = str(self.documents["open"].pk)
+        shown = self.document(self.documents["open"].pk)
+        self.assertEqual(len(shown["history"]), 1)
+
+        self.deny(("document", "production_at_place"))
+
+        hit = next(
+            r
+            for r in self.client.get("/en/api/explorer/search?grain=documents").json()[
+                "results"
+            ]
+            if r["id"] == document
+        )
+        self.assertIsNone(hit["dates"])
+        self.assertEqual(self.document(self.documents["open"].pk)["history"], [])
+        self.assertNotIn("Paris", str(self.document(self.documents["open"].pk)))
+
     def test_a_value_nodegroup_the_visitor_cannot_read_leaves_its_values_out(self):
         self.deny(("analysis", "analysis_technique_used"))
 
@@ -387,6 +408,11 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         assert_shape(self, payload, "DocumentPayload")
+        self.assertEqual(len(payload["history"]), 1)
+        for line in payload["history"]:
+            assert_shape(self, line, "HistoryLine")
+            for place in line["places"]:
+                assert_shape(self, place, "NamedRef")
         self.assertEqual(
             payload["canvases"][0]["image"]["service"],
             "https://example.org/iiif/image/f1v",
@@ -411,6 +437,19 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(payload["techniques"][XRF]["label"]["value"], "Portable XRF")
         self.assertEqual([z["canvas"] for z in mine["zones"]], [0])
         self.assertEqual(mine["zones"][0]["shape"]["type"], "point")
+
+    def test_an_analysis_names_its_component(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        by_id = self.by_id(payload)
+        self.assertEqual(
+            by_id[str(self.analyses["open"].pk)]["component"],
+            str(self.components["open"].pk),
+        )
+        self.assertIsNone(by_id[str(self.analyses["on_document"].pk)]["component"])
+        self.assertIn(
+            str(self.components["open"].pk), [c["id"] for c in payload["components"]]
+        )
 
     def test_zones_carry_their_feature(self):
         payload = self.get(self.documents["open"].pk).json()
@@ -660,10 +699,57 @@ class DocumentComponentsTests(IIIFCase):
         payload = self.payload().json()
 
         self.assertEqual(
-            [c["id"] for c in payload["components"]], [str(sooner.pk), str(later.pk)]
+            [c["id"] for c in payload["components"]],
+            [str(sooner.pk), str(later.pk), str(self.components["open"].pk)],
         )
 
-    def test_a_component_without_a_zone_on_the_pages_is_left_out(self):
+    def test_a_component_observed_without_a_zone_is_listed_with_no_zones(self):
+        placed = self.component(
+            "Zzz placed",
+            [("0b0b0b0b-0000-4000-8000-00000000000b", CANVAS_3, POINT)],
+        )
+
+        payload = self.payload().json()
+
+        listed = payload["components"]
+        self.assertEqual(
+            [c["id"] for c in listed],
+            [str(placed.pk), str(self.components["open"].pk)],
+        )
+        self.assertEqual(listed[1]["zones"], [])
+        self.assertIs(listed[1]["unpublished"], False)
+        for component in listed:
+            assert_shape(self, component, "DocumentComponent")
+
+    def test_observed_components_without_zone_follow_those_with_one_by_name(self):
+        second = self.component("Bbb observed", [])
+        first = self.component("Aaa observed", [])
+        for found in (second, first):
+            analysis = self.new_resource("analysis", f"obs {found.pk}")
+            self.tile(analysis, "component_observed", self.refs(found))
+            self.tile(analysis, "analysis_by_project", self.refs(self.projects["main"]))
+
+        listed = [c["id"] for c in self.payload().json()["components"]]
+
+        self.assertEqual(
+            listed,
+            [str(first.pk), str(second.pk), str(self.components["open"].pk)],
+        )
+
+    def test_a_draft_component_is_listed_unpublished(self):
+        draft = self.component(
+            "Draft part", [("0b0b0b0b-0000-4000-8000-00000000000c", CANVAS, POINT)]
+        )
+        self.make_draft(draft)
+
+        marked = {
+            c["id"]: c["unpublished"] for c in self.payload().json()["components"]
+        }
+
+        self.assertIs(marked[str(draft.pk)], True)
+        self.assertIs(marked[str(self.components["open"].pk)], False)
+
+    def test_a_component_neither_placed_nor_observed_is_left_out(self):
         self.component("f. 5r — no zone", [])
         self.component(
             "Elsewhere",
@@ -676,7 +762,10 @@ class DocumentComponentsTests(IIIFCase):
             ],
         )
 
-        self.assertEqual(self.payload().json()["components"], [])
+        self.assertEqual(
+            [c["name"]["value"] for c in self.payload().json()["components"]],
+            ["f. 1v — initial"],
+        )
 
     def test_a_component_of_another_document_is_not_listed(self):
         self.zone(
@@ -685,7 +774,10 @@ class DocumentComponentsTests(IIIFCase):
             alias=self.COMPONENT_ZONE,
         )
 
-        self.assertEqual(self.payload().json()["components"], [])
+        self.assertEqual(
+            [c["id"] for c in self.payload().json()["components"]],
+            [str(self.components["open"].pk)],
+        )
 
     def test_a_restricted_component_is_never_listed(self):
         self.zone(
@@ -712,7 +804,9 @@ class DocumentComponentsTests(IIIFCase):
         with self.captureOnCommitCallbacks(execute=True):
             assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
 
-        self.assertEqual(self.payload().json()["components"], [])
+        listed = self.payload().json()["components"]
+        self.assertEqual([c["id"] for c in listed], [str(self.components["open"].pk)])
+        self.assertEqual(listed[0]["zones"], [])
 
     def test_the_query_count_does_not_grow_with_the_components(self):
         def queries():
@@ -739,7 +833,7 @@ class DocumentComponentsTests(IIIFCase):
             )
         many = queries()
 
-        self.assertEqual(len(self.payload().json()["components"]), 4)
+        self.assertEqual(len(self.payload().json()["components"]), 5)
         self.assertEqual(many, one)
 
 
@@ -759,6 +853,36 @@ class DocumentMatchRouteTests(CorpusCase):
             for value in facet["values"]:
                 assert_shape(self, value, "FacetValue")
         self.assertEqual(payload["kept"]["analyses"], [str(self.analyses["open"].pk)])
+
+    def test_match_carries_period_and_place(self):
+        document = self.documents["open"].pk
+        paris, lyon = (self.places[k].pk for k in ("paris", "lyon"))
+
+        payload = self.get(document, f"?place={lyon}&period=1000,2000").json()
+
+        assert_shape(self, payload, "DocumentMatch")
+        assert_shape(self, payload["period"], "RangeFacet")
+        self.assertEqual(payload["period"]["min"], 1401)
+        keys = {f["key"] for f in payload["facets"]}
+        self.assertIn("place", keys)
+        self.assertEqual(len(payload["kept"]["analyses"]), 2)
+        self.assertEqual(
+            self.get(document, f"?place={paris}").json()["total"],
+            self.get(document).json()["total"],
+        )
+
+    def test_a_restricted_place_nodegroup_leaves_its_facet_out(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            for slug in ("document", "component"):
+                nodegroup = NodeGroup.objects.get(
+                    pk=self.nodes[(slug, "production_at_place")].nodegroup_id
+                )
+                assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        self.assertNotIn("place", [f["key"] for f in payload["facets"]])
+        self.assertIsNone(payload["period"])
 
     def test_the_match_without_a_filter_keeps_every_analysis_as_null(self):
         response = self.get(self.documents["open"].pk)
@@ -1505,6 +1629,50 @@ class FacetRouteTests(CorpusCase):
 
         self.assertEqual((response.status_code, response.content), (404, b""))
 
+    def test_facet_period_answers_the_range_facet(self):
+        search = self.client.get("/en/api/explorer/search?technique=" + XRF).json()
+        response = self.get("period", f"?technique={XRF}&find=ignored")
+
+        self.assertEqual(response.status_code, 200)
+        assert_shape(self, response.json(), "RangeFacet")
+        self.assertEqual(response.json(), search["period"])
+        self.assertEqual(response.json()["event"], "production")
+        for bucket in response.json()["buckets"]:
+            self.assertEqual(set(bucket), {"from", "to", "count"})
+
+    def test_facet_period_of_a_document(self):
+        document = self.documents["open"].pk
+        response = self.get("period", f"?document={document}")
+        match = self.client.get(f"/en/api/explorer/document/{document}/match").json()
+
+        self.assertEqual(response.json(), match["period"])
+        undated = self.get("period", f"?document={self.documents['embargoed'].pk}")
+        self.assertEqual((undated.status_code, undated.content), (404, b""))
+
+    def test_facet_place_lists_the_tree_and_find_keeps_the_ancestors(self):
+        response = self.get("place", "?find=pari")
+
+        facet = response.json()
+        assert_shape(self, facet, "Facet")
+        self.assertEqual(
+            {v["id"] for v in facet["values"]},
+            {str(self.places[k].pk) for k in ("paris", "france", "europe")},
+        )
+        for value in facet["values"]:
+            assert_shape(self, value, "FacetValue")
+
+    def test_a_restricted_place_nodegroup_answers_like_an_absent_facet(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            for slug in ("document", "component"):
+                nodegroup = NodeGroup.objects.get(
+                    pk=self.nodes[(slug, "production_at_place")].nodegroup_id
+                )
+                assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+
+        response = self.get("place")
+
+        self.assertEqual((response.status_code, response.content), (404, b""))
+
     def test_a_document_scope_counts_only_the_rows_of_the_document(self):
         document = self.documents["open"].pk
         corpus = self.get("part").json()
@@ -1664,6 +1832,72 @@ class RevalidationTests(CorpusCase):
 
             self.assertEqual(again.status_code, 304, url)
             self.assertEqual(again["ETag"], etag, url)
+
+    def test_part_colour_is_an_alias_of_colour_with_the_same_etag(self):
+        uri = "http://vocab/part-blue"
+        for route in ("search", "facet/technique"):
+            etags = {
+                self.client.get(f"/en/api/explorer/{route}?{query}")["ETag"]
+                for query in (f"colour={uri}", f"partColour={uri}")
+            }
+
+            self.assertEqual(len(etags), 1, route)
+
+    def test_colour_scope_is_ignored_with_the_same_body_and_etag(self):
+        for route in (
+            "/en/api/explorer/search?colour=http://vocab/blue",
+            "/en/api/explorer/facet/technique?colour=http://vocab/blue",
+            "/en/api/explorer/document/{document}/match?colour=http://vocab/blue",
+        ):
+            url = route.format(document=self.documents["open"].pk)
+            plain = self.client.get(url)
+            scoped = self.client.get(url + "&colourScope=part")
+
+            self.assertEqual(scoped.status_code, 200, url)
+            self.assertEqual(scoped["ETag"], plain["ETag"], url)
+            self.assertEqual(scoped.content, plain.content, url)
+
+    def test_period_place_and_their_options_enter_the_etag(self):
+        paris = self.places["paris"].pk
+        variants = (
+            "period=1300,1400",
+            "period=1300,1400&periodMatch=within",
+            "period=1300,1400&periodEvent=modification",
+            "period=1300,1400&undated=1",
+            f"place={paris}",
+        )
+        for route in (
+            "/en/api/explorer/search?grain=analyses",
+            "/en/api/explorer/facet/technique?grain=analyses",
+            "/en/api/explorer/document/{document}/match?grain=analyses",
+        ):
+            url = route.format(document=self.documents["open"].pk)
+            seen = {self.client.get(url)["ETag"]}
+            for variant in variants:
+                joined = f"{url}&{variant}"
+                etag = self.client.get(joined)["ETag"]
+                with (
+                    mock.patch.object(
+                        explorer_service, "build_bundle", side_effect=AssertionError
+                    ),
+                    mock.patch.object(
+                        explorer_service.explorer_memo,
+                        "remember",
+                        side_effect=AssertionError,
+                    ),
+                ):
+                    again = self.client.get(joined, HTTP_IF_NONE_MATCH=etag)
+
+                self.assertNotIn(etag, seen, joined)
+                seen.add(etag)
+                self.assertEqual(again.status_code, 304, joined)
+
+    def test_an_invalid_period_is_answered_like_none(self):
+        plain = self.client.get("/en/api/explorer/search?grain=analyses")
+        broken = self.client.get("/en/api/explorer/search?grain=analyses&period=abc")
+
+        self.assertEqual(broken.status_code, 200)
+        self.assertEqual(broken.content, plain.content)
 
     def test_the_etag_changes_when_the_data_changes(self):
         for url in self.urls():

@@ -1,0 +1,393 @@
+import { inject, ref } from "vue";
+import { useGettext } from "vue3-gettext";
+
+import {
+    ANNOUNCE_KEY,
+    SELECTION_HINTS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    checkState,
+    planToggleAll,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/bulk.ts";
+import {
+    BASKET_LIMIT,
+    slotLabel,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+
+import type { Ref } from "vue";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import type { CheckState } from "@/manuspectrum/pages/AnalysisExplorer/selection/bulk.ts";
+import type {
+    BasketItem,
+    BulkStatus,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+
+export interface SelectionToggle {
+    isHeld: (key: string) => boolean;
+    /** The slot label (« A3 ») of a held key, else null. */
+    slotOf: (key: string) => string | null;
+    toggle: (key: string, hint?: SelectionHint) => void;
+    stateOf: (keys: readonly string[]) => CheckState;
+    toggleAll: (
+        keys: readonly string[],
+        hints?: ReadonlyMap<string, SelectionHint> | null,
+    ) => void;
+    /** How many of the keys the Selection holds. */
+    heldCount: (keys: readonly string[]) => number;
+    /** Why the keys cannot all be added: no place left, or `needed` of them for `free` places; null when they can (or all are held). */
+    refusal: (keys: readonly string[]) => Refusal | null;
+    /** The short reason of a refusal (« 48 analyses to add, 26 places left », or « Selection full (30 / 30) » with no place left), else null. */
+    blockedReason: (keys: readonly string[]) => string | null;
+    /** Speaks, once, that a refused action added nothing; does nothing when the keys can be added. */
+    announceRefused: (keys: readonly string[]) => void;
+    /** Empties the Selection; `undo()` puts every item back at its slot. */
+    clearAll: () => void;
+    lastBulk: Ref<BulkStatus | null>;
+    undo: () => void;
+    dismiss: () => void;
+}
+
+export type Refusal =
+    | { kind: "full" }
+    | { kind: "room"; needed: number; free: number };
+
+export type Kind = "analysis" | "material" | "item";
+
+/** What `keys` are: analyses (`an:`), identified materials (`ch:`), or items when the kinds are mixed, none, or neither (`af:`, `im:`). */
+export function kindOf(keys: readonly string[]): Kind {
+    const kinds = new Set<Kind>(
+        keys.map((key) =>
+            key.startsWith("an:")
+                ? "analysis"
+                : key.startsWith("ch:")
+                  ? "material"
+                  : "item",
+        ),
+    );
+    return kinds.size === 1 ? [...kinds][0] : "item";
+}
+
+// One Selection, so one last grouped change: the checkbox that makes it and
+// the status line that undoes it are in different components.
+const lastBulk = ref<BulkStatus | null>(null);
+let removedItems: BasketItem[] = [];
+
+/**
+ * Reads and changes the Selection for the checkboxes: one key at a time or a
+ * group, all or nothing. Each action is announced once through `ANNOUNCE_KEY`;
+ * a grouped change leaves `lastBulk`, which `undo()` reverses (an addition is
+ * removed, a removal is restored at its own slots). Hints are recorded before
+ * the keys are added, so the Selection can name an item before it has read it.
+ */
+export function useSelectionToggle(): SelectionToggle {
+    const store = useExplorerStore();
+    const { $gettext, $ngettext, interpolate } = useGettext();
+    const announce = inject(ANNOUNCE_KEY, () => undefined);
+    const selectionHints = inject(
+        SELECTION_HINTS_KEY,
+        () => ref(new Map<string, SelectionHint>()),
+        true,
+    );
+
+    function heldKeys(): Set<string> {
+        return new Set(store.basket.map((item) => item.key));
+    }
+
+    function slotOf(key: string): string | null {
+        const item = store.basket.find((entry) => entry.key === key);
+        return item ? slotLabel(item.slot) : null;
+    }
+
+    function recordHints(
+        incoming: ReadonlyMap<string, SelectionHint> | null | undefined,
+    ): void {
+        if (!incoming || incoming.size === 0) return;
+        const next = new Map(selectionHints.value);
+        for (const [key, hint] of incoming) next.set(key, hint);
+        selectionHints.value = next;
+    }
+
+    function stateOf(keys: readonly string[]): CheckState {
+        return checkState(keys, heldKeys());
+    }
+
+    function needed(kind: Kind, n: number): string {
+        if (kind === "analysis") {
+            return $ngettext("%{n} analysis to add", "%{n} analyses to add", n);
+        }
+        if (kind === "material") {
+            return $ngettext(
+                "%{n} identified material to add",
+                "%{n} identified materials to add",
+                n,
+            );
+        }
+        return $ngettext("%{n} item to add", "%{n} items to add", n);
+    }
+
+    function heldCount(keys: readonly string[]): number {
+        const held = heldKeys();
+        return keys.filter((key) => held.has(key)).length;
+    }
+
+    function refusal(keys: readonly string[]): Refusal | null {
+        const plan = planToggleAll(keys, heldKeys(), store.basketFree);
+        if (plan.action !== "refused") return null;
+        if (plan.free < 1) return { kind: "full" };
+        return { kind: "room", needed: plan.needed, free: plan.free };
+    }
+
+    function announceRefused(keys: readonly string[]): void {
+        const refused = refusal(keys);
+        if (refused === null) return;
+        if (refused.kind === "full") {
+            announce(
+                interpolate(
+                    $gettext(
+                        "Selection full (%{limit} / %{limit}): nothing was added.",
+                    ),
+                    { limit: BASKET_LIMIT },
+                    true,
+                ),
+            );
+            return;
+        }
+        announce(
+            interpolate(
+                $ngettext(
+                    "Not enough room: %{n} to add, %{free} place left. Nothing was added.",
+                    "Not enough room: %{n} to add, %{free} places left. Nothing was added.",
+                    refused.free,
+                ),
+                { n: refused.needed, free: refused.free },
+                true,
+            ),
+        );
+    }
+
+    function blockedReason(keys: readonly string[]): string | null {
+        const plan = planToggleAll(keys, heldKeys(), store.basketFree);
+        if (plan.action !== "refused") return null;
+        if (plan.free < 1) {
+            return interpolate(
+                $gettext("Selection full (%{limit} / %{limit})"),
+                { limit: BASKET_LIMIT },
+                true,
+            );
+        }
+        return [
+            interpolate(
+                needed(kindOf(keys), plan.needed),
+                { n: plan.needed },
+                true,
+            ),
+            interpolate(
+                $ngettext(
+                    "%{free} place left",
+                    "%{free} places left",
+                    plan.free,
+                ),
+                { free: plan.free },
+                true,
+            ),
+        ].join(", ");
+    }
+
+    function toggle(key: string, hint?: SelectionHint): void {
+        if (heldKeys().has(key)) {
+            store.removeFromBasket(key);
+            announce(
+                interpolate(
+                    $gettext("Removed from the Selection (%{n}/%{limit})."),
+                    { n: store.basket.length, limit: BASKET_LIMIT },
+                    true,
+                ),
+            );
+            return;
+        }
+        if (store.basketFree < 1) return;
+        recordHints(hint ? new Map([[key, hint]]) : null);
+        store.addToBasket(key);
+        announce(
+            interpolate(
+                $gettext("Added to the Selection (%{n}/%{limit})."),
+                { n: store.basket.length, limit: BASKET_LIMIT },
+                true,
+            ),
+        );
+    }
+
+    function addedMessage(kind: Kind, n: number): string {
+        if (kind === "analysis") {
+            return $ngettext(
+                "%{n} analysis added (%{first}). Selection: %{held} / %{limit}.",
+                "%{n} analyses added (%{first} to %{last}). Selection: %{held} / %{limit}.",
+                n,
+            );
+        }
+        if (kind === "material") {
+            return $ngettext(
+                "%{n} identified material added (%{first}). Selection: %{held} / %{limit}.",
+                "%{n} identified materials added (%{first} to %{last}). Selection: %{held} / %{limit}.",
+                n,
+            );
+        }
+        return $ngettext(
+            "%{n} item added (%{first}). Selection: %{held} / %{limit}.",
+            "%{n} items added (%{first} to %{last}). Selection: %{held} / %{limit}.",
+            n,
+        );
+    }
+
+    function addedText(slots: readonly string[], kind: Kind): string {
+        return interpolate(
+            addedMessage(kind, slots.length),
+            {
+                n: slots.length,
+                first: slots[0],
+                last: slots[slots.length - 1],
+                held: store.basket.length,
+                limit: BASKET_LIMIT,
+            },
+            true,
+        );
+    }
+
+    function removedText(count: number, kind: Kind): string {
+        const message =
+            kind === "analysis"
+                ? $ngettext(
+                      "%{n} analysis removed from the Selection.",
+                      "%{n} analyses removed from the Selection.",
+                      count,
+                  )
+                : kind === "material"
+                  ? $ngettext(
+                        "%{n} identified material removed from the Selection.",
+                        "%{n} identified materials removed from the Selection.",
+                        count,
+                    )
+                  : $ngettext(
+                        "%{n} item removed from the Selection.",
+                        "%{n} items removed from the Selection.",
+                        count,
+                    );
+        return interpolate(message, { n: count }, true);
+    }
+
+    function toggleAll(
+        keys: readonly string[],
+        hints?: ReadonlyMap<string, SelectionHint> | null,
+    ): void {
+        const plan = planToggleAll(keys, heldKeys(), store.basketFree);
+        if (plan.action === "refused" || plan.keys.length === 0) return;
+        if (plan.action === "remove") {
+            removedItems = store.removeManyFromBasket(plan.keys);
+            lastBulk.value = {
+                kind: "removed",
+                keys: removedItems.map((item) => item.key),
+                slots: removedItems.map((item) => slotLabel(item.slot)),
+                total: store.basket.length,
+            };
+            announce(
+                removedText(
+                    removedItems.length,
+                    kindOf(removedItems.map((item) => item.key)),
+                ),
+            );
+            return;
+        }
+        recordHints(hints);
+        const result = store.addManyToBasket(plan.keys);
+        if (result.refused !== null || result.added.length === 0) return;
+        removedItems = [];
+        const slots = result.added.map((key) => slotOf(key) ?? "");
+        lastBulk.value = {
+            kind: "added",
+            keys: result.added,
+            slots,
+            total: store.basket.length,
+        };
+        announce(addedText(slots, kindOf(result.added)));
+    }
+
+    function clearAll(): void {
+        if (store.basket.length === 0) return;
+        removedItems = store.removeManyFromBasket(
+            store.basket.map((item) => item.key),
+        );
+        lastBulk.value = {
+            kind: "emptied",
+            keys: removedItems.map((item) => item.key),
+            slots: removedItems.map((item) => slotLabel(item.slot)),
+            total: 0,
+        };
+        announce(
+            interpolate(
+                $gettext("Selection emptied (%{n})."),
+                { n: removedItems.length },
+                true,
+            ),
+        );
+    }
+
+    function undo(): void {
+        const status = lastBulk.value;
+        if (status === null) return;
+        lastBulk.value = null;
+        if (status.kind === "added") {
+            const gone = store.removeManyFromBasket(status.keys);
+            announce(
+                removedText(gone.length, kindOf(gone.map((item) => item.key))),
+            );
+            return;
+        }
+        const restored = store.restoreBasketItems(removedItems);
+        removedItems = [];
+        const parts: string[] = [];
+        if (restored.kept.length > 0) {
+            parts.push(
+                addedText(
+                    restored.kept.map((key) => slotOf(key) ?? ""),
+                    kindOf(restored.kept),
+                ),
+            );
+        }
+        if (restored.truncated > 0) {
+            parts.push(
+                interpolate(
+                    $ngettext(
+                        "%{n} item could not be restored (Selection full).",
+                        "%{n} items could not be restored (Selection full).",
+                        restored.truncated,
+                    ),
+                    { n: restored.truncated },
+                    true,
+                ),
+            );
+        }
+        if (parts.length > 0) announce(parts.join(" "));
+    }
+
+    function dismiss(): void {
+        lastBulk.value = null;
+        removedItems = [];
+    }
+
+    return {
+        isHeld: (key) => heldKeys().has(key),
+        slotOf,
+        toggle,
+        stateOf,
+        toggleAll,
+        heldCount,
+        refusal,
+        blockedReason,
+        announceRefused,
+        clearAll,
+        lastBulk,
+        undo,
+        dismiss,
+    };
+}

@@ -26,6 +26,7 @@ function home(): UrlSnapshot {
         document: null,
         focus: null,
         folioView: "analyses",
+        outside: true,
         filters: emptyFilters(),
     };
 }
@@ -54,6 +55,41 @@ describe("toQuery / fromQuery", () => {
                 "&technique=http%3A%2F%2Fx%2Framan&technique=http%3A%2F%2Fx%2Fxrf&year=2021&year=2023&period=1000%2C1200",
         );
         expect(fromQuery(query)).toEqual(snapshot);
+    });
+
+    it("reads the period options, writes them only when they are not the defaults", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(
+                "period=1300,1400&periodMatch=within&periodEvent=modification&undated=1",
+            ),
+        );
+        expect(snapshot.filters).toMatchObject({
+            period: [1300, 1400],
+            periodMatch: "within",
+            periodEvent: "modification",
+            undated: true,
+        });
+        expect(toQuery(snapshot).toString()).toBe(
+            "screen=results&period=1300%2C1400&periodMatch=within&periodEvent=modification&undated=1",
+        );
+        for (const raw of [
+            "periodMatch=overlap&periodEvent=production&undated=0",
+            "periodMatch=bogus&periodEvent=bogus&undated=no",
+            "",
+        ]) {
+            const plain = fromQuery(new URLSearchParams(raw));
+            expect(plain.filters).toMatchObject({
+                periodMatch: "overlap",
+                periodEvent: "production",
+                undated: false,
+            });
+            expect(toQuery(plain).toString()).not.toMatch(
+                /periodMatch|periodEvent|undated/,
+            );
+        }
+        expect(
+            fromQuery(new URLSearchParams("undated=true")).filters.undated,
+        ).toBe(true);
     });
 
     it("reads only a page size the search offers, 10 by default", () => {
@@ -112,6 +148,26 @@ describe("toQuery / fromQuery", () => {
         ).toBe("analyses");
         expect(fromQuery(new URLSearchParams("fview=samples")).folioView).toBe(
             "analyses",
+        );
+    });
+
+    it("writes outside=hide for a document and reads absent as shown", () => {
+        const hidden = fromQuery(
+            new URLSearchParams(`doc=${DOC}&outside=hide`),
+        );
+        expect(hidden.outside).toBe(false);
+        expect(toQuery(hidden).get("outside")).toBe("hide");
+        const shown = fromQuery(new URLSearchParams(`doc=${DOC}`));
+        expect(shown.outside).toBe(true);
+        expect(toQuery(shown).has("outside")).toBe(false);
+        expect(
+            fromQuery(new URLSearchParams(`doc=${DOC}&outside=show`)).outside,
+        ).toBe(true);
+        expect(fromQuery(new URLSearchParams("outside=hide")).outside).toBe(
+            true,
+        );
+        expect(toQuery({ ...home(), outside: false }).has("outside")).toBe(
+            false,
         );
     });
 
@@ -180,6 +236,36 @@ describe("toQuery / fromQuery", () => {
     });
 });
 
+describe("colour in the address", () => {
+    it("reads the legacy partColour into colour and never writes it back", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams("partColour=b&colour=a&partColour=a"),
+        );
+        expect(snapshot.filters.colour).toEqual(["a", "b"]);
+        expect(toQuery(snapshot).toString()).toBe(
+            "screen=results&colour=a&colour=b",
+        );
+    });
+
+    it("ignores an old colourScope and drops it from the canonical address", () => {
+        for (const raw of [
+            "colourScope=part",
+            "colourScope=material",
+            "colourScope=all",
+        ]) {
+            const snapshot = fromQuery(new URLSearchParams(raw));
+            expect("colourScope" in snapshot.filters).toBe(false);
+            expect(snapshot.corpusScreen).toBe("home");
+            expect(toQuery(snapshot).toString()).toBe("");
+            expect(documentHref(snapshot, DOC)).toBe(`?doc=${DOC}`);
+        }
+        const coloured = fromQuery(
+            new URLSearchParams("colour=a&colourScope=part"),
+        );
+        expect(toQuery(coloured).toString()).toBe("screen=results&colour=a");
+    });
+});
+
 describe("historyMode", () => {
     it("historyMode pushes on screen, view, document and first focus, replaces otherwise", () => {
         const start = home();
@@ -232,6 +318,18 @@ describe("store round trip", () => {
         expect(snapshotOf(store)).toEqual({ ...snapshot, view: "corpus" });
     });
 
+    it("applies and reads back the outside state", () => {
+        const store = useExplorerStore();
+        applySnapshot(
+            store,
+            fromQuery(new URLSearchParams(`doc=${DOC}&outside=hide`)),
+        );
+        expect(store.showOutside).toBe(false);
+        expect(snapshotOf(store).outside).toBe(false);
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.showOutside).toBe(true);
+    });
+
     it("returning home from filtered results writes a URL that reads back as home, without filters", () => {
         const store = useExplorerStore();
         store.setFilter("grain", "analyses");
@@ -279,5 +377,35 @@ describe("store round trip", () => {
         expect(sample.folioView).toBe("samples");
         expect(material.folioView).toBe("characterizations");
         expect(chosen.folioView).toBe("analyses");
+    });
+
+    it("reads and writes a focused component, which opens the analyses view", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(`doc=${DOC}&focus=component:${ANALYSIS}`),
+        );
+        expect(snapshot.focus).toEqual({ kind: "component", id: ANALYSIS });
+        expect(snapshot.folioView).toBe("analyses");
+        expect(toQuery(snapshot).get("focus")).toBe(`component:${ANALYSIS}`);
+    });
+});
+
+describe("place in the address", () => {
+    it("reads place as a list, an old single value as a list of one", () => {
+        expect(
+            fromQuery(new URLSearchParams("place=p1")).filters.place,
+        ).toEqual(["p1"]);
+        const several = fromQuery(
+            new URLSearchParams("place=p2&place=p1&place=p2"),
+        );
+        expect(several.filters.place).toEqual(["p1", "p2"]);
+        expect(several.corpusScreen).toBe("results");
+    });
+
+    it("writes one place parameter per place, sorted, and nothing without any", () => {
+        const snapshot = fromQuery(new URLSearchParams("place=p2&place=p1"));
+        expect(toQuery(snapshot).toString()).toBe(
+            "screen=results&place=p1&place=p2",
+        );
+        expect(toQuery(fromQuery(new URLSearchParams(""))).toString()).toBe("");
     });
 });

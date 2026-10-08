@@ -4,6 +4,7 @@ import type {
     CharacterizationSummary,
     ContentStateLink,
     DocumentAnalysis,
+    DocumentComponent,
     DocumentHit,
     DocumentMatch,
     DocumentPayload,
@@ -15,6 +16,7 @@ import type {
     LayerMethod,
     LayerUnit,
     ProductLink,
+    RangeFacet,
     SampleSummary,
     SearchResponse,
     SharePayload,
@@ -79,8 +81,8 @@ export function analysisHit(
 }
 
 const GROUP_OF: Record<Facet["key"], Facet["group"]> = {
+    place: "document",
     partType: "part",
-    partColour: "part",
     part: "part",
     project: "analysis",
     technique: "analysis",
@@ -88,7 +90,7 @@ const GROUP_OF: Record<Facet["key"], Facet["group"]> = {
     year: "analysis",
     material: "characterization",
     colour: "characterization",
-    layer: "characterization",
+    layer: "part",
     element: "characterization",
 };
 
@@ -104,6 +106,8 @@ export function facetValue(
         count: 1,
         mark: null,
         swatch: null,
+        parent: null,
+        unpublished: false,
         ...overrides,
     };
 }
@@ -122,6 +126,8 @@ export function facet(key: Facet["key"], count: number): Facet {
                     ? { code: `T${n}`, colour: n + 1, family: `${key}-${n}` }
                     : null,
             swatch: null,
+            parent: null,
+            unpublished: false,
         })),
         total: count,
     };
@@ -141,6 +147,26 @@ export function homeResponse(
     };
 }
 
+/** The century histogram of 1030–1465: five centuries, three rows without a date. */
+export function rangeFacet(overrides: Partial<RangeFacet> = {}): RangeFacet {
+    return {
+        key: "period",
+        group: "document",
+        event: "production",
+        min: 1030,
+        max: 1465,
+        buckets: [
+            { from: 1001, to: 1100, count: 2 },
+            { from: 1101, to: 1200, count: 0 },
+            { from: 1201, to: 1300, count: 1 },
+            { from: 1301, to: 1400, count: 4 },
+            { from: 1401, to: 1500, count: 7 },
+        ],
+        undated: 3,
+        ...overrides,
+    };
+}
+
 export function searchResponse(
     overrides: Partial<SearchResponse> = {},
 ): SearchResponse {
@@ -152,6 +178,7 @@ export function searchResponse(
         facets: [],
         unpublishedCount: 0,
         withoutAnalyses: 0,
+        period: null,
         ...overrides,
     };
 }
@@ -200,6 +227,7 @@ export function documentMatch(
         facets: [],
         kept: { analyses: [], characterizations: [] },
         total: 0,
+        period: null,
         ...overrides,
     };
 }
@@ -211,6 +239,8 @@ export interface DocumentShown extends Partial<DocumentPayload> {
     /** Identified materials the filters do not keep. */
     dimmed?: string[];
     facets?: Facet[];
+    /** The range facet of the document's analyses. */
+    period?: RangeFacet | null;
 }
 
 /**
@@ -223,6 +253,7 @@ export function documentResponses({
     unlocated = [],
     dimmed = [],
     facets = [],
+    period = null,
     ...overrides
 }: DocumentShown = {}): { payload: DocumentPayload; match: DocumentMatch } {
     const payload = documentPayload(overrides);
@@ -239,6 +270,7 @@ export function documentResponses({
                 technique: entry.technique?.uri ?? null,
                 dataKind: entry.dataKind,
                 unpublished: entry.unpublished,
+                component: entry.component,
                 zones: [],
             });
         }
@@ -256,6 +288,7 @@ export function documentResponses({
         payload: { ...payload, techniques, analyses: [...analyses.values()] },
         match: documentMatch({
             facets,
+            period,
             kept: {
                 analyses: [...kept],
                 characterizations: payload.characterizations
@@ -318,7 +351,27 @@ export function annotation(
         name: label(`MS1_f12_XRF_0${n}`),
         dataKind: "xy",
         unpublished: false,
+        component: null,
         match: true,
+        ...overrides,
+    };
+}
+
+export function documentComponent(
+    n: number,
+    overrides: Partial<DocumentComponent> = {},
+): DocumentComponent {
+    return {
+        id: uuid(700 + n),
+        name: label(`Component ${n}`),
+        zones: [
+            {
+                canvas: 0,
+                shape: { type: "rect", x: 30 * n, y: 40 * n, w: 50, h: 60 },
+                feature: uuid(950 + n),
+            },
+        ],
+        unpublished: false,
         ...overrides,
     };
 }
@@ -348,6 +401,7 @@ export function characterization(
         id: uuid(500 + n),
         name: label(`Characterization ${n}`),
         objects: [],
+        components: [],
         materials: [
             {
                 value: valueRef("http://example.org/vermilion", "Vermilion"),
@@ -355,7 +409,9 @@ export function characterization(
                 proportion: null,
             },
         ],
-        colours: [valueRef("http://example.org/red", "Red")],
+        colours: [
+            { ...valueRef("http://example.org/red", "Red"), swatch: null },
+        ],
         layers: [],
         elements: [],
         zone: null,

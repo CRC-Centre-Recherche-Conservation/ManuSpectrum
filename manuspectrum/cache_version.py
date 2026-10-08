@@ -34,6 +34,7 @@ CACHE_SHAPE_MODULES = (
     # values of its rows (names, labels, references) and its link maps.
     "views/explorer/memo.py",
     "views/explorer/values.py",
+    "views/explorer/swatches.py",
     "utils/role_links.py",
     "utils/roles.py",
     # IIIF documents: the sources and zones the Explorer memo reads, and the

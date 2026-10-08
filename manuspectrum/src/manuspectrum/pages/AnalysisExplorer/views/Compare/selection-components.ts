@@ -48,9 +48,8 @@ function gatherMaterial(
     summary: CharacterizationSummary,
     canvases: readonly string[],
 ): void {
-    for (const object of summary.objects) {
-        if (object.model !== "component") continue;
-        const entry = gather(found, object.id, object.name);
+    for (const ref of summary.components) {
+        const entry = gather(found, ref.id, ref.name);
         entry.materials.add(summary.id);
         for (const canvas of canvases) entry.canvases.add(canvas);
     }
@@ -58,9 +57,8 @@ function gatherMaterial(
 
 /**
  * The components of the Selection: those its analyses observe
- * (`AnalysisHit.component`) and those its identified materials observe
- * (`objects` of model component), the materials of the synthesis
- * included. Their folios are the coverage rows counting them and the
+ * (`AnalysisHit.component`) and those its identified materials are linked
+ * to (`components`), the materials of the synthesis included. Their folios are the coverage rows counting them and the
  * canvases of the materials observing them. In the server's order of the
  * coverage rows, then by name in `locale` (accents and case aside), then id.
  */
@@ -71,9 +69,8 @@ export function selectionComponents(
     locale: string | undefined = undefined,
 ): SelectionComponent[] {
     const found = new Map<string, Gathered>();
-    for (const { key } of basket) {
-        const item = byKey.get(key);
-        if (!item) continue;
+    const items = basket.flatMap(({ key }) => byKey.get(key) ?? []);
+    for (const item of items) {
         if (item.kind === "characterization") {
             gatherMaterial(found, item.characterization, []);
             continue;

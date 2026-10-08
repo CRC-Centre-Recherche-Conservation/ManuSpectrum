@@ -19,11 +19,13 @@ import {
     analysisPayload,
     annotation,
     characterization,
+    documentComponent,
     documentPayload,
     documentResponses,
     facet,
     facetValue,
     label,
+    rangeFacet,
     sample,
     technique,
     uuid,
@@ -70,9 +72,11 @@ const FolioStub = defineComponent({
         layers: { type: Object as PropType<LayerToggles>, required: true },
         view: { type: String, required: true },
         samples: { type: Array, default: () => [] },
+        components: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
         caption: { type: String, default: "" },
+        stage: { type: String, default: "dark" },
     },
     emits: ["select"],
     setup(_props, { expose }) {
@@ -91,6 +95,10 @@ function cardStub(name: string): Component {
             summary: { type: Object, default: null },
             scale: { type: Object, default: null },
             sample: { type: Object, default: null },
+            component: { type: Object, default: null },
+            analyses: { type: Array, default: null },
+            materials: { type: Array, default: null },
+            components: { type: Array, default: null },
             analysisNames: { type: Map, default: null },
             headingId: { type: String, default: undefined },
             closable: { type: Boolean, default: true },
@@ -194,6 +202,7 @@ function mountScreen(
                 AnalysisCard: cardStub("AnalysisCard"),
                 CharacterizationCard: cardStub("CharacterizationCard"),
                 SampleCard: cardStub("SampleCard"),
+                ComponentCard: cardStub("ComponentCard"),
                 ...options.stubs,
             },
         },
@@ -274,6 +283,78 @@ describe("CorpusDocument", () => {
         );
     });
 
+    it("shows the production date and places of the document in its header", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            history: [
+                {
+                    type: "production",
+                    places: [
+                        { id: uuid(500), name: label("Le Mont-Saint-Michel") },
+                        { id: uuid(501), name: label("Avranches") },
+                    ],
+                    date: { start: "1401", end: "1500", approximate: false },
+                },
+            ],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").text()).toBe(
+            "Production: 15th century · Le Mont-Saint-Michel, Avranches",
+        );
+    });
+
+    it("shows a date without a place", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            history: [
+                {
+                    type: "production",
+                    places: [],
+                    date: { start: "1464", end: "1464", approximate: true },
+                },
+            ],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").text()).toBe(
+            "Production: c. 1464",
+        );
+    });
+
+    it("shows a place without a date", async () => {
+        stubFetch({
+            annotations: [annotation(1)],
+            history: [
+                {
+                    type: "production",
+                    places: [{ id: uuid(500), name: label("Avranches") }],
+                    date: { start: null, end: null, approximate: false },
+                },
+            ],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").text()).toBe(
+            "Production: Avranches",
+        );
+    });
+
+    it("shows no production chip without a production line", async () => {
+        stubFetch({ annotations: [annotation(1)] });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .production").exists()).toBe(false);
+    });
+
+    it("leaves the document's own place and date out of its rail", async () => {
+        stubFetch({ annotations: [annotation(1)], period: rangeFacet() });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".rail .period-facet").exists()).toBe(false);
+        expect(wrapper.find(".rail .tree").exists()).toBe(false);
+    });
+
     it("shows the first analysed page and changes page from the strip", async () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
@@ -317,6 +398,229 @@ describe("CorpusDocument", () => {
         expect(wrapper.find(".stage .page-count").text()).toBe(
             "1 / 2 analyses on this page",
         );
+    });
+
+    describe("analyses outside the filters", () => {
+        const FILTERED = (store: ExplorerStore) => {
+            store.setFilter("technique", ["http://example.org/xrf"]);
+            store.openDocument(uuid(1));
+        };
+
+        function shown(extra: DocumentShown = {}): DocumentShown {
+            return {
+                annotations: [annotation(1), annotation(2, { match: false })],
+                unlocated: [
+                    {
+                        analysis: uuid(150),
+                        name: label("FORS_014"),
+                        technique: null,
+                        dataKind: "xy",
+                        unpublished: false,
+                        component: null,
+                        match: false,
+                    },
+                ],
+                ...extra,
+            };
+        }
+
+        const names = (wrapper: ReturnType<typeof mountScreen>["wrapper"]) =>
+            (
+                wrapper.findComponent(FolioStub).props("annotations") as {
+                    analysis: string;
+                }[]
+            ).map((entry) => entry.analysis);
+
+        it("has no switch without filters or without an excluded analysis", async () => {
+            stubFetch(shown());
+            const open = mountScreen();
+            await flushPromises();
+            expect(open.wrapper.find("[role=switch]").exists()).toBe(false);
+            forgetPayloads();
+            stubFetch({ annotations: [annotation(1)] });
+            const kept = mountScreen(FILTERED);
+            await flushPromises();
+            expect(kept.wrapper.find("[role=switch]").exists()).toBe(false);
+        });
+
+        it("offers the switch when only an identified material is left out", async () => {
+            stubFetch({
+                annotations: [annotation(1)],
+                characterizations: [characterization(1), characterization(2)],
+                dimmed: [uuid(502)],
+            });
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            expect(wrapper.find(".stage-head [role=switch]").text()).toContain(
+                "Outside the filters: 1 identified material",
+            );
+        });
+
+        it("keeps the switch while the outside is hidden, whatever the filters leave out", async () => {
+            stubFetch({ annotations: [annotation(1)] });
+            const { wrapper, store } = mountScreen((opened) => {
+                FILTERED(opened);
+                opened.setShowOutside(false);
+            });
+            await flushPromises();
+            const control = wrapper.find(".stage-head [role=switch]");
+            expect(control.exists()).toBe(true);
+            expect(control.attributes("aria-checked")).toBe("false");
+            await control.trigger("click");
+            expect(store.showOutside).toBe(true);
+        });
+
+        it("offers no switch without a filter, and lists everything even when the address says outside=hide", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen((opened) => {
+                opened.openDocument(uuid(1));
+                opened.setShowOutside(false);
+            });
+            await flushPromises();
+            expect(wrapper.find(".stage-head [role=switch]").exists()).toBe(
+                false,
+            );
+            expect(names(wrapper)).toEqual([uuid(101), uuid(102)]);
+        });
+
+        it("offers the switch in the stage head with the number of analyses left out, on by default", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            const control = wrapper.find(".stage-head [role=switch]");
+            expect(control.text()).toContain(
+                "Analyses outside the filters (2)",
+            );
+            expect(control.attributes("aria-checked")).toBe("true");
+            expect(names(wrapper)).toEqual([uuid(101), uuid(102)]);
+        });
+
+        it("hides them from the folio and the list, keeps the page count, and writes the state in the store", async () => {
+            stubFetch(shown());
+            const { wrapper, store } = mountScreen(FILTERED);
+            await flushPromises();
+            await wrapper.find("[role=switch]").trigger("click");
+            expect(store.showOutside).toBe(false);
+            expect(names(wrapper)).toEqual([uuid(101)]);
+            const list = wrapper.findComponent({ name: "OnThisPage" });
+            expect(list.props("annotations")).toHaveLength(1);
+            expect(list.props("unlocated")).toHaveLength(0);
+            expect(list.props("hiddenCount")).toBe(2);
+            expect(wrapper.find(".page-count").text()).toBe(
+                "1 / 2 analyses on this page",
+            );
+            expect(
+                wrapper.find("[role=switch]").attributes("aria-checked"),
+            ).toBe("false");
+        });
+
+        it("starts hidden when the address says outside=hide", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen((store) => {
+                FILTERED(store);
+                store.setShowOutside(false);
+            });
+            await flushPromises();
+            expect(names(wrapper)).toEqual([uuid(101)]);
+        });
+
+        it("keeps the focused analysis visible while the others are hidden", async () => {
+            stubFetch(shown());
+            const { wrapper, store } = mountScreen((store) => {
+                FILTERED(store);
+                store.setShowOutside(false);
+                store.focusOn({ kind: "analysis", id: uuid(102) });
+            });
+            await flushPromises();
+            expect(names(wrapper)).toEqual([uuid(101), uuid(102)]);
+            store.focusOn(null);
+            await flushPromises();
+            expect(names(wrapper)).toEqual([uuid(101)]);
+        });
+
+        it("hides the identified materials the filters drop", async () => {
+            stubFetch({
+                ...shown(),
+                characterizations: [
+                    characterization(1, {
+                        zone: {
+                            canvas: "https://iiif.example/c1",
+                            shape: { type: "point", x: 1, y: 1 },
+                            source: "own",
+                        },
+                    }),
+                    characterization(2, {
+                        zone: {
+                            canvas: "https://iiif.example/c1",
+                            shape: { type: "point", x: 2, y: 2 },
+                            source: "own",
+                        },
+                    }),
+                ],
+                dimmed: [uuid(502)],
+            });
+            const { wrapper, store } = mountScreen(FILTERED);
+            await flushPromises();
+            const drawn = () =>
+                (
+                    wrapper
+                        .findComponent(FolioStub)
+                        .props("characterizations") as { id: string }[]
+                ).map((entry) => entry.id);
+            expect(drawn()).toEqual([uuid(501), uuid(502)]);
+            store.setShowOutside(false);
+            await flushPromises();
+            expect(drawn()).toEqual([uuid(501)]);
+        });
+
+        it("toggles without remounting or redrawing the folio", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            const folio = wrapper.findComponent(FolioStub);
+            const canvas = folio.props("canvas");
+            await wrapper.find("[role=switch]").trigger("click");
+            await wrapper.find("[role=switch]").trigger("click");
+            expect(wrapper.findComponent(FolioStub).vm).toBe(folio.vm);
+            expect(wrapper.findComponent(FolioStub).props("canvas")).toBe(
+                canvas,
+            );
+            expect(focusTarget).not.toHaveBeenCalled();
+        });
+
+        it("keeps every page in the strip and the available views when hiding", async () => {
+            stubFetch(shown());
+            const { wrapper, store } = mountScreen(FILTERED);
+            await flushPromises();
+            const before = wrapper
+                .findComponent({ name: "CanvasStrip" })
+                .props();
+            store.setShowOutside(false);
+            await flushPromises();
+            expect(
+                wrapper.findComponent({ name: "CanvasStrip" }).props(),
+            ).toEqual(before);
+        });
+
+        it("shows the status line of a grouped change under the page checkbox, not after the panel", async () => {
+            stubFetch(shown());
+            const { wrapper } = mountScreen(FILTERED);
+            await flushPromises();
+            expect(wrapper.find(".bulk-status-line").exists()).toBe(false);
+            await wrapper
+                .find(".on-this-page .page-select input")
+                .setValue(true);
+            await flushPromises();
+            expect(
+                wrapper.find(".side .on-this-page .bulk-status-line").exists(),
+            ).toBe(true);
+            expect(
+                wrapper.findAll(".side > .bulk-status-line, .bulk-status-line"),
+            ).toHaveLength(1);
+            expect(wrapper.find(".side > .bulk-status-line").exists()).toBe(
+                false,
+            );
+        });
     });
 
     describe("folio views", () => {
@@ -455,6 +759,195 @@ describe("CorpusDocument", () => {
         });
     });
 
+    describe("components", () => {
+        const OBSERVED = uuid(703);
+        function withComponents() {
+            return {
+                annotations: [
+                    annotation(1, { component: OBSERVED }),
+                    annotation(2, { canvas: "https://iiif.example/c2" }),
+                ],
+                components: [
+                    documentComponent(1),
+                    documentComponent(2, {
+                        zones: [
+                            { ...documentComponent(2).zones[0], canvas: 1 },
+                        ],
+                    }),
+                    documentComponent(3, { zones: [], unpublished: true }),
+                ],
+            };
+        }
+
+        it("lists the components of the page, placed or observed by one of its analyses, and hands the folio their zones on the page", async () => {
+            stubFetch(withComponents());
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll(".on-this-page .components button")
+                    .map((button) => button.attributes("data-focus")),
+            ).toEqual([`component:${uuid(701)}`, `component:${OBSERVED}`]);
+            expect(
+                (
+                    wrapper.findComponent(FolioStub).props("components") as {
+                        id: string;
+                    }[]
+                ).map((entry) => entry.id),
+            ).toEqual([uuid(701)]);
+        });
+
+        it("opens the card of a component from the list with the analyses that observe it, and gives the focus back to the entry on close", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            const selector = `.on-this-page [data-focus="component:${OBSERVED}"]`;
+            const entry = wrapper.find(selector);
+            (entry.element as HTMLButtonElement).focus();
+            await entry.trigger("click");
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "component", id: OBSERVED });
+            const card = wrapper.findComponent({ name: "ComponentCard" });
+            expect(card.props("component")).toMatchObject({ id: OBSERVED });
+            expect(
+                (card.props("analyses") as { id: string }[]).map(
+                    (item) => item.id,
+                ),
+            ).toEqual([uuid(101)]);
+            expect(wrapper.find(".on-this-page").exists()).toBe(false);
+            card.vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(document.activeElement).toBe(wrapper.find(selector).element);
+            wrapper.unmount();
+        });
+
+        it("hands the card the materials linked to the component, and the material card its components", async () => {
+            const observing = characterization(1, {
+                objects: [
+                    {
+                        id: uuid(701),
+                        model: "component",
+                        name: label("Component 1"),
+                    },
+                ],
+                components: [
+                    {
+                        id: uuid(701),
+                        model: "component",
+                        name: label("Component 1"),
+                    },
+                ],
+            });
+            const citing = characterization(2, {
+                evidence: [{ id: uuid(101), name: label("MS1_f12_XRF_01") }],
+                components: [
+                    {
+                        id: OBSERVED,
+                        model: "component",
+                        name: label("Component 3"),
+                    },
+                ],
+            });
+            stubFetch({
+                ...withComponents(),
+                characterizations: [observing, citing, characterization(3)],
+            });
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "component", id: OBSERVED });
+            await flushPromises();
+            expect(
+                (
+                    wrapper
+                        .findComponent({ name: "ComponentCard" })
+                        .props("materials") as { id: string }[]
+                ).map((entry) => entry.id),
+            ).toEqual([citing.id]);
+            store.focusOn({ kind: "characterization", id: citing.id });
+            await flushPromises();
+            expect(
+                (
+                    wrapper
+                        .findComponent({ name: "CharacterizationCard" })
+                        .props("components") as { id: string }[]
+                ).map((entry) => entry.id),
+            ).toEqual([OBSERVED]);
+        });
+
+        it("opens the card when the folio selects an outline", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "component", id: uuid(701) });
+            await flushPromises();
+            expect(store.focus).toEqual({ kind: "component", id: uuid(701) });
+            expect(
+                wrapper
+                    .findComponent({ name: "ComponentCard" })
+                    .props("component"),
+            ).toMatchObject({ id: uuid(701) });
+        });
+
+        it("gives the focus to the document name when an outline opened the card", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen(undefined, {
+                attachTo: document.body,
+            });
+            await flushPromises();
+            wrapper
+                .findComponent(FolioStub)
+                .vm.$emit("select", { kind: "component", id: uuid(701) });
+            await flushPromises();
+            wrapper.findComponent({ name: "ComponentCard" }).vm.$emit("close");
+            await flushPromises();
+            expect(store.focus).toBeNull();
+            expect(document.activeElement).toBe(
+                wrapper.find(".document-bar h2").element,
+            );
+            wrapper.unmount();
+        });
+
+        it("follows a component to the page of its first zone", async () => {
+            stubFetch(withComponents());
+            const { store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "component", id: uuid(702) });
+            await flushPromises();
+            expect(store.document?.canvas).toBe("https://iiif.example/c2");
+        });
+
+        it("keeps a component card for a component the document does not hold closed", async () => {
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen();
+            await flushPromises();
+            store.focusOn({ kind: "component", id: uuid(799) });
+            await flushPromises();
+            expect(
+                wrapper.findComponent({ name: "ComponentCard" }).exists(),
+            ).toBe(false);
+        });
+
+        it("shows the component card in the drawer on a narrow screen", async () => {
+            narrow = true;
+            stubFetch(withComponents());
+            const { wrapper, store } = mountScreen(undefined, {
+                stubs: { transition: false },
+            });
+            await flushPromises();
+            store.focusOn({ kind: "component", id: uuid(701) });
+            await flushPromises();
+            const card = wrapper.findComponent({ name: "ComponentCard" });
+            expect(card.exists()).toBe(true);
+            expect(card.props("closable")).toBe(false);
+            wrapper.unmount();
+        });
+    });
+
     it("opens the analysis card when the folio selects an analysis", async () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
@@ -504,6 +997,7 @@ describe("CorpusDocument", () => {
                     technique: null,
                     dataKind: "xy" as const,
                     unpublished: false,
+                    component: null,
                     match: true,
                 },
             ],
@@ -553,6 +1047,7 @@ describe("CorpusDocument", () => {
                 technique: null,
                 dataKind: "xy" as const,
                 unpublished: false,
+                component: null,
                 match: true,
             },
         ];
@@ -593,8 +1088,9 @@ describe("CorpusDocument", () => {
         await flushPromises();
         const homeLabels = wrapper
             .findAll("button")
-            .filter((button) => button.text() === "Back to the explorer home");
+            .filter((button) => button.text() === "Explorer home");
         expect(homeLabels).toHaveLength(1);
+        expect(wrapper.text()).not.toContain("Back to the explorer home");
     });
 
     it("goes back to the results it was opened from", async () => {
@@ -605,7 +1101,7 @@ describe("CorpusDocument", () => {
             store.openDocument(uuid(1));
         });
         await flushPromises();
-        const back = wrapper.find(".explorer-back");
+        const back = wrapper.find(".return-pill");
         expect(back.text()).toBe("Results");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("results");
@@ -632,9 +1128,48 @@ describe("CorpusDocument", () => {
             { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
         );
         await flushPromises();
-        expect(wrapper.find(".explorer-back").text()).toBe(
-            "Results (30 documents)",
+        expect(wrapper.find(".return-pill").text()).toBe(
+            "Results · 30 documents",
         );
+    });
+
+    it("counts analyses when the results left list analyses", async () => {
+        stubFetch();
+        const memo = ref<ResultsMemo>({
+            query: "grain=analyses",
+            filterKey: "grain=analyses",
+            page: 1,
+            total: 1,
+            grain: "analyses",
+            scroll: 0,
+            opened: uuid(1),
+        });
+        const { wrapper } = mountScreen(
+            (store) => {
+                store.setCorpusScreen("results");
+                store.openDocument(uuid(1));
+            },
+            { provide: { [RESULTS_MEMO_KEY as symbol]: memo } },
+        );
+        await flushPromises();
+        expect(wrapper.find(".return-pill").text()).toBe(
+            "Results · 1 analysis",
+        );
+    });
+
+    it("shows the return pill and no breadcrumb", async () => {
+        stubFetch();
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find("nav.breadcrumb").exists()).toBe(false);
+        expect(wrapper.find(".return-pill").exists()).toBe(true);
+    });
+
+    it("gives the folio the soft stage", async () => {
+        stubFetch();
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.findComponent(FolioStub).props("stage")).toBe("soft");
     });
 
     it("counts its filters in this document only", async () => {
@@ -687,8 +1222,8 @@ describe("CorpusDocument", () => {
         stubFetch();
         const { wrapper, store } = mountScreen();
         await flushPromises();
-        const back = wrapper.find(".explorer-back");
-        expect(back.text()).toBe("Back to the explorer home");
+        const back = wrapper.find(".return-pill");
+        expect(back.text()).toBe("Explorer home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
     });
@@ -846,7 +1381,7 @@ describe("CorpusDocument", () => {
             attachTo: document.body,
         });
         await flushPromises();
-        const entry = wrapper.find(".on-this-page button");
+        const entry = wrapper.find(".on-this-page li > button");
         (entry.element as HTMLButtonElement).focus();
         await entry.trigger("click");
         await flushPromises();

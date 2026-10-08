@@ -1,18 +1,50 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCheckbox.vue";
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
+
 import type { AnalysisHit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-/** One analysis of the results, headed by its name; technique, document, part, date and data kinds as meta. */
+/**
+ * One analysis of the results, headed by its name; technique, document,
+ * component, date and data kinds as meta. Its Selection checkbox sits in a
+ * column on the left; the title stays a separate button that opens the
+ * analysis. A held analysis tints the row.
+ */
 const props = defineProps<{ hit: AnalysisHit }>();
 const emit = defineEmits<{ open: [hit: AnalysisHit] }>();
 
-const { $gettext } = useGettext();
+const { $gettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
+
+const toggle = useSelectionToggle();
+const key = computed(() => analysisKey(props.hit.id));
+const held = computed(() => toggle.isHeld(key.value));
+const hint = computed(() => ({
+    title: props.hit.name,
+    kind: $gettext("analysis"),
+}));
+const addLabel = computed(() =>
+    interpolate(
+        $gettext("Add %{name} to the Selection"),
+        { name: props.hit.name.value },
+        true,
+    ),
+);
+const removeLabel = computed(() =>
+    interpolate(
+        $gettext("Remove %{name} from the Selection"),
+        { name: props.hit.name.value },
+        true,
+    ),
+);
 
 function open(): void {
     emit("open", props.hit);
@@ -20,7 +52,17 @@ function open(): void {
 </script>
 
 <template>
-    <article class="analysis-row">
+    <article
+        class="analysis-row"
+        :class="{ held: held }"
+    >
+        <SelectionCheckbox
+            class="check"
+            :item-key="key"
+            :label="addLabel"
+            :held-label="removeLabel"
+            :hint="hint"
+        />
         <h3 class="title">
             <button
                 type="button"
@@ -73,9 +115,25 @@ function open(): void {
 <style scoped>
 .analysis-row {
     display: grid;
-    gap: 0.25rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.5rem;
+    row-gap: 0.25rem;
+    align-items: start;
     padding-block: 0.75rem;
     border-block-end: 0.0625rem solid var(--border);
+}
+
+.analysis-row.held {
+    background: var(--selection-tint);
+}
+
+.analysis-row > .check {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+}
+
+.analysis-row > :not(.check) {
+    grid-column: 2;
 }
 
 .analysis-row .link {

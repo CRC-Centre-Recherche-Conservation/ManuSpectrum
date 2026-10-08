@@ -53,6 +53,19 @@ describe("SampleCard", () => {
         expect(store.folioView).toBe("analyses");
     });
 
+    it("closes through an icon button named « Close the card », described by Escape", async () => {
+        const { wrapper } = mountCard();
+        const button = wrapper.find("button.close");
+        const named = (attribute: string) =>
+            wrapper.find(`[id="${button.attributes(attribute)}"]`).text();
+
+        expect(button.text()).toBe("");
+        expect(named("aria-labelledby")).toBe("Close the card");
+        expect(named("aria-describedby")).toBe("Escape");
+        await button.trigger("click");
+        expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
     it("emits close from its close button", async () => {
         const { wrapper } = mountCard();
         await wrapper.find(".close").trigger("click");

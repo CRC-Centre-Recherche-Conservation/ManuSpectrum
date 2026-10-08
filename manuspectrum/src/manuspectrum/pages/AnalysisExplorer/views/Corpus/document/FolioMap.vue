@@ -37,6 +37,7 @@ import {
 import type {
     CharacterizationSummary,
     DocumentCanvas,
+    DocumentComponent,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
@@ -80,12 +81,22 @@ const props = withDefaults(
         layers: LayerToggles;
         view: FolioView;
         samples: SampleSummary[];
+        /** The Components with their zones on this page: an outline each, opening its card. */
+        components?: DocumentComponent[];
         overlays?: FolioOverlay[];
         curtain?: string | null;
         /** The line under the page: document, page, position. */
         caption?: string;
+        /** `soft` lightens the stage (`--stage-soft`), for the Corpus; the light table and Compare keep `dark`. */
+        stage?: "dark" | "soft";
     }>(),
-    { overlays: () => [], curtain: null, caption: "" },
+    {
+        components: () => [],
+        overlays: () => [],
+        curtain: null,
+        caption: "",
+        stage: "dark",
+    },
 );
 const emit = defineEmits<{ select: [focus: Focus] }>();
 defineExpose({ focusTarget, focusCurrent });
@@ -108,6 +119,7 @@ const matchOf = new Map<L.Marker, boolean>();
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
 let sampleZones: L.GeoJSON | null = null;
+let componentZones: L.GeoJSON | null = null;
 let order: string[] = [];
 let openedGroup: Set<string> | null = null;
 // An imageless page is fitted to its markers once; later redraws keep the reader's view.
@@ -129,6 +141,7 @@ watch(
         props.dimmedMaterials,
         props.view,
         props.samples,
+        props.components,
         props.lit,
     ],
     drawMarks,
@@ -404,6 +417,45 @@ function repin(): void {
     }
 }
 
+/**
+ * A dashed outline per area zone of the components, under the markers; only
+ * while the zones layer is on, so a hidden outline is not a click target.
+ * The outline is a button of the SVG, named by its component.
+ */
+function drawComponentZones(): L.GeoJSON {
+    const features = props.layers.zones
+        ? props.components.flatMap((component) =>
+              component.zones.flatMap((zone) => {
+                  const feature =
+                      zone.shape.type !== "point"
+                          ? shapeFeature(zone.shape, { id: component.id })
+                          : null;
+                  return feature ? [feature] : [];
+              }),
+          )
+        : [];
+    const group = L.geoJSON(features, {
+        style: () => ({
+            className: "folio-component-zone",
+            dashArray: "2 4",
+            weight: 1.5,
+            fill: false,
+        }),
+        onEachFeature: (feature, layer) => {
+            const id = String(feature.properties.id);
+            const component = props.components.find((entry) => entry.id === id);
+            if (component) layer.bindTooltip(component.name.value);
+            layer.on("click", () => emit("select", { kind: "component", id }));
+            layer.on("add", () => {
+                (layer as L.Path)
+                    .getElement()
+                    ?.setAttribute("aria-hidden", "true");
+            });
+        },
+    });
+    return group;
+}
+
 function drawMarks(): void {
     if (!map) return;
     openedGroup = null;
@@ -413,7 +465,10 @@ function drawMarks(): void {
     frames?.remove();
     materials?.remove();
     sampleZones?.remove();
+    componentZones?.remove();
     markers.clear();
+
+    componentZones = drawComponentZones().addTo(map);
 
     cluster = L.markerClusterGroup({
         maxClusterRadius: CLUSTER_RADIUS,
@@ -764,6 +819,7 @@ function wholePage(): void {
     <div
         ref="host"
         class="folio"
+        :class="{ soft: props.stage === 'soft' }"
         role="group"
         tabindex="-1"
         :aria-label="$gettext('Page and its analyses')"
@@ -871,6 +927,19 @@ function wholePage(): void {
     background: var(--stage);
     border-radius: var(--explorer-radius, 0.625rem);
     overflow: hidden;
+}
+
+.folio.soft,
+.folio.soft .surface {
+    background: var(--stage-soft);
+}
+
+.folio.soft {
+    --stage: var(--stage-soft);
+}
+
+.folio.soft .caption {
+    background: color-mix(in srgb, var(--stage-soft) 85%, black);
 }
 
 .folio:focus-visible {
@@ -1126,6 +1195,16 @@ function wholePage(): void {
 
 .folio :deep(.folio-sample-zone) {
     stroke: var(--ink);
+}
+
+.folio :deep(.folio-component-zone) {
+    stroke: var(--surface);
+    stroke-opacity: 0.6;
+    cursor: pointer;
+}
+
+.folio :deep(.folio-component-zone:hover) {
+    stroke-opacity: 1;
 }
 
 .folio :deep(.folio-cluster) {

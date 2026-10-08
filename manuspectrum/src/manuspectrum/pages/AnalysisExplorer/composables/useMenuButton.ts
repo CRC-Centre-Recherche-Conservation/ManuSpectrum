@@ -13,7 +13,7 @@ export interface MenuButton {
 
 /**
  * The WAI-ARIA menu button pattern for a button and the `role="menuitem"`
- * entries under `root`: the button opens the menu on the first entry
+ * or `role="menuitemradio"` entries under `root`: the button opens the menu on the first entry
  * (ArrowUp: on the last); Arrows, Home and End move through the entries;
  * Escape closes and gives the focus back to the button; Tab or a pointer
  * down outside `root` closes. A negative index counts from the end.
@@ -29,7 +29,7 @@ export function useMenuButton(
     function menuItems(): HTMLElement[] {
         return [
             ...(root.value?.querySelectorAll<HTMLElement>(
-                '[role="menuitem"]',
+                '[role="menuitem"], [role="menuitemradio"]',
             ) ?? []),
         ];
     }

@@ -106,7 +106,7 @@ const notes = computed(() =>
         if (!result.series) {
             return [
                 interpolate(
-                    $gettext("%{name}: nothing to draw."),
+                    $gettext("%{name}: no preview available."),
                     { name: file.name },
                     true,
                 ),

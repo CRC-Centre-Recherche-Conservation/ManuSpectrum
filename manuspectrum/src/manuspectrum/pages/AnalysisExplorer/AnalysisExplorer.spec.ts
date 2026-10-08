@@ -14,6 +14,7 @@ import {
     analysisPayload,
     documentMatch,
     documentPayload,
+    homeResponse,
     searchResponse,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -232,6 +233,29 @@ describe("AnalysisExplorer", () => {
         expect(wrapper.find(".active-filters").exists()).toBe(true);
     });
 
+    it("rewrites an inherited partColour address to the canonical colour once, and leaves a canonical address alone", async () => {
+        window.history.replaceState(null, "", "/en/discover?partColour=c1");
+        const rewrite = vi.spyOn(window.history, "replaceState");
+        const inherited = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        expect(useExplorerStore().filters.colour).toEqual(["c1"]);
+        expect(rewrite).toHaveBeenCalledTimes(1);
+        expect(window.location.search).toBe("?screen=results&colour=c1");
+        inherited.unmount();
+
+        rewrite.mockClear();
+        setActivePinia((pinia = createPinia()));
+        const canonical = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        expect(rewrite).not.toHaveBeenCalled();
+        canonical.unmount();
+        rewrite.mockRestore();
+    });
+
     it("leaves the Corpus filters bar to Corpus, the filters kept for its return", async () => {
         window.history.replaceState(null, "", "/en/discover?q=gold");
         const wrapper = mount(AnalysisExplorer, {
@@ -247,6 +271,43 @@ describe("AnalysisExplorer", () => {
         store.setView("corpus");
         await flushPromises();
         expect(wrapper.find(".active-filters").exists()).toBe(true);
+        wrapper.unmount();
+    });
+
+    it("names the size of the whole corpus in the way out of the filters, from the home", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            url.includes("explorer-home")
+                ? jsonResponse(homeResponse({ documentCount: 51 }))
+                : jsonResponse(searchResponse()),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        window.history.replaceState(null, "", "/en/discover?q=gold");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        expect(wrapper.find(".active-filters .clear-all").text()).toBe(
+            "See the whole corpus (51 documents)",
+        );
+        wrapper.unmount();
+    });
+
+    it("does not ask for the home on the home screen itself more than once", async () => {
+        const fetchMock = vi.fn(async (url: string) =>
+            url.includes("explorer-home")
+                ? jsonResponse(homeResponse())
+                : jsonResponse(searchResponse()),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia] },
+        });
+        await flushPromises();
+        const homeCalls = fetchMock.mock.calls.filter(([url]) =>
+            String(url).includes("explorer-home"),
+        );
+        expect(homeCalls).toHaveLength(1);
         wrapper.unmount();
     });
 
@@ -277,10 +338,10 @@ describe("AnalysisExplorer", () => {
         expect(bar.querySelector(".selection-drawer .opener")).not.toBeNull();
         useExplorerStore().openDocument(uuid(1));
         await flushPromises();
-        expect(bar.querySelector(".explorer-back")?.textContent).toContain(
-            "Back to the explorer home",
+        expect(bar.querySelector(".return-pill")?.textContent).toContain(
+            "Explorer home",
         );
-        expect(wrapper.find(".corpus-document .explorer-back").exists()).toBe(
+        expect(wrapper.find(".corpus-document .return-pill").exists()).toBe(
             false,
         );
         wrapper.unmount();
@@ -312,6 +373,10 @@ describe("AnalysisExplorer", () => {
                       : null,
         );
         expect(owners).toEqual(["share", "selection"]);
+        const actions = bar.querySelector(".ms-explorer-intro__actions");
+        expect(actions?.querySelector(".share-export")).not.toBeNull();
+        expect(actions?.querySelector(".selection-drawer")).not.toBeNull();
+        expect(actions?.closest("#ms-explorer-intro-bar")).toBe(bar);
         wrapper.unmount();
         bar.remove();
     });
@@ -422,7 +487,7 @@ describe("AnalysisExplorer", () => {
         const store = useExplorerStore();
         store.openDocument(uuid(1));
         await flushPromises();
-        const back = wrapper.find(".explorer-back");
+        const back = wrapper.find(".return-pill");
         (back.element as HTMLButtonElement).focus();
         store.$patch((state) => {
             state.document = { id: uuid(1), canvas: null };
@@ -512,9 +577,9 @@ describe("AnalysisExplorer", () => {
         await flushPromises();
         useExplorerStore().openDocument(uuid(1));
         await flushPromises();
-        expect(
-            document.activeElement?.classList.contains("explorer-back"),
-        ).toBe(true);
+        expect(document.activeElement?.classList.contains("return-pill")).toBe(
+            true,
+        );
         wrapper.unmount();
     });
 });

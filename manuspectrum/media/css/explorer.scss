@@ -23,6 +23,7 @@ body.ms-page--app {
     --explorer-radius: 0.625rem;
     --explorer-target: 2rem;
     --explorer-busy-opacity: 0.55;
+    --selection-tint: color-mix(in srgb, var(--blue-text) 8%, var(--surface));
 
     @media (pointer: coarse) {
         --explorer-target: 2.75rem;
@@ -94,15 +95,22 @@ body.ms-page--app::after {
         display: none;
     }
 
-    > .share,
-    > .selection {
+    > .ms-explorer-intro__actions {
         order: 1;
-    }
-
-    > .share,
-    > .selection:first-child,
-    > :not(.share) + .selection {
         margin-inline-start: auto;
+    }
+}
+
+// Share and Selection stay one unit: it moves as a whole, never splits.
+.ms-explorer-intro__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+
+    @media (min-width: 48rem) {
+        flex-wrap: nowrap;
+        flex-shrink: 0;
     }
 }
 
@@ -226,6 +234,14 @@ body.ms-page--app .ms-skeleton {
 
 .p-drawer-mask.p-drawer-bottom .p-drawer.explorer-share-drawer {
     block-size: min(85dvh, calc(100% - 3rem));
+}
+
+.p-drawer.explorer-selection-drawer .p-drawer-content {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    padding-block-end: 0;
+    overflow: hidden;
 }
 
 .p-drawer.explorer-card-drawer,

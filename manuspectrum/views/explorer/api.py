@@ -123,10 +123,20 @@ def _token(route, ticket, *parts):
     ).hexdigest()
 
 
+FILTER_KEYS = (
+    *FACET_KEYS,
+    "q",
+    "period",
+    "periodMatch",
+    "periodEvent",
+    "undated",
+)
+
+
 def _filters(query):
     """The filters of *query* as ``row_filter`` reads them, without grain, page and size."""
     filters, _ = parse_filters(query)
-    return {key: filters[key] for key in (*FACET_KEYS, "q")}
+    return {key: filters[key] for key in FILTER_KEYS}
 
 
 def _ticket(reader):
@@ -162,7 +172,7 @@ class ExplorerFacetView(View):
 
     def get(self, request, key):
         document_id = document_scope(request.GET)
-        if key not in FACET_KEYS or document_id is None:
+        if (key not in FACET_KEYS and key != "period") or document_id is None:
             return _not_found()
         reader = anonymous_user()
         ticket, language = _ticket(reader), translation.get_language()

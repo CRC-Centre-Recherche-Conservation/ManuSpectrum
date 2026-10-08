@@ -1,4 +1,4 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computed, nextTick, ref } from "vue";
@@ -29,6 +29,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: () => "/en/api/explorer/items",
 }));
 
+enableAutoUnmount(afterEach);
 afterEach(() => vi.unstubAllGlobals());
 
 const KEY = `af:${uuid(101)}:${uuid(700)}`;
@@ -56,7 +57,10 @@ function mountPanel() {
     const store = useExplorerStore();
     store.addManyToBasket([KEY, GONE]);
     return {
-        wrapper: mount(SelectionPanel, { global: { plugins: [pinia] } }),
+        wrapper: mount(SelectionPanel, {
+            attachTo: document.body,
+            global: { plugins: [pinia] },
+        }),
         store,
     };
 }
@@ -69,6 +73,28 @@ describe("SelectionPanel", () => {
         const row = wrapper.find(`[data-key="${KEY}"]`);
         expect(row.find(".pending").exists()).toBe(true);
         expect(row.find(".pending").attributes("aria-label")).toBe("Loading…");
+    });
+
+    it("lays out a column whose list is the only scroller and whose footer comes after it", () => {
+        const { wrapper } = mountPanel();
+        const children = [...wrapper.element.children].map(
+            (child) => child.tagName + "." + child.className,
+        );
+        expect(children.at(0)).toMatch(/^HEADER/);
+        expect(children.at(-1)).toMatch(/^FOOTER\.foot/);
+        expect(children.at(-2)).toMatch(/^OL/);
+        const foot = wrapper.get("footer.foot");
+        expect(foot.find(".actions .compare").exists()).toBe(true);
+        expect(wrapper.get("ol").element.contains(foot.element)).toBe(false);
+    });
+
+    it("keeps the undo line in the footer after the Selection is emptied", async () => {
+        const { wrapper } = mountPanel();
+        await wrapper.get(".clear").trigger("click");
+        await nextTick();
+        const foot = wrapper.get("footer.foot");
+        expect(foot.find('[data-action="undo"]').exists()).toBe(true);
+        expect(foot.find(".actions").exists()).toBe(false);
     });
 
     it("says the Selection is kept on this browser", () => {
@@ -275,11 +301,49 @@ describe("SelectionPanel", () => {
         expect(store.basket.map((item) => item.key)).toEqual([KEY]);
     });
 
-    it("empties the Selection", async () => {
+    it("puts Compare (n) first as the primary action and Empty… second", async () => {
+        const { wrapper } = mountPanel();
+        await flushPromises();
+        const buttons = wrapper.findAll(".actions button");
+        expect(buttons.map((button) => button.text())).toEqual([
+            "Compare (2)",
+            "Empty…",
+        ]);
+        expect(buttons[0].classes()).toContain("primary");
+        expect(buttons[1].classes()).toContain("secondary");
+        expect(buttons[1].classes()).not.toContain("primary");
+    });
+
+    it("empties the Selection without asking, then offers Undo", async () => {
         const { wrapper, store } = mountPanel();
         await flushPromises();
         await wrapper.find("button.clear").trigger("click");
         expect(store.basket).toEqual([]);
+        const line = wrapper.get('[role="status"]');
+        expect(line.text()).toContain("Selection emptied (2).");
+        expect(wrapper.find(".actions").exists()).toBe(false);
+    });
+
+    it("restores the emptied Selection at the same slots with Undo", async () => {
+        const { wrapper, store } = mountPanel();
+        await flushPromises();
+        const before = store.basket.map((item) => [item.key, item.slot]);
+        await wrapper.find("button.clear").trigger("click");
+        await wrapper.get('[data-action="undo"]').trigger("click");
+        expect(store.basket.map((item) => [item.key, item.slot])).toEqual(
+            before,
+        );
+        expect(wrapper.find('[role="status"]').exists()).toBe(false);
+    });
+
+    it("moves the focus to Undo when the buttons it was on are gone", async () => {
+        const { wrapper } = mountPanel();
+        await flushPromises();
+        await wrapper.find("button.clear").trigger("click");
+        await flushPromises();
+        expect(document.activeElement).toBe(
+            wrapper.get('[data-action="undo"]').element,
+        );
     });
 
     it("opens the Compare view and says so, for a drawer holding it to close", async () => {

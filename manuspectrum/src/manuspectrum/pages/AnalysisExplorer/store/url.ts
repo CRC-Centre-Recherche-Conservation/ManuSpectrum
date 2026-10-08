@@ -9,7 +9,11 @@ import {
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type { HistoryMode } from "@/manuspectrum/public/useUrlState.ts";
-import type { EventType } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    EventType,
+    PeriodEvent,
+    PeriodMatch,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type {
     CorpusScreen,
@@ -26,6 +30,8 @@ export interface UrlSnapshot {
     document: DocumentState | null;
     focus: Focus | null;
     folioView: FolioView;
+    /** False when a document screen hides the analyses outside the filters (`outside=hide`). */
+    outside: boolean;
     filters: Filters;
 }
 
@@ -33,6 +39,7 @@ const VIEWS: readonly ExplorerView[] = ["corpus", "map", "compare"];
 const FOCUS_KINDS: readonly Focus["kind"][] = [
     "analysis",
     "characterization",
+    "component",
     "file",
     "sample",
 ];
@@ -49,6 +56,8 @@ const EVENT_TYPES: readonly EventType[] = [
     "analysis",
     "sampling",
 ];
+/** The list an older address named the colour of the studied component by; read as `colour`, never written. */
+const LEGACY_COLOUR_KEY = "partColour";
 const YEAR = /^\d{1,4}$/;
 const MAX_TEXT = 200;
 const MAX_VALUE = 2048;
@@ -100,6 +109,7 @@ export function snapshotOf(store: ExplorerStore): UrlSnapshot {
             document: store.document,
             focus: store.focus,
             folioView: store.folioView,
+            outside: store.showOutside,
             filters: store.filters,
         }),
     ) as UrlSnapshot;
@@ -119,6 +129,7 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
         query.set("focus", `${snapshot.focus.kind}:${snapshot.focus.id}`);
     if (snapshot.document && snapshot.folioView !== "analyses")
         query.set("fview", snapshot.folioView);
+    if (snapshot.document && !snapshot.outside) query.set("outside", "hide");
     if (filters.q) query.set("q", filters.q);
     if (filters.grain !== "documents") query.set("grain", filters.grain);
     if (filters.size !== PAGE_SIZES[0]) query.set("size", String(filters.size));
@@ -128,9 +139,13 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
     }
     for (const year of [...filters.year].sort((a, b) => a - b))
         query.append("year", String(year));
-    if (filters.place) query.set("place", filters.place);
     if (filters.period)
         query.set("period", `${filters.period[0]},${filters.period[1]}`);
+    if (filters.periodMatch !== "overlap")
+        query.set("periodMatch", filters.periodMatch);
+    if (filters.periodEvent !== "production")
+        query.set("periodEvent", filters.periodEvent);
+    if (filters.undated) query.set("undated", "1");
     for (const type of [...filters.eventType].sort())
         query.append("eventType", type);
     return query;
@@ -150,10 +165,27 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
     for (const key of LIST_FILTER_KEYS) {
         filters[key] = listOf(query, key);
     }
+    filters.colour = [
+        ...new Set([
+            ...listOf(query, "colour"),
+            ...listOf(query, LEGACY_COLOUR_KEY),
+        ]),
+    ]
+        .sort()
+        .slice(0, MAX_VALUES);
     filters.year = yearsOf(query);
-    const place = (query.get("place") ?? "").trim();
-    filters.place = place && place.length <= MAX_VALUE ? place : null;
     filters.period = periodOf(query.get("period"));
+    filters.periodMatch = (
+        query.get("periodMatch") === "within" ? "within" : "overlap"
+    ) satisfies PeriodMatch;
+    filters.periodEvent = (
+        query.get("periodEvent") === "modification"
+            ? "modification"
+            : "production"
+    ) satisfies PeriodEvent;
+    filters.undated = ["1", "true", "yes"].includes(
+        (query.get("undated") ?? "").toLowerCase(),
+    );
     filters.eventType = listOf(query, "eventType").filter(
         (type): type is EventType => EVENT_TYPES.includes(type as EventType),
     );
@@ -186,6 +218,7 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         document,
         focus,
         folioView: document ? folioView : "analyses",
+        outside: !(document && query.get("outside") === "hide"),
         filters,
     };
 }
@@ -234,6 +267,7 @@ export function applySnapshot(
         state.document = snapshot.document;
         state.focus = snapshot.focus;
         state.folioView = snapshot.folioView;
+        state.showOutside = snapshot.outside;
         state.filters = snapshot.filters;
     });
 }

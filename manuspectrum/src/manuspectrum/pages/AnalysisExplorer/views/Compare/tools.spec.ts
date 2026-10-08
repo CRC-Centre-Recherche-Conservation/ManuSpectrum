@@ -24,7 +24,7 @@ const C1 = "https://iiif.example/c1";
 const C2 = "https://iiif.example/c2";
 const C3 = "https://iiif.example/c3";
 const XRF = technique("http://example.org/xrf", "XRF", 1, "xrf");
-const BLUE = valueRef("http://example.org/blue", "Blue");
+const BLUE = { ...valueRef("http://example.org/blue", "Blue"), swatch: null };
 const AZURITE = valueRef("http://example.org/azurite", "Azurite");
 const CHALK = valueRef("http://example.org/chalk", "Chalk");
 const COPPER = { ...valueRef("http://example.org/cu", "Copper"), symbol: "Cu" };
@@ -245,6 +245,7 @@ describe("folioMarks", () => {
                 technique: XRF_URI,
                 dataKind: "xy",
                 unpublished: false,
+                component: null,
                 zones: [
                     {
                         canvas: 0,
@@ -264,6 +265,7 @@ describe("folioMarks", () => {
                 technique: null,
                 dataKind: "xy",
                 unpublished: false,
+                component: null,
                 zones: [
                     {
                         canvas: 0,

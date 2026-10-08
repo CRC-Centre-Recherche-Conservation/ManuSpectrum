@@ -3,14 +3,17 @@ import {
     computed,
     defineAsyncComponent,
     inject,
+    ref,
     useId,
     useTemplateRef,
 } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
+import CollapsibleSection from "@/manuspectrum/pages/AnalysisExplorer/components/CollapsibleSection.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import AddToSelection from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AddToSelection.vue";
@@ -22,7 +25,10 @@ import {
     formatSize,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    CITE_OPEN_KEY,
+    MIRADOR_URL_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import {
     contentStateLink,
@@ -75,6 +81,7 @@ const emit = defineEmits<{ close: [] }>();
 defineExpose({ focusHeading });
 
 const miradorUrl = inject(MIRADOR_URL_KEY, "");
+const citeOpen = inject(CITE_OPEN_KEY, () => ref(false), true);
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
@@ -164,9 +171,11 @@ const date = computed(() =>
     analysis.value ? formatDateRange(analysis.value.date) : "",
 );
 const datasetHref = computed(() => safeHref(analysis.value?.dataset?.url));
-const licence = computed(
-    () => previewed.value[0]?.license ?? files.value[0]?.license ?? null,
-);
+/** The licence the file states; none stated (the project default) shows nothing. */
+const licence = computed(() => {
+    const stated = previewed.value[0]?.license ?? files.value[0]?.license;
+    return stated && !stated.isDefault ? stated : null;
+});
 const licenceHref = computed(() => safeHref(licence.value?.url));
 const attribution = computed(() => {
     const text = licence.value?.attribution;
@@ -228,12 +237,20 @@ function names(refs: { name: Label }[]): string {
     return refs.map((ref) => ref.name.value).join(", ");
 }
 
+function setCiteOpen(open: boolean): void {
+    citeOpen.value = open;
+}
+
 function close(): void {
     emit("close");
 }
 
 function openCharacterization(id: string): void {
     store.focusOn({ kind: "characterization", id });
+}
+
+function openComponent(id: string): void {
+    store.focusOn({ kind: "component", id });
 }
 
 function focusHeading(): void {
@@ -272,14 +289,14 @@ function focusHeading(): void {
                     <span>{{ $gettext("Loading the analysis…") }}</span>
                 </span>
             </h3>
-            <button
+            <IconButton
                 v-if="props.closable"
-                type="button"
                 class="close"
+                icon="times"
+                :label="$gettext('Close the card')"
+                :description="$gettext('Escape')"
                 @click="close"
-            >
-                <span>{{ $gettext("Close") }}</span>
-            </button>
+            />
             <template v-if="analysis">
                 <p class="meta">
                     <span
@@ -488,10 +505,16 @@ function focusHeading(): void {
                 </template>
                 <template v-if="analysis.component">
                     <dt>
-                        <span>{{ $gettext("Studied area") }}</span>
+                        <span>{{ $gettext("Studied component") }}</span>
                     </dt>
                     <dd :lang="analysis.component.name.lang">
-                        <span>{{ analysis.component.name.value }}</span>
+                        <button
+                            type="button"
+                            class="component-link"
+                            @click="openComponent(analysis.component.id)"
+                        >
+                            <span>{{ analysis.component.name.value }}</span>
+                        </button>
                     </dd>
                 </template>
                 <template v-if="analysis.sample">
@@ -545,13 +568,19 @@ function focusHeading(): void {
                 </template>
             </dl>
 
-            <section
+            <CollapsibleSection
                 class="cite"
-                :aria-labelledby="`${sectionId}-cite`"
+                :title="$gettext('Cite')"
+                :open="citeOpen"
+                @toggle="setCiteOpen"
             >
-                <h4 :id="`${sectionId}-cite`">
-                    <span>{{ $gettext("Cite") }}</span>
-                </h4>
+                <template #actions>
+                    <CopyButton
+                        :text="analysis.citation.text"
+                        :label="$gettext('Copy the citation')"
+                        :icon-only="true"
+                    />
+                </template>
                 <CitationBlock :citation="analysis.citation" />
                 <CopyButton
                     class="availability"
@@ -605,7 +634,7 @@ function focusHeading(): void {
                         >
                     </a>
                 </div>
-            </section>
+            </CollapsibleSection>
 
             <p
                 v-if="licence"
@@ -626,12 +655,6 @@ function focusHeading(): void {
                     :lang="licence.label.lang"
                 >
                     {{ licence.label.value }}
-                </span>
-                <span
-                    v-if="licence.isDefault"
-                    class="badge default"
-                >
-                    {{ $gettext("Project licence (not stated for this file)") }}
                 </span>
                 <span
                     v-if="attribution"
@@ -687,6 +710,7 @@ function focusHeading(): void {
 <style scoped>
 .analysis-card {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     container-type: inline-size;
 }
@@ -707,7 +731,7 @@ function focusHeading(): void {
     font-weight: 600;
 }
 
-.analysis-card .card-head .close {
+.analysis-card .card-head .icon-button {
     grid-column: 2;
     grid-row: 1;
 }
@@ -799,7 +823,17 @@ function focusHeading(): void {
     color: var(--blue-text);
 }
 
-.analysis-card .card-head .close,
+.analysis-card .component-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--blue-text);
+    font: inherit;
+    text-align: start;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .analysis-card .evidence-of button {
     padding-inline: 0.75rem;
     border: 0.0625rem solid var(--border-hover);
