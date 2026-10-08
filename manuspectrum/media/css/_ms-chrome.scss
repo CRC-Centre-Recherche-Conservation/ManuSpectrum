@@ -167,6 +167,24 @@
     --focus-2: #1e6256;
     --focus-3: #93499e;
     --focus-4: #760a03;
+    // XRF lens: one hue per chemical element (lines, labels, chips), for the
+    // elements that hold no focus slot. Every hue reads as text at >= 4.5:1 on
+    // --surface and --bg (lines and chips need 3:1) and sits >= 7 OKLab dE
+    // from --focus-1…4; element-colour.ts assigns them by element, never by
+    // rank, and plot-theme.ts holds the same values as fallbacks (a spec pins
+    // them equal).
+    --element-1: #c2410c;
+    --element-2: #0e6baa;
+    --element-3: #8a6508;
+    --element-4: #14804a;
+    --element-5: #b912e2;
+    --element-6: #d0257a;
+    --element-7: #475569;
+    --element-8: #8e3329;
+    --element-9: #3f6212;
+    --element-10: #6d28d9;
+    --element-11: #0828a0;
+    --element-12: #680070;
     --focus-on: #ffffff;
     // Light table: the letter and rim of panes A to D, apart from the focus
     // hues (gold, teal, orchil, olive: white letters on them >= 4.5:1).

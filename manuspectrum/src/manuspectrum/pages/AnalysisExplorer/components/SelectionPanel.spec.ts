@@ -158,6 +158,7 @@ describe("SelectionPanel", () => {
                         {
                             key: KEY,
                             kind: "analysis-file",
+                            excitation: null,
                             analysis: analysisHit(1),
                             file: fileEntry(),
                         },

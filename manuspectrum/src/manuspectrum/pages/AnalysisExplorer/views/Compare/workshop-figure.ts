@@ -1,3 +1,5 @@
+import { annotationLogY, canUseLogScale, logScaleFigure } from "utils/xy-scale";
+
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     DIM_OPACITY,
@@ -21,7 +23,9 @@ import {
     unifiedHoverLine,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
-import type { Layout, PlotData } from "plotly.js";
+import { DECLARED_STRIP_PX } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
+
+import type { Layout, PlotData, Shape } from "plotly.js";
 import type {
     CurvePaint,
     CurveState,
@@ -62,6 +66,16 @@ export interface FigureInput {
     /** The chart element's size, in pixels (0 when unknown). */
     width: number;
     height: number;
+    /** A logarithmic Y on every Y axis; ignored in Offset and when a curve has no positive value. */
+    yLog?: boolean;
+    /** Layout shapes drawn over the curves, passed through as given. */
+    shapes?: readonly Partial<Shape>[];
+    /**
+     * The chart carries the XRF lens: its counts axis never goes below zero
+     * (linear Y, not Offset) and a stacked chart keeps `DECLARED_STRIP_PX`
+     * more above its plot area for the declared labels.
+     */
+    lens?: boolean;
 }
 
 export interface Figure {
@@ -202,6 +216,34 @@ export function hoverTemplatesFor(
     );
 }
 
+/** Whether this figure draws a logarithmic Y: asked for, not Offset, and every curve has a positive value. */
+function logY(input: FigureInput, offset: boolean): boolean {
+    return (
+        input.yLog === true &&
+        !offset &&
+        canUseLogScale(input.curves.map((curve) => ({ y: curve.y })))
+    );
+}
+
+/**
+ * The field a hovertemplate reads its value from: `customdata` where the
+ * traces carry the real values apart from the laid ones (Offset, a log axis),
+ * else `y`.
+ */
+export function hoverValueFor(input: FigureInput, offset: boolean): string {
+    return offset || logY(input, offset) ? "customdata" : "y";
+}
+
+/** A trace laid on a log axis by the shared rule: non-positive values clamped, the real ones in `customdata` for the hover template. */
+function logTrace(trace: Trace): Trace {
+    const [laid] = logScaleFigure([{ y: trace.y as number[] }]).traces;
+    return { ...trace, y: laid.y, customdata: laid.customdata } as Trace;
+}
+
+function shapesOf(input: FigureInput): { shapes?: Partial<Shape>[] } {
+    return input.shapes ? { shapes: [...input.shapes] } : {};
+}
+
 function baseLayout(input: FigureInput): Record<string, unknown> {
     return plotLayout(input.theme, {
         lang: input.lang,
@@ -220,6 +262,7 @@ function baseLayout(input: FigureInput): Record<string, unknown> {
 function endLabels(
     input: FigureInput,
     ys: readonly number[][],
+    log: boolean,
 ): { annotations: Annotation[]; follows: number[][] } {
     const { theme } = input;
     const ends = input.curves.flatMap((curve, index) => {
@@ -227,11 +270,15 @@ function endLabels(
         const point = endPoint(curve.x, ys[index], input.xReversed);
         return point ? [{ index, point }] : [];
     });
-    const span = extent(ys.flat());
+    // On a log axis the labels are spread and placed in log10, which Plotly reads for an annotation.
+    const heightOf = (value: number) =>
+        log ? annotationLogY(value) ?? 0 : value;
+    const span = extent(ys.flat().map(heightOf));
     const plotHeight = Math.max(0, input.height - STACKED_ROOM);
     const wanted = ends.map(({ point }) =>
         span && span.max > span.min
-            ? plotHeight * (1 - (point.y - span.min) / (span.max - span.min))
+            ? plotHeight *
+              (1 - (heightOf(point.y) - span.min) / (span.max - span.min))
             : plotHeight / 2,
     );
     const placed =
@@ -244,7 +291,7 @@ function endLabels(
         const moved = Math.abs(shift) >= LABEL_MOVED;
         return {
             x: point.x,
-            y: point.y,
+            y: heightOf(point.y),
             text: `${swatch(theme.series[itemHue(order)], order)} ${slotLabel(slot)}`,
             xanchor: "left",
             yanchor: "middle",
@@ -281,21 +328,33 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     // Every curve is its own hue: trace order is the window's order, none drawn under another.
     const order = input.curves.map((_, index) => index);
     const mode = hoverMode(input);
-    const data = order.map(
-        (index): Trace => ({
-            ...traceOf(input, index, offset ? "customdata" : "y", mode),
+    const log = logY(input, offset);
+    const data = order.map((index): Trace => {
+        const trace: Trace = {
+            ...traceOf(input, index, offset || log ? "customdata" : "y", mode),
             y: ys[index],
             ...(offset ? { customdata: input.curves[index].y } : {}),
-        }),
-    );
-    const { annotations, follows } = endLabels(input, ys);
+        };
+        return log ? logTrace(trace) : trace;
+    });
+    const laid = data.map((trace) => trace.y as number[]);
+    const { annotations, follows } = endLabels(input, laid, log);
     const base = baseLayout(input);
-    const yaxis = base.yaxis as Record<string, unknown>;
+    const yaxis: Record<string, unknown> = {
+        ...(base.yaxis as Record<string, unknown>),
+        ...(log ? { type: "log" } : {}),
+        ...(input.lens && !log && !offset ? { rangemode: "tozero" } : {}),
+    };
+    const margin = base.margin as { t: number };
     return {
         data,
         layout: {
             ...base,
-            margin: { ...(base.margin as object), r: LABEL_ROOM },
+            margin: {
+                ...margin,
+                r: LABEL_ROOM,
+                ...(input.lens ? { t: margin.t + DECLARED_STRIP_PX } : {}),
+            },
             yaxis: offset
                 ? {
                       ...yaxis,
@@ -310,6 +369,7 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
                   }
                 : yaxis,
             annotations,
+            ...shapesOf(input),
         } as Partial<Layout>,
         order,
         follows,
@@ -347,9 +407,11 @@ export function multiplesFigure(input: FigureInput): Figure {
         Math.max(0, input.height - margin.t - margin.b),
     );
     const needed = spacing.height + margin.t + margin.b;
-    const cellWidth =
-        ((input.width - margin.l - margin.r) / grid.columns) *
-        (1 - spacing.xgap);
+    const cellWidth = gridCell(
+        input.width - margin.l - margin.r,
+        grid.columns,
+        spacing.xgap,
+    );
     const titleChars =
         input.width > 0
             ? Math.max(
@@ -379,7 +441,11 @@ export function multiplesFigure(input: FigureInput): Figure {
         ...(height === null ? {} : { height }),
     };
     const baseX = base.xaxis as Record<string, unknown>;
-    const baseY = base.yaxis as Record<string, unknown>;
+    const baseY: Record<string, unknown> = {
+        ...(base.yaxis as Record<string, unknown>),
+        ...(logY(input, false) ? { type: "log" } : {}),
+        ...(input.lens && !logY(input, false) ? { rangemode: "tozero" } : {}),
+    };
     const annotations: Annotation[] = [];
     const follows: number[][] = [];
     const shown: { on: number; off: number }[] = [];
@@ -453,25 +519,102 @@ export function multiplesFigure(input: FigureInput): Figure {
     shown.push({ on: 1, off: 1 }, { on: 1, off: 1 });
     const order = input.curves.map((_, index) => index);
     const mode = hoverMode(input);
+    const log = logY(input, false);
     const data = order.map((index): Trace => {
         const curve = input.curves[index];
         const panel = slots.indexOf(curve.slot);
         const suffix = panel === 0 ? "" : String(panel + 1);
-        return {
-            ...traceOf(input, index, "y", mode),
+        const trace: Trace = {
+            ...traceOf(input, index, log ? "customdata" : "y", mode),
             y: curve.y,
+        };
+        return {
+            ...(log ? logTrace(trace) : trace),
             xaxis: `x${suffix}`,
             yaxis: `y${suffix}`,
         };
     });
     return {
         data,
-        layout: { ...layout, annotations } as Partial<Layout>,
+        layout: {
+            ...layout,
+            annotations,
+            ...shapesOf(input),
+        } as Partial<Layout>,
         order,
         follows,
         shown,
         height,
     };
+}
+
+/** How far above the highest value the fitted Y range goes, as a share of its height. */
+const FIT_HEADROOM = 0.05;
+/** The decades kept on each side of a log axis whose window holds one value. */
+const LOG_FLAT_PAD = 0.5;
+
+/**
+ * The relayout that fits the counts axes to the energy window `xRange`: for
+ * each Y axis, from zero (or the lowest value when negative) to the highest
+ * value of the curves shown there inside the window, plus `FIT_HEADROOM`;
+ * on a log axis from the smallest positive value to the highest, in log10, with
+ * the same share on both ends. Offset adds each curve's lift first. A curve
+ * hidden by its state is ignored. `null` or a window holding no value gives
+ * every axis back its autorange. A relayout of `yaxis*.range` only: no data
+ * is redrawn.
+ */
+export function yFitUpdate(
+    input: FigureInput,
+    kind: "overlay" | "offset" | "multiples",
+    xRange: readonly [number, number] | null,
+): Record<string, unknown> {
+    const offset = kind === "offset";
+    const log = logY(input, offset);
+    const lifts = offset
+        ? offsetLifts(input.curves.map((curve) => curve.yRange))
+        : [];
+    const slots =
+        kind === "multiples"
+            ? [...new Set(input.curves.map((curve) => curve.slot))].sort(
+                  (one, other) => one - other,
+              )
+            : [null];
+    const [low, high] = xRange
+        ? [Math.min(...xRange), Math.max(...xRange)]
+        : [0, 0];
+    const update: Record<string, unknown> = {};
+    slots.forEach((slot, panel) => {
+        const name = `yaxis${panel === 0 ? "" : panel + 1}`;
+        let min = Infinity;
+        let max = -Infinity;
+        input.curves.forEach((curve, index) => {
+            if (slot !== null && curve.slot !== slot) return;
+            if (input.states[index] === "hidden" || !xRange) return;
+            const lift = lifts[index] ?? 0;
+            for (let at = 0; at < curve.x.length; at += 1) {
+                const x = curve.x[at];
+                const y = curve.y[at] + lift;
+                if (!(x >= low && x <= high) || !Number.isFinite(y)) continue;
+                if (log && !(y > 0)) continue;
+                if (y < min) min = y;
+                if (y > max) max = y;
+            }
+        });
+        if (max === -Infinity || (!log && !(max > 0 || min < 0))) {
+            update[`${name}.autorange`] = true;
+            return;
+        }
+        if (log) {
+            const [from, to] = [Math.log10(min), Math.log10(max)];
+            const pad = to > from ? (to - from) * FIT_HEADROOM : LOG_FLAT_PAD;
+            update[`${name}.range`] = [from - pad, to + pad];
+            return;
+        }
+        const span = max > min ? max - min : Math.abs(max) || 1;
+        const floor = offset || min < 0 ? min - span * FIT_HEADROOM : 0;
+        update[`${name}.range`] = [floor, max + (max - floor) * FIT_HEADROOM];
+    });
+    return update;
 }
 
 /**
@@ -499,6 +642,38 @@ export function annotationOpacities(
 }
 
 /**
+ * The width of one cell of a Plotly grid of `columns` over a plot `plot` px
+ * wide: `plot · (1 − gap) / (columns − gap)`, `gap` being a fraction of the
+ * step between two cells (`fillGridPositions` in plotly.js-cartesian-dist
+ * 4.0.0), not of the plot.
+ */
+function gridCell(plot: number, columns: number, gap: number): number {
+    return (Math.max(0, plot) * (1 - gap)) / (columns - gap);
+}
+
+/**
+ * The plot width (px) of each panel of `figure` drawn `width` px wide, by axis
+ * suffix (`""`, `"2"`…): the width less the margins, shared by the grid's
+ * columns as Plotly does (`gridCell`).
+ */
+export function panelWidths(
+    figure: Figure,
+    width: number,
+): Record<string, number> {
+    const layout = figure.layout as Record<string, unknown>;
+    const margin = (layout.margin ?? {}) as { l?: number; r?: number };
+    const plot = width - (margin.l ?? 0) - (margin.r ?? 0);
+    const grid = layout.grid as { columns?: number; xgap?: number } | undefined;
+    const cell = gridCell(plot, grid?.columns ?? 1, grid?.xgap ?? 0);
+    const widths: Record<string, number> = {};
+    for (const name of Object.keys(layout)) {
+        const match = /^xaxis(\d*)$/.exec(name);
+        if (match) widths[match[1]] = cell;
+    }
+    return widths;
+}
+
+/**
  * The figure as exported: `paints` (in trace order) applied, a hidden
  * curve kept transparent and out of the legend (a panel with no trace
  * drawn would get no axis line), on the page background, Plotly's legend
@@ -512,6 +687,7 @@ export function exportFigure(
     paints: readonly CurvePaint[],
     theme: PlotTheme,
     text: { title: string; source: string },
+    shapes?: readonly Partial<Shape>[],
 ): { data: Trace[]; layout: Partial<Layout> } {
     const data = figure.data.map((trace, position) => {
         const paint = paints[position];
@@ -564,6 +740,7 @@ export function exportFigure(
                 },
             },
             margin: { ...margin, t: (margin.t ?? 0) + EXPORT_TITLE_ROOM },
+            ...(shapes ? { shapes: [...shapes] } : {}),
         } as Partial<Layout>,
     };
 }

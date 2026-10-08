@@ -1202,6 +1202,55 @@ class ItemsRouteTests(CorpusCase):
             ("xrf", "XRF — energy / counts"),
         )
 
+    def statement(self, analysis, text):
+        self.tile(analysis, "content_of_statement", self.string_value(text))
+
+    def test_an_analysis_item_carries_the_excitation_read_from_its_statements(self):
+        analysis = self.analyses["open"]
+        self.statement(analysis, "<p>Tube Ag, 40 kV</p>")
+        keys = [f"an:{analysis.pk}:-", f"af:{analysis.pk}:{self.CSV}"]
+
+        items = self.get(keys).json()["items"]
+
+        expected = {"anode": "Ag", "kV": 40, "source": "conditions"}
+        self.assertEqual([i["excitation"] for i in items], [expected] * 2)
+
+    def test_an_analysis_without_excitation_text_gives_null(self):
+        key = f"an:{self.analyses['open'].pk}:-"
+
+        item = self.get([key]).json()["items"][0]
+
+        assert_shape(self, item, "AnalysisItem")
+        self.assertIsNone(item["excitation"])
+
+    def test_a_statement_nodegroup_the_visitor_cannot_read_gives_null_excitation(self):
+        self.statement(self.analyses["open"], "<p>Tube Ag, 40 kV</p>")
+        self.restrict_nodegroup(
+            self.nodes[("analysis", "content_of_statement")].nodegroup_id,
+            self.editor,
+        )
+
+        item = self.get([f"an:{self.analyses['open'].pk}:-"]).json()["items"][0]
+
+        self.assertIsNone(item["excitation"])
+
+    def test_reading_the_excitation_adds_no_query(self):
+        analysis = self.analyses["open"]
+        keys = [f"an:{analysis.pk}:-", f"af:{analysis.pk}:{self.CSV}"]
+
+        def warm_queries():
+            self.get(keys)
+            with CaptureQueriesContext(connection) as captured:
+                payload = self.get(keys).json()
+            return payload, [q["sql"] for q in captured if "silk_" not in q["sql"]]
+
+        _, without = warm_queries()
+        self.statement(analysis, "<p>Tube Ag, 40 kV</p>")
+        payload, with_excitation = warm_queries()
+
+        self.assertEqual(payload["items"][0]["excitation"]["anode"], "Ag")
+        self.assertEqual(len(with_excitation), len(without), "\n".join(with_excitation))
+
     def test_an_analysis_with_nothing_to_show_is_still_an_item(self):
         key = f"an:{self.analyses['on_document'].pk}:-"
 

@@ -46,6 +46,26 @@ declare module "utils/xy-transforms" {
     ): string;
 }
 
+declare module "utils/xy-scale" {
+    export const SCALE_LINEAR: string;
+    export const SCALE_LOG: string;
+    export function smallestPositive(
+        values: ArrayLike<number> | null | undefined,
+    ): number | null;
+    export function canUseLogScale(
+        traces: readonly { y?: ArrayLike<number>; yaxis?: string }[] | null,
+    ): boolean;
+    export function annotationLogY(y: number): number | null;
+    export function logScaleFigure<
+        T extends { y?: ArrayLike<number>; yaxis?: string },
+    >(
+        traces: readonly T[] | null,
+    ): {
+        traces: (T & { customdata?: number[]; hovertemplate?: string })[];
+        yaxis: { type: string };
+    };
+}
+
 declare module "utils/xy-views" {
     import type { TransformStep } from "utils/xy-transforms";
     export interface XyView {

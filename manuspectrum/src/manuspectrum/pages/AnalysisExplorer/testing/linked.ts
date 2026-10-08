@@ -61,6 +61,7 @@ const DOCUMENT = { id: D1, model: "document", name: label("Manuscript 1") };
 const A1: Item = {
     key: `an:${AN1}:-`,
     kind: "analysis",
+    excitation: null,
     analysis: analysisHit(1, {
         technique: XRF,
         canvas: C1,
@@ -90,6 +91,7 @@ const A1: Item = {
 const A2: Item = {
     key: `an:${AN2}:-`,
     kind: "analysis",
+    excitation: null,
     analysis: analysisHit(2, {
         technique: RAMAN,
         canvas: C2,

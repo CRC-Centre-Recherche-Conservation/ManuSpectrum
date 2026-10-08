@@ -2,6 +2,23 @@ import type { Config, Layout } from "plotly.js";
 
 const TRANSPARENT = "rgba(0,0,0,0)";
 const SERIES = 12;
+/** Compare's focus holds this many slots, each with its hue (`--focus-1…4`). */
+const FOCUS_SLOTS = 4;
+const FOCUS_FALLBACKS = ["#3d2e8d", "#1e6256", "#93499e", "#760a03"];
+export const ELEMENT_FALLBACKS = [
+    "#c2410c",
+    "#0e6baa",
+    "#8a6508",
+    "#14804a",
+    "#b912e2",
+    "#d0257a",
+    "#475569",
+    "#8e3329",
+    "#3f6212",
+    "#6d28d9",
+    "#0828a0",
+    "#680070",
+];
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;
 /** The number format of a hover value: 4 significant digits, no trailing zeros. */
@@ -17,6 +34,10 @@ export const UNIFIED_HOVER_MAX_CURVES = 12;
 
 export interface PlotTheme {
     series: string[];
+    /** The hue of each focus slot (index 0 is slot 1). */
+    focus: string[];
+    /** The hue of each chemical element of the XRF lens (`elementColour`), apart from the focus hues. */
+    element: string[];
     /** The grey of a curve dimmed by the focus's « Dim » switch (unrelated to any pin). */
     context: string;
     ink: string;
@@ -53,6 +74,12 @@ export function readPlotTheme(
     return {
         series: Array.from({ length: SERIES }, (_, index) =>
             token(`--series-${index + 1}`, "#1a1a2e"),
+        ),
+        focus: Array.from({ length: FOCUS_SLOTS }, (_, index) =>
+            token(`--focus-${index + 1}`, FOCUS_FALLBACKS[index]),
+        ),
+        element: Array.from({ length: ELEMENT_FALLBACKS.length }, (_, index) =>
+            token(`--element-${index + 1}`, ELEMENT_FALLBACKS[index]),
         ),
         context: token("--series-context", "#8a8999"),
         ink: token("--ink", "#1a1a2e"),

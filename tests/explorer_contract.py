@@ -268,7 +268,18 @@ SHAPES = {
         "points": (int, type(None)),
         "decimated": bool,
     },
-    "AnalysisItem": {"key": str, "kind": str, "analysis": "AnalysisHit", "files": list},
+    "Excitation": {
+        "anode": (str, type(None)),
+        "kV": (int, float, type(None)),
+        "source": str,
+    },
+    "AnalysisItem": {
+        "key": str,
+        "kind": str,
+        "analysis": "AnalysisHit",
+        "excitation": ("Excitation", type(None)),
+        "files": list,
+    },
     "ItemsResponse": {"items": list, "missing": list},
     "SharePayload": {
         "scope": "ShareScope",

@@ -8,6 +8,7 @@ import XyWorkshop from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/comp
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
+    ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -25,11 +26,15 @@ import {
     resetPlotly,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/plotly.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+import { OPEN_POPUP } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import { reloadXrfSettings } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfSettings.ts";
 import {
     analysisNode,
     canvasNode,
+    elementNode,
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
+import { loadLineTable } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/line-table.ts";
 
 import type { DOMWrapper, VueWrapper } from "@vue/test-utils";
 import type {
@@ -76,6 +81,8 @@ interface LayoutCall {
 interface FakeLinked {
     linked: LinkedSelection;
     selection: { value: NodeId[] };
+    slots: { value: (NodeId | null)[] };
+    nodes: { value: Set<NodeId> };
     levels: { value: Map<NodeId, RelationLevel> };
     previewLevels: { value: Map<NodeId, RelationLevel> };
     toggle: ReturnType<typeof vi.fn>;
@@ -141,12 +148,19 @@ const FOLIO_CANVAS = "https://iiif.example/f12r";
 /** The part of Compare's linked selection the workshop reads, its state set by each spec. */
 function fakeLinked(): FakeLinked {
     const selection = ref<NodeId[]>([]);
+    const slots = ref<(NodeId | null)[]>([]);
+    const nodes = ref(new Set<NodeId>());
     const levels = shallowRef(new Map<NodeId, RelationLevel>());
     const previewLevels = shallowRef(new Map<NodeId, RelationLevel>());
     const toggle = vi.fn();
     const preview = vi.fn();
     const linked = {
         selection: computed(() => selection.value),
+        slots: computed(() => slots.value),
+        graph: computed(() => ({
+            symbols: new Map<string, string>(),
+            nodes: nodes.value,
+        })),
         levels: computed(() => levels.value),
         relations: computed(
             () =>
@@ -169,7 +183,16 @@ function fakeLinked(): FakeLinked {
         toggle,
         preview,
     } as unknown as LinkedSelection;
-    return { linked, selection, levels, previewLevels, toggle, preview };
+    return {
+        linked,
+        selection,
+        slots,
+        nodes,
+        levels,
+        previewLevels,
+        toggle,
+        preview,
+    };
 }
 
 function nextFrame(): Promise<void> {
@@ -180,6 +203,7 @@ let fake: FakeLinked;
 let fetchMock: ReturnType<typeof vi.fn>;
 let wrapper: VueWrapper | null = null;
 let answers: Map<string, Response>;
+const announce = vi.fn();
 
 /** Answers each preview by its file number `n`; the others get `SERIES`. */
 function answer(n: number, response: Response): void {
@@ -201,6 +225,7 @@ async function mountWorkshop(
             provide: {
                 [WINDOW_RESIZE_KEY as symbol]: resize,
                 [LINKED_SELECTION_KEY as symbol]: fake.linked,
+                [ANNOUNCE_KEY as symbol]: announce,
             },
         },
     });
@@ -258,6 +283,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
+    announce.mockClear();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     document.documentElement.removeAttribute("style");
@@ -720,7 +746,10 @@ describe("XyWorkshop", () => {
             "xaxis.range[1]": 2.5,
         });
         await flushPromises();
-        expect(plotly.relayout).not.toHaveBeenCalled();
+        expect(plotly.relayout).not.toHaveBeenCalledWith(
+            chart,
+            expect.objectContaining({ "xaxis.autorange": true }),
+        );
         expect(fake.toggle).toHaveBeenCalledTimes(1);
         expect(actions()).toEqual(["reset", "png", "csv", "table"]);
     });
@@ -1292,7 +1321,8 @@ describe("XyWorkshop", () => {
 
     it("offers Hide or Dim for unrelated curves only while a focus is active, Hide by default", async () => {
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
-        expect(view.find(".unrelated-mode").exists()).toBe(false);
+        expect(view.find(".unrelated-mode").classes()).toContain("idle");
+        expect(view.find(".unrelated-mode").attributes("inert")).toBeDefined();
 
         fake.selection.value = [analysisNode(analysisHit(1).id)];
         fake.levels.value = new Map([
@@ -1300,7 +1330,8 @@ describe("XyWorkshop", () => {
         ]);
         await flushPromises();
         const mode = view.find(".unrelated-mode");
-        expect(mode.exists()).toBe(true);
+        expect(mode.classes()).not.toContain("idle");
+        expect(mode.attributes("inert")).toBeUndefined();
         expect(mode.find('[data-mode="hide"]').attributes("aria-pressed")).toBe(
             "true",
         );
@@ -1322,7 +1353,8 @@ describe("XyWorkshop", () => {
         fake.selection.value = [];
         fake.levels.value = new Map();
         await flushPromises();
-        expect(view.find(".unrelated-mode").exists()).toBe(false);
+        expect(view.find(".unrelated-mode").classes()).toContain("idle");
+        expect(view.find(".unrelated-mode").attributes("inert")).toBeDefined();
     });
 
     it("previews the node of a legend entry or a curve under the mouse, and toggles a clicked curve", async () => {
@@ -1467,6 +1499,7 @@ describe("XyWorkshop", () => {
         expect(plotly.Plots.resize).not.toHaveBeenCalled();
         const element = view.find(".chart").element;
         Object.defineProperty(element, "clientWidth", { value: 640 });
+        Object.defineProperty(element, "clientHeight", { value: 360 });
         resize.value += 1;
         await flushPromises();
         expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
@@ -1476,6 +1509,50 @@ describe("XyWorkshop", () => {
         view.unmount();
         wrapper = null;
         expect(plotly.purge).toHaveBeenCalledWith(element);
+    });
+
+    it("follows the chart's own box when what sits below it moves it, once per frame", async () => {
+        const observers: {
+            callback: () => void;
+            observed: Element[];
+            disconnect: () => void;
+        }[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                observed: Element[] = [];
+                disconnect = vi.fn();
+                callback: () => void;
+                constructor(callback: () => void) {
+                    this.callback = callback;
+                    observers.push(this);
+                }
+                observe(element: Element) {
+                    this.observed.push(element);
+                }
+                unobserve() {}
+            },
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        const element = view.find(".chart").element;
+        const watcher = observers.find((o) => o.observed.includes(element));
+        expect(watcher).toBeDefined();
+        const frame = () =>
+            new Promise((resolve) => requestAnimationFrame(resolve));
+        watcher!.callback();
+        await frame();
+        await flushPromises();
+        expect(plotly.Plots.resize).not.toHaveBeenCalled();
+        Object.defineProperty(element, "clientWidth", { value: 640 });
+        Object.defineProperty(element, "clientHeight", { value: 210 });
+        watcher!.callback();
+        watcher!.callback();
+        await frame();
+        await flushPromises();
+        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        view.unmount();
+        wrapper = null;
+        expect(watcher!.disconnect).toHaveBeenCalled();
     });
 
     it("draws small multiples again at their new size once they no longer need a height of their own", async () => {
@@ -1504,11 +1581,60 @@ describe("XyWorkshop", () => {
         resize.value += 1;
         await flushPromises();
         expect(element.style.minBlockSize).toBe("");
-        expect(plotly.react.mock.calls.length).toBe(drawings + 2);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
         expect(plotly.Plots.resize.mock.calls.at(-1)?.[0]).toBe(element);
         resize.value += 1;
         await flushPromises();
-        expect(plotly.react.mock.calls.length).toBe(drawings + 2);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+    });
+
+    it("keeps small multiples at the height they took, whatever the box they hold open echoes", async () => {
+        const observers: { callback: () => void; observed: Element[] }[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                observed: Element[] = [];
+                callback: () => void;
+                constructor(callback: () => void) {
+                    this.callback = callback;
+                    observers.push(this);
+                }
+                observe(element: Element) {
+                    this.observed.push(element);
+                }
+                disconnect() {}
+                unobserve() {}
+            },
+        );
+        const view = await mountWorkshop(
+            Array.from({ length: 9 }, (_, index) =>
+                curve(index % 2, index + 1),
+            ),
+        );
+        const element = view.find<HTMLElement>(".chart").element;
+        Object.defineProperty(element, "clientWidth", { value: 300 });
+        Object.defineProperty(element, "clientHeight", {
+            get: () =>
+                element.style.minBlockSize
+                    ? parseFloat(element.style.minBlockSize) * 16
+                    : 300,
+        });
+        const watcher = observers.find((o) => o.observed.includes(element))!;
+        const frame = () =>
+            new Promise((resolve) => requestAnimationFrame(resolve));
+        watcher.callback();
+        await frame();
+        await flushPromises();
+        const held = element.style.minBlockSize;
+        expect(held).not.toBe("");
+        const drawings = plotly.react.mock.calls.length;
+        for (let turn = 0; turn < 4; turn += 1) {
+            watcher.callback();
+            await frame();
+            await flushPromises();
+        }
+        expect(element.style.minBlockSize).toBe(held);
+        expect(plotly.react.mock.calls.length).toBe(drawings);
     });
 
     it("aborts the requests of an unmounted window", async () => {
@@ -1589,5 +1715,1310 @@ describe("XyWorkshop", () => {
         expect(revoke).not.toHaveBeenCalled();
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(revoke).toHaveBeenCalledWith("blob:csv");
+    });
+});
+
+describe("XyWorkshop XRF lens", () => {
+    const FOCUS_1 = "#123456";
+
+    /** Pins an element and lights every curve of the window through its analysis. */
+    function pinElement(symbol: string, lit: number[] = [1, 2]): void {
+        const node = elementNode(symbol);
+        fake.slots.value = [node];
+        fake.selection.value = [node];
+        fake.levels.value = new Map<NodeId, RelationLevel>([
+            [node, "self"],
+            ...lit.map(
+                (slot) =>
+                    [analysisNode(analysisHit(slot).id), "evidence"] as [
+                        NodeId,
+                        RelationLevel,
+                    ],
+            ),
+        ]);
+    }
+
+    async function settle(): Promise<void> {
+        await loadLineTable();
+        await flushPromises();
+        await nextFrame();
+        await flushPromises();
+    }
+
+    function shapeCalls(): Record<string, unknown>[] {
+        return plotly.relayout.mock.calls
+            .map(([, update]) => update)
+            .filter((update) => "shapes" in update);
+    }
+
+    beforeEach(() => {
+        localStorage.clear();
+        reloadXrfSettings();
+        document.documentElement.style.setProperty("--focus-1", FOCUS_1);
+    });
+
+    afterEach(() => {
+        localStorage.clear();
+        reloadXrfSettings();
+    });
+
+    it("draws an element pin as one relayout of the shapes alone, no redraw", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.react.mockClear();
+        plotly.relayout.mockClear();
+        pinElement("Pb");
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(plotly.relayout).toHaveBeenCalledTimes(1);
+        const [, update] = plotly.relayout.mock.calls[0];
+        expect(Object.keys(update)).toEqual(["shapes"]);
+        const shapes = update.shapes as {
+            x0: number;
+            line: { color: string };
+        }[];
+        // Pb Mα1 is the one Pb line inside the 1–3 keV of the fixture's spectra.
+        const line = shapes.find((shape) => Math.abs(shape.x0 - 2.346) < 0.01);
+        expect(line?.line.color).toBe(FOCUS_1);
+    });
+
+    it("shows the same shapes again after another redraw, so a redraw never loses the lines", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        plotly.react.mockClear();
+        await view.find('[data-layout="offset"]').trigger("click");
+        await flushPromises();
+        const layout = lastDrawing().layout as unknown as {
+            shapes: { x0: number }[];
+        };
+        expect(layout.shapes.some((s) => Math.abs(s.x0 - 2.346) < 0.01)).toBe(
+            true,
+        );
+    });
+
+    it("makes at most one shapes relayout and never a redraw for a pin of an analysis, whose hidden curves drop their instrument ticks", async () => {
+        const peakAt = (centre: number) =>
+            series(
+                Array.from({ length: 2001 }, (_, i) => i / 100),
+                Array.from({ length: 2001 }, (_, i) =>
+                    Math.round(
+                        10 +
+                            5000 *
+                                Math.exp(
+                                    -(((i / 100 - centre) / 0.05) ** 2) / 2,
+                                ),
+                    ),
+                ),
+            );
+        answer(1, jsonResponse(peakAt(6.4)));
+        answer(2, jsonResponse(peakAt(9)));
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.relayout.mockClear();
+        plotly.react.mockClear();
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.slots.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+            [fileNode(uuid(701)), "direct"],
+        ]);
+        await nextFrame();
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+        const calls = shapeCalls();
+        expect(calls).toHaveLength(1);
+        const shapes = calls[0].shapes as { x0: number }[];
+        // Curve 2's escape (9 − 1.74) is gone with the curve; curve 1's (4.66) stays.
+        expect(shapes.some((s) => Math.abs(s.x0 - 7.26) < 0.02)).toBe(false);
+        expect(shapes.some((s) => Math.abs(s.x0 - 4.66) < 0.02)).toBe(true);
+    });
+
+    it("draws an element added to the lens without touching the focus", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        plotly.relayout.mockClear();
+        const input = view.find(".xrf-strip input");
+        await input.setValue("Pb");
+        await input.trigger("keydown", { key: "Enter" });
+        await nextFrame();
+        await flushPromises();
+        expect(shapeCalls()).toHaveLength(1);
+        expect(fake.toggle).not.toHaveBeenCalled();
+        expect(fake.selection.value).toEqual([]);
+        expect(view.find(".xrf-strip li.element").text()).toContain("Pb");
+    });
+
+    it("shows no lens controls, strip or shapes for a spectrum that is not XRF", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1, {
+                presetKey: "ftir",
+                axisKey: "transmittance|wavenumber (cm-1)|desc",
+            }),
+        ]);
+        await flushPromises();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        expect(view.find(".xrf-lens-controls").exists()).toBe(false);
+        expect(view.find(".xrf-strip").exists()).toBe(false);
+        expect(
+            (lastDrawing().layout as unknown as { shapes?: unknown }).shapes,
+        ).toBeUndefined();
+        expect(shapeCalls()).toEqual([]);
+    });
+
+    it("lays the Y axis on a log scale through a redraw, the hover reading the real values", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.react.mockClear();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+        const { traces, layout } = lastDrawing();
+        expect(layout.yaxis).toMatchObject({ type: "log" });
+        expect(traces[0].customdata).toEqual([10, 30, 20]);
+        expect(traces[0].hovertemplate).toContain("%{customdata:");
+        expect(view.find('[data-scale="log"]').attributes("aria-pressed")).toBe(
+            "true",
+        );
+        plotly.restyle.mockClear();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls[0][1] as {
+            hovertemplate: string[];
+        };
+        expect(update.hovertemplate[0]).toContain("%{customdata:");
+    });
+
+    it("picks the curve nearest the pointer on a log axis, whatever the axis maps", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        // Plotly: c2p takes data values (linear or log), l2p takes linearised ones.
+        const yaxis = {
+            c2p: (value: number) => 100 - Math.log10(value) * 30,
+            l2p: (value: number) => 100 - value * 30,
+            _offset: 0,
+        };
+        emitPlotly(view.find(".chart").element, "plotly_click", {
+            points: [
+                { curveNumber: 0, x: 2, y: 1000, yaxis },
+                { curveNumber: 1, x: 2, y: 10, yaxis },
+            ],
+            event: { clientY: 15 },
+        });
+        expect(fake.toggle).toHaveBeenCalledWith(
+            analysisNode(analysisHit(1).id),
+        );
+    });
+
+    it("keeps the energy range through a Log toggle, a preset or a zoom by hand", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        await view.find('[data-range="5-15"]').trigger("click");
+        await flushPromises();
+        plotly.relayout.mockClear();
+        plotly.react.mockClear();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.range": [5, 15],
+            "yaxis.autorange": true,
+        });
+        expect(
+            view.find('[data-range="5-15"]').attributes("aria-pressed"),
+        ).toBe("true");
+        expect(view.find('[data-action="reset"]').exists()).toBe(true);
+
+        const chart = view.find(".chart").element;
+        Object.assign(chart, {
+            _fullLayout: {
+                xaxis: { range: [1.5, 2.5], autorange: false, _length: 400 },
+            },
+        });
+        emitPlotly(chart, "plotly_relayout", {
+            "xaxis.range[0]": 1.5,
+            "xaxis.range[1]": 2.5,
+        });
+        await flushPromises();
+        plotly.relayout.mockClear();
+        await view.find('[data-scale="linear"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.range": [1.5, 2.5],
+            "yaxis.range": [0, 31.5],
+        });
+        expect(
+            view.find('[data-range="custom"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("goes back to the full range through a Log toggle when none was chosen", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        plotly.relayout.mockClear();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).not.toHaveBeenCalled();
+        expect(
+            view.find('[data-range="full"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("does not offer the log scale with Offset, and says why", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        await view.find('[data-scale="log"]').trigger("click");
+        await flushPromises();
+        plotly.react.mockClear();
+        await view.find('[data-layout="offset"]').trigger("click");
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+        expect(lastDrawing().layout.yaxis).not.toHaveProperty("type");
+        plotly.react.mockClear();
+        const log = view.find('[data-scale="log"]');
+        expect(log.attributes("aria-disabled")).toBe("true");
+        expect(log.attributes("aria-pressed")).toBe("false");
+        expect(view.find(".xrf-lens-controls").text()).toContain(
+            "Not available with Offset",
+        );
+        await log.trigger("click");
+        await flushPromises();
+        expect(plotly.react).not.toHaveBeenCalled();
+    });
+
+    it("sets an energy range by a relayout of the X axis, which counts as a zoom", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        plotly.relayout.mockClear();
+        plotly.react.mockClear();
+        await view.find('[data-range="5-15"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
+            "xaxis.range": [5, 15],
+            "yaxis.autorange": true,
+        });
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(
+            view.find('[data-range="5-15"]').attributes("aria-pressed"),
+        ).toBe("true");
+        expect(view.find('[data-action="reset"]').exists()).toBe(true);
+        await view.find('[data-range="full"]').trigger("click");
+        await flushPromises();
+        expect(plotly.relayout).toHaveBeenLastCalledWith(
+            expect.any(HTMLElement),
+            { "xaxis.autorange": true, "yaxis.autorange": true },
+        );
+        expect(view.find('[data-action="reset"]').exists()).toBe(false);
+    });
+
+    describe("counts range follows the energy window", () => {
+        const WIDE = series(
+            [1, 4, 6, 8, 10, 14, 16],
+            [900, 80, 50, 200, 120, 60, 999],
+        );
+
+        async function mountWide(): Promise<VueWrapper> {
+            answer(1, jsonResponse(WIDE));
+            const view = await mountWorkshop([curve(0, 1)]);
+            await settle();
+            plotly.relayout.mockClear();
+            plotly.react.mockClear();
+            return view;
+        }
+
+        it("fits the counts axis to the data inside a preset, with 5 % of headroom, in the same relayout", async () => {
+            const view = await mountWide();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledTimes(1);
+            expect(plotly.relayout).toHaveBeenCalledWith(
+                expect.any(HTMLElement),
+                { "xaxis.range": [5, 15], "yaxis.range": [0, 210] },
+            );
+            expect(plotly.react).not.toHaveBeenCalled();
+        });
+
+        it("gives the autorange back on « Toute la plage »", async () => {
+            const view = await mountWide();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            await view.find('[data-range="full"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                expect.any(HTMLElement),
+                { "xaxis.autorange": true, "yaxis.autorange": true },
+            );
+        });
+
+        it("fits again in log10 through a Log toggle, keeping the energy range", async () => {
+            const view = await mountWide();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            plotly.relayout.mockClear();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            const [, update] = plotly.relayout.mock.calls.at(-1) as [
+                HTMLElement,
+                Record<string, unknown>,
+            ];
+            expect(update["xaxis.range"]).toEqual([5, 15]);
+            const [from, to] = update["yaxis.range"] as number[];
+            expect(from).toBeLessThan(Math.log10(50));
+            expect(from).toBeGreaterThan(Math.log10(50) - 0.2);
+            expect(to).toBeGreaterThan(Math.log10(200));
+            expect(to).toBeLessThan(Math.log10(200) + 0.2);
+        });
+
+        it("fits the counts axis after a drag of the energy axis alone, but leaves a box zoom's own counts range", async () => {
+            const view = await mountWide();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                },
+            });
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 15,
+            });
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "yaxis.range": [0, 210],
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 15,
+                "yaxis.range[0]": 10,
+                "yaxis.range[1]": 100,
+            });
+            await flushPromises();
+            expect(plotly.relayout).not.toHaveBeenCalled();
+        });
+
+        it("gives the counts autorange back when the energy axis returns to its autorange", async () => {
+            const view = await mountWide();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [0, 20], autorange: true, _length: 400 },
+                },
+            });
+            emitPlotly(chart, "plotly_relayout", { "xaxis.autorange": true });
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "yaxis.autorange": true,
+            });
+        });
+    });
+
+    it("shows « Custom » once the reader zooms by hand, and « Reset the zoom » goes back to the full range", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        emitPlotly(view.find(".chart").element, "plotly_relayout", {
+            "xaxis.range[0]": 1.5,
+            "xaxis.range[1]": 2.5,
+        });
+        await flushPromises();
+        const custom = view.find('[data-range="custom"]');
+        expect(custom.attributes("aria-pressed")).toBe("true");
+        expect(custom.text()).toBe("Custom");
+        await view.find('[data-action="reset"]').trigger("click");
+        await flushPromises();
+        expect(view.find('[data-range="custom"]').exists()).toBe(false);
+        expect(
+            view.find('[data-range="full"]').attributes("aria-pressed"),
+        ).toBe("true");
+    });
+
+    it("exports the PNG with the lens shapes shown now and the line table's source", async () => {
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+            () => undefined,
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        await view.find('[data-action="png"]').trigger("click");
+        await flushPromises();
+        const [figure] = plotly.toImage.mock.calls[0] as unknown as [
+            {
+                layout: LayoutCall & { shapes: { x0: number }[] };
+            },
+        ];
+        expect(
+            figure.layout.shapes.some((s) => Math.abs(s.x0 - 2.346) < 0.01),
+        ).toBe(true);
+        expect(figure.layout.title?.subtitle.text).toMatch(
+            /Lines: XrayDB .* \(CC0\), Elam, Ravel &amp; Sieber 2002$/,
+        );
+    });
+
+    it("names the elements drawn in the chart's label", async () => {
+        const view = await mountWorkshop([curve(0, 1)]);
+        await settle();
+        pinElement("Pb", [1]);
+        await flushPromises();
+        expect(view.find(".chart").attributes("aria-label")).toContain(
+            "XRF lines drawn: Pb; listed below the chart.",
+        );
+    });
+
+    it("dims the curves an element focus does not light instead of hiding them, and keeps the Hide switch off", async () => {
+        const view = await mountWorkshop([
+            curve(0, 1),
+            curve(1, 2),
+            curve(9, 3),
+        ]);
+        await settle();
+        plotly.restyle.mockClear();
+        pinElement("Pb", [1]);
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls[0][1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity).toEqual([1, 0.35, 0.35]);
+        expect(update["line.color"]).toEqual([COLOURS[0], CONTEXT, CONTEXT]);
+        const hide = view.find('[data-mode="hide"]');
+        expect(hide.attributes("aria-disabled")).toBe("true");
+        const tip = view.find(`[id="${hide.attributes("aria-describedby")}"]`);
+        expect(tip.text()).toBe(
+            "Not available while only elements are in the focus: the lens draws them on every spectrum",
+        );
+        expect(view.find('[data-mode="dim"]').attributes("aria-pressed")).toBe(
+            "true",
+        );
+        await hide.trigger("click");
+        expect(plotly.react).toHaveBeenCalledTimes(1);
+    });
+
+    it("still hides the curves an analysis focus does not light", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        plotly.restyle.mockClear();
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await nextFrame();
+        await flushPromises();
+        const update = plotly.restyle.mock.calls[0][1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity).toEqual([1, 0]);
+    });
+
+    describe("counts range and zoom state", () => {
+        const LOW = series([1, 6, 8, 10, 16], [10, 50, 200, 120, 5]);
+        const HIGH = series([1, 6, 8, 10, 16], [10, 50, 5000, 120, 5]);
+
+        async function mountTwo(): Promise<VueWrapper> {
+            answer(1, jsonResponse(LOW));
+            answer(2, jsonResponse(HIGH));
+            const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+            await settle();
+            return view;
+        }
+
+        it("fits the counts axis again when a curve comes back inside the energy window", async () => {
+            const view = await mountTwo();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                expect.any(HTMLElement),
+                { "xaxis.range": [5, 15], "yaxis.range": [0, 210] },
+            );
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 210], autorange: false, _length: 300 },
+                },
+            });
+            plotly.relayout.mockClear();
+            plotly.react.mockClear();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).not.toHaveBeenCalled();
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "yaxis.range": [0, 5250],
+            });
+        });
+
+        it("leaves the counts axis alone when a curve changes under the full range", async () => {
+            const view = await mountTwo();
+            plotly.relayout.mockClear();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(
+                plotly.relayout.mock.calls.filter(([, update]) =>
+                    Object.keys(update).some((key) => key.startsWith("yaxis")),
+                ),
+            ).toEqual([]);
+        });
+
+        function yUpdates(): Record<string, unknown>[] {
+            return plotly.relayout.mock.calls
+                .map(([, update]) => update as Record<string, unknown>)
+                .filter((update) =>
+                    Object.keys(update).some((key) => key.startsWith("yaxis")),
+                );
+        }
+
+        async function boxZoomed(view: VueWrapper): Promise<HTMLElement> {
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 40], autorange: false, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 15,
+                "yaxis.range[0]": 0,
+                "yaxis.range[1]": 40,
+            });
+            await flushPromises();
+            plotly.relayout.mockClear();
+            return chart as HTMLElement;
+        }
+
+        it("keeps the counts range of a box zoom through a hover preview", async () => {
+            const view = await mountTwo();
+            await boxZoomed(view);
+            fake.previewLevels.value = new Map([[fileNode(uuid(702)), "self"]]);
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.restyle).toHaveBeenCalled();
+            expect(yUpdates()).toEqual([]);
+        });
+
+        it("keeps the counts range of a box zoom when a curve is hidden or comes back", async () => {
+            const view = await mountTwo();
+            await boxZoomed(view);
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(yUpdates()).toEqual([]);
+        });
+
+        it("keeps the counts range after a preset when only the emphasis changes", async () => {
+            const view = await mountTwo();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            plotly.relayout.mockClear();
+            fake.previewLevels.value = new Map([[fileNode(uuid(702)), "self"]]);
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.restyle).toHaveBeenCalled();
+            expect(yUpdates()).toEqual([]);
+        });
+
+        it("does not read the programmatic relayout after a press that ended in a click as a slipped zoom", async () => {
+            const view = await mountTwo();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [1, 16], autorange: true, _length: 400 },
+                    yaxis: { range: [0, 5250], autorange: true, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 1, y: 30 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(new Event("pointerdown"));
+            emitPlotly(chart, "plotly_click", {
+                points: [{ curveNumber: 1, x: 8, y: 30 }],
+                event: {},
+            });
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            plotly.relayout.mockClear();
+            plotly.relayout.mockImplementationOnce(
+                async (target: HTMLElement) => {
+                    emitPlotly(target, "plotly_relayout", {
+                        "xaxis.range[0]": 5,
+                        "xaxis.range[1]": 15,
+                        "yaxis.range[0]": 0,
+                        "yaxis.range[1]": 200,
+                    });
+                },
+            );
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            expect(
+                plotly.relayout.mock.calls.filter(([, update]) =>
+                    Object.prototype.hasOwnProperty.call(
+                        update,
+                        "xaxis.autorange",
+                    ),
+                ),
+            ).toEqual([]);
+        });
+
+        it("does not read a relayout of its own as a slipped zoom while a press is still held", async () => {
+            const view = await mountTwo();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [1, 16], autorange: true, _length: 400 },
+                    yaxis: { range: [0, 5250], autorange: true, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 1, y: 30 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(new Event("pointerdown"));
+            plotly.relayout.mockClear();
+            plotly.relayout.mockImplementationOnce(
+                async (target: HTMLElement) => {
+                    emitPlotly(target, "plotly_relayout", {
+                        "xaxis.range[0]": 5,
+                        "xaxis.range[1]": 15,
+                        "yaxis.range[0]": 0,
+                        "yaxis.range[1]": 200,
+                    });
+                },
+            );
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(fake.toggle).not.toHaveBeenCalled();
+            expect(
+                plotly.relayout.mock.calls.filter(([, update]) =>
+                    Object.prototype.hasOwnProperty.call(
+                        update,
+                        "xaxis.autorange",
+                    ),
+                ),
+            ).toEqual([]);
+        });
+
+        it("keeps « Reset the zoom » when the counts fit of a grid panel with nothing in the window echoes an autorange", async () => {
+            const view = await mountTwo();
+            await view.find('[data-layout="multiples"]').trigger("click");
+            await flushPromises();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 7], autorange: false, _length: 400 },
+                    xaxis2: { range: [5, 7], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 210], autorange: true, _length: 300 },
+                    yaxis2: { range: [0, 210], autorange: true, _length: 300 },
+                },
+            });
+            answer(1, jsonResponse(LOW));
+            plotly.relayout.mockImplementationOnce(
+                async (target: HTMLElement) => {
+                    emitPlotly(target, "plotly_relayout", {
+                        "yaxis.range[0]": 0,
+                        "yaxis.range[1]": 60,
+                        "yaxis2.autorange": true,
+                    });
+                },
+            );
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 7,
+            });
+            await flushPromises();
+            expect(view.find('[data-action="reset"]').exists()).toBe(true);
+        });
+    });
+
+    it("lists in the strip the instrument peaks inside the energy window shown, all of them on the full range", async () => {
+        const wide = series(
+            Array.from({ length: 450 }, (_, i) => 1 + i / 10),
+            Array.from({ length: 450 }, () => 10),
+        );
+        answer(1, jsonResponse(wide));
+        const xrf = {
+            ...curve(0, 1),
+            excitation: { anode: "Rh", kV: 40, source: "conditions" as const },
+        };
+        const view = await mountWorkshop([xrf]);
+        await settle();
+        const listed = () => view.find("li.instrument");
+        expect(listed().text()).toContain("Rh Kα1 20.22 keV");
+        await view.find('[data-range="5-15"]').trigger("click");
+        await flushPromises();
+        expect(listed().exists()).toBe(false);
+        await view.find('[data-range="full"]').trigger("click");
+        await flushPromises();
+        expect(listed().text()).toContain("Rh Kα1 20.22 keV");
+    });
+
+    describe("the chart's own box", () => {
+        const PEAK = series(
+            Array.from({ length: 71 }, (_, i) => 2 + i / 100),
+            Array.from({ length: 71 }, (_, i) => (i === 35 ? 500 : 10)),
+        );
+        let watcher: { callback: () => void; observed: Element[] };
+
+        async function mountObserved(): Promise<VueWrapper> {
+            const observers: (typeof watcher)[] = [];
+            vi.stubGlobal(
+                "ResizeObserver",
+                class {
+                    observed: Element[] = [];
+                    callback: () => void;
+                    constructor(callback: () => void) {
+                        this.callback = callback;
+                        observers.push(this);
+                    }
+                    observe(element: Element) {
+                        this.observed.push(element);
+                    }
+                    disconnect() {}
+                    unobserve() {}
+                },
+            );
+            answer(1, jsonResponse(PEAK));
+            const view = await mountWorkshop([curve(0, 1)]);
+            await settle();
+            const element = view.find(".chart").element;
+            Object.defineProperty(element, "clientWidth", {
+                value: 800,
+                configurable: true,
+            });
+            Object.defineProperty(element, "clientHeight", {
+                value: 400,
+                configurable: true,
+            });
+            watcher = observers.find((o) => o.observed.includes(element))!;
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            return view;
+        }
+
+        function resizeTo(view: VueWrapper, height: number): void {
+            Object.defineProperty(view.find(".chart").element, "clientHeight", {
+                value: height,
+                configurable: true,
+            });
+            watcher.callback();
+        }
+
+        it("keeps the energy range the reader chose through a resize, with the identifier opening below the chart", async () => {
+            const view = await mountObserved();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 210], autorange: false, _length: 300 },
+                },
+            });
+            await view.find('[data-action="identify"]').trigger("click");
+            emitPlotly(chart, "plotly_click", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: {},
+            });
+            await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(true);
+            plotly.Plots.resize.mockClear();
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            resizeTo(view, 300);
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+            expect(plotly.react).toHaveBeenCalledTimes(1);
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "xaxis.range": [5, 15],
+                "yaxis.range": [0, 210],
+            });
+            for (const [, update] of plotly.relayout.mock.calls) {
+                expect(update).not.toHaveProperty("xaxis.autorange");
+            }
+            expect(
+                view.find('[data-range="5-15"]').attributes("aria-pressed"),
+            ).toBe("true");
+            expect(view.find('[data-action="reset"]').exists()).toBe(true);
+        });
+
+        it("starts from the full range again when the figure itself changes", async () => {
+            const view = await mountObserved();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            Object.assign(view.find(".chart").element, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                },
+            });
+            plotly.relayout.mockClear();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            expect(plotly.react).toHaveBeenCalled();
+            expect(
+                view.find('[data-range="5-15"]').attributes("aria-pressed"),
+            ).toBe("true");
+            await view.find('[data-layout="offset"]').trigger("click");
+            await flushPromises();
+            expect(
+                view.find('[data-range="full"]').attributes("aria-pressed"),
+            ).toBe("true");
+        });
+
+        it("keeps the lens strip, the identifier and the cue in a region of their own, apart from the chart's box", async () => {
+            const view = await mountObserved();
+            const region = view.find(".lens-region");
+            expect(region.exists()).toBe(true);
+            expect(region.find(".xrf-strip").exists()).toBe(true);
+            expect(region.find(".chart").exists()).toBe(false);
+            await view.find('[data-action="identify"]').trigger("click");
+            expect(region.find(".identify-hint").exists()).toBe(true);
+            emitPlotly(view.find(".chart").element, "plotly_click", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: {},
+            });
+            await flushPromises();
+            expect(region.find('[role="dialog"]').exists()).toBe(true);
+        });
+
+        it("reserves the room of what a focus change shows: the selector is always in the toolbar and the note overlays the plot", async () => {
+            const view = await mountObserved();
+            const selector = view.find(".toolbar .unrelated-mode");
+            expect(selector.exists()).toBe(true);
+            expect(selector.attributes("inert")).toBeDefined();
+            fake.selection.value = [analysisNode(analysisHit(1).id)];
+            fake.levels.value = new Map();
+            await flushPromises();
+            expect(view.find(".toolbar .unrelated-mode").element).toBe(
+                selector.element,
+            );
+            const note = view.find(".isolated");
+            expect(note.exists()).toBe(true);
+            expect(note.element.parentElement?.classList).toContain(
+                "plot-area",
+            );
+            expect(view.find(".lens-region .isolated").exists()).toBe(false);
+        });
+
+        it("ignores the zero box of a folded window and does not draw again when it unfolds at the size it had", async () => {
+            const view = await mountObserved();
+            plotly.Plots.resize.mockClear();
+            plotly.react.mockClear();
+            const element = view.find(".chart").element;
+            for (const name of ["clientWidth", "clientHeight"]) {
+                Object.defineProperty(element, name, {
+                    value: 0,
+                    configurable: true,
+                });
+            }
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.Plots.resize).not.toHaveBeenCalled();
+            expect(plotly.react).not.toHaveBeenCalled();
+            Object.defineProperty(element, "clientWidth", {
+                value: 800,
+                configurable: true,
+            });
+            Object.defineProperty(element, "clientHeight", {
+                value: 400,
+                configurable: true,
+            });
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("peak identifier", () => {
+        /** 2.00 to 2.70 keV in 0.01 steps, flat at 10 counts with one peak of 500 at 2.35. */
+        const PEAK = series(
+            Array.from({ length: 71 }, (_, i) => 2 + i / 100),
+            Array.from({ length: 71 }, (_, i) => (i === 35 ? 500 : 10)),
+        );
+
+        async function mountPeak(): Promise<VueWrapper> {
+            answer(1, jsonResponse(PEAK));
+            const view = await mountWorkshop([curve(0, 1)]);
+            await settle();
+            return view;
+        }
+
+        function toggleButton(view: VueWrapper): DOMWrapper<Element> {
+            return view.find('[data-action="identify"]');
+        }
+
+        function clickAt(view: VueWrapper, x: number): void {
+            emitPlotly(view.find(".chart").element, "plotly_click", {
+                points: [{ curveNumber: 0, x, y: 10 }],
+                event: {},
+            });
+        }
+
+        async function identifyAt(view: VueWrapper, x: number): Promise<void> {
+            await toggleButton(view).trigger("click");
+            clickAt(view, x);
+            await flushPromises();
+        }
+
+        it("offers « Identify a peak » as a toggle, off at first and only in an XRF window", async () => {
+            const view = await mountPeak();
+            const button = toggleButton(view);
+            expect(button.attributes("aria-pressed")).toBe("false");
+            expect(button.attributes("aria-expanded")).toBeUndefined();
+            expect(
+                view.find(".chart").attributes("data-identifying"),
+            ).toBeUndefined();
+            await button.trigger("click");
+            expect(button.attributes("aria-pressed")).toBe("true");
+            expect(
+                view.find(".chart").attributes("data-identifying"),
+            ).toBeDefined();
+        });
+
+        it("leaves the classes Plotly set on the chart alone when the mode toggles", async () => {
+            const view = await mountPeak();
+            const chart = view.find(".chart").element;
+            chart.classList.add("js-plotly-plot");
+            await toggleButton(view).trigger("click");
+            expect(chart.classList.contains("js-plotly-plot")).toBe(true);
+            await toggleButton(view).trigger("click");
+            expect(chart.classList.contains("js-plotly-plot")).toBe(true);
+        });
+
+        it("stops every drag from zooming while the mode is on, by a relayout, and gives the zoom back when it ends", async () => {
+            const view = await mountPeak();
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            await toggleButton(view).trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(
+                view.find(".chart").element,
+                { dragmode: false },
+            );
+            await toggleButton(view).trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                view.find(".chart").element,
+                { dragmode: "zoom" },
+            );
+            expect(plotly.react).not.toHaveBeenCalled();
+        });
+
+        it("identifies once on the click Plotly sends after a press that moved, and not on the release alone", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const chart = view.find(".chart").element;
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(
+                new MouseEvent("pointerdown", { clientX: 100, clientY: 100 }),
+            );
+            chart.dispatchEvent(
+                new MouseEvent("pointerup", { clientX: 102, clientY: 160 }),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            clickAt(view, 2.33);
+            await flushPromises();
+            expect(view.find('[role="dialog"] h3').text()).toContain(
+                "2.35 keV",
+            );
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("keeps the drag off when the chart is drawn again while the mode is on", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            await flushPromises();
+            plotly.react.mockClear();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            expect(lastDrawing().layout.dragmode).toBe(false);
+        });
+
+        it("opens the candidates at the local maximum of the raw counts on a click, and toggles nothing in the focus", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const dialog = view.find('[role="dialog"]');
+            expect(dialog.find("h3").text()).toMatch(
+                /^Candidates at 2\.35 keV \(± 0\.\d\d\)$/,
+            );
+            expect(dialog.find(".checked").text()).toContain("A1");
+            expect(dialog.find('li[data-symbol="Pb"]').exists()).toBe(true);
+            expect(fake.toggle).not.toHaveBeenCalled();
+            const button = toggleButton(view);
+            expect(button.attributes("aria-expanded")).toBe("true");
+        });
+
+        it("still toggles the focus on a click outside the mode", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            await toggleButton(view).trigger("click");
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            emitPlotly(view.find(".chart").element, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            clickAt(view, 2.33);
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            expect(fake.toggle).toHaveBeenCalledWith(
+                analysisNode(analysisHit(1).id),
+            );
+        });
+
+        it("identifies, rather than toggling, a press that slips into a zoom box under 20 px", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [2, 2.7], autorange: true, _length: 400 },
+                    yaxis: { range: [0, 500], autorange: true, _length: 300 },
+                },
+            });
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(new Event("pointerdown"));
+            emitPlotly(chart, "plotly_unhover", { points: [], event: {} });
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 2.33,
+                "xaxis.range[1]": 2.331,
+                "yaxis.range[0]": 10,
+                "yaxis.range[1]": 11,
+            });
+            await flushPromises();
+            expect(view.find('[role="dialog"] h3').text()).toContain(
+                "2.35 keV",
+            );
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("moves one channel with ← and →, and to the energy typed in the field", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const input = view.find('[role="dialog"] input');
+            expect(input.attributes("step")).toBe("0.01");
+            await view.find('[data-action="raise"]').trigger("click");
+            expect(view.find(".peak-identifier h3").text()).toContain(
+                "2.36 keV",
+            );
+            expect((input.element as HTMLInputElement).value).toBe("2.36");
+            await view.find('[data-action="lower"]').trigger("click");
+            await view.find('[data-action="lower"]').trigger("click");
+            expect(view.find(".peak-identifier h3").text()).toContain(
+                "2.34 keV",
+            );
+            await input.setValue("2.5");
+            expect(view.find(".peak-identifier h3").text()).toContain(
+                "2.50 keV",
+            );
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("toggles el:Pb in the focus with « Pin Pb », offered only for an element of the graph", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            expect(
+                view.find('li[data-symbol="Pb"] [data-action="pin"]').exists(),
+            ).toBe(false);
+            fake.nodes.value = new Set([elementNode("Pb")]);
+            await flushPromises();
+            const pin = view.find('li[data-symbol="Pb"] [data-action="pin"]');
+            expect(pin.text()).toBe("Pin Pb");
+            await pin.trigger("click");
+            expect(fake.toggle).toHaveBeenCalledTimes(1);
+            expect(fake.toggle).toHaveBeenCalledWith(elementNode("Pb"));
+        });
+
+        it("adds the element to the lens elements with « Show Pb lines », leaving the focus alone", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const lines = view.find(
+                'li[data-symbol="Pb"] [data-action="lines"]',
+            );
+            expect(lines.text()).toBe("Show Pb lines");
+            expect(lines.attributes("aria-pressed")).toBe("false");
+            await lines.trigger("click");
+            await flushPromises();
+            expect(
+                view
+                    .find('li[data-symbol="Pb"] [data-action="lines"]')
+                    .attributes("aria-pressed"),
+            ).toBe("true");
+            expect(view.find(".xrf-strip li.element").text()).toContain("Pb");
+            expect(fake.toggle).not.toHaveBeenCalled();
+            expect(fake.selection.value).toEqual([]);
+        });
+
+        it("closes on Escape, gives the focus back to the toggle and leaves the selection intact", async () => {
+            const view = await mountPeak();
+            const held = analysisNode(analysisHit(1).id);
+            fake.selection.value = [held];
+            fake.slots.value = [held];
+            await identifyAt(view, 2.33);
+            expect(document.activeElement).toBe(
+                view.find('[role="dialog"] input').element,
+            );
+            await view
+                .find('[role="dialog"] input')
+                .trigger("keydown", { key: "Escape" });
+            await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            expect(document.activeElement).toBe(toggleButton(view).element);
+            expect(
+                toggleButton(view).attributes("aria-expanded"),
+            ).toBeUndefined();
+            expect(fake.selection.value).toEqual([held]);
+            expect(fake.toggle).not.toHaveBeenCalled();
+        });
+
+        it("leaves Escape outside the panel to the page and takes it on the panel and the toggle", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            expect(document.querySelector(OPEN_POPUP)).toBeNull();
+            const onToggle = new KeyboardEvent("keydown", {
+                key: "Escape",
+                cancelable: true,
+                bubbles: true,
+            });
+            toggleButton(view).element.dispatchEvent(onToggle);
+            await flushPromises();
+            expect(onToggle.defaultPrevented).toBe(true);
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+        });
+
+        it("announces the number of candidates when the identifier opens", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const count = view.findAll(".peak-identifier .candidate").length;
+            expect(count).toBeGreaterThan(0);
+            expect(announce).toHaveBeenLastCalledWith(
+                expect.stringMatching(/^\d+ candidates? at 2\.35 keV$/),
+            );
+        });
+
+        it("shows a hint line under the chart while the mode is on and no peak is chosen, and announces it once", async () => {
+            const view = await mountPeak();
+            expect(view.find(".identify-hint").exists()).toBe(false);
+            announce.mockClear();
+            await toggleButton(view).trigger("click");
+            const hint = view.find(".identify-hint");
+            const sentence =
+                "Click the top of a peak: the elements with a line at that energy show under the chart.";
+            expect(hint.find("p > span").text()).toBe(sentence);
+            expect(announce).toHaveBeenCalledWith(sentence);
+            clickAt(view, 2.33);
+            await flushPromises();
+            expect(view.find(".identify-hint").exists()).toBe(false);
+            expect(announce).toHaveBeenCalledTimes(2);
+        });
+
+        it("offers a help button after the hint that discloses the four rules on a click, and hides them on the next", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const help = view.find(
+                ".identify-hint [data-action='identify-help']",
+            );
+            expect(help.exists()).toBe(true);
+            const named = document.getElementById(
+                help.attributes("aria-labelledby") ?? "",
+            );
+            expect(named?.textContent).toBe("How to identify a peak");
+            const rules = view.find(`#${help.attributes("aria-controls")}`);
+            expect(help.attributes("aria-expanded")).toBe("false");
+            expect(rules.isVisible()).toBe(false);
+            await help.trigger("click");
+            expect(help.attributes("aria-expanded")).toBe("true");
+            expect(rules.isVisible()).toBe(true);
+            expect(rules.findAll("li").map((item) => item.text())).toEqual([
+                "The click snaps to the nearest peak top.",
+                "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
+                "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
+                "Hints only: the analyst decides. Escape closes the candidates; « Identify a peak » again leaves the mode.",
+            ]);
+            await help.trigger("click");
+            expect(help.attributes("aria-expanded")).toBe("false");
+            expect(rules.isVisible()).toBe(false);
+        });
+
+        it("keeps the chart where it is: the identifier follows the chart, before the lens strip", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const html = view.html();
+            const at = (marker: string) => html.indexOf(marker);
+            expect(at('class="plot-area')).toBeGreaterThan(-1);
+            expect(at('class="peak-identifier')).toBeGreaterThan(
+                at('class="plot-area'),
+            );
+            expect(at('class="peak-identifier')).toBeLessThan(
+                at('class="xrf-strip'),
+            );
+        });
+
+        it("marks the identified energy with one dashed line by a shapes relayout alone, moves it with the arrows and removes it on close", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            clickAt(view, 2.33);
+            await nextFrame();
+            await flushPromises();
+            const marked = () =>
+                (
+                    shapeCalls().at(-1)?.shapes as {
+                        x0: number;
+                        line: { dash: string };
+                        label?: { text: string };
+                    }[]
+                ).filter((shape) => shape.label?.text.startsWith("⌖"));
+            expect(plotly.react).not.toHaveBeenCalled();
+            expect(marked()).toHaveLength(1);
+            expect(marked()[0].x0).toBeCloseTo(2.35, 2);
+            expect(marked()[0].line.dash).toBe("dash");
+            expect(marked()[0].label?.text).toBe("⌖ 2.35 keV");
+
+            await view.find('[data-action="raise"]').trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(marked()[0].x0).toBeCloseTo(2.36, 2);
+            expect(plotly.react).not.toHaveBeenCalled();
+
+            await toggleButton(view).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(marked()).toHaveLength(0);
+        });
+
+        it("closes the identifier and leaves the mode with the toggle", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            await toggleButton(view).trigger("click");
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+            expect(toggleButton(view).attributes("aria-pressed")).toBe("false");
+        });
     });
 });

@@ -237,6 +237,54 @@ describe('xy-reader chart display state', () => {
         expect(chartVm.processing()).toBeTruthy();
     });
 
+    it('shares the log Y toggle between the chart and the panel, off by default', () => {
+        expect(chartVm.yLog()).toBe(false);
+
+        panelVm.yLog(true);
+
+        expect(chartVm.yLog()).toBe(true);
+    });
+
+    it('offers the log scale only when every curve has a positive value', () => {
+        chartVm.chartData({ value: [1, 2], count: [0, 3] });
+        expect(chartVm.canLogScale()).toBe(true);
+
+        chartVm.chartData({ value: [1, 2], count: [0, 0] });
+        expect(chartVm.canLogScale()).toBe(false);
+
+        chartVm.chartData({
+            series: [
+                { value: [1], count: [2] },
+                { value: [1], count: [-1] },
+            ],
+        });
+        expect(chartVm.canLogScale()).toBe(false);
+    });
+
+    it('keeps a right-axis curve out of the log rule, as the binding does', () => {
+        chartVm.chartData({
+            series: [
+                { value: [1], count: [2] },
+                { value: [1], count: [0], yaxis: 'y2' },
+            ],
+        });
+        expect(chartVm.canLogScale()).toBe(true);
+
+        chartVm.chartData({
+            series: [{ value: [1], count: [0], yaxis: 'y2' }],
+        });
+        expect(chartVm.canLogScale()).toBe(false);
+    });
+
+    it('does not touch the stored configuration when the scale changes', () => {
+        const before = structuredClone(stored.configs);
+
+        chartVm.yLog(true);
+
+        expect(stored.configs).toEqual(before);
+        expect(fixture.tile.save).not.toHaveBeenCalled();
+    });
+
     it('keeps the axis labels in step, as they already were', () => {
         panelVm.selectedConfig(FTIR_ID);
 

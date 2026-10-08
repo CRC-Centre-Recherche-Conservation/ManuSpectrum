@@ -458,11 +458,20 @@ export interface AnalysisPayload {
     unpublished: boolean;
 }
 
+/** The X-ray tube read from the analysis's measurement conditions; each field is null when not found or ambiguous. */
+export interface Excitation {
+    anode: string | null;
+    kV: number | null;
+    /** Where the value comes from; only the free-text conditions today. */
+    source: "conditions";
+}
+
 /** A whole analysis in the Selection, with the files a viewer shows (raw files left out; possibly none). */
 export interface AnalysisItem {
     key: string;
     kind: "analysis";
     analysis: AnalysisHit;
+    excitation: Excitation | null;
     files: FileEntry[];
 }
 
@@ -472,6 +481,7 @@ export type Item =
           key: string;
           kind: "analysis-file";
           analysis: AnalysisHit;
+          excitation: Excitation | null;
           file: FileEntry;
       }
     | { key: string; kind: "imaging"; analysis: AnalysisHit; file: FileEntry }
@@ -878,10 +888,15 @@ export const SHAPE_KEYS = {
         points: true,
         decimated: true,
     } satisfies Record<keyof FileViewer, true>,
+    Excitation: { anode: true, kV: true, source: true } satisfies Record<
+        keyof Excitation,
+        true
+    >,
     AnalysisItem: {
         key: true,
         kind: true,
         analysis: true,
+        excitation: true,
         files: true,
     } satisfies Record<keyof AnalysisItem, true>,
     ItemsResponse: { items: true, missing: true } satisfies Record<

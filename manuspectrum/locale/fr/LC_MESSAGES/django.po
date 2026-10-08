@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 16:35-0500\n"
+"POT-Creation-Date: 2026-10-08 03:37-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -227,7 +227,7 @@ msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
 msgid "Without a position on the image"
 msgstr "Sans position sur l'image"
 
-#: iiif/manifest.py:178 views/explorer/export.py:384
+#: iiif/manifest.py:178 views/explorer/export.py:385
 #: views/explorer/series.py:126
 msgid "Contains drafts"
 msgstr "Contient des brouillons"
@@ -278,7 +278,7 @@ msgstr ""
 msgid "Sign in"
 msgstr "Se connecter"
 
-#: iiif/services.py:41 views/iiif/auth.py:64
+#: iiif/services.py:41 views/iiif/auth.py:65
 msgid "Not available"
 msgstr "Non disponible"
 
@@ -303,15 +303,15 @@ msgstr "Correspondances de termes"
 msgid "References"
 msgstr "Références"
 
-#: settings.py:574
+#: settings.py:575
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:611
+#: settings.py:612
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:612
+#: settings.py:613
 msgid "French"
 msgstr "Français"
 
@@ -497,7 +497,7 @@ msgstr ""
 "Les données proviennent des jeux de données ci-dessous ; citez-les et "
 "réutilisez-les par leur identifiant."
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:507
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
 msgid "Licences per file"
 msgstr "Licences par fichier"
 
@@ -2581,21 +2581,36 @@ msgstr ""
 msgid "Password reset — %(site_name)s"
 msgstr "Réinitialisation du mot de passe — %(site_name)s"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:29
-#: templates/views/components/widgets/file-xy.htm:103
+#: templates/views/components/cards/file-renderers/afs-reader.htm:13
+#: templates/views/components/widgets/file-xy.htm:68
+msgid "Y axis scale"
+msgstr "Échelle de l'axe Y"
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:17
+#: templates/views/components/widgets/file-xy.htm:72
+msgid "Lin"
+msgstr "Lin"
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:22
+#: templates/views/components/widgets/file-xy.htm:77
+msgid "Log"
+msgstr "Log"
+
+#: templates/views/components/cards/file-renderers/afs-reader.htm:42
+#: templates/views/components/widgets/file-xy.htm:120
 msgid "Processing:"
 msgstr "Traitement :"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:31
-#: templates/views/components/widgets/file-xy.htm:105
+#: templates/views/components/cards/file-renderers/afs-reader.htm:44
+#: templates/views/components/widgets/file-xy.htm:122
 msgid "none applied"
 msgstr "aucun"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:45
+#: templates/views/components/cards/file-renderers/afs-reader.htm:58
 msgid "Config"
 msgstr "Configuration"
 
-#: templates/views/components/cards/file-renderers/afs-reader.htm:54
+#: templates/views/components/cards/file-renderers/afs-reader.htm:67
 msgid "Chart Configuration"
 msgstr "Configuration du graphique"
 
@@ -2787,10 +2802,10 @@ msgid ""
 "or a\n"
 "            deconvolved element map."
 msgstr ""
-"Lorsqu'un manifeste d'imagerie chimique est enregistré, chacun de ses "
-"canvas sans description de couche en reçoit une, proposée à partir du "
-"libellé du canvas : un symbole d'élément, une bande spectrale, une image "
-"de vidéo ou une carte d'élément déconvoluée."
+"Lorsqu'un manifeste d'imagerie chimique est enregistré, chacun de ses canvas "
+"sans description de couche en reçoit une, proposée à partir du libellé du "
+"canvas : un symbole d'élément, une bande spectrale, une image de vidéo ou "
+"une carte d'élément déconvoluée."
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:13
 msgid "An existing layer is never modified."
@@ -2808,29 +2823,28 @@ msgstr ""
 "Les canvas dont le libellé n'est pas reconnu restent sans couche. Des "
 "couches ne sont proposées que lorsqu'un manifeste est enregistré pour la "
 "première fois ou que son URL change : une couche supprimée ensuite reste "
-"supprimée. Rien n'est proposé pour une modification en attente de "
-"relecture, et un échec est consigné dans le journal sans bloquer "
-"l'enregistrement."
+"supprimée. Rien n'est proposé pour une modification en attente de relecture, "
+"et un échec est consigné dans le journal sans bloquer l'enregistrement."
 
-#: templates/views/components/functions/imaging-layers-proposal.htm:19
+#: templates/views/components/functions/imaging-layers-proposal.htm:21
 msgid ""
 "Layers of analyses recorded before this function\n"
 "            existed are filled once by a maintenance script."
 msgstr ""
-"Les couches des analyses enregistrées avant cette fonction sont remplies "
-"une fois par un script de maintenance."
+"Les couches des analyses enregistrées avant cette fonction sont remplies une "
+"fois par un script de maintenance."
 
-#: templates/views/components/functions/imaging-layers-proposal.htm:24
+#: templates/views/components/functions/imaging-layers-proposal.htm:25
 msgid ""
 "A resource imported from Arches JSON with its layer\n"
 "            tiles may receive duplicate layers: the manifest tile is saved\n"
 "            before its layers, and the function cannot see them."
 msgstr ""
-"Une ressource importée depuis un JSON Arches avec ses couches peut "
-"recevoir des couches en double : la tuile du manifeste est enregistrée "
-"avant ses couches, et la fonction ne peut pas les voir."
+"Une ressource importée depuis un JSON Arches avec ses couches peut recevoir "
+"des couches en double : la tuile du manifeste est enregistrée avant ses "
+"couches, et la fonction ne peut pas les voir."
 
-#: templates/views/components/functions/imaging-layers-proposal.htm:26
+#: templates/views/components/functions/imaging-layers-proposal.htm:33
 #: templates/views/components/functions/xy-technique-config.htm:26
 msgid "Triggered by"
 msgstr "Déclenchée par"
@@ -3345,15 +3359,15 @@ msgstr "Tout désélectionner"
 msgid "View:"
 msgstr "Affichage :"
 
-#: templates/views/components/widgets/file-xy.htm:69
+#: templates/views/components/widgets/file-xy.htm:85
 msgid "Loading charts..."
 msgstr "Chargement des graphiques..."
 
-#: templates/views/components/widgets/file-xy.htm:77
+#: templates/views/components/widgets/file-xy.htm:93
 msgid "Unable to load chart data"
 msgstr "Impossible de charger les données du graphique"
 
-#: templates/views/components/widgets/file-xy.htm:85
+#: templates/views/components/widgets/file-xy.htm:101
 msgid "Select files to display"
 msgstr "Sélectionnez les fichiers à afficher"
 
@@ -4788,28 +4802,28 @@ msgstr ""
 "License v3. La consultation et le téléchargement des données publiées ne "
 "nécessitent aucun compte."
 
-#: views/biblissima_proxy.py:545
+#: views/biblissima_proxy.py:624
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Trop de requêtes Biblissima sont en cours. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:558
+#: views/biblissima_proxy.py:637
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:569
+#: views/biblissima_proxy.py:648
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: views/biblissima_proxy.py:582
+#: views/biblissima_proxy.py:661
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -4818,29 +4832,29 @@ msgstr ""
 "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer "
 "dans un instant."
 
-#: views/biblissima_proxy.py:594 views/biblissima_proxy.py:603
+#: views/biblissima_proxy.py:673 views/biblissima_proxy.py:682
 msgid "Invalid response from the Biblissima portal."
 msgstr "Réponse invalide du portail Biblissima."
 
-#: views/biblissima_proxy.py:611
+#: views/biblissima_proxy.py:690
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
 
-#: views/biblissima_proxy.py:2341
+#: views/biblissima_proxy.py:2442
 #, python-format
 msgid "Time limit of %(seconds)s s for this item exceeded."
 msgstr "Délai de %(seconds)s s dépassé pour cet élément."
 
-#: views/biblissima_proxy.py:2389
+#: views/biblissima_proxy.py:2490
 #, python-format
 msgid "Select at most %(max)s descriptors."
 msgstr "Sélectionnez au plus %(max)s descripteurs."
 
-#: views/biblissima_proxy.py:2398
+#: views/biblissima_proxy.py:2499
 msgid "The descriptor list is malformed."
 msgstr "La liste de descripteurs est mal formée."
 
-#: views/biblissima_proxy.py:2958
+#: views/biblissima_proxy.py:3059
 msgid "The manuscript identifier is malformed."
 msgstr "L'identifiant du manuscrit est mal formé."
 
@@ -4925,22 +4939,22 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
 
-#: views/explorer/export.py:377
+#: views/explorer/export.py:378
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] "Sélection de %(count)d élément"
 msgstr[1] "Sélection de %(count)d éléments"
 
-#: views/explorer/export.py:509
+#: views/explorer/export.py:510
 msgid "Each file carries its own licence, given with the file."
 msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
 
-#: views/explorer/export.py:513
+#: views/explorer/export.py:514
 msgid "Licence of the files of this package that name it."
 msgstr "Licence des fichiers de ce paquet qui la mentionnent."
 
-#: views/explorer/export.py:796
+#: views/explorer/export.py:797
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
@@ -4949,7 +4963,7 @@ msgstr ""
 "Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus "
 "de %(count)d canvases) : ouvrez-le par document."
 
-#: views/explorer/export.py:806
+#: views/explorer/export.py:807
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
@@ -4958,7 +4972,7 @@ msgstr ""
 "json) ; ses images sont servies par des serveurs d'images IIIF et ne sont "
 "pas dans le paquet."
 
-#: views/explorer/export.py:813
+#: views/explorer/export.py:814
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
@@ -5026,39 +5040,39 @@ msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
 msgid "%(label)s · view %(number)s"
 msgstr "%(label)s · vue %(number)s"
 
-#: views/iiif/auth.py:51
+#: views/iiif/auth.py:52
 msgid "The request to the token service is malformed."
 msgstr "La demande au service de jeton est mal formée."
 
-#: views/iiif/auth.py:53
+#: views/iiif/auth.py:54
 msgid "Not signed in to ManuSpectrum in this browser."
 msgstr "Pas de connexion à ManuSpectrum dans ce navigateur."
 
-#: views/iiif/auth.py:55
+#: views/iiif/auth.py:56
 msgid "The ManuSpectrum sign-in is no longer valid."
 msgstr "La connexion à ManuSpectrum n'est plus valide."
 
-#: views/iiif/auth.py:56
+#: views/iiif/auth.py:57
 msgid "This viewer is not allowed to receive a token."
 msgstr "Cette visionneuse n'est pas autorisée à recevoir un jeton."
 
-#: views/iiif/auth.py:57
+#: views/iiif/auth.py:58
 msgid "The token service is unavailable, try again later."
 msgstr "Le service de jeton est indisponible, réessayez plus tard."
 
-#: views/iiif/auth.py:60
+#: views/iiif/auth.py:61
 msgid "Invalid request"
 msgstr "Demande invalide"
 
-#: views/iiif/auth.py:61
+#: views/iiif/auth.py:62
 msgid "Not signed in"
 msgstr "Non connecté"
 
-#: views/iiif/auth.py:62
+#: views/iiif/auth.py:63
 msgid "Sign-in no longer valid"
 msgstr "Connexion expirée"
 
-#: views/iiif/auth.py:63
+#: views/iiif/auth.py:64
 msgid "Viewer not allowed"
 msgstr "Visionneuse non autorisée"
 

@@ -1,6 +1,9 @@
 import type { InjectionKey, Ref } from "vue";
 
-import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    Label,
+    SynthesisResponse,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
@@ -103,6 +106,11 @@ export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
 /** How the Compare window holding a body is framed (its preset size, enlarged or not); provided by the window. */
 export const WINDOW_FRAME_KEY: InjectionKey<Readonly<Ref<TableFrame>>> =
     Symbol("window-frame");
+
+/** The synthesis of the Selection shown in the Compare view, null while it is read or after a failure; provided by the Compare view. */
+export const SYNTHESIS_KEY: InjectionKey<
+    Readonly<Ref<SynthesisResponse | null>>
+> = Symbol("synthesis");
 
 /** Opens the Selection drawer; provided by the shell, whose drawer holds the state. */
 export interface SelectionDrawerHandle {

@@ -63,6 +63,7 @@ describe("HelpTip", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+        vi.unstubAllGlobals();
         vi.useRealTimers();
     });
 
@@ -308,5 +309,52 @@ describe("HelpTip", () => {
         wrapper.unmount();
         expect(unlisten).toHaveBeenCalledWith("keydown", expect.any(Function));
         expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("renders the tooltip as a manual popover shown in the top layer and hidden with it", async () => {
+        const wrapper = mountTip();
+        const tip = document.body.querySelector(
+            '[role="tooltip"]',
+        ) as HTMLElement;
+        let open = false;
+        tip.showPopover = vi.fn(() => (open = true));
+        tip.hidePopover = vi.fn(() => (open = false));
+        tip.matches = vi.fn(() => open) as never;
+        expect(tip.getAttribute("popover")).toBe("manual");
+
+        wrapper.element.dispatchEvent(pointer("pointerenter"));
+        vi.advanceTimersByTime(DELAY_MS);
+        await wrapper.vm.$nextTick();
+        expect(tip.showPopover).toHaveBeenCalledTimes(1);
+
+        wrapper.element.dispatchEvent(pointer("pointerleave"));
+        await wrapper.vm.$nextTick();
+        expect(tip.hidePopover).toHaveBeenCalledTimes(1);
+        expect(tip.style.insetBlockStart).not.toBe("");
+    });
+
+    it("hides when its control scrolls out of sight", async () => {
+        const watchers: ((entries: { isIntersecting: boolean }[]) => void)[] =
+            [];
+        vi.stubGlobal(
+            "IntersectionObserver",
+            class {
+                constructor(
+                    callback: (entries: { isIntersecting: boolean }[]) => void,
+                ) {
+                    watchers.push(callback);
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
+        const wrapper = mountTip();
+        wrapper.element.dispatchEvent(pointer("pointerenter"));
+        vi.advanceTimersByTime(DELAY_MS);
+        await wrapper.vm.$nextTick();
+        expect(shown()).not.toBeNull();
+        watchers.at(-1)?.([{ isIntersecting: false }]);
+        await wrapper.vm.$nextTick();
+        expect(shown()).toBeNull();
     });
 });
