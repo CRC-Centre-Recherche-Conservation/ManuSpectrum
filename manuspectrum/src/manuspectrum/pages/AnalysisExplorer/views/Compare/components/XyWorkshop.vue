@@ -174,6 +174,8 @@ const DEFAULT_PNG_HEIGHT = 540;
 /** Room on the right of the exported figure for its legend. */
 const PNG_LEGEND_ROOM = 240;
 const REM = 16;
+/** Left and right margins of the plot inside the chart, in px (`workshop-figure` margins). */
+const PLOT_MARGIN_X = 80;
 const DEFAULT_POINTER = "mouse";
 
 /**
@@ -278,6 +280,9 @@ let restyleFrame: number | null = null;
 /** The lens shapes the chart shows, serialised (`shapesKey`); a relayout is made only when they differ. */
 let shownShapesKey = "";
 let shapesFrame: number | null = null;
+/** Watches the chart element's own box: its height changes when the content below it does. */
+let sizeObserver: ResizeObserver | null = null;
+let sizeFrame: number | null = null;
 /** Set while the range select's own relayout runs, so its echo is not read as a zoom by hand. */
 let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
@@ -749,6 +754,17 @@ watch(
     () => resizeTick?.value,
     () => followSize(),
 );
+watch(
+    chart,
+    (element) => {
+        sizeObserver?.disconnect();
+        if (element && typeof ResizeObserver !== "undefined") {
+            sizeObserver ??= new ResizeObserver(scheduleFollowSize);
+            sizeObserver.observe(element);
+        }
+    },
+    { flush: "post" },
+);
 watch(drawn, (curves) => {
     const ids = new Set(curves.map(curveId));
     store.pruneHiddenCurves(windowKey.value, (id) => ids.has(id));
@@ -758,11 +774,22 @@ onBeforeUnmount(() => {
     disposed = true;
     if (restyleFrame !== null) cancelAnimationFrame(restyleFrame);
     if (shapesFrame !== null) cancelAnimationFrame(shapesFrame);
+    if (sizeFrame !== null) cancelAnimationFrame(sizeFrame);
+    sizeObserver?.disconnect();
     purgeChart();
 });
 
 function sizeOf(element: HTMLElement): string {
     return `${element.clientWidth}×${element.clientHeight}`;
+}
+
+/** One `followSize` per frame, whatever moved the chart's box (the lens strip opening, a window resize). */
+function scheduleFollowSize(): void {
+    if (sizeFrame !== null) return;
+    sizeFrame = requestAnimationFrame(() => {
+        sizeFrame = null;
+        followSize();
+    });
 }
 
 /** Draws the chart again for its size, when that size is not the one it was drawn at. */
@@ -857,7 +884,9 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
 
 /** The lens shapes for `theme`; none outside an XRF window. */
 function lensShapesFor(theme: PlotTheme): Partial<Shape>[] {
-    return lens.active.value ? lens.shapes(theme) : [];
+    if (!lens.active.value) return [];
+    const width = chart.value?.clientWidth;
+    return lens.shapes(theme, width ? width - PLOT_MARGIN_X : undefined);
 }
 
 async function draw(): Promise<void> {

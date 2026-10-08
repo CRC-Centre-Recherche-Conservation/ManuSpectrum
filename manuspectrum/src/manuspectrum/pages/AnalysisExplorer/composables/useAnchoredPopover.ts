@@ -1,0 +1,117 @@
+import { onBeforeUnmount, ref, watch } from "vue";
+
+import type { Ref } from "vue";
+
+/** Space kept to the viewport's edges, and between the anchor and the popover, in px. */
+const EDGE_PX = 8;
+const OFFSET_PX = 4;
+
+export interface AnchoredPopover {
+    /** Inline position of the popover and `--anchor-width`; apply it with `:style`. */
+    style: Ref<Record<string, string>>;
+    /** Places the popover again against its anchor. */
+    place: () => void;
+}
+
+/**
+ * Puts `popover` in the top layer (`popover="manual"` element, so it is never
+ * clipped by a scrolling window body) while `open` is true, under `anchor`,
+ * left-aligned and kept inside the viewport; above the anchor when there is
+ * more room there. It follows the anchor on scroll and resize. Showing and
+ * hiding do not move the focus; light dismissal is the caller's.
+ */
+export function useAnchoredPopover(
+    open: Readonly<Ref<boolean>>,
+    popover: Readonly<Ref<HTMLElement | null>>,
+    anchor: Readonly<Ref<HTMLElement | null>>,
+): AnchoredPopover {
+    const style = ref<Record<string, string>>({});
+    let listening = false;
+
+    watch(
+        [open, popover],
+        ([isOpen, element], [wasOpen, previous]) => {
+            if (previous && previous !== element) hide(previous);
+            if (isOpen && element) {
+                show(element);
+                place();
+                listen();
+            } else {
+                if (wasOpen && element) hide(element);
+                unlisten();
+            }
+        },
+        { flush: "post" },
+    );
+
+    onBeforeUnmount(unlisten);
+
+    function show(element: HTMLElement): void {
+        if (typeof element.showPopover !== "function") return;
+        try {
+            if (!element.matches(":popover-open")) element.showPopover();
+        } catch {
+            // Not connected yet: the element stays where the stylesheet puts it.
+        }
+    }
+
+    function hide(element: HTMLElement): void {
+        if (typeof element.hidePopover !== "function") return;
+        try {
+            if (element.matches(":popover-open")) element.hidePopover();
+        } catch {
+            // Already gone with its parent.
+        }
+    }
+
+    function place(): void {
+        const element = popover.value;
+        const from = anchor.value;
+        if (!element || !from) return;
+        const rect = from.getBoundingClientRect();
+        const width = element.offsetWidth;
+        const height = element.scrollHeight;
+        const room = {
+            below: window.innerHeight - rect.bottom - EDGE_PX - OFFSET_PX,
+            above: rect.top - EDGE_PX - OFFSET_PX,
+        };
+        const above = height > room.below && room.above > room.below;
+        const available = Math.max(above ? room.above : room.below, 0);
+        const left = Math.max(
+            EDGE_PX,
+            Math.min(rect.left, window.innerWidth - width - EDGE_PX),
+        );
+        const shown = Math.min(height, available);
+        style.value = {
+            insetInlineStart: `${left}px`,
+            insetBlockStart: `${above ? rect.top - OFFSET_PX - shown : rect.bottom + OFFSET_PX}px`,
+            maxBlockSize: `${available}px`,
+            "--anchor-width": `${rect.width}px`,
+        };
+    }
+
+    function onMoved(event: Event): void {
+        if (
+            event.target instanceof Node &&
+            popover.value?.contains(event.target)
+        )
+            return;
+        place();
+    }
+
+    function listen(): void {
+        if (listening) return;
+        listening = true;
+        window.addEventListener("scroll", onMoved, true);
+        window.addEventListener("resize", onMoved);
+    }
+
+    function unlisten(): void {
+        if (!listening) return;
+        listening = false;
+        window.removeEventListener("scroll", onMoved, true);
+        window.removeEventListener("resize", onMoved);
+    }
+
+    return { style, place };
+}

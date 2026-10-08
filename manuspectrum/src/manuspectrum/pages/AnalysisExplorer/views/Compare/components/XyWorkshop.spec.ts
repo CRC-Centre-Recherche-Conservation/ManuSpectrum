@@ -1504,6 +1504,49 @@ describe("XyWorkshop", () => {
         expect(plotly.purge).toHaveBeenCalledWith(element);
     });
 
+    it("follows the chart's own box when what sits below it moves it, once per frame", async () => {
+        const observers: {
+            callback: () => void;
+            observed: Element[];
+            disconnect: () => void;
+        }[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                observed: Element[] = [];
+                disconnect = vi.fn();
+                callback: () => void;
+                constructor(callback: () => void) {
+                    this.callback = callback;
+                    observers.push(this);
+                }
+                observe(element: Element) {
+                    this.observed.push(element);
+                }
+                unobserve() {}
+            },
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        const element = view.find(".chart").element;
+        const watcher = observers.find((o) => o.observed.includes(element));
+        expect(watcher).toBeDefined();
+        const frame = () =>
+            new Promise((resolve) => requestAnimationFrame(resolve));
+        watcher!.callback();
+        await frame();
+        await flushPromises();
+        expect(plotly.Plots.resize).not.toHaveBeenCalled();
+        Object.defineProperty(element, "clientHeight", { value: 210 });
+        watcher!.callback();
+        watcher!.callback();
+        await frame();
+        await flushPromises();
+        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        view.unmount();
+        wrapper = null;
+        expect(watcher!.disconnect).toHaveBeenCalled();
+    });
+
     it("draws small multiples again at their new size once they no longer need a height of their own", async () => {
         const resize = ref(0);
         const view = await mountWorkshop(

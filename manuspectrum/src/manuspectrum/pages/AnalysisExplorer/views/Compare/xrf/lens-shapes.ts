@@ -18,6 +18,14 @@ const OVERLAP_RULE_WIDTH = 4;
 const OVERLAP_RULE_OPACITY = 0.5;
 const COMPTON_OPACITY = 0.12;
 const LABEL_SIZE = 10;
+/** Rows the instrument labels are staggered on, and the height each row adds to its tick. */
+const INSTRUMENT_ROWS = 3;
+const ROW_STEP_PX = 14;
+/** Width of one monospace glyph at `LABEL_SIZE`, and the gap kept between two labels on a row. */
+const GLYPH_PX = 6.2;
+const LABEL_GAP_PX = 4;
+/** The panel width assumed when the caller gives none. */
+const DEFAULT_PLOT_PX = 640;
 
 /** Colours the lens draws with: the slot hues of `focus` (indexed by `hue`) and the hue of each element (`elementColour`). */
 export type LensTheme = Pick<
@@ -97,6 +105,8 @@ export interface LensShapesInput {
     elements: LensElementLines[];
     overlaps: OverlapBand[];
     theme: LensTheme;
+    /** Width in pixels of a panel's plot area; sets how many instrument labels fit side by side. */
+    plotWidth?: number;
 }
 
 interface Ranked {
@@ -120,13 +130,15 @@ function label(
     text: string,
     colour: string,
     theme: LensTheme,
-    textposition: "end" | "start",
+    textposition: string,
+    placing: Record<string, unknown> = {},
 ): LensShape["label"] {
     return {
         text: escapePlotlyText(text),
         textposition,
         font: { family: theme.fontMono, size: LABEL_SIZE, color: colour },
-    };
+        ...placing,
+    } as LensShape["label"];
 }
 
 function fullLine(
@@ -151,16 +163,23 @@ function fullLine(
     };
 }
 
+/**
+ * A short line against the top or the bottom edge of the panel. A bottom tick
+ * (`row` 0 to `INSTRUMENT_ROWS - 1`) is `row` steps taller and carries its
+ * label horizontally above its tip; a `null` text draws the tick alone.
+ */
 function tick(
     panel: LensPanel,
     energy: number,
     top: boolean,
     colour: string,
     dash: string,
-    text: string,
+    text: string | null,
     theme: LensTheme,
+    row = 0,
 ): LensShape {
-    return {
+    const length = TICK_PX + row * ROW_STEP_PX;
+    const shape: LensShape = {
         type: "line",
         layer: "above",
         xref: `x${panel.suffix}` as LensShape["xref"],
@@ -169,11 +188,64 @@ function tick(
         x1: energy,
         ysizemode: "pixel",
         yanchor: top ? 1 : 0,
-        y0: top ? -TICK_PX : 0,
-        y1: top ? 0 : TICK_PX,
+        y0: top ? -length : 0,
+        y1: top ? 0 : length,
         line: { color: colour, width: 1.5, dash: dash as "dash" },
-        label: label(text, colour, theme, top ? "start" : "end"),
     };
+    if (text !== null) {
+        shape.label = top
+            ? label(text, colour, theme, "start")
+            : label(text, colour, theme, "end", {
+                  textangle: 0,
+                  xanchor: "center",
+                  yanchor: "bottom",
+              });
+    }
+    return shape;
+}
+
+/**
+ * The row (0 to `INSTRUMENT_ROWS - 1`) each tick's label takes, `null` when it
+ * fits on none or repeats the text of a neighbour it would touch.
+ */
+function labelRows(
+    texts: readonly string[],
+    xs: readonly number[],
+    pxPerKev: number,
+): (number | null)[] {
+    interface Placed {
+        text: string;
+        row: number;
+        lo: number;
+        hi: number;
+    }
+    const order = xs.map((_, index) => index).sort((a, b) => xs[a] - xs[b]);
+    const placed: Placed[] = [];
+    const rows: (number | null)[] = xs.map(() => null);
+    for (const index of order) {
+        const x = xs[index] * pxPerKev;
+        const half = (texts[index].length * GLYPH_PX + LABEL_GAP_PX) / 2;
+        const lo = x - half;
+        const hi = x + half;
+        const text = texts[index];
+        if (
+            placed.some(
+                (held) => held.text === text && held.hi > lo && hi > held.lo,
+            )
+        ) {
+            continue;
+        }
+        for (let row = 0; row < INSTRUMENT_ROWS; row++) {
+            const clear = placed.every(
+                (held) => held.row !== row || held.hi <= lo || hi <= held.lo,
+            );
+            if (!clear) continue;
+            placed.push({ text, row, lo, hi });
+            rows[index] = row;
+            break;
+        }
+    }
+    return rows;
 }
 
 function band(
@@ -201,7 +273,12 @@ function band(
         opacity,
         line: { width: 0 },
     };
-    if (text) shape.label = label(text, colour, theme, "start");
+    if (text) {
+        shape.label = label(text, colour, theme, "top center", {
+            textangle: 0,
+            yanchor: "bottom",
+        });
+    }
     return shape;
 }
 
@@ -246,7 +323,10 @@ function overlapShapes(
  * placed by `x`/`y … domain` references and never sets `showlegend` (that
  * flag turns a relayout into a full calc). Beyond `MAX_LENS_SHAPES` the least
  * important are dropped: focus lines, lens elements, declared majors, minors,
- * traces, instrument ticks, then bands.
+ * traces, instrument ticks, then bands. The instrument labels are
+ * horizontal and staggered on `INSTRUMENT_ROWS` rows of taller ticks by the
+ * width they need at `plotWidth`; one that fits on no row is left out and its
+ * tick stays. A band's label sits above its panel.
  */
 export function lensShapes(input: LensShapesInput): LensShape[] {
     const { theme } = input;
@@ -310,8 +390,17 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                 ),
             );
         }
-        for (const entry of panel.instrument) {
-            if (!inside(entry.energy, panel.extent)) continue;
+        const shown = panel.instrument.filter((entry) =>
+            inside(entry.energy, panel.extent),
+        );
+        const span = panel.extent[1] - panel.extent[0];
+        const rows = labelRows(
+            shown.map((entry) => entry.label),
+            shown.map((entry) => entry.energy),
+            span > 0 ? (input.plotWidth ?? DEFAULT_PLOT_PX) / span : 0,
+        );
+        shown.forEach((entry, index) => {
+            const row = rows[index];
             add(
                 5,
                 tick(
@@ -320,11 +409,12 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                     false,
                     entry.colour,
                     "dot",
-                    entry.label,
+                    row === null ? null : entry.label,
                     theme,
+                    row ?? 0,
                 ),
             );
-        }
+        });
         for (const entry of panel.bands) {
             add(
                 6,

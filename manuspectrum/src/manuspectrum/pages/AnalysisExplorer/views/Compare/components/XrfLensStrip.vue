@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, useId } from "vue";
+import {
+    computed,
+    onBeforeUnmount,
+    ref,
+    useId,
+    useTemplateRef,
+    watch,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 
+import { useAnchoredPopover } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnchoredPopover.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { elementHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/element-colour.ts";
 import { declaredText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
@@ -31,7 +39,10 @@ const ENERGY_DIGITS = 2;
  * overlaps between drawn lines and the line that tells them apart. It also
  * holds the lens element picker: an « Add an element » combobox over the
  * line table's symbols and a mini periodic table (Na to U) of toggles. Lens
- * elements are the reader's own list; they never enter the focus.
+ * elements are the reader's own list; they never enter the focus. The
+ * suggestions and the periodic table are popovers in the top layer, under
+ * their input and button (`useAnchoredPopover`): Escape or a press outside
+ * closes the table and the focus goes back to its button.
  */
 const props = defineProps<{
     elements: readonly StripElement[];
@@ -54,6 +65,11 @@ const { $gettext, interpolate } = useGettext();
 
 const inputId = useId();
 const listId = useId();
+const tableId = useId();
+const input = useTemplateRef<HTMLInputElement>("input");
+const listbox = useTemplateRef<HTMLElement>("listbox");
+const toggle = useTemplateRef<HTMLButtonElement>("toggle");
+const tablePopover = useTemplateRef<HTMLElement>("tablePopover");
 const query = ref("");
 const suggestionsOpen = ref(false);
 const activeIndex = ref(0);
@@ -92,6 +108,16 @@ const grid = computed(() =>
             },
         }),
     ),
+);
+const { style: listStyle } = useAnchoredPopover(
+    showSuggestions,
+    listbox,
+    input,
+);
+const { style: tableStyle } = useAnchoredPopover(
+    tableOpen,
+    tablePopover,
+    toggle,
 );
 const hasContent = computed(
     () =>
@@ -202,12 +228,50 @@ function choose(symbol: string): void {
     activeIndex.value = 0;
 }
 
+function openSuggestions(): void {
+    tableOpen.value = false;
+    suggestionsOpen.value = true;
+}
+
 function onInput(event: Event): void {
     query.value = (event.target as HTMLInputElement).value;
     unknownSymbol.value = null;
-    suggestionsOpen.value = true;
+    openSuggestions();
     activeIndex.value = 0;
 }
+
+function closeTable(returnFocus: boolean): void {
+    tableOpen.value = false;
+    if (returnFocus) toggle.value?.focus();
+}
+
+function onPointerDown(event: PointerEvent): void {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (tablePopover.value?.contains(target) || toggle.value?.contains(target))
+        return;
+    closeTable(false);
+}
+
+/** Escape closes the table, unless the field's own Escape just closed the suggestions. */
+function onEscape(event: KeyboardEvent): void {
+    if (!tableOpen.value || event.defaultPrevented) return;
+    event.preventDefault();
+    closeTable(true);
+}
+
+watch(tableOpen, (isOpen) => {
+    if (isOpen) {
+        suggestionsOpen.value = false;
+        document.addEventListener("pointerdown", onPointerDown);
+    } else {
+        document.removeEventListener("pointerdown", onPointerDown);
+    }
+});
+
+onBeforeUnmount(() =>
+    document.removeEventListener("pointerdown", onPointerDown),
+);
 
 function onKeydown(event: KeyboardEvent): void {
     const count = suggestions.value.length;
@@ -234,6 +298,7 @@ function onKeydown(event: KeyboardEvent): void {
     <section
         class="xrf-strip"
         :aria-label="$gettext('XRF lens')"
+        @keydown.esc="onEscape"
     >
         <div class="picker">
             <label
@@ -244,12 +309,14 @@ function onKeydown(event: KeyboardEvent): void {
                 <span class="combobox">
                     <input
                         :id="inputId"
+                        ref="input"
                         type="text"
                         role="combobox"
                         autocomplete="off"
                         spellcheck="false"
                         maxlength="2"
                         aria-autocomplete="list"
+                        aria-haspopup="listbox"
                         :aria-expanded="showSuggestions ? 'true' : 'false'"
                         :aria-controls="listId"
                         :aria-activedescendant="
@@ -259,13 +326,17 @@ function onKeydown(event: KeyboardEvent): void {
                         "
                         :value="query"
                         @input="onInput"
-                        @focus="suggestionsOpen = true"
+                        @focus="openSuggestions"
+                        @blur="suggestionsOpen = false"
                         @keydown="onKeydown"
                     />
                     <ul
                         v-show="showSuggestions"
                         :id="listId"
+                        ref="listbox"
+                        popover="manual"
                         class="suggestions"
+                        :style="listStyle"
                         role="listbox"
                         :aria-label="$gettext('Elements')"
                     >
@@ -285,9 +356,12 @@ function onKeydown(event: KeyboardEvent): void {
                 </span>
             </label>
             <button
+                ref="toggle"
                 type="button"
                 class="table-toggle"
+                data-popover="xrf-table"
                 :aria-expanded="tableOpen ? 'true' : 'false'"
+                :aria-controls="tableOpen ? tableId : undefined"
                 @click="tableOpen = !tableOpen"
             >
                 <span>{{ $gettext("Periodic table") }}</span>
@@ -302,7 +376,11 @@ function onKeydown(event: KeyboardEvent): void {
         </div>
         <div
             v-if="tableOpen"
+            :id="tableId"
+            ref="tablePopover"
+            popover="manual"
             class="mini-table"
+            :style="tableStyle"
             role="group"
             :aria-label="$gettext('Lens elements')"
         >
@@ -435,17 +513,20 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .xrf-strip .suggestions {
-    position: absolute;
-    inset-block-start: 100%;
-    inset-inline-start: 0;
-    z-index: 1100;
+    position: fixed;
+    inset: auto;
     display: grid;
-    min-inline-size: 100%;
-    margin: 0.125rem 0 0;
+    align-content: start;
+    inline-size: max-content;
+    min-inline-size: var(--anchor-width, 0);
+    max-block-size: 12rem;
+    margin: 0;
     padding: 0.25rem;
+    overflow-y: auto;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.375rem;
     background: var(--surface);
+    color: var(--ink);
     box-shadow: 0 0.25rem 1rem color-mix(in srgb, var(--ink) 15%, transparent);
     list-style: none;
 }
@@ -483,11 +564,22 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .xrf-strip .mini-table {
+    position: fixed;
+    inset: auto;
     display: grid;
     grid-template-columns: repeat(18, minmax(1.5rem, 2rem));
     grid-template-rows: repeat(5, auto) 0.5rem repeat(2, auto);
     gap: 0.125rem;
-    overflow-x: auto;
+    inline-size: max-content;
+    max-inline-size: calc(100vw - 1rem);
+    margin: 0;
+    padding: 0.5rem;
+    overflow: auto;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.375rem;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 0.25rem 1rem color-mix(in srgb, var(--ink) 15%, transparent);
 }
 
 .xrf-strip .mini-table .cell {

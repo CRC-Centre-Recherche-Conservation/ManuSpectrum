@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import XrfLensStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue";
@@ -27,6 +27,13 @@ function element(overrides: Partial<StripElement> = {}): StripElement {
         ...overrides,
     };
 }
+
+let attached: ReturnType<typeof mount> | null = null;
+
+afterEach(() => {
+    attached?.unmount();
+    attached = null;
+});
 
 function mountStrip(
     props: {
@@ -251,5 +258,89 @@ describe("XrfLensStrip", () => {
 
     it("shows no list while the lens has nothing to say", () => {
         expect(mountStrip().find("ul.lines").exists()).toBe(false);
+    });
+
+    it("wires the combobox to its listbox, a popover, and closes the options on blur", async () => {
+        const view = mountStrip();
+        const input = view.find("input");
+        const list = view.find('[role="listbox"]');
+        expect(list.attributes("popover")).toBe("manual");
+        expect(input.attributes("aria-controls")).toBe(list.attributes("id"));
+        expect(input.attributes("aria-haspopup")).toBe("listbox");
+        await input.trigger("focus");
+        expect(input.attributes("aria-expanded")).toBe("true");
+        await input.trigger("blur");
+        expect(input.attributes("aria-expanded")).toBe("false");
+    });
+
+    it("opens the periodic table as a popover named by its button", async () => {
+        const view = mountStrip();
+        const toggle = view.find("button.table-toggle");
+        expect(toggle.attributes("aria-controls")).toBeUndefined();
+        await toggle.trigger("click");
+        const table = view.find(".mini-table");
+        expect(table.attributes("popover")).toBe("manual");
+        expect(toggle.attributes("aria-controls")).toBe(table.attributes("id"));
+        expect(toggle.attributes("data-popover")).toBe("xrf-table");
+    });
+
+    it("closes the table with Escape and gives the focus back to its button", async () => {
+        attached = mount(XrfLensStrip, {
+            attachTo: document.body,
+            props: {
+                elements: [],
+                declaredSlots: [],
+                overlaps: [],
+                symbols: SYMBOLS,
+                lensSymbols: [],
+                lang: "en",
+            },
+        });
+        const toggle = attached.find("button.table-toggle");
+        await toggle.trigger("click");
+        const cell = attached.find<HTMLButtonElement>(".mini-table .cell");
+        cell.element.focus();
+        await cell.trigger("keydown", { key: "Escape" });
+        expect(attached.find(".mini-table").exists()).toBe(false);
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(document.activeElement).toBe(toggle.element);
+    });
+
+    it("closes the table on a press outside it, not on one inside it or on its button", async () => {
+        attached = mount(XrfLensStrip, {
+            attachTo: document.body,
+            props: {
+                elements: [],
+                declaredSlots: [],
+                overlaps: [],
+                symbols: SYMBOLS,
+                lensSymbols: [],
+                lang: "en",
+            },
+        });
+        await attached.find("button.table-toggle").trigger("click");
+        const press = (target: Element) =>
+            target.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+        press(attached.find(".mini-table .cell").element);
+        press(attached.find("button.table-toggle").element);
+        await attached.vm.$nextTick();
+        expect(attached.find(".mini-table").exists()).toBe(true);
+        press(document.body);
+        await attached.vm.$nextTick();
+        expect(attached.find(".mini-table").exists()).toBe(false);
+    });
+
+    it("keeps one popover open at a time, and leaves the table to the Escape of the options", async () => {
+        const view = mountStrip();
+        const input = view.find("input");
+        await input.trigger("focus");
+        expect(input.attributes("aria-expanded")).toBe("true");
+        await view.find("button.table-toggle").trigger("click");
+        expect(input.attributes("aria-expanded")).toBe("false");
+        await input.trigger("focus");
+        expect(view.find(".mini-table").exists()).toBe(false);
+        await input.setValue("c");
+        await input.trigger("keydown", { key: "Escape" });
+        expect(input.attributes("aria-expanded")).toBe("false");
     });
 });

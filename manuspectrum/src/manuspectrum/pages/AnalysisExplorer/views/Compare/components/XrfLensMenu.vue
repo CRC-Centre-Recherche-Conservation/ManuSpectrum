@@ -4,6 +4,7 @@ import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 
+import { useAnchoredPopover } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnchoredPopover.ts";
 import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
@@ -33,7 +34,8 @@ const NO_TUBE = "none";
 /**
  * « XRF lens settings »: an icon button opening a popover (`data-popover`,
  * so Escape closes it and leaves the focus alone; `useMenuButton` holds its
- * state, the focus return and the click outside). It holds the layer
+ * state, the focus return and the click outside; `useAnchoredPopover` puts
+ * it in the top layer under the button). It holds the layer
  * toggles (declared elements, instrument peaks, overlaps), the detector
  * resolution, the tube anode of each analysis of the window (the one the
  * conditions gave, shown as such, else a select) and the line table's
@@ -70,6 +72,7 @@ const button = computed<HTMLButtonElement | null>(
     () => trigger.value?.element ?? null,
 );
 const { expanded, closeMenu, toggle } = useMenuButton(root, button);
+const { style: panelStyle } = useAnchoredPopover(expanded, panel, button);
 
 const layerLabels = computed<Record<LayerName, string>>(() => ({
     declared: $gettext("Declared elements"),
@@ -163,7 +166,9 @@ function onKeydown(event: KeyboardEvent): void {
             v-if="expanded"
             :id="panelId"
             ref="panel"
+            popover="manual"
             class="panel"
+            :style="panelStyle"
             role="dialog"
             :aria-label="$gettext('XRF lens settings')"
             @keydown="onKeydown"
@@ -273,15 +278,14 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .xrf-lens-menu .panel {
-    position: absolute;
-    inset-block-start: 100%;
-    inset-inline-start: 0;
-    z-index: 1100;
+    position: fixed;
+    inset: auto;
     display: grid;
     gap: 0.5rem;
     min-inline-size: 16rem;
-    max-inline-size: 22rem;
-    margin: 0.25rem 0 0;
+    max-inline-size: min(22rem, calc(100vw - 1rem));
+    overflow-y: auto;
+    margin: 0;
     padding: 0.5rem 0.75rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.375rem;

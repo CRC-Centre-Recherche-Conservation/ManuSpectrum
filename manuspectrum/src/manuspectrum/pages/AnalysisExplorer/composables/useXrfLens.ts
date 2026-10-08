@@ -715,7 +715,7 @@ export function useXrfLens(sources: LensSources) {
     });
 
     /** The shapes of the lens in `theme`; empty when the window is not XRF or the table is not loaded. */
-    function shapes(theme: PlotTheme): LensShape[] {
+    function shapes(theme: PlotTheme, plotWidth?: number): LensShape[] {
         const current = model.value;
         if (current.panels.length === 0) return [];
         const colourOf = (order: number) => theme.series[itemHue(order)];
@@ -744,6 +744,7 @@ export function useXrfLens(sources: LensSources) {
             focus: current.focus,
             elements: current.elements,
             overlaps: current.overlaps,
+            plotWidth,
             theme: {
                 ink: theme.ink,
                 inkMuted: theme.inkMuted,

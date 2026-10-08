@@ -295,4 +295,101 @@ describe("lensShapes", () => {
         );
         expect(shapesKey([])).toBe("[]");
     });
+
+    describe("instrument labels", () => {
+        const ticks = (labels: [string, number][], plotWidth = 200) =>
+            lensShapes(
+                input({
+                    plotWidth,
+                    panels: [
+                        panel("", {
+                            extent: [0, 40],
+                            instrument: labels.map(([label, energy]) => ({
+                                label,
+                                energy,
+                                colour: "#f00",
+                            })),
+                        }),
+                    ],
+                }),
+            );
+
+        it("keeps a label alone on the first row, horizontal above its tick", () => {
+            const [shape] = ticks([["somme", 10]]);
+            expect(shape).toMatchObject({ ysizemode: "pixel", y1: 14 });
+            expect(shape.label).toMatchObject({
+                text: "somme",
+                textangle: 0,
+                xanchor: "center",
+                yanchor: "bottom",
+            });
+        });
+
+        it("staggers labels that would touch on taller ticks", () => {
+            const shapes = ticks([
+                ["éch.", 10],
+                ["somme", 11],
+                ["40 kV", 12],
+            ]);
+            expect(shapes.map((s) => s.y1)).toEqual([14, 28, 42]);
+            expect(shapes.every((s) => s.label !== undefined)).toBe(true);
+        });
+
+        it("leaves a label out when it fits on no row, the tick stays", () => {
+            const shapes = ticks([
+                ["a", 10],
+                ["b", 10.1],
+                ["c", 10.2],
+                ["d", 10.3],
+            ]);
+            expect(shapes).toHaveLength(4);
+            expect(shapes.filter((s) => s.label).length).toBe(3);
+            expect(shapes[3].label).toBeUndefined();
+            expect(shapes[3].y1).toBe(14);
+        });
+
+        it("labels one of several close ticks that carry the same text", () => {
+            const shapes = ticks([
+                ["somme", 10],
+                ["somme", 10.2],
+                ["somme", 10.4],
+            ]);
+            expect(shapes.filter((s) => s.label).length).toBe(1);
+            expect(shapes.map((s) => s.y1)).toEqual([14, 14, 14]);
+        });
+
+        it("uses more rows as the plot gets narrower", () => {
+            const labels: [string, number][] = [
+                ["somme", 10],
+                ["éch.", 12],
+            ];
+            expect(ticks(labels, 1000).map((s) => s.y1)).toEqual([14, 14]);
+            expect(ticks(labels, 150).map((s) => s.y1)).toEqual([14, 28]);
+        });
+    });
+
+    it("puts a band's label above the band, horizontal", () => {
+        const shapes = lensShapes(
+            input({
+                panels: [
+                    panel("", {
+                        bands: [
+                            {
+                                label: "Compton",
+                                from: 5,
+                                to: 6,
+                                colour: "#f00",
+                            },
+                        ],
+                    }),
+                ],
+            }),
+        );
+        expect(shapes[0].label).toMatchObject({
+            text: "Compton",
+            textposition: "top center",
+            textangle: 0,
+            yanchor: "bottom",
+        });
+    });
 });
