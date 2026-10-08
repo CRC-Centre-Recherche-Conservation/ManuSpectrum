@@ -6,6 +6,15 @@ import type { Ref } from "vue";
 const EDGE_PX = 8;
 const OFFSET_PX = 4;
 
+export interface AnchoredPopoverOptions {
+    /** The side tried first; the other one is used when it has more room and this one too little. Default: below. */
+    prefer?: "above" | "below";
+    /** The anchor's edge the popover lines up with. Default: start (left). */
+    align?: "start" | "end";
+    /** Gap between the anchor and the popover, in px. */
+    offset?: number;
+}
+
 export interface AnchoredPopover {
     /** Inline position of the popover and `--anchor-width`; apply it with `:style`. */
     style: Ref<Record<string, string>>;
@@ -17,14 +26,17 @@ export interface AnchoredPopover {
  * Puts `popover` in the top layer (`popover="manual"` element, so it is never
  * clipped by a scrolling window body) while `open` is true, under `anchor`,
  * left-aligned and kept inside the viewport; above the anchor when there is
- * more room there. It follows the anchor on scroll and resize. Showing and
+ * more room there (`options.prefer: "above"` tries above first, `align: "end"`
+ * lines the popover up with the anchor's right edge). It follows the anchor on scroll and resize. Showing and
  * hiding do not move the focus; light dismissal is the caller's.
  */
 export function useAnchoredPopover(
     open: Readonly<Ref<boolean>>,
     popover: Readonly<Ref<HTMLElement | null>>,
     anchor: Readonly<Ref<HTMLElement | null>>,
+    options: AnchoredPopoverOptions = {},
 ): AnchoredPopover {
+    const gap = options.offset ?? OFFSET_PX;
     const style = ref<Record<string, string>>({});
     let listening = false;
 
@@ -72,19 +84,23 @@ export function useAnchoredPopover(
         const width = element.offsetWidth;
         const height = element.scrollHeight;
         const room = {
-            below: window.innerHeight - rect.bottom - EDGE_PX - OFFSET_PX,
-            above: rect.top - EDGE_PX - OFFSET_PX,
+            below: window.innerHeight - rect.bottom - EDGE_PX - gap,
+            above: rect.top - EDGE_PX - gap,
         };
-        const above = height > room.below && room.above > room.below;
+        const above =
+            options.prefer === "above"
+                ? height <= room.above || room.above >= room.below
+                : height > room.below && room.above > room.below;
         const available = Math.max(above ? room.above : room.below, 0);
+        const wanted = options.align === "end" ? rect.right - width : rect.left;
         const left = Math.max(
             EDGE_PX,
-            Math.min(rect.left, window.innerWidth - width - EDGE_PX),
+            Math.min(wanted, window.innerWidth - width - EDGE_PX),
         );
         const shown = Math.min(height, available);
         style.value = {
             insetInlineStart: `${left}px`,
-            insetBlockStart: `${above ? rect.top - OFFSET_PX - shown : rect.bottom + OFFSET_PX}px`,
+            insetBlockStart: `${above ? rect.top - gap - shown : rect.bottom + gap}px`,
             maxBlockSize: `${available}px`,
             "--anchor-width": `${rect.width}px`,
         };

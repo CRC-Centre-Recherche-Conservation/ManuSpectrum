@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 
 import PeakIdentifier from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeakIdentifier.vue";
 
@@ -261,5 +261,28 @@ describe("PeakIdentifier", () => {
         expect(view.emitted("close")).toHaveLength(1);
         expect(view.emitted("toggle-pin")).toBeUndefined();
         expect(view.emitted("toggle-lens")).toBeUndefined();
+    });
+
+    it("scrolls itself into view, no further than needed, when it opens and when the energy moves", async () => {
+        const scroll = vi.fn();
+        Element.prototype.scrollIntoView = scroll;
+        try {
+            const view = mountIdentifier();
+            await flushPromises();
+            expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+            scroll.mockClear();
+            await view.setProps({ energy: 10.56 });
+            await flushPromises();
+            expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+        } finally {
+            delete (Element.prototype as Partial<Element>).scrollIntoView;
+        }
+    });
+
+    it("focuses the energy field without scrolling the page to it", () => {
+        const focus = vi.spyOn(HTMLInputElement.prototype, "focus");
+        mountIdentifier();
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+        focus.mockRestore();
     });
 });

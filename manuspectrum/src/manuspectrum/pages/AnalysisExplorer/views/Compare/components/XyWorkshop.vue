@@ -27,6 +27,7 @@ import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import { useXrfLens } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import {
+    ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -249,6 +250,7 @@ const props = defineProps<{
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, null);
 const linked = inject(LINKED_SELECTION_KEY, null);
+const announce = inject(ANNOUNCE_KEY, () => undefined);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 const store = useExplorerStore();
@@ -324,6 +326,10 @@ const rangeKey = ref("full");
 const identifying = ref(false);
 /** The peak being identified: the curve it was read on (`curveId`) and its energy (keV). */
 const identified = ref<{ id: string; energy: number } | null>(null);
+/** The cue shown above the chart while the mode is on and no peak is chosen; also announced once when the mode turns on. */
+const identifyHint = computed(() =>
+    $gettext("Click a peak in the spectrum to list candidate elements."),
+);
 const identifyToggle =
     useTemplateRef<InstanceType<typeof IconButton>>("identifyToggle");
 
@@ -745,6 +751,10 @@ watch(layout, (name) => {
 });
 watch(effectiveStates, () => scheduleRestyle());
 watch(lens.model, () => scheduleShapes());
+watch(
+    () => identification.value?.energy ?? null,
+    () => scheduleShapes(),
+);
 watch([lens.active, layout], ([isXrf, shown]) => {
     if (isXrf && shown !== "table") return;
     identifying.value = false;
@@ -882,11 +892,27 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
     };
 }
 
-/** The lens shapes for `theme`; none outside an XRF window. */
-function lensShapesFor(theme: PlotTheme): Partial<Shape>[] {
+/**
+ * The lens shapes for `theme`; none outside an XRF window. While a peak is
+ * identified, `withMarker` adds the dashed line at its energy.
+ */
+function lensShapesFor(theme: PlotTheme, withMarker = true): Partial<Shape>[] {
     if (!lens.active.value) return [];
     const width = chart.value?.clientWidth;
-    return lens.shapes(theme, width ? width - PLOT_MARGIN_X : undefined);
+    const held = withMarker ? identification.value : null;
+    return lens.shapes(
+        theme,
+        width ? width - PLOT_MARGIN_X : undefined,
+        held
+            ? {
+                  energy: held.energy,
+                  label: `⌖ ${new Intl.NumberFormat(lang, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                  }).format(held.energy)} keV`,
+              }
+            : undefined,
+    );
 }
 
 async function draw(): Promise<void> {
@@ -1148,6 +1174,7 @@ function identify(curve: Curve | null, energy: number | null): void {
 function toggleIdentify(): void {
     identifying.value = !identifying.value;
     if (!identifying.value) identified.value = null;
+    else announce(identifyHint.value);
 }
 
 /** Escape on the toggle closes the open identifier and keeps the key from clearing the focus. */
@@ -1352,7 +1379,7 @@ async function downloadPng(): Promise<void> {
     if (!plotly || !element || !figure || !theme) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
-    const shapes = lensShapesFor(theme);
+    const shapes = lensShapesFor(theme, false);
     try {
         const url = await plotly.toImage(
             exportFigure(
@@ -1567,24 +1594,6 @@ function chooseView(event: Event): void {
                     </template>
                 </XrfLensControls>
             </div>
-            <PeakIdentifier
-                v-if="identification"
-                :energy="identification.energy"
-                :curve-name="identification.name"
-                :candidates="identification.candidates"
-                :k-v="identification.kV"
-                :channel="identification.channel"
-                :tolerance="identification.tolerance"
-                :lang="lang"
-                :pinnable="lens.pinnable"
-                :pinned="lens.isPinned"
-                :lens-symbols="lens.settings.value.elements"
-                :declared-parts="identifiedDeclaredParts"
-                @move="moveIdentified"
-                @close="closeIdentifier"
-                @toggle-pin="lens.togglePin($event.symbol)"
-                @toggle-lens="lens.toggleElement($event.symbol)"
-            />
             <p
                 v-if="treatments.mixed"
                 class="note mixed"
@@ -1614,6 +1623,12 @@ function chooseView(event: Event): void {
             >
                 <span>{{ allHiddenNote }}</span>
             </p>
+            <p
+                v-if="identifying && !identification && layout !== 'table'"
+                class="note identify-hint"
+            >
+                <span>{{ identifyHint }}</span>
+            </p>
             <div
                 v-if="layout !== 'table'"
                 class="plot-area"
@@ -1639,6 +1654,24 @@ function chooseView(event: Event): void {
                     @show-all="onLegendShowAll"
                 />
             </div>
+            <PeakIdentifier
+                v-if="identification"
+                :energy="identification.energy"
+                :curve-name="identification.name"
+                :candidates="identification.candidates"
+                :k-v="identification.kV"
+                :channel="identification.channel"
+                :tolerance="identification.tolerance"
+                :lang="lang"
+                :pinnable="lens.pinnable"
+                :pinned="lens.isPinned"
+                :lens-symbols="lens.settings.value.elements"
+                :declared-parts="identifiedDeclaredParts"
+                @move="moveIdentified"
+                @close="closeIdentifier"
+                @toggle-pin="lens.togglePin($event.symbol)"
+                @toggle-lens="lens.toggleElement($event.symbol)"
+            />
             <XrfLensStrip
                 v-if="lens.active.value && layout !== 'table'"
                 :elements="lens.stripElements.value"

@@ -238,6 +238,33 @@ describe("lensShapes", () => {
         expect(texts).toContain("Major");
     });
 
+    it("draws the identified marker as one dashed ink line per panel holding its energy, kept beyond the cap", () => {
+        const many = Array.from({ length: MAX_LENS_SHAPES + 20 }, (_, i) => ({
+            energy: 1 + i / 10,
+            label: `L${i}`,
+            intensity: 1,
+        }));
+        const shapes = lensShapes(
+            input({
+                panels: [panel(""), panel("2", { extent: [0, 4] })],
+                focus: [{ hue: 0, lines: many }],
+                marker: { energy: 3, label: "⌖ 3.00 keV" },
+            }),
+        );
+        expect(shapes).toHaveLength(MAX_LENS_SHAPES);
+        const marked = shapes.filter((s) => s.label?.text === "⌖ 3.00 keV");
+        expect(marked.map((s) => s.xref)).toEqual(["x", "x2"]);
+        expect(marked[0].line).toMatchObject({ color: "#111", dash: "dash" });
+        expect(marked[0].x0).toBe(3);
+    });
+
+    it("draws no marker outside the panel's extent", () => {
+        const shapes = lensShapes(
+            input({ marker: { energy: 50, label: "far" } }),
+        );
+        expect(shapes).toEqual([]);
+    });
+
     it("sets no showlegend", () => {
         const shapes = lensShapes(
             input({

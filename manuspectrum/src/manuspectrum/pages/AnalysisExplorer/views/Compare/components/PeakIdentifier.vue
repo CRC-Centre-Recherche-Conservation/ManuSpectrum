@@ -2,6 +2,7 @@
 import {
     computed,
     inject,
+    nextTick,
     onMounted,
     ref,
     useId,
@@ -77,6 +78,7 @@ const announce = inject(ANNOUNCE_KEY, () => undefined);
 const headingId = useId();
 const fieldId = useId();
 const field = useTemplateRef<HTMLInputElement>("field");
+const root = useTemplateRef<HTMLElement>("root");
 const showAll = ref(false);
 
 const numbers = computed(
@@ -127,7 +129,19 @@ watch(
     { immediate: true },
 );
 
-onMounted(() => field.value?.focus());
+watch(
+    () => props.energy,
+    () => void revealPanel(),
+    { immediate: true },
+);
+
+onMounted(() => field.value?.focus({ preventScroll: true }));
+
+/** Brings the panel into the scrolling window body or dialog it sits in, moving it no further than needed. */
+async function revealPanel(): Promise<void> {
+    await nextTick();
+    root.value?.scrollIntoView?.({ block: "nearest" });
+}
 
 function energyText(value: number): string {
     return numbers.value.format(value);
@@ -250,6 +264,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
     <section
+        ref="root"
         class="peak-identifier"
         role="dialog"
         :aria-labelledby="headingId"

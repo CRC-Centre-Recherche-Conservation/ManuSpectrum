@@ -99,6 +99,12 @@ export interface LensPanel {
     bands: EnergyBand[];
 }
 
+/** The energy a peak is being identified at: one dashed ink line across every panel that holds it. */
+export interface IdentifiedMarker {
+    energy: number;
+    label: string;
+}
+
 export interface LensShapesInput {
     panels: LensPanel[];
     focus: FocusLines[];
@@ -107,6 +113,8 @@ export interface LensShapesInput {
     theme: LensTheme;
     /** Width in pixels of a panel's plot area; sets how many instrument labels fit side by side. */
     plotWidth?: number;
+    /** Drawn in front of every other shape and never dropped by the cap. */
+    marker?: IdentifiedMarker;
 }
 
 interface Ranked {
@@ -323,7 +331,8 @@ function overlapShapes(
  * placed by `x`/`y … domain` references and never sets `showlegend` (that
  * flag turns a relayout into a full calc). Beyond `MAX_LENS_SHAPES` the least
  * important are dropped: focus lines, lens elements, declared majors, minors,
- * traces, instrument ticks, then bands. The instrument labels are
+ * traces, instrument ticks, then bands; the identified `marker` is never
+ * dropped. The instrument labels are
  * horizontal and staggered on `INSTRUMENT_ROWS` rows of taller ticks by the
  * width they need at `plotWidth`; one that fits on no row is left out and its
  * tick stays. A band's label sits above its panel.
@@ -336,6 +345,19 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
     };
 
     for (const panel of input.panels) {
+        if (input.marker && inside(input.marker.energy, panel.extent)) {
+            add(-1, {
+                ...fullLine(
+                    panel,
+                    input.marker.energy,
+                    theme.ink,
+                    { width: 1.5, dash: "dash" },
+                    input.marker.label,
+                    theme,
+                ),
+                layer: "above",
+            });
+        }
         for (const group of input.focus) {
             const colour = theme.focus[group.hue] ?? theme.ink;
             for (const line of group.lines) {

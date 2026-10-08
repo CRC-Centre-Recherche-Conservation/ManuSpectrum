@@ -70,6 +70,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
 import type {
     FocusLines,
+    IdentifiedMarker,
     InstrumentTick,
     EnergyBand,
     LensElementLines,
@@ -715,7 +716,11 @@ export function useXrfLens(sources: LensSources) {
     });
 
     /** The shapes of the lens in `theme`; empty when the window is not XRF or the table is not loaded. */
-    function shapes(theme: PlotTheme, plotWidth?: number): LensShape[] {
+    function shapes(
+        theme: PlotTheme,
+        plotWidth?: number,
+        marker?: IdentifiedMarker,
+    ): LensShape[] {
         const current = model.value;
         if (current.panels.length === 0) return [];
         const colourOf = (order: number) => theme.series[itemHue(order)];
@@ -745,6 +750,7 @@ export function useXrfLens(sources: LensSources) {
             elements: current.elements,
             overlaps: current.overlaps,
             plotWidth,
+            marker,
             theme: {
                 ink: theme.ink,
                 inkMuted: theme.inkMuted,

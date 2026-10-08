@@ -4,14 +4,21 @@ import { mount } from "@vue/test-utils";
 
 import { useAnchoredPopover } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnchoredPopover.ts";
 
-function setup() {
+import type { AnchoredPopoverOptions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnchoredPopover.ts";
+
+function setup(options?: AnchoredPopoverOptions) {
     const open = ref(false);
     const state = { style: ref<Record<string, string>>({}) };
     const Host = defineComponent({
         setup() {
             const popover = ref<HTMLElement | null>(null);
             const anchor = ref<HTMLElement | null>(null);
-            state.style = useAnchoredPopover(open, popover, anchor).style;
+            state.style = useAnchoredPopover(
+                open,
+                popover,
+                anchor,
+                options,
+            ).style;
             return () => [
                 h("button", { ref: anchor }),
                 h("div", { ref: popover, popover: "manual" }),
@@ -68,6 +75,50 @@ describe("useAnchoredPopover", () => {
         expect(state.style.value.insetBlockStart).toBe(
             `${bottom - 30 - 4 - 200}px`,
         );
+        view.unmount();
+    });
+
+    it("lines up with the anchor's end, above first, with the given offset", async () => {
+        const { open, state, element, anchor, view } = setup({
+            prefer: "above",
+            align: "end",
+            offset: 0,
+        });
+        anchor.getBoundingClientRect = () =>
+            ({
+                left: 300,
+                right: 340,
+                top: 200,
+                bottom: 230,
+                width: 40,
+            }) as DOMRect;
+        Object.defineProperty(element, "offsetWidth", { value: 100 });
+        Object.defineProperty(element, "scrollHeight", { value: 50 });
+        open.value = true;
+        await nextTick();
+        expect(state.style.value.insetInlineStart).toBe("240px");
+        expect(state.style.value.insetBlockStart).toBe("150px");
+        view.unmount();
+    });
+
+    it("falls back below when preferring above leaves less room there", async () => {
+        const { open, state, element, anchor, view } = setup({
+            prefer: "above",
+            offset: 0,
+        });
+        anchor.getBoundingClientRect = () =>
+            ({
+                left: 10,
+                right: 50,
+                top: 20,
+                bottom: 50,
+                width: 40,
+            }) as DOMRect;
+        Object.defineProperty(element, "offsetWidth", { value: 100 });
+        Object.defineProperty(element, "scrollHeight", { value: 50 });
+        open.value = true;
+        await nextTick();
+        expect(state.style.value.insetBlockStart).toBe("50px");
         view.unmount();
     });
 });

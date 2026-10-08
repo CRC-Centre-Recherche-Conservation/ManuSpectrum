@@ -2278,6 +2278,70 @@ describe("XyWorkshop XRF lens", () => {
             );
         });
 
+        it("shows a hint line above the chart while the mode is on and no peak is chosen, and announces it once", async () => {
+            const view = await mountPeak();
+            expect(view.find(".identify-hint").exists()).toBe(false);
+            announce.mockClear();
+            await toggleButton(view).trigger("click");
+            const hint = view.find(".identify-hint");
+            expect(hint.text()).toBe(
+                "Click a peak in the spectrum to list candidate elements.",
+            );
+            expect(announce).toHaveBeenCalledWith(hint.text());
+            clickAt(view, 2.33);
+            await flushPromises();
+            expect(view.find(".identify-hint").exists()).toBe(false);
+            expect(announce).toHaveBeenCalledTimes(2);
+        });
+
+        it("keeps the chart where it is: the identifier follows the chart, before the lens strip", async () => {
+            const view = await mountPeak();
+            await identifyAt(view, 2.33);
+            const html = view.html();
+            const at = (marker: string) => html.indexOf(marker);
+            expect(at('class="plot-area')).toBeGreaterThan(-1);
+            expect(at('class="peak-identifier')).toBeGreaterThan(
+                at('class="plot-area'),
+            );
+            expect(at('class="peak-identifier')).toBeLessThan(
+                at('class="xrf-strip'),
+            );
+        });
+
+        it("marks the identified energy with one dashed line by a shapes relayout alone, moves it with the arrows and removes it on close", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            clickAt(view, 2.33);
+            await nextFrame();
+            await flushPromises();
+            const marked = () =>
+                (
+                    shapeCalls().at(-1)?.shapes as {
+                        x0: number;
+                        line: { dash: string };
+                        label?: { text: string };
+                    }[]
+                ).filter((shape) => shape.label?.text.startsWith("⌖"));
+            expect(plotly.react).not.toHaveBeenCalled();
+            expect(marked()).toHaveLength(1);
+            expect(marked()[0].x0).toBeCloseTo(2.35, 2);
+            expect(marked()[0].line.dash).toBe("dash");
+            expect(marked()[0].label?.text).toBe("⌖ 2.35 keV");
+
+            await view.find('[data-action="raise"]').trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(marked()[0].x0).toBeCloseTo(2.36, 2);
+            expect(plotly.react).not.toHaveBeenCalled();
+
+            await toggleButton(view).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(marked()).toHaveLength(0);
+        });
+
         it("closes the identifier and leaves the mode with the toggle", async () => {
             const view = await mountPeak();
             await identifyAt(view, 2.33);
