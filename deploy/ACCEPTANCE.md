@@ -268,7 +268,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   Change it any time from the profile page or with
   `make -C deploy manage ARGS="changepassword admin"` (interactive): the file then no
   longer matches and only served the installation, the password manager is the
-  reference. PP-2 (sops) will keep an encrypted copy in Git.
+  reference. Step 5 puts it, with the other secrets, in the vault item.
   - On failure: `init` ends with `the admin password could not be set` (the database
     exists with the default password): fix the file, then `make -C deploy admin-password`.
 - [ ] *(service account)* Run `make -C deploy init` again → exit ≠ 0 with
@@ -446,7 +446,7 @@ The markers of 2.7 stay in place until here: 2.8 reuses them.
 
 the checks that need nginx, TLS and a browser (an XY chart in the editor and in a report,
 the model page, Compare, a French page) are step 4;
-secrets under sops, `/readyz` and the JSON logs, backups, the real SMTP relay, and
+the vault copy and the rotation of secrets (step 5), `/readyz` and the JSON logs, backups, the real SMTP relay, and
 pyramidal TIFFs for Cantaloupe (a separate change).
 
 ---
@@ -773,8 +773,100 @@ above).
 
 ---
 
+## Step 5 — Secrets (`deploy/SECRETS.md`)
+
+The five secret files, their copy in the project's password manager (Bitwarden), their restore and
+their rotation. Uses the `dc` alias of step 2 and the same convention: *(service account)* commands
+run after `sudo -iu manuspectrum` and `cd ~/manuspectrum`. Start from the installed stack of step 2.
+Record where the vault item lives, never a value.
+
+**What CI already proves.** `check-stack.sh` runs the `secret-set` and `secrets-check` tests (values
+reach no argument, output or temporary file; modes; refusals; the terminal path), `test_compose.py`
+(every secret has its inventory row and its Make targets), the gitleaks tests, and the `secret-scan`
+workflow scans every pull request and its commits. The `deploy-lint` image job proves the strict
+`check --deploy` probe and a real start through the guard. What follows proves them on the
+production-shaped VM, and the rotations, which CI does not run.
+
+### 5.1 The startup guard
+
+- [ ] *(service account)* `dc run --rm --no-deps -T web manage check --deploy --tag security --fail-level WARNING`
+  → `System check identified no issues (… silenced).` **(CI too)**
+- [ ] *(service account)* `dc logs web | grep -c 'deployment checks failed'` → `0`.
+  - On failure: the output names the check id (`security.W…`); a weak or development
+    `SECRET_KEY`, a missing secure-cookie setting or a debug flag in `.env` are the usual causes.
+
+### 5.2 The secrets and the vault item
+
+- [ ] *(service account)* `make -C deploy secrets-check` → `directory: ok` and five `<name>: ok` lines,
+  exit 0. Break one on purpose and watch it fail, then restore it: `chmod 600 deploy/compose/secrets/pg_password`
+  → `pg_password: mode is 600, expected 444`, exit 1; `chmod 444` → ok again.
+- [ ] The vault item `ManuSpectrum <host> secrets` exists in the shared collection, with one hidden
+  field per name (`pg_password`, `elastic_password`, `django_secret_key`, `email_password`,
+  `admin_password`), filled from the files (`cat deploy/compose/secrets/<name>`, in a terminal nobody
+  watches). Both administrators open it; each knows where their recovery code is kept (do not read it).
+  Record the item's location in the follow-up artifact.
+  - On failure: an administrator cannot see the item: share the collection, not the item.
+
+### 5.3 Restore drill
+
+- [ ] *(service account)* Move the five files aside, inside the (ignored) directory:
+  `cd deploy/compose/secrets && mkdir aside && mv pg_password elastic_password django_secret_key email_password admin_password aside/ && cd ../../..`
+  → `make -C deploy secrets-check` now reports five `missing`, exit 1.
+- [ ] *(service account)* For each of the five names,
+  `make -C deploy secret-set NAME=<name>`, pasting the value from the vault at the prompt (typed twice,
+  nothing is echoed). For `email_password`, Enter twice. Each prints `<name>: written`.
+- [ ] *(service account)* `make -C deploy secrets-check` → all `ok`. A second `secret-set NAME=pg_password`
+  with the same value → `pg_password: kept (same value)`; with another value → refused, with `FORCE=yes`
+  in the message.
+- [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp deploy/compose/secrets/$f deploy/compose/secrets/aside/$f && echo "$f identical"; done`
+  → five `identical`.
+- [ ] *(service account)* `make -C deploy down up`, then `deploy/compose/smoke.sh check` → only `ok:` lines.
+- [ ] *(service account)* `rm -r deploy/compose/secrets/aside`; `git status --short deploy/compose` → empty.
+  - On failure: `cmp` differs = the vault holds a different value, fix the vault or the file before going on.
+
+### 5.4 Rotation drills
+
+In this order, each with the procedure of `SECRETS.md` section 6, each followed by
+`deploy/compose/smoke.sh check` → only `ok:` lines, then the vault field updated.
+
+- [ ] Django key. Before: sign in to the rehearsal site in a browser. After: that browser session is logged out.
+- [ ] Elasticsearch password. After `down up`: `dc ps elasticsearch` shows `healthy`.
+  - On failure: the API call answered 401 = the mounted file no longer matches what Elasticsearch stores;
+    reset it with `dc exec elasticsearch bin/elasticsearch-reset-password -u elastic -i` and follow
+    « Which value to type » in `SECRETS.md`.
+- [ ] PostgreSQL password. After: `dc logs postgres --since 10m | grep -cFf <(head -c 12 deploy/compose/secrets/pg_password)`
+  → `0` (the value is not in the logs).
+  - On failure: `web` cannot connect after `down up` = the role was not changed; run the block again (it keeps an existing `.new` file and stops at the first failing step).
+- [ ] Admin password: `make -C deploy secret-set NAME=admin_password FORCE=yes`, `make -C deploy admin-password`;
+  signing in as `admin` works with the new value and is refused with the old one.
+- [ ] `make -C deploy secrets-check` → all `ok`; no `*.new` file is left in `deploy/compose/secrets`.
+
+### 5.5 The commit hook
+
+- [ ] In a clone with Docker: `pre-commit install`. On a throwaway branch, stage a file holding a fake token
+  generated on the spot (`ghp_` followed by 36 random letters and digits) and `git commit -m probe` → the
+  commit is refused by `gitleaks` with a redacted finding; `git log --oneline -1` shows no new commit.
+  Delete the branch. `SKIP=gitleaks git commit` is only for a deliberate, reviewed case. **(CI too:**
+  `test_gitleaks.sh` runs this through `pre-commit run`.)
+
+### 5.6 What cannot be tested in rehearsal
+
+The real production vault item and its two administrators; the restic password and the backup of `SECRETS_DIR`
+(PP-7); the Grafana password (PP-6); Ansible (PP-8); GitHub secret scanning and push protection (repository settings).
+
+### 5.7 Before production
+
+- [ ] The production host runs `make -C deploy secrets` itself; no rehearsal file is copied to it.
+- [ ] Its vault item is filled and both administrators opened it (5.2).
+- [ ] Both administrators have run 5.3 once (on the rehearsal VM).
+- [ ] GitHub secret scanning and push protection are enabled on the repository (repository owner), and the
+  `secret-scan` check is green on the pull request.
+- [ ] `make -C deploy secrets-check` on the production host → all `ok`.
+
+---
+
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): secrets, backups, deployed observability, accounts, Ansible, delivery, then
+what to do on failure): backups, deployed observability, accounts, Ansible, delivery, then
 "Before production".

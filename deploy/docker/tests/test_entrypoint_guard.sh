@@ -79,6 +79,7 @@ cp "$TMP/pg_isready" "$TMP/curl"
 cat >"$TMP/python" <<'SH'
 #!/bin/sh
 echo "PYENV $* multiproc=${PROMETHEUS_MULTIPROC_DIR:-unset}" >>"${PYLOG:-/dev/null}"
+if [ "$2" = check ]; then echo "CHECK $*" >>"${PYLOG:-/dev/null}"; exit "${CHECK_STATUS:-0}"; fi
 if [ "$2" = set_admin_password ]; then exit "${ADMIN_STATUS:-0}"; fi
 cat >/dev/null
 if [ "$2" = database ]; then exit 0; fi
@@ -148,7 +149,7 @@ assert "worker: the metrics directory is emptied before celery" $?
 PYLOG="$TMP/pylog" PROMETHEUS_MULTIPROC_DIR="$metrics" run_web 0 0 >/dev/null || true
 PYLOG="$TMP/pylog" PROMETHEUS_MULTIPROC_DIR="$metrics" PATH="$TMP:$PATH" PGHOST=h PGPORT=1 PGUSERNAME=u \
   ESHOST=e ESPORT=1 bash "$ENTRYPOINT" worker >/dev/null 2>&1 || true
-[ "$(grep -c '^PYENV' "$TMP/pylog")" -ge 4 ] && ! grep '^PYENV' "$TMP/pylog" | grep -qv 'multiproc=unset'
+[ "$(grep -c '^PYENV' "$TMP/pylog")" -ge 5 ] && ! grep '^PYENV' "$TMP/pylog" | grep -qv 'multiproc=unset'
 assert "web: every pre-start python call runs without PROMETHEUS_MULTIPROC_DIR" $?
 servers="$(grep -c "^SERVER .* multiproc=$metrics\$" "$TMP/pylog")"
 [ "$servers" -eq 2 ] && ok=0 || ok=1
@@ -167,6 +168,35 @@ out="$(PROMETHEUS_MULTIPROC_DIR="$TMP/missing" run_web 0 0)" && status=0 || stat
 [ "$status" -eq 1 ] && grep -q 'PROMETHEUS_MULTIPROC_DIR .* is not a writable directory' <<<"$out" \
   && ! grep -q 'STUB gunicorn' <<<"$out"
 assert "web: a missing metrics directory stops the start" $?
+
+# Django's deployment checks come first in web and init and stop the start.
+out="$(CHECK_STATUS=1 run_web 0 0)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "deployment checks failed" <<<"$out" \
+  && ! grep -q 'PostgreSQL is up' <<<"$out" \
+  && ! grep -q 'STUB python manage.py migrate' <<<"$out" && ! grep -q 'STUB gunicorn' <<<"$out"
+assert "deploy-check-web-refuses: a failing check stops web before any wait" $?
+
+out="$(CHECK_STATUS=1 PATH="$TMP:$PATH" PGHOST=h PGPORT=1 PGUSERNAME=u PGDBNAME=d \
+  ESHOST=e ESPORT=1 bash "$ENTRYPOINT" init 2>&1)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "deployment checks failed" <<<"$out" \
+  && ! grep -q 'PostgreSQL is up' <<<"$out" && ! grep -q 'setup_db' <<<"$out"
+assert "deploy-check-init-refuses: a failing check stops init before setup_db" $?
+
+: >"$TMP/pylog"
+PYLOG="$TMP/pylog" PROMETHEUS_MULTIPROC_DIR="$metrics" run_web 0 0 >/dev/null || true
+[ "$(grep '^CHECK' "$TMP/pylog")" = "CHECK manage.py check --deploy --tag security --fail-level WARNING" ] \
+  && [ "$(grep -c '^CHECK' "$TMP/pylog")" -eq 1 ] \
+  && grep -q '^PYENV manage.py check .* multiproc=unset$' "$TMP/pylog"
+assert "deploy-check-arguments: exact command, without PROMETHEUS_MULTIPROC_DIR" $?
+
+out="$(CHECK_STATUS=0 run_web 0 0)" || true
+grep -q 'STUB python manage.py migrate' <<<"$out"
+assert "deploy-check-pass: a clean check goes on to migrate" $?
+
+: >"$TMP/pylog"
+out="$(PYLOG="$TMP/pylog" CHECK_STATUS=1 PATH="$TMP:$PATH" bash "$ENTRYPOINT" manage check 2>&1)" || true
+grep -q '^CHECK manage.py check$' "$TMP/pylog" && ! grep -q 'deployment checks failed' <<<"$out"
+assert "manage check: the guard does not run, the escape hatch stays" $?
 
 # Local CA: an empty or missing file changes nothing; a non-empty one yields a
 # bundle = certifi + that CA, exported for requests and ssl.

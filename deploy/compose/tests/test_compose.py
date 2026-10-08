@@ -573,6 +573,38 @@ class RepositoryRulesTests(unittest.TestCase):
         self.assertIn("certs/make-local-ca.sh", makefile)
         self.assertRegex(makefile, r"(?m)^certs-local:")
 
+    def test_secret_targets_pass_the_directory_and_the_names_to_their_scripts(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        for target, script in (
+            ("secret-set", "secret-set.sh"),
+            ("secrets-check", "secrets-check.sh"),
+        ):
+            with self.subTest(target=target):
+                self.assertIn(target, phony)
+                self.assertRegex(makefile, rf"(?m)^{target}:.*## \S")
+                recipe = re.search(rf"(?ms)^{target}:.*?\n(.*?)(?:\n\n|\Z)", makefile)[
+                    1
+                ]
+                self.assertIn(script, recipe)
+                self.assertIn("$(SECRETS_DIR)", recipe)
+                self.assertIn("$(SECRET_FILES)", recipe)
+                self.assertTrue((DEPLOY_DIR / "scripts" / script).is_file())
+
+    def test_secret_set_needs_a_name_and_forwards_force_only_on_yes(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        recipe = re.search(r"(?ms)^secret-set:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
+        self.assertIn("$(NAME)", recipe)
+        self.assertRegex(recipe, r"\$\(if \$\(filter yes,\$\(FORCE\)\),--force\)")
+
+    def test_every_secret_is_documented(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        names = re.search(r"^SECRET_FILES := (.+)$", makefile, re.M)[1].split()
+        text = (DEPLOY_DIR / "SECRETS.md").read_text(encoding="utf-8")
+        for name in names:
+            with self.subTest(secret=name):
+                self.assertRegex(text, rf"(?m)^\| `{name}` \|")
+
     def test_cert_renew_reloads_on_a_change_and_exits_with_certbots_status(self):
         cases = [
             ("changed, certbot fails", "echo new > $$CERT; exit 3", True, False),

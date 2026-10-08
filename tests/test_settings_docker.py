@@ -89,6 +89,8 @@ NAMES = [
     "RATELIMIT_IP_META_KEY",
     "SECURE_HSTS_SECONDS",
     "USE_X_FORWARDED_HOST",
+    "X_FRAME_OPTIONS",
+    "JWT_KEY",
 ]
 
 PROBE = textwrap.dedent("""
@@ -197,6 +199,25 @@ class SettingsDockerTests(SimpleTestCase):
                     dict(BASE_ENV, MANUSPECTRUM_SECRET_KEY=key),
                     "MANUSPECTRUM_SECRET_KEY",
                 )
+
+    def test_development_key_of_settings_py_is_refused(self):
+        source = (ROOT / "manuspectrum" / "settings.py").read_text(encoding="utf-8")
+        match = re.search(
+            r'os\.environ\.get\(\s*"MANUSPECTRUM_SECRET_KEY",\s*"([^"]+)"', source
+        )
+        self.assertIsNotNone(match, "development key fallback not found")
+        values = load(dict(BASE_ENV, MANUSPECTRUM_SECRET_KEY=match.group(1)))
+        self.assertEqual(values.get("error"), "ImproperlyConfigured")
+        self.assertNotIn(match.group(1), values["message"])
+
+    def test_jwt_key_follows_the_secret_key(self):
+        values = load(BASE_ENV)
+        self.assertEqual(values["JWT_KEY"], BASE_ENV["MANUSPECTRUM_SECRET_KEY"])
+
+    def test_frame_options_warning_is_silenced_with_sameorigin_kept(self):
+        values = load(BASE_ENV)
+        self.assertEqual(values["X_FRAME_OPTIONS"], "SAMEORIGIN")
+        self.assertIn("security.W019", values["SILENCED_SYSTEM_CHECKS"])
 
     def test_secret_file_wins_over_the_variable(self):
         with tempfile.NamedTemporaryFile("w", delete=False) as handle:
@@ -476,6 +497,38 @@ class LoggingTests(SimpleTestCase):
             with self.subTest(logger=name):
                 self.assertTrue(handlers)
                 self.assertNotIn("AdminEmailHandler", handlers)
+
+
+CHECK_PROBE = textwrap.dedent("""
+    import sys
+    sys.modules["manuspectrum.settings_local"] = None
+    sys.modules["settings_local"] = None
+    import django
+    django.setup()
+    from django.core.management import call_command
+    call_command("check", "--deploy", "--tag", "security", "--fail-level", "WARNING")
+    """)
+
+
+class DeploymentChecksTests(SimpleTestCase):
+    def test_deploy_checks_pass_at_warning_level(self):
+        with tempfile.TemporaryDirectory() as home:
+            result = subprocess.run(
+                [sys.executable, "-c", CHECK_PROBE],
+                env={
+                    "PATH": os.environ["PATH"],
+                    "HOME": home,
+                    "PYTHONPATH": str(ROOT),
+                    "DJANGO_SETTINGS_MODULE": "manuspectrum.settings_docker",
+                    **BASE_ENV,
+                },
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        raised = sorted(set(re.findall(r"\b[\w.]+\.[WE]\d{3}\b", result.stderr)))
+        self.assertEqual(result.returncode, 0, f"checks raised {raised}")
 
 
 JSON_PROBE = textwrap.dedent("""

@@ -91,6 +91,8 @@ if SECRET_KEY.startswith("django-insecure-") or len(SECRET_KEY) < 50:
     raise ImproperlyConfigured(
         "MANUSPECTRUM_SECRET_KEY must be a generated key of at least 50 characters"
     )
+# Arches derives JWT_KEY from its public default key at import.
+JWT_KEY = SECRET_KEY
 
 DOMAIN_NAMES = get_env_variable("DOMAIN_NAMES").split()
 if not DOMAIN_NAMES:
@@ -271,4 +273,7 @@ SILENCED_SYSTEM_CHECKS = [
     # nginx sets HSTS and the HTTPS redirect on every response (deploy/compose/nginx).
     "security.W004",
     "security.W008",
+    # SAMEORIGIN on purpose: the workflow help panel frames Arches' help_template
+    # route (init-workflow.htm); nginx sends the same value and frame-ancestors 'self'.
+    "security.W019",
 ]

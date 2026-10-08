@@ -2,6 +2,19 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Credentials read at run time from a Docker secret file, never written in the repository"
 regexes = ['''\$\$?\(cat /run/secrets/[a-z_]+\)''']
+
+[[allowlists]]
+description = "Fixed password constant of the set_admin_password tests (local test database only)"
+condition = "AND"
+paths = ['''(^|/)tests/test_set_admin_password\.py$''']
+regexTarget = "line"
+regexes = ['''\bPASSWORD = "[^"]+"''']
+
+[[rules]]
+id = "sops-encrypted-value"
+description = "A sops-encrypted value: escrow files stay out of the repository (see deploy/SECRETS.md)"
+regex = '''ENC\[AES256_GCM,data:[A-Za-z0-9+/=]*,iv:'''
+keywords = ["enc[aes256_gcm"]

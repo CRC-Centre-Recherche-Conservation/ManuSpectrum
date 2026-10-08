@@ -38,7 +38,13 @@ repos:
           "vue",
         ]
 
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.1
+  # Runs the pinned gitleaks image (needs docker; fails closed without it).
+  # `SKIP=gitleaks git commit` is a deliberate bypass.
+  - repo: local
     hooks:
       - id: gitleaks
+        name: gitleaks
+        entry: deploy/scripts/gitleaks.sh staged
+        language: system
+        pass_filenames: false
+        stages: [commit]

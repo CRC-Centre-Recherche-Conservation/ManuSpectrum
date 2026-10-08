@@ -48,3 +48,11 @@ deploy/rehearsal/rehearsal.env
 # Compose stack (deploy/)
 deploy/compose/.env
 deploy/compose/.smoke-state
+
+# Secret escrow and age keys (nothing encrypted or key-shaped is versioned)
+*.sops.yaml
+*.sops.json
+*.enc.env
+*.age
+age-recipients.txt
+**/sops/age/keys.txt
