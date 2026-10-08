@@ -13,6 +13,7 @@ import type {
     FigureCurve,
     FigureInput,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
+import type { CurvePaint } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 const SERIES = Array.from({ length: 12 }, (_, index) => `#s${index}`);
@@ -355,6 +356,97 @@ describe("workshop figure", () => {
                 text: "Counts &lt;raw&gt;",
                 subtitle: { text: "Source: ManuSpectrum" },
             },
+        });
+    });
+    describe("logarithmic Y", () => {
+        const curves = () => [curve(0, [0, 10, 1000]), curve(1, [5, 0, 50])];
+
+        it("sets a log type on the Y axis, and on every panel of the grid", () => {
+            const stacked = stackedFigure(
+                input(curves(), { yLog: true }),
+                false,
+            );
+            expect((stacked.layout.yaxis as { type?: string }).type).toBe(
+                "log",
+            );
+            const grid = multiplesFigure(input(curves(), { yLog: true }));
+            const layout = grid.layout as Record<string, { type?: string }>;
+            expect(layout.yaxis.type).toBe("log");
+            expect(layout.yaxis2.type).toBe("log");
+            const linear = stackedFigure(input(curves()), false);
+            expect(linear.layout.yaxis).not.toHaveProperty("type");
+        });
+
+        it("clamps non-positive values to the curve's smallest positive and keeps the real ones for the hover", () => {
+            for (const figure of [
+                stackedFigure(input(curves(), { yLog: true }), false),
+                multiplesFigure(input(curves(), { yLog: true })),
+            ]) {
+                expect(figure.data[0].y).toEqual([10, 10, 1000]);
+                expect(figure.data[0].customdata).toEqual([0, 10, 1000]);
+                expect(figure.data[1].y).toEqual([5, 5, 50]);
+                expect(figure.data[0].hovertemplate).toContain("%{customdata");
+            }
+        });
+
+        it("puts the end label at the log10 of the curve's end", () => {
+            const figure = stackedFigure(
+                input(curves(), { yLog: true }),
+                false,
+            );
+            const labels = figure.layout.annotations as { y: number }[];
+            expect(labels[0].y).toBeCloseTo(3);
+            expect(labels[1].y).toBeCloseTo(Math.log10(50));
+        });
+
+        it("stays linear in Offset and when a curve has no positive value", () => {
+            const offset = stackedFigure(input(curves(), { yLog: true }), true);
+            expect(offset.layout.yaxis).not.toHaveProperty("type", "log");
+            expect(offset.data[0].customdata).toEqual([0, 10, 1000]);
+            const flat = stackedFigure(
+                input([curve(0, [0, 0])], { yLog: true }),
+                false,
+            );
+            expect(flat.layout.yaxis).not.toHaveProperty("type");
+        });
+    });
+
+    describe("shapes", () => {
+        const shapes = [
+            { type: "line", x0: 1, x1: 1, y0: 0, y1: 1, yref: "paper" },
+        ] as FigureInput["shapes"];
+
+        it("passes the shapes of the input through, and none by default", () => {
+            const given = input([curve(0, [1, 2])], { shapes });
+            expect(stackedFigure(given, false).layout.shapes).toEqual(shapes);
+            expect(multiplesFigure(given).layout.shapes).toEqual(shapes);
+            expect(
+                stackedFigure(input([curve(0, [1, 2])]), false).layout,
+            ).not.toHaveProperty("shapes");
+        });
+
+        it("keeps the shapes it is given in the export", () => {
+            const figure = stackedFigure(input([curve(0, [1, 2])]), false);
+            const paints: CurvePaint[] = [
+                {
+                    colour: "#111111",
+                    dash: "solid",
+                    width: 2,
+                    opacity: 1,
+                    hover: true,
+                },
+            ];
+            const text = { title: "t", source: "s" };
+            expect(
+                exportFigure(figure, paints, THEME, text, shapes).layout.shapes,
+            ).toEqual(shapes);
+            const withShapes = stackedFigure(
+                input([curve(0, [1, 2])], { shapes }),
+                false,
+            );
+            expect(
+                exportFigure(withShapes, paints, THEME, text).layout.shapes,
+            ).toEqual(shapes);
         });
     });
 });

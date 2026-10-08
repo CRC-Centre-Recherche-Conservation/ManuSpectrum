@@ -1,3 +1,5 @@
+import { annotationLogY, canUseLogScale, logScaleFigure } from "utils/xy-scale";
+
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     DIM_OPACITY,
@@ -21,7 +23,7 @@ import {
     unifiedHoverLine,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
-import type { Layout, PlotData } from "plotly.js";
+import type { Layout, PlotData, Shape } from "plotly.js";
 import type {
     CurvePaint,
     CurveState,
@@ -62,6 +64,10 @@ export interface FigureInput {
     /** The chart element's size, in pixels (0 when unknown). */
     width: number;
     height: number;
+    /** A logarithmic Y on every Y axis; ignored in Offset and when a curve has no positive value. */
+    yLog?: boolean;
+    /** Layout shapes drawn over the curves, passed through as given. */
+    shapes?: readonly Partial<Shape>[];
 }
 
 export interface Figure {
@@ -202,6 +208,25 @@ export function hoverTemplatesFor(
     );
 }
 
+/** Whether this figure draws a logarithmic Y: asked for, not Offset, and every curve has a positive value. */
+function logY(input: FigureInput, offset: boolean): boolean {
+    return (
+        input.yLog === true &&
+        !offset &&
+        canUseLogScale(input.curves.map((curve) => ({ y: curve.y })))
+    );
+}
+
+/** A trace laid on a log axis by the shared rule: non-positive values clamped, the real ones in `customdata` for the hover template. */
+function logTrace(trace: Trace): Trace {
+    const [laid] = logScaleFigure([{ y: trace.y as number[] }]).traces;
+    return { ...trace, y: laid.y, customdata: laid.customdata } as Trace;
+}
+
+function shapesOf(input: FigureInput): { shapes?: Partial<Shape>[] } {
+    return input.shapes ? { shapes: [...input.shapes] } : {};
+}
+
 function baseLayout(input: FigureInput): Record<string, unknown> {
     return plotLayout(input.theme, {
         lang: input.lang,
@@ -220,6 +245,7 @@ function baseLayout(input: FigureInput): Record<string, unknown> {
 function endLabels(
     input: FigureInput,
     ys: readonly number[][],
+    log: boolean,
 ): { annotations: Annotation[]; follows: number[][] } {
     const { theme } = input;
     const ends = input.curves.flatMap((curve, index) => {
@@ -227,11 +253,15 @@ function endLabels(
         const point = endPoint(curve.x, ys[index], input.xReversed);
         return point ? [{ index, point }] : [];
     });
-    const span = extent(ys.flat());
+    // On a log axis the labels are spread and placed in log10, which Plotly reads for an annotation.
+    const heightOf = (value: number) =>
+        log ? annotationLogY(value) ?? 0 : value;
+    const span = extent(ys.flat().map(heightOf));
     const plotHeight = Math.max(0, input.height - STACKED_ROOM);
     const wanted = ends.map(({ point }) =>
         span && span.max > span.min
-            ? plotHeight * (1 - (point.y - span.min) / (span.max - span.min))
+            ? plotHeight *
+              (1 - (heightOf(point.y) - span.min) / (span.max - span.min))
             : plotHeight / 2,
     );
     const placed =
@@ -244,7 +274,7 @@ function endLabels(
         const moved = Math.abs(shift) >= LABEL_MOVED;
         return {
             x: point.x,
-            y: point.y,
+            y: heightOf(point.y),
             text: `${swatch(theme.series[itemHue(order)], order)} ${slotLabel(slot)}`,
             xanchor: "left",
             yanchor: "middle",
@@ -281,16 +311,22 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     // Every curve is its own hue: trace order is the window's order, none drawn under another.
     const order = input.curves.map((_, index) => index);
     const mode = hoverMode(input);
-    const data = order.map(
-        (index): Trace => ({
-            ...traceOf(input, index, offset ? "customdata" : "y", mode),
+    const log = logY(input, offset);
+    const data = order.map((index): Trace => {
+        const trace: Trace = {
+            ...traceOf(input, index, offset || log ? "customdata" : "y", mode),
             y: ys[index],
             ...(offset ? { customdata: input.curves[index].y } : {}),
-        }),
-    );
-    const { annotations, follows } = endLabels(input, ys);
+        };
+        return log ? logTrace(trace) : trace;
+    });
+    const laid = data.map((trace) => trace.y as number[]);
+    const { annotations, follows } = endLabels(input, laid, log);
     const base = baseLayout(input);
-    const yaxis = base.yaxis as Record<string, unknown>;
+    const yaxis: Record<string, unknown> = {
+        ...(base.yaxis as Record<string, unknown>),
+        ...(log ? { type: "log" } : {}),
+    };
     return {
         data,
         layout: {
@@ -310,6 +346,7 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
                   }
                 : yaxis,
             annotations,
+            ...shapesOf(input),
         } as Partial<Layout>,
         order,
         follows,
@@ -379,7 +416,10 @@ export function multiplesFigure(input: FigureInput): Figure {
         ...(height === null ? {} : { height }),
     };
     const baseX = base.xaxis as Record<string, unknown>;
-    const baseY = base.yaxis as Record<string, unknown>;
+    const baseY: Record<string, unknown> = {
+        ...(base.yaxis as Record<string, unknown>),
+        ...(logY(input, false) ? { type: "log" } : {}),
+    };
     const annotations: Annotation[] = [];
     const follows: number[][] = [];
     const shown: { on: number; off: number }[] = [];
@@ -453,20 +493,28 @@ export function multiplesFigure(input: FigureInput): Figure {
     shown.push({ on: 1, off: 1 }, { on: 1, off: 1 });
     const order = input.curves.map((_, index) => index);
     const mode = hoverMode(input);
+    const log = logY(input, false);
     const data = order.map((index): Trace => {
         const curve = input.curves[index];
         const panel = slots.indexOf(curve.slot);
         const suffix = panel === 0 ? "" : String(panel + 1);
-        return {
-            ...traceOf(input, index, "y", mode),
+        const trace: Trace = {
+            ...traceOf(input, index, log ? "customdata" : "y", mode),
             y: curve.y,
+        };
+        return {
+            ...(log ? logTrace(trace) : trace),
             xaxis: `x${suffix}`,
             yaxis: `y${suffix}`,
         };
     });
     return {
         data,
-        layout: { ...layout, annotations } as Partial<Layout>,
+        layout: {
+            ...layout,
+            annotations,
+            ...shapesOf(input),
+        } as Partial<Layout>,
         order,
         follows,
         shown,
@@ -512,6 +560,7 @@ export function exportFigure(
     paints: readonly CurvePaint[],
     theme: PlotTheme,
     text: { title: string; source: string },
+    shapes?: readonly Partial<Shape>[],
 ): { data: Trace[]; layout: Partial<Layout> } {
     const data = figure.data.map((trace, position) => {
         const paint = paints[position];
@@ -564,6 +613,7 @@ export function exportFigure(
                 },
             },
             margin: { ...margin, t: (margin.t ?? 0) + EXPORT_TITLE_ROOM },
+            ...(shapes ? { shapes: [...shapes] } : {}),
         } as Partial<Layout>,
     };
 }

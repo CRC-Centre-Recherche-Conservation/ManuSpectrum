@@ -399,6 +399,36 @@ export function zoomedAfter(
     return zoomed;
 }
 
+/** An energy window offered by the XRF lens, in keV; `null` is the whole spectrum. */
+export interface RangePreset {
+    key: string;
+    range: readonly [number, number] | null;
+}
+
+export const RANGE_PRESETS: readonly RangePreset[] = [
+    { key: "full", range: null },
+    { key: "0-25", range: [0, 25] },
+    { key: "1-5", range: [1, 5] },
+    { key: "5-15", range: [5, 15] },
+];
+
+/**
+ * The relayout that sets the X range of a preset (`xaxis.range`), or puts
+ * the axis back on its autorange for « full » (« reversed » when the axis
+ * is). Small-multiples X axes follow the first one (`matches: "x"`), so
+ * only `xaxis` is set. `zoomedAfter` reads it as a zoom, except « full ».
+ */
+export function rangeUpdate(
+    preset: RangePreset,
+    reversed = false,
+): Record<string, unknown> {
+    if (!preset.range) {
+        return { "xaxis.autorange": reversed ? "reversed" : true };
+    }
+    const [low, high] = preset.range;
+    return { "xaxis.range": reversed ? [high, low] : [low, high] };
+}
+
 /** An axis of a drawn chart: its range, its autorange setting, its length in pixels. */
 export interface AxisView {
     range: readonly [number, number];

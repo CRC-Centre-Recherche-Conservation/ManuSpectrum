@@ -34,6 +34,8 @@ import {
     undoZoom,
     visibleCurveCount,
     workshopCsv,
+    RANGE_PRESETS,
+    rangeUpdate,
     zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
 
@@ -501,5 +503,24 @@ describe("workshop", () => {
                 .slice(1)
                 .split("\r\n")[0],
         ).toBe("'=A1 · x,'=A1 · y");
+    });
+    it("lays an energy range as a relayout of the first X axis, which the small-multiples axes follow, and counts it as a zoom", () => {
+        const [full, wide, ...windows] = RANGE_PRESETS;
+        expect(RANGE_PRESETS.map((preset) => preset.key)).toEqual([
+            "full",
+            "0-25",
+            "1-5",
+            "5-15",
+        ]);
+        expect(rangeUpdate(wide)).toEqual({ "xaxis.range": [0, 25] });
+        expect(rangeUpdate(windows[0], true)).toEqual({
+            "xaxis.range": [5, 1],
+        });
+        expect(zoomedAfter(rangeUpdate(windows[1]), false)).toBe(true);
+        expect(rangeUpdate(full)).toEqual({ "xaxis.autorange": true });
+        expect(rangeUpdate(full, true)).toEqual({
+            "xaxis.autorange": "reversed",
+        });
+        expect(zoomedAfter(rangeUpdate(full), true)).toBe(false);
     });
 });
