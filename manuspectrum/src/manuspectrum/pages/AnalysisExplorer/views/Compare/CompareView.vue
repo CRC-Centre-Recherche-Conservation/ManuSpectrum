@@ -37,6 +37,7 @@ import {
     FOLIO_REQUEST_KEY,
     LINKED_SELECTION_KEY,
     SELECTION_ITEMS_KEY,
+    SYNTHESIS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { setFullSeriesRoom } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -173,6 +174,11 @@ const pending = computed(
         synthesis.status.value === "loading" &&
         synthesis.data.value !== null,
 );
+/** The synthesis the windows are built on: the answer for the Selection, else the previous one while the next is read. */
+const shownSynthesis = computed(
+    () => answered.value ?? (pending.value ? synthesis.data.value : null),
+);
+provide(SYNTHESIS_KEY, shownSynthesis);
 const windows = computed<AutoWindow[]>((previous) =>
     keepUnchangedCurves(
         previous ?? [],
@@ -180,7 +186,7 @@ const windows = computed<AutoWindow[]>((previous) =>
             store.basket,
             selection.byKey.value,
             selection.missing.value,
-            answered.value ?? (pending.value ? synthesis.data.value : null),
+            shownSynthesis.value,
             pending.value,
         ),
     ),

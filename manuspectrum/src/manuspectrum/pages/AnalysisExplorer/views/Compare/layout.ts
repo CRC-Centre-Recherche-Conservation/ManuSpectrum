@@ -70,6 +70,34 @@ function isBox(value: unknown): value is WindowBox {
 const LAYOUT_VERSION = 3;
 const READABLE_VERSIONS: readonly number[] = [2, LAYOUT_VERSION];
 
+export const XRF_DETECTORS = ["sdd", "si-pin"] as const;
+export type XrfDetector = (typeof XRF_DETECTORS)[number];
+
+/** The tube anodes an analysis can be given by hand. */
+export const XRF_ANODES = [
+    "Rh",
+    "Ag",
+    "W",
+    "Mo",
+    "Cr",
+    "Cu",
+    "Pd",
+    "Ti",
+    "Au",
+    "Re",
+] as const;
+export type XrfAnode = (typeof XRF_ANODES)[number];
+
+const XRF_MAX_ANODES = 200;
+const XRF_MAX_ELEMENTS = 30;
+
+/** The XRF settings of the reader: the detector, the anode chosen per analysis (`none` = no tube line drawn) and the lens elements shared by every XRF window. */
+export interface XrfSettings {
+    detector: XrfDetector;
+    anodes: Record<string, XrfAnode | "none">;
+    elements: string[];
+}
+
 /** A tool open in Compare, as stored: its window id is derived from it (`toolWindowId`). */
 export type StoredTool = Pick<ToolWindow, "kind" | "params">;
 
@@ -79,6 +107,7 @@ interface StoredLayout {
     folded: Record<string, boolean>;
     tools: StoredTool[];
     imaging: StoredImaging | undefined;
+    xrf: XrfSettings | undefined;
 }
 
 function emptyLayout(): StoredLayout {
@@ -88,6 +117,7 @@ function emptyLayout(): StoredLayout {
         folded: {},
         tools: [],
         imaging: undefined,
+        xrf: undefined,
     };
 }
 
@@ -217,6 +247,36 @@ function imagingOf(value: unknown): StoredImaging | undefined {
     };
 }
 
+/** The XRF settings as stored; undefined when the record is absent or malformed as a whole. */
+function xrfOf(value: unknown): XrfSettings | undefined {
+    if (!isRecord(value)) return undefined;
+    const detector = XRF_DETECTORS.find((name) => name === value.detector);
+    if (detector === undefined || !isRecord(value.anodes)) return undefined;
+    if (!Array.isArray(value.elements)) return undefined;
+    const entries = Object.entries(value.anodes);
+    if (entries.length > XRF_MAX_ANODES) return undefined;
+    const anodes: XrfSettings["anodes"] = {};
+    for (const [id, anode] of entries) {
+        const known = XRF_ANODES.find((name) => name === anode);
+        if (id === "") return undefined;
+        if (known !== undefined) anodes[id] = known;
+        else if (anode === "none") anodes[id] = "none";
+        else return undefined;
+    }
+    const elements = value.elements;
+    if (
+        elements.length > XRF_MAX_ELEMENTS ||
+        !elements.every(
+            (symbol) =>
+                typeof symbol === "string" && /^[A-Z][a-z]?$/.test(symbol),
+        ) ||
+        new Set(elements).size !== elements.length
+    ) {
+        return undefined;
+    }
+    return { detector, anodes, elements: [...(elements as string[])] };
+}
+
 /**
  * A stored layout, anything unreadable dropped. A layout saved before hidden
  * windows existed is a bare `Record<windowId, box>`: its boxes are read, with
@@ -241,6 +301,7 @@ function parseStored(raw: string | null): StoredLayout {
             folded: foldedOf(parsed.folded),
             tools: toolsOf(parsed.tools),
             imaging: imagingOf(parsed.imaging),
+            xrf: xrfOf(parsed.xrf),
         };
     }
     return { ...emptyLayout(), boxes: boxesOf(parsed) };
@@ -256,6 +317,7 @@ function writeStored({
     folded,
     tools,
     imaging,
+    xrf,
 }: StoredLayout): void {
     writeStorage(
         LAYOUT_STORAGE_KEY,
@@ -266,6 +328,7 @@ function writeStored({
             folded,
             ...(tools.length > 0 ? { tools } : {}),
             ...(imaging ? { imaging } : {}),
+            ...(xrf ? { xrf } : {}),
         }),
     );
 }
@@ -332,13 +395,33 @@ export function writeImaging(imaging: StoredImaging | undefined): void {
     else writeStored(stored);
 }
 
+/** The XRF settings as the reader left them; undefined when nothing valid was stored. */
+export function readXrfSettings(): XrfSettings | undefined {
+    return readStored().xrf;
+}
+
+/** Saves the XRF settings (undefined forgets them); the rest stays as stored. */
+export function writeXrfSettings(xrf: XrfSettings | undefined): void {
+    const stored = {
+        ...readStored(),
+        xrf: xrf && {
+            detector: xrf.detector,
+            anodes: { ...xrf.anodes },
+            elements: [...xrf.elements],
+        },
+    };
+    if (isEmpty(stored)) removeStorage(LAYOUT_STORAGE_KEY);
+    else writeStored(stored);
+}
+
 function isEmpty(stored: StoredLayout): boolean {
     return (
         Object.keys(stored.boxes).length === 0 &&
         stored.hidden.length === 0 &&
         Object.keys(stored.folded).length === 0 &&
         stored.tools.length === 0 &&
-        stored.imaging === undefined
+        stored.imaging === undefined &&
+        stored.xrf === undefined
     );
 }
 

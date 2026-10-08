@@ -201,12 +201,14 @@ describe("autoWindows", () => {
                 slot: 0,
                 analysis: (images as { analysis: AnalysisHit }).analysis,
                 file: micro(1),
+                excitation: null,
             },
             {
                 key: images.key,
                 slot: 0,
                 analysis: (images as { analysis: AnalysisHit }).analysis,
                 file: micro(2),
+                excitation: null,
             },
         ]);
         expect(
@@ -326,6 +328,37 @@ describe("autoWindows", () => {
             (window) => window.kind === "chemical-imaging",
         );
         expect(maps?.kind === "chemical-imaging" && maps.folded).toBe(true);
+    });
+
+    it("copies the excitation of the item onto each of its curves", () => {
+        const excitation = {
+            anode: "Rh",
+            kV: 40,
+            source: "conditions" as const,
+        };
+        const analysis = analysisHit(1);
+        const whole1: Item = {
+            key: `an:${analysis.id}:-`,
+            kind: "analysis",
+            excitation,
+            analysis,
+            files: [spectrum(1, XRF), spectrum(2, XRF)],
+        };
+        const one: Item = {
+            key: `af:${analysisHit(2).id}:${uuid(711)}`,
+            kind: "analysis-file",
+            excitation,
+            analysis: analysisHit(2),
+            file: spectrum(11, XRF),
+        };
+        const bare = whole(3, [spectrum(3, XRF)]);
+        const curves = xy(derive([whole1, one, bare]))[0].curves;
+        expect(curves.map((curve) => curve.excitation)).toEqual([
+            excitation,
+            excitation,
+            excitation,
+            null,
+        ]);
     });
 
     it("reads the older one-file and one-layer keys into the same windows", () => {

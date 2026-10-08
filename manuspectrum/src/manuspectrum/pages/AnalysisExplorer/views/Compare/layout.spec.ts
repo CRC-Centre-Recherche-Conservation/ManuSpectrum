@@ -13,6 +13,7 @@ import {
     readImaging,
     readLayout,
     readTools,
+    readXrfSettings,
     readingOrder,
     sizeOf,
     writeFolded,
@@ -20,6 +21,7 @@ import {
     writeImaging,
     writeLayout,
     writeTools,
+    writeXrfSettings,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
 
 afterEach(() => window.localStorage.clear());
@@ -471,5 +473,97 @@ describe("Compare layout, imaging record (v3)", () => {
             });
         expect(readImaging()).toBeUndefined();
         spy.mockRestore();
+    });
+});
+
+describe("Compare layout, xrf record (v3)", () => {
+    const XRF = {
+        detector: "sdd" as const,
+        anodes: { a1: "Rh" as const, a2: "none" as const },
+        elements: ["Fe", "Pb", "S"],
+    };
+
+    function store(record: unknown, version = 3) {
+        window.localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ version, boxes: {}, xrf: record }),
+        );
+    }
+
+    it("round-trips under version 3 and keeps the rest as stored", () => {
+        expect(readXrfSettings()).toBeUndefined();
+        writeHidden(["auto:micro"]);
+        writeXrfSettings(XRF);
+        expect(readXrfSettings()).toEqual(XRF);
+        expect(readHidden()).toEqual(["auto:micro"]);
+        expect(
+            JSON.parse(window.localStorage.getItem(LAYOUT_STORAGE_KEY)!),
+        ).toMatchObject({ version: 3, xrf: XRF });
+        writeXrfSettings(undefined);
+        expect(readXrfSettings()).toBeUndefined();
+        expect(readHidden()).toEqual(["auto:micro"]);
+    });
+
+    it("removes the record when nothing else is stored", () => {
+        writeXrfSettings(XRF);
+        writeXrfSettings(undefined);
+        expect(window.localStorage.getItem(LAYOUT_STORAGE_KEY)).toBeNull();
+    });
+
+    it("reads records written without xrf, in version 2 and 3", () => {
+        for (const version of [2, 3]) {
+            window.localStorage.setItem(
+                LAYOUT_STORAGE_KEY,
+                JSON.stringify({
+                    version,
+                    boxes: { "auto:micro": { x: 0, y: 0, w: 6, h: 5 } },
+                }),
+            );
+            expect(readXrfSettings()).toBeUndefined();
+            expect(readLayout()["auto:micro"]).toBeDefined();
+        }
+    });
+
+    it.each([
+        ["an unknown detector", { ...XRF, detector: "ge" }],
+        ["a non-record", "sdd"],
+        ["an anode off the list", { ...XRF, anodes: { a1: "Fe" } }],
+        ["an anode that is not a string", { ...XRF, anodes: { a1: 3 } }],
+        ["anodes that are an array", { ...XRF, anodes: ["Rh"] }],
+        ["a lowercase symbol", { ...XRF, elements: ["fe"] }],
+        ["a three-letter symbol", { ...XRF, elements: ["Fee"] }],
+        ["a repeated symbol", { ...XRF, elements: ["Fe", "Fe"] }],
+        ["elements that are not an array", { ...XRF, elements: "Fe" }],
+        ["a symbol that is not a string", { ...XRF, elements: [26] }],
+    ])("drops a record with %s", (_, record) => {
+        store(record);
+        expect(readXrfSettings()).toBeUndefined();
+    });
+
+    it("drops a record over its bounds and keeps the layout", () => {
+        const many = Object.fromEntries(
+            Array.from({ length: 201 }, (_, index) => [`a${index}`, "Rh"]),
+        );
+        store({ ...XRF, anodes: many });
+        expect(readXrfSettings()).toBeUndefined();
+        const symbols = Array.from({ length: 31 }, (_, index) =>
+            `A${String.fromCharCode(97 + (index % 26))}`.replace(
+                /^A(.)$/,
+                index < 26 ? "A$1" : "B$1",
+            ),
+        );
+        store({ ...XRF, elements: symbols });
+        expect(readXrfSettings()).toBeUndefined();
+        const fine = Object.fromEntries(
+            Array.from({ length: 200 }, (_, index) => [`a${index}`, "Rh"]),
+        );
+        store({ ...XRF, anodes: fine });
+        expect(Object.keys(readXrfSettings()!.anodes)).toHaveLength(200);
+    });
+
+    it("does not let an xrf record disturb the other records", () => {
+        writeImaging(undefined);
+        store({ detector: "x" });
+        expect(readTools()).toEqual([]);
     });
 });
