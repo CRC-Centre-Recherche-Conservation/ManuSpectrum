@@ -322,6 +322,19 @@ describe("useXrfLens", () => {
         });
     });
 
+    it("draws a previewed element with no free slot in its own hue, as the strip lists it", async () => {
+        const { lens, previewing, previewSlot } = await mountLens([curve()]);
+        previewing.value = elementNode("Cu");
+        previewSlot.value = null;
+        const shape = lineAt(shapesOf(lens), 8.046);
+        expect(shape?.line?.color).toBe("#e3");
+        expect(shape?.line?.dash).toBe("dash");
+        expect(lens.stripElements.value[0]).toMatchObject({
+            kind: "preview",
+            slot: null,
+        });
+    });
+
     it("marks an element outside the line table as unknown, with nothing drawn", async () => {
         const { lens, slots } = await mountLens([curve()]);
         slots.value = [elementNode("O")];
@@ -436,6 +449,59 @@ describe("useXrfLens", () => {
             overlaps: false,
         };
         expect(lens.layerCounts.value).toEqual(counts);
+    });
+
+    it("counts the instrument peaks and the declared elements of the visible curves only, one per tick the chart draws", async () => {
+        const source = {
+            rawY: PEAKED,
+            excitation: { anode: "Ag", kV: 20, source: "conditions" as const },
+        };
+        const { lens, hidden } = await mountLens(
+            [
+                curve({ ...source, analysis: ANALYSIS }),
+                curve({
+                    ...source,
+                    slot: 1,
+                    order: 1,
+                    analysis: "22222222-2222-4222-8222-222222222222",
+                    excitation: { anode: "Rh", kV: 30, source: "conditions" },
+                }),
+            ],
+            SYNTHESIS,
+        );
+        const ticks = lens.model.value.panels[0].ticks;
+        const bands = lens.model.value.panels[0].bands;
+        expect(lens.layerCounts.value.instrument).toBe(
+            ticks.length + bands.length,
+        );
+        expect(lens.layerCounts.value.instrument).toBe(
+            lens.instrumentNotes.value.length + bands.length,
+        );
+        const both = lens.layerCounts.value.instrument;
+        hidden.value = [false, true];
+        expect(lens.layerCounts.value.instrument).toBeLessThan(both);
+        expect(lens.layerCounts.value.instrument).toBe(
+            lens.model.value.panels[0].ticks.length +
+                lens.model.value.panels[0].bands.length,
+        );
+        expect(lens.layerCounts.value.declared).toBe(1);
+        hidden.value = [true, true];
+        expect(lens.layerCounts.value).toMatchObject({
+            declared: 0,
+            instrument: 0,
+        });
+    });
+
+    it("counts a declared element once it has a tick on a visible curve, not for a line the range lacks", async () => {
+        const { lens } = await mountLens(
+            [
+                curve({
+                    extent: { min: 0.5, max: 1.5, count: 21 },
+                }),
+            ],
+            SYNTHESIS,
+        );
+        expect(lens.layerCounts.value.declared).toBe(0);
     });
 
     it("counts nothing for a window without declared elements or an anode", async () => {

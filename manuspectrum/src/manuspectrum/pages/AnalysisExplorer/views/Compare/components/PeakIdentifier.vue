@@ -407,9 +407,7 @@ function onKeydown(event: KeyboardEvent): void {
             }}</span>
         </button>
         <p class="footer">
-            <span>{{
-                $gettext("Indications only: the analyst decides.")
-            }}</span>
+            <span>{{ $gettext("Hints only: the analyst decides.") }}</span>
         </p>
     </section>
 </template>

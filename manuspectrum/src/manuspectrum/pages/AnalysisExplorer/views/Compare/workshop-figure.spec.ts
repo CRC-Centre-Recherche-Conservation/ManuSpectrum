@@ -6,6 +6,7 @@ import {
     exportFigure,
     hoverTemplatesFor,
     multiplesFigure,
+    panelWidths,
     stackedFigure,
     yFitUpdate,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
@@ -486,6 +487,35 @@ describe("workshop figure", () => {
             expect(layout.yaxis).toMatchObject({ rangemode: "tozero" });
             expect(layout.yaxis2).toMatchObject({ rangemode: "tozero" });
             expect((layout.margin as { t: number }).t).toBe(28);
+        });
+    });
+
+    describe("panelWidths", () => {
+        it("gives the single panel of a stacked chart the width less its margins", () => {
+            const figure = stackedFigure(input([curve(0, [0, 5])]), false);
+            const margin = figure.layout.margin as { l: number; r: number };
+            expect(panelWidths(figure, 1000)).toEqual({
+                "": 1000 - margin.l - margin.r,
+            });
+        });
+
+        it("shares the plot width between the columns of a grid, less the gaps, for its own export width", () => {
+            const curves = [0, 1, 2, 3].map((slot) => curve(slot, [0, 5]));
+            const figure = multiplesFigure(input(curves, { width: 900 }));
+            const grid = figure.layout.grid as {
+                columns: number;
+                xgap: number;
+            };
+            const margin = figure.layout.margin as { l: number; r: number };
+            const widths = panelWidths(figure, 1140);
+            expect(Object.keys(widths).sort()).toEqual(["", "2", "3", "4"]);
+            const plot = 1140 - margin.l - margin.r;
+            expect(widths[""]).toBeCloseTo(
+                (plot * (1 - grid.xgap * (grid.columns - 1))) / grid.columns,
+            );
+            expect(panelWidths(figure, 1140)[""]).toBeGreaterThan(
+                panelWidths(figure, 900)[""],
+            );
         });
     });
 

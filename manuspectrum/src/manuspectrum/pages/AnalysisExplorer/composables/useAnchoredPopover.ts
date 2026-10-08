@@ -13,6 +13,8 @@ export interface AnchoredPopoverOptions {
     align?: "start" | "end";
     /** Gap between the anchor and the popover, in px. */
     offset?: number;
+    /** Called while open when the anchor is no longer visible (scrolled out of, or clipped by, its container). */
+    onLost?: () => void;
 }
 
 export interface AnchoredPopover {
@@ -27,7 +29,10 @@ export interface AnchoredPopover {
  * clipped by a scrolling window body) while `open` is true, under `anchor`,
  * left-aligned and kept inside the viewport; above the anchor when there is
  * more room there (`options.prefer: "above"` tries above first, `align: "end"`
- * lines the popover up with the anchor's right edge). It follows the anchor on scroll and resize. Showing and
+ * lines the popover up with the anchor's right edge). It follows the anchor
+ * wherever it goes: scroll, resize, and any layout shift that moves it (the
+ * anchor's box is read once per frame while open). When the anchor leaves the
+ * visible area it calls `options.onLost`, for the caller to close. Showing and
  * hiding do not move the focus; light dismissal is the caller's.
  */
 export function useAnchoredPopover(
@@ -39,6 +44,9 @@ export function useAnchoredPopover(
     const gap = options.offset ?? OFFSET_PX;
     const style = ref<Record<string, string>>({});
     let listening = false;
+    let frame: number | null = null;
+    let placedBox = "";
+    let sight: IntersectionObserver | null = null;
 
     watch(
         [open, popover],
@@ -81,6 +89,7 @@ export function useAnchoredPopover(
         const from = anchor.value;
         if (!element || !from) return;
         const rect = from.getBoundingClientRect();
+        placedBox = boxOf(rect);
         const width = element.offsetWidth;
         const height = element.scrollHeight;
         const room = {
@@ -115,11 +124,40 @@ export function useAnchoredPopover(
         place();
     }
 
+    function boxOf(rect: DOMRect): string {
+        return `${rect.left}|${rect.top}|${rect.width}|${rect.bottom}`;
+    }
+
+    function follow(): void {
+        frame = requestAnimationFrame(() => {
+            frame = null;
+            const from = anchor.value;
+            if (!listening) return;
+            if (from && boxOf(from.getBoundingClientRect()) !== placedBox) {
+                place();
+            }
+            follow();
+        });
+    }
+
     function listen(): void {
         if (listening) return;
         listening = true;
         window.addEventListener("scroll", onMoved, true);
         window.addEventListener("resize", onMoved);
+        follow();
+        const from = anchor.value;
+        if (
+            from &&
+            options.onLost &&
+            typeof IntersectionObserver !== "undefined"
+        ) {
+            sight = new IntersectionObserver((entries) => {
+                if (entries.at(-1)?.isIntersecting === false)
+                    options.onLost?.();
+            });
+            sight.observe(from);
+        }
     }
 
     function unlisten(): void {
@@ -127,6 +165,10 @@ export function useAnchoredPopover(
         listening = false;
         window.removeEventListener("scroll", onMoved, true);
         window.removeEventListener("resize", onMoved);
+        if (frame !== null) cancelAnimationFrame(frame);
+        frame = null;
+        sight?.disconnect();
+        sight = null;
     }
 
     return { style, place };

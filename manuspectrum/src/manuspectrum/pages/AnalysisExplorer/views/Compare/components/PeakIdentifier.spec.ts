@@ -125,7 +125,7 @@ describe("PeakIdentifier", () => {
             "Spectrum checked: A2 · file.csv",
         );
         expect(view.find(".footer").text()).toBe(
-            "Indications only: the analyst decides.",
+            "Hints only: the analyst decides.",
         );
     });
 

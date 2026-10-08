@@ -131,23 +131,54 @@ describe("XrfLensStrip", () => {
             instrument: [
                 {
                     label: "esc",
+                    kind: "escape",
                     energy: 8.27,
                     slots: [5, 6],
                     everywhere: false,
                 },
-                { label: "sum", energy: 23.64, slots: [11], everywhere: false },
+                {
+                    label: "sum",
+                    kind: "sum",
+                    energy: 23.64,
+                    slots: [11],
+                    everywhere: false,
+                },
                 {
                     label: "Ag Kα1",
+                    kind: "rayleigh",
                     energy: 22.16,
+                    slots: [0, 1],
+                    everywhere: true,
+                },
+                {
+                    label: "40 kV",
+                    kind: "duane-hunt",
+                    energy: 40,
                     slots: [0, 1],
                     everywhere: true,
                 },
             ],
         });
         expect(view.find("li.instrument").text()).toBe(
-            "Instrument peaks: esc 8.27 keV (A6, A7) · sum 23.64 keV (A12) · Ag Kα1 22.16 keV (all)",
+            "Instrument peaks: esc 8.27 keV (A6, A7) · sum 23.64 keV (A12) · Ag Kα1 22.16 keV (all) · 40 kV (all)",
         );
         expect(mountStrip().find("li.instrument").exists()).toBe(false);
+    });
+
+    it("lists twelve instrument peaks at most and counts the rest", () => {
+        const peaks = Array.from({ length: 15 }, (_, index) => ({
+            label: `p${index}`,
+            kind: "sum" as const,
+            energy: 1 + index,
+            slots: [0],
+            everywhere: false,
+        }));
+        const text = mountStrip({ instrument: peaks })
+            .find("li.instrument")
+            .text();
+        expect(text).toContain("p11 12.00 keV (A1)");
+        expect(text).not.toContain("p12");
+        expect(text.endsWith(" · +3 more")).toBe(true);
     });
 
     it("writes the overlap and the lines that tell the two apart", () => {
@@ -358,6 +389,44 @@ describe("XrfLensStrip", () => {
         press(document.body);
         await attached.vm.$nextTick();
         expect(attached.find(".mini-table").exists()).toBe(false);
+    });
+
+    it("closes the table when the focus leaves the button and the table together, and not while it moves between them", async () => {
+        attached = mount(XrfLensStrip, {
+            attachTo: document.body,
+            props: {
+                elements: [],
+                declaredSlots: [],
+                overlaps: [],
+                instrument: [],
+                symbols: SYMBOLS,
+                lensSymbols: [],
+                lang: "en",
+            },
+        });
+        const outside = document.createElement("button");
+        document.body.append(outside);
+        const toggle = attached.find("button.table-toggle");
+        await toggle.trigger("click");
+        const cell = attached.find(".mini-table .cell");
+        await toggle.trigger("focusout", { relatedTarget: cell.element });
+        await cell.trigger("focusout", { relatedTarget: toggle.element });
+        expect(attached.find(".mini-table").exists()).toBe(true);
+        await cell.trigger("focusout", { relatedTarget: outside });
+        expect(attached.find(".mini-table").exists()).toBe(false);
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        outside.remove();
+    });
+
+    it("keeps the options open on a press inside their list, which a scrollbar press is", async () => {
+        const view = mountStrip();
+        await view.find("input").trigger("focus");
+        const press = new Event("pointerdown", {
+            bubbles: true,
+            cancelable: true,
+        });
+        view.find('[role="listbox"]').element.dispatchEvent(press);
+        expect(press.defaultPrevented).toBe(true);
     });
 
     it("keeps one popover open at a time, and leaves the table to the Escape of the options", async () => {

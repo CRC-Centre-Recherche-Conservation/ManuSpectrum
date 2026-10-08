@@ -258,6 +258,28 @@ describe("lensShapes", () => {
         expect(marked[0].x0).toBe(3);
     });
 
+    it("draws the identified marker after every other shape, so in front of the ticks", () => {
+        const shapes = lensShapes(
+            input({
+                panels: [
+                    panel("", {
+                        declared: [{ symbol: "Hg", energy: 3, rank: 0 }],
+                        instrument: [{ label: "sum", energy: 4 }],
+                    }),
+                ],
+                focus: [
+                    {
+                        hue: 0,
+                        lines: [{ energy: 5, label: "Pb", intensity: 1 }],
+                    },
+                ],
+                marker: { energy: 3, label: "⌖ 3.00 keV" },
+            }),
+        );
+        expect(shapes.at(-1)?.label?.text).toBe("⌖ 3.00 keV");
+        expect(shapes.at(-1)?.layer).toBe("above");
+    });
+
     it("draws no marker outside the panel's extent", () => {
         const shapes = lensShapes(
             input({ marker: { energy: 50, label: "far" } }),
@@ -383,11 +405,16 @@ describe("lensShapes", () => {
             expect(shapes[2].label).toBeUndefined();
         });
 
-        it("lifts the strip when the caller says so", () => {
+        it("lifts the label alone when the caller says so, the stroke staying in the plot", () => {
             const shapes = declared([["Fe", 10]], {
                 declaredStrip: { rows: 1, lift: 16 },
             });
-            expect(shapes[0].y1).toBe(16);
+            expect(shapes[0].y1).toBe(0);
+            expect(shapes[0].y0).toBe(-14);
+            expect(shapes[0].label).toMatchObject({ padding: 16 });
+            expect(declared([["Fe", 10]])[0].label).not.toHaveProperty(
+                "padding",
+            );
         });
 
         it("keeps the level dashes", () => {
@@ -532,6 +559,57 @@ describe("lensShapes", () => {
             ];
             expect(ticks(labels, 1000).map((s) => s.y1)).toEqual([14, 14]);
             expect(ticks(labels, 150).map((s) => s.y1)).toEqual([14, 28]);
+        });
+    });
+
+    describe("the view a panel shows", () => {
+        const ticks = (view?: LensPanel["view"], plotWidth = 640) =>
+            lensShapes(
+                input({
+                    plotWidth,
+                    panels: [
+                        panel("", {
+                            extent: [0, 40],
+                            view,
+                            instrument: [
+                                { label: "a", energy: 2.31 },
+                                { label: "b", energy: 2.62 },
+                                { label: "c", energy: 2.9 },
+                                { label: "d", energy: 30 },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+
+        it("spreads the labels over the energy range shown, not over the data extent", () => {
+            const whole = ticks().filter((s) => (s.x0 as number) < 5);
+            expect(whole.map((s) => s.y1)).not.toEqual([14, 14, 14]);
+            const zoomed = ticks({ range: [1, 5] });
+            expect(zoomed.map((s) => s.y1)).toEqual([14, 14, 14]);
+            expect(zoomed.every((s) => s.label !== undefined)).toBe(true);
+        });
+
+        it("leaves out the marks outside the range shown", () => {
+            expect(ticks({ range: [1, 5] }).map((s) => s.x0)).toEqual([
+                2.31, 2.62, 2.9,
+            ]);
+            expect(ticks({ range: [5, 1] }).map((s) => s.x0)).toEqual([
+                2.31, 2.62, 2.9,
+            ]);
+        });
+
+        it("uses the width of the panel itself, a grid cell being narrower than the chart", () => {
+            const wide = ticks({ range: [1, 5], width: 640 });
+            const narrow = ticks({ range: [1, 5], width: 60 });
+            expect(wide.map((s) => s.y1)).toEqual([14, 14, 14]);
+            expect(narrow.map((s) => s.y1)).not.toEqual([14, 14, 14]);
+        });
+
+        it("falls back to the data extent when the range is empty or outside it", () => {
+            expect(ticks({ range: [50, 60] }).map((s) => s.x0)).toEqual(
+                ticks().map((s) => s.x0),
+            );
         });
     });
 

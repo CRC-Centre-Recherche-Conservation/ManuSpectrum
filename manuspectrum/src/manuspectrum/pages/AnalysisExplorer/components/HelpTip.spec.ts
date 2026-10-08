@@ -331,4 +331,30 @@ describe("HelpTip", () => {
         expect(tip.hidePopover).toHaveBeenCalledTimes(1);
         expect(tip.style.insetBlockStart).not.toBe("");
     });
+
+    it("hides when its control scrolls out of sight", async () => {
+        const watchers: ((entries: { isIntersecting: boolean }[]) => void)[] =
+            [];
+        vi.stubGlobal(
+            "IntersectionObserver",
+            class {
+                constructor(
+                    callback: (entries: { isIntersecting: boolean }[]) => void,
+                ) {
+                    watchers.push(callback);
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
+        const wrapper = mountTip();
+        wrapper.element.dispatchEvent(pointer("pointerenter"));
+        vi.advanceTimersByTime(DELAY_MS);
+        await wrapper.vm.$nextTick();
+        expect(shown()).not.toBeNull();
+        watchers.at(-1)?.([{ isIntersecting: false }]);
+        await wrapper.vm.$nextTick();
+        expect(shown()).toBeNull();
+        vi.unstubAllGlobals();
+    });
 });

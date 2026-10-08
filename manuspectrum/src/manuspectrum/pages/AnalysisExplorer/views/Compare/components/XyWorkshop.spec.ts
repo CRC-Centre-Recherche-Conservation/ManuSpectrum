@@ -1496,6 +1496,7 @@ describe("XyWorkshop", () => {
         expect(plotly.Plots.resize).not.toHaveBeenCalled();
         const element = view.find(".chart").element;
         Object.defineProperty(element, "clientWidth", { value: 640 });
+        Object.defineProperty(element, "clientHeight", { value: 360 });
         resize.value += 1;
         await flushPromises();
         expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
@@ -1539,6 +1540,7 @@ describe("XyWorkshop", () => {
         await frame();
         await flushPromises();
         expect(plotly.Plots.resize).not.toHaveBeenCalled();
+        Object.defineProperty(element, "clientWidth", { value: 640 });
         Object.defineProperty(element, "clientHeight", { value: 210 });
         watcher!.callback();
         watcher!.callback();
@@ -2215,6 +2217,286 @@ describe("XyWorkshop XRF lens", () => {
         expect(update.opacity).toEqual([1, 0]);
     });
 
+    describe("counts range and zoom state", () => {
+        const LOW = series([1, 6, 8, 10, 16], [10, 50, 200, 120, 5]);
+        const HIGH = series([1, 6, 8, 10, 16], [10, 50, 5000, 120, 5]);
+
+        async function mountTwo(): Promise<VueWrapper> {
+            answer(1, jsonResponse(LOW));
+            answer(2, jsonResponse(HIGH));
+            const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+            await settle();
+            return view;
+        }
+
+        it("fits the counts axis again when a curve comes back inside the energy window", async () => {
+            const view = await mountTwo();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                expect.any(HTMLElement),
+                { "xaxis.range": [5, 15], "yaxis.range": [0, 210] },
+            );
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 210], autorange: false, _length: 300 },
+                },
+            });
+            plotly.relayout.mockClear();
+            plotly.react.mockClear();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).not.toHaveBeenCalled();
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "yaxis.range": [0, 5250],
+            });
+        });
+
+        it("leaves the counts axis alone when a curve changes under the full range", async () => {
+            const view = await mountTwo();
+            plotly.relayout.mockClear();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(
+                plotly.relayout.mock.calls.filter(([, update]) =>
+                    Object.keys(update).some((key) => key.startsWith("yaxis")),
+                ),
+            ).toEqual([]);
+        });
+
+        it("keeps « Reset the zoom » when the counts fit of a grid panel with nothing in the window echoes an autorange", async () => {
+            const view = await mountTwo();
+            await view.find('[data-layout="multiples"]').trigger("click");
+            await flushPromises();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 7], autorange: false, _length: 400 },
+                    xaxis2: { range: [5, 7], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 210], autorange: true, _length: 300 },
+                    yaxis2: { range: [0, 210], autorange: true, _length: 300 },
+                },
+            });
+            answer(1, jsonResponse(LOW));
+            plotly.relayout.mockImplementationOnce(
+                async (target: HTMLElement) => {
+                    emitPlotly(target, "plotly_relayout", {
+                        "yaxis.range[0]": 0,
+                        "yaxis.range[1]": 60,
+                        "yaxis2.autorange": true,
+                    });
+                },
+            );
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 5,
+                "xaxis.range[1]": 7,
+            });
+            await flushPromises();
+            expect(view.find('[data-action="reset"]').exists()).toBe(true);
+        });
+    });
+
+    it("lists in the strip the instrument peaks inside the energy window shown, all of them on the full range", async () => {
+        const wide = series(
+            Array.from({ length: 450 }, (_, i) => 1 + i / 10),
+            Array.from({ length: 450 }, () => 10),
+        );
+        answer(1, jsonResponse(wide));
+        const xrf = {
+            ...curve(0, 1),
+            excitation: { anode: "Rh", kV: 40, source: "conditions" as const },
+        };
+        const view = await mountWorkshop([xrf]);
+        await settle();
+        const listed = () => view.find("li.instrument");
+        expect(listed().text()).toContain("Rh Kα1 20.22 keV");
+        await view.find('[data-range="5-15"]').trigger("click");
+        await flushPromises();
+        expect(listed().exists()).toBe(false);
+        await view.find('[data-range="full"]').trigger("click");
+        await flushPromises();
+        expect(listed().text()).toContain("Rh Kα1 20.22 keV");
+    });
+
+    describe("the chart's own box", () => {
+        const PEAK = series(
+            Array.from({ length: 71 }, (_, i) => 2 + i / 100),
+            Array.from({ length: 71 }, (_, i) => (i === 35 ? 500 : 10)),
+        );
+        let watcher: { callback: () => void; observed: Element[] };
+
+        async function mountObserved(): Promise<VueWrapper> {
+            const observers: (typeof watcher)[] = [];
+            vi.stubGlobal(
+                "ResizeObserver",
+                class {
+                    observed: Element[] = [];
+                    callback: () => void;
+                    constructor(callback: () => void) {
+                        this.callback = callback;
+                        observers.push(this);
+                    }
+                    observe(element: Element) {
+                        this.observed.push(element);
+                    }
+                    disconnect() {}
+                    unobserve() {}
+                },
+            );
+            answer(1, jsonResponse(PEAK));
+            const view = await mountWorkshop([curve(0, 1)]);
+            await settle();
+            const element = view.find(".chart").element;
+            Object.defineProperty(element, "clientWidth", {
+                value: 800,
+                configurable: true,
+            });
+            Object.defineProperty(element, "clientHeight", {
+                value: 400,
+                configurable: true,
+            });
+            watcher = observers.find((o) => o.observed.includes(element))!;
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            return view;
+        }
+
+        function resizeTo(view: VueWrapper, height: number): void {
+            Object.defineProperty(view.find(".chart").element, "clientHeight", {
+                value: height,
+                configurable: true,
+            });
+            watcher.callback();
+        }
+
+        it("keeps the energy range the reader chose through a resize, with the identifier opening below the chart", async () => {
+            const view = await mountObserved();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: { range: [0, 210], autorange: false, _length: 300 },
+                },
+            });
+            await view.find('[data-action="identify"]').trigger("click");
+            emitPlotly(chart, "plotly_click", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: {},
+            });
+            await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(true);
+            plotly.Plots.resize.mockClear();
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            resizeTo(view, 300);
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+            expect(plotly.react).toHaveBeenCalledTimes(1);
+            expect(plotly.relayout).toHaveBeenCalledWith(chart, {
+                "xaxis.range": [5, 15],
+                "yaxis.range": [0, 210],
+            });
+            for (const [, update] of plotly.relayout.mock.calls) {
+                expect(update).not.toHaveProperty("xaxis.autorange");
+            }
+            expect(
+                view.find('[data-range="5-15"]').attributes("aria-pressed"),
+            ).toBe("true");
+            expect(view.find('[data-action="reset"]').exists()).toBe(true);
+        });
+
+        it("starts from the full range again when the figure itself changes", async () => {
+            const view = await mountObserved();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            Object.assign(view.find(".chart").element, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                },
+            });
+            plotly.relayout.mockClear();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            expect(plotly.react).toHaveBeenCalled();
+            expect(
+                view.find('[data-range="5-15"]').attributes("aria-pressed"),
+            ).toBe("true");
+            await view.find('[data-layout="offset"]').trigger("click");
+            await flushPromises();
+            expect(
+                view.find('[data-range="full"]').attributes("aria-pressed"),
+            ).toBe("true");
+        });
+
+        it("keeps the lens strip, the identifier and the cue in a region of their own, apart from the chart's box", async () => {
+            const view = await mountObserved();
+            const region = view.find(".lens-region");
+            expect(region.exists()).toBe(true);
+            expect(region.find(".xrf-strip").exists()).toBe(true);
+            expect(region.find(".chart").exists()).toBe(false);
+            await view.find('[data-action="identify"]').trigger("click");
+            expect(region.find(".identify-hint").exists()).toBe(true);
+            emitPlotly(view.find(".chart").element, "plotly_click", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: {},
+            });
+            await flushPromises();
+            expect(region.find('[role="dialog"]').exists()).toBe(true);
+        });
+
+        it("makes no drawing when a focus pin grows the strip but leaves the chart's box as it was", async () => {
+            await mountObserved();
+            plotly.Plots.resize.mockClear();
+            plotly.react.mockClear();
+            pinElement("Pb");
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).not.toHaveBeenCalled();
+            expect(plotly.Plots.resize).not.toHaveBeenCalled();
+        });
+
+        it("ignores the zero box of a folded window and does not draw again when it unfolds at the size it had", async () => {
+            const view = await mountObserved();
+            plotly.Plots.resize.mockClear();
+            plotly.react.mockClear();
+            const element = view.find(".chart").element;
+            for (const name of ["clientWidth", "clientHeight"]) {
+                Object.defineProperty(element, name, {
+                    value: 0,
+                    configurable: true,
+                });
+            }
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.Plots.resize).not.toHaveBeenCalled();
+            expect(plotly.react).not.toHaveBeenCalled();
+            Object.defineProperty(element, "clientWidth", {
+                value: 800,
+                configurable: true,
+            });
+            Object.defineProperty(element, "clientHeight", {
+                value: 400,
+                configurable: true,
+            });
+            watcher.callback();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).not.toHaveBeenCalled();
+        });
+    });
+
     describe("peak identifier", () => {
         /** 2.00 to 2.70 keV in 0.01 steps, flat at 10 counts with one peak of 500 at 2.35. */
         const PEAK = series(
@@ -2269,6 +2551,75 @@ describe("XyWorkshop XRF lens", () => {
             expect(chart.classList.contains("js-plotly-plot")).toBe(true);
             await toggleButton(view).trigger("click");
             expect(chart.classList.contains("js-plotly-plot")).toBe(true);
+        });
+
+        it("stops every drag from zooming while the mode is on, by a relayout, and gives the zoom back when it ends", async () => {
+            const view = await mountPeak();
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            await toggleButton(view).trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(
+                view.find(".chart").element,
+                { dragmode: false },
+            );
+            await toggleButton(view).trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                view.find(".chart").element,
+                { dragmode: "zoom" },
+            );
+            expect(plotly.react).not.toHaveBeenCalled();
+        });
+
+        it("identifies the peak a press began on when the press moved too far for Plotly to call it a click", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const chart = view.find(".chart").element;
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(
+                new MouseEvent("pointerdown", { clientX: 100, clientY: 100 }),
+            );
+            chart.dispatchEvent(
+                new MouseEvent("pointerup", { clientX: 102, clientY: 160 }),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            await flushPromises();
+            expect(view.find('[role="dialog"] h3').text()).toContain(
+                "2.35 keV",
+            );
+        });
+
+        it("leaves a press that Plotly took as a click, or that did not move, to the click", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            const chart = view.find(".chart").element;
+            emitPlotly(chart, "plotly_hover", {
+                points: [{ curveNumber: 0, x: 2.33, y: 10 }],
+                event: { pointerType: "mouse" },
+            });
+            chart.dispatchEvent(
+                new MouseEvent("pointerdown", { clientX: 100, clientY: 100 }),
+            );
+            chart.dispatchEvent(
+                new MouseEvent("pointerup", { clientX: 101, clientY: 101 }),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            await flushPromises();
+            expect(view.find('[role="dialog"]').exists()).toBe(false);
+        });
+
+        it("keeps the drag off when the chart is drawn again while the mode is on", async () => {
+            const view = await mountPeak();
+            await toggleButton(view).trigger("click");
+            await flushPromises();
+            plotly.react.mockClear();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            expect(lastDrawing().layout.dragmode).toBe(false);
         });
 
         it("opens the candidates at the local maximum of the raw counts on a click, and toggles nothing in the focus", async () => {
@@ -2434,7 +2785,7 @@ describe("XyWorkshop XRF lens", () => {
             );
         });
 
-        it("shows a hint line above the chart while the mode is on and no peak is chosen, and announces it once", async () => {
+        it("shows a hint line under the chart while the mode is on and no peak is chosen, and announces it once", async () => {
             const view = await mountPeak();
             expect(view.find(".identify-hint").exists()).toBe(false);
             announce.mockClear();
@@ -2442,7 +2793,7 @@ describe("XyWorkshop XRF lens", () => {
             const hint = view.find(".identify-hint");
             const sentence =
                 "Click the top of a peak: the elements with a line at that energy show under the chart.";
-            expect(hint.find(":scope > span").text()).toBe(sentence);
+            expect(hint.find("p > span").text()).toBe(sentence);
             expect(announce).toHaveBeenCalledWith(sentence);
             clickAt(view, 2.33);
             await flushPromises();
@@ -2450,7 +2801,7 @@ describe("XyWorkshop XRF lens", () => {
             expect(announce).toHaveBeenCalledTimes(2);
         });
 
-        it("offers a help button after the hint, named and described by the four rules", async () => {
+        it("offers a help button after the hint that discloses the four rules on a click, and hides them on the next", async () => {
             const view = await mountPeak();
             await toggleButton(view).trigger("click");
             const help = view.find(
@@ -2461,15 +2812,21 @@ describe("XyWorkshop XRF lens", () => {
                 help.attributes("aria-labelledby") ?? "",
             );
             expect(named?.textContent).toBe("How to identify a peak");
-            const described = document.getElementById(
-                help.attributes("aria-describedby") ?? "",
-            );
-            expect(described?.textContent?.split("\n")).toEqual([
+            const rules = view.find(`#${help.attributes("aria-controls")}`);
+            expect(help.attributes("aria-expanded")).toBe("false");
+            expect(rules.isVisible()).toBe(false);
+            await help.trigger("click");
+            expect(help.attributes("aria-expanded")).toBe("true");
+            expect(rules.isVisible()).toBe(true);
+            expect(rules.findAll("li").map((item) => item.text())).toEqual([
                 "The click snaps to the nearest peak top.",
                 "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
                 "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
-                "Hints only: the analyst decides. Escape or the target to leave.",
+                "Hints only: the analyst decides. Escape closes the candidates; « Identify a peak » again leaves the mode.",
             ]);
+            await help.trigger("click");
+            expect(help.attributes("aria-expanded")).toBe("false");
+            expect(rules.isVisible()).toBe(false);
         });
 
         it("keeps the chart where it is: the identifier follows the chart, before the lens strip", async () => {

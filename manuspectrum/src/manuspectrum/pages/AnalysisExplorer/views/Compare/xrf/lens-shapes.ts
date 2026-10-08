@@ -45,7 +45,10 @@ export interface LensLine {
 
 /** A pinned element's lines, in the hue of its focus slot. */
 export interface FocusLines {
+    /** The focus slot hue (0 to 3); out of the palette (-1), the element's own hue takes over. */
     hue: number;
+    /** The element, for its own hue when `hue` names no slot. */
+    symbol?: string;
     /** A previewed element draws thin and dashed. */
     preview?: boolean;
     lines: LensLine[];
@@ -96,12 +99,19 @@ export interface LensPanel {
     suffix: string;
     /** X extent of the data the panel draws (keV); nothing is drawn outside it. */
     extent: [number, number];
+    /**
+     * What the panel shows now, when the reader knows it: the energy range
+     * (keV, inside `extent`) and the plot width (px). The declared and
+     * instrument labels are spread over this range and this width, and a mark
+     * outside the range is left out.
+     */
+    view?: { range?: [number, number]; width?: number };
     declared: DeclaredTick[];
     instrument: InstrumentTick[];
     bands: EnergyBand[];
 }
 
-/** The energy a peak is being identified at: one dashed ink line across every panel that holds it. */
+/** The energy a peak is being identified at: one dashed ink line across every panel that holds it, in front of every other shape. */
 export interface IdentifiedMarker {
     energy: number;
     label: string;
@@ -115,11 +125,11 @@ export interface LensShapesInput {
     theme: LensTheme;
     /** Width in pixels of a panel's plot area; sets how many instrument labels fit side by side. */
     plotWidth?: number;
-    /** Drawn in front of every other shape and never dropped by the cap. */
+    /** Drawn last, so in front of every other shape, and never dropped by the cap. */
     marker?: IdentifiedMarker;
     /**
      * Where the declared labels go: `rows` staggered rows, the first `lift`
-     * pixels above the plot area. The chart keeps `DECLARED_STRIP_PX` free
+     * pixels above the plot area (the labels rise, the ticks do not). The chart keeps `DECLARED_STRIP_PX` free
      * above its plot area for the default two rows at no lift.
      */
     declaredStrip?: { rows: number; lift: number };
@@ -134,6 +144,15 @@ const RANK_DASH = ["solid", "dash", "dot"] as const;
 
 function inside(energy: number, extent: [number, number]): boolean {
     return energy >= extent[0] && energy <= extent[1];
+}
+
+/** The energy range a panel's labels are laid out on: its view clipped to its extent, else its extent. */
+function shownRange(panel: LensPanel): [number, number] {
+    const range = panel.view?.range;
+    if (!range) return panel.extent;
+    const low = Math.max(Math.min(range[0], range[1]), panel.extent[0]);
+    const high = Math.min(Math.max(range[0], range[1]), panel.extent[1]);
+    return low < high ? [low, high] : panel.extent;
 }
 
 function lineStyle(intensity: number): { width: number; dash: string } {
@@ -184,9 +203,10 @@ function fullLine(
  *
  * A bottom tick (`row` 0 to `INSTRUMENT_ROWS - 1`) rises `row` steps higher
  * and carries its label horizontally above its tip. A top tick keeps
- * `TICK_PX` inside the plot and, on `row` 1 and beyond, rises `lift` plus
- * `row` steps above it into the strip over the plot area, where its label sits
- * horizontally above the tip. A `null` text draws the tick alone.
+ * `TICK_PX` inside the plot and, on `row` 1 and beyond, rises `row` steps
+ * above it into the strip over the plot area, where its label sits
+ * horizontally above the tip; a `lift` raises the label alone (its padding),
+ * the stroke never crossing what sits between the plot and the label. A `null` text draws the tick alone.
  */
 function tick(
     panel: LensPanel,
@@ -200,7 +220,7 @@ function tick(
     lift = 0,
 ): LensShape {
     const length = TICK_PX + (top ? 0 : row * ROW_STEP_PX);
-    const reach = top ? lift + row * ROW_STEP_PX : 0;
+    const reach = top ? row * ROW_STEP_PX : 0;
     const shape: LensShape = {
         type: "line",
         layer: "above",
@@ -219,6 +239,7 @@ function tick(
             textangle: 0,
             xanchor: "center",
             yanchor: "bottom",
+            ...(top && lift > 0 ? { padding: lift } : {}),
         });
     }
     return shape;
@@ -345,7 +366,7 @@ function overlapShapes(
  * flag turns a relayout into a full calc). Beyond `MAX_LENS_SHAPES` the least
  * important are dropped: focus lines, lens elements, declared majors, minors,
  * traces, instrument ticks, then bands; the identified `marker` is never
- * dropped. No shape reads or extends a data axis: the ticks are pixel-sized
+ * dropped and comes last. No shape reads or extends a data axis: the ticks are pixel-sized
  * on the panel's domain. The instrument labels (muted ink) are horizontal and
  * staggered on `INSTRUMENT_ROWS` rows of taller ticks by the width they need
  * at `plotWidth`; the declared labels (the element's colour) are horizontal
@@ -361,21 +382,10 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
     };
 
     for (const panel of input.panels) {
-        if (input.marker && inside(input.marker.energy, panel.extent)) {
-            add(-1, {
-                ...fullLine(
-                    panel,
-                    input.marker.energy,
-                    theme.ink,
-                    { width: 1.5, dash: "dash" },
-                    input.marker.label,
-                    theme,
-                ),
-                layer: "above",
-            });
-        }
         for (const group of input.focus) {
-            const colour = theme.focus[group.hue] ?? theme.ink;
+            const colour =
+                theme.focus[group.hue] ??
+                (group.symbol ? elementColour(theme, group.symbol) : theme.ink);
             for (const line of group.lines) {
                 if (!inside(line.energy, panel.extent)) continue;
                 const style = group.preview
@@ -410,12 +420,16 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                 );
             }
         }
+        const shown = shownRange(panel);
         const inPanel = panel.declared.filter((entry) =>
-            inside(entry.energy, panel.extent),
+            inside(entry.energy, shown),
         );
-        const span = panel.extent[1] - panel.extent[0];
+        const span = shown[1] - shown[0];
         const pxPerKev =
-            span > 0 ? (input.plotWidth ?? DEFAULT_PLOT_PX) / span : 0;
+            span > 0
+                ? (panel.view?.width ?? input.plotWidth ?? DEFAULT_PLOT_PX) /
+                  span
+                : 0;
         const strip = input.declaredStrip ?? {
             rows: DECLARED_ROWS,
             lift: 0,
@@ -446,16 +460,16 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
                 ),
             );
         });
-        const shown = panel.instrument.filter((entry) =>
-            inside(entry.energy, panel.extent),
+        const ticks = panel.instrument.filter((entry) =>
+            inside(entry.energy, shown),
         );
         const rows = labelRows(
-            shown.map((entry) => entry.label),
-            shown.map((entry) => entry.energy),
+            ticks.map((entry) => entry.label),
+            ticks.map((entry) => entry.energy),
             pxPerKev,
             INSTRUMENT_ROWS,
         );
-        shown.forEach((entry, index) => {
+        ticks.forEach((entry, index) => {
             const row = rows[index];
             add(
                 5,
@@ -489,6 +503,22 @@ export function lensShapes(input: LensShapesInput): LensShape[] {
             for (const shape of overlapShapes(panel, entry, theme)) {
                 add(6, shape);
             }
+        }
+    }
+
+    for (const panel of input.panels) {
+        if (input.marker && inside(input.marker.energy, panel.extent)) {
+            add(-1, {
+                ...fullLine(
+                    panel,
+                    input.marker.energy,
+                    theme.ink,
+                    { width: 1.5, dash: "dash" },
+                    input.marker.label,
+                    theme,
+                ),
+                layer: "above",
+            });
         }
     }
 

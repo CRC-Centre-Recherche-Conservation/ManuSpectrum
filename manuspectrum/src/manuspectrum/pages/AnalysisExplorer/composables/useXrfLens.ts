@@ -22,6 +22,7 @@ import {
     candidates,
     instrumentPeaks,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
+import { mergeInstrument } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/instrument-merge.ts";
 import { lensShapes } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import {
     allSymbols,
@@ -66,6 +67,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
 import type {
     Candidate,
+    InstrumentKind,
     InstrumentPeak,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
 import type {
@@ -91,8 +93,6 @@ const DETECTOR_FWHM_KEV: Record<XrfDetector, number> = {
 };
 /** Declared labels of small multiples: one row, over the panel's title. */
 const PANEL_STRIP = { rows: 1, lift: 16 };
-/** Instrument ticks closer than this (keV) are drawn once. */
-const TICK_MERGE_KEV = 0.02;
 /** Overlap sentences the strip lists at most. */
 const MAX_OVERLAP_NOTES = 8;
 /** Rank given to a declared element whose material states no level (the weakest). */
@@ -190,6 +190,8 @@ export interface StripOverlap {
 /** An instrument peak the chart draws as one tick, with the slots whose curves carry it. */
 export interface StripInstrumentPeak {
     label: string;
+    /** What the peak is: a Duane–Hunt label already says its energy. */
+    kind: InstrumentKind;
     energy: number;
     slots: number[];
     /** Every slot of the window carries it (and there are several). */
@@ -217,6 +219,11 @@ export interface AnodeRow {
     inferred: string | null;
     chosen: XrfAnode | "none" | null;
 }
+
+/** What each panel shows now, by its axis suffix (`""`, `"2"`…): see `LensPanel.view`. */
+export type PanelViews = Readonly<
+    Record<string, NonNullable<LensPanel["view"]>>
+>;
 
 interface PanelModel {
     suffix: string;
@@ -455,7 +462,8 @@ export function useXrfLens(sources: LensSources) {
         const preview = previewed.value;
         if (preview) {
             groups.push({
-                hue: (preview.slot ?? 1) - 1,
+                hue: (preview.slot ?? 0) - 1,
+                symbol: preview.symbol,
                 preview: true,
                 lines: linesOf(preview.symbol),
             });
@@ -647,45 +655,22 @@ export function useXrfLens(sources: LensSources) {
                     }
                 }
             }
-            const ticks: PanelModel["ticks"] = [];
-            const bands: PanelModel["bands"] = [];
-            for (const index of visible) {
-                for (const peak of instrumentOfCurves.value[index] ?? []) {
-                    const curveOrder = curves[index].order;
-                    if (peak.kind === "compton") {
-                        if (
-                            !bands.some(
-                                (held) =>
-                                    Math.abs(held.from - peak.from) <
-                                        TICK_MERGE_KEV &&
-                                    Math.abs(held.to - peak.to) <
-                                        TICK_MERGE_KEV,
-                            )
-                        ) {
-                            bands.push({
-                                curveOrder,
-                                label: labels().compton,
-                                from: peak.from,
-                                to: peak.to,
-                            });
-                        }
-                        continue;
-                    }
-                    if (
-                        ticks.some(
-                            (held) =>
-                                Math.abs(held.energy - peak.energy) <
-                                tolerance(peak.energy, fwhmMn.value),
-                        )
-                    ) {
-                        continue;
-                    }
-                    ticks.push({
-                        label: instrumentLabel(peak, labels()),
-                        energy: peak.energy,
-                    });
-                }
-            }
+            const merged = mergedInstrument(
+                visible.map((index) => ({
+                    slot: curves[index].slot,
+                    order: curves[index].order,
+                    peaks: instrumentOfCurves.value[index] ?? [],
+                })),
+            );
+            const ticks: PanelModel["ticks"] = merged.peaks.map(
+                ({ label, energy }) => ({ label, energy }),
+            );
+            const bands: PanelModel["bands"] = merged.bands.map((held) => ({
+                curveOrder: held.order,
+                label: labels().compton,
+                from: held.from,
+                to: held.to,
+            }));
             return [
                 {
                     suffix,
@@ -704,66 +689,69 @@ export function useXrfLens(sources: LensSources) {
         };
     });
 
+    /** The one merge of instrument peaks (`mergeInstrument`) the ticks, the strip and the menu's count share. */
+    function mergedInstrument(
+        sourcesOf: Parameters<typeof mergeInstrument>[0],
+    ) {
+        return mergeInstrument(sourcesOf, fwhmMn.value, (peak) =>
+            instrumentLabel(peak, labels()),
+        );
+    }
+
+    /** The instrument peaks of the visible curves, whatever the layer toggle says. */
+    const visibleInstrument = computed(() => {
+        if (!active.value || !table.value) return { peaks: [], bands: [] };
+        const hidden = sources.hidden();
+        return mergedInstrument(
+            sources.curves().flatMap((curve, index) =>
+                hidden[index]
+                    ? []
+                    : [
+                          {
+                              slot: curve.slot,
+                              order: curve.order,
+                              peaks: allInstrument.value[index] ?? [],
+                          },
+                      ],
+            ),
+        );
+    });
+
     /**
      * The instrument peaks of the visible curves, one entry per label and
      * energy (within the detector tolerance), by energy: what the ticks at
      * the foot of the chart say, with the slots that carry each.
      */
     const instrumentNotes = computed<StripInstrumentPeak[]>(() => {
-        if (!active.value || !table.value) return [];
-        const curves = sources.curves();
-        const hidden = sources.hidden();
-        const notes: StripInstrumentPeak[] = [];
-        curves.forEach((curve, index) => {
-            if (hidden[index]) return;
-            for (const peak of instrumentOfCurves.value[index] ?? []) {
-                if (peak.kind === "compton") continue;
-                const label = instrumentLabel(peak, labels());
-                const held = notes.find(
-                    (note) =>
-                        note.label === label &&
-                        Math.abs(note.energy - peak.energy) <
-                            tolerance(peak.energy, fwhmMn.value),
-                );
-                if (!held) {
-                    notes.push({
-                        label,
-                        energy: peak.energy,
-                        slots: [curve.slot],
-                        everywhere: false,
-                    });
-                } else if (!held.slots.includes(curve.slot)) {
-                    held.slots.push(curve.slot);
-                }
-            }
-        });
-        const total = new Set(curves.map((curve) => curve.slot)).size;
-        return notes
-            .map((note) => ({
-                ...note,
-                slots: [...note.slots].sort((a, b) => a - b),
-                everywhere: total > 1 && note.slots.length === total,
-            }))
-            .sort((a, b) => a.energy - b.energy);
+        if (!layers.value.instrument) return [];
+        const total = new Set(sources.curves().map((curve) => curve.slot)).size;
+        return visibleInstrument.value.peaks.map((peak) => ({
+            ...peak,
+            everywhere: total > 1 && peak.slots.length === total,
+        }));
     });
 
     /**
      * What each layer has to draw on this window, whatever its toggle says:
-     * the elements the visible analyses declare, the distinct instrument
-     * peaks, the overlaps.
+     * the distinct elements the visible curves declare with a tick, the
+     * instrument peaks and bands of the visible curves, the overlaps.
      */
     const layerCounts = computed<LayerCounts>(() => {
-        const peaks = new Set<string>();
-        for (const found of allInstrument.value) {
-            for (const peak of found) {
-                peaks.add(
-                    `${peak.kind}:${Math.round(peak.energy / TICK_MERGE_KEV)}`,
-                );
-            }
+        const hidden = sources.hidden();
+        const ticked = new Set<string>();
+        if (active.value && table.value) {
+            sources.curves().forEach((curve, index) => {
+                if (hidden[index]) return;
+                for (const tick of declaredTicks(curve)) {
+                    ticked.add(tick.symbol);
+                }
+            });
         }
         return {
-            declared: active.value ? declaredSymbols(sources.curves()).size : 0,
-            instrument: peaks.size,
+            declared: ticked.size,
+            instrument:
+                visibleInstrument.value.peaks.length +
+                visibleInstrument.value.bands.length,
             overlaps: overlapAll.value.bands.length,
         };
     });
@@ -773,6 +761,7 @@ export function useXrfLens(sources: LensSources) {
         theme: PlotTheme,
         plotWidth?: number,
         marker?: IdentifiedMarker,
+        views?: PanelViews,
     ): LensShape[] {
         const current = model.value;
         if (current.panels.length === 0) return [];
@@ -780,6 +769,7 @@ export function useXrfLens(sources: LensSources) {
         const panels: LensPanel[] = current.panels.map((panel) => ({
             suffix: panel.suffix,
             extent: panel.extent,
+            ...(views?.[panel.suffix] ? { view: views[panel.suffix] } : {}),
             declared: panel.declared,
             instrument: panel.ticks.map(
                 (tick): InstrumentTick => ({

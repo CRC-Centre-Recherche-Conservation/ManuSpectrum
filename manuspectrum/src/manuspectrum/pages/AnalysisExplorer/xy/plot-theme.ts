@@ -5,10 +5,10 @@ const SERIES = 12;
 /** Compare's focus holds this many slots, each with its hue (`--focus-1…4`). */
 const FOCUS_SLOTS = 4;
 const FOCUS_FALLBACKS = ["#3d2e8d", "#1e6256", "#93499e", "#760a03"];
-const ELEMENT_FALLBACKS = [
+export const ELEMENT_FALLBACKS = [
     "#c2410c",
     "#0e6baa",
-    "#b8860b",
+    "#8a6508",
     "#14804a",
     "#b912e2",
     "#d0257a",
@@ -16,6 +16,8 @@ const ELEMENT_FALLBACKS = [
     "#8e3329",
     "#3f6212",
     "#6d28d9",
+    "#0e7490",
+    "#a04a00",
 ];
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;

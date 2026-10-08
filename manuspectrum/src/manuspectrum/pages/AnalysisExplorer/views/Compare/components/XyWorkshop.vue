@@ -51,6 +51,7 @@ import {
     hoverValueFor,
     multiplesFigure,
     paintOf,
+    panelWidths,
     stackedFigure,
     yFitUpdate,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
@@ -111,6 +112,7 @@ import type {
 import type {
     LensCurve,
     LensLabels,
+    PanelViews,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
@@ -179,6 +181,8 @@ const REM = 16;
 /** Left and right margins of the plot inside the chart, in px (`workshop-figure` margins). */
 const PLOT_MARGIN_X = 80;
 const DEFAULT_POINTER = "mouse";
+/** A press that moves this far (px) is no click for Plotly; in « Identify a peak » it still names the peak it began on. */
+const SLIP_PX = 5;
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
@@ -291,6 +295,8 @@ let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
+/** What the chart was last drawn of (`figureIdentity`): the reader's zoom survives a drawing of the same figure. */
+let drawnIdentity = "";
 /**
  * The height the chart has when small multiples do not hold it open
  * (`chartHeight` null): small multiples are laid out for it, never for the
@@ -315,6 +321,15 @@ let press: {
     axes: Record<string, AxisView>;
 } | null = null;
 
+/** The press in progress on the chart: where it began and whether Plotly took it as a click. */
+let held: {
+    curve: Curve | null;
+    energy: number | null;
+    x: number;
+    y: number;
+    clicked: boolean;
+} | null = null;
+
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
 /** The layout picked before the table, given back when the table is left. */
@@ -332,6 +347,8 @@ const unrelatedMode = ref<"hide" | "dim">("hide");
 const logScale = ref(false);
 /** The energy range shown: a preset key, or `CUSTOM_RANGE` after a zoom by hand. */
 const rangeKey = ref("full");
+/** The energy window the chart shows when it is narrower than the data (a preset or a zoom); null for the full range. */
+const shownEnergy = ref<[number, number] | null>(null);
 /** « Identify a peak »: a click on the chart identifies instead of toggling the focus. */
 const identifying = ref(false);
 /** The peak being identified: the curve it was read on (`curveId`) and its energy (keV). */
@@ -343,20 +360,21 @@ const identifyHint = computed(() =>
     ),
 );
 const identifyHelpLabel = computed(() => $gettext("How to identify a peak"));
-const identifyHelp = computed(() =>
-    [
-        $gettext("The click snaps to the nearest peak top."),
-        $gettext(
-            "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
-        ),
-        $gettext(
-            "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
-        ),
-        $gettext(
-            "Hints only: the analyst decides. Escape or the target to leave.",
-        ),
-    ].join("\n"),
-);
+const identifyHelpId = useId();
+/** The rules of the mode are shown under the cue. */
+const identifyHelpOpen = ref(false);
+const identifyHelp = computed(() => [
+    $gettext("The click snaps to the nearest peak top."),
+    $gettext(
+        "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
+    ),
+    $gettext(
+        "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
+    ),
+    $gettext(
+        "Hints only: the analyst decides. Escape closes the candidates; « Identify a peak » again leaves the mode.",
+    ),
+]);
 const identifyToggle =
     useTemplateRef<InstanceType<typeof IconButton>>("identifyToggle");
 
@@ -576,6 +594,15 @@ const identification = computed(() => {
     };
 });
 /** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
+/** The instrument peaks the strip lists: those inside the energy window shown. */
+const listedInstrument = computed(() => {
+    const window = shownEnergy.value;
+    return window
+        ? lens.instrumentNotes.value.filter(
+              (peak) => peak.energy >= window[0] && peak.energy <= window[1],
+          )
+        : lens.instrumentNotes.value;
+});
 const logShown = computed(
     () => lens.active.value && logScale.value && layout.value !== "offset",
 );
@@ -778,6 +805,10 @@ watch(layout, (name) => {
 });
 watch(effectiveStates, () => scheduleRestyle());
 watch(lens.model, () => scheduleShapes());
+watch(identifying, (on) => {
+    if (!on) identifyHelpOpen.value = false;
+    void setDragMode();
+});
 watch(
     () => identification.value?.energy ?? null,
     () => scheduleShapes(),
@@ -837,6 +868,7 @@ function scheduleFollowSize(): void {
 function followSize(measureAgain = false): void {
     const element = chart.value;
     if (!plotly || !element || layout.value === "table") return;
+    if (element.clientWidth === 0 || element.clientHeight === 0) return;
     const size = sizeOf(element);
     const held = chartHeight.value !== null;
     if (held && !measureAgain && element.clientWidth === widthOf(drawnSize)) {
@@ -935,13 +967,55 @@ function figureInput(
 }
 
 /**
- * The lens shapes for `theme`; none outside an XRF window. While a peak is
- * identified, `withMarker` adds the dashed line at its energy.
+ * What the chart is a drawing of: its curves, layout, treatment and scale.
+ * A drawing of the same figure (a new size) keeps the reader's zoom; another
+ * figure starts from the full range.
  */
-function lensShapesFor(theme: PlotTheme, withMarker = true): Partial<Shape>[] {
+function figureIdentity(): string {
+    return [
+        layout.value,
+        view.value.key,
+        logShown.value,
+        xReversed.value,
+        drawn.value.map(curveId).join(","),
+    ].join("|");
+}
+
+/** What each panel of the drawn chart shows now: its energy range and its plot width. */
+function liveViews(): PanelViews | undefined {
+    const element = drawnOn;
+    if (!element) return undefined;
+    const axes = axesOf(element);
+    const views: Record<string, NonNullable<PanelViews[string]>> = {};
+    for (const panel of lens.model.value.panels) {
+        const axis = axes[`xaxis${panel.suffix}`];
+        if (!axis) continue;
+        views[panel.suffix] = {
+            range: [axis.range[0], axis.range[1]],
+            ...(axis.length > 0 ? { width: axis.length } : {}),
+        };
+    }
+    return views;
+}
+
+interface ShapeOptions {
+    /** Adds the dashed line at the energy being identified. */
+    marker?: boolean;
+    /** What each panel shows: the drawn chart's (`liveViews`) or an export's. */
+    views?: PanelViews;
+}
+
+/**
+ * The lens shapes for `theme`; none outside an XRF window. Without `views`
+ * the labels are laid out on the data extent and the chart's width.
+ */
+function lensShapesFor(
+    theme: PlotTheme,
+    { marker = true, views }: ShapeOptions = {},
+): Partial<Shape>[] {
     if (!lens.active.value) return [];
     const width = chart.value?.clientWidth;
-    const held = withMarker ? identification.value : null;
+    const held = marker ? identification.value : null;
     return lens.shapes(
         theme,
         width ? width - PLOT_MARGIN_X : undefined,
@@ -954,6 +1028,7 @@ function lensShapesFor(theme: PlotTheme, withMarker = true): Partial<Shape>[] {
                   }).format(held.energy)} keV`,
               }
             : undefined,
+        views,
     );
 }
 
@@ -995,6 +1070,12 @@ async function draw(): Promise<void> {
         (figure.layout.annotations ?? []).forEach((note, index) => {
             note.opacity = opacities[index];
         });
+        if (identifying.value) figure.layout.dragmode = false;
+        const identity = figureIdentity();
+        const kept =
+            drawnOn === element && identity === drawnIdentity
+                ? keptRanges(element)
+                : null;
         lastFigure = figure;
         drawnOn = element;
         drawnTheme = theme;
@@ -1009,11 +1090,17 @@ async function draw(): Promise<void> {
             figure.layout,
             WORKSHOP_CONFIG,
         );
-        zoomed.value = false;
-        rangeKey.value = "full";
         if (disposed) {
             plotly.purge(element);
             return;
+        }
+        drawnIdentity = identity;
+        if (kept === null) {
+            zoomed.value = false;
+            rangeKey.value = "full";
+            shownEnergy.value = null;
+        } else {
+            await setRanges(element, kept);
         }
         bindEvents(element);
         drawFailed.value = false;
@@ -1031,6 +1118,43 @@ async function draw(): Promise<void> {
     if (released && !disposed) {
         await nextTick();
         followSize();
+    }
+}
+
+/** Reads the energy window the chart shows now. */
+function syncShownEnergy(): void {
+    const axis = drawnOn ? axesOf(drawnOn).xaxis : undefined;
+    shownEnergy.value =
+        axis && !axis.autorange
+            ? [
+                  Math.min(axis.range[0], axis.range[1]),
+                  Math.max(axis.range[0], axis.range[1]),
+              ]
+            : null;
+}
+
+/** The axes the reader zoomed (or a fit set) on `element`, as the relayout that puts them back. */
+function keptRanges(element: HTMLElement): Record<string, unknown> {
+    const kept: Record<string, unknown> = {};
+    for (const [name, axis] of Object.entries(axesOf(element))) {
+        if (!axis.autorange) kept[`${name}.range`] = [...axis.range];
+    }
+    return kept;
+}
+
+/** Relayouts `update` on `element` without the echo being read as the reader's zoom. */
+async function setRanges(
+    element: HTMLElement,
+    update: Record<string, unknown>,
+): Promise<void> {
+    if (!plotly || Object.keys(update).length === 0) return;
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, update);
+    } catch (error: unknown) {
+        console.error("The ranges could not be put back", error);
+    } finally {
+        applyingRange = false;
     }
 }
 
@@ -1079,8 +1203,12 @@ async function redrawKeepingRange(): Promise<void> {
     }
     zoomed.value = true;
     rangeKey.value = key;
+    shownEnergy.value = energyWindow
+        ? [energyWindow[0] as number, energyWindow[1] as number]
+        : null;
 }
 
+/** Draws the chart again for its new size; the reader's zoom and range stay (same figure, `figureIdentity`). */
 async function resizeChart(element: HTMLElement): Promise<void> {
     if (!plotly) return;
     await plotly.Plots.resize(element);
@@ -1113,7 +1241,7 @@ async function relayoutShapes(): Promise<void> {
     const element = drawnOn;
     const theme = drawnTheme;
     if (drawing || !plotly || !element || !lastFigure || !theme) return;
-    const shapes = lensShapesFor(theme);
+    const shapes = lensShapesFor(theme, { views: liveViews() });
     const key = shapesKey(shapes);
     if (key === shownShapesKey) return;
     try {
@@ -1177,21 +1305,69 @@ async function restyle(): Promise<void> {
             shownOpacities = opacities;
             shownStates = key;
         }
+        await refitCounts(element);
     } catch (error: unknown) {
         console.error("Spectra comparison could not be restyled", error);
     }
+}
+
+/**
+ * Fits the counts axes again to the energy window shown when the curves
+ * shown changed (a curve that came back may be higher than the fit): a
+ * relayout of the ranges that differ, none when the window is the full range.
+ */
+async function refitCounts(element: HTMLElement): Promise<void> {
+    if (!lens.active.value || rangeKey.value === "full") return;
+    const axes = axesOf(element);
+    const energy = axes.xaxis;
+    if (!energy || energy.autorange) return;
+    const fit = yFit([energy.range[0], energy.range[1]]);
+    const changed = Object.entries(fit).filter(([key, value]) => {
+        const axis = axes[key.slice(0, key.indexOf("."))];
+        if (key.endsWith(".autorange")) return !axis?.autorange;
+        const [low, high] = value as number[];
+        return (
+            !axis ||
+            axis.autorange ||
+            Math.abs(axis.range[0] - low) > 1e-9 ||
+            Math.abs(axis.range[1] - high) > 1e-9
+        );
+    });
+    await setRanges(element, Object.fromEntries(changed));
 }
 
 function bindEvents(element: HTMLElement): void {
     const target = element as PlotlyTarget;
     if (boundCharts.has(element) || typeof target.on !== "function") return;
     boundCharts.add(element);
-    element.addEventListener("pointerdown", () => {
+    element.addEventListener("pointerdown", (event) => {
         press = {
             curve: hovered,
             energy: hoveredEnergy,
             axes: axesOf(element),
         };
+        held = {
+            curve: hovered,
+            energy: hoveredEnergy,
+            x: event.clientX,
+            y: event.clientY,
+            clicked: false,
+        };
+    });
+    element.addEventListener("pointerup", (event) => {
+        const start = held;
+        held = null;
+        if (!start || !start.curve) return;
+        const moved = Math.hypot(
+            event.clientX - start.x,
+            event.clientY - start.y,
+        );
+        if (moved < SLIP_PX) return;
+        setTimeout(() => {
+            if (identifying.value && !start.clicked) {
+                identify(start.curve, start.energy);
+            }
+        }, 0);
     });
     target.on("plotly_relayout", (update: Record<string, unknown>) => {
         const before = press;
@@ -1202,10 +1378,15 @@ function bindEvents(element: HTMLElement): void {
             else if (before.curve) toggle(entryNode(before.curve));
             return;
         }
-        zoomed.value = zoomedAfter(update, zoomed.value);
-        if (!applyingRange && TOUCHES_X_AXIS.test(Object.keys(update).join())) {
+        const touchesX = TOUCHES_X_AXIS.test(Object.keys(update).join());
+        if (!applyingRange) zoomed.value = zoomedAfter(update, zoomed.value);
+        if (!applyingRange && touchesX) {
             rangeKey.value = zoomed.value ? CUSTOM_RANGE : "full";
             void fitToEnergyWindow(element, update);
+        }
+        if (touchesX) {
+            syncShownEnergy();
+            scheduleShapes();
         }
     });
     target.on("plotly_hover", (event: PlotMouseEvent) => {
@@ -1220,6 +1401,7 @@ function bindEvents(element: HTMLElement): void {
         preview(null, pointerOf(event));
     });
     target.on("plotly_click", (event: PlotMouseEvent) => {
+        if (held) held.clicked = true;
         const curve = hoveredCurve(event);
         if (identifying.value) identify(curve, energyOf(event));
         else if (curve) toggle(entryNode(curve));
@@ -1270,6 +1452,19 @@ function identify(curve: Curve | null, energy: number | null): void {
         id: curveId(curve),
         energy: lens.snapEnergy(index, energy),
     };
+}
+
+/** In « Identify a peak » no drag zooms (a press that slips on a peak is the click it was meant to be); a relayout, never a redraw. */
+async function setDragMode(): Promise<void> {
+    const element = drawnOn;
+    if (!plotly || !element) return;
+    try {
+        await plotly.relayout(element, {
+            dragmode: identifying.value ? false : "zoom",
+        });
+    } catch (error: unknown) {
+        console.error("The drag mode could not be set", error);
+    }
 }
 
 function toggleIdentify(): void {
@@ -1388,6 +1583,7 @@ function preview(node: NodeId | null, event: PreviewEvent): void {
 async function reset(): Promise<void> {
     zoomed.value = false;
     rangeKey.value = "full";
+    shownEnergy.value = null;
     if (plotly && chart.value) {
         await resetAxes(
             plotly,
@@ -1422,6 +1618,9 @@ async function chooseRange(key: string): Promise<void> {
         applyingRange = false;
     }
     zoomed.value = zoomedAfter(xUpdate, zoomed.value);
+    shownEnergy.value = preset.range
+        ? [preset.range[0], preset.range[1]]
+        : null;
 }
 
 function onLayer(event: {
@@ -1481,7 +1680,15 @@ async function downloadPng(): Promise<void> {
     if (!plotly || !element || !figure || !theme) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
-    const shapes = lensShapesFor(theme, false);
+    const widths = panelWidths(
+        figure,
+        element.clientWidth || DEFAULT_PNG_WIDTH,
+    );
+    const views: Record<string, { width: number }> = {};
+    for (const [suffix, width] of Object.entries(widths)) {
+        views[suffix] = { width };
+    }
+    const shapes = lensShapesFor(theme, { marker: false, views });
     try {
         const url = await plotly.toImage(
             exportFigure(
@@ -1725,20 +1932,6 @@ function chooseView(event: Event): void {
             >
                 <span>{{ allHiddenNote }}</span>
             </p>
-            <p
-                v-if="identifying && !identification && layout !== 'table'"
-                class="note identify-hint"
-            >
-                <span>{{ identifyHint }}</span>
-                <IconButton
-                    icon="question-circle"
-                    data-action="identify-help"
-                    :label="identifyHelpLabel"
-                    :description="identifyHelp"
-                    tip-placement="below"
-                    tip-align="start"
-                />
-            </p>
             <div
                 v-if="layout !== 'table'"
                 class="plot-area"
@@ -1764,37 +1957,71 @@ function chooseView(event: Event): void {
                     @show-all="onLegendShowAll"
                 />
             </div>
-            <PeakIdentifier
-                v-if="identification"
-                :energy="identification.energy"
-                :curve-name="identification.name"
-                :candidates="identification.candidates"
-                :k-v="identification.kV"
-                :channel="identification.channel"
-                :tolerance="identification.tolerance"
-                :lang="lang"
-                :pinnable="lens.pinnable"
-                :pinned="lens.isPinned"
-                :lens-symbols="lens.settings.value.elements"
-                :declared-parts="identifiedDeclaredParts"
-                @move="moveIdentified"
-                @close="closeIdentifier"
-                @toggle-pin="lens.togglePin($event.symbol)"
-                @toggle-lens="lens.toggleElement($event.symbol)"
-            />
-            <XrfLensStrip
+            <div
                 v-if="lens.active.value && layout !== 'table'"
-                :elements="lens.stripElements.value"
-                :declared-slots="lens.declaredSlots.value"
-                :overlaps="lens.overlapNotes.value"
-                :instrument="lens.instrumentNotes.value"
-                :symbols="lens.symbols.value"
-                :lens-symbols="lens.settings.value.elements"
-                :lang="lang"
-                @add-element="lens.addElement($event.symbol)"
-                @remove-element="lens.removeElement($event.symbol)"
-                @toggle-element="lens.toggleElement($event.symbol)"
-            />
+                class="lens-region"
+            >
+                <div
+                    v-if="identifying && !identification"
+                    class="identify-hint"
+                >
+                    <p class="note">
+                        <span>{{ identifyHint }}</span>
+                        <IconButton
+                            icon="question-circle"
+                            data-action="identify-help"
+                            :label="identifyHelpLabel"
+                            :aria-expanded="identifyHelpOpen ? 'true' : 'false'"
+                            :aria-controls="identifyHelpId"
+                            tip-placement="below"
+                            tip-align="start"
+                            @click="identifyHelpOpen = !identifyHelpOpen"
+                        />
+                    </p>
+                    <ul
+                        v-show="identifyHelpOpen"
+                        :id="identifyHelpId"
+                        class="note identify-rules"
+                    >
+                        <li
+                            v-for="rule in identifyHelp"
+                            :key="rule"
+                        >
+                            <span>{{ rule }}</span>
+                        </li>
+                    </ul>
+                </div>
+                <PeakIdentifier
+                    v-if="identification"
+                    :energy="identification.energy"
+                    :curve-name="identification.name"
+                    :candidates="identification.candidates"
+                    :k-v="identification.kV"
+                    :channel="identification.channel"
+                    :tolerance="identification.tolerance"
+                    :lang="lang"
+                    :pinnable="lens.pinnable"
+                    :pinned="lens.isPinned"
+                    :lens-symbols="lens.settings.value.elements"
+                    :declared-parts="identifiedDeclaredParts"
+                    @move="moveIdentified"
+                    @close="closeIdentifier"
+                    @toggle-pin="lens.togglePin($event.symbol)"
+                    @toggle-lens="lens.toggleElement($event.symbol)"
+                />
+                <XrfLensStrip
+                    :elements="lens.stripElements.value"
+                    :declared-slots="lens.declaredSlots.value"
+                    :overlaps="lens.overlapNotes.value"
+                    :instrument="listedInstrument"
+                    :symbols="lens.symbols.value"
+                    :lens-symbols="lens.settings.value.elements"
+                    :lang="lang"
+                    @add-element="lens.addElement($event.symbol)"
+                    @remove-element="lens.removeElement($event.symbol)"
+                    @toggle-element="lens.toggleElement($event.symbol)"
+                />
+            </div>
             <p class="note">
                 <span>{{
                     $gettext(
@@ -1965,6 +2192,14 @@ function chooseView(event: Event): void {
         max-block-size: 100%;
         overflow: auto;
     }
+
+    .xy-workshop .lens-region {
+        flex: none;
+        align-content: start;
+        block-size: 14rem;
+        overflow: auto;
+        overscroll-behavior: contain;
+    }
 }
 
 .xy-workshop .chart[data-failed] {
@@ -1983,10 +2218,26 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .identify-hint {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.xy-workshop .identify-hint p {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
+}
+
+.xy-workshop .identify-rules {
+    margin: 0;
+    padding-inline-start: 1.25rem;
+}
+
+.xy-workshop .lens-region {
+    display: grid;
+    gap: 0.5rem;
+    min-inline-size: 0;
 }
 
 .xy-workshop .notes {

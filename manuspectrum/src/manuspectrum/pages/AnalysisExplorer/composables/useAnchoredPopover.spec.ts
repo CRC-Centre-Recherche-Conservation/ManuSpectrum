@@ -121,4 +121,74 @@ describe("useAnchoredPopover", () => {
         expect(state.style.value.insetBlockStart).toBe("50px");
         view.unmount();
     });
+
+    it("places the popover again when a layout shift moves the anchor, without a scroll or a resize", async () => {
+        const { open, state, element, anchor, view } = setup();
+        let top = 100;
+        anchor.getBoundingClientRect = () =>
+            ({ left: 10, top, bottom: top + 30, width: 40 }) as DOMRect;
+        Object.defineProperty(element, "offsetWidth", { value: 100 });
+        Object.defineProperty(element, "scrollHeight", { value: 50 });
+        open.value = true;
+        await nextTick();
+        expect(state.style.value.insetBlockStart).toBe("134px");
+        top = 160;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        expect(state.style.value.insetBlockStart).toBe("194px");
+        view.unmount();
+    });
+
+    it("stops following once closed", async () => {
+        const { open, state, anchor, view } = setup();
+        let top = 100;
+        anchor.getBoundingClientRect = () =>
+            ({ left: 10, top, bottom: top + 30, width: 40 }) as DOMRect;
+        open.value = true;
+        await nextTick();
+        open.value = false;
+        await nextTick();
+        const placed = state.style.value.insetBlockStart;
+        top = 300;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        expect(state.style.value.insetBlockStart).toBe(placed);
+        view.unmount();
+    });
+
+    it("tells the caller when the anchor leaves the visible area, and only while open", async () => {
+        const watchers: {
+            callback: (entries: { isIntersecting: boolean }[]) => void;
+            disconnect: ReturnType<typeof vi.fn>;
+        }[] = [];
+        vi.stubGlobal(
+            "IntersectionObserver",
+            class {
+                disconnect = vi.fn();
+                callback: (entries: { isIntersecting: boolean }[]) => void;
+                constructor(
+                    callback: (entries: { isIntersecting: boolean }[]) => void,
+                ) {
+                    this.callback = callback;
+                    watchers.push(this);
+                }
+                observe() {}
+            },
+        );
+        const onLost = vi.fn();
+        const { open, view } = setup({ onLost });
+        expect(watchers).toHaveLength(0);
+        open.value = true;
+        await nextTick();
+        expect(watchers).toHaveLength(1);
+        watchers[0].callback([{ isIntersecting: true }]);
+        expect(onLost).not.toHaveBeenCalled();
+        watchers[0].callback([{ isIntersecting: false }]);
+        expect(onLost).toHaveBeenCalledTimes(1);
+        open.value = false;
+        await nextTick();
+        expect(watchers[0].disconnect).toHaveBeenCalled();
+        view.unmount();
+        vi.unstubAllGlobals();
+    });
 });

@@ -640,6 +640,29 @@ export function annotationOpacities(
 }
 
 /**
+ * The plot width (px) of each panel of `figure` drawn `width` px wide, by axis
+ * suffix (`""`, `"2"`…): the width less the margins, shared by the grid's
+ * columns as Plotly does (`xgap` is a fraction of the plot width).
+ */
+export function panelWidths(
+    figure: Figure,
+    width: number,
+): Record<string, number> {
+    const layout = figure.layout as Record<string, unknown>;
+    const margin = (layout.margin ?? {}) as { l?: number; r?: number };
+    const plot = Math.max(0, width - (margin.l ?? 0) - (margin.r ?? 0));
+    const grid = layout.grid as { columns?: number; xgap?: number } | undefined;
+    const columns = grid?.columns ?? 1;
+    const cell = (plot * (1 - (grid?.xgap ?? 0) * (columns - 1))) / columns;
+    const widths: Record<string, number> = {};
+    for (const name of Object.keys(layout)) {
+        const match = /^xaxis(\d*)$/.exec(name);
+        if (match) widths[match[1]] = cell;
+    }
+    return widths;
+}
+
+/**
  * The figure as exported: `paints` (in trace order) applied, a hidden
  * curve kept transparent and out of the legend (a panel with no trace
  * drawn would get no axis line), on the page background, Plotly's legend

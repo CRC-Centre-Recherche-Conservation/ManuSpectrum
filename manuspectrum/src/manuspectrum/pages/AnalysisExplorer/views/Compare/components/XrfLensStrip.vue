@@ -32,6 +32,8 @@ const MAX_SUGGESTIONS = 8;
 /** The rows above Na's (H to Ne) are left out of the grid. */
 const SKIPPED_ROWS = 2;
 const ENERGY_DIGITS = 2;
+/** Instrument peaks the strip lists before it says how many more there are. */
+const MAX_INSTRUMENT_LISTED = 12;
 
 /**
  * The text equivalent of what the XRF lens draws, under the chart: one line
@@ -43,7 +45,9 @@ const ENERGY_DIGITS = 2;
  * elements are the reader's own list; they never enter the focus. The
  * suggestions and the periodic table are popovers in the top layer, under
  * their input and button (`useAnchoredPopover`): Escape or a press outside
- * closes the table and the focus goes back to its button.
+ * closes the table and the focus goes back to its button; the focus leaving
+ * the button and the table together closes it too. The instrument list stops
+ * at `MAX_INSTRUMENT_LISTED` peaks and counts the rest.
  */
 const props = defineProps<{
     elements: readonly StripElement[];
@@ -64,7 +68,7 @@ const emit = defineEmits<{
     (event: "remove-element", payload: { symbol: string }): void;
 }>();
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $pgettext, interpolate } = useGettext();
 
 const inputId = useId();
 const listId = useId();
@@ -116,11 +120,13 @@ const { style: listStyle } = useAnchoredPopover(
     showSuggestions,
     listbox,
     input,
+    { onLost: () => (suggestionsOpen.value = false) },
 );
 const { style: tableStyle } = useAnchoredPopover(
     tableOpen,
     tablePopover,
     toggle,
+    { onLost: () => closeTable(false) },
 );
 const hasContent = computed(
     () =>
@@ -128,6 +134,19 @@ const hasContent = computed(
         props.declaredSlots.length > 0 ||
         props.overlaps.length > 0 ||
         props.instrument.length > 0,
+);
+
+watch(tableOpen, (isOpen) => {
+    if (isOpen) {
+        suggestionsOpen.value = false;
+        document.addEventListener("pointerdown", onPointerDown);
+    } else {
+        document.removeEventListener("pointerdown", onPointerDown);
+    }
+});
+
+onBeforeUnmount(() =>
+    document.removeEventListener("pointerdown", onPointerDown),
 );
 
 function energy(value: number): string {
@@ -180,25 +199,35 @@ function declaredSlotText(entry: StripDeclaredSlot): string {
             item.level ? `${item.symbol} ${item.level.value}` : item.symbol,
         )
         .join(" · ");
-    return `${interpolate(
-        $gettext("Declared on %{slot}"),
-        { slot: slotLabel(entry.slot) },
+    return interpolate(
+        $gettext("Declared on %{slot}: %{items}"),
+        { slot: slotLabel(entry.slot), items },
         true,
-    )}: ${items}`;
+    );
 }
 
 function instrumentText(): string {
-    const peaks = props.instrument
-        .map(
-            (peak) =>
-                `${peak.label} ${energy(peak.energy)} keV (${
-                    peak.everywhere
-                        ? $gettext("all")
-                        : peak.slots.map(slotLabel).join(", ")
-                })`,
-        )
-        .join(" · ");
-    return `${$gettext("Instrument peaks")}: ${peaks}`;
+    const listed = props.instrument
+        .slice(0, MAX_INSTRUMENT_LISTED)
+        .map((peak) => {
+            const carriers = peak.everywhere
+                ? $pgettext("every analysis of the window", "all")
+                : peak.slots.map(slotLabel).join(", ");
+            const where =
+                peak.kind === "duane-hunt"
+                    ? peak.label
+                    : `${peak.label} ${energy(peak.energy)} keV`;
+            return `${where} (${carriers})`;
+        });
+    const more = props.instrument.length - listed.length;
+    if (more > 0) {
+        listed.push(interpolate($gettext("+%{n} more"), { n: more }, true));
+    }
+    return interpolate(
+        $gettext("Instrument peaks: %{peaks}"),
+        { peaks: listed.join(" · ") },
+        true,
+    );
 }
 
 function removeLabel(symbol: string): string {
@@ -263,6 +292,16 @@ function closeTable(returnFocus: boolean): void {
     if (returnFocus) toggle.value?.focus();
 }
 
+/** Tab out of the button and the table together closes the table, the focus staying where it went. */
+function onTableFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (!tableOpen.value || !(next instanceof Node)) return;
+    if (tablePopover.value?.contains(next) || toggle.value?.contains(next)) {
+        return;
+    }
+    closeTable(false);
+}
+
 function onPointerDown(event: PointerEvent): void {
     const target = event.target;
     if (!(target instanceof Node)) return;
@@ -277,19 +316,6 @@ function onEscape(event: KeyboardEvent): void {
     event.preventDefault();
     closeTable(true);
 }
-
-watch(tableOpen, (isOpen) => {
-    if (isOpen) {
-        suggestionsOpen.value = false;
-        document.addEventListener("pointerdown", onPointerDown);
-    } else {
-        document.removeEventListener("pointerdown", onPointerDown);
-    }
-});
-
-onBeforeUnmount(() =>
-    document.removeEventListener("pointerdown", onPointerDown),
-);
 
 function onKeydown(event: KeyboardEvent): void {
     const count = suggestions.value.length;
@@ -357,6 +383,7 @@ function onKeydown(event: KeyboardEvent): void {
                         :style="listStyle"
                         role="listbox"
                         :aria-label="$gettext('Elements')"
+                        @pointerdown.prevent
                     >
                         <li
                             v-for="(symbol, index) in suggestions"
@@ -381,6 +408,7 @@ function onKeydown(event: KeyboardEvent): void {
                 :aria-expanded="tableOpen ? 'true' : 'false'"
                 :aria-controls="tableOpen ? tableId : undefined"
                 @click="tableOpen = !tableOpen"
+                @focusout="onTableFocusOut"
             >
                 <span>{{ $gettext("Periodic table") }}</span>
             </button>
@@ -401,6 +429,7 @@ function onKeydown(event: KeyboardEvent): void {
             :style="tableStyle"
             role="group"
             :aria-label="$gettext('Lens elements')"
+            @focusout="onTableFocusOut"
         >
             <button
                 v-for="cell in grid"
@@ -661,6 +690,14 @@ function onKeydown(event: KeyboardEvent): void {
 
 .xrf-strip [data-hue="9"] {
     --chip: var(--element-10);
+}
+
+.xrf-strip [data-hue="10"] {
+    --chip: var(--element-11);
+}
+
+.xrf-strip [data-hue="11"] {
+    --chip: var(--element-12);
 }
 
 .xrf-strip .swatch {

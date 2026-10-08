@@ -17,7 +17,8 @@ const FOCUS_VISIBLE = ":focus-visible";
  * (`describedby`). The node stays in the DOM, `hidden` until shown.
  * `placement` puts it above (the default) or below the control, `align`
  * lines it up with the control's start (the default) or end; the other side
- * is used when the first has too little room. The node is a `popover="manual"`
+ * is used when the first has too little room (both may change while mounted).
+ * The tooltip closes when its control scrolls out of sight. The node is a `popover="manual"`
  * element shown in the top layer (`useAnchoredPopover`), so no ancestor's
  * overflow clips it; the padding above and below it bridges the gap to the
  * control so the pointer can reach it.
@@ -54,9 +55,14 @@ const shown = ref(false);
 const root = useTemplateRef<HTMLElement>("root");
 const bubble = useTemplateRef<HTMLElement>("bubble");
 const { style: bubbleStyle } = useAnchoredPopover(shown, bubble, root, {
-    prefer: props.placement,
-    align: props.align,
+    get prefer() {
+        return props.placement;
+    },
+    get align() {
+        return props.align;
+    },
     offset: 0,
+    onLost: hide,
 });
 let timer: ReturnType<typeof setTimeout> | null = null;
 let suppressed = false;
@@ -209,6 +215,5 @@ function onDocumentKeydown(event: KeyboardEvent): void {
     display: block;
     padding-block-start: 0.25rem;
     font-size: 0.75rem;
-    white-space: pre-line;
 }
 </style>
