@@ -13,7 +13,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check build init admin-password manage load-snapshot backup-init backup restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -70,6 +70,20 @@ manage: ## Run a management command, interactive: make -C deploy manage ARGS="ch
 load-snapshot: ## Rehearsal only: replace the data with a dev snapshot (SNAPSHOT=/path) or an aside directory (RESTORE_BEFORE=/path), CONFIRM=yes
 	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' RESTORE_BEFORE='$(RESTORE_BEFORE)' \
 		$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/load-snapshot.sh '$(SNAPSHOT)'
+
+# Backups (BACKUP.md). TAG: nightly (retention and repository check), manual or
+# pre-update (the blocking backup before an update: non-zero exit stops it).
+TAG ?= manual
+BACKUP_ENV = COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' METRICS_TEXTFILE_DIR="$(call envval,METRICS_TEXTFILE_DIR)"
+
+backup-init: ## Once per host: create the restic repository, or check that it opens (idempotent)
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --init
+
+backup: ## Back up the database, the uploads and the secrets: make -C deploy backup [TAG=nightly|manual|pre-update]
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --tag '$(TAG)'
+
+restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS="snapshots"
+	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --restic $(ARGS)
 
 # `up --wait` refuses a service whose healthcheck is disabled, and beat has
 # none on purpose: wait for every other service, then start beat (it depends

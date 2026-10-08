@@ -691,6 +691,30 @@ class RepositoryRulesTests(unittest.TestCase):
                 self.assertIn("$(SECRET_FILES)", recipe)
                 self.assertTrue((DEPLOY_DIR / "scripts" / script).is_file())
 
+    def test_backup_targets_pass_the_metrics_directory(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        for target, option in (
+            ("backup-init", "--init"),
+            ("backup", "--tag"),
+            ("restic", "--restic"),
+        ):
+            with self.subTest(target=target):
+                self.assertIn(target, phony)
+                self.assertRegex(makefile, rf"(?m)^{target}:.*## \S")
+                recipe = re.search(rf"(?ms)^{target}:.*?\n(.*?)(?:\n\n|\Z)", makefile)[
+                    1
+                ]
+                self.assertIn("$(BACKUP_ENV)", recipe)
+                self.assertIn(
+                    f"scripts/backup.sh {option}",
+                    recipe.replace("$(SCRIPTS_DIR)/", "scripts/"),
+                )
+        env = re.search(r"(?m)^BACKUP_ENV =(.*)$", makefile)[1]
+        self.assertIn("METRICS_TEXTFILE_DIR=", env)
+        self.assertIn("$(call envval,METRICS_TEXTFILE_DIR)", env)
+        self.assertTrue((DEPLOY_DIR / "scripts" / "backup.sh").is_file())
+
     def test_secret_set_needs_a_name_and_forwards_force_only_on_yes(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         recipe = re.search(r"(?ms)^secret-set:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
