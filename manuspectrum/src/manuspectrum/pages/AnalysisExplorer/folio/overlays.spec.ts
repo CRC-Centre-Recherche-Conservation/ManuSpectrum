@@ -12,7 +12,10 @@ import {
     removeOverlayPane,
     rotatedImageUrl,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
-import { boundsOfBox } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import {
+    boundsOfBox,
+    fitInside,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import {
     analysisPayload,
@@ -175,7 +178,7 @@ describe("folio overlays", () => {
         ).toBeNull();
     });
 
-    it("lays the layers switched on in the bounding box of the analysis zone", () => {
+    it("lays the layers switched on in the analysis zone, at their own aspect ratio", () => {
         const analysis = analysisPayload({ files: [imagingEntry()] });
         const zone = annotation(1, {
             dataKind: "chemical-imaging",
@@ -205,10 +208,9 @@ describe("folio overlays", () => {
                     "https://iiif.example/image/hg/full/pct:68/0/default.jpg",
                     "https://iiif.example/image/hg/full/max/0/default.jpg",
                 ],
-                bounds: [
-                    [-1, 0],
-                    [0, 2],
-                ],
+                bounds: boundsOfBox(
+                    fitInside({ x: 0, y: 0, w: 64, h: 32 }, 2000 / 3000),
+                ),
                 opacity: 0.6,
                 label: "Hg",
                 analysis: uuid(101),
@@ -249,6 +251,23 @@ describe("folio overlays", () => {
             touched: 1,
             ...overrides,
         });
+        const fitted = boundsOfBox(
+            fitInside({ x: 0, y: 0, w: 64, h: 32 }, 2000 / 3000),
+        );
+        const sized = (width: number, height: number) => {
+            const entry = imagingEntry();
+            return analysisPayload({
+                files: [
+                    {
+                        ...entry,
+                        layers: entry.layers.map((layer) => ({
+                            ...layer,
+                            image: { ...layer.image, width, height },
+                        })),
+                    },
+                ],
+            });
+        };
         const lay = (
             place: { canvas: string | null; registration: Registration | null },
             analysis = analysisPayload({ files: [imagingEntry()] }),
@@ -274,21 +293,50 @@ describe("folio overlays", () => {
             ]);
         });
 
-        it("lays the zone box on another canvas", () => {
+        it("lays an unregistered layer with its own aspect ratio, centred in the zone", () => {
+            const [portrait] = lay(
+                { canvas: "canvas-1", registration: null },
+                sized(1000, 2000),
+            );
+            expect(portrait.bounds).toEqual(
+                boundsOfBox({ x: 24, y: 0, w: 16, h: 32 }),
+            );
+            const [wide] = lay(
+                { canvas: "canvas-1", registration: null },
+                sized(4000, 1000),
+            );
+            expect(wide.bounds).toEqual(
+                boundsOfBox({ x: 0, y: 8, w: 64, h: 16 }),
+            );
+            expect(wide.zoneBounds).toEqual([
+                [-1, 0],
+                [0, 2],
+            ]);
+        });
+
+        it("keeps the zone box for a layer whose size is unknown", () => {
+            const [laid] = lay(
+                { canvas: "canvas-1", registration: null },
+                sized(0, 0),
+            );
+            expect(laid.bounds).toEqual(laid.zoneBounds);
+        });
+
+        it("lays the fitted box on another canvas", () => {
             const [laid] = lay({
                 canvas: "canvas-2",
                 registration: registration(),
             });
-            expect(laid.bounds).toEqual(laid.zoneBounds);
+            expect(laid.bounds).toEqual(fitted);
             expect(laid.quarter).toBe(0);
             expect(laid.registered).toBe(false);
             expect(laid.url).toContain("/0/default.jpg");
         });
 
-        it("lays the zone box without a registration", () => {
+        it("lays the fitted box without a registration", () => {
             const [laid] = lay({ canvas: "canvas-1", registration: null });
             expect(laid.registered).toBe(false);
-            expect(laid.bounds).toEqual(laid.zoneBounds);
+            expect(laid.bounds).toEqual(fitted);
         });
 
         it("counts an entry that holds only a capture as not registered", () => {
@@ -298,7 +346,7 @@ describe("folio overlays", () => {
             });
             expect(laid.registered).toBe(false);
             expect(laid.quarter).toBe(0);
-            expect(laid.bounds).toEqual(laid.zoneBounds);
+            expect(laid.bounds).toEqual(fitted);
         });
 
         it("drops the quarter of a layer that cannot turn", () => {

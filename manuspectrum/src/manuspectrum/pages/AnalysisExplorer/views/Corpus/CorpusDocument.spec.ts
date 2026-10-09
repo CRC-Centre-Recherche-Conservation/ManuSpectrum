@@ -13,6 +13,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import {
+    fitInside,
+    turn,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import {
     FOLIO_CANVAS_KEY,
     RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -1680,6 +1684,7 @@ describe("CorpusDocument", () => {
             vi.unstubAllGlobals();
         });
         const ZONE_BOX = { x: 100, y: 100, w: 800, h: 400 };
+        const FITTED_BOX = fitInside(ZONE_BOX, 2000 / 3000);
 
         /** Answers the held probes one after the other, as the chain of urls asks them. */
         async function settleHeld(): Promise<void> {
@@ -1770,25 +1775,31 @@ describe("CorpusDocument", () => {
             wrapper.unmount();
         });
 
-        it("turns the layer from the zone's box, then from the registered box, and registers it", async () => {
+        it("turns the layer from its fitted box, then from the registered box, and registers it", async () => {
             const { wrapper, folio } = await mountLaidLayer();
             folio.vm.$emit("layer-turn", LAYER, 1);
             await flushPromises();
-            expect(useRegistration().get(uuid(101))).toMatchObject({
+            const held = useRegistration().get(uuid(101))!;
+            expect(held).toMatchObject({
                 canvas: "https://iiif.example/c1",
                 quarter: 1,
-                box: { x: 300, y: -100, w: 400, h: 800 },
             });
+            for (const [side, value] of Object.entries(
+                turn(FITTED_BOX, 0, 1).box,
+            )) {
+                expect(held.box[side as "x"]).toBeCloseTo(value, 6);
+            }
             expect(folio.props("overlays")[0]).toMatchObject({
                 registered: true,
                 quarter: 1,
             });
             folio.vm.$emit("layer-turn", LAYER, -1);
             await flushPromises();
-            expect(useRegistration().get(uuid(101))).toMatchObject({
-                quarter: 0,
-                box: ZONE_BOX,
-            });
+            const back = useRegistration().get(uuid(101))!;
+            expect(back.quarter).toBe(0);
+            for (const [side, value] of Object.entries(FITTED_BOX)) {
+                expect(back.box[side as "x"]).toBeCloseTo(value, 6);
+            }
             wrapper.unmount();
         });
 
@@ -2013,6 +2024,22 @@ describe("CorpusDocument", () => {
                 wrapper.unmount();
             });
 
+            it("keeps the frame of a capture taken over part of the layer", async () => {
+                const { wrapper, folio } = await mountCapturing();
+                const frame = { x: 10, y: 0, w: 400, h: 600 };
+                folio.vm.$emit(
+                    "captured",
+                    LAYER,
+                    { ...CAPTURE, frame },
+                    ORIGIN,
+                );
+                await flushPromises();
+                expect(
+                    useRegistration().get(uuid(101))?.capture?.frame,
+                ).toEqual(frame);
+                wrapper.unmount();
+            });
+
             it("files a capture under the page it was taken on, and drops one that finished elsewhere", async () => {
                 const { wrapper, folio, announce } = await mountCapturing();
                 folio.vm.$emit("captured", LAYER, CAPTURE, {
@@ -2176,13 +2203,13 @@ describe("CorpusDocument", () => {
                 wrapper.unmount();
             });
 
-            it("says why a box that runs off the page is not captured", async () => {
+            it("says why a box wholly off the page is not captured", async () => {
                 const { wrapper, folio, announce } = await mountCapturing();
                 folio.vm.$emit("layer-capture", LAYER);
                 folio.vm.$emit("capture-failed", LAYER, "off-page");
                 await flushPromises();
                 expect(announce).toHaveBeenCalledWith(
-                    "The layer runs off the page: move it inside to capture.",
+                    "The layer is entirely off the page: nothing to capture.",
                 );
                 expect(folio.props("capturing")).toBeNull();
                 wrapper.unmount();

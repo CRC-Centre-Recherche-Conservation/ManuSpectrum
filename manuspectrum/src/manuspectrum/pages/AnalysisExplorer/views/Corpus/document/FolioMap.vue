@@ -58,7 +58,10 @@ import type {
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
-import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import type {
+    Box,
+    Frame,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
@@ -140,7 +143,12 @@ const emit = defineEmits<{
     "layer-capture": [key: string];
     captured: [
         key: string,
-        capture: { url: string; width: number; height: number },
+        capture: {
+            url: string;
+            width: number;
+            height: number;
+            frame?: Frame;
+        },
         origin: { analysis: string; canvas: string },
     ];
     "capture-failed": [key: string, reason: CaptureFailure];

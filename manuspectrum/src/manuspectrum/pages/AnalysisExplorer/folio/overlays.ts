@@ -7,7 +7,11 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
-import { boundsOfBox } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import {
+    boundsOfBox,
+    boxOfBounds,
+    fitInside,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 
 import type {
@@ -139,8 +143,10 @@ export function layerImageChain(
  * its registered box, turned by its quarter, when `place.registration` is
  * for `place.canvas` and holds a box (`UNPLACED` marks an entry that holds
  * only a capture); otherwise it is stretched into the bounding box of the
- * analysis's marked zone on this page (`markedZones`; indicative). An analysis
- * with only a point here lays nothing.
+ * analysis's marked zone on this page (`markedZones`; indicative), at the
+ * layer's own aspect ratio, centred and contained in it (`fitInside`; the
+ * zone's box when the layer's size is unknown). An analysis with only a point
+ * here lays nothing.
  */
 export function folioOverlays(
     analysis: AnalysisPayload | null,
@@ -169,11 +175,17 @@ export function folioOverlays(
             const chain = layerImageChain(layer.image, OVERLAY_SIZE, quarter);
             const url = chain[0] ?? null;
             if (setting?.on && url) {
+                const own = boundsOfBox(
+                    fitInside(
+                        boxOfBounds(bounds),
+                        layer.image.width / layer.image.height,
+                    ),
+                );
                 result.push({
                     key,
                     url,
                     fallbackUrls: chain.slice(1),
-                    bounds: registered ? boundsOfBox(held.box) : bounds,
+                    bounds: registered ? boundsOfBox(held.box) : own,
                     opacity: setting.opacity,
                     label: layer.label,
                     analysis: analysis.id,

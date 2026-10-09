@@ -102,6 +102,56 @@ describe("registration store", () => {
         expect(parseRegistrations(raw).a.capture).toEqual(capture);
     });
 
+    describe("capture frame", () => {
+        const base = {
+            url: "https://img.example/iiif/p/0,0,10,10/10,10/0/default.jpg",
+            width: 400,
+            height: 200,
+            canvas: "c1",
+            at: 1,
+        };
+        const read = (extra: Record<string, unknown>) =>
+            parseRegistrations(
+                JSON.stringify({
+                    version: 1,
+                    entries: {
+                        a: {
+                            canvas: "c1",
+                            box: place,
+                            quarter: 0,
+                            capture: { ...base, ...extra },
+                            touched: 1,
+                        },
+                    },
+                }),
+            ).a.capture;
+
+        it("keeps a frame inside the layer", () => {
+            const frame = { x: 0, y: 50, w: 200, h: 150 };
+            expect(read({ frame })).toEqual({ ...base, frame });
+        });
+
+        it("reads a capture without a frame as the full frame", () => {
+            expect(read({})).toEqual(base);
+            expect(read({})).not.toHaveProperty("frame");
+        });
+
+        it("drops a frame that is not finite, empty, negative or outside the layer", () => {
+            for (const frame of [
+                { x: 0, y: 0, w: 0, h: 10 },
+                { x: -1, y: 0, w: 10, h: 10 },
+                { x: 0, y: 0, w: 401, h: 10 },
+                { x: 300, y: 0, w: 200, h: 10 },
+                { x: 0, y: 150, w: 10, h: 100 },
+                { x: 0, y: 0, w: null, h: 10 },
+                { x: "0", y: 0, w: 10, h: 10 },
+                "frame",
+            ]) {
+                expect(read({ frame })).toEqual(base);
+            }
+        });
+    });
+
     it("keeps the hundred most recently touched", () => {
         const many = Object.fromEntries(
             Array.from({ length: 105 }, (_, n) => [

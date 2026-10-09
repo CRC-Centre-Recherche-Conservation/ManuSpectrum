@@ -3,6 +3,7 @@ import {
     toLatLng,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 
+import type { ImageRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 
 /**
@@ -104,37 +105,104 @@ export function resizeFromCorner(
     };
 }
 
+type Page = { bounds: [LatLng, LatLng]; served: { w: number; h: number } };
+
+/** A rectangle of a layer, in the pixels of the layer's own orientation. */
+export type Frame = Box;
+
 /**
- * The box in served page pixels; null unless the box lies wholly on the page
- * (within one annotation pixel), since a region cut short would not line up
- * with the layer.
+ * The image of a folio capture: the layer's whole size as `width` x `height`,
+ * and `frame`, where the image lies in it (absent: it fills it). Only a
+ * capture carries one; `layImage` reads it when asked for the declared size.
  */
-export function captureRegion(
-    box: Box,
-    page: { bounds: [LatLng, LatLng]; served: { w: number; h: number } },
-): { x: number; y: number; w: number; h: number } | null {
+export type FramedImage = ImageRef & { frame?: Frame };
+
+/** The part of `box` over the page, in annotation pixels; null when it is under a pixel. */
+function pageOverlap(box: Box, page: Page): Box | null {
     const p = boxOfBounds(page.bounds);
-    const slack = PAGE_SLACK;
-    if (
-        box.x < p.x - slack ||
-        box.y < p.y - slack ||
-        box.x + box.w > p.x + p.w + slack ||
-        box.y + box.h > p.y + p.h + slack
-    ) {
-        return null;
-    }
-    const sx = page.served.w / p.w;
-    const sy = page.served.h / p.h;
     const x0 = Math.max(box.x, p.x);
     const y0 = Math.max(box.y, p.y);
     const x1 = Math.min(box.x + box.w, p.x + p.w);
     const y1 = Math.min(box.y + box.h, p.y + p.h);
     if (x1 - x0 < 1 || y1 - y0 < 1) return null;
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/**
+ * The part of the box over the page, in served page pixels; null when the box
+ * is wholly off the page.
+ */
+export function captureRegion(
+    box: Box,
+    page: Page,
+): { x: number; y: number; w: number; h: number } | null {
+    const overlap = pageOverlap(box, page);
+    if (!overlap) return null;
+    const p = boxOfBounds(page.bounds);
+    const sx = page.served.w / p.w;
+    const sy = page.served.h / p.h;
     return {
-        x: Math.round((x0 - p.x) * sx),
-        y: Math.round((y0 - p.y) * sy),
-        w: Math.round((x1 - x0) * sx),
-        h: Math.round((y1 - y0) * sy),
+        x: Math.round((overlap.x - p.x) * sx),
+        y: Math.round((overlap.y - p.y) * sy),
+        w: Math.round(overlap.w * sx),
+        h: Math.round(overlap.h * sy),
+    };
+}
+
+/**
+ * Where the part of the box over the page lies in the layer of `size` (its
+ * own orientation), or null when the whole box is on the page (within
+ * `PAGE_SLACK`) or wholly off it. The box is the layer turned clockwise by
+ * `quarter`: a point at (u, v) of the box, as shares of its sides, is at
+ * (v, 1 − u), (1 − u, 1 − v) or (1 − v, u) of the layer for 1, 2 or 3 turns.
+ */
+export function captureFrame(
+    box: Box,
+    page: Page,
+    quarter: Quarter,
+    size: { w: number; h: number },
+): Frame | null {
+    const overlap = pageOverlap(box, page);
+    if (!overlap) return null;
+    const lost =
+        overlap.x - box.x > PAGE_SLACK ||
+        overlap.y - box.y > PAGE_SLACK ||
+        box.x + box.w - (overlap.x + overlap.w) > PAGE_SLACK ||
+        box.y + box.h - (overlap.y + overlap.h) > PAGE_SLACK;
+    if (!lost) return null;
+    const u0 = (overlap.x - box.x) / box.w;
+    const u1 = (overlap.x + overlap.w - box.x) / box.w;
+    const v0 = (overlap.y - box.y) / box.h;
+    const v1 = (overlap.y + overlap.h - box.y) / box.h;
+    const [a0, a1, b0, b1] = (
+        [
+            [u0, u1, v0, v1],
+            [v0, v1, 1 - u1, 1 - u0],
+            [1 - u1, 1 - u0, 1 - v1, 1 - v0],
+            [1 - v1, 1 - v0, u0, u1],
+        ] as const
+    )[quarter];
+    return {
+        x: Math.round(a0 * size.w),
+        y: Math.round(b0 * size.h),
+        w: Math.round((a1 - a0) * size.w),
+        h: Math.round((b1 - b0) * size.h),
+    };
+}
+
+/**
+ * The largest box of the given width / height `ratio` that fits in `zone`,
+ * centred in it; the zone itself when the ratio is not a usable number.
+ */
+export function fitInside(zone: Box, ratio: number): Box {
+    if (!Number.isFinite(ratio) || ratio <= 0) return zone;
+    const w = Math.min(zone.w, zone.h * ratio);
+    const h = w / ratio;
+    return {
+        x: zone.x + (zone.w - w) / 2,
+        y: zone.y + (zone.h - h) / 2,
+        w,
+        h,
     };
 }
 

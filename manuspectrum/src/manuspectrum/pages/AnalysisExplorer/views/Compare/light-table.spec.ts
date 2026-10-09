@@ -357,6 +357,20 @@ describe("captures", () => {
         expect(layer.elements).toEqual([]);
     });
 
+    it("carries the frame of a capture taken over part of the layer", () => {
+        const framed = { x: 10, y: 20, w: 100, h: 200 };
+        expect(
+            captureLayer(id, { ...capture, frame: framed }, "Folio photo")
+                .image,
+        ).toEqual({
+            service: null,
+            url: capture.url,
+            width: 200,
+            height: 300,
+            frame: framed,
+        });
+    });
+
     it("carries the note it is given", () => {
         expect(
             captureLayer(id, capture, "Folio photo", "Kept in this browser")

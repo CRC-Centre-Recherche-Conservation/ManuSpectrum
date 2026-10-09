@@ -5,6 +5,8 @@ import {
     layerImageChain,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
+    boxOfBounds,
+    captureFrame,
     captureRegion,
     captureUrl,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
@@ -12,6 +14,7 @@ import {
 import type { ImageRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     Box,
+    Frame,
     Quarter,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -22,12 +25,13 @@ const PROBE_TIMEOUT_MS = 15000;
 export type CaptureFailure = "off-page" | "no-page" | "server";
 
 /**
- * The IIIF url of the folio region under a layer's box, asked at the layer's
- * own size at most with the layer's turn undone; `width` and `height` are the
- * layer's own size, the one the capture is laid at (the region's own, turned
- * back, when the layer's is unknown: a size of 0). Refused with `no-page`
- * without a laid page or a service, and with `off-page` unless the box lies
- * wholly on the page.
+ * The IIIF url of the part of the folio under a layer's box, asked at the
+ * layer's own size at most, scaled to the part's share of it, with the layer's
+ * turn undone. `width` and `height` are the layer's whole size, the one the
+ * capture is laid in (the box's own, in served pixels and turned back, when
+ * the layer's is unknown: a size of 0); `frame` is where the part lies in it,
+ * absent when the box lies on the page. Refused with `no-page` without a laid
+ * page or a service, and with `off-page` when the box is wholly off the page.
  */
 export function planCapture(input: {
     page: { bounds: [LatLng, LatLng]; served: { w: number; h: number } } | null;
@@ -36,20 +40,28 @@ export function planCapture(input: {
     quarter: Quarter;
     layerSize: { w: number; h: number };
 }):
-    | { url: string; width: number; height: number }
+    | { url: string; width: number; height: number; frame?: Frame }
     | { refused: "no-page" | "off-page" } {
     if (!input.page || !input.service) return { refused: "no-page" };
     const region = captureRegion(input.box, input.page);
     if (!region) return { refused: "off-page" };
     const known = input.layerSize.w > 0 && input.layerSize.h > 0;
     const odd = input.quarter % 2 === 1;
-    const size = known
-        ? input.layerSize
-        : { w: odd ? region.h : region.w, h: odd ? region.w : region.h };
+    let size = input.layerSize;
+    if (!known) {
+        const pageBox = boxOfBounds(input.page.bounds);
+        const w = (input.box.w * input.page.served.w) / pageBox.w;
+        const h = (input.box.h * input.page.served.h) / pageBox.h;
+        size = odd ? { w: h, h: w } : { w, h };
+    }
+    size = { w: Math.round(size.w), h: Math.round(size.h) };
+    const frame = captureFrame(input.box, input.page, input.quarter, size);
+    const asked = frame ?? size;
     return {
-        url: captureUrl(input.service, region, size, input.quarter),
-        width: Math.round(size.w),
-        height: Math.round(size.h),
+        url: captureUrl(input.service, region, asked, input.quarter),
+        width: size.w,
+        height: size.h,
+        ...(frame ? { frame } : {}),
     };
 }
 

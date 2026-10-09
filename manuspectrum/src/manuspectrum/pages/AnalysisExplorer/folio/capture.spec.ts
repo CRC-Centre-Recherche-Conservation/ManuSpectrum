@@ -62,6 +62,79 @@ describe("planCapture", () => {
         });
     });
 
+    it("captures only the part over the page and places it in the layer's frame", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box: { x: 700, y: 100, w: 640, h: 800 },
+            quarter: 0,
+            layerSize: { w: 1280, h: 1600 },
+        });
+        expect(plan).toEqual({
+            url: `${SERVICE}/1400,200,600,1600/600,1600/0/default.jpg`,
+            width: 1280,
+            height: 1600,
+            frame: { x: 0, y: 0, w: 600, h: 1600 },
+        });
+    });
+
+    it("asks the part at its share of the layer size, with the turn undone, for an odd quarter", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box: { x: 700, y: 100, w: 640, h: 800 },
+            quarter: 1,
+            layerSize: { w: 800, h: 640 },
+        });
+        expect(plan).toEqual({
+            url: `${SERVICE}/1400,200,600,1600/300,800/270/default.jpg`,
+            width: 800,
+            height: 640,
+            frame: { x: 0, y: 340, w: 800, h: 300 },
+        });
+    });
+
+    it("scales the part down to its share of a smaller layer", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box: { x: 700, y: 100, w: 640, h: 800 },
+            quarter: 0,
+            layerSize: { w: 640, h: 800 },
+        });
+        expect(plan).toMatchObject({
+            url: `${SERVICE}/1400,200,600,1600/300,800/0/default.jpg`,
+            frame: { x: 0, y: 0, w: 300, h: 800 },
+        });
+    });
+
+    it("measures the layer from the box when its size is unknown", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box: { x: 700, y: 100, w: 640, h: 800 },
+            quarter: 0,
+            layerSize: { w: 0, h: 0 },
+        });
+        expect(plan).toEqual({
+            url: `${SERVICE}/1400,200,600,1600/600,1600/0/default.jpg`,
+            width: 1280,
+            height: 1600,
+            frame: { x: 0, y: 0, w: 600, h: 1600 },
+        });
+    });
+
+    it("carries no frame for a box wholly on the page", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box,
+            quarter: 0,
+            layerSize: { w: 640, h: 800 },
+        });
+        expect(plan).not.toHaveProperty("frame");
+    });
+
     it("refuses without a page or a service", () => {
         const base = { box, quarter: 0 as const, layerSize: { w: 10, h: 10 } };
         expect(planCapture({ ...base, page: null, service: SERVICE })).toEqual({
@@ -72,12 +145,12 @@ describe("planCapture", () => {
         });
     });
 
-    it("refuses a box that runs off the page, with its own reason", () => {
+    it("refuses a box wholly off the page, with its own reason", () => {
         const base = { quarter: 0 as const, layerSize: { w: 10, h: 10 } };
         for (const off of [
             { x: 90000, y: 90000, w: 10, h: 10 },
             { x: 1000, y: 1000, w: 90000, h: 10 },
-            { x: -50, y: 640, w: 640, h: 800 },
+            { x: -700, y: 640, w: 640, h: 800 },
         ]) {
             expect(
                 planCapture({

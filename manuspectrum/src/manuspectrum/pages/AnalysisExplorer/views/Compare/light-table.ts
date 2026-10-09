@@ -2,6 +2,7 @@ import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/la
 
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Capture } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
+import type { FramedImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 export type TableLayout = "single" | "curtain" | "grid2" | "grid4" | "stack";
@@ -75,16 +76,18 @@ export function captureLayer(
     label: string,
     note: string | null = null,
 ): FileLayer {
+    const image: FramedImage = {
+        service: null,
+        url: capture.url,
+        width: capture.width,
+        height: capture.height,
+        ...(capture.frame ? { frame: capture.frame } : {}),
+    };
     return {
         index: -1,
         id: CAPTURE_PREFIX + analysisId,
         label,
-        image: {
-            service: null,
-            url: capture.url,
-            width: capture.width,
-            height: capture.height,
-        },
+        image,
         content: null,
         elements: [],
         emissionLine: null,

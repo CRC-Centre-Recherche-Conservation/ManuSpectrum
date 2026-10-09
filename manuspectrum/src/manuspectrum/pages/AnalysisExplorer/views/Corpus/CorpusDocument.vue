@@ -102,7 +102,10 @@ import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/o
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
-import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import type {
+    Box,
+    Frame,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 
@@ -883,7 +886,12 @@ function onLayerCapture(key: string): void {
  */
 function onCaptured(
     key: string,
-    capture: { url: string; width: number; height: number },
+    capture: {
+        url: string;
+        width: number;
+        height: number;
+        frame?: Frame;
+    },
     origin: { analysis: string; canvas: string },
 ): void {
     capturing.value = null;
@@ -909,7 +917,7 @@ function onCaptureFailed(_key: string, reason: CaptureFailure): void {
     announce(
         reason === "off-page"
             ? $gettext(
-                  "The layer runs off the page: move it inside to capture.",
+                  "The layer is entirely off the page: nothing to capture.",
               )
             : reason === "no-page"
               ? $gettext("The page is not loaded yet: try again in a moment.")

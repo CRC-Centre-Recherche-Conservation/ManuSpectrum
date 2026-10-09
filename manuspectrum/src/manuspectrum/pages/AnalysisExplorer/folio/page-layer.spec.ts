@@ -319,6 +319,66 @@ describe("layImage", () => {
         expect(drawnExtent(layer)).toEqual({ w: 1200, h: 2000 });
     });
 
+    it("lays a capture at its frame inside its declared size, the rest left empty", async () => {
+        const read = vi.fn();
+        const capture = {
+            ...BY_URL,
+            width: 1200,
+            height: 2000,
+            frame: { x: 100, y: 500, w: 600, h: 1000 },
+        };
+        layImage(
+            map,
+            capture,
+            { read, failed: vi.fn() },
+            { declaredSize: true },
+        );
+        await settle();
+        const [size, , layer] = read.mock.calls[0];
+        expect(size).toEqual({ w: 1200, h: 2000 });
+        const box = (layer as L.ImageOverlay).getBounds();
+        expect(box.getEast() - box.getWest()).toBe(600);
+        expect(box.getNorth() - box.getSouth()).toBe(1000);
+        expect(box.getWest()).toBe(0 + 100);
+        expect(box.getNorth()).toBe(-500);
+    });
+
+    it("keeps a capture's frame in the frame of its scale group, lined up with a larger layer", async () => {
+        FakeImage.served = {
+            "https://img.example/a.png": { w: 300, h: 500 },
+            "https://img.example/big.png": { w: 1400, h: 2000 },
+        };
+        const scale = createScaleGroup();
+        const read = vi.fn();
+        layImage(
+            map,
+            {
+                ...BY_URL,
+                width: 1200,
+                height: 2000,
+                frame: { x: 100, y: 500, w: 300, h: 500 },
+            },
+            { read, failed: vi.fn() },
+            { scale, declaredSize: true },
+        );
+        layImage(
+            map,
+            { ...BY_URL, url: "https://img.example/big.png" },
+            { read, failed: vi.fn() },
+            { scale },
+        );
+        await settle();
+        const [photo, big] = read.mock.calls.map(
+            (call) => call[2] as L.ImageOverlay,
+        );
+        expect(scale.frame()).toEqual({ w: 1400, h: 2000 });
+        const at = (layer: L.ImageOverlay) => layer.getBounds().getWest();
+        // The 1200 wide capture frame is centred in 1400: 100 in, then its own 100.
+        expect(at(photo) - at(big)).toBe(100 + 100);
+        const top = (layer: L.ImageOverlay) => layer.getBounds().getNorth();
+        expect(top(photo) - top(big)).toBe(-500);
+    });
+
     it("keeps the natural size of an image with a declared size when not told to use it", async () => {
         const read = vi.fn();
         layImage(

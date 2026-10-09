@@ -2,6 +2,7 @@ import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 import type {
     Box,
+    Frame,
     Quarter,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 
@@ -18,8 +19,14 @@ export const UNPLACED: Box = { x: 0, y: 0, w: 1, h: 1 };
 
 export interface Capture {
     url: string;
+    /** The layer's whole size, the frame the capture is laid in. */
     width: number;
     height: number;
+    /**
+     * Where the image lies in that frame, in the layer's pixels; absent when it
+     * fills it (the part of a layer over the folio is the only one captured).
+     */
+    frame?: Frame;
     canvas: string;
     at: number;
 }
@@ -48,6 +55,19 @@ function parseBox(value: unknown): Box | null {
     return { x, y, w, h };
 }
 
+/** A frame inside the `width` x `height` layer, else null (the full frame). */
+function parseFrame(
+    value: unknown,
+    width: number,
+    height: number,
+): Frame | null {
+    const box = parseBox(value);
+    if (box === null) return null;
+    if (box.x < 0 || box.y < 0) return null;
+    if (box.x + box.w > width || box.y + box.h > height) return null;
+    return box;
+}
+
 function parseCapture(value: unknown): Capture | null {
     if (!isRecord(value)) return null;
     const { url, width, height, canvas, at } = value;
@@ -57,7 +77,10 @@ function parseCapture(value: unknown): Capture | null {
         return null;
     }
     if (typeof canvas !== "string" || !finite(at)) return null;
-    return { url, width, height, canvas, at };
+    const frame = parseFrame(value.frame, width, height);
+    return frame
+        ? { url, width, height, frame, canvas, at }
+        : { url, width, height, canvas, at };
 }
 
 function parseEntry(value: unknown): Registration | null {

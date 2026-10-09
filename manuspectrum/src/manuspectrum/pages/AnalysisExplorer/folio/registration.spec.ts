@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
     boundsOfBox,
     boxOfBounds,
+    captureFrame,
     captureRegion,
     captureUrl,
+    fitInside,
     moveBox,
     resizeFromCorner,
     scaleBox,
@@ -86,25 +88,138 @@ describe("registration math", () => {
         });
     });
 
-    it("refuses a box that is not wholly on the page", () => {
+    it("keeps the part of the box over the page, in served pixels", () => {
         const page = {
             bounds: boundsOfBox({ x: 0, y: 0, w: 1000, h: 500 }),
             served: { w: 4000, h: 2000 },
         };
-        expect(
-            captureRegion({ x: 900, y: 450, w: 300, h: 100 }, page),
-        ).toBeNull();
-        expect(
-            captureRegion({ x: -20, y: 10, w: 100, h: 100 }, page),
-        ).toBeNull();
-        expect(
-            captureRegion({ x: 2000, y: 2000, w: 10, h: 10 }, page),
-        ).toBeNull();
+        expect(captureRegion({ x: 900, y: 450, w: 300, h: 100 }, page)).toEqual(
+            { x: 3600, y: 1800, w: 400, h: 200 },
+        );
+        expect(captureRegion({ x: -20, y: 10, w: 100, h: 100 }, page)).toEqual({
+            x: 0,
+            y: 40,
+            w: 320,
+            h: 400,
+        });
         expect(captureRegion({ x: 0, y: 0, w: 1000, h: 500 }, page)).toEqual({
             x: 0,
             y: 0,
             w: 4000,
             h: 2000,
+        });
+    });
+
+    it("refuses a box wholly off the page", () => {
+        const page = {
+            bounds: boundsOfBox({ x: 0, y: 0, w: 1000, h: 500 }),
+            served: { w: 4000, h: 2000 },
+        };
+        expect(
+            captureRegion({ x: 2000, y: 2000, w: 10, h: 10 }, page),
+        ).toBeNull();
+        expect(captureRegion({ x: -50, y: 10, w: 50, h: 10 }, page)).toBeNull();
+    });
+
+    describe("captureFrame", () => {
+        const page = {
+            bounds: boundsOfBox({ x: 0, y: 0, w: 1000, h: 500 }),
+            served: { w: 4000, h: 2000 },
+        };
+
+        it("is null when the box lies on the page", () => {
+            expect(
+                captureFrame({ x: 100, y: 100, w: 200, h: 100 }, page, 0, {
+                    w: 400,
+                    h: 200,
+                }),
+            ).toBeNull();
+            expect(
+                captureFrame({ x: -0.5, y: 0, w: 1000.5, h: 500 }, page, 0, {
+                    w: 400,
+                    h: 200,
+                }),
+            ).toBeNull();
+        });
+
+        it("places the overlap in the layer's own pixels for each quarter (right half over the page)", () => {
+            const box = { x: 900, y: 100, w: 200, h: 100 };
+            expect(captureFrame(box, page, 0, { w: 400, h: 200 })).toEqual({
+                x: 0,
+                y: 0,
+                w: 200,
+                h: 200,
+            });
+            expect(captureFrame(box, page, 1, { w: 200, h: 400 })).toEqual({
+                x: 0,
+                y: 200,
+                w: 200,
+                h: 200,
+            });
+            expect(captureFrame(box, page, 2, { w: 400, h: 200 })).toEqual({
+                x: 200,
+                y: 0,
+                w: 200,
+                h: 200,
+            });
+            expect(captureFrame(box, page, 3, { w: 200, h: 400 })).toEqual({
+                x: 0,
+                y: 0,
+                w: 200,
+                h: 200,
+            });
+        });
+
+        it("places a corner overlap for each quarter", () => {
+            const box = { x: -100, y: -50, w: 200, h: 100 };
+            expect(captureFrame(box, page, 0, { w: 400, h: 200 })).toEqual({
+                x: 200,
+                y: 100,
+                w: 200,
+                h: 100,
+            });
+            expect(captureFrame(box, page, 1, { w: 200, h: 400 })).toEqual({
+                x: 100,
+                y: 0,
+                w: 100,
+                h: 200,
+            });
+            expect(captureFrame(box, page, 2, { w: 400, h: 200 })).toEqual({
+                x: 0,
+                y: 0,
+                w: 200,
+                h: 100,
+            });
+            expect(captureFrame(box, page, 3, { w: 200, h: 400 })).toEqual({
+                x: 0,
+                y: 200,
+                w: 100,
+                h: 200,
+            });
+        });
+    });
+
+    describe("fitInside", () => {
+        const zone = { x: 0, y: 0, w: 400, h: 200 };
+
+        it("contains and centres a portrait ratio", () => {
+            expect(fitInside(zone, 0.5)).toEqual({
+                x: 150,
+                y: 0,
+                w: 100,
+                h: 200,
+            });
+        });
+
+        it("contains and centres a wider ratio", () => {
+            expect(fitInside(zone, 4)).toEqual({ x: 0, y: 50, w: 400, h: 100 });
+        });
+
+        it("keeps the zone for its own ratio or an unusable one", () => {
+            expect(fitInside(zone, 2)).toEqual(zone);
+            expect(fitInside(zone, 0)).toEqual(zone);
+            expect(fitInside(zone, Number.NaN)).toEqual(zone);
+            expect(fitInside(zone, Infinity)).toEqual(zone);
         });
     });
 

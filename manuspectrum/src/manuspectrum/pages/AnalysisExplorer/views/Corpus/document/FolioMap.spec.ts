@@ -1073,18 +1073,8 @@ describe("FolioMap", () => {
                 wrapper.unmount();
             });
 
-            it("refuses a box that only partly runs off the page, without asking the image server", async () => {
+            it("captures the part of a box that runs off the page and says where it lies in the layer", async () => {
                 stubImage("load");
-                const asked = vi.fn();
-                vi.stubGlobal(
-                    "Image",
-                    class {
-                        onload: (() => void) | null = null;
-                        set src(url: string) {
-                            asked(url);
-                        }
-                    },
-                );
                 const wrapper = mountFolio({
                     overlays: [
                         laidLayer("a:0", {
@@ -1099,17 +1089,24 @@ describe("FolioMap", () => {
                 await flushPromises();
                 press(bars(wrapper)[0], "capture");
                 await flushPromises();
-                expect(wrapper.emitted("capture-failed")).toEqual([
-                    ["a:0", "off-page"],
-                ]);
-                expect(asked).not.toHaveBeenCalled();
-                expect(
-                    vi
-                        .mocked(fetch)
-                        .mock.calls.filter(([url]) =>
-                            String(url).includes("layer"),
-                        ),
-                ).toEqual([]);
+                const [, capture] = (
+                    wrapper.emitted("captured") as unknown as [
+                        [
+                            string,
+                            {
+                                url: string;
+                                width: number;
+                                height: number;
+                                frame?: object;
+                            },
+                        ],
+                    ]
+                )[0];
+                expect(capture.width).toBe(800);
+                expect(capture.height).toBe(600);
+                expect(capture.frame).toEqual({ x: 229, y: 0, w: 571, h: 600 });
+                expect(capture.url).toContain("/0,");
+                expect(wrapper.emitted("capture-failed")).toBeUndefined();
                 wrapper.unmount();
             });
         });

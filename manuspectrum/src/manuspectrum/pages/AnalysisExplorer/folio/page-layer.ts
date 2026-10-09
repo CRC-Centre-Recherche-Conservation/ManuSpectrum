@@ -7,7 +7,7 @@ import {
     layerImageChain,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 
-import type { ImageRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { FramedImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 
 /** The leaflet-iiif 3.0.0 state read here: the info.json request, the image sizes it yields, the tile container. */
 type IiifLayer = L.TileLayer & {
@@ -492,13 +492,15 @@ function imageBounds(
  * image keeps its own pixel scale relative to the others (`ScaleGroup`).
  * `tileFormat` is the format of the IIIF tiles (`layPage`); a layer's element
  * carries `PIXELATED_CLASS` while the map is zoomed past its native zoom.
- * `declaredSize` lays an image without a service at the size its `ImageRef`
+ * `declaredSize` lays an image without a service at the size its image
  * declares, when it declares one, instead of the size the server sent (a
- * folio capture is asked smaller than the layer it was taken for).
+ * folio capture is asked smaller than the layer it was taken for); the image
+ * then fills the declared frame, or its `frame` only, the rest of the frame
+ * staying empty.
  */
 export function layImage(
     map: L.Map,
-    image: ImageRef,
+    image: FramedImage,
     handlers: {
         read: (
             size: { w: number; h: number },
@@ -569,13 +571,17 @@ export function layImage(
         const probe = new Image();
         probe.onload = () => {
             if (removed) return;
-            const size =
-                options.declaredSize && image.width > 0 && image.height > 0
-                    ? { w: image.width, h: image.height }
-                    : { w: probe.naturalWidth, h: probe.naturalHeight };
+            const declared =
+                options.declaredSize && image.width > 0 && image.height > 0;
+            const size = declared
+                ? { w: image.width, h: image.height }
+                : { w: probe.naturalWidth, h: probe.naturalHeight };
+            const frame = declared ? image.frame : undefined;
+            const drawn = frame ? { w: frame.w, h: frame.h } : size;
+            const inset = frame ? { x: frame.x, y: frame.y } : { x: 0, y: 0 };
             const laid = L.imageOverlay(
                 url,
-                imageBounds(map, size, options.scale?.zoom() ?? 0),
+                imageBounds(map, drawn, options.scale?.zoom() ?? 0, inset),
                 options.pane ? { pane: options.pane } : {},
             );
             overlay = wrap(laid);
@@ -586,7 +592,12 @@ export function layImage(
                     size,
                     apply: (zoom, offset) => {
                         allowOverzoom(map, zoom);
-                        laid.setBounds(imageBounds(map, size, zoom, offset));
+                        laid.setBounds(
+                            imageBounds(map, drawn, zoom, {
+                                x: offset.x + inset.x,
+                                y: offset.y + inset.y,
+                            }),
+                        );
                     },
                 };
                 options.scale.join(member);
