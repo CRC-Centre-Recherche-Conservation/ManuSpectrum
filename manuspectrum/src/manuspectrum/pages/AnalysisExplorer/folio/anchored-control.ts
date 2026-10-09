@@ -1,18 +1,19 @@
 import L from "leaflet";
 
+import { handleClearance } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
+
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 
 // Above Leaflet's panes (up to 700) and level with the folio's own controls.
 const CONTROL_Z_INDEX = "1000";
-// The room above a top edge for the half of an adjust handle (0.625rem) and a margin.
-const ABOVE_GAP = 16;
 
 export interface AnchoredControl {
     /**
      * Keeps the element's top-right corner on the top-right corner of
      * `bounds`, `stack` pixels lower (the room of the controls laid before it).
      * With `above`, the element sits instead right above the top edge of
-     * `bounds`, clear of the handles on its corners, and `stack` is ignored.
+     * `bounds`, clear of the handles on its corners, and `stack` is ignored;
+     * under the bottom edge instead when the top edge leaves no room above.
      */
     place(bounds: [LatLng, LatLng], stack?: number, above?: boolean): void;
     /** Stops following the map and takes the element off it. */
@@ -52,9 +53,17 @@ export function anchoredControl(
             Math.max(corner.x - element.offsetWidth, 0),
             maxLeft,
         );
-        const wanted = above
-            ? corner.y - element.offsetHeight - ABOVE_GAP
-            : corner.y + offset;
+        let wanted = corner.y + offset;
+        if (above) {
+            wanted = corner.y - element.offsetHeight - handleClearance();
+            if (wanted < 0) {
+                const bottom = map.latLngToContainerPoint([
+                    Math.min(bounds[0][0], bounds[1][0]),
+                    Math.min(bounds[0][1], bounds[1][1]),
+                ]);
+                wanted = bottom.y + handleClearance();
+            }
+        }
         const top = Math.min(Math.max(wanted, 0), maxTop);
         element.style.left = `${left}px`;
         element.style.top = `${top}px`;

@@ -344,9 +344,14 @@ describe("layImage", () => {
     });
 
     it("keeps a capture's frame in the frame of its scale group, lined up with a larger layer", async () => {
+        const LAYER_WIDTH = 1200;
+        const BIG_WIDTH = 1400;
+        const FRAME_INSET_X = 100;
+        const FRAME_INSET_Y = 500;
+        const CENTRING = (BIG_WIDTH - LAYER_WIDTH) / 2;
         FakeImage.served = {
             "https://img.example/a.png": { w: 300, h: 500 },
-            "https://img.example/big.png": { w: 1400, h: 2000 },
+            "https://img.example/big.png": { w: BIG_WIDTH, h: 2000 },
         };
         const scale = createScaleGroup();
         const read = vi.fn();
@@ -354,9 +359,9 @@ describe("layImage", () => {
             map,
             {
                 ...BY_URL,
-                width: 1200,
+                width: LAYER_WIDTH,
                 height: 2000,
-                frame: { x: 100, y: 500, w: 300, h: 500 },
+                frame: { x: FRAME_INSET_X, y: FRAME_INSET_Y, w: 300, h: 500 },
             },
             { read, failed: vi.fn() },
             { scale, declaredSize: true },
@@ -371,12 +376,11 @@ describe("layImage", () => {
         const [photo, big] = read.mock.calls.map(
             (call) => call[2] as L.ImageOverlay,
         );
-        expect(scale.frame()).toEqual({ w: 1400, h: 2000 });
+        expect(scale.frame()).toEqual({ w: BIG_WIDTH, h: 2000 });
         const at = (layer: L.ImageOverlay) => layer.getBounds().getWest();
-        // The 1200 wide capture frame is centred in 1400: 100 in, then its own 100.
-        expect(at(photo) - at(big)).toBe(100 + 100);
+        expect(at(photo) - at(big)).toBe(CENTRING + FRAME_INSET_X);
         const top = (layer: L.ImageOverlay) => layer.getBounds().getNorth();
-        expect(top(photo) - top(big)).toBe(-500);
+        expect(top(photo) - top(big)).toBe(-FRAME_INSET_Y);
     });
 
     it("keeps the natural size of an image with a declared size when not told to use it", async () => {

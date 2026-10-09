@@ -1,6 +1,7 @@
 import L from "leaflet";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { handleClearance } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
 import { anchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 
 import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
@@ -46,21 +47,36 @@ describe("anchoredControl", () => {
         expect(host.style.top).toBe(`${point.y}px`);
     });
 
-    it("sits above the top edge, right-aligned, when asked to, kept inside the container", () => {
+    it("sits right above the top edge, right-aligned, at the handle's clearance", () => {
         const bounds: Bounds = [
             [-20, -30],
             [30, 40],
         ];
         Object.defineProperty(host, "offsetWidth", { value: 120 });
         Object.defineProperty(host, "offsetHeight", { value: 38 });
-        const control = anchoredControl(map, host);
-        control.place(bounds, 44, true);
+        anchoredControl(map, host).place(bounds, 44, true);
         const point = corner(bounds);
         expect(host.style.left).toBe(`${point.x - 120}px`);
-        expect(Number.parseFloat(host.style.top)).toBeLessThanOrEqual(
-            point.y - 38,
-        );
-        control.place(
+        expect(host.style.top).toBe(`${point.y - 38 - handleClearance()}px`);
+    });
+
+    it("drops below the bottom edge when there is no room above it", () => {
+        const bounds: Bounds = [
+            [-20, -30],
+            [67.5, 40],
+        ];
+        Object.defineProperty(host, "offsetWidth", { value: 120 });
+        Object.defineProperty(host, "offsetHeight", { value: 38 });
+        anchoredControl(map, host).place(bounds, 44, true);
+        const bottom = map.latLngToContainerPoint([-20, 40]);
+        expect(corner(bounds).y).toBe(30);
+        expect(host.style.top).toBe(`${bottom.y + handleClearance()}px`);
+    });
+
+    it("keeps the control inside the container when above is asked far off the map", () => {
+        Object.defineProperty(host, "offsetWidth", { value: 120 });
+        Object.defineProperty(host, "offsetHeight", { value: 38 });
+        anchoredControl(map, host).place(
             [
                 [4000, 4000],
                 [5000, 5000],

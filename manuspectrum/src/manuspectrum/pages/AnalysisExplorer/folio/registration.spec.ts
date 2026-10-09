@@ -12,6 +12,7 @@ import {
     scaleBox,
     turn,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import { parseRegistrations } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 
 const box = { x: 100, y: 200, w: 300, h: 100 };
 
@@ -199,6 +200,41 @@ describe("registration math", () => {
         });
     });
 
+    describe("captureFrame rounding", () => {
+        const page = {
+            bounds: boundsOfBox({ x: 0, y: 0, w: 1000, h: 500 }),
+            served: { w: 4000, h: 2000 },
+        };
+
+        it("never leaves the layer when a half pixel rounds up, and survives a stored round trip", () => {
+            const box = { x: -100, y: 100, w: 200, h: 100 };
+            const frame = captureFrame(box, page, 0, { w: 401, h: 200 });
+            expect(frame).not.toBeNull();
+            expect(frame!.x + frame!.w).toBeLessThanOrEqual(401);
+            expect(frame!.y + frame!.h).toBeLessThanOrEqual(200);
+            const raw = JSON.stringify({
+                version: 1,
+                entries: {
+                    a: {
+                        canvas: "c1",
+                        box: { x: 0, y: 0, w: 100, h: 100 },
+                        quarter: 0,
+                        capture: {
+                            url: "https://img.example/iiif/p/0,0,10,10/10,10/0/default.jpg",
+                            width: 401,
+                            height: 200,
+                            frame,
+                            canvas: "c1",
+                            at: 1,
+                        },
+                        touched: 1,
+                    },
+                },
+            });
+            expect(parseRegistrations(raw).a.capture?.frame).toEqual(frame);
+        });
+    });
+
     describe("fitInside", () => {
         const zone = { x: 0, y: 0, w: 400, h: 200 };
 
@@ -213,6 +249,17 @@ describe("registration math", () => {
 
         it("contains and centres a wider ratio", () => {
             expect(fitInside(zone, 4)).toEqual({ x: 0, y: 50, w: 400, h: 100 });
+        });
+
+        it("keeps an empty zone", () => {
+            const flat = { x: 5, y: 5, w: 0, h: 10 };
+            expect(fitInside(flat, 2)).toEqual(flat);
+            expect(fitInside({ x: 5, y: 5, w: 10, h: 0 }, 2)).toEqual({
+                x: 5,
+                y: 5,
+                w: 10,
+                h: 0,
+            });
         });
 
         it("keeps the zone for its own ratio or an unusable one", () => {

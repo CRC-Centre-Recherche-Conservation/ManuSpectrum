@@ -1,7 +1,10 @@
 import L from "leaflet";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { adjustLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
+import {
+    adjustLayer,
+    handleClearance,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
 import {
     boundsOfBox,
     boxOfBounds,
@@ -408,5 +411,18 @@ describe("adjustLayer", () => {
         pointer(image, "pointerdown", 100, 100);
         adjusting.stop();
         expect(map.dragging.enabled()).toBe(true);
+    });
+});
+
+describe("handleClearance", () => {
+    afterEach(() => {
+        document.documentElement.style.fontSize = "";
+    });
+
+    it("is the half handle in rem at the root font size, plus a margin", () => {
+        document.documentElement.style.fontSize = "20px";
+        expect(handleClearance()).toBe(0.625 * 20 + 6);
+        document.documentElement.style.fontSize = "16px";
+        expect(handleClearance()).toBe(16);
     });
 });

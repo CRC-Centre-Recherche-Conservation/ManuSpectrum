@@ -14,12 +14,31 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 
 const CORNERS: readonly Corner[] = ["nw", "ne", "se", "sw"];
-const HANDLE_SIZE = "1.25rem";
-const HANDLE_OFFSET = "-0.625rem";
+const HANDLE_SIZE_REM = 1.25;
+const HANDLE_SIZE = `${HANDLE_SIZE_REM}rem`;
+const HANDLE_OFFSET = `${-HANDLE_SIZE_REM / 2}rem`;
+const HANDLE_MARGIN = 6;
+const DEFAULT_ROOT_FONT_PX = 16;
 const SCALE_STEP = 1.02;
 const BIG_STEP = 10;
 const PERSIST_DELAY_MS = 200;
 const ADJUSTING_CLASS = "is-adjusting";
+
+/**
+ * The room, in pixels, a control needs past an edge of a layer being adjusted
+ * to clear the half of a corner handle that sticks out, plus a margin; the
+ * handle's size is in rem, read against the root font size.
+ */
+export function handleClearance(): number {
+    const root =
+        typeof document === "undefined"
+            ? Number.NaN
+            : Number.parseFloat(
+                  getComputedStyle(document.documentElement).fontSize,
+              );
+    const rem = Number.isFinite(root) && root > 0 ? root : DEFAULT_ROOT_FONT_PX;
+    return (HANDLE_SIZE_REM / 2) * rem + HANDLE_MARGIN;
+}
 
 export interface AdjustOptions {
     /** The accessible name of the image while it is adjusted. */

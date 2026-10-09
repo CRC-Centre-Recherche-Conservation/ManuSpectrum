@@ -182,12 +182,15 @@ export function captureFrame(
             [1 - v1, 1 - v0, u0, u1],
         ] as const
     )[quarter];
-    return {
-        x: Math.round(a0 * size.w),
-        y: Math.round(b0 * size.h),
-        w: Math.round((a1 - a0) * size.w),
-        h: Math.round((b1 - b0) * size.h),
-    };
+    const x0 = clamp(Math.round(a0 * size.w), 0, size.w);
+    const x1 = clamp(Math.round(a1 * size.w), 0, size.w);
+    const y0 = clamp(Math.round(b0 * size.h), 0, size.h);
+    const y1 = clamp(Math.round(b1 * size.h), 0, size.h);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
 }
 
 /**
@@ -196,6 +199,7 @@ export function captureFrame(
  */
 export function fitInside(zone: Box, ratio: number): Box {
     if (!Number.isFinite(ratio) || ratio <= 0) return zone;
+    if (zone.w <= 0 || zone.h <= 0) return zone;
     const w = Math.min(zone.w, zone.h * ratio);
     const h = w / ratio;
     return {

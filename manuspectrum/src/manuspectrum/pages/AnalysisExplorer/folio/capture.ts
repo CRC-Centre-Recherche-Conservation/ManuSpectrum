@@ -31,7 +31,8 @@ export type CaptureFailure = "off-page" | "no-page" | "server";
  * capture is laid in (the box's own, in served pixels and turned back, when
  * the layer's is unknown: a size of 0); `frame` is where the part lies in it,
  * absent when the box lies on the page. Refused with `no-page` without a laid
- * page or a service, and with `off-page` when the box is wholly off the page.
+ * page or a service, and with `off-page` when the box is wholly off the page or its part over it is
+ * under a pixel of the layer.
  */
 export function planCapture(input: {
     page: { bounds: [LatLng, LatLng]; served: { w: number; h: number } } | null;
@@ -56,6 +57,7 @@ export function planCapture(input: {
     }
     size = { w: Math.round(size.w), h: Math.round(size.h) };
     const frame = captureFrame(input.box, input.page, input.quarter, size);
+    if (frame && (frame.w < 1 || frame.h < 1)) return { refused: "off-page" };
     const asked = frame ?? size;
     return {
         url: captureUrl(input.service, region, asked, input.quarter),

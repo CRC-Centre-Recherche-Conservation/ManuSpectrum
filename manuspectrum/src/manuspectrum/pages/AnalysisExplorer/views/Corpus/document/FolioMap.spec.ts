@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
 
+import { handleClearance } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
 import { shapeCentre } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
@@ -807,10 +808,6 @@ describe("FolioMap", () => {
                 quarter: 0 as const,
                 registered: false,
                 canTurn: true,
-                zoneBounds: [
-                    [-1, 0],
-                    [0, 2],
-                ] as [[number, number], [number, number]],
             };
         }
 
@@ -880,10 +877,6 @@ describe("FolioMap", () => {
                 quarter: 0 as const,
                 registered: true,
                 canTurn: true,
-                zoneBounds: [
-                    [-20, 0],
-                    [0, 30],
-                ] as [[number, number], [number, number]],
                 ...patch,
             };
         }
@@ -1165,10 +1158,36 @@ describe("FolioMap", () => {
             await wrapper.setProps({ adjusting: "a:0" });
             await flushPromises();
             const above = Number.parseFloat(host.style.top);
-            expect(above).toBeLessThanOrEqual(onCorner - 38);
+            expect(above).toBe(onCorner - 38 - handleClearance());
             await wrapper.setProps({ adjusting: null });
             await flushPromises();
             expect(Number.parseFloat(host.style.top)).toBe(onCorner);
+            wrapper.unmount();
+        });
+
+        it("hides and disables the toolbars of the other layers while one is adjusted", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+            });
+            await flushPromises();
+            const hosts = Array.from(
+                wrapper.element.querySelectorAll(".layer-controls-host"),
+            ) as HTMLElement[];
+            expect(hosts).toHaveLength(2);
+            expect(hosts.map((host) => host.style.visibility)).toEqual([
+                "",
+                "",
+            ]);
+            await wrapper.setProps({ adjusting: "a:1" });
+            await flushPromises();
+            expect(hosts[0].style.visibility).toBe("hidden");
+            expect(hosts[0].hasAttribute("inert")).toBe(true);
+            expect(hosts[1].style.visibility).toBe("");
+            expect(hosts[1].hasAttribute("inert")).toBe(false);
+            await wrapper.setProps({ adjusting: null });
+            await flushPromises();
+            expect(hosts[0].style.visibility).toBe("");
+            expect(hosts[0].hasAttribute("inert")).toBe(false);
             wrapper.unmount();
         });
 

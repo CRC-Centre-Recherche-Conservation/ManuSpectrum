@@ -38,10 +38,6 @@ function overlay(
         quarter: 0,
         registered: false,
         canTurn: true,
-        zoneBounds: [
-            [0, 0],
-            [-10, 10],
-        ],
     };
 }
 

@@ -51,8 +51,6 @@ export interface FolioOverlay {
     service?: string | null;
     /** The layer's image reference: the address and the declared size. */
     image?: ImageRef;
-    /** The bounding box of the analysis's marked zone on this page. */
-    zoneBounds: [LatLng, LatLng];
 }
 
 /** The key of a layer's settings in `store.overlays`. */
@@ -147,6 +145,10 @@ export function layerImageChain(
  * layer's own aspect ratio, centred and contained in it (`fitInside`; the
  * zone's box when the layer's size is unknown). An analysis with only a point
  * here lays nothing.
+ *
+ * The registration is held per analysis (PO ruling 08/10): the layers of an
+ * analysis share the one registered box and turn, which is right while they
+ * come from the same scan.
  */
 export function folioOverlays(
     analysis: AnalysisPayload | null,
@@ -194,7 +196,6 @@ export function folioOverlays(
                     canTurn,
                     service: layer.image.service,
                     image: layer.image,
-                    zoneBounds: bounds,
                 });
             }
         }

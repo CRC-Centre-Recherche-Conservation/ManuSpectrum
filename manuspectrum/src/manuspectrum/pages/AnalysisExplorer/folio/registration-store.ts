@@ -25,6 +25,7 @@ export interface Capture {
     /**
      * Where the image lies in that frame, in the layer's pixels; absent when it
      * fills it (the part of a layer over the folio is the only one captured).
+     * A stored frame that cannot be trusted drops the whole capture.
      */
     frame?: Frame;
     canvas: string;
@@ -55,7 +56,7 @@ function parseBox(value: unknown): Box | null {
     return { x, y, w, h };
 }
 
-/** A frame inside the `width` x `height` layer, else null (the full frame). */
+/** A frame inside the `width` x `height` layer, else null. */
 function parseFrame(
     value: unknown,
     width: number,
@@ -77,7 +78,11 @@ function parseCapture(value: unknown): Capture | null {
         return null;
     }
     if (typeof canvas !== "string" || !finite(at)) return null;
-    const frame = parseFrame(value.frame, width, height);
+    let frame: Frame | null = null;
+    if ("frame" in value) {
+        frame = parseFrame(value.frame, width, height);
+        if (frame === null) return null;
+    }
     return frame
         ? { url, width, height, frame, canvas, at }
         : { url, width, height, canvas, at };

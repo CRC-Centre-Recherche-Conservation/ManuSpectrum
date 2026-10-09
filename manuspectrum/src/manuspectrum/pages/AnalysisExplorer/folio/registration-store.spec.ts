@@ -136,7 +136,7 @@ describe("registration store", () => {
             expect(read({})).not.toHaveProperty("frame");
         });
 
-        it("drops a frame that is not finite, empty, negative or outside the layer", () => {
+        it("drops the whole capture when its frame is not finite, empty, negative or outside the layer", () => {
             for (const frame of [
                 { x: 0, y: 0, w: 0, h: 10 },
                 { x: -1, y: 0, w: 10, h: 10 },
@@ -147,7 +147,7 @@ describe("registration store", () => {
                 { x: "0", y: 0, w: 10, h: 10 },
                 "frame",
             ]) {
-                expect(read({ frame })).toEqual(base);
+                expect(read({ frame })).toBeNull();
             }
         });
     });

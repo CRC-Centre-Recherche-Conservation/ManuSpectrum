@@ -221,10 +221,6 @@ describe("folio overlays", () => {
                 image: expect.objectContaining({
                     service: "https://iiif.example/image/hg",
                 }),
-                zoneBounds: [
-                    [-1, 0],
-                    [0, 2],
-                ],
             },
         ]);
     });
@@ -287,10 +283,6 @@ describe("folio overlays", () => {
             expect(laid.quarter).toBe(1);
             expect(laid.registered).toBe(true);
             expect(laid.canTurn).toBe(true);
-            expect(laid.zoneBounds).toEqual([
-                [-1, 0],
-                [0, 2],
-            ]);
         });
 
         it("lays an unregistered layer with its own aspect ratio, centred in the zone", () => {
@@ -308,10 +300,6 @@ describe("folio overlays", () => {
             expect(wide.bounds).toEqual(
                 boundsOfBox({ x: 0, y: 8, w: 64, h: 16 }),
             );
-            expect(wide.zoneBounds).toEqual([
-                [-1, 0],
-                [0, 2],
-            ]);
         });
 
         it("keeps the zone box for a layer whose size is unknown", () => {
@@ -319,7 +307,10 @@ describe("folio overlays", () => {
                 { canvas: "canvas-1", registration: null },
                 sized(0, 0),
             );
-            expect(laid.bounds).toEqual(laid.zoneBounds);
+            expect(laid.bounds).toEqual([
+                [-1, 0],
+                [0, 2],
+            ]);
         });
 
         it("lays the fitted box on another canvas", () => {

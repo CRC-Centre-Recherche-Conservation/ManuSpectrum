@@ -24,10 +24,6 @@ function overlay(patch: Partial<FolioOverlay> = {}): FolioOverlay {
         quarter: 0,
         registered: true,
         canTurn: true,
-        zoneBounds: [
-            [-10, 0],
-            [0, 10],
-        ],
         ...patch,
     };
 }

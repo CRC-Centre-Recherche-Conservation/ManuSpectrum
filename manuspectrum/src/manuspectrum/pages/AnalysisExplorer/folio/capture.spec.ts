@@ -164,6 +164,19 @@ describe("planCapture", () => {
     });
 });
 
+describe("planCapture sliver", () => {
+    it("refuses an overlap that is under one pixel of the layer", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box: { x: -639, y: 100, w: 640, h: 800 },
+            quarter: 0,
+            layerSize: { w: 10, h: 800 },
+        });
+        expect(plan).toEqual({ refused: "off-page" });
+    });
+});
+
 describe("probeImage", () => {
     afterEach(() => {
         vi.unstubAllGlobals();

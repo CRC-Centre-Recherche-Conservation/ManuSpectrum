@@ -860,7 +860,9 @@ function startAdjustment(
 /**
  * One host element per laid layer, in the map's container and on the
  * corner of the layer (`anchoredControl`), for its toolbar to be teleported
- * into; the host of a layer that is gone is removed.
+ * into; the host of a layer that is gone is removed. While a layer is
+ * adjusted the hosts of the others are hidden and inert, so no toolbar covers
+ * the handles of the adjusted one.
  */
 function drawControls(): void {
     if (!map) return;
@@ -881,6 +883,13 @@ function drawControls(): void {
             anchor = anchoredControl(map, element);
             anchors.set(overlay.key, anchor);
             hosts.set(overlay.key, element);
+        }
+        const element = hosts.get(overlay.key);
+        if (element) {
+            const aside =
+                props.adjusting !== null && props.adjusting !== overlay.key;
+            element.style.visibility = aside ? "hidden" : "";
+            element.toggleAttribute("inert", aside);
         }
         anchor.place(
             adjustment?.key === overlay.key
