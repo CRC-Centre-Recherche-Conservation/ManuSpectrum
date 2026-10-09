@@ -25,7 +25,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence
+.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence monthly-report report-test
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -211,6 +211,20 @@ alerts: ## Alerts Alertmanager holds now
 silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh --duration=2h --comment="why"'
 	@[ -n "$(ARGS)" ] || { echo "usage: make silence ARGS='matcher... --duration=2h --comment=\"why\"'" >&2; exit 1; }
 	$(AMTOOL) silence add $(ARGS)
+
+# The monthly report (scripts/monthly-report.py, Python standard library only)
+# runs in a throwaway container of the application image on the Compose
+# network, where `prometheus` and the SMTP relay resolve; the relay settings
+# come from the env file the container already reads. The script is mounted
+# read-only. Exit 1: sent with a section "données indisponibles".
+monthly-report: ## Send the report of the previous month to ALERT_EMAILS (the timer runs it on the 1st at 08:00)
+	$(COMPOSE) run --rm --no-deps -T --entrypoint python3 \
+		-v '$(SCRIPTS_DIR)/monthly-report.py:/monthly-report.py:ro' \
+		-e ALERT_EMAILS="$(call envval,ALERT_EMAILS)" -e ALERT_EMAIL_FROM="$(call envval,ALERT_EMAIL_FROM)" \
+		web -I /monthly-report.py $(ARGS)
+
+report-test: ## Send the report now to ALERT_EMAILS to check the chain: make -C deploy report-test [ARGS="--month YYYY-MM"]
+	$(MAKE) --no-print-directory monthly-report
 
 smoke: ## Read-only checks of the running stack
 	$(COMPOSE_DIR)/smoke.sh check
