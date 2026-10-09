@@ -497,7 +497,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.time=35d
       - --storage.tsdb.retention.size=8GB
     networks: [default, monitoring]
     # The edge probe target comes from PUBLIC_HOST: the entrypoint writes it to

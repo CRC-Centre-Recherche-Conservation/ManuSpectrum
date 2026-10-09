@@ -124,6 +124,8 @@ REQUIRED_TESTED = {
     "Watchdog",
     "DiskFillingUp",
     "MetricsDirFilling",
+    "WriteRequestsFailing",
+    "ActivityStale",
 }
 
 # Series written by deploy/scripts/host-metrics.sh (Task 6 keeps these names).
@@ -382,8 +384,13 @@ class RuleContractTests(unittest.TestCase):
         self.assertEqual(forbidden_label_names(label_names_in(bad)), {"path", "user"})
 
     def test_every_metric_in_an_expression_exists(self):
+        recorded = {r["record"] for _, r in self.rules if "record" in r}
         known = (
-            registry_metrics() | textfile_metrics() | HOST_METRICS | EXPORTER_METRICS
+            registry_metrics()
+            | textfile_metrics()
+            | HOST_METRICS
+            | EXPORTER_METRICS
+            | recorded
         )
         for _, rule in self.rules:
             with self.subTest(rule=rule.get("alert") or rule.get("record")):

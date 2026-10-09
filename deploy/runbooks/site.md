@@ -121,3 +121,27 @@ Wait for a running rebuild to end. A host short of memory: see `MemoryPressure`.
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## WriteRequestsFailing
+
+Severity: warning. At least three write requests (POST, PUT or DELETE) answered a server error in the last 30 minutes. Severity is warning on purpose: the site is up and the failures are few, which `ErrorRateHigh` (critical) does not see; a curator's input may be lost, so it is read the same working day.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout. Grafana through the SSH tunnel (dashboard Activity, panel "Failing writes (5xx) by view").
+
+### Symptom
+
+A curator reports that a save, an import step or a deletion failed with an error page, or no one has noticed yet.
+
+### Diagnosis
+
+The panel "Failing writes (5xx) by view" gives the `view` of the failing requests (`tile`, `plugins`, `workflow_history`, `biblissima-create-resource`, ...). Read the web log for that period (`make -C deploy logs`, lines at ERROR with the request id). A database, Elasticsearch or Redis outage shows in `NotReady` or in the datastore alerts. The first error of a view that never failed counts too (the rule adds the series created within the window to the increase of the older ones); the panel counts it the same way. Limits: a series is counted as new only if its target was scraped (`up`) 30 minutes earlier, so a Prometheus started less than 30 minutes ago misses first errors of new series until then; a scrape gap never raises the alert on its own.
+
+### Remediation
+
+Fix the cause the log names. Tell the curators whose save failed to repeat it and check the record afterwards: a write that died halfway can leave a resource without its cards.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

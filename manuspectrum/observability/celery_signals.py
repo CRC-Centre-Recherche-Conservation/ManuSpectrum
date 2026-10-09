@@ -123,6 +123,24 @@ def record_active_accounts_gauge(**kwargs):
         connections.close_all()
 
 
+@worker_ready.connect(weak=False, dispatch_uid="ms-activity-gauges")
+def record_activity_gauges(**kwargs):
+    """Set the activity gauges when the worker starts.
+
+    A database error is logged and never stops the worker.
+    """
+    from django.db import connections
+
+    from manuspectrum.observability import activity
+
+    try:
+        activity.publish_gauges()
+    except Exception:
+        logger.warning("activity gauges not set at worker start", exc_info=True)
+    finally:
+        connections.close_all()
+
+
 @worker_process_shutdown.connect(weak=False, dispatch_uid="ms-worker-child-exit")
 def forget_child(pid=None, **kwargs):
     if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):

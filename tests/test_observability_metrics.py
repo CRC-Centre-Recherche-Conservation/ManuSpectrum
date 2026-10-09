@@ -25,7 +25,7 @@ def declared():
 
 class RegistryRulesTests(SimpleTestCase):
     def test_the_inventory_is_declared(self):
-        self.assertEqual(len(declared()), 34)
+        self.assertEqual(len(declared()), 38)
 
     def test_names_carry_the_prefix_and_their_unit(self):
         for attribute, metric in declared().items():

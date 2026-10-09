@@ -128,3 +128,11 @@ def publish_active_accounts():
 def record_active_accounts_task():
     """Refresh ``manuspectrum_active_accounts`` (a single aggregated count)."""
     return publish_active_accounts()
+
+
+@shared_task(name="manuspectrum.record_activity")
+def record_activity_task():
+    """Refresh the activity gauges (resources, last 24 hours, open workflows)."""
+    from manuspectrum.observability import activity
+
+    activity.publish_gauges()

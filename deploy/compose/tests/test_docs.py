@@ -76,6 +76,8 @@ class ObservabilityDocTests(unittest.TestCase):
 
     def test_names_every_rule_file_and_runbook(self):
         for rules in RULES.glob("*.yml"):
+            if "- alert:" not in rules.read_text():
+                continue  # recording rules only: no runbook
             with self.subTest(area=rules.stem):
                 self.assertIn(f"runbooks/{rules.stem}.md", self.text)
 

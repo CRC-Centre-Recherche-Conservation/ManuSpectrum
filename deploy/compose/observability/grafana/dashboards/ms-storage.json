@@ -2272,7 +2272,7 @@
       "id": 41,
       "type": "stat",
       "title": "Prometheus data vs 8 GB cap",
-      "description": "Share of the retention size cap (--storage.tsdb.retention.size, 8 GB) already used: past it Prometheus deletes the oldest blocks before the 30 days are over.",
+      "description": "Share of the retention size cap (--storage.tsdb.retention.size, 8 GB) already used: past it Prometheus deletes the oldest blocks before the 35 days are over.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

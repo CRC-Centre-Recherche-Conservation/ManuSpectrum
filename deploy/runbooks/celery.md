@@ -97,3 +97,27 @@ Restart the application containers (`make -C deploy restart`); the worker also r
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## ActivityStale
+
+Severity: warning. The activity gauges (resources per model, changes of the last 24 hours, open workflows) are more than three hours old.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+The panels of the Contents and Workflows rows of the dashboard Activity stay flat.
+
+### Diagnosis
+
+The `beat` container is running (`ContainerMissing` shows it) and its log lists `record-activity` every hour; the worker log shows `manuspectrum.record_activity` succeeding. `CeleryTaskFailures` fires when the task itself fails.
+
+### Remediation
+
+Restart the application containers (`make -C deploy restart`); the worker also refreshes the gauges when it starts.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

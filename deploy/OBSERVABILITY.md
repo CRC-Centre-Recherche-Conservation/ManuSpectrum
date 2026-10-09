@@ -15,9 +15,9 @@ socket:
 
 | Service | Role |
 | --- | --- |
-| `prometheus` | Scrapes the application, Prometheus and Alertmanager every 30 s and the exporters every 60 s, evaluates the rules; 30 days of data, capped at 8 GB, on a local volume (never the network filesystem) |
+| `prometheus` | Scrapes the application, Prometheus and Alertmanager every 30 s and the exporters every 60 s, evaluates the rules; 35 days of data, capped at 8 GB, on a local volume (never the network filesystem) |
 | `alertmanager` | Routes the alerts by severity and mails them through the SMTP relay of the stack |
-| `grafana` | Four read-only dashboards; listens on `127.0.0.1:3000` of the host only |
+| `grafana` | Five read-only dashboards; listens on `127.0.0.1:3000` of the host only |
 | `node-exporter` | Host CPU, memory, load, clock, filesystems, and the textfile metrics below |
 | `postgres-exporter` | PostgreSQL through the read-only `ms_monitor` role (`pg_monitor`); no query text |
 | `redis-exporter` | Broker and cache |
@@ -68,6 +68,7 @@ a modification made there is lost at the next start.
 | Overview | Is it working? Site, readiness, image server, alerts firing, certificate, disks, last good backup |
 | Application | Requests, errors, Explorer latency and corpus builds, Celery tasks, upstream calls, sign-in attempts, active accounts |
 | Infrastructure | Containers (state, memory against its limit, restarts, OOM kills), host CPU, memory, swap, clock, PostgreSQL, Redis, scrape targets |
+| Activity | What people do: consultations by kind, content created and changed, workflows, sign-ins, data packages, the health of writes |
 | Storage and backups | Filesystem use and time until full for `/` and `/data`, size of each data area, database size, backup repository, last backup and restore test |
 
 **Disk numbers.** The `/` and `/data` panels come from the filesystem itself
@@ -85,9 +86,9 @@ a mount root.
 
 ## Alerts
 
-51 rules in `compose/observability/prometheus/rules/*.yml`, one file per area
+55 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
 (site, application, containers, host, storage, backup, tls, celery, datastores,
-explorer, biblissima, monitoring). Every rule has a `severity`, a `service`, a
+explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of
 [`runbooks/`](runbooks/site.md) named after the alert.
 
@@ -232,11 +233,13 @@ everything; mail filters sort on either.
 
 On the 1st at 08:00 the `manuspectrum-monthly-report` timer sends a report of the
 previous month, in French, to `ALERT_EMAILS`: availability, disks, sizes, backups and
-restore tests, restarts and out-of-memory kills, alerts of the month, active accounts (the number at
+restore tests, restarts and out-of-memory kills, alerts of the month, consultations, contents,
+workflows, bulk imports and exports, sign-ins, and active accounts (the number at
 the end of the month and its maximum over the month). Growth is given "sur le mois"
-when Prometheus still holds the start of the month, else "depuis le <date>" from its oldest sample (retention is 30
-days). Metrics that could not be read are listed
-under "données indisponibles" and the command exits 1.
+when Prometheus still holds the start of the month, else "depuis le <date>" from its oldest sample (retention is 35
+days). A source that could not be read is listed
+under "données indisponibles" and the command exits 1. The report reads Prometheus and the
+database, aggregates only (see "Activity" below).
 **Active accounts** read `manuspectrum_active_accounts`: one number, no label, the
 active accounts (staff and superusers included, the `anonymous` visitor not) whose last
 login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)
@@ -246,6 +249,59 @@ Prometheus. `manuspectrum_active_accounts_timestamp_seconds` is the time of that
 when it is. The maximum line says "depuis le <date>" when the month is longer than the
 retention. Without a sample the report prints "n/d". `make -C deploy report-test
 [ARGS="--month YYYY-MM"]` sends one now.
+
+## Activity
+
+Counts only: nothing names a person, a resource or a path (GDPR). Three sources.
+
+**Consultations** need no application code. The recording rules of `activity.yml` map the
+route names of `django_http_*` (the `view` label) to a closed `kind` vocabulary and record
+`manuspectrum:consultations:total{kind}` (GET answers 2xx or 304 only) and
+`manuspectrum:consultations:rate1h{kind}`. `tests/test_consultation_kinds.py` fails when a route of
+`urls.py` is neither mapped nor ignored with a reason. Robots are counted, a 304 counts, the Explorer
+memoises payloads for five minutes per tab, and the IIIF kinds count requests, not views. Map tiles,
+the thumbnail route, plugin pages and the back-office plumbing are not consultations.
+
+A file download is the 302 that `file_access` answers (Arches' `FileView` redirects to the stored file and
+nginx follows it); the 200 answers of that route are card thumbnails and are not counted. The homepage is
+the route `root` (`/index.htm` is an unnamed redirect). The `explorer_search` kind counts API calls
+(debounced filter changes and the first search of each page), not searches typed by a user.
+
+Caveats of the other sources. `saisies enregistrées` (tile saves) include the `tile delete` rows that a
+workflow cancellation writes and the provisional edits of non-reviewers. A later `Resource.save()` of an
+existing resource writes a new `create` row, so it would read as created that month (no project path does
+this today). `biblissima-create-*` answers 504 when its write budget is spent, so an upstream slowdown
+also raises `WriteRequestsFailing` next to `WriteBudgetSpent`. Prometheus creates a labelled series at its
+first increment, so the first error of a new `(view, method, status)` series is invisible to a bare
+`increase()`: the alert and the 4xx/5xx and cancellation panels add the series that did not exist one
+window earlier. The fresh-series term only counts targets that were scraped successfully one window earlier (`up offset 30m == 1`): a scrape gap does not turn every old series into a new one, and a Prometheus started less than 30 minutes ago misses new series until then. A thumbnail request for a file without `thumbnail_data` is answered with the same 302 as a download, so it is counted as one. Bulk runs: `cancelled` (stopped by the user) and `unloaded` are terminal; the Excel exporters insert their row as `validated` and set `indexed` when done, so for an export module `validated` means running or crashed and is reported as unfinished. History is 35 days, capped at 8 GB (`--storage.tsdb.retention.size`): if the cap cuts
+earlier, the consultation and sign-in figures of the monthly report undercount the start of the month
+without a mark, as does the first month after the recording rules are deployed (they have no history
+before their first evaluation).
+
+**Content, workflows and bulk runs** are read from the database by
+`manuspectrum/observability/activity.py`, in a read-only transaction. Created, modified and
+deleted are counted per model as distinct resources from the Arches `edit_log` (a `create` row is
+written by every save, and the Biblissima bulk path writes only tile rows noted `resource creation`);
+totals come from `resource_instances`, workflows from `workflow_history` (a run cancelled by its user
+is deleted by Arches: it is counted from the `transaction_reverse` requests), bulk runs from
+`load_event`. Month bounds are UTC instants and the Arches columns read are `timestamptz`: Arches writes
+a naive `datetime.now()` in the process zone (`America/Chicago`, `USE_TZ = False`) and PostgreSQL
+converts it with the session zone, so the stored values are true instants. That holds while a writer's
+process zone equals its session zone (Django guarantees it; a hand `psql` session in another zone writing
+naive values would not), and a value written during the repeated hour of the autumn change is ambiguous
+(at most one hour a year is placed an hour off). The window of a month counts the log as it is: rows written outside Arches
+(`load_package`, SQL) have no `edit_log` entry but are in the totals. A workflow open for more than 30
+days is "stale": a provisional delay until the cleanup of abandoned workflows is decided.
+`python manage.py activity_summary --month YYYY-MM` prints the month as one line of JSON; the monthly
+report runs it in its own container.
+
+**Gauges** are refreshed hourly by the Celery task `manuspectrum.record_activity` (and when the worker
+starts): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last 24 hours),
+`manuspectrum_workflows{kind,state}` and `manuspectrum_activity_timestamp_seconds`. `model` is the closed
+list of resource models, anything else is `other`. `ActivityStale` warns when they are more than three
+hours old. `WriteRequestsFailing` (warning) warns when three POST, PUT or DELETE requests answer a 5xx
+within 30 minutes: a curator's input may be lost, which `ErrorRateHigh` does not see.
 
 ## Host metrics
 
@@ -287,7 +343,7 @@ severities), never an id, a user, a URL or a path. Textfile label values match
 
 | Command | Checks |
 | --- | --- |
-| `smoke.sh monitoring` | Every Prometheus target up, every rule evaluating, `Watchdog` firing, the series each rule and dashboard expression reads, Grafana healthy with its four dashboards. Run `make container-metrics disk-usage` (and a backup) first. `SMOKE_EXPECT_BACKUP=1` also requires the backup and restore-test gauges to exist and read 0 |
+| `smoke.sh monitoring` | Every Prometheus target up, every rule evaluating, `Watchdog` firing, the series each rule and dashboard expression reads, Grafana healthy with its five dashboards. Run `make container-metrics disk-usage` (and a backup) first. `SMOKE_EXPECT_BACKUP=1` also requires the backup and restore-test gauges to exist and read 0 |
 | `smoke.sh mail alert` | After `make alert-test`: the `AlertTest` mail reached Mailpit with the `[ManuSpectrum][Alert]` prefix and its category header (CI and rehearsal, where `COMPOSE_PROFILES` includes `mailpit`) |
 | `smoke.sh mail report` | The same after `make report-test`, for `[ManuSpectrum][Report] Rapport mensuel` |
 
@@ -315,7 +371,7 @@ make -C deploy volumes secrets up monitoring-init observability-on
 
 Prometheus data, Alertmanager silences and Grafana's database are monitoring
 state, rebuilt from the configuration in Git. They are not part of any backup
-(`BACKUP.md`); the retention (30 days) is an operational choice, not a legal
+(`BACKUP.md`); the retention (35 days) is an operational choice, not a legal
 limit on personal data.
 
 ## Runbooks

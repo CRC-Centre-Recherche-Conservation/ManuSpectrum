@@ -65,3 +65,16 @@ groups:
           summary: "The Explorer search is slow"
           description: "The 95th percentile of the Explorer search is {{ $value | humanizeDuration }} over 10 minutes."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchlatencyhigh
+      - alert: WriteRequestsFailing
+        expr: |
+          (
+            (sum(increase(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"}[30m]) and django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) or vector(0))
+            + (sum((django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} unless django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) and on (job, instance) (up offset 30m == 1)) or vector(0))
+          ) >= 3
+        labels:
+          severity: warning
+          service: site
+        annotations:
+          summary: "Writes fail with a server error"
+          description: "{{ $value | humanize }} POST, PUT or DELETE requests answered a 5xx in the last 30 minutes. A curator's input may have been lost."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#writerequestsfailing

@@ -11,7 +11,7 @@
 #   observability /readyz, /metrics, JSON logs and the request id, the worker's
 #                metrics after one prune task (CI and rehearsal)
 #   monitoring   Prometheus targets and rules, the series the rules and dashboards
-#                read, Grafana and its four dashboards (CI and rehearsal; run
+#                read, Grafana and its five dashboards (CI and rehearsal; run
 #                `make container-metrics disk-usage` and a backup first)
 #   mail alert|report
 #                the e-mail of `make alert-test` / `make report-test` reached
@@ -312,7 +312,7 @@ gf_password() { cat "$(env_value SECRETS_DIR)/grafana_admin_password"; }
 gf_get() { printf 'user = "admin:%s"\n' "$(gf_password)" | curl -fsS --max-time 20 -K - "http://127.0.0.1:3000$1"; }
 grafana_has_dashboards() {
   [ "$(gf_get '/api/search?type=dash-db' | json_field '",".join(sorted(d["uid"] for d in r))')" \
-    = "ms-application,ms-infrastructure,ms-overview,ms-storage" ]
+    = "ms-activity,ms-application,ms-infrastructure,ms-overview,ms-storage" ]
 }
 mail_get() { compose exec -T prometheus wget -qO- "http://mailpit:8025$1"; } # Mailpit shares the monitoring network
 
@@ -367,7 +367,7 @@ cmd_monitoring() {
   ok "histogram bounds a rule reads: $checked found, $skipped skipped (no sample yet)"
 
   retry "Grafana is healthy" 120 gf_get /api/health
-  retry "Grafana lists the four dashboards" 120 grafana_has_dashboards
+  retry "Grafana lists the five dashboards" 120 grafana_has_dashboards
   line="$(curl -fsS --max-time 20 http://127.0.0.1:3000/metrics | grep '^grafana_stat_totals_dashboard ' || true)"
   echo "info: Grafana ${line:-reports no dashboard total yet}"
 }

@@ -455,7 +455,8 @@ class RulesAgreeWithRoutingTests(unittest.TestCase):
         ):
             for group in yaml.safe_load(path.read_text(encoding="utf-8"))["groups"]:
                 for rule in group["rules"]:
-                    severities.add(rule["labels"]["severity"])
+                    if "alert" in rule:
+                        severities.add(rule["labels"]["severity"])
         self.assertEqual(severities, {"critical", "warning", "info", "none"})
 
 
