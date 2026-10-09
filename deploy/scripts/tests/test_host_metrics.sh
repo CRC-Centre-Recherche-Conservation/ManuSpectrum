@@ -25,7 +25,15 @@ printf 'docker %s\n' "$*" >>"$CALLS"
 [ -z "$STUB_DF_FAIL" ] || [ "$1" != system ] || exit 1
 case "$1" in
   ps) cat "$STUB_PS" ;;
-  inspect) cat "$STUB_INSPECT" ;;
+  inspect)
+    # Docker 27.5 evaluates a template that names .Id on a map: a field read
+    # as .State.Health fails when the container has no healthcheck (no
+    # "Health" key); `index .State "Health"` does not.
+    case "$*" in
+      *".State.Health"*) echo 'template parsing error: map has no entry for key "Health"' >&2; exit 1 ;;
+    esac
+    cat "$STUB_INSPECT"
+    ;;
   stats) cat "$STUB_STATS" ;;
   events) cat "${STUB_EVENTS:-/dev/null}" ;;
   system)

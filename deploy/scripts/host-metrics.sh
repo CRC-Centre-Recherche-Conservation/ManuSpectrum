@@ -147,7 +147,7 @@ containers() {
   [ -n "$ids" ] || { log "no container found for project $PROJECT"; return 1; }
   # shellcheck disable=SC2086  # one argument per container id
   inspect="$(timeout "$DOCKER_TIMEOUT" docker inspect --format \
-    '{{.Id}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.OOMKilled}}|{{.State.FinishedAt}}|{{.HostConfig.Memory}}' \
+    '{{.Id}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{with index .State "Health"}}{{.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.OOMKilled}}|{{.State.FinishedAt}}|{{.HostConfig.Memory}}' \
     $ids)" || { log "docker inspect failed or timed out"; return 1; }
   # shellcheck disable=SC2086
   stats="$(timeout "$DOCKER_TIMEOUT" docker stats --no-stream --format '{{.ID}}|{{.MemUsage}}' $ids)" || { stats=""; errors=$((errors + 1)); log "docker stats failed or timed out"; }
