@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: dev@fargeo.com\n"
-"POT-Creation-Date: 2026-10-05 11:28:57\n"
-"PO-Revision-Date: 2026-10-05 11:28:57\n"
+"POT-Creation-Date: 2026-10-08 15:51:59\n"
+"PO-Revision-Date: 2026-10-08 15:51:59\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -753,36 +753,44 @@ msgid "Sample_Owner"
 msgstr ""
 
 #: cards:1
-msgid "Name of Place"
-msgstr ""
-
-#: cards:1
-msgid "Name of Analysis"
-msgstr ""
-
-#: cards:1
 msgid "Name of Document"
 msgstr ""
 
 #: cards:1
-msgid "Author(s) of inference"
-msgstr ""
-
-#: cards:1
-msgid "Default Application Names"
-msgstr ""
-
-#: cards:1
-msgid "Represents a single node in a graph"
+msgid "Naming the document"
 msgstr ""
 
 #: cards:1
 msgid ""
-"Names used to identify your application and the system data import personna"
+"<p>The <strong>Label</strong> (required) is the name shown in search results"
+" and on the public site. For a manuscript, use <code>City. Library, Ms. "
+"N</code>, e.g. <code>Avranches. Bibliothèque municipale Edouard Le Héricher,"
+" Ms. 59</code>. The label can hold an English and a French text; give both "
+"when they differ.</p><p>Set <strong>Type</strong> to « preferred terms » for"
+" the main name and to « alternate titles » for other forms of it (e.g. "
+"<code>Avranches. BM, Ms. 59</code>); « translated titles » is for a "
+"translation. Fill <strong>Language</strong> when the name belongs to one "
+"language (the main name of MS 59 is French); it is not needed otherwise.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Name(s) of instrument"
+msgid "Name of Person"
+msgstr ""
+
+#: cards:1
+msgid "Naming the person"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Enter one name per entry in <strong>Label</strong>, spelled as in your "
+"source and in one form for every record (<em>Forename Surname</em>, ordinary"
+" capitals), e.g. <em>Hildegard of Bingen</em>, then the other forms of the "
+"same person (<em>Hildegard von Bingen</em>) as further entries.</p><p>Set "
+"<strong>Type</strong> to « preferred terms » for the main name, « alternate "
+"titles » for variants and « translated titles » for translations. Give the "
+"<strong>Language</strong> when you record several forms of the name, so they"
+" can be told apart; a single name does not need it.</p>"
 msgstr ""
 
 #: cards:1
@@ -806,11 +814,51 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Name of Project"
+msgid "Naming the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Enter one name per entry in <strong>Label</strong>. Give the official "
+"name in its own language as « preferred terms », e.g. <em>Abbaye du Mont-"
+"Saint-Michel (ordre monastique)</em>; a parenthesis only tells homonyms "
+"apart or names the body's kind or parents, as in <em>Centre de la Recherche "
+"sur la Conservation (CNRS / MNHN / Ministère de la Culture)</em>.</p><p>Add "
+"the other forms as further entries: « translated titles » for a translation,"
+" e.g. <em>Abbey of Mont-Saint-Michel (monastic order)</em> with "
+"<strong>Language</strong> « English (language) », « alternate titles » for "
+"variants. Give the <strong>Language</strong> when you record several forms; "
+"a single name does not need it.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Name of Place"
+msgstr ""
+
+#: cards:1
+msgid "Naming the place"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Enter one name per entry in <strong>Label</strong> (required), in the "
+"form your source gives. For the main name, add a qualifier in brackets when "
+"it removes doubt: <em>Avranches (Normandie)</em>, <em>France (nord)</em>. "
+"Other names of the same place (<em>Paris (France)</em>) go in further "
+"entries.</p><p>Set <strong>Type</strong> to « preferred terms » for the main"
+" name, « alternate titles » for variants and « translated titles » for "
+"translations. Fill <strong>Language</strong> when a form belongs to one "
+"language (e.g. « French (language) »); it is not needed otherwise. Use "
+"<strong>Source</strong> for the record that attests the name, when one "
+"exists.</p>"
 msgstr ""
 
 #: cards:1
 msgid "Mapbox API"
+msgstr ""
+
+#: cards:1
+msgid "Represents a single node in a graph"
 msgstr ""
 
 #: cards:1
@@ -820,15 +868,213 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Name of Component"
-msgstr ""
-
-#: cards:1
 msgid "Joining Group event"
 msgstr ""
 
 #: cards:1
-msgid "Name of Person"
+msgid "Date of joining"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A joining is usually dated approximately, so give a range: « between 1130"
+" and 1140 » is the earliest possible date in the required "
+"<strong>Date</strong> (the begin) and the latest possible date in "
+"<strong>Date (end of the end)</strong>, as <code>YYYY-MM</code> or a year "
+"alone. With the choice above them, mark the dates « Approximative » when "
+"they are not certain, « Confirmed » when they are.</p><p>For a finer "
+"reading, the four fields are: begin (<strong>Date</strong>), latest begin "
+"(<strong>Date (end of the begin)</strong>), earliest end (<strong>Date (end "
+"approximative)</strong>) and latest end (<strong>Date (end of the "
+"end)</strong>). When only the period is known, use the sub-card below.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Naming the alteration"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results; build it "
+"so it can be read alone: <code>&lt;phenomenon&gt; - &lt;zone&gt; "
+"&lt;folio&gt; - &lt;shelfmark&gt;</code>, with a plain hyphen between the "
+"three parts, the zone and the folio joined by a space, and the shelfmark "
+"written <code>BM Avranches MS 59</code> for this manuscript. The label can "
+"be entered in English and in French.</p><p>Set <strong>Type</strong> to « "
+"preferred terms » for the main name, and to « alternate titles » or « "
+"translated titles » for the others, one entry each. "
+"<strong>Language</strong> is rarely needed: fill it only for a name written "
+"in a language other than English or French.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Name of Analysis"
+msgstr ""
+
+#: cards:1
+msgid "Naming the analysis"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results and on the"
+" public site, so it must read alone. Recommended form: <code>&lt;analysis "
+"code&gt; - &lt;zone&gt; &lt;folio&gt; - &lt;shelfmark&gt;</code>, with a "
+"plain hyphen between the three parts, the zone and the folio joined by a "
+"space, and the shelfmark written <code>BM Avranches MS 59</code> for this "
+"manuscript. The technique is not part of the name; it has its own "
+"card.</p><p>Set <strong>Type</strong> to « preferred terms » for the main "
+"name. Add a translated or alternate name as a further entry; give its "
+"<strong>Language</strong> when the name exists in several languages.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Name of Component"
+msgstr ""
+
+#: cards:1
+msgid "Naming the component"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> (required) is the name shown in search results"
+" and on the public site. Build it so it can be read alone: "
+"<code>&lt;zone&gt; &lt;folio&gt; - &lt;shelfmark&gt;</code>, the zone and "
+"the folio joined by a space (no hyphen between them), the folio as "
+"<code>f31v</code>, and a plain hyphen before the shelfmark, written <code>BM"
+" Avranches MS 59</code> for this manuscript. E.g. <code>Parchment f31v - BM "
+"Avranches MS 59</code>.</p><p>Set <strong>Type</strong> to « preferred terms"
+" » for the main name; add other names as further entries. "
+"<strong>Language</strong> is rarely needed: fill it only for a name written "
+"in one language.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Author(s) of inference"
+msgstr ""
+
+#: cards:1
+msgid "Name(s) of instrument"
+msgstr ""
+
+#: cards:1
+msgid "Naming the instrument"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Name</strong> is shown in search results and in the Analysis "
+"records: build it so it can be read alone, with the kind of device, the "
+"maker and the model. E.g. <em>Portable X-ray fluorescence spectrometer, "
+"Maker Model X</em>, using the same words as the technique list (« portable "
+"X-ray fluorescence »).</p><p>Set <strong>Type</strong> to « preferred terms "
+"» for the main name, and to « alternate titles » or « translated titles » "
+"for the others, one entry each. <strong>Language</strong> is rarely needed: "
+"fill it only for a name written in a language other than English or "
+"French.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Naming the characterization"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results and on the"
+" public site, so it must read alone. Recommended form, like the Analysis and"
+" Component names: the materials, the zone and folio, then the shelfmark of "
+"the document, with a plain hyphen between these three parts, in the form "
+"<code>&lt;materials&gt; - &lt;zone&gt; &lt;folio&gt; - "
+"&lt;shelfmark&gt;</code> (the layer is not part of the name; the zone and "
+"the folio are joined by a space, without hyphen).</p><p>Set "
+"<strong>Type</strong> to « preferred terms » for the main name; give its "
+"<strong>Language</strong> when you add the name in several languages. In "
+"<strong>Source</strong>, you may cite a record that names the "
+"characterization this way.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Name of Project"
+msgstr ""
+
+#: cards:1
+msgid "Naming the project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results. Give the "
+"usual short name as « preferred terms », e.g. <em>Project EMMA</em> (in "
+"French <em>Projet EMMA</em>), and the full title as a further entry typed « "
+"alternate titles », e.g. <em>Material study of ancient manuscripts from Mont"
+" Saint-Michel</em>.</p><p>Give the <strong>Language</strong> of each name "
+"when you record several forms; a single name does not need it.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Default Application Names"
+msgstr ""
+
+#: cards:1
+msgid ""
+"Names used to identify your application and the system data import personna"
+msgstr ""
+
+#: cards:1
+msgid "Naming the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results; build it "
+"so it can be read alone: <code>&lt;intervention&gt; - &lt;zone&gt; "
+"&lt;folio&gt; - &lt;shelfmark&gt;</code>, with a plain hyphen between the "
+"three parts, the zone and the folio joined by a space, and the shelfmark "
+"written <code>BM Avranches MS 59</code> for this manuscript. The label can "
+"be entered in English and in French.</p><p>Set <strong>Type</strong> to « "
+"preferred terms » for the main name, and to « alternate titles » or « "
+"translated titles » for the others, one entry each. "
+"<strong>Language</strong> is rarely needed: fill it only for a name written "
+"in a language other than English or French.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Identifier"
+msgstr ""
+
+#: cards:1
+msgid "Identifiers of the component"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the component, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"the address of the decor page of an initial on initiale.irht.cnrs.fr, "
+"<code>https://initiale.irht.cnrs.fr/decor/…</code>, Type « record "
+"identifiers » and no Source; or a Biblissima page, Source « Biblissima ». A "
+"local working code is not entered here: put it in the name.</p>"
+msgstr ""
+
+#: cards:1
+msgid "What was characterized, and where"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Object observed</strong>, choose the Component the "
+"characterization is about, e.g. an initial. In <strong>Color "
+"aspect</strong>, choose the colour of the layer as it appears today, among "
+"Silvery, Beige, White, Blue, Brown, Coppery, Golden, Grey, Yellow, Black, "
+"Orange, Pink, Red, Green and Violet; several colours are allowed. "
+"<strong>Origin color</strong> is free text for the original colour, if "
+"known.</p><p>In <strong>Location of characterization</strong>, draw the zone"
+" on the image and name it in <strong>Location appellation</strong>, e.g. "
+"<code>red area of the initial</code>. The colour you choose is also what "
+"visitors filter on.</p>"
 msgstr ""
 
 #: cards:1
@@ -840,27 +1086,34 @@ msgid "Places where alteration may have occurred "
 msgstr ""
 
 #: cards:1
-msgid "Statement"
+msgid "Where the alteration occurred"
 msgstr ""
 
 #: cards:1
-msgid "Temporality of Person"
+msgid ""
+"<p>In <strong>Places</strong>, choose the Place records where the alteration"
+" may have occurred, e.g. the town or the library where the object was kept "
+"while it deteriorated (Avranches, Paris, Mont-Saint-Michel…). Leave it empty"
+" when unknown.</p><p>This is not where the object was analysed: that place "
+"is recorded in the Analysis record.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Temporality of Group"
+msgid "Identifiers of the project"
 msgstr ""
 
 #: cards:1
-msgid "Leaving Group event"
-msgstr ""
-
-#: cards:1
-msgid "Identifier"
-msgstr ""
-
-#: cards:1
-msgid "Production of Component"
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the project, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"the Wikidata page of the project, "
+"<code>https://www.wikidata.org/entity/Q00000000</code> (a placeholder), "
+"Source « Wikidata » (no Type needed). a DOI written "
+"<code>https://doi.org/…</code> takes Type « DOI (Digital Object Identifier) "
+"»; an ARK from ARCA takes Source « ARCA » and Type « ARK (Archival Resource "
+"Key) ».</p>"
 msgstr ""
 
 #: cards:1
@@ -869,6 +1122,22 @@ msgstr ""
 
 #: cards:1
 msgid "Google service used to track application usage and other metrics"
+msgstr ""
+
+#: cards:1
+msgid "Identifier of the place"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the place, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"the Geonames page of Avranches (Normandie), "
+"<code>https://www.geonames.org/3035639/</code>, Source « Geonames » (no Type"
+" needed). Other sources of the list are used the same way (« Wikidata », « "
+"Biblissima »…).</p>"
 msgstr ""
 
 #: cards:1
@@ -883,7 +1152,164 @@ msgid ""
 msgstr ""
 
 #: cards:1
+msgid "Leaving Group event"
+msgstr ""
+
+#: cards:1
+msgid "Date of leaving"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A departure is usually dated approximately, so give a range: « between "
+"1160 and 1170 » is the earliest possible date in the required "
+"<strong>Date</strong> (the begin) and the latest possible date in "
+"<strong>Date (end of the end)</strong>, as <code>YYYY-MM</code> or a year "
+"alone. With the choice above them, mark the dates « Approximative » when "
+"they are not certain, « Confirmed » when they are.</p><p>For a finer "
+"reading, the four fields are: begin (<strong>Date</strong>), latest begin "
+"(<strong>Date (end of the begin)</strong>), earliest end (<strong>Date (end "
+"approximative)</strong>) and latest end (<strong>Date (end of the "
+"end)</strong>). When only the period is known, use the sub-card below.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Temporality of Person"
+msgstr ""
+
+#: cards:1
+msgid "Historical or contemporary"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Choose in <strong>Temporality</strong> « Historical person » (true) for a"
+" person of the past (e.g. a medieval scribe) or « Contemporary person » "
+"(false) for a person of today (e.g. a researcher or an instrument operator "
+"of today): a living researcher is always « Contemporary person ».</p><p>For "
+"a contemporary person, record only what the person has made public or agreed"
+" to share, and no private detail in <strong>Statement</strong>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Statement"
+msgstr ""
+
+#: cards:1
+msgid "Describing the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text, written in <strong>Content</strong> and classed by "
+"<strong>Type</strong>: « description » for what is seen, « note » for a "
+"remark, « conditions » for the circumstances of the intervention. E.g. type "
+"« note »: <em>later addition in an opaque paint over the original "
+"background</em>.</p><p>Give the <strong>Language</strong> of the text and, "
+"in <strong>Source</strong>, the full web address of the document it comes "
+"from, if any. The process itself is described in the card « Description "
+"process ».</p>"
+msgstr ""
+
+#: cards:1
 msgid "Identifier(s)"
+msgstr ""
+
+#: cards:1
+msgid "Identifiers of the instrument"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the instrument, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"the page of the device model in Wikidata, "
+"<code>https://www.wikidata.org/entity/Q00000</code> (a placeholder), Source "
+"« Wikidata » (no Type needed); a DOI written <code>https://doi.org/…</code> "
+"takes Type « DOI (Digital Object Identifier) ». This card is not for local "
+"codes or serial numbers: the name of the record is entered in « Name(s) of "
+"instrument ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Identifiers of the analysis"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per identifier. <strong>Value (URI)</strong> (required) holds "
+"the identifier of the analysis and <strong>Type</strong> says what kind it "
+"is. For a persistent identifier, store the full URL and pick the matching "
+"<strong>Source</strong>; add the <strong>Type</strong> when the Source does "
+"not say it all, e.g. an ARCA ARK: Source « ARCA », Type « ARK (Archival "
+"Resource Key) ».</p><p>On an analysis, a short local code is also accepted: "
+"type it as it is (e.g. <code>X01</code>), with Type « Internal Identifier » "
+"and no Source. It is not a URI.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Temporality of Group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Choose in <strong>Temporality</strong> « Historical group » (true) for a "
+"group of the past (e.g. a monastic order) or « Contemporary group » (false) "
+"for a group that exists today (e.g. a research centre or a library).</p><p>A"
+" group is an organization, a community or a family; the persons who belong "
+"to it are linked from their own record, in « Is (was) member of ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Identifiers of the document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the document, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"the ARCA ARK <code>https://arca.irht.cnrs.fr/ark:/63955/md56zw130x58</code>,"
+" Source « ARCA », Type « ARK (Archival Resource Key) »; or the Biblissima "
+"page <code>https://data.biblissima.fr/entity/Q210045</code>, Source « "
+"Biblissima » (no Type needed). A shelfmark is not entered here: it belongs "
+"in the name of the document.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Production of Component"
+msgstr ""
+
+#: cards:1
+msgid "Describing how the component was made"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Fill only what differs from the document or adds to it: <strong>Produced "
+"by</strong> (a Person or Group record, e.g. the illuminator's workshop), "
+"<strong>Motivated by</strong>, <strong>Produced at Place</strong>, and on "
+"the map <strong>Geographical location</strong> (draw it: strongly "
+"recommended, a point is enough, a line or a polygon for an area when known; "
+"the Place record ties the component to the rest of the data). "
+"<strong>Techniques used</strong> (2 028 terms) and <strong>Cultural "
+"influences</strong> (406 terms) are long lists: type to search and pick the "
+"most specific term, checking the parent shown when several terms share a "
+"label.</p><p>Production is usually dated approximately, so give a range: « "
+"between 1030 and 1060 » is the earliest possible date in "
+"<strong>Date</strong> (the begin, mandatory once the card is used) and the "
+"latest possible date in <strong>end of the end</strong>, here "
+"<code>1030</code> and <code>1060</code> (a year or a year-month, e.g. "
+"<code>1030-01</code>). Set the <strong>Date</strong> switch to « "
+"Approximative » when the dates are not certain, « Confirmed » when they "
+"are.</p><p>For a finer reading, the four fields are: begin "
+"(<strong>Date</strong>), latest begin (<strong>end of the begin</strong>), "
+"earliest end (<strong>Date (end approximative)</strong>) and latest end "
+"(<strong>end of the end</strong>). When only the period is known, use the "
+"sub-card « Production period ».</p>"
 msgstr ""
 
 #: cards:1
@@ -891,7 +1317,22 @@ msgid "TimeSpan about alteration process"
 msgstr ""
 
 #: cards:1
-msgid "Statement about Instrumentation"
+msgid "Dating the alteration"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>An alteration is usually dated approximately, so give a range: « between "
+"1850 and 1900 » is the earliest possible date in <strong>Date</strong> "
+"(required, the begin) and the latest possible date in <strong>Date (end of "
+"the end)</strong>, here <code>1850</code> and <code>1900</code>. A date is a"
+" year or a month, e.g. <code>1850</code> or <code>1850-03</code>. Choose « "
+"Approximative » in the first field when the dates are not certain, « "
+"Confirmed » when they are.</p><p>For a finer reading, the four fields are: "
+"begin (<strong>Date</strong>), latest begin (<strong>Date (end of the "
+"begin)</strong>), earliest end (<strong>Date (end approximative)</strong>) "
+"and latest end (<strong>Date (end of the end)</strong>). When only the "
+"period is known, complete the sub-card « Alteration process period ».</p>"
 msgstr ""
 
 #: cards:1
@@ -899,21 +1340,78 @@ msgid "Dataset Evaluation"
 msgstr ""
 
 #: cards:1
-msgid "Type of Place"
-msgstr ""
-
-#: cards:1
-msgid "Identifier of Person"
-msgstr ""
-
-#: cards:1
-msgid "Thesaurus Service Providers"
+msgid "Evidence for the inference"
 msgstr ""
 
 #: cards:1
 msgid ""
-"Arches can access Thesaurus services, such as the Getty AAT, to acquire "
-"thesaurus entries using the Reference Data Manager (RDM)"
+"<p>Groups the evidence behind the inference above. Open the sub-card « Data "
+"Evaluation » and add one entry per observation that supports it.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Type of Group"
+msgstr ""
+
+#: cards:1
+msgid "Kind of group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Choose in <strong>Type</strong> the most specific item of the list. It is"
+" long (226 terms in 3 branches: « AAT - General Group Types », « groups and "
+"collectivities », « Organizations »): type to search. E.g. « monastic order "
+"» for an abbey community, « research centers (institutions) » for a "
+"laboratory, « academic libraries (institutions) » for a university library. "
+"For a library, choose « library (institution) » (a municipal library is not "
+"academic).</p><p>Several items are accepted, but one is usually enough.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Type of Project"
+msgstr ""
+
+#: cards:1
+msgid "Kind of project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong> (required), choose « project » for a research "
+"project as a whole, « research task » for one of its tasks or work packages,"
+" or « experiment » for a single experimental campaign.</p><p>Link a task to "
+"its parent project in the card « Part of Project ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Writing a statement"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the component, written in "
+"<strong>Content</strong> (required) and classed by <strong>Type</strong>: « "
+"description », « materials », « inscriptions », « note »… E.g. type « "
+"description »: <em>blue initial with a foliate extension in the "
+"margin</em>.</p><p>Give the <strong>Language</strong> of the text and, in "
+"<strong>Source</strong>, the URL of the catalogue or study it comes from, if"
+" any. Identified materials are not recorded here but as Characterization "
+"records.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the analysis, written in "
+"<strong>Content</strong> and classed by <strong>Type</strong>: « instrument "
+"settings » or « configuration » for the acquisition parameters (e.g. the "
+"step size and the dwell time of a mapping), « methodology », « conditions » "
+"or « note » for the rest. Pick a Type so that the statements can be told "
+"apart; the content is stored as formatted text.</p><p>Give the "
+"<strong>Language</strong> of the text when it matters and, in "
+"<strong>source</strong>, the URL of the document it comes from, if any. "
+"Identified materials are not recorded here but as Characterization "
+"records.</p>"
 msgstr ""
 
 #: cards:1
@@ -928,11 +1426,51 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Type of Project"
+msgid "Type of Document"
 msgstr ""
 
 #: cards:1
-msgid "Type of Group"
+msgid "Choosing the type of document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong> (required), choose one term of the list. It is a"
+" tree of 162 terms: type to search and pick the most specific term that "
+"fits, e.g. « manuscript » for a manuscript codex (the term used for MS "
+"59).</p><p>One term only. If nothing fits better, choose a broader term such"
+" as « book » rather than leaving the field empty.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Thesaurus Service Providers"
+msgstr ""
+
+#: cards:1
+msgid ""
+"Arches can access Thesaurus services, such as the Getty AAT, to acquire "
+"thesaurus entries using the Reference Data Manager (RDM)"
+msgstr ""
+
+#: cards:1
+msgid "Identifier of Person"
+msgstr ""
+
+#: cards:1
+msgid "Identifier of the person"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One persistent identifier only: the card takes a single entry, so choose "
+"the most stable one. <strong>Value (URI)</strong> (required) holds the full "
+"URL of the person, not a bare number or code; <strong>Source</strong> names "
+"the database that issued it (« ORCID », « VIAF », « ISNI », « Wikidata », « "
+"BNF ID »…).</p><p>E.g. <code>https://orcid.org/0000-0000-0000-0000</code> (a"
+" placeholder), Source « ORCID », Type « persistent identifiers ». "
+"<strong>Type</strong> is required in this card: pick « persistent "
+"identifiers », or a more specific child such as « ARK (Archival Resource "
+"Key) » when it applies.</p>"
 msgstr ""
 
 #: cards:1
@@ -940,23 +1478,111 @@ msgid "Layer"
 msgstr ""
 
 #: cards:1
-msgid "Type of Document"
+msgid "Which layer is characterized"
 msgstr ""
 
 #: cards:1
-msgid "Identified materials"
+msgid ""
+"<p>In <strong>Layer type</strong>, choose the layer of the object that the "
+"materials below belong to: « Colored layer » for a pigment or a dye, « "
+"Preparatory layer » for a ground, « Script » for an ink, « Support » for the"
+" parchment, « Non-painted layer » for a layer that is not paint, « Auxiliary"
+" device » for an auxiliary device.</p><p>One layer per Characterization: if "
+"two layers were identified, create two records and link them in « Correlated"
+" characterizations ». Choose « Decoration » or its child « Decorative book »"
+" only when none of the other items fits.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Identifier of Group"
+msgid "Identifiers of the modification"
 msgstr ""
 
 #: cards:1
-msgid "Author of Analysis"
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the modification, not a bare number or "
+"code; <strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"an ARK such as <code>https://example.org/ark:/00000/xyz</code> (a "
+"placeholder) takes Type « ARK (Archival Resource Key) » and the Source that "
+"issued it, when it is in the list; a DOI written "
+"<code>https://doi.org/…</code> takes Type « DOI (Digital Object Identifier) "
+"». This card is not for local codes: the name of the record is entered in « "
+"Name ».</p>"
 msgstr ""
 
 #: cards:1
-msgid "People Membership"
+msgid "Type of Place"
+msgstr ""
+
+#: cards:1
+msgid "Kind of place"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Choose in <strong>Type</strong> (required) the kind of geopolitical unit,"
+" e.g. « city-town » for Avranches or Paris, « region » for a region such as "
+"« France (nord) ». The list has 67 terms, some nested (« region » › « "
+"province »): type to search and pick the most specific term that "
+"fits.</p><p>Choose the kind the place had in the period you describe; a "
+"place that changed status can be explained in a « Statement ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Statement about Instrumentation"
+msgstr ""
+
+#: cards:1
+msgid "Describing the instrument"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text, written in <strong>Content</strong> and classed by "
+"<strong>Type</strong>: « description » for the device, « configuration » for"
+" its components, « instrument settings » for usual settings. E.g. type « "
+"configuration »: <em>X-ray tube with a rhodium anode, silicon drift "
+"detector</em>.</p><p>Give the <strong>Language</strong> of the text and, in "
+"<strong>source</strong>, the full web address of the document it comes from,"
+" if any. Settings used for a given analysis belong to that Analysis "
+"record.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Technique of the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Technique</strong> (required), type a word to search the list "
+"and choose the most specific item, reading its parent path because many "
+"labels exist under several groups. For a painted intervention, look under « "
+"painting technique », e.g. « paint application » or « illuminated »; « "
+"varnishing technique » covers varnishes.</p><p>Beware: « retouching » is "
+"filed under « photographic technique » only. This is the technique used to "
+"modify the document, not an analytical technique: those belong to the "
+"Analysis records.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Type of Component"
+msgstr ""
+
+#: cards:1
+msgid "What the component is"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong> (required), choose what the component is. Common"
+" cases: « Support » for the parchment, « Script » for an ink text or "
+"incipit, « initial » for a decorated or coloured letter (under Decoration › "
+"Decorative book), « illumination » for a painted scene or "
+"decoration.</p><p>Several terms are allowed when the component is both, e.g."
+" « initial » and « Script » for a letter that is part of the text. The "
+"layers or parts it shows (leaf, handwriting…) go in « Description features "
+"», not here.</p>"
 msgstr ""
 
 #: cards:1
@@ -970,27 +1596,154 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Type of Component"
+msgid "Describing the alteration"
 msgstr ""
 
 #: cards:1
-msgid "Current location"
+msgid ""
+"<p>One entry per text, written in <strong>Content</strong> and classed by "
+"<strong>Type</strong>: « description » for what is seen, « hypothesis » for "
+"a suspected cause, « conditions » for the storage or environment, « note » "
+"for the rest. E.g. type « description »: <em>brown halo around the green "
+"passages, stronger along the lower margin</em>.</p><p>Give the "
+"<strong>Language</strong> of the text and, in <strong>Source</strong>, the "
+"full web address of the document it comes from, if any. The interpretation "
+"drawn from analyses belongs to « Inference making ».</p>"
 msgstr ""
 
 #: cards:1
-msgid "Type of Alteration"
+msgid ""
+"<p>One entry per text about the place, written in <strong>Content</strong> "
+"(required) and classed by <strong>Type</strong>: « description », « note »… "
+"E.g. type « description »: two sentences on the history and the extent of "
+"the place.</p><p>Give the <strong>Language</strong> of the text and, in "
+"<strong>source</strong>, the URL of the document it comes from, if any. "
+"Dates and identifiers have their own cards: do not repeat them here.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Techniques usage"
+msgid "Identified materials"
 msgstr ""
 
 #: cards:1
-msgid "Period Activity"
+msgid "Listing the identified materials"
 msgstr ""
 
 #: cards:1
-msgid "Description process"
+msgid ""
+"<p>One entry per material identified in the layer. In "
+"<strong>Material</strong>, type part of the name to search the tree and pick"
+" the most specific item, not its branch; pigments are under « Coloring "
+"material », grouped by colour (e.g. « red pigment » › « red lead », « white "
+"pigment » › « lead white », « blue pigment » › « lapis lazuli »). If two "
+"items bear the same name, check which branch they belong to.</p><p>Then "
+"choose your <strong>Confidence</strong>: « Highly reliable », « Reliable », "
+"« Use with caution » or « Uncertain ». Fill <strong>Proportion</strong> and "
+"its <strong>Unit</strong> (« Percent », « Mass percent » or « Parts ») only "
+"when the proportion was actually estimated, e.g. <code>30</code> in « "
+"Percent ». The reasoning behind the identification goes in « Inference "
+"Making ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "People Membership"
+msgstr ""
+
+#: cards:1
+msgid "People of the person"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. In <strong>People</strong>, choose one or several peoples the "
+"person is associated with, e.g. « Celts » or « Arabs ». The list is long "
+"(406 terms): type to search and pick the most specific item, e.g. « "
+"Merovingians » (under « Franks ») rather than « Franks ».</p><p>This is not "
+"membership of an organization: use « Is (was) member of » for that.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Describing the project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text, written in <strong>Content</strong> and classed by "
+"<strong>Type</strong>: « abstract / summary / resumé » for the presentation "
+"of the project, « description (activity) » for what is done, « methodology "
+"», « acknowledgments » for funding and partners, « brief text » for a short "
+"presentation. Several types can be chosen for one text. E.g. an abstract of "
+"a few paragraphs.</p><p>Give the <strong>Language</strong> of the text and, "
+"in <strong>Source</strong>, the URL of the page it comes from, e.g. the "
+"project page of the host laboratory. Dates have their own card: do not "
+"repeat them here.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Identifier of Group"
+msgstr ""
+
+#: cards:1
+msgid "Identifier of the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the group, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"<code>https://data.biblissima.fr/entity/Q80553</code>, Source « Biblissima »"
+" (no Type needed); other sources of the list: « ISNI », « VIAF », « Wikidata"
+" », « BNF ID »… An ARK from ARCA takes Source « ARCA » and Type « ARK "
+"(Archival Resource Key) ».</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the document, written in "
+"<strong>Content</strong> (required) and classed by <strong>Type</strong>: « "
+"description », « provenance statement », « foliation », « inscriptions », « "
+"note »… E.g. type « foliation »: <em>modern pencil foliation, top right of "
+"each recto</em>.</p><p>Give the <strong>Language</strong> of the text and, "
+"in <strong>Source</strong>, the URL of the catalogue or study it comes from,"
+" if any.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Author of Analysis"
+msgstr ""
+
+#: cards:1
+msgid "Who carried out the analysis"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Produced by</strong>, choose the persons and groups who "
+"carried out the acquisition, e.g. the laboratory group (a Group record) and,"
+" if you wish, the operator (a Person record). They must already exist: "
+"create them first if needed.</p><p>The author of the zone drawn on the image"
+" is recorded separately, in « Component observed by Analysis ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Defined by"
+msgstr ""
+
+#: cards:1
+msgid "Drawing the place on the map"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Localisation</strong>, draw the place on the map. This is "
+"strongly recommended: the map of the site shows records only through these "
+"drawings. A point is enough for a town or a site (e.g. Avranches); use a "
+"line for a road or a river, a polygon for a region or the extent of a "
+"kingdom.</p><p>Draw only what the sources support. For a vanished place, "
+"draw its best-documented extent and explain the choice in a « Statement "
+"».</p>"
 msgstr ""
 
 #: cards:1
@@ -1004,11 +1757,21 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Member of"
+msgid "Type of Alteration"
 msgstr ""
 
 #: cards:1
-msgid "Description features"
+msgid "Choosing the type of alteration"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong> (required), type a word to search the list and "
+"choose the most specific item, e.g. « darkening » (under « color changes › "
+"discoloration ») rather than « color changes », or « yellowing », « fading "
+"», « flaking », « delamination », « chalking », « cracking ».</p><p>The type"
+" names the phenomenon, not its cause: record a suspected cause in « "
+"Inference making ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1016,7 +1779,16 @@ msgid "Project of Analysis"
 msgstr ""
 
 #: cards:1
-msgid "Gender of Person"
+msgid "Linking the analysis to its project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Project</strong>, choose the research project under which the "
+"analysis was made, e.g. Project EMMA for the analyses of the Avranches "
+"manuscripts.</p><p>The analysis follows its project's access rules: if the "
+"project is restricted (embargo), its analyses are hidden from the public "
+"too.</p>"
 msgstr ""
 
 #: cards:1
@@ -1024,7 +1796,231 @@ msgid "Detected elements"
 msgstr ""
 
 #: cards:1
-msgid "Defined by"
+msgid "Chemical elements detected"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per level of abundance: choose the <strong>Level</strong> (« "
+"Major », « Minor » or « Trace »), then select all the "
+"<strong>Elements</strong> detected at that level. Elements are listed by "
+"name (e.g. « Mercury » and « Sulfur » at level « Major »).</p><p>This lists "
+"what the measurement shows, whatever the interpretation; the materials you "
+"deduce from it go in « Identified materials ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Description features"
+msgstr ""
+
+#: cards:1
+msgid "Layers and parts described"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong>, choose every layer or part that the description"
+" of the component mentions. Common cases: « Leaf » for a parchment folio, « "
+"Handwriting » for an ink text. The list has 44 terms (« Pictorial layer », «"
+" Primer », « Book block »…): type to search and pick the most specific. "
+"Several terms are allowed.</p><p>This says what is there, not what it is "
+"made of: the pigments and materials identified by analysis are recorded in "
+"Characterization records.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Current location"
+msgstr ""
+
+#: cards:1
+msgid "Where the document is kept"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Place</strong>, choose the Place record of the town or site "
+"where the document is kept today, e.g. « Avranches (Normandie) ». Create the"
+" Place record first if it does not exist.</p><p>Then draw the location on "
+"the map in <strong>Location</strong>: this is strongly recommended, because "
+"the map of the site shows records only through these drawings. A point is "
+"enough; use a line or a polygon for an area when you know it. The Place "
+"record ties the document to the rest of the data. The institution that owns "
+"the document goes in « Current owner ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Member of"
+msgstr ""
+
+#: cards:1
+msgid "Group within a larger group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Group</strong>, choose the Group record of the larger group "
+"this group is, or was, part of, e.g. a priory within a monastic order. "
+"Create that Group record first if it does not exist.</p><p>The card holds "
+"one group. To link persons to a group, use « Is (was) member of » on the "
+"Person record.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Techniques usage"
+msgstr ""
+
+#: cards:1
+msgid "Techniques the instrument serves"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Techniques</strong> (required), type a word to search the list"
+" of analysis and examination techniques and choose the most specific items, "
+"one for each technique the instrument is used for: « portable X-ray "
+"fluorescence », « X-ray microfluorescence », « fiber optic reflectance "
+"spectrometry », « Fourier transform infrared spectrometry », « Raman "
+"spectrometry »…</p><p>This describes the device. The technique of a given "
+"measurement is chosen in the Analysis record.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Description process"
+msgstr ""
+
+#: cards:1
+msgid "Describing the process used"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Used_Process</strong>, describe in a few words how the "
+"intervention was carried out and with what, e.g. <em>repainting of the "
+"losses with an opaque water-based paint</em>.</p><p>Longer comments, sources"
+" and doubts go in a « Statement ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Gender of Person"
+msgstr ""
+
+#: cards:1
+msgid "Gender of the person"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. Choose in <strong>Gender</strong> the term used by the sources "
+"or stated by the person: « female », « male », « nonbinary gender "
+"»…</p><p>Leave it empty when it is unknown, and do not infer it from a name."
+" For a contemporary person, fill it only with their agreement.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Period Activity"
+msgstr ""
+
+#: cards:1
+msgid "Dating the project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per phase of the project. <strong>Status</strong> (required) is"
+" « In preparation », « Activity in progress », « Activity completed » or « "
+"Discontinued activity »; <strong>Start Date</strong> (required) is a full "
+"date <code>YYYY-MM-DD</code>, e.g. <code>2018-10-01</code>; <strong>End "
+"Date</strong> stays empty while the project runs. When a date is only "
+"approximate, give the earliest possible day for the start and the latest "
+"possible day for the end, and say it in a « Statement ».</p><p>E.g. status «"
+" Activity in progress », a start date, no end date. When the project ends, "
+"set the status to « Activity completed » and fill the end date.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Part of Instrument"
+msgstr ""
+
+#: cards:1
+msgid "Instrument it belongs to"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Instrument</strong>, choose the Instrument record this one is "
+"a part of, e.g. a probe or a detector that belongs to a "
+"spectrometer.</p><p>Enter the link on the part, not on the whole.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Inference Making"
+msgstr ""
+
+#: cards:1
+msgid "Explaining the identification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Inference making</strong>, write the reasoning that leads from"
+" the measurements to the materials: which elements or bands were found, with"
+" which techniques, why they point to this material, and what remains "
+"uncertain. You can write it in English and in French.</p><p>List the "
+"Analyses that support it in <strong>Analyses used as evidence</strong> (one "
+"record per measurement or mapping), the persons, groups or project "
+"responsible in <strong>Authors of inference</strong>, and the <strong>Start "
+"Date</strong> of the work (as <code>YYYY-MM-DD</code>; <strong>End "
+"Date</strong> only if it lasted).</p>"
+msgstr ""
+
+#: cards:1
+msgid "Identifiers of the alteration"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per persistent identifier. <strong>Value (URI)</strong> "
+"(required) holds the full URL of the alteration, not a bare number or code; "
+"<strong>Source</strong> names the database that issued it; add "
+"<strong>Type</strong> only when the Source does not say it all.</p><p>E.g. "
+"an ARK such as <code>https://example.org/ark:/00000/xyz</code> (a "
+"placeholder) takes Type « ARK (Archival Resource Key) » and the Source that "
+"issued it, when it is in the list; a DOI written "
+"<code>https://doi.org/…</code> takes Type « DOI (Digital Object Identifier) "
+"». This card is not for local codes: the name of the record is entered in « "
+"Name ».</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the group, written in <strong>Content</strong> "
+"and classed by <strong>Type</strong>: « brief text » for a short "
+"presentation, « description » for a longer one, « note » or « provenance "
+"statement » for the rest. E.g. type « brief text »: one or two sentences on "
+"the mission of the group.</p><p>Give the <strong>Language</strong> of the "
+"text and, in <strong>Source</strong>, the URL of the page it comes from, "
+"e.g. the website of the group. Dates and identifiers have their own cards: "
+"do not repeat them here.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Document modified"
+msgstr ""
+
+#: cards:1
+msgid "Locating the modified document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Document/Component</strong> (required), choose the Document or"
+" Components that were modified; prefer the Component when the intervention "
+"is limited to it. <strong>Features object modified</strong> says which layer"
+" or part was changed: « Overpaint », « Consolidation layer », « Varnish "
+"layer », « Book cover », « Leaf »…</p><p>In <strong>Literal location of "
+"document modification</strong>, open the image and draw the modified zone, "
+"and give its author in <strong>Annotator of location "
+"modification</strong>.</p>"
 msgstr ""
 
 #: cards:1
@@ -1036,10 +2032,15 @@ msgid "Date of acquisition analysis."
 msgstr ""
 
 #: cards:1
+msgid "Dates of acquisition"
+msgstr ""
+
+#: cards:1
 msgid ""
-"<p>The &quot;<strong>End Date</strong>&quot; of experience acquisition corresponds to the end of a long acquisition (e.g. 2 days).</p>\n"
-"\n"
-"<p>If your acquisition takes place over a short period of time, then use only the &ldquo;<strong>Start Date</strong>&rdquo; data entry.</p>\n"
+"<p>The <strong>Start Date</strong> is the day of the acquisition. The "
+"<strong>End Date</strong> is only for a long acquisition (e.g. a mapping "
+"over 2 days).</p><p>If the acquisition took place over a short period, fill "
+"only the <strong>Start Date</strong>.</p>"
 msgstr ""
 
 #: cards:1
@@ -1055,11 +2056,18 @@ msgid "Component expression context. Example: 'L' letter in red "
 msgstr ""
 
 #: cards:1
-msgid "Birth"
+msgid "Describing the context"
 msgstr ""
 
 #: cards:1
-msgid "Document modified"
+msgid ""
+"<p>In <strong>Context</strong>, write one short line that says what the "
+"component looks like, e.g. <em>\"ET\" initial red blue yellow</em> or "
+"<em>'C' initial in blue</em>. It helps tell apart two components of the same"
+" type in the same document.</p><p>Do not repeat the folio (it is in the name"
+" and in « Location appellation »). The colours also go in « Color(s) of "
+"Component », which is what visitors filter on. Write plain text, without "
+"codes.</p>"
 msgstr ""
 
 #: cards:1
@@ -1067,11 +2075,39 @@ msgid "Current owner"
 msgstr ""
 
 #: cards:1
-msgid "Inference Making"
+msgid "Who owns the document"
 msgstr ""
 
 #: cards:1
-msgid "Part of Instrument"
+msgid ""
+"<p>In <strong>Person/Group</strong>, choose the owner today. For MS 59 it is"
+" the Group « Bibliothèque municipale Edouard Le Héricher (Avranches) ». They"
+" must already exist as Person or Group records: create them first if "
+"needed.</p><p>The owner is not always the place where the document is kept: "
+"that goes in « Current location ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Birth"
+msgstr ""
+
+#: cards:1
+msgid "Date of birth"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A birth is usually dated approximately, so give a range: « between 1090 "
+"and 1099 » is the earliest possible date in the required "
+"<strong>Date</strong> (the begin) and the latest possible date in "
+"<strong>Date (end of the end)</strong>, as <code>YYYY-MM-DD</code>, "
+"<code>YYYY-MM</code> or a year alone. With the choice above them, mark the "
+"dates « Approximative » when they are not certain, « Confirmed » when they "
+"are.</p><p>For a finer reading, the four fields are: begin "
+"(<strong>Date</strong>), latest begin (<strong>Date (end of the "
+"begin)</strong>), earliest end (<strong>Date (end approximative)</strong>) "
+"and latest end (<strong>Date (end of the end)</strong>). When only the "
+"period is known, use the sub-card « Birth period ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1081,23 +2117,32 @@ msgstr ""
 #: cards:1
 msgid ""
 "The inverse relation is not created automatically: if A lies above B, record"
-" \"lies below\" on B."
+" « Lies below » on B. The same goes for « Confirms », « Contradicts », « "
+"Same material elsewhere » and « Mixture or superposition (uncertain) »: "
+"record them on each record concerned."
 msgstr ""
 
 #: cards:1
-msgid "Carried out by Actor"
+msgid "Death"
 msgstr ""
 
 #: cards:1
-msgid "Place of acquisition"
+msgid "Date of death"
 msgstr ""
 
 #: cards:1
-msgid "Place where the instrument was used to produce the analysis"
-msgstr ""
-
-#: cards:1
-msgid "Dimension(s) of instrument"
+msgid ""
+"<p>A death is usually dated approximately, so give a range: « between 1450 "
+"and 1460 » is the earliest possible date in the required "
+"<strong>Date</strong> (the begin) and the latest possible date in "
+"<strong>Date (end of the end)</strong>, as <code>YYYY-MM</code> or a year "
+"alone. With the choice above them, mark the dates « Approximative » when "
+"they are not certain, « Confirmed » when they are.</p><p>For a finer "
+"reading, the four fields are: begin (<strong>Date</strong>), latest begin "
+"(<strong>Date (end of the begin)</strong>), earliest end (<strong>Date (end "
+"approximative)</strong>) and latest end (<strong>Date (end of the "
+"end)</strong>). When only the period is known, use the sub-card « Death "
+"period ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1109,11 +2154,18 @@ msgid "show feature of colors"
 msgstr ""
 
 #: cards:1
-msgid "Occured in presence of Material"
+msgid "Colours of the component"
 msgstr ""
 
 #: cards:1
-msgid "Death"
+msgid ""
+"<p>In <strong>Color(s)</strong>, choose the colours you see on the "
+"component, one term per colour, e.g. « Red », « Blue » and « Yellow » for "
+"the initial above, or « Golden » for gilding. The list offers 15 colours "
+"(Silvery, Beige, White, Blue, Brown, Coppery, Golden, Grey, Yellow, Black, "
+"Orange, Pink, Red, Green, Violet).</p><p>These colours are what visitors use"
+" to find the component; the colour of each identified material is recorded "
+"in its Characterization record.</p>"
 msgstr ""
 
 #: cards:1
@@ -1121,23 +2173,130 @@ msgid "Production of Document"
 msgstr ""
 
 #: cards:1
-msgid "Object altered"
+msgid "Describing how the document was made"
 msgstr ""
 
 #: cards:1
-msgid "Details about the part of the object that has been altered"
+msgid ""
+"<p>Say who made it and where: <strong>Produced by</strong> (a Group or "
+"Person record, e.g. the « Abbaye du Mont-Saint-Michel (ordre monastique) » "
+"group for MS 59), <strong>Motivated by</strong> (e.g. the patron who ordered"
+" it), <strong>Produced at Place</strong> (e.g. « Le Mont-Saint-Michel ») "
+"and, on the map, <strong>Geographical location</strong> (draw it: strongly "
+"recommended, a point is enough, a line or a polygon for an area when known; "
+"the Place record ties the document to the rest of the data). "
+"<strong>Techniques used</strong> and <strong>Cultural influences</strong> "
+"are long lists (2 028 and 406 terms): type to search and pick the most "
+"specific term, checking the parent shown when several terms share a label. "
+"<strong>Influenced by</strong> takes any Place, Person, Group, Document or "
+"Component record.</p><p>A manuscript is usually dated approximately, so give"
+" a range: « between 1030 and 1045 » is the earliest possible date in "
+"<strong>Date</strong> (the begin, mandatory) and the latest possible date in"
+" <strong>Date (end approximative)</strong> (the end), as a year or a year-"
+"month. E.g. MS 59: <code>1030-01</code> to <code>1045-01</code>. Set the "
+"<strong>Date</strong> switch to « Approximative » when the dates are not "
+"certain, « Confirmed » when they are. When only the period is known, use the"
+" sub-card « Period production » (a century or a named period).</p>"
 msgstr ""
 
 #: cards:1
-msgid "Instrumentals techniques used during the project"
+msgid "Dimension(s) of instrument"
 msgstr ""
 
 #: cards:1
-msgid "Current location of Instrument"
+msgid "Dimensions of the instrument"
 msgstr ""
 
 #: cards:1
-msgid "Is (was) member of"
+msgid ""
+"<p>One entry per dimension: <strong>Type</strong> (optional, e.g. « height "
+"», « width », « weight (heaviness attribute) »), <strong>Value</strong> "
+"(required, a number) and <strong>Unit</strong> (required, e.g. « centimeters"
+" », « kilograms »).</p><p>E.g. type « weight (heaviness attribute) », value "
+"<code>1.5</code>, unit « kilograms ». Do not leave the Type empty: a bare "
+"number says nothing.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Carried out by Actor"
+msgstr ""
+
+#: cards:1
+msgid "Who carried out the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Carried_Out_by_Actor</strong>, choose the Person or Group "
+"records responsible for the intervention, e.g. a restoration workshop or a "
+"later owner. Create them first if needed.</p><p>Leave it empty when the "
+"author is unknown: say so in a « Statement ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Who carries out the project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Actors</strong> (required), choose the Person and Group "
+"records that carry out the project: the research team and the partner "
+"institutions, e.g. « Université de Caen Normandie/CRAHAM » and « Centre de "
+"la Recherche sur la Conservation (CNRS / MNHN / Ministère de la Culture) ». "
+"Create them first if needed.</p><p>The operator of a given measurement is "
+"recorded in the Analysis record, not here.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Occured in presence of Material"
+msgstr ""
+
+#: cards:1
+msgid "Material involved"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Material</strong>, type a word to search the list and choose "
+"the most specific item, reading its parent path because many labels exist "
+"twice. Pigments are under « Coloring material › Pigment », e.g. « red lead "
+"», « lead white » or « lapis lazuli »; when the material is not identified, "
+"choose « unknown ». One material per record.</p><p>Fill this card before the"
+" sub-card « Data Evaluation »: its field <strong>Observed</strong> picks the"
+" material recorded here.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Place of acquisition"
+msgstr ""
+
+#: cards:1
+msgid "Place where the instrument was used to produce the analysis"
+msgstr ""
+
+#: cards:1
+msgid "Where the measurement was made"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Place</strong>, choose where the instrument was used, e.g. "
+"Avranches for an in-situ campaign at the library, or Paris for a measurement"
+" made in the laboratory. Choose an existing Place record; create it first if"
+" needed.</p><p>This is not where the document was produced or is kept: those"
+" places belong to the Document record.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the characterization, written in "
+"<strong>Content</strong> and classed by <strong>Type</strong>: « hypothesis "
+"», « note », « scientific analysis »… E.g. type « hypothesis »: <em>the "
+"layer could be a mixture, to be checked with a second "
+"technique</em>.</p><p>Give the <strong>Language</strong> of the text when it"
+" matters and, in <strong>Source</strong>, the URL of the document it comes "
+"from, if any. The main explanation of the identification goes in « Inference"
+" Making ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1151,6 +2310,136 @@ msgid ""
 msgstr ""
 
 #: cards:1
+msgid "Place it corresponds to"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Place</strong>, choose another Place record that this place "
+"approximates, e.g. link a record for a vanished kingdom with the modern "
+"country that covers most of it. It can be an existing or a vanished "
+"place.</p><p>This is not containment: use « Part of Places » when this place"
+" lies inside a larger one.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Object altered"
+msgstr ""
+
+#: cards:1
+msgid "Details about the part of the object that has been altered"
+msgstr ""
+
+#: cards:1
+msgid "Locating the altered object"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Object</strong> (required), choose the Document or Component "
+"that shows the alteration; prefer the Component when the alteration is "
+"limited to it. <strong>Object Type</strong> says which layer or part is "
+"affected: « Pictorial layer », « Leaf », « Handwriting », « Overpaint », « "
+"Varnish layer »…</p><p>In <strong>Localisation</strong>, open the image and "
+"draw the altered zone, and give its author in <strong>Annotator</strong>. "
+"Without a drawn zone, the alteration cannot be placed on the image.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Instrument used"
+msgstr ""
+
+#: cards:1
+msgid "Choosing the instrument"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Instrument</strong>, choose the Instrument record of the "
+"device used, e.g. a portable XRF spectrometer of a given make and model. "
+"Create the Instrument record first if it does not exist.</p><p>The settings "
+"used for this analysis (voltage, current, acquisition time, step size) go in"
+" a « Statement » of type « instrument settings », not in the Instrument "
+"record.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Is (was) member of"
+msgstr ""
+
+#: cards:1
+msgid "Membership of a group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Group</strong>, choose the Group record of an organization, "
+"community or family the person belonged to, e.g. a monastic order for a "
+"historical person or a research centre for a contemporary one. Create the "
+"Group record first if it does not exist.</p><p>This card holds one group. "
+"The dates of entry and exit go in the sub-cards « Joining Group » and « "
+"Leaving Group ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Instrumentals techniques used during the project"
+msgstr ""
+
+#: cards:1
+msgid "Techniques of the project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Techniques</strong>, choose the analysis and examination "
+"techniques planned or used in the project, e.g. « fiber optic reflectance "
+"spectrometry », « portable X-ray fluorescence » or « Raman spectrometry ». "
+"The list is long (322 terms): type to search and pick the most specific "
+"item, not its parent (« spectrometry »).</p><p>This is an overview of the "
+"project. Each Analysis record carries its own technique. Sampling is "
+"recorded on the Sample record.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Modification date"
+msgstr ""
+
+#: cards:1
+msgid "Dating the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A modification is usually dated approximately, so give a range: « between"
+" 1850 and 1900 » is the earliest possible date in <strong>Date</strong> "
+"(required, the begin) and the latest possible date in <strong>Date (end of "
+"the end)</strong>, here <code>1850</code> and <code>1900</code>. A date is a"
+" year or a month, e.g. <code>1850</code> or <code>1850-03</code>. Choose « "
+"Approximative » in the first field when the dates are not certain, « "
+"Confirmed » when they are.</p><p>For a finer reading, the four fields are: "
+"begin (<strong>Date</strong>), latest begin (<strong>Date (end of the "
+"begin)</strong>), earliest end (<strong>Date (end approximative)</strong>) "
+"and latest end (<strong>Date (end of the end)</strong>). When only the "
+"period is known, complete the sub-card « Modification period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Formation"
+msgstr ""
+
+#: cards:1
+msgid "Formation of the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>This card only groups what concerns the founding of the group. Give the "
+"date in « Formation timespan »; the « Formation period » card inside it "
+"gives the century and the named period, alone when only a period is known or"
+" beside a date.</p>"
+msgstr ""
+
+#: cards:1
 msgid "Part of"
 msgstr ""
 
@@ -1161,23 +2450,35 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Modification date"
+msgid "Linking to a larger document"
 msgstr ""
 
 #: cards:1
-msgid "Instrument used"
+msgid ""
+"<p>In <strong>Document</strong>, choose the Document record that contains "
+"this one, e.g. the manuscript when this record describes one of its "
+"codicological units.</p><p>Link upwards only: record the link on the part, "
+"not on the larger document. Nothing is created on the larger document.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Formation"
+msgid "Current location of Instrument"
 msgstr ""
 
 #: cards:1
-msgid "Current owner of Instrument"
+msgid "Where the instrument is now"
 msgstr ""
 
 #: cards:1
-msgid "Dimension"
+msgid ""
+"<p>In <strong>Place of Instrument</strong>, choose the Place record where "
+"the instrument is kept, e.g. the town of the laboratory (Paris…). Then, in "
+"<strong>Annotation of location</strong>, draw the position on the map: this "
+"is strongly recommended, because the map of the site shows records only "
+"through these drawings. A point is enough; use a line or a polygon for an "
+"area when you know it. The Place record ties the instrument to the rest of "
+"the data.</p><p>This is the current location only; for the owner see the "
+"card « Current owner of Instrument ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1185,7 +2486,46 @@ msgid "Took place at Place"
 msgstr ""
 
 #: cards:1
-msgid "Technique used"
+msgid "Where the modification took place"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Place</strong>, choose the Place record where the intervention"
+" was carried out, e.g. a workshop or a library, by its town (Avranches, "
+"Paris, Mont-Saint-Michel…). Then, in <strong>Literal location of "
+"Modification event</strong>, draw the position on the map: this is strongly "
+"recommended, because the map of the site shows records only through these "
+"drawings. A point is enough; use a line or a polygon for an area when you "
+"know it. The Place record ties the modification to the rest of the "
+"data.</p><p>This is not the place where the document is kept today.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the person, written in <strong>Content</strong> "
+"and classed by <strong>Type</strong>: « description » for a presentation of "
+"the person's work, « biography » for the life, « note » for anything else. "
+"E.g. type « biography »: two sentences on the career, in the language "
+"chosen.</p><p>Give the <strong>Language</strong> of the text and, in "
+"<strong>Source</strong>, the URL of the document it comes from, if any. "
+"Dates and identifiers have their own cards: do not repeat them here.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Current owner of Instrument"
+msgstr ""
+
+#: cards:1
+msgid "Who owns the instrument"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Actor/Group</strong> (required), choose the Person or Group "
+"records that own the instrument today, usually the laboratory or its "
+"institution (a Group record). Create them first if needed.</p><p>This is the"
+" owner, who is not always the operator of a given analysis.</p>"
 msgstr ""
 
 #: cards:1
@@ -1193,7 +2533,35 @@ msgid "Dissolution"
 msgstr ""
 
 #: cards:1
-msgid "Part of Project"
+msgid "Dissolution of the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>This card only groups what concerns the end of the group. Give the date "
+"in « Dissolution timespan »; the « Dissolution period » card inside it gives"
+" the century and the named period, alone when only a period is known or "
+"beside a date. Leave it empty for a group that still exists.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Technique used"
+msgstr ""
+
+#: cards:1
+msgid "Choosing the technique"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Technique</strong>, type part of the name to search the list, "
+"then pick the most specific item rather than its group. Items used so far: «"
+" portable X-ray fluorescence », « X-ray microfluorescence », « fiber optic "
+"reflectance spectrometry », « Fourier transform infrared spectrometry » and "
+"« laser desorption mass spectrometry ». Do not pick « Sample Taking "
+"Technique »: the sampling is described in the Sample record.</p><p>The "
+"technique sets how the spectra files of the analysis are plotted: fill this "
+"card before, or together with, the data files.</p>"
 msgstr ""
 
 #: cards:1
@@ -1201,7 +2569,103 @@ msgid "Item Feature of Component"
 msgstr ""
 
 #: cards:1
+msgid "Linking the component to its document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Part of (Document)</strong> (required), choose the Document "
+"that carries the component, e.g. « Avranches. Bibliothèque municipale "
+"Edouard Le Héricher, Ms. 59 » for the initials of MS 59. Create the Document"
+" record first if it does not exist.</p><p>The sub-cards below say how the "
+"component was made (« Production of Component ») and where it lies on the "
+"document's images (« Location in Document »).</p>"
+msgstr ""
+
+#: cards:1
+msgid "Part of Project"
+msgstr ""
+
+#: cards:1
+msgid "Parent project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Project</strong>, choose the Project record this one is a part"
+" of, e.g. a work package inside a research programme.</p><p>Enter the link "
+"on the part, not on the parent. For a project that merely inspired this one,"
+" use « Influenced by ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Recording an inference"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The conclusion drawn from the observations. Write it in <strong>Inference"
+" making</strong> (required), e.g. <em>the darkening is consistent with the "
+"degradation of a lead-based pigment</em>, and rate it in "
+"<strong>Confidence</strong> (required): « Highly confidence », « Good "
+"Confidence », « Use with caution » or « Unsure ».</p><p>Give the "
+"<strong>Start Date</strong> (required) and <strong>End Date</strong> of the "
+"interpretation and its <strong>Authors of inference</strong>. In "
+"<strong>Influenced by Characterization observation</strong> choose the other"
+" Alteration records the inference builds on. The supporting analyses go in "
+"the sub-cards.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Dimension"
+msgstr ""
+
+#: cards:1
+msgid "Recording a dimension"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per measurement: <strong>Type</strong> (height, width, depth, "
+"diameter, weight…), <strong>Value</strong> (required) and "
+"<strong>Unit</strong> (required). E.g. « height », <code>28.5</code>, « "
+"centimeters »; then a second entry for the « width ».</p><p>Measure the "
+"object as it is now, binding included, once per dimension. The number of "
+"leaves is not a dimension: use « Composed of ».</p>"
+msgstr ""
+
+#: cards:1
 msgid "Observed by Characterisation"
+msgstr ""
+
+#: cards:1
+msgid "Characterizations of the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Characterisation</strong>, choose the Characterization records"
+" that observed this modification, e.g. one identifying a pigment that did "
+"not exist when the document was made.</p><p>Create the Characterization "
+"records first; the link is entered from this side.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Profession activity"
+msgstr ""
+
+#: cards:1
+msgid "Profession or role"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Choose in <strong>Type</strong> the profession or official role of the "
+"person, e.g. « archivist », « copyist », « monk », « physicist » or « "
+"historian ». The list is long (270 terms, many grouped under a broader "
+"role): type to search and pick the most specific item.</p><p>Several terms "
+"are accepted, but one is usually enough: pick the role that matters most for"
+" the record.</p>"
 msgstr ""
 
 #: cards:1
@@ -1213,11 +2677,78 @@ msgid "folios, quires, gathering, or other parts"
 msgstr ""
 
 #: cards:1
+msgid "Counting the parts of the document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per kind of part: choose <strong>Type</strong> « count (sum "
+"total) », give the number in <strong>Value</strong> and the kind of part in "
+"<strong>Unit</strong>: « folios (leaves) », « gatherings (gathered matter "
+"components) », « pages (components) »… E.g. count, <code>120</code>, folios;"
+" then count, <code>15</code>, gatherings.</p><p>This counts the parts; it "
+"does not describe them one by one. The size of the object goes in « "
+"Dimension ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Projects that influenced this one"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Project</strong>, choose a Project record that influenced this"
+" one, e.g. an earlier project whose method or corpus it takes up. Add one "
+"entry per project.</p><p>This is not a hierarchy: a project that contains "
+"this one is entered in « Part of Project ».</p>"
+msgstr ""
+
+#: cards:1
 msgid " Production of Instrument"
 msgstr ""
 
 #: cards:1
-msgid "Profession activity"
+msgid "How the instrument was made"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Produced by</strong>, choose the maker (Person or Group); "
+"<strong>Motivated by</strong> is who ordered it; <strong>Influenced "
+"by</strong> lists the persons, groups, projects or instruments that shaped "
+"its design; <strong>Produced at Place</strong> and <strong>Geographical "
+"location</strong> (map) say where: link the Place record (it ties the "
+"instrument to the rest of the data) and draw the location on the map, which "
+"is strongly recommended (a point is enough; a line or a polygon for an area "
+"when known).</p><p>An instrument is often dated approximately, so give a "
+"range: « between 2010 and 2015 » is the earliest possible date in "
+"<strong>Date</strong> (the begin, required here) and the latest possible "
+"date in <strong>Date (end of the end)</strong>, as a year or a month "
+"(<code>2010</code>, <code>2015-06</code>). Choose « Approximative » in the "
+"first field when the dates are not certain, « Confirmed » when they "
+"are.</p><p>For a finer reading, the four fields are: begin "
+"(<strong>Date</strong>), latest begin (<strong>Date (end of the "
+"begin)</strong>), earliest end (<strong>Date (end approximative)</strong>) "
+"and latest end (<strong>Date (end of the end)</strong>).</p>"
+msgstr ""
+
+#: cards:1
+msgid "Locating the analysis on the document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Component observed by Analysis</strong>, choose the Component "
+"measured (an initial, the ink of the text, the parchment, an illumination…);"
+" choose the whole Document only when no Component fits. The Component "
+"already carries the folio.</p><p>In <strong>Localisation of Analysis in "
+"Object observed</strong>, open the document's image and draw the measured "
+"zone: a point for a spot, a rectangle for a mapped area. Give it a "
+"<strong>Label</strong>, the measurement point code (e.g. <code>X01</code>), "
+"its <strong>Author</strong> and, if useful, a <strong>Note</strong> that "
+"adds something the Component does not say (e.g. <em>edge of the letter, gold"
+" avoided</em>).</p><p>Without a drawn zone, the analysis cannot be placed on"
+" the image on the public site.</p>"
 msgstr ""
 
 #: cards:1
@@ -1225,7 +2756,33 @@ msgid "Facsimiles"
 msgstr ""
 
 #: cards:1
+msgid "Linking the digital facsimile"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Facsimiles (URI)</strong>, paste the URL of the IIIF manifest "
+"of the digitised document, e.g. "
+"<code>https://example.org/iiif/ms-123/manifest.json</code>. The images are "
+"then shown in the viewer of the record, and analyses can be located on "
+"them.</p><p>Give the manifest, not the web page of the digital library: the "
+"page does not open in the viewer.</p>"
+msgstr ""
+
+#: cards:1
 msgid "Sample observed by analysis"
+msgstr ""
+
+#: cards:1
+msgid "Analysis of a sample"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Only when the measurement was made on material taken from the object (a "
+"micro-sample, a cross-section): choose its record in "
+"<strong>Sample</strong>. Create the Sample record first.</p><p>Leave this "
+"card empty for a non-invasive analysis made directly on the document.</p>"
 msgstr ""
 
 #: cards:1
@@ -1233,7 +2790,42 @@ msgid "Bibliographic reference"
 msgstr ""
 
 #: cards:1
+msgid "Citing a publication"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A publication that describes the instrument, e.g. a technical report or "
+"an article. Give its <strong>Title</strong> (required), its "
+"<strong>Type</strong> (« technical reports », « articles », « monographs »…)"
+" and, if known, the <strong>Publisher</strong> (for an article, the "
+"journal), the <strong>Place of publication</strong> (for an article, the "
+"volume and pages) and the <strong>Publication date</strong> (a year, e.g. "
+"<code>2024</code>).</p><p>Attach a copy in <strong>Document file</strong> "
+"only if its licence allows it; add the DOI or URL in « Bibliographic "
+"Identifier » and each author in « Authors of Publication ».</p>"
+msgstr ""
+
+#: cards:1
 msgid "Data Resource"
+msgstr ""
+
+#: cards:1
+msgid "Describing the dataset"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Describe the data as a whole: the <strong>Filename</strong> of the "
+"original export (e.g. <code>spectrum.csv</code>), its <strong>Format (MIME "
+"type)</strong> (<code>text/csv</code> for a CSV export; "
+"<code>application/octet-stream</code> for a raw instrument file) and, in "
+"<strong>Dataset (URL)</strong>, the link to the full dataset in a data "
+"repository, written as a full DOI link (e.g. "
+"<code>https://doi.org/10.xxxx/xxxxx</code>) with no comma or space after it."
+" The label of the link can hold the full citation.</p><p>The files "
+"themselves are uploaded in the sub-cards: spectra in « Measurement Point "
+"(data) », images in « Scientific Imaging ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1241,7 +2833,60 @@ msgid "Bibliographic Reference"
 msgstr ""
 
 #: cards:1
-msgid "Period"
+msgid ""
+"<p>The publication where the analysis is published or discussed. Give its "
+"<strong>Title</strong>, its <strong>Type</strong> (e.g. « articles », « "
+"theses ») and, if known, the <strong>Publisher</strong> (for an article, the"
+" journal, e.g. Journal of Cultural Heritage), the <strong>Place of "
+"publication</strong> (for an article, the volume and pages, e.g. "
+"<code>Volume 67 Pages 452-460</code>) and the <strong>Publication "
+"date</strong> (e.g. <code>2024</code>).</p><p>Add the DOI or URL in « "
+"Identifier of publication » and each author in « Authors of publication "
+"».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Author(s)"
+msgstr ""
+
+#: cards:1
+msgid "Statement about sample taking activity"
+msgstr ""
+
+#: cards:1
+msgid "Notes on the sampling"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A text about how the sampling went, written in <strong>Content</strong> "
+"and classed by <strong>Type</strong>, e.g. type « sampling »: <em>taken with"
+" a scalpel at the edge of the letter, area already damaged</em>; « "
+"conditions » and « note » also fit.</p><p>Give the <strong>Language</strong>"
+" when it matters and, in <strong>source</strong>, the URL of the document it"
+" comes from, if any. One text only; notes about the sample itself go in the "
+"« Statement » card.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Birth period"
+msgstr ""
+
+#: cards:1
+msgid "Period of the birth"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card when the birth cannot be dated exactly, or to add the "
+"century to a date. <strong>Absolute period attribution</strong> (required) "
+"is the broad slot: pick the century when it is known (e.g. « 11th century "
+"»), the millennium otherwise. <strong>Relative Period</strong> is a named "
+"historical period: type to search and pick the most specific item, e.g. « "
+"Merovingian Period » rather than « Early Middle Ages ».</p><p>Mind the "
+"labels: « High Middle Ages » is « Moyen Âge classique » in French, while « "
+"haut Moyen Âge » is « Early Middle Ages ». If the period you need is not in "
+"the lists, describe it in the sub-card « Alternative Period ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1249,24 +2894,142 @@ msgid "Alternative Period"
 msgstr ""
 
 #: cards:1
-msgid "System Data Settings"
-msgstr ""
-
-#: cards:1
-msgid "Part of Places"
-msgstr ""
-
-#: cards:1
-msgid "Default Map Settings"
+msgid "Period missing from the lists"
 msgstr ""
 
 #: cards:1
 msgid ""
-"Initial settings for Arches maps displayed in reports, cards, and search"
+"<p>Only when the period is not in the lists of the card above. Give its "
+"<strong>PeriodO (URI)</strong> (required), e.g. "
+"<code>https://n2t.net/ark:/99152/p0xxxxx</code>, and a readable name in "
+"<strong>Appellation</strong>, e.g. <em>Carolingian period</em>.</p><p>Set "
+"<strong>Source of Identifier</strong> to « PeriodO »; the <strong>Type of "
+"Identifier</strong> can stay empty because the Source says it all.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Data Evaluation"
+msgid "Death period"
+msgstr ""
+
+#: cards:1
+msgid "Period of the death"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card when the death cannot be dated exactly, or to add the "
+"century to a date. <strong>Absolute period attribution</strong> (required) "
+"is the broad slot: pick the century when it is known (e.g. « 11th century "
+"»), the millennium otherwise. <strong>Relative Period</strong> is a named "
+"historical period: type to search and pick the most specific item, e.g. « "
+"Merovingian Period » rather than « Early Middle Ages ».</p><p>Mind the "
+"labels: « High Middle Ages » is « Moyen Âge classique » in French, while « "
+"haut Moyen Âge » is « Early Middle Ages ». If the period you need is not in "
+"the lists, describe it in the sub-card « Alternative Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Joining Group"
+msgstr ""
+
+#: cards:1
+msgid "Joining the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>This card only groups the entries of the person into the group chosen in "
+"« Is (was) member of »: one entry per joining, so a person who joined twice "
+"has two. Open « Joining Group event » to give the date.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Bibliographic_Identifier"
+msgstr ""
+
+#: cards:1
+msgid "Appellation of Statement"
+msgstr ""
+
+#: cards:1
+msgid "Title of the statement"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong> and its <strong>Type</strong> (« preferred "
+"terms »); <strong>Language</strong> only when it is not English or French. "
+"E.g. <em>Visual description</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Joining Group Period"
+msgstr ""
+
+#: cards:1
+msgid "Period of joining"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card when the entry into the group cannot be dated exactly, or "
+"to add the century to a date. <strong>Absolute period attribution</strong> "
+"(required) is the broad slot: pick the century when it is known (e.g. « 11th"
+" century »), the millennium otherwise. <strong>Relative Period</strong> is a"
+" named historical period: type to search and pick the most specific item, "
+"e.g. « Merovingian Period » rather than « Early Middle Ages ».</p><p>Mind "
+"the labels: « High Middle Ages » is « Moyen Âge classique » in French, while"
+" « haut Moyen Âge » is « Early Middle Ages ». If the period you need is not "
+"in the lists, describe it in the sub-card « Alternative Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Leaving Group"
+msgstr ""
+
+#: cards:1
+msgid "Leaving the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>This card only groups the departures of the person from the group chosen "
+"in « Is (was) member of »: one entry per leaving. Open « Leaving Group event"
+" » to give the date.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Name of Statement"
+msgstr ""
+
+#: cards:1
+msgid "Leaving Group Period"
+msgstr ""
+
+#: cards:1
+msgid "Period of leaving"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card when the departure from the group cannot be dated exactly, "
+"or to add the century to a date. <strong>Absolute period "
+"attribution</strong> (required) is the broad slot: pick the century when it "
+"is known (e.g. « 11th century »), the millennium otherwise. <strong>Relative"
+" Period</strong> is a named historical period: type to search and pick the "
+"most specific item, e.g. « Merovingian Period » rather than « Early Middle "
+"Ages ».</p><p>Mind the labels: « High Middle Ages » is « Moyen Âge classique"
+" » in French, while « haut Moyen Âge » is « Early Middle Ages ». If the "
+"period you need is not in the lists, describe it in the sub-card « "
+"Alternative Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and <strong>Language</strong>. E.g. <em>Biography</em>.</p>"
 msgstr ""
 
 #: cards:1
@@ -1282,19 +3045,81 @@ msgid "Set the default search results behavior"
 msgstr ""
 
 #: cards:1
-msgid "Production period"
+msgid "Data Evaluation"
 msgstr ""
 
 #: cards:1
-msgid "Authors of publication"
+msgid "Part of Places"
 msgstr ""
 
 #: cards:1
-msgid "Sample object"
+msgid "Larger places"
 msgstr ""
 
 #: cards:1
-msgid "Iconographic representation"
+msgid ""
+"<p>In <strong>Part of Place</strong>, choose the Place records that contain "
+"this place, e.g. link a town to the region record « France (nord) ». Several"
+" are allowed, and the chain can go up level by level.</p><p>Choose only "
+"places that really contain it; for a place that merely resembles another, "
+"use « Similar of ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Period"
+msgstr ""
+
+#: cards:1
+msgid "Period of the place"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card to place the place in time, e.g. the period in which it "
+"existed. <strong>Absolute period attribution</strong> (required) is the "
+"broad slot: choose the century (e.g. « 11th century ») rather than the "
+"millennium above it. <strong>Relative Period</strong> is a named historical "
+"period of a tree of 340 terms (e.g. « Medieval Period »): type to search and"
+" pick the most specific.</p><p>If the period you need is not in the lists, "
+"describe it in the sub-card « Alternative Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Only when the period is not in the lists of the card above. Give its "
+"<strong>PeriodO (URI)</strong> (required), e.g. "
+"<code>https://n2t.net/ark:/99152/p0…</code>, and a readable name in "
+"<strong>Appellation</strong>, e.g. <em>Carolingian period</em>.</p><p>Set "
+"<strong>Source of Identifier</strong> to « PeriodO »; the <strong>Type of "
+"Identifier</strong> can stay empty because the Source says it all.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Default Map Settings"
+msgstr ""
+
+#: cards:1
+msgid ""
+"Initial settings for Arches maps displayed in reports, cards, and search"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and <strong>Language</strong>. E.g. <em>History</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "System Data Settings"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A short title for the sampling note above, shown instead of its full "
+"text: <strong>Name</strong>, its <strong>Type</strong> (« preferred terms »)"
+" and, when it matters, its <strong>Language</strong>. E.g. <em>Sampling "
+"conditions</em>.</p>"
 msgstr ""
 
 #: cards:1
@@ -1302,7 +3127,69 @@ msgid "Studied objects during Project"
 msgstr ""
 
 #: cards:1
-msgid "Name of Statement"
+msgid "Objects studied by the project"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Studied Objects</strong> (required), choose the Document or "
+"Component records studied by the project, e.g. the manuscript « Avranches. "
+"Bibliothèque municipale Edouard Le Héricher, Ms. 59 ». Create them first if "
+"needed.</p><p>This lists the corpus. The measurements themselves are "
+"recorded in Analysis records, which refer to their project.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and <strong>Language</strong>. E.g. <em>Abstract</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Size of the sample"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Fill <strong>Value</strong> and <strong>Unit</strong>, and say in "
+"<strong>Type</strong> what was measured. E.g. Type « weight (heaviness "
+"attribute) », Value <code>0.01</code>, Unit « grams (measurements) »; or "
+"Type « diameter », Unit « centimeters ».</p><p>Only one measurement fits "
+"here. For a sample, an approximate size or mass is enough; leave the card "
+"empty if nothing was measured.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Identifiers of the sample"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per identifier. <strong>Value (URI)</strong> (required) holds "
+"the identifier of the sample and <strong>Type</strong> says what kind it is."
+" For a persistent identifier, store the full URL and pick the matching "
+"<strong>Source</strong>; add the <strong>Type</strong> when the Source does "
+"not say it all, e.g. an ARCA ARK: Source « ARCA », Type « ARK (Archival "
+"Resource Key) ».</p><p>On a sample, a short local code is also accepted: "
+"type it as it is (e.g. <code>prot43</code>), with Type « Internal Identifier"
+" » and no Source. It is not a URI.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Naming the sample"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results and on the"
+" public site, so it must read alone. Recommended form: <code>Sample "
+"&lt;code&gt; - &lt;zone&gt; &lt;folio&gt; - &lt;shelfmark&gt;</code>, with a"
+" plain hyphen between the three parts, the zone and the folio joined by a "
+"space, and the shelfmark written <code>BM Avranches MS 59</code> for this "
+"manuscript.</p><p>Set <strong>Type</strong> to « preferred terms » for the "
+"main name. Add a translated or alternate name as a further entry; give its "
+"<strong>Language</strong> when the name exists in several languages.</p>"
 msgstr ""
 
 #: cards:1
@@ -1310,19 +3197,30 @@ msgid "TimeSpan"
 msgstr ""
 
 #: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and, when it matters, its <strong>Language</strong>. E.g. "
+"<em>Acquisition conditions</em>.</p>"
+msgstr ""
+
+#: cards:1
 msgid "Measurement Point (data)"
 msgstr ""
 
 #: cards:1
-msgid "Statement about sample taking activity"
+msgid "Uploading spectra"
 msgstr ""
 
 #: cards:1
-msgid "Sample taking"
-msgstr ""
-
-#: cards:1
-msgid "Appellation of Statement"
+msgid ""
+"<p>Upload the spectra of this analysis in <strong>Data file</strong>, one "
+"file per measurement point, as CSV with two columns (X, Y), e.g. "
+"<code>spectrum.csv</code>. The chart settings are set from the « Technique "
+"used ».</p><p>Only CSV files are plotted. Raw instrument files "
+"(<code>.mca</code>, <code>.asd</code>, <code>.0</code>, <code>.txt</code>…) "
+"can be uploaded alongside: they are listed and downloadable, but not read; "
+"convert them to CSV to see the spectrum.</p>"
 msgstr ""
 
 #: cards:1
@@ -1330,15 +3228,16 @@ msgid "Identifier of publication"
 msgstr ""
 
 #: cards:1
-msgid "Alteration process period"
+msgid "Identifiers of the publication"
 msgstr ""
 
 #: cards:1
-msgid "Bibliographic_Identifier"
-msgstr ""
-
-#: cards:1
-msgid "Author(s)"
+msgid ""
+"<p>One entry per identifier of the publication: the full URL in "
+"<strong>Value (URI)</strong> and its <strong>Type</strong>. A DOI is written"
+" as a link and typed « DOI (Digital Object Identifier) », e.g. "
+"<code>https://doi.org/10.1016/j.culher.2024.03.013</code>. Do not leave the "
+"Type empty.</p>"
 msgstr ""
 
 #: cards:1
@@ -1346,51 +3245,216 @@ msgid "Scientific Imaging"
 msgstr ""
 
 #: cards:1
-msgid "Saved Searches"
-msgstr ""
-
-#: cards:1
-msgid "System configuration for saving searches"
+msgid "Two kinds of images"
 msgstr ""
 
 #: cards:1
 msgid ""
-"Arches allows you save a search and present it as convenience for your "
-"users."
+"<p>This card only groups the images of the analysis. Use « Micro/macro "
+"Imaging » for photographs (macro views, microscope images) and « "
+"Chemical/physical imaging » for the IIIF manifest of maps and spectral "
+"images (element maps, hyperspectral bands).</p>"
 msgstr ""
 
 #: cards:1
-msgid "Micro/macro Imaging"
+msgid "Authors of publication"
 msgstr ""
 
 #: cards:1
-msgid "Accepted image formats"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>Upload JPEG, PNG or BMP images (10 MB max per file). Each file is saved "
-"as its own entry.</p><p><strong>TIFF files are not accepted here:</strong> "
-"web browsers cannot display them, so they would show as broken images in the"
-" editor and in the report.</p><p>Convert the image to JPEG or PNG before "
-"uploading. Keep the original TIFF in your data repository and give its link "
-"in <em>Data Resource › Dataset (URL)</em>.</p>"
-msgstr ""
-
-#: cards:1
-msgid "Visual representation of processed datacube analysis"
-msgstr ""
-
-#: cards:1
-msgid "IIIF manifest imaging"
+msgid "Authors of the publication"
 msgstr ""
 
 #: cards:1
 msgid ""
-"<p>You can upload your data through the <strong>Image Service Manager</strong>.<br />\n"
-"Once the upload is complete, the corresponding <strong>IIIF manifest</strong> will be automatically retrieved and added to your list.</p>\n"
-"\n"
-"<p>Please make sure to <strong>use a clear and consistent naming convention</strong> for your files &mdash; this will help you easily identify and manage your datasets later.</p>\n"
+"<p>One entry per author, in the order of the publication, written "
+"<code>Surname, Forename</code> in <strong>Author</strong>. These are plain "
+"text, not links to Person records. Do not put all the authors in a single "
+"entry.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Alternative period"
+msgstr ""
+
+#: cards:1
+msgid "Production"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A short title for the statement above, shown instead of its full text: "
+"<strong>Name</strong>, its <strong>Type</strong> (« preferred terms ») and, "
+"when it matters, its <strong>Language</strong>. E.g. <em>Hypothesis on the "
+"layer</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Sample object"
+msgstr ""
+
+#: cards:1
+msgid "Where the sample is now"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Current location of sample object</strong>, choose the Place "
+"record where the sample is stored, e.g. Paris for a laboratory collection. "
+"In <strong>Sample_Owner</strong>, choose the person or group that owns the "
+"sample, e.g. the laboratory group that keeps it.</p><p><strong>Property "
+"type</strong> is free text for the nature of the sample, e.g. <em>paint "
+"flake</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Iconographic representation"
+msgstr ""
+
+#: cards:1
+msgid "What the component depicts"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per subject depicted. In <strong>Concept URI</strong>, paste "
+"the address of the Biblissima iconography portal page for the subject "
+"(<code>https://portail.biblissima.fr/fr/ark:/43093/desc…</code>) or of a "
+"Biblissima entity (<code>https://data.biblissima.fr/entity/Q…</code>), and "
+"give it a short label, e.g. « Lion » or « zoomorphic letter ».</p><p>Use an "
+"address that identifies the subject itself, not a search result or a "
+"picture. Write the labels in English.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and <strong>Language</strong>. E.g. <em>Description of the "
+"initial</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Production period"
+msgstr ""
+
+#: cards:1
+msgid "Dating by century or period"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card to date the production in broad terms, in addition to (or "
+"instead of) exact dates. <strong>Absolute period attribution</strong> "
+"(required) is a century: choose the century, not the millennium above it, "
+"e.g. « 11th century ». <strong>Relative Period</strong> is a named period of"
+" a tree of 340 terms: type to search and pick the most specific, e.g. « High"
+" Middle Ages ».</p><p>Both are terms of controlled lists: choose them, do "
+"not type them. A period defined by an external authority goes in the sub-"
+"card « Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Period from PeriodO"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. Cite a period defined in the PeriodO gazetteer: paste its "
+"address in <strong>PeriodO (URI)</strong> (required), e.g. "
+"<code>https://n2t.net/ark:/99152/p0…</code>, and its name in "
+"<strong>Appellation</strong>.</p><p>Set <strong>Source of "
+"Identifier</strong> to « PeriodO »; the <strong>Type of Identifier</strong> "
+"can stay empty because the Source says it all.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Locating the component on the document"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Location in Document</strong>, open the image of the document "
+"and draw the area of the component: a rectangle around an initial, a polygon"
+" around a miniature. In <strong>Location appellation</strong>, write the "
+"folio of the zone as <code>f31v</code>.</p><p>Without a drawn zone, the "
+"component cannot be shown on the image, and a characterization of the "
+"component that has no zone of its own cannot be placed on it either.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Authors of Publication"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per author, in the order of the publication, written "
+"<code>Surname, Forename</code> in <strong>Author</strong>. These are plain "
+"text, not links to Person records.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Sample taking"
+msgstr ""
+
+#: cards:1
+msgid "Recording how the sample was taken"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>From Object</strong>, choose what the sample was taken from, "
+"preferably the Component (an initial, the parchment…) rather than the whole "
+"Document. In <strong>Type</strong>, pick « Invasive » or « Superficial » "
+"(under « Intentional Sampling »), or « Unintentional Sampling » for a "
+"fragment found loose. In <strong>Techniques used</strong>, pick « sampling »"
+" or, when known, a more precise item: « on-site sampling », « laboratory "
+"sampling from the object », « core drilling »; the list also offers « "
+"stratigraphic cross-section », « thin section », « non-destructive method » "
+"and « swab test ».</p><p>Add the <strong>Instruments used</strong>, who did "
+"it (<strong>Carried out by</strong>), where (<strong>Place location of "
+"Sample Taking</strong>) and the <strong>Project Context</strong> (e.g. "
+"Project EMMA). In <strong>Location in object</strong>, draw on the image the"
+" spot where the material was taken.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Name of statement"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and <strong>Language</strong>. E.g. <em>Provenance</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Period production"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card to date the production in broad terms, in addition to (or "
+"instead of) exact dates. <strong>Absolute period attribution</strong> "
+"(required) is a century: choose the century, not the millennium above it, "
+"e.g. « 11th century » for MS 59. <strong>Relative Period</strong> is a named"
+" period of a tree of 340 terms: type to search and pick the most specific, "
+"e.g. « High Middle Ages » for MS 59 or « Merovingian Period » under « Early "
+"Middle Ages ». Several periods are allowed.</p><p>Both are terms of "
+"controlled lists: choose them, do not type them. A period defined by an "
+"external authority goes in the sub-card « Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Bibliographic Identifier"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per identifier of the publication: the full link in "
+"<strong>Value (URI)</strong> and its <strong>Type</strong>. E.g. "
+"<code>https://doi.org/10.1016/j.culher.2024.03.013</code>, type « DOI "
+"(Digital Object Identifier) ».</p>"
 msgstr ""
 
 #: cards:1
@@ -1416,67 +3480,45 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Authors of Publication"
+msgid "Visual representation of processed datacube analysis"
 msgstr ""
 
 #: cards:1
-msgid "Bibliographic Identifier"
+msgid "IIIF manifest imaging"
 msgstr ""
 
 #: cards:1
-msgid "Type of Instrument"
+msgid ""
+"<p>You can upload your data through the <strong>Image Service Manager</strong>.<br />\n"
+"Once the upload is complete, the corresponding <strong>IIIF manifest</strong> will be automatically retrieved and added to your list.</p>\n"
+"\n"
+"<p>Please make sure to <strong>use a clear and consistent naming convention</strong> for your files &mdash; this will help you easily identify and manage your datasets later.</p>\n"
 msgstr ""
 
 #: cards:1
-msgid "Production"
+msgid "Linking an analysis to the inference"
 msgstr ""
 
 #: cards:1
-msgid "Alternative period"
+msgid ""
+"<p>One entry per observation. <strong>Observed</strong> (required) picks the"
+" material recorded in « Occured in presence of Material »; <strong>Analysis "
+"reference</strong> (required) takes the Analysis records that show it; "
+"<strong>Observation notes</strong> says what the data show, e.g. <em>lead "
+"signal in the XRF spectrum</em>.</p><p>Create the Analysis records "
+"first.</p>"
 msgstr ""
 
 #: cards:1
-msgid "Birth period"
-msgstr ""
-
-#: cards:1
-msgid "Joining Group"
-msgstr ""
-
-#: cards:1
-msgid "Death period"
-msgstr ""
-
-#: cards:1
-msgid "Leaving Group"
-msgstr ""
-
-#: cards:1
-msgid "Joining Group Period"
-msgstr ""
-
-#: cards:1
-msgid "Leaving Group Period"
-msgstr ""
-
-#: cards:1
-msgid "Formation period"
-msgstr ""
-
-#: cards:1
-msgid "Dissolution timespan"
-msgstr ""
-
-#: cards:1
-msgid "Formation timespan"
-msgstr ""
-
-#: cards:1
-msgid "Location of Group"
-msgstr ""
-
-#: cards:1
-msgid "Dissolution period"
+msgid ""
+"<p>One entry per text about the sample, written in <strong>Content</strong> "
+"and classed by <strong>Type</strong>: « description », « sampling », « "
+"conditions », « note »… E.g. type « description »: <em>flake of about 1 mm, "
+"red, from the edge of the letter</em>.</p><p>Give the "
+"<strong>Language</strong> of the text when it matters and, in "
+"<strong>Source</strong>, the URL of the document it comes from, if any. What"
+" the sample is made of is recorded in Characterization records, not "
+"here.</p>"
 msgstr ""
 
 #: cards:1
@@ -1484,9 +3526,257 @@ msgid "Modification period"
 msgstr ""
 
 #: cards:1
-msgid "Period production"
+msgid "Placing in a period"
 msgstr ""
 
 #: cards:1
-msgid "Name of statement"
+msgid ""
+"<p>Gives a coarse date when the exact one is unknown. <strong>Absolute "
+"period attribution</strong> (required) takes a century or a millennium, e.g."
+" « 19th century » (the centuries of the 1st millennium read « 1st century AD"
+" »…); <strong>Relative Period</strong> takes a named period of the FRANTIQ "
+"list, e.g. « Age of Enlightenment ». That list is large and worldwide: type "
+"to search and choose the most specific item.</p><p>To cite a period of the "
+"PeriodO gazetteer, use the sub-card « Alternative Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Location of Group"
+msgstr ""
+
+#: cards:1
+msgid "Where the group is established"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>First, in <strong>Place</strong>, choose the Place records where the "
+"group is, or was, established, e.g. « Paris » or « Le Mont-Saint-Michel ». "
+"Create the Place record first if needed.</p><p>Then draw the location on the"
+" map in <strong>Location in Map</strong>: this is strongly recommended, "
+"because the map of the site shows records only through these drawings. A "
+"point is enough (a building, an abbey, a town); use a line or a polygon for "
+"an area when you know it.</p><p>The Place record is what links the group to "
+"the rest of the data.</p>"
+msgstr ""
+
+#: cards:1
+msgid "People of the group"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. In <strong>People</strong>, choose one or several peoples the "
+"group is associated with, e.g. « French », « Merovingians » or « "
+"Carolingians ». The list is long (406 terms): type to search and pick the "
+"most specific item.</p><p>This is not a link to a larger organization: use «"
+" Member of » for that.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Formation timespan"
+msgstr ""
+
+#: cards:1
+msgid "Date of formation"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A foundation is usually dated approximately, so give a range: « between "
+"1090 and 1100 » is the earliest possible date in the required "
+"<strong>Date</strong> (the begin) and the latest possible date in "
+"<strong>Date (end of the end)</strong>, as <code>YYYY-MM</code> with a four-"
+"digit year (e.g. <code>0709-10</code>) or a year alone. With the choice "
+"above them, mark the dates « Approximative » when they are not certain, « "
+"Confirmed » when they are.</p><p>For a finer reading, the four fields are: "
+"begin (<strong>Date</strong>), latest begin (<strong>Date (end of the "
+"begin)</strong>), earliest end (<strong>Date (end approximative)</strong>) "
+"and latest end (<strong>Date (end of the end)</strong>). When only the "
+"period is known, use the sub-card « Formation period » below.</p><p>Use the "
+"sub-card « Formation period » to give the century and the period, e.g. « 8th"
+" century » and « Merovingian Period », or when no date is known.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Formation period"
+msgstr ""
+
+#: cards:1
+msgid "Period of the formation"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card when the formation cannot be dated exactly, or to add the "
+"century to a date. <strong>Absolute period attribution</strong> (required) "
+"is the broad slot: pick the century when it is known (e.g. « 11th century "
+"»), the millennium otherwise. <strong>Relative Period</strong> is a named "
+"historical period: type to search and pick the most specific item, e.g. « "
+"Merovingian Period » rather than « Early Middle Ages ».</p><p>Mind the "
+"labels: « High Middle Ages » is « Moyen Âge classique » in French, while « "
+"haut Moyen Âge » is « Early Middle Ages ». If the period you need is not in "
+"the lists, describe it in the sub-card « Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Dissolution timespan"
+msgstr ""
+
+#: cards:1
+msgid "Date of dissolution"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>A dissolution is usually dated approximately, so give a range: « between "
+"1785 and 1795 » is the earliest possible date in the required "
+"<strong>Date</strong> (the begin) and the latest possible date in "
+"<strong>Date (end of the end)</strong>, as <code>YYYY-MM</code> or a year "
+"alone. With the choice above them, mark the dates « Approximative » when "
+"they are not certain, « Confirmed » when they are.</p><p>For a finer "
+"reading, the four fields are: begin (<strong>Date</strong>), latest begin "
+"(<strong>Date (end of the begin)</strong>), earliest end (<strong>Date (end "
+"approximative)</strong>) and latest end (<strong>Date (end of the "
+"end)</strong>). When only the period is known, use the sub-card « "
+"Dissolution period » below.</p><p>Use the sub-card « Dissolution period » to"
+" give the century and the period, or when no date is known.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Dissolution period"
+msgstr ""
+
+#: cards:1
+msgid "Period of the dissolution"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Use this card when the dissolution cannot be dated exactly, or to add the"
+" century to a date. <strong>Absolute period attribution</strong> (required) "
+"is the broad slot: pick the century when it is known (e.g. « 11th century "
+"»), the millennium otherwise. <strong>Relative Period</strong> is a named "
+"historical period: type to search and pick the most specific item, e.g. « "
+"Merovingian Period » rather than « Early Middle Ages ».</p><p>Mind the "
+"labels: « High Middle Ages » is « Moyen Âge classique » in French, while « "
+"haut Moyen Âge » is « Early Middle Ages ». If the period you need is not in "
+"the lists, describe it in the sub-card « Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Citing a PeriodO period"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. To refer to a period defined in the PeriodO gazetteer, paste "
+"its full link in <strong>PeriodO (URI)</strong> (it looks like "
+"<code>https://n2t.net/ark:/99152/p0xxxxx</code>) and give the period's name "
+"in <strong>Appellation</strong>.</p><p>Set <strong>Source of "
+"Identifier</strong> to « PeriodO »; the <strong>Type of Identifier</strong> "
+"can stay empty because the Source says it all.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Alteration process period"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Gives a coarse date when the exact one is unknown. <strong>Absolute "
+"period attribution</strong> (required) takes a century or a millennium, e.g."
+" « 19th century » (the centuries of the 1st millennium read « 1st century AD"
+" »…); <strong>Relative Period</strong> takes a named period of the FRANTIQ "
+"list, e.g. « Early modern period ». That list is large and worldwide: type "
+"to search and choose the most specific item.</p><p>To cite a period of the "
+"PeriodO gazetteer, use the sub-card « Period ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Micro/macro Imaging"
+msgstr ""
+
+#: cards:1
+msgid "Accepted image formats"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Upload JPEG, PNG or BMP images (10 MB max per file). Each file is saved "
+"as its own entry.</p><p><strong>TIFF files are not accepted here:</strong> "
+"web browsers cannot display them, so they would show as broken images in the"
+" editor and in the report.</p><p>Convert the image to JPEG or PNG before "
+"uploading. Keep the original TIFF in your data repository and give its link "
+"in <em>Data Resource › Dataset (URL)</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong>, its <strong>Type</strong> (« preferred "
+"terms ») and, when it matters, its <strong>Language</strong>. E.g. "
+"<em>Description of the sample</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Type of Instrument"
+msgstr ""
+
+#: cards:1
+msgid "Kind of instrument"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong>, say how the instrument was obtained: « "
+"Manufactured » for a commercial device, « Home-made » for one built in the "
+"laboratory, « Prototype » for an unfinished or experimental model.</p><p>The"
+" kind of device (spectrometer, camera…) is given by the name and by « "
+"Techniques usage ».</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong> and its <strong>Type</strong> (« preferred "
+"terms »); <strong>Language</strong> only when it is not English or French. "
+"E.g. <em>Detector configuration</em>.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Saved Searches"
+msgstr ""
+
+#: cards:1
+msgid "System configuration for saving searches"
+msgstr ""
+
+#: cards:1
+msgid ""
+"Arches allows you save a search and present it as convenience for your "
+"users."
+msgstr ""
+
+#: cards:1
+msgid "Dates of the sampling"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Start Date</strong> is the day the material was taken. Fill "
+"the <strong>End Date</strong> only if the sampling lasted several days (e.g."
+" a campaign on site); otherwise leave it empty. When the exact day is not "
+"known, give the range: the earliest possible day in the <strong>Start "
+"Date</strong> and the latest possible day in the <strong>End "
+"Date</strong>.</p><p>Give the date of the sampling, not the date of the "
+"analysis, which is recorded in the Analysis record.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>Optional. A short title for the statement above, shown instead of its "
+"full text: <strong>Name</strong> and its <strong>Type</strong> (« preferred "
+"terms »); <strong>Language</strong> only when it is not English or French. "
+"E.g. <em>Opaque overpaint</em>.</p>"
 msgstr ""
