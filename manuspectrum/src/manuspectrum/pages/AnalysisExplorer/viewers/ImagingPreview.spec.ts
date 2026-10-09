@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ref } from "vue";
 
 import type {
@@ -9,6 +9,10 @@ import type {
     FileLayer,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
+import {
+    reloadRegistrations,
+    useRegistration,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue";
 
 import {
@@ -23,6 +27,11 @@ import {
     uuid,
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+
+beforeEach(() => {
+    window.localStorage.clear();
+    reloadRegistrations();
+});
 
 function mountPreview(
     zones: string[] = [uuid(101)],
@@ -212,11 +221,60 @@ describe("ImagingPreview", () => {
         expect(wrapper.find(".current .value").text()).toBe("L0");
     });
 
-    it("puts the laid layer under the curtain", async () => {
-        const { wrapper, curtain } = mountPreview();
+    it("leaves opacity and curtain to the toolbar on the laid layer", async () => {
+        const { wrapper } = mountPreview();
         await wrapper.find("input.lay").setValue(true);
-        await wrapper.find("input.curtain").setValue(true);
-        expect(curtain.value).toBe(`${uuid(101)}:0`);
+        expect(wrapper.find(".opacity").exists()).toBe(false);
+        expect(wrapper.find("[role=slider]").exists()).toBe(false);
+        expect(wrapper.find("input.curtain").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("Curtain: compare with the page");
+    });
+
+    it("keeps a laid layer's opacity and curtain when it moves to the next layer", async () => {
+        const { wrapper, store, curtain } = mountPreview();
+        await wrapper.find("input.lay").setValue(true);
+        store.setOverlay(`${uuid(101)}:0`, {
+            element: "Pb",
+            opacity: 0.3,
+            on: true,
+        });
+        curtain.value = `${uuid(101)}:0`;
+        await wrapper.find("[data-action=next]").trigger("click");
+        expect(store.overlays[`${uuid(101)}:1`]).toMatchObject({
+            opacity: 0.3,
+            on: true,
+        });
+        expect(curtain.value).toBe(`${uuid(101)}:1`);
+    });
+
+    it("says the position is registered in this browser when the analysis has a place on this page", async () => {
+        const { wrapper, store } = mountPreview();
+        store.openDocument("doc", "canvas-1");
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).toContain("Indicative positioning");
+        useRegistration().setPlace(
+            uuid(101),
+            "canvas-1",
+            { x: 10, y: 10, w: 100, h: 100 },
+            0,
+        );
+        await wrapper.vm.$nextTick();
+        expect(wrapper.text()).toContain("Registered in this browser");
+        expect(wrapper.text()).not.toContain("Indicative positioning");
+    });
+
+    it("keeps the indicative note when the place was taken on another page", async () => {
+        const { wrapper, store } = mountPreview();
+        store.openDocument("doc", "canvas-2");
+        useRegistration().setPlace(
+            uuid(101),
+            "canvas-1",
+            { x: 10, y: 10, w: 100, h: 100 },
+            0,
+        );
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).toContain("Indicative positioning");
+        expect(wrapper.text()).not.toContain("Registered in this browser");
     });
 
     it("explains why a layer cannot be laid when the analysis has no zone on this page", () => {

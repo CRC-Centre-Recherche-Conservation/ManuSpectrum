@@ -862,6 +862,136 @@ describe("FolioMap", () => {
         });
     });
 
+    describe("with the layer controls", () => {
+        function laidLayer(key: string, patch: Record<string, unknown> = {}) {
+            return {
+                key,
+                url: `https://iiif.example/${key}/full/!2048,2048/0/default.jpg`,
+                fallbackUrls: [],
+                bounds: [
+                    [-20, 0],
+                    [0, 30],
+                ] as [[number, number], [number, number]],
+                opacity: 0.5,
+                label: key,
+                analysis: "a",
+                quarter: 0 as const,
+                registered: true,
+                canTurn: true,
+                zoneBounds: [
+                    [-20, 0],
+                    [0, 30],
+                ] as [[number, number], [number, number]],
+                ...patch,
+            };
+        }
+
+        function bars(wrapper: { element: Element }): HTMLElement[] {
+            return [
+                ...wrapper.element.querySelectorAll<HTMLElement>(
+                    "[role=toolbar]",
+                ),
+            ];
+        }
+
+        function press(bar: HTMLElement, action: string): void {
+            bar.querySelector<HTMLElement>(`[data-action=${action}]`)!.click();
+        }
+
+        it("puts one toolbar on the map for each laid layer and drops it with the layer", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+            });
+            await flushPromises();
+            expect(bars(wrapper)).toHaveLength(2);
+            expect(
+                bars(wrapper).map((bar) => bar.getAttribute("aria-label")),
+            ).toEqual(["Layer on the page: a:0", "Layer on the page: a:1"]);
+            await wrapper.setProps({ overlays: [laidLayer("a:1")] });
+            await flushPromises();
+            expect(bars(wrapper)).toHaveLength(1);
+            await wrapper.setProps({ overlays: [] });
+            await flushPromises();
+            expect(bars(wrapper)).toHaveLength(0);
+            expect(
+                wrapper.element.querySelectorAll(".layer-controls-host"),
+            ).toHaveLength(0);
+            wrapper.unmount();
+        });
+
+        it("anchors each toolbar to its layer's corner on the map", async () => {
+            const wrapper = mountFolio({ overlays: [laidLayer("a:0")] });
+            await flushPromises();
+            const host = bars(wrapper)[0].parentElement!;
+            expect(host.parentElement?.classList).toContain(
+                "leaflet-container",
+            );
+            expect(host.style.position).toBe("absolute");
+            expect(host.style.left).not.toBe("");
+            expect(host.style.top).not.toBe("");
+            wrapper.unmount();
+        });
+
+        it("emits the layer's key with each control", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0")],
+                adjusting: "a:0",
+                curtain: "a:0",
+            });
+            await flushPromises();
+            const [bar] = bars(wrapper);
+            press(bar, "turn-right");
+            press(bar, "turn-left");
+            press(bar, "adjust");
+            press(bar, "curtain");
+            press(bar, "capture");
+            press(bar, "reset");
+            expect(wrapper.emitted("layer-turn")).toEqual([
+                ["a:0", 1],
+                ["a:0", -1],
+            ]);
+            expect(wrapper.emitted("layer-adjust")).toEqual([["a:0", false]]);
+            expect(wrapper.emitted("layer-curtain")).toEqual([["a:0", false]]);
+            expect(wrapper.emitted("layer-capture")).toEqual([["a:0"]]);
+            expect(wrapper.emitted("layer-reset")).toEqual([["a:0"]]);
+            wrapper.unmount();
+        });
+
+        it("shows adjust and curtain pressed only on the layer they name", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                adjusting: "a:1",
+                curtain: "a:0",
+            });
+            await flushPromises();
+            const pressed = bars(wrapper).map((bar) => [
+                bar
+                    .querySelector("[data-action=adjust]")
+                    ?.getAttribute("aria-pressed"),
+                bar
+                    .querySelector("[data-action=curtain]")
+                    ?.getAttribute("aria-pressed"),
+            ]);
+            expect(pressed).toEqual([
+                ["false", "true"],
+                ["true", "false"],
+            ]);
+            wrapper.unmount();
+        });
+
+        it("emits the opacity chosen for a layer as a fraction", async () => {
+            const wrapper = mountFolio({ overlays: [laidLayer("a:0")] });
+            await flushPromises();
+            press(bars(wrapper)[0], "opacity");
+            await flushPromises();
+            const slider = wrapper.findComponent({ name: "Slider" });
+            expect(slider.exists()).toBe(true);
+            slider.vm.$emit("update:modelValue", 40);
+            expect(wrapper.emitted("layer-opacity")).toEqual([["a:0", 0.4]]);
+            wrapper.unmount();
+        });
+    });
+
     it("puts one marker per analysis on its first zone", async () => {
         const zones = [
             annotation(3, {

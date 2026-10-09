@@ -7,6 +7,10 @@ import { defineComponent, h, ref } from "vue";
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import {
+    reloadRegistrations,
+    useRegistration,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -19,6 +23,7 @@ import {
     analysisPayload,
     annotation,
     characterization,
+    imagingEntry,
     documentComponent,
     documentPayload,
     documentResponses,
@@ -75,10 +80,20 @@ const FolioStub = defineComponent({
         components: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
+        adjusting: { type: String, default: null },
+        capturing: { type: String, default: null },
         caption: { type: String, default: "" },
         stage: { type: String, default: "dark" },
     },
-    emits: ["select"],
+    emits: [
+        "select",
+        "layer-adjust",
+        "layer-turn",
+        "layer-opacity",
+        "layer-curtain",
+        "layer-capture",
+        "layer-reset",
+    ],
     setup(_props, { expose }) {
         expose({ focusTarget, focusCurrent });
         return () => h("div", { class: "folio-stub" });
@@ -1617,6 +1632,127 @@ describe("CorpusDocument", () => {
             const card = wrapper.findComponent({ name: "AnalysisCard" });
             expect(card.props("closable")).toBe(false);
             expect(card.props("headingId")).toBe("explorer-card-heading");
+            wrapper.unmount();
+        });
+    });
+    describe("layer controls", () => {
+        const LAYER = `${uuid(101)}:0`;
+
+        beforeEach(() => {
+            window.localStorage.clear();
+            reloadRegistrations();
+        });
+        afterEach(() => {
+            window.localStorage.clear();
+            reloadRegistrations();
+        });
+        const ZONE_BOX = { x: 100, y: 100, w: 800, h: 400 };
+
+        async function mountLaidLayer() {
+            const base = stubFetch({
+                annotations: [
+                    annotation(1, {
+                        dataKind: "chemical-imaging",
+                        shape: { type: "rect", ...ZONE_BOX },
+                    }),
+                ],
+            });
+            const fetchMock = vi.fn(async (url: string) =>
+                url.includes("/analysis/")
+                    ? jsonResponse(analysisPayload({ files: [imagingEntry()] }))
+                    : base(url),
+            );
+            vi.stubGlobal("fetch", fetchMock);
+            const { wrapper, store } = mountScreen((opened) => {
+                opened.openDocument(uuid(1));
+                opened.focusOn({ kind: "analysis", id: uuid(101) });
+                opened.setOverlay(LAYER, {
+                    element: "Pb",
+                    opacity: 0.7,
+                    on: true,
+                });
+            });
+            await flushPromises();
+            const folio = wrapper.getComponent({ name: "FolioMap" });
+            return { wrapper, store, folio };
+        }
+
+        it("lays the layer and hands its controls to the folio", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            expect(folio.props("overlays")).toHaveLength(1);
+            expect(folio.props("adjusting")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("keeps a new opacity in the layer's setting", async () => {
+            const { wrapper, store, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-opacity", LAYER, 0.4);
+            expect(store.overlays[LAYER]).toEqual({
+                element: "Pb",
+                opacity: 0.4,
+                on: true,
+            });
+            wrapper.unmount();
+        });
+
+        it("puts the layer under the curtain and takes it off", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-curtain", LAYER, true);
+            await flushPromises();
+            expect(folio.props("curtain")).toBe(LAYER);
+            folio.vm.$emit("layer-curtain", LAYER, false);
+            await flushPromises();
+            expect(folio.props("curtain")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("tells the folio which layer is being adjusted", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-adjust", LAYER, true);
+            await flushPromises();
+            expect(folio.props("adjusting")).toBe(LAYER);
+            folio.vm.$emit("layer-adjust", LAYER, false);
+            await flushPromises();
+            expect(folio.props("adjusting")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("turns the layer from the zone's box, then from the registered box, and registers it", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                canvas: "https://iiif.example/c1",
+                quarter: 1,
+                box: { x: 300, y: -100, w: 400, h: 800 },
+            });
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: true,
+                quarter: 1,
+            });
+            folio.vm.$emit("layer-turn", LAYER, -1);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 0,
+                box: ZONE_BOX,
+            });
+            wrapper.unmount();
+        });
+
+        it("forgets the registered place on reset", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: true,
+            });
+            folio.vm.$emit("layer-reset", LAYER);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: false,
+                quarter: 0,
+            });
             wrapper.unmount();
         });
     });

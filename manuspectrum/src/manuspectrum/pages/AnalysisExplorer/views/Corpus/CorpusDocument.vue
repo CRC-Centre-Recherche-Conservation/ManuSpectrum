@@ -54,6 +54,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import { folioOverlays } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
+    boxOfBounds,
+    turn,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import {
     techniqueKey,
     techniqueStyles,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
@@ -88,6 +92,7 @@ import type {
     Focus,
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -143,6 +148,8 @@ const side = useTemplateRef<HTMLElement>("side");
 
 const hasIntroBar = introBar() !== null;
 const curtain = ref<string | null>(null);
+/** The key of the laid layer being adjusted on the folio. */
+const adjusting = ref<string | null>(null);
 let pageToFollow = store.focus !== null;
 /** The document whose first payload has placed the page. */
 let landedOn: string | null = null;
@@ -649,6 +656,14 @@ watch(
         followFocus();
     },
 );
+watch(overlays, (laid) => {
+    if (
+        adjusting.value &&
+        !laid.some((entry) => entry.key === adjusting.value)
+    ) {
+        adjusting.value = null;
+    }
+});
 watch(data, () => {
     if (pageToFollow) followFocus();
 });
@@ -756,6 +771,39 @@ function followFocus(): void {
 function retry(): void {
     if (hasFailed(payload.status.value)) payload.retry();
     if (hasFailed(match.status.value)) match.retry();
+}
+
+function laidLayer(key: string): FolioOverlay | undefined {
+    return overlays.value.find((entry) => entry.key === key);
+}
+
+function onLayerAdjust(key: string, on: boolean): void {
+    adjusting.value = on ? key : null;
+}
+
+/** Turns the layer a quarter about the centre of the box it lies in (the registered one, else the zone's). */
+function onLayerTurn(key: string, by: 1 | -1): void {
+    const layer = laidLayer(key);
+    const canvas = currentCanvas.value?.id;
+    if (!layer || !canvas) return;
+    const turned = turn(boxOfBounds(layer.bounds), layer.quarter, by);
+    registration.setPlace(layer.analysis, canvas, turned.box, turned.quarter);
+}
+
+function onLayerOpacity(key: string, value: number): void {
+    const layer = laidLayer(key);
+    const setting = store.overlays[key];
+    if (!layer || !setting) return;
+    store.setOverlay(key, { ...setting, opacity: value });
+}
+
+function onLayerCurtain(key: string, on: boolean): void {
+    curtain.value = on ? key : null;
+}
+
+function onLayerReset(key: string): void {
+    const layer = laidLayer(key);
+    if (layer) registration.reset(layer.analysis);
 }
 
 function onSelect(focus: Focus): void {
@@ -1013,9 +1061,15 @@ function goHome(): void {
                             :components="pageComponents"
                             :overlays="overlays"
                             :curtain="curtain"
+                            :adjusting="adjusting"
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"
+                            @layer-adjust="onLayerAdjust"
+                            @layer-turn="onLayerTurn"
+                            @layer-opacity="onLayerOpacity"
+                            @layer-curtain="onLayerCurtain"
+                            @layer-reset="onLayerReset"
                         />
                         <FolioLegend
                             class="legend"

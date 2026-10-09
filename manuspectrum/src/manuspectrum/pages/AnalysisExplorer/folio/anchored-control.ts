@@ -1,0 +1,63 @@
+import L from "leaflet";
+
+import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+
+// Above Leaflet's panes (up to 700) and level with the folio's own controls.
+const CONTROL_Z_INDEX = "1000";
+
+export interface AnchoredControl {
+    /** Keeps the element's top-right corner on the top-right corner of `bounds`. */
+    place(bounds: [LatLng, LatLng]): void;
+    /** Stops following the map and takes the element off it. */
+    remove(): void;
+}
+
+/**
+ * Keeps `element`, a child of the map's container, on the top-right corner of
+ * a rectangle of the map: placed in container pixels, again on every `zoom`,
+ * `move` and `resize`, and held inside the container so a corner scrolled out
+ * of view leaves the control at the nearest edge. Clicks, double clicks and
+ * wheel turns on it do not reach the map.
+ */
+export function anchoredControl(
+    map: L.Map,
+    element: HTMLElement,
+): AnchoredControl {
+    let bounds: [LatLng, LatLng] | null = null;
+    element.style.position = "absolute";
+    element.style.zIndex = CONTROL_Z_INDEX;
+    L.DomEvent.disableClickPropagation(element);
+    L.DomEvent.disableScrollPropagation(element);
+
+    function reposition(): void {
+        if (!bounds) return;
+        const corner = map.latLngToContainerPoint([
+            Math.max(bounds[0][0], bounds[1][0]),
+            Math.max(bounds[0][1], bounds[1][1]),
+        ]);
+        const size = map.getSize();
+        const maxLeft = Math.max(size.x - element.offsetWidth, 0);
+        const maxTop = Math.max(size.y - element.offsetHeight, 0);
+        const left = Math.min(
+            Math.max(corner.x - element.offsetWidth, 0),
+            maxLeft,
+        );
+        const top = Math.min(Math.max(corner.y, 0), maxTop);
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+    }
+
+    map.on("zoom move resize", reposition);
+
+    return {
+        place(next) {
+            bounds = next;
+            reposition();
+        },
+        remove() {
+            map.off("zoom move resize", reposition);
+            bounds = null;
+            element.remove();
+        },
+    };
+}

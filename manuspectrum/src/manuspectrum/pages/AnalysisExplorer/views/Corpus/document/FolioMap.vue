@@ -4,6 +4,7 @@ import {
     onBeforeUnmount,
     onMounted,
     ref,
+    shallowRef,
     useTemplateRef,
     watch,
 } from "vue";
@@ -13,6 +14,9 @@ import "leaflet.markercluster";
 import { useGettext } from "vue3-gettext";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
+import LayerControls from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue";
+
+import { anchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import {
     markedZones,
     shapeCentre,
@@ -40,6 +44,7 @@ import type {
     DocumentComponent,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
@@ -67,6 +72,7 @@ const PINNED_PANE = "folio-pinned";
 // Above Leaflet's marker pane (600), below its tooltips (650).
 const PINNED_PANE_Z_INDEX = "620";
 const MARKER_PANE = "markerPane";
+const CONTROLS_HOST_CLASS = "layer-controls-host";
 
 const props = withDefaults(
     defineProps<{
@@ -85,6 +91,10 @@ const props = withDefaults(
         components?: DocumentComponent[];
         overlays?: FolioOverlay[];
         curtain?: string | null;
+        /** The key of the laid layer being adjusted, if any. */
+        adjusting?: string | null;
+        /** The key of the laid layer whose capture is being taken, if any. */
+        capturing?: string | null;
         /** The line under the page: document, page, position. */
         caption?: string;
         /** `soft` lightens the stage (`--stage-soft`), for the Corpus; the light table and Compare keep `dark`. */
@@ -94,11 +104,21 @@ const props = withDefaults(
         components: () => [],
         overlays: () => [],
         curtain: null,
+        adjusting: null,
+        capturing: null,
         caption: "",
         stage: "dark",
     },
 );
-const emit = defineEmits<{ select: [focus: Focus] }>();
+const emit = defineEmits<{
+    select: [focus: Focus];
+    "layer-adjust": [key: string, on: boolean];
+    "layer-turn": [key: string, by: 1 | -1];
+    "layer-opacity": [key: string, value: number];
+    "layer-curtain": [key: string, on: boolean];
+    "layer-capture": [key: string];
+    "layer-reset": [key: string];
+}>();
 defineExpose({ focusTarget, focusCurrent });
 
 const { $gettext, interpolate } = useGettext();
@@ -109,6 +129,8 @@ const active = ref<string | null>(null);
 const pageFailed = ref(false);
 /** Keys of laid maps whose image did not load. */
 const failedOverlays = ref<ReadonlySet<string>>(new Set());
+/** The element each laid layer's toolbar is teleported into, by layer key. */
+const controlHosts = shallowRef<ReadonlyMap<string, HTMLElement>>(new Map());
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
 let page: PageLayer | null = null;
@@ -127,6 +149,7 @@ let fittedCanvas: string | null | undefined;
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
 let laid: LaidLayers | null = null;
+const anchors = new Map<string, AnchoredControl>();
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
@@ -188,6 +211,8 @@ onBeforeUnmount(() => {
     page = null;
     laid?.remove();
     laid = null;
+    for (const anchor of anchors.values()) anchor.remove();
+    anchors.clear();
     map?.remove();
     map = null;
 });
@@ -619,6 +644,42 @@ function drawOverlays(): void {
         [...failedOverlays.value].filter((key) => wanted.has(key)),
     );
     laid.draw(props.overlays, props.curtain);
+    drawControls();
+}
+
+/**
+ * One host element per laid layer, in the map's container and on the
+ * corner of the layer (`anchoredControl`), for its toolbar to be teleported
+ * into; the host of a layer that is gone is removed.
+ */
+function drawControls(): void {
+    if (!map) return;
+    const wanted = new Set(props.overlays.map((overlay) => overlay.key));
+    const hosts = new Map(controlHosts.value);
+    for (const [key, anchor] of anchors) {
+        if (wanted.has(key)) continue;
+        anchor.remove();
+        anchors.delete(key);
+        hosts.delete(key);
+    }
+    for (const overlay of props.overlays) {
+        let anchor = anchors.get(overlay.key);
+        if (!anchor) {
+            const element = document.createElement("div");
+            element.className = CONTROLS_HOST_CLASS;
+            map.getContainer().append(element);
+            anchor = anchoredControl(map, element);
+            anchors.set(overlay.key, anchor);
+            hosts.set(overlay.key, element);
+        }
+        anchor.place(overlay.bounds);
+    }
+    if (
+        hosts.size !== controlHosts.value.size ||
+        [...hosts.keys()].some((key) => !controlHosts.value.has(key))
+    ) {
+        controlHosts.value = hosts;
+    }
 }
 
 function markOverlayFailed(key: string): void {
@@ -909,6 +970,28 @@ function wholePage(): void {
                 <span>{{ $gettext("Retry") }}</span>
             </button>
         </p>
+        <template
+            v-for="overlay in props.overlays"
+            :key="overlay.key"
+        >
+            <Teleport
+                v-if="controlHosts.get(overlay.key)"
+                :to="controlHosts.get(overlay.key)!"
+            >
+                <LayerControls
+                    :overlay="overlay"
+                    :adjusting="props.adjusting === overlay.key"
+                    :under-curtain="props.curtain === overlay.key"
+                    :capturing="props.capturing === overlay.key"
+                    @adjust="emit('layer-adjust', overlay.key, $event)"
+                    @turn="emit('layer-turn', overlay.key, $event)"
+                    @opacity="emit('layer-opacity', overlay.key, $event)"
+                    @curtain="emit('layer-curtain', overlay.key, $event)"
+                    @capture="emit('layer-capture', overlay.key)"
+                    @reset="emit('layer-reset', overlay.key)"
+                />
+            </Teleport>
+        </template>
         <p
             v-if="props.caption"
             class="caption"
