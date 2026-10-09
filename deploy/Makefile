@@ -21,11 +21,11 @@ ENV_SECRETS_DIR := $(patsubst SECRETS_DIR=%,%,$(ENV_SECRETS_LINE))
 SECRETS_DIR ?= $(if $(ENV_SECRETS_DIR),$(if $(filter /%,$(ENV_SECRETS_DIR)),$(ENV_SECRETS_DIR),$(abspath $(COMPOSE_DIR)/$(ENV_SECRETS_DIR))),$(COMPOSE_DIR)/secrets)
 SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
 IMAGE ?= manuspectrum:local
-EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache
+EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms_prometheus_data
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew
+.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -41,7 +41,7 @@ volumes: ## Create the external data volumes (once per host, idempotent)
 
 # Each file is written to a temporary name and moved into place, so a failed
 # generator leaves no empty secret; an existing file is never replaced.
-SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password restic_password
+SECRET_FILES := pg_password elastic_password django_secret_key email_password admin_password restic_password grafana_admin_password pg_monitor_password
 
 secrets: ## Create the secrets directory (0700) and the secret files that are missing
 	@command -v openssl >/dev/null || { echo "openssl is required to generate the secrets" >&2; exit 1; }
@@ -51,7 +51,7 @@ secrets: ## Create the secrets directory (0700) and the secret files that are mi
 	for f in $(SECRET_FILES); do \
 		[ -e $$f ] && continue; \
 		case $$f in \
-			pg_password|elastic_password|admin_password|restic_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
+			pg_password|elastic_password|admin_password|restic_password|grafana_admin_password|pg_monitor_password) openssl rand -base64 48 | tr -d '\n' > $$f.tmp ;; \
 			django_secret_key) python3 -c "import secrets; print(secrets.token_urlsafe(64), end='')" > $$f.tmp ;; \
 			email_password) : > $$f.tmp ;; \
 		esac; \
@@ -122,6 +122,17 @@ backup-init: ## Once per host: create the restic repository, or check that it op
 backup: ## Back up the database, the uploads and the secrets: make -C deploy backup [TAG=nightly|manual|pre-update]
 	$(BACKUP_ENV) $(SCRIPTS_DIR)/backup.sh --tag '$(TAG)'
 
+# Host metrics for the node_exporter textfile collector (host-metrics.sh); the
+# systemd timers of deploy/systemd run these two targets.
+HOST_METRICS_ENV = COMPOSE_PROJECT=manuspectrum METRICS_TEXTFILE_DIR="$(call envval,METRICS_TEXTFILE_DIR)"
+
+container-metrics: ## Write the container metrics (up, health, restarts, OOM kills, memory); the timer runs it every 30 s
+	$(HOST_METRICS_ENV) $(SCRIPTS_DIR)/host-metrics.sh containers
+
+disk-usage: ## Write the size of the uploads, restic repository, dumps and nginx logs (never du of a mount root); the timer runs it hourly
+	$(HOST_METRICS_ENV) DISK_USAGE_AREAS="media=$(call envval,MEDIA_HOST_DIR) restic=$(call envval,RESTIC_REPOSITORY_DIR) dumps=$(call envval,BACKUP_DUMP_DIR) nginx_logs=$(call envval,NGINX_LOG_HOST_DIR)" \
+		$(SCRIPTS_DIR)/host-metrics.sh disk
+
 restore-test: ## Prove the latest backup restores into a scratch database: make -C deploy restore-test [RESTIC_SNAPSHOT=<id>]
 	$(BACKUP_ENV) $(SCRIPTS_DIR)/restore-test.sh$(if $(RESTIC_SNAPSHOT), --snapshot '$(RESTIC_SNAPSHOT)')
 
@@ -154,6 +165,52 @@ status: ## Containers and their health
 
 logs: ## Follow the last 200 lines of every service
 	$(COMPOSE) logs --tail=200 -f
+
+# The monitoring services run under the `observability` profile. COMPOSE_PROFILES
+# in the env file switches it on for every command; naming the services here
+# enables it for these two targets even when it is empty.
+OBSERVABILITY_SERVICES := prometheus alertmanager grafana node-exporter postgres-exporter redis-exporter blackbox-exporter
+
+monitoring-init: ## Once per host, with postgres up: create or update the ms_monitor role and pg_stat_statements (password from pg_monitor_password)
+	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' SECRETS_DIR='$(SECRETS_DIR)' $(SCRIPTS_DIR)/monitoring-init.sh
+
+observability-on: ## Start the monitoring services and wait until they are healthy
+	$(COMPOSE) --profile observability up -d --wait $(OBSERVABILITY_SERVICES)
+
+observability-off: ## Stop and remove the monitoring containers (volumes kept); empty COMPOSE_PROFILES in .env to keep them off
+	$(COMPOSE) --profile observability rm --stop --force $(OBSERVABILITY_SERVICES)
+	@echo "Volumes kept. Set COMPOSE_PROFILES= in $(ENV_FILE) so that 'make up' does not start them again."
+
+# amtool inside the running container: no published port, no host install.
+AMTOOL = $(COMPOSE) --profile observability exec -T alertmanager amtool --alertmanager.url=http://127.0.0.1:9093
+
+# Alertmanager reads ALERT_EMAILS, ALERT_EMAIL_FROM and the EMAIL_* relay from
+# its environment, fixed when the container is created, so a /-/reload could
+# not see a changed .env. The values are checked on the host with the same
+# render.sh first (a bad list must not take the running instance down), then
+# `up` recreates only this container when its environment changed; the
+# silences and the notification log live on a volume and survive.
+alert-recipients: ## After editing ALERT_EMAILS (or the sender or relay) in .env: validate, recreate alertmanager, wait until ready
+	@ALERT_EMAILS="$(call envval,ALERT_EMAILS)" ALERT_EMAIL_FROM="$(call envval,ALERT_EMAIL_FROM)" \
+		EMAIL_HOST="$(call envval,EMAIL_HOST)" EMAIL_PORT="$(call envval,EMAIL_PORT)" \
+		EMAIL_USE_TLS="$(call envval,EMAIL_USE_TLS)" EMAIL_HOST_USER="$(call envval,EMAIL_HOST_USER)" \
+		ALERTMANAGER_DIR='$(COMPOSE_DIR)/observability/alertmanager' ALERTMANAGER_RENDER_ONLY=1 \
+		ALERTMANAGER_OUT=/dev/null sh '$(COMPOSE_DIR)/observability/alertmanager/render.sh' \
+		|| { echo "alert-recipients: fix $(ENV_FILE); alertmanager was left running unchanged" >&2; exit 1; }
+	$(COMPOSE) --profile observability up -d --no-deps --wait alertmanager
+
+alert-test: ## Fire a critical AlertTest for 5 minutes: an e-mail must reach ALERT_EMAILS (Mailpit in the rehearsal)
+	$(AMTOOL) alert add AlertTest severity=critical service=monitoring \
+		--annotation=summary='"Test alert"' --annotation=description='"Raised by make alert-test; no action needed."' \
+		--annotation=runbook_url='"https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md"' \
+		--end="$$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+
+alerts: ## Alerts Alertmanager holds now
+	$(AMTOOL) alert query
+
+silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh --duration=2h --comment="why"'
+	@[ -n "$(ARGS)" ] || { echo "usage: make silence ARGS='matcher... --duration=2h --comment=\"why\"'" >&2; exit 1; }
+	$(AMTOOL) silence add $(ARGS)
 
 smoke: ## Read-only checks of the running stack
 	$(COMPOSE_DIR)/smoke.sh check

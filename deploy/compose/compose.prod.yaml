@@ -3,6 +3,8 @@
 # §2.11), measured again on the rehearsal VM (docker stats during a full
 # reindex) before it is trusted. The limits are ceilings, not allocations:
 # they sum to 17.5 GB and the expected resident set is 10 to 11 GB.
+# The monitoring services (profile observability) add 1952 MiB of ceilings,
+# 19.5 GiB in all; mailpit (CI and rehearsal only) has its own.
 # Elasticsearch: heap 2g, about 3.4 GiB resident with 12k resources loaded
 # (direct memory, metaspace, threads, page cache), hence a 5g limit.
 # memswap_limit equals the memory limit everywhere: a container never swaps, a
@@ -18,10 +20,16 @@ services:
               "-c", "maintenance_work_mem=256MB",
               "-c", "autovacuum_work_mem=128MB",
               "-c", "random_page_cost=1.5",
-              "-c", "jit=off"]
+              "-c", "jit=off",
+              "-c", "shared_preload_libraries=pg_stat_statements",
+              "-c", "pg_stat_statements.track=top",
+              "-c", "pg_stat_statements.max=1000",
+              "-c", "track_io_timing=on"]
     shm_size: 1g
     deploy: {resources: {limits: {memory: 3g}}}
     memswap_limit: 3g
+    # The OOM killer takes everything else first (Elasticsearch next).
+    oom_score_adj: -500
 
   elasticsearch:
     environment:
@@ -29,6 +37,7 @@ services:
       xpack.ml.enabled: "false"
     deploy: {resources: {limits: {memory: 5g}}}
     memswap_limit: 5g
+    oom_score_adj: -300
 
   redis-broker:
     deploy: {resources: {limits: {memory: 256m}}}
@@ -70,3 +79,44 @@ services:
   restic:
     deploy: {resources: {limits: {memory: 1g}}}
     memswap_limit: 1g
+
+  # Monitoring: 1952 MiB in all, kept low in CPU priority against the application.
+  prometheus:
+    deploy: {resources: {limits: {memory: 1g}}}
+    memswap_limit: 1g
+    cpu_shares: 128
+
+  grafana:
+    deploy: {resources: {limits: {memory: 512m}}}
+    memswap_limit: 512m
+    cpu_shares: 128
+
+  alertmanager:
+    deploy: {resources: {limits: {memory: 128m}}}
+    memswap_limit: 128m
+    cpu_shares: 128
+
+  postgres-exporter:
+    deploy: {resources: {limits: {memory: 96m}}}
+    memswap_limit: 96m
+    cpu_shares: 128
+
+  node-exporter:
+    deploy: {resources: {limits: {memory: 64m}}}
+    memswap_limit: 64m
+    cpu_shares: 128
+
+  redis-exporter:
+    deploy: {resources: {limits: {memory: 64m}}}
+    memswap_limit: 64m
+    cpu_shares: 128
+
+  blackbox-exporter:
+    deploy: {resources: {limits: {memory: 64m}}}
+    memswap_limit: 64m
+    cpu_shares: 128
+
+  # CI and rehearsal only, outside the budget like restic.
+  mailpit:
+    deploy: {resources: {limits: {memory: 128m}}}
+    memswap_limit: 128m

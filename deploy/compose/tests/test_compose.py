@@ -39,6 +39,19 @@ PROD_LIMITS = {
     "nginx": 512 * MIB,
 }
 PROD_LIMITS_CEILING = 17.5 * GIB
+OBS_LIMITS = {
+    "prometheus": 1024 * MIB,
+    "grafana": 512 * MIB,
+    "alertmanager": 128 * MIB,
+    "postgres-exporter": 96 * MIB,
+    "node-exporter": 64 * MIB,
+    "redis-exporter": 64 * MIB,
+    "blackbox-exporter": 64 * MIB,
+}
+OBS_LIMITS_CEILING = 2 * GIB
+TOTAL_LIMITS_CEILING = 19.5 * GIB
+OBS_EXTERNAL_VOLUMES = {"prometheus_data": "ms_prometheus_data"}
+OBS_SECRETS = {"grafana_admin_password", "pg_monitor_password"}
 
 
 def to_bytes(value):
@@ -47,7 +60,7 @@ def to_bytes(value):
     return number * {"": 1, "k": 1024, "m": MIB, "g": GIB}[unit]
 
 
-def render(*files, profiles=()):
+def render(*files, profiles=(), env_profiles=None):
     """Return `docker compose config` as JSON for `files`, with .env.example values."""
     with tempfile.TemporaryDirectory() as tmp:
         project = Path(tmp) / "compose"
@@ -62,6 +75,8 @@ def render(*files, profiles=()):
             "django_secret_key",
             "admin_password",
             "restic_password",
+            "grafana_admin_password",
+            "pg_monitor_password",
         ):
             (secrets / name).write_text("x" * 64)
         (secrets / "email_password").write_text("")
@@ -93,6 +108,10 @@ def render(*files, profiles=()):
         env = re.sub(r"(?m)^MEDIA_HOST_DIR=.*$", f"MEDIA_HOST_DIR={media}", env)
         env = re.sub(r"(?m)^CERTS_DIR=.*$", f"CERTS_DIR={certs}", env)
         env = re.sub(r"(?m)^NGINX_LOG_HOST_DIR=.*$", f"NGINX_LOG_HOST_DIR={logs}", env)
+        # The example enables the monitoring; a render asks for it explicitly.
+        env = re.sub(r"(?m)^COMPOSE_PROFILES=.*\n", "", env)
+        if env_profiles is not None:
+            env += f"COMPOSE_PROFILES={env_profiles}\n"
         (project / ".env").write_text(env)
         command = ["docker", "compose", "--project-directory", str(project)]
         for profile in profiles:
@@ -115,7 +134,20 @@ class ComposeStackTests(unittest.TestCase):
     def setUpClass(cls):
         cls.base, cls.media = render("compose.yaml")
         cls.prod, _ = render("compose.yaml", "compose.prod.yaml")
-        cls.stacks = {"base": cls.base, "prod": cls.prod}
+        cls.observability, _ = render(
+            "compose.yaml", "compose.prod.yaml", profiles=("observability",)
+        )
+        cls.mailpit, _ = render(
+            "compose.yaml", "compose.prod.yaml", profiles=("mailpit",)
+        )
+        cls.from_env, _ = render(
+            "compose.yaml", "compose.prod.yaml", env_profiles="observability"
+        )
+        cls.stacks = {
+            "base": cls.base,
+            "prod": cls.prod,
+            "observability": cls.observability,
+        }
         cls.acme, _ = render("compose.yaml", "compose.prod.yaml", profiles=("acme",))
         cls.backup, _ = render(
             "compose.yaml", "compose.prod.yaml", profiles=("backup",)
@@ -130,6 +162,20 @@ class ComposeStackTests(unittest.TestCase):
     def test_only_nginx_publishes_ports(self):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):
+                if name == "grafana":
+                    self.assertEqual(
+                        service["ports"],
+                        [
+                            {
+                                "mode": "ingress",
+                                "host_ip": "127.0.0.1",
+                                "target": 3000,
+                                "published": "3000",
+                                "protocol": "tcp",
+                            }
+                        ],
+                    )
+                    continue
                 if name != "nginx":
                     self.assertFalse(service.get("ports"))
                     continue
@@ -355,7 +401,10 @@ class ComposeStackTests(unittest.TestCase):
     def test_data_volumes_are_external_with_fixed_names(self):
         for label, stack in self.stacks.items():
             with self.subTest(stack=label):
-                for key, name in EXTERNAL_VOLUMES.items():
+                external = dict(EXTERNAL_VOLUMES)
+                if label == "observability":
+                    external.update(OBS_EXTERNAL_VOLUMES)
+                for key, name in external.items():
                     self.assertTrue(stack["volumes"][key]["external"])
                     self.assertEqual(stack["volumes"][key]["name"], name)
                 for key in ("static", "beat"):
@@ -384,8 +433,8 @@ class ComposeStackTests(unittest.TestCase):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
         self.assertEqual(
-            source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 5 + 2
-        )  # + init: package, CA
+            source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 5 + 2 + 1
+        )  # + init: package, CA; node-exporter: textfile directory
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -465,7 +514,7 @@ class ComposeStackTests(unittest.TestCase):
     def test_production_postgres_settings(self):
         command = self.prod["services"]["postgres"]["command"]
         settings = dict(
-            item.split("=", 1) for item in command if re.match(r"^[a-z_]+=", item)
+            item.split("=", 1) for item in command if re.match(r"^[a-z_.]+=", item)
         )
         for key, value in {
             "standard_conforming_strings": "off",
@@ -479,10 +528,52 @@ class ComposeStackTests(unittest.TestCase):
             with self.subTest(setting=key):
                 self.assertEqual(settings.get(key), value)
         self.assertNotIn("idle_in_transaction_session_timeout", " ".join(command))
+        self.assertEqual(settings.get("shared_preload_libraries"), "pg_stat_statements")
+        self.assertEqual(settings.get("track_io_timing"), "on")
+        self.assertEqual(settings.get("pg_stat_statements.track"), "top")
+        self.assertEqual(settings.get("pg_stat_statements.max"), "1000")
+        for key in settings:
+            self.assertFalse(
+                key.startswith("log_min_duration") or key.startswith("log_lock"),
+                f"{key}: slow-statement and lock logs would write literal SQL values",
+            )
+        self.assertNotIn("log_statement", settings)
         self.assertEqual(
             self.prod["services"]["postgres"]["environment"]["POSTGRES_INITDB_ARGS"],
             "--encoding=UTF8 --locale=en_US.utf8",
         )
+
+    def test_the_database_and_elasticsearch_are_the_last_victims_of_the_oom_killer(
+        self,
+    ):
+        services = self.prod["services"]
+        self.assertEqual(services["postgres"]["oom_score_adj"], -500)
+        self.assertEqual(services["elasticsearch"]["oom_score_adj"], -300)
+        for name, service in services.items():
+            if name not in ("postgres", "elasticsearch"):
+                with self.subTest(service=name):
+                    self.assertGreaterEqual(service.get("oom_score_adj", 0), 0)
+
+    def test_monitoring_init_is_a_make_target_that_reads_the_secret_file(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        self.assertIn("monitoring-init", phony)
+        self.assertRegex(makefile, r"(?m)^monitoring-init:.*## \S")
+        recipe = re.search(r"(?ms)^monitoring-init:.*?\n(.*?)(?:\n\n|\Z)", makefile)[1]
+        self.assertIn("monitoring-init.sh", recipe)
+        self.assertIn("$(SECRETS_DIR)", recipe)
+        self.assertIn("$(COMPOSE)", recipe)
+        self.assertTrue((DEPLOY_DIR / "scripts" / "monitoring-init.sh").is_file())
+
+    def test_secrets_doc_covers_the_monitoring_secrets(self):
+        text = (DEPLOY_DIR / "SECRETS.md").read_text(encoding="utf-8")
+        for name in ("grafana_admin_password", "pg_monitor_password"):
+            with self.subTest(secret=name):
+                self.assertRegex(text, rf"(?m)^### `{name}`$")
+        self.assertIn("monitoring-init", text)
+        self.assertIn("rotate **all eight** secrets", text)
+        self.assertRegex(text, r"`grafana_admin_password` under 16")
+        self.assertRegex(text, r"`pg_monitor_password` under 32")
 
     def test_cantaloupe_reads_the_uploaded_files_through_the_host_group(self):
         for label, stack in self.stacks.items():
@@ -514,10 +605,16 @@ class ComposeStackTests(unittest.TestCase):
     def test_every_declared_secret_is_made_by_make_secrets(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
         made = set(re.search(r"^SECRET_FILES := (.+)$", makefile, re.M)[1].split())
-        self.assertEqual(set(self.backup["secrets"]), made)
+        self.assertEqual(set(self.backup["secrets"]), made - OBS_SECRETS)
+        self.assertEqual(set(self.observability["secrets"]), made - {"restic_password"})
+        self.assertEqual(OBS_SECRETS, made & OBS_SECRETS)
         for label, stack in self.stacks.items():
+            if label == "observability":
+                continue
             with self.subTest(stack=label):
-                self.assertEqual(set(stack["secrets"]), made - {"restic_password"})
+                self.assertEqual(
+                    set(stack["secrets"]), made - {"restic_password"} - OBS_SECRETS
+                )
 
     def test_smtp_password_is_an_optional_secret_file(self):
         for label, stack in self.stacks.items():
@@ -579,11 +676,270 @@ class ComposeStackTests(unittest.TestCase):
         self.assertFalse(certbot.get("secrets"))
 
     def test_third_party_images_are_pinned_by_digest(self):
-        for label, stack in (("acme", self.acme), ("backup", self.backup)):
+        for label, stack in (
+            ("acme", self.acme),
+            ("backup", self.backup),
+            ("observability", self.observability),
+            ("mailpit", self.mailpit),
+        ):
             for name, service in stack["services"].items():
                 if name not in APP_SERVICES:
                     with self.subTest(profile=label, service=name):
                         self.assertRegex(service["image"], r"@sha256:[0-9a-f]{64}$")
+
+    OBS_SERVICES = tuple(OBS_LIMITS)
+
+    def test_monitoring_runs_only_under_the_observability_profile(self):
+        for label, stack in (
+            ("base", self.base),
+            ("prod", self.prod),
+            ("acme", self.acme),
+            ("backup", self.backup),
+            ("init", self.init),
+            ("mailpit", self.mailpit),
+        ):
+            for name in self.OBS_SERVICES:
+                with self.subTest(stack=label, service=name):
+                    self.assertNotIn(name, stack["services"])
+        for name in self.OBS_SERVICES:
+            with self.subTest(service=name):
+                self.assertIn(name, self.observability["services"])
+                self.assertEqual(
+                    self.observability["services"][name]["profiles"],
+                    ["observability"],
+                )
+        self.assertNotIn("mailpit", self.observability["services"])
+
+    def test_compose_reads_the_profiles_from_the_env_file(self):
+        self.assertIn("prometheus", self.from_env["services"])
+        self.assertEqual(
+            set(self.from_env["services"]), set(self.observability["services"])
+        )
+        self.assertRegex(
+            (COMPOSE_DIR / ".env.example").read_text(),
+            r"(?m)^COMPOSE_PROFILES=observability$",
+        )
+
+    def test_monitoring_services_are_hardened(self):
+        for name in self.OBS_SERVICES:
+            service = self.observability["services"][name]
+            with self.subTest(service=name):
+                self.assertEqual(service["restart"], "unless-stopped")
+                self.assertEqual(service["cap_drop"], ["ALL"])
+                self.assertFalse(service.get("cap_add"))
+                self.assertIn("no-new-privileges:true", service["security_opt"])
+                self.assertTrue(service["read_only"])
+                self.assertRegex(service["user"], r"^[1-9]\d*(:\d+)?$")
+                self.assertTrue(any(t.startswith("/tmp:") for t in service["tmpfs"]))
+                self.assertTrue(service["healthcheck"]["test"])
+                self.assertFalse(service.get("privileged"))
+                self.assertNotIn("pid", service)
+                self.assertNotIn("network_mode", service)
+                self.assertFalse(service.get("group_add"))
+                self.assertEqual(service["logging"]["driver"], "json-file")
+                for volume in service.get("volumes", []):
+                    self.assertNotIn("docker.sock", str(volume.get("source", "")))
+                if name != "grafana":
+                    self.assertFalse(service.get("ports"))
+        self.assertEqual(
+            self.observability["services"]["node-exporter"]["user"], "65534:65534"
+        )
+        self.assertEqual(self.observability["services"]["grafana"]["user"], "472:472")
+
+    def test_grafana_cannot_reach_the_application(self):
+        services = self.observability["services"]
+        networks = {
+            name: set(service.get("networks", {"default": None}))
+            for name, service in services.items()
+        }
+        self.assertEqual(networks["grafana"], {"monitoring"})
+        self.assertEqual(networks["alertmanager"], {"monitoring"})
+        self.assertEqual(networks["prometheus"], {"default", "monitoring"})
+        for name in (
+            "node-exporter",
+            "postgres-exporter",
+            "redis-exporter",
+            "blackbox-exporter",
+        ):
+            self.assertEqual(networks[name], {"default"}, name)
+        self.assertEqual(
+            {n for n, nets in networks.items() if "monitoring" in nets},
+            {"grafana", "alertmanager", "prometheus"},
+        )
+        self.assertFalse(self.observability["networks"]["monitoring"].get("internal"))
+        mailpit = self.mailpit["services"]["mailpit"]
+        self.assertEqual(set(mailpit["networks"]), {"default", "monitoring"})
+
+    def test_node_exporter_reads_the_host_read_only_and_the_textfile_directory(self):
+        node = self.observability["services"]["node-exporter"]
+        mounts = {v["target"]: v for v in node["volumes"]}
+        self.assertEqual(set(mounts), {"/host", "/textfile"})
+        root = mounts["/host"]
+        self.assertEqual(root["source"], "/")
+        self.assertTrue(root["read_only"])
+        self.assertEqual(root["bind"]["propagation"], "rslave")
+        textfile = mounts["/textfile"]
+        self.assertTrue(textfile["read_only"])
+        self.assertTrue(textfile["source"].endswith("/metrics"))
+        self.assertFalse(textfile.get("bind", {}).get("create_host_path", False))
+        for flag in (
+            "--path.rootfs=/host",
+            "--collector.textfile.directory=/textfile",
+            "--collector.filesystem.mount-timeout=5s",
+            "--no-collector.netdev",
+            "--no-collector.netstat",
+            "--no-collector.sockstat",
+        ):
+            self.assertIn(flag, node["command"])
+
+    def test_monitoring_budget(self):
+        services = self.observability["services"]
+        for name, limit in OBS_LIMITS.items():
+            with self.subTest(service=name):
+                memory = services[name]["deploy"]["resources"]["limits"]["memory"]
+                self.assertEqual(to_bytes(memory), limit)
+                self.assertEqual(to_bytes(services[name]["memswap_limit"]), limit)
+                self.assertEqual(services[name]["cpu_shares"], 128)
+        self.assertLessEqual(sum(OBS_LIMITS.values()), OBS_LIMITS_CEILING)
+        self.assertLessEqual(
+            sum(PROD_LIMITS.values()) + sum(OBS_LIMITS.values()), TOTAL_LIMITS_CEILING
+        )
+        self.assertEqual(sum(PROD_LIMITS.values()), PROD_LIMITS_CEILING)
+        steady = sum(
+            to_bytes(s["deploy"]["resources"]["limits"]["memory"])
+            for n, s in self.observability["services"].items()
+            if n in PROD_LIMITS
+        )
+        self.assertEqual(steady, sum(PROD_LIMITS.values()))
+
+    def test_prometheus_keeps_30_days_on_an_external_volume(self):
+        prometheus = self.observability["services"]["prometheus"]
+        self.assertIn("--storage.tsdb.retention.time=30d", prometheus["command"])
+        self.assertIn("--storage.tsdb.retention.size=8GB", prometheus["command"])
+        self.assertIn("--storage.tsdb.path=/prometheus", prometheus["command"])
+        mounts = {v["target"]: v for v in prometheus["volumes"]}
+        self.assertEqual(mounts["/prometheus"]["source"], "prometheus_data")
+        self.assertFalse(mounts["/prometheus"].get("read_only"))
+        for target, mount in mounts.items():
+            if target != "/prometheus":
+                self.assertTrue(mount["read_only"], target)
+        self.assertEqual([c["source"] for c in prometheus["configs"]], ["edge_targets"])
+        self.assertIn("ms_prometheus_data", (DEPLOY_DIR / "Makefile").read_text())
+        makefile = (DEPLOY_DIR / "Makefile").read_text()
+        volumes = re.search(r"^EXTERNAL_VOLUMES := (.+)$", makefile, re.M)[1].split()
+        self.assertEqual(
+            set(volumes),
+            set(EXTERNAL_VOLUMES.values()) | set(OBS_EXTERNAL_VOLUMES.values()),
+        )
+
+    def test_grafana_sends_nothing_outside(self):
+        grafana = self.observability["services"]["grafana"]
+        environment = grafana["environment"]
+        for key, value in {
+            "GF_AUTH_ANONYMOUS_ENABLED": "false",
+            "GF_USERS_ALLOW_SIGN_UP": "false",
+            "GF_SECURITY_DISABLE_GRAVATAR": "true",
+            "GF_ANALYTICS_REPORTING_ENABLED": "false",
+            "GF_ANALYTICS_CHECK_FOR_UPDATES": "false",
+            "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES": "false",
+            "GF_NEWS_NEWS_FEED_ENABLED": "false",
+            "GF_SECURITY_ADMIN_PASSWORD__FILE": "/run/secrets/grafana_admin_password",
+        }.items():
+            with self.subTest(key=key):
+                self.assertEqual(environment[key], value)
+        self.assertNotIn("GF_SECURITY_ADMIN_PASSWORD", environment)
+        self.assertEqual(
+            [s["source"] for s in grafana["secrets"]], ["grafana_admin_password"]
+        )
+        for volume in grafana["volumes"]:
+            if volume["target"] != "/var/lib/grafana":
+                self.assertTrue(volume["read_only"], volume["target"])
+
+    def test_monitoring_secrets_reach_only_their_consumers(self):
+        services = self.observability["services"]
+        holders = {
+            name: {s["source"] for s in service.get("secrets", [])}
+            for name, service in services.items()
+        }
+        for secret in OBS_SECRETS:
+            for name, sources in holders.items():
+                with self.subTest(secret=secret, service=name):
+                    expected = (
+                        secret == "grafana_admin_password" and name == "grafana"
+                    ) or (
+                        secret == "pg_monitor_password" and name == "postgres-exporter"
+                    )
+                    self.assertEqual(secret in sources, expected)
+        exporter = services["postgres-exporter"]["environment"]
+        self.assertEqual(
+            exporter["DATA_SOURCE_PASS_FILE"], "/run/secrets/pg_monitor_password"
+        )
+        self.assertEqual(exporter["DATA_SOURCE_USER"], "ms_monitor")
+        self.assertTrue(
+            exporter["DATA_SOURCE_URI"].startswith("postgres:5432/postgres?")
+        )
+        command = services["postgres-exporter"]["command"]
+        for flag in (
+            "--collector.stat_statements",
+            "--no-collector.stat_statements.include_query",
+            "--no-collector.stat_user_tables",
+            "--no-collector.statio_user_tables",
+        ):
+            self.assertIn(flag, command)
+
+    def test_alertmanager_gets_the_relay_and_the_recipients_from_the_env_file(self):
+        alertmanager = self.observability["services"]["alertmanager"]
+        environment = alertmanager["environment"]
+        self.assertEqual(environment["ALERT_EMAILS"], "alerts@manuspectrum.test")
+        self.assertEqual(
+            environment["ALERT_EMAIL_FROM"], "manuspectrum@manuspectrum.test"
+        )
+        self.assertEqual(environment["EMAIL_HOST"], "smtp.manuspectrum.test")
+        self.assertEqual(environment["EMAIL_PORT"], "25")
+        self.assertEqual(environment["EMAIL_USE_TLS"], "false")
+        self.assertIn("EMAIL_HOST_USER", environment)
+        self.assertEqual(
+            [s["source"] for s in alertmanager["secrets"]], ["email_password"]
+        )
+        self.assertEqual(
+            alertmanager["entrypoint"], ["/bin/sh", "/etc/alertmanager/render.sh"]
+        )
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(env, r"(?m)^ALERT_EMAILS=\S+$")
+        self.assertNotIn("ALERT_EMAIL_TO", env)
+
+    def test_edge_probe_target_is_an_inline_config(self):
+        config = self.observability["configs"]["edge_targets"]
+        self.assertIn("https://manuspectrum.test/healthz", config["content"])
+
+    def test_mailpit_only_under_its_profile(self):
+        for label, stack in self.stacks.items():
+            self.assertNotIn("mailpit", stack["services"], label)
+        for stack in (self.acme, self.backup, self.init):
+            self.assertNotIn("mailpit", stack["services"])
+        mailpit = self.mailpit["services"]["mailpit"]
+        self.assertEqual(mailpit["profiles"], ["mailpit"])
+        self.assertFalse(mailpit.get("ports"))
+        self.assertTrue(mailpit["read_only"])
+        self.assertEqual(mailpit["cap_drop"], ["ALL"])
+        self.assertNotEqual(mailpit["user"].split(":")[0], "0")
+        self.assertNotIn("mailpit", OBS_LIMITS)
+
+    def test_observability_off_stops_without_removing_volumes(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text(encoding="utf-8")
+        phony = re.search(r"(?m)^\.PHONY:(.*)$", makefile)[1].split()
+        self.assertIn("observability-on", phony)
+        self.assertIn("observability-off", phony)
+        recipe = re.search(r"(?ms)^observability-off:.*?(?=^\S)", makefile)[0]
+        self.assertIn("rm --stop --force", recipe)
+        self.assertNotRegex(recipe, r"rm\b[^\n]* -[a-z]*v\b")
+        self.assertIn("COMPOSE_PROFILES", recipe)
+        self.assertIn("$(OBSERVABILITY_SERVICES)", recipe)
+        listed = re.search(r"(?m)^OBSERVABILITY_SERVICES := (.+)$", makefile)[1]
+        self.assertEqual(set(listed.split()), set(self.OBS_SERVICES))
+        up = re.search(r"(?ms)^observability-on:.*?(?=^\S)", makefile)[0]
+        self.assertIn("--profile observability", up)
+        self.assertIn("--wait", up)
 
     def test_restic_runs_only_under_the_backup_profile(self):
         self.assertNotIn("restic", self.base["services"])
