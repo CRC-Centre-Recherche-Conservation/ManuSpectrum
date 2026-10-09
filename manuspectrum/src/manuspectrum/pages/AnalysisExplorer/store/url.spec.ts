@@ -309,15 +309,15 @@ describe("historyMode", () => {
 });
 
 describe("store round trip", () => {
-    it("applies a snapshot and reads it back, keeping an unavailable view on corpus", () => {
+    it("applies a snapshot and reads it back, keeping the map view", () => {
         const store = useExplorerStore();
         const snapshot = fromQuery(
             new URLSearchParams(`view=map&doc=${DOC}&technique=t1`),
         );
         applySnapshot(store, snapshot);
-        expect(store.view).toBe("corpus");
+        expect(store.view).toBe("map");
         expect(store.document?.id).toBe(DOC);
-        expect(snapshotOf(store)).toEqual({ ...snapshot, view: "corpus" });
+        expect(snapshotOf(store)).toEqual(snapshot);
     });
 
     it("applies and reads back the outside state", () => {

@@ -1,0 +1,2247 @@
+<script setup lang="ts">
+import {
+    computed,
+    inject,
+    nextTick,
+    onMounted,
+    ref,
+    shallowRef,
+    useTemplateRef,
+    watch,
+} from "vue";
+import { useMediaQuery } from "@vueuse/core";
+import Drawer from "primevue/drawer";
+import { useGettext } from "vue3-gettext";
+
+import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
+import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
+import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
+import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
+import MapPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue";
+import MapStage from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapStage.vue";
+import MapTimeline from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue";
+import MaterialsControl from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue";
+import PlaceList from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/PlaceList.vue";
+import SmallMultiples from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/SmallMultiples.vue";
+
+import {
+    ICONS,
+    ICON_VIEW_BOX,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import {
+    exportHref,
+    useEvents,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useEvents.ts";
+import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
+import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { intervalOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/aoristic.ts";
+import { materialCounts } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/colour-groups.ts";
+import {
+    boundsOf,
+    padBounds,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+import {
+    FALLBACK_COLOURS,
+    readColours,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-colours.ts";
+import {
+    DEFAULT_EVENT_TYPES,
+    shownEventTypes,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
+import {
+    MULTIPLES_PER_PAGE,
+    byCentury,
+    byMaterial,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
+import {
+    featureStates,
+    inBrush,
+    lowLevels,
+    placeFeatures,
+    summarisePlaces,
+    territoryFields,
+    withoutLow,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
+import { territories } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+import { trackedOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
+import { webglAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/webgl.ts";
+
+import type {
+    EventType,
+    MapEvent,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Bounds } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+import type {
+    MapMode,
+    MultiplesAxis,
+    TerritoryColour,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
+import type { MiniMap } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
+import type { PanelSubject } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/panel-groups.ts";
+
+interface Hovered {
+    id: string;
+    x: number;
+    y: number;
+    /** The tooltip opens to the left of, or above, the pointer past the middle of the frame. */
+    flipX: boolean;
+    flipY: boolean;
+}
+
+type RailGroup = "materials" | "reliability" | "events";
+
+const EUROPE: Bounds = { west: -10, south: 36, east: 20, north: 56 };
+const EVENT_TYPES: readonly EventType[] = [
+    "production",
+    "modification",
+    "alteration",
+    "analysis",
+    "sampling",
+];
+const MODES: readonly MapMode[] = ["places", "territories", "multiples"];
+const COMPACT_QUERY = "(max-width: 80rem)";
+const NARROW_QUERY = "(max-width: 48rem)";
+const PHONE_QUERY = "(max-width: 30rem)";
+const RADIUS_MIN = 60;
+const RADIUS_MAX = 400;
+const RADIUS_STEP = 10;
+const HEADING_ID = "explorer-map-title";
+const CANVAS_SELECTOR = ".maplibregl-canvas";
+
+/**
+ * The Map & timeline view: the kept events on a MapLibre stage (places,
+ * territories of the followed materials, or small multiples), their
+ * timeline, the filters of the map in a rail, and the panel of the place,
+ * period, document or material opened. The mode, the followed materials,
+ * the brushed period and the borders live in the store (`mapState`, in the
+ * address); the reliability switch, the hovered place and the opened
+ * subject live here. The stage stays laid out, hidden, while the small
+ * multiples show, so its snapshot can be taken and the map comes back as
+ * it was. The opened subject's opener gets the focus back on close.
+ */
+const announce = inject(ANNOUNCE_KEY, null);
+
+const store = useExplorerStore();
+const { $gettext, $ngettext, interpolate } = useGettext();
+const { eventTypeLabel, viewTitle } = useVocabulary();
+const { activeFilters } = useActiveFilters();
+const request = useEvents(() => store.filters);
+const compact = useMediaQuery(COMPACT_QUERY);
+const narrow = useMediaQuery(NARROW_QUERY);
+const phone = useMediaQuery(PHONE_QUERY);
+const webgl = webglAvailable();
+const root = useTemplateRef<HTMLElement>("root");
+const heading = useTemplateRef<HTMLElement>("heading");
+const stage = useTemplateRef<InstanceType<typeof MapStage>>("stage");
+const rail = useTemplateRef<{ focusFilters: () => void }>("rail");
+const timelineBox = useTemplateRef<HTMLElement>("timeline-box");
+useScreenHeading(() => heading.value);
+
+const subject = ref<PanelSubject | null>(null);
+const hovered = ref<Hovered | null>(null);
+const listHovered = ref<string | null>(null);
+const page = ref(0);
+const showLow = ref(true);
+const background = ref<string | null>(null);
+const mapFailed = ref(false);
+const mapColours = shallowRef(FALLBACK_COLOURS);
+const legendOpen = ref(!narrow.value);
+const radiusDraft = ref(store.mapState.radius);
+const folded = ref(new Set<RailGroup>());
+let opener: HTMLElement | null = null;
+
+const response = computed(() => request.data.value);
+const status = computed(() => request.status.value);
+const firstLoad = computed(
+    () =>
+        response.value === null &&
+        (status.value === "loading" || status.value === "idle"),
+);
+const failed = computed(
+    () => status.value === "error" || status.value === "unavailable",
+);
+const refetching = computed(
+    () => status.value === "loading" && response.value !== null,
+);
+const mode = computed(() => store.mapState.mode);
+const low = computed(() =>
+    lowLevels(response.value?.certaintyScale ?? { levels: [] }),
+);
+const places = computed(() => response.value?.places ?? {});
+const events = computed<MapEvent[]>(() => {
+    const all = response.value?.events ?? [];
+    return showLow.value ? all : withoutLow(all, low.value);
+});
+const brushed = computed(() =>
+    events.value.filter((event) => inBrush(event, store.mapState.brush)),
+);
+const tracked = computed(() => trackedOf(store.mapState.track));
+const summaries = computed(() =>
+    summarisePlaces(brushed.value, places.value, tracked.value, low.value),
+);
+const summaryList = computed(() => [...summaries.value.values()]);
+const features = computed(() => placeFeatures(summaries.value));
+const states = computed(
+    () =>
+        new Map(
+            summaryList.value.map((summary) => [
+                summary.id,
+                {
+                    ...featureStates(summary, tracked.value, store.trackMode),
+                    hover: summary.id === listHovered.value,
+                },
+            ]),
+        ),
+);
+const bounds = computed(() =>
+    padBounds(
+        boundsOf(summaryList.value.map((summary) => summary.lngLat)) ?? EUROPE,
+        store.mapState.radius,
+    ),
+);
+const territoryReason = computed(() =>
+    tracked.value.length === 0
+        ? $gettext("Follow at least one material to draw territories.")
+        : null,
+);
+const territoryData = computed(() => {
+    if (mode.value !== "territories" || tracked.value.length === 0) {
+        return null;
+    }
+    return territories(
+        territoryFields(summaries.value, tracked.value, low.value),
+        store.mapState.radius,
+        bounds.value,
+        store.mapState.colour,
+    );
+});
+const nothingToDraw = computed(
+    () =>
+        territoryData.value !== null &&
+        territoryData.value.features.length === 0,
+);
+/** The years the kept events span, for the century multiples and the stage title without a brush. */
+const eventsRange = computed<[number, number] | null>(() => {
+    let from = Infinity;
+    let to = -Infinity;
+    for (const event of events.value) {
+        const interval = intervalOf(event.date);
+        if (!interval) continue;
+        from = Math.min(from, interval[0]);
+        to = Math.max(to, interval[1]);
+    }
+    return Number.isFinite(from) ? [from, to] : null;
+});
+const minis = computed<MiniMap[]>(() => {
+    if (mode.value !== "multiples") return [];
+    if (store.mapState.multiples === "material") {
+        const ticked = store.filters.material;
+        return byMaterial(
+            brushed.value,
+            places.value,
+            ticked.length > 0
+                ? ticked
+                : Object.keys(response.value?.materials ?? {}),
+            low.value,
+        );
+    }
+    const range = store.mapState.brush ?? eventsRange.value;
+    return range
+        ? byCentury(
+              brushed.value,
+              places.value,
+              tracked.value,
+              low.value,
+              range,
+          )
+        : [];
+});
+const pages = computed(() =>
+    Math.max(1, Math.ceil(minis.value.length / MULTIPLES_PER_PAGE)),
+);
+const bordersYear = computed(() => {
+    const brush = store.mapState.brush;
+    return brush ? Math.round((brush[0] + brush[1]) / 2) : null;
+});
+const bordersShown = computed(
+    () => store.mapState.borders && bordersYear.value !== null,
+);
+const bordersLabel = computed(() =>
+    bordersYear.value === null
+        ? $gettext("Historical borders")
+        : interpolate(
+              $gettext("Historical borders (%{year})"),
+              { year: bordersYear.value },
+              true,
+          ),
+);
+const language = computed(() => document.documentElement.lang || "en");
+const exports = computed(() => ({
+    csv: exportHref(
+        "manuspectrum:explorer-events-csv",
+        store.filters,
+        language.value,
+    ),
+    geojson: exportHref(
+        "manuspectrum:explorer-events-geojson",
+        store.filters,
+        language.value,
+    ),
+}));
+const unplaced = computed(
+    () =>
+        brushed.value.filter(
+            (event) => !(event.place && places.value[event.place]?.lngLat),
+        ).length,
+);
+const unplacedText = computed(() =>
+    interpolate(
+        $ngettext(
+            "%{n} event without a mapped place",
+            "%{n} events without a mapped place",
+            unplaced.value,
+        ),
+        { n: unplaced.value },
+    ),
+);
+const shownTypes = computed(() => shownEventTypes(store.filters.eventType));
+const typeCounts = computed(() => {
+    const counts = new Map<EventType, number>();
+    for (const event of response.value?.events ?? []) {
+        counts.set(event.type, (counts.get(event.type) ?? 0) + 1);
+    }
+    return counts;
+});
+const showLabel = computed(() =>
+    interpolate(
+        $ngettext("See %{n} event", "See %{n} events", brushed.value.length),
+        { n: brushed.value.length },
+    ),
+);
+const modeLabels = computed<Record<MapMode, string>>(() => ({
+    places: $gettext("Places"),
+    territories: $gettext("Territories"),
+    multiples: $gettext("Small multiples"),
+}));
+const colourOptions = computed<{ id: TerritoryColour; label: string }[]>(() => [
+    { id: "each", label: $gettext("Each material") },
+    { id: "dominant", label: $gettext("Dominant") },
+]);
+const axisOptions = computed<{ id: MultiplesAxis; label: string }[]>(() => [
+    { id: "material", label: $gettext("Material") },
+    { id: "century", label: $gettext("Century") },
+]);
+const selectedPlace = computed(() =>
+    subject.value?.kind === "place" ? subject.value.id : null,
+);
+/** A period opens on every kept event of its years; any other subject on the brushed ones, as the map shows them. */
+const panelEvents = computed(() =>
+    subject.value?.kind === "period" ? events.value : brushed.value,
+);
+const drawerVisible = computed({
+    get: () => narrow.value && subject.value !== null,
+    set: (visible: boolean) => {
+        if (!visible) closePanel();
+    },
+});
+const followed = computed(() => {
+    const counts = materialCounts(brushed.value);
+    return tracked.value.map(({ uri, slot }) => ({
+        uri,
+        slot,
+        label: response.value?.materials[uri]?.label ??
+            counts.get(uri)?.label ?? { value: uri, lang: "" },
+        documents: counts.get(uri)?.documents ?? 0,
+    }));
+});
+const stageTitle = computed(() => {
+    const title =
+        mode.value === "territories"
+            ? store.mapState.colour === "dominant"
+                ? $gettext("Dominant material")
+                : $gettext("Areas by material")
+            : $gettext("Places");
+    const range = store.mapState.brush ?? eventsRange.value;
+    if (!range) return title;
+    return interpolate(
+        $gettext("%{title} · %{period}"),
+        {
+            title,
+            period: interpolate(
+                $gettext("%{start}–%{end}"),
+                { start: range[0], end: range[1] },
+                true,
+            ),
+        },
+        true,
+    );
+});
+const territorySentence = computed(() => {
+    if (territoryReason.value) return territoryReason.value;
+    if (nothingToDraw.value) {
+        return $gettext(
+            "Nothing to draw: the followed materials are not attested in the kept events.",
+        );
+    }
+    return store.mapState.colour === "dominant"
+        ? $gettext(
+              "Each area takes the colour of the followed material that weighs most there; hatched areas are nearly tied.",
+          )
+        : $gettext(
+              "Each followed material radiates from the places that attest it and fades with distance.",
+          );
+});
+const radiusText = computed(() =>
+    interpolate($gettext("%{n} km"), { n: radiusDraft.value }),
+);
+const tooltip = computed(() => {
+    const current = hovered.value;
+    const summary = current ? summaries.value.get(current.id) : undefined;
+    if (!current || !summary) return null;
+    return {
+        position: {
+            "--tip-x": `${current.x}px`,
+            "--tip-y": `${current.y}px`,
+        },
+        flipX: current.flipX,
+        flipY: current.flipY,
+        name: summary.name,
+        counts: countsText(
+            summary.documents.size,
+            summary.components.size,
+            summary.analyses.size,
+        ),
+        slots: followed.value
+            .filter(({ slot }) => summary.tracked.has(slot))
+            .map((entry) => ({
+                ...entry,
+                pale: summary.tracked.get(entry.slot) === "pale",
+            })),
+        attributed: summary.dashed,
+    };
+});
+
+watch(
+    () => [mode.value, bounds.value] as const,
+    async ([current]) => {
+        if (current !== "multiples") return;
+        background.value = (await stage.value?.snapshot(bounds.value)) ?? null;
+    },
+    { immediate: true },
+);
+watch(mode, (current, previous) => {
+    if (previous === "multiples" && current !== "multiples") {
+        void nextTick(() => stage.value?.resize());
+    }
+});
+watch(
+    () => store.filters,
+    () => {
+        page.value = 0;
+    },
+);
+watch(
+    () => store.mapState.radius,
+    (radius) => {
+        radiusDraft.value = radius;
+    },
+);
+
+onMounted(() => {
+    if (root.value) mapColours.value = readColours(root.value);
+});
+
+function countsText(
+    documents: number,
+    components: number,
+    analyses: number,
+): string {
+    return interpolate($gettext("%{documents} · %{components} · %{analyses}"), {
+        documents: interpolate(
+            $ngettext("%{n} document", "%{n} documents", documents),
+            { n: documents },
+        ),
+        components: interpolate(
+            $ngettext("%{n} Composant", "%{n} Composants", components),
+            { n: components },
+        ),
+        analyses: interpolate(
+            $ngettext("%{n} analysis", "%{n} analyses", analyses),
+            { n: analyses },
+        ),
+    });
+}
+
+function setMode(next: MapMode): void {
+    if (next === "territories" && territoryReason.value) return;
+    if (next === mode.value) return;
+    store.setMapState({ mode: next });
+    announce?.(
+        interpolate($gettext("Map mode: %{mode}."), {
+            mode: modeLabels.value[next],
+        }),
+    );
+}
+
+function setColour(colour: TerritoryColour): void {
+    store.setMapState({ colour });
+}
+
+function setAxis(axis: MultiplesAxis): void {
+    page.value = 0;
+    store.setMapState({ multiples: axis });
+}
+
+function commitRadius(): void {
+    store.setMapState({ radius: radiusDraft.value });
+}
+
+function onRadiusInput(event: Event): void {
+    radiusDraft.value = Number((event.target as HTMLInputElement).value);
+}
+
+function setBorders(event: Event): void {
+    store.setMapState({
+        borders: (event.target as HTMLInputElement).checked,
+    });
+}
+
+/** Ticks or unticks a type; none left means all five, and exactly the server's defaults means no filter. */
+function toggleType(type: EventType, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    let next = checked
+        ? [...shownTypes.value, type]
+        : shownTypes.value.filter((shown) => shown !== type);
+    if (next.length === 0) next = [...EVENT_TYPES];
+    const isDefault =
+        next.length === DEFAULT_EVENT_TYPES.length &&
+        DEFAULT_EVENT_TYPES.every((fallback) => next.includes(fallback));
+    store.setFilter("eventType", isDefault ? [] : next);
+}
+
+function setShowLow(event: Event): void {
+    showLow.value = (event.target as HTMLInputElement).checked;
+}
+
+function isFolded(group: RailGroup): boolean {
+    return folded.value.has(group);
+}
+
+function toggleGroup(group: RailGroup): void {
+    const next = new Set(folded.value);
+    if (next.has(group)) next.delete(group);
+    else next.add(group);
+    folded.value = next;
+}
+
+function groupBodyId(group: RailGroup): string {
+    return `explorer-map-group-${group}`;
+}
+
+function openSubject(next: PanelSubject): void {
+    const active = document.activeElement;
+    opener =
+        active instanceof HTMLElement && active !== document.body
+            ? active
+            : null;
+    subject.value = next;
+}
+
+/** Closes the panel; the focus goes back to what opened it, else to the map. */
+function closePanel(): void {
+    subject.value = null;
+    const target = opener;
+    opener = null;
+    void nextTick(() => {
+        if (target?.isConnected) {
+            target.focus();
+            return;
+        }
+        root.value?.querySelector<HTMLElement>(CANVAS_SELECTOR)?.focus();
+    });
+}
+
+function onStageHover(
+    payload: { id: string; x: number; y: number } | null,
+): void {
+    if (!payload) {
+        hovered.value = null;
+        return;
+    }
+    const frame = (
+        stage.value?.$el as HTMLElement | undefined
+    )?.getBoundingClientRect();
+    hovered.value = {
+        ...payload,
+        flipX: frame ? payload.x > frame.width / 2 : false,
+        flipY: frame ? payload.y > frame.height / 2 : false,
+    };
+}
+
+function openMini(mini: MiniMap): void {
+    if (mini.uri) {
+        openSubject({ kind: "material", uri: mini.uri });
+    } else if (mini.century !== null) {
+        openSubject({
+            kind: "period",
+            from: mini.century * 100 + 1,
+            to: (mini.century + 1) * 100,
+        });
+    }
+}
+
+function skipToPlaces(): void {
+    if (compact.value) {
+        rail.value?.focusFilters();
+        return;
+    }
+    const target =
+        root.value?.querySelector<HTMLElement>(".place-list .place") ??
+        root.value?.querySelector<HTMLElement>(".place-list .toggle");
+    target?.focus();
+}
+
+function skipToTimeline(): void {
+    timelineBox.value?.focus();
+}
+</script>
+
+<template>
+    <section
+        ref="root"
+        class="map-view"
+        :aria-labelledby="HEADING_ID"
+    >
+        <h2
+            :id="HEADING_ID"
+            ref="heading"
+            class="visually-hidden"
+            tabindex="-1"
+        >
+            <span>{{ viewTitle("map") }}</span>
+        </h2>
+        <nav
+            class="skip-links"
+            :aria-label="$gettext('Skip links')"
+        >
+            <button
+                type="button"
+                class="skip"
+                @click="skipToPlaces"
+            >
+                <span>{{ $gettext("Skip to the place list") }}</span>
+            </button>
+            <button
+                type="button"
+                class="skip"
+                @click="skipToTimeline"
+            >
+                <span>{{ $gettext("Skip to the timeline") }}</span>
+            </button>
+        </nav>
+        <BusyStatus
+            :busy="status === 'loading'"
+            :first="response === null"
+        />
+        <div
+            v-if="firstLoad"
+            class="workspace skeleton"
+            aria-hidden="true"
+        >
+            <span class="ms-skeleton rail-block"></span>
+            <div class="main">
+                <span class="ms-skeleton stage-block"></span>
+                <span class="ms-skeleton timeline-block"></span>
+            </div>
+            <span class="ms-skeleton side-block"></span>
+        </div>
+        <div
+            v-else
+            class="workspace"
+        >
+            <RailPanel
+                ref="rail"
+                class="rail"
+                :title="$gettext('Map filters')"
+                :show-label="showLabel"
+            >
+                <div class="map-rail">
+                    <section class="group">
+                        <h3 class="group-title">
+                            <button
+                                type="button"
+                                class="disclosure"
+                                :aria-expanded="
+                                    isFolded('materials') ? 'false' : 'true'
+                                "
+                                :aria-controls="groupBodyId('materials')"
+                                @click="toggleGroup('materials')"
+                            >
+                                <span
+                                    class="chevron"
+                                    aria-hidden="true"
+                                    >{{
+                                        isFolded("materials") ? "▸" : "▾"
+                                    }}</span
+                                >
+                                <span>{{
+                                    $gettext("Identified materials")
+                                }}</span>
+                            </button>
+                        </h3>
+                        <div
+                            v-show="!isFolded('materials')"
+                            :id="groupBodyId('materials')"
+                            class="group-body"
+                        >
+                            <MaterialsControl
+                                :events="events"
+                                :materials="response?.materials ?? {}"
+                                :colours="response?.colours ?? {}"
+                            />
+                        </div>
+                    </section>
+                    <section class="group">
+                        <h3 class="group-title">
+                            <button
+                                type="button"
+                                class="disclosure"
+                                :aria-expanded="
+                                    isFolded('reliability') ? 'false' : 'true'
+                                "
+                                :aria-controls="groupBodyId('reliability')"
+                                @click="toggleGroup('reliability')"
+                            >
+                                <span
+                                    class="chevron"
+                                    aria-hidden="true"
+                                    >{{
+                                        isFolded("reliability") ? "▸" : "▾"
+                                    }}</span
+                                >
+                                <span>{{ $gettext("Reliability") }}</span>
+                            </button>
+                        </h3>
+                        <div
+                            v-show="!isFolded('reliability')"
+                            :id="groupBodyId('reliability')"
+                            class="group-body"
+                        >
+                            <label
+                                class="value"
+                                :class="{ checked: showLow }"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :checked="showLow"
+                                    @change="setShowLow"
+                                />
+                                <span class="label wrap">{{
+                                    $gettext(
+                                        "Include “use with caution” and “uncertain”",
+                                    )
+                                }}</span>
+                            </label>
+                            <p class="hint">
+                                <span>{{
+                                    $gettext("shown hollow on the map")
+                                }}</span>
+                            </p>
+                        </div>
+                    </section>
+                    <section class="group">
+                        <h3 class="group-title">
+                            <button
+                                type="button"
+                                class="disclosure"
+                                :aria-expanded="
+                                    isFolded('events') ? 'false' : 'true'
+                                "
+                                :aria-controls="groupBodyId('events')"
+                                @click="toggleGroup('events')"
+                            >
+                                <span
+                                    class="chevron"
+                                    aria-hidden="true"
+                                    >{{ isFolded("events") ? "▸" : "▾" }}</span
+                                >
+                                <span>{{ $gettext("Events") }}</span>
+                            </button>
+                        </h3>
+                        <ul
+                            v-show="!isFolded('events')"
+                            :id="groupBodyId('events')"
+                            class="group-body event-types"
+                        >
+                            <li
+                                v-for="type in EVENT_TYPES"
+                                :key="type"
+                            >
+                                <label
+                                    class="value"
+                                    :class="{
+                                        checked: shownTypes.includes(type),
+                                    }"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :checked="shownTypes.includes(type)"
+                                        @change="toggleType(type, $event)"
+                                    />
+                                    <span class="label">{{
+                                        eventTypeLabel(type)
+                                    }}</span>
+                                    <span
+                                        v-if="shownTypes.includes(type)"
+                                        class="count"
+                                        >{{ typeCounts.get(type) ?? 0 }}</span
+                                    >
+                                </label>
+                            </li>
+                        </ul>
+                    </section>
+                    <PlaceList
+                        :summaries="summaryList"
+                        :unplaced="unplaced"
+                        :selected="selectedPlace"
+                        :open="!compact"
+                        @select="openSubject({ kind: 'place', id: $event })"
+                        @hover="listHovered = $event"
+                        @unplaced="openSubject({ kind: 'unplaced' })"
+                    />
+                    <p class="rail-note">
+                        <span>{{
+                            $gettext(
+                                "+ the Corpus filters (Composant, technique, place…)",
+                            )
+                        }}</span>
+                    </p>
+                </div>
+            </RailPanel>
+            <div class="main">
+                <section
+                    class="stage"
+                    :aria-label="$gettext('Map')"
+                    :aria-busy="refetching ? 'true' : 'false'"
+                >
+                    <div class="stage-head">
+                        <span
+                            class="segmented mode-switch"
+                            role="group"
+                            :aria-label="$gettext('Map mode')"
+                        >
+                            <template
+                                v-for="option in MODES"
+                                :key="option"
+                            >
+                                <HelpTip
+                                    v-if="
+                                        option === 'territories' &&
+                                        territoryReason
+                                    "
+                                    :text="territoryReason"
+                                    placement="below"
+                                >
+                                    <template #default="{ describedby }">
+                                        <button
+                                            type="button"
+                                            aria-disabled="true"
+                                            :aria-pressed="
+                                                mode === option
+                                                    ? 'true'
+                                                    : 'false'
+                                            "
+                                            :aria-describedby="describedby"
+                                            @click="setMode(option)"
+                                        >
+                                            <span>{{
+                                                modeLabels[option]
+                                            }}</span>
+                                        </button>
+                                    </template>
+                                </HelpTip>
+                                <button
+                                    v-else
+                                    type="button"
+                                    :aria-pressed="
+                                        mode === option ? 'true' : 'false'
+                                    "
+                                    @click="setMode(option)"
+                                >
+                                    <span>{{ modeLabels[option] }}</span>
+                                </button>
+                            </template>
+                        </span>
+                        <span
+                            v-if="mode === 'territories'"
+                            class="options"
+                        >
+                            <span
+                                class="kicker"
+                                aria-hidden="true"
+                                >{{ $gettext("Colour") }}</span
+                            >
+                            <span
+                                class="segments"
+                                role="group"
+                                :aria-label="$gettext('Colour')"
+                            >
+                                <button
+                                    v-for="option in colourOptions"
+                                    :key="option.id"
+                                    type="button"
+                                    :aria-pressed="
+                                        store.mapState.colour === option.id
+                                            ? 'true'
+                                            : 'false'
+                                    "
+                                    @click="setColour(option.id)"
+                                >
+                                    <span>{{ option.label }}</span>
+                                </button>
+                            </span>
+                        </span>
+                        <span
+                            v-else-if="mode === 'multiples'"
+                            class="options"
+                        >
+                            <span
+                                class="kicker"
+                                aria-hidden="true"
+                                >{{ $gettext("One map per") }}</span
+                            >
+                            <span
+                                class="segments"
+                                role="group"
+                                :aria-label="$gettext('One map per')"
+                            >
+                                <button
+                                    v-for="option in axisOptions"
+                                    :key="option.id"
+                                    type="button"
+                                    :aria-pressed="
+                                        store.mapState.multiples === option.id
+                                            ? 'true'
+                                            : 'false'
+                                    "
+                                    @click="setAxis(option.id)"
+                                >
+                                    <span>{{ option.label }}</span>
+                                </button>
+                            </span>
+                        </span>
+                        <span class="tools">
+                            <label class="borders">
+                                <input
+                                    type="checkbox"
+                                    :checked="store.mapState.borders"
+                                    @change="setBorders"
+                                />
+                                <span>{{ bordersLabel }}</span>
+                            </label>
+                            <a
+                                class="export"
+                                data-format="csv"
+                                :href="exports.csv"
+                                :aria-label="
+                                    $gettext('Download the kept events (CSV)')
+                                "
+                                download=""
+                            >
+                                <svg
+                                    :viewBox="ICON_VIEW_BOX"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                >
+                                    <path
+                                        v-for="(path, index) in ICONS.download"
+                                        :key="index"
+                                        :d="path"
+                                    />
+                                </svg>
+                                <span>{{ $gettext("CSV") }}</span>
+                            </a>
+                            <a
+                                class="export"
+                                data-format="geojson"
+                                :href="exports.geojson"
+                                :aria-label="
+                                    $gettext(
+                                        'Download the kept events (GeoJSON)',
+                                    )
+                                "
+                                download=""
+                            >
+                                <svg
+                                    :viewBox="ICON_VIEW_BOX"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                >
+                                    <path
+                                        v-for="(path, index) in ICONS.download"
+                                        :key="index"
+                                        :d="path"
+                                    />
+                                </svg>
+                                <span>{{ $gettext("GeoJSON") }}</span>
+                            </a>
+                        </span>
+                        <p
+                            v-if="
+                                store.mapState.borders && bordersYear === null
+                            "
+                            class="borders-hint"
+                        >
+                            <span>{{
+                                $gettext(
+                                    "Choose a period on the timeline to see its borders.",
+                                )
+                            }}</span>
+                        </p>
+                        <button
+                            v-if="unplaced > 0"
+                            type="button"
+                            class="unplaced"
+                            @click="openSubject({ kind: 'unplaced' })"
+                        >
+                            <span>{{ unplacedText }}</span>
+                        </button>
+                    </div>
+                    <UnavailableState
+                        v-if="failed"
+                        status="error"
+                        :hide-home="true"
+                        @retry="request.retry"
+                    />
+                    <div
+                        v-else
+                        class="frame"
+                        :class="{ multiples: mode === 'multiples' }"
+                    >
+                        <MapStage
+                            v-if="webgl && !mapFailed"
+                            ref="stage"
+                            :class="{ parked: mode === 'multiples' }"
+                            :places="features"
+                            :states="states"
+                            :territories="territoryData"
+                            :colours="mapColours"
+                            :borders="bordersShown"
+                            :borders-year="bordersYear"
+                            :fit="bounds"
+                            :selected="selectedPlace"
+                            @select="openSubject({ kind: 'place', id: $event })"
+                            @hover="onStageHover"
+                            @failed="mapFailed = true"
+                        >
+                            <div class="legend">
+                                <button
+                                    type="button"
+                                    class="toggle"
+                                    aria-controls="explorer-map-legend"
+                                    :aria-expanded="
+                                        legendOpen ? 'true' : 'false'
+                                    "
+                                    @click="legendOpen = !legendOpen"
+                                >
+                                    <span>{{ stageTitle }}</span>
+                                    <span
+                                        v-if="!legendOpen"
+                                        class="dots"
+                                    >
+                                        <FocusSlotDot
+                                            v-for="entry in followed"
+                                            :key="entry.slot"
+                                            :number="entry.slot"
+                                            size="small"
+                                        />
+                                    </span>
+                                    <span
+                                        class="chevron"
+                                        aria-hidden="true"
+                                        >{{ legendOpen ? "▾" : "▸" }}</span
+                                    >
+                                </button>
+                                <div
+                                    v-show="legendOpen"
+                                    id="explorer-map-legend"
+                                    class="entries"
+                                >
+                                    <ul
+                                        v-if="followed.length > 0"
+                                        class="followed"
+                                    >
+                                        <li
+                                            v-for="entry in followed"
+                                            :key="entry.slot"
+                                        >
+                                            <FocusSlotDot
+                                                :number="entry.slot"
+                                                size="medium"
+                                            />
+                                            <span
+                                                class="name"
+                                                :lang="
+                                                    entry.label.lang ||
+                                                    undefined
+                                                "
+                                                >{{ entry.label.value }}</span
+                                            >
+                                            <span class="count">{{
+                                                entry.documents
+                                            }}</span>
+                                        </li>
+                                    </ul>
+                                    <ul class="key">
+                                        <li>
+                                            <span
+                                                class="symbol ring"
+                                                aria-hidden="true"
+                                            ></span>
+                                            <span>{{
+                                                $gettext(
+                                                    "documents analysed here",
+                                                )
+                                            }}</span>
+                                        </li>
+                                        <li>
+                                            <span
+                                                class="symbol ring dashed"
+                                                aria-hidden="true"
+                                            ></span>
+                                            <span>{{
+                                                $gettext(
+                                                    "attributed place: region or parent place",
+                                                )
+                                            }}</span>
+                                        </li>
+                                        <li>
+                                            <span
+                                                class="symbol pip"
+                                                aria-hidden="true"
+                                                >1</span
+                                            >
+                                            <span>{{
+                                                $gettext("attested")
+                                            }}</span>
+                                        </li>
+                                        <li>
+                                            <span
+                                                class="symbol pip hollow"
+                                                aria-hidden="true"
+                                                >1</span
+                                            >
+                                            <span>{{
+                                                $gettext(
+                                                    "use with caution or uncertain",
+                                                )
+                                            }}</span>
+                                        </li>
+                                        <template v-if="mode === 'territories'">
+                                            <li>
+                                                <span
+                                                    class="symbol hex"
+                                                    aria-hidden="true"
+                                                ></span>
+                                                <span>{{
+                                                    $gettext(
+                                                        "area of a followed material",
+                                                    )
+                                                }}</span>
+                                            </li>
+                                            <li
+                                                v-if="
+                                                    store.mapState.colour ===
+                                                    'dominant'
+                                                "
+                                            >
+                                                <span
+                                                    class="symbol hex hatched"
+                                                    aria-hidden="true"
+                                                ></span>
+                                                <span>{{
+                                                    $gettext("nearly tied")
+                                                }}</span>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div
+                                v-if="mode === 'territories' && !narrow"
+                                class="territory-note"
+                                role="note"
+                            >
+                                <p class="title">
+                                    <span>{{
+                                        $gettext("Influence model, not data")
+                                    }}</span>
+                                </p>
+                                <p class="sentence">
+                                    <span>{{ territorySentence }}</span>
+                                </p>
+                                <p class="radius">
+                                    <label for="explorer-map-radius">{{
+                                        $gettext("Radius")
+                                    }}</label>
+                                    <input
+                                        id="explorer-map-radius"
+                                        type="range"
+                                        :min="RADIUS_MIN"
+                                        :max="RADIUS_MAX"
+                                        :step="RADIUS_STEP"
+                                        :value="radiusDraft"
+                                        @input="onRadiusInput"
+                                        @change="commitRadius"
+                                    />
+                                    <output for="explorer-map-radius">{{
+                                        radiusText
+                                    }}</output>
+                                </p>
+                            </div>
+                            <div
+                                v-if="tooltip && mode !== 'multiples'"
+                                class="tooltip"
+                                :class="{
+                                    'flip-x': tooltip.flipX,
+                                    'flip-y': tooltip.flipY,
+                                }"
+                                :style="tooltip.position"
+                                aria-hidden="true"
+                            >
+                                <strong
+                                    class="name"
+                                    :lang="tooltip.name.lang || undefined"
+                                    >{{ tooltip.name.value }}</strong
+                                >
+                                <em>{{ tooltip.counts }}</em>
+                                <ul
+                                    v-if="tooltip.slots.length > 0"
+                                    class="rows"
+                                >
+                                    <li
+                                        v-for="entry in tooltip.slots"
+                                        :key="entry.slot"
+                                    >
+                                        <FocusSlotDot
+                                            :number="entry.slot"
+                                            size="small"
+                                        />
+                                        <span class="label">{{
+                                            entry.label.value
+                                        }}</span>
+                                        <em v-if="entry.pale">{{
+                                            $gettext("use with caution")
+                                        }}</em>
+                                    </li>
+                                </ul>
+                                <span
+                                    v-if="tooltip.attributed"
+                                    class="attributed"
+                                    >{{ $gettext("Attributed place") }}</span
+                                >
+                            </div>
+                        </MapStage>
+                        <div
+                            v-else
+                            class="map-unavailable-frame"
+                        >
+                            <p
+                                class="map-unavailable"
+                                role="status"
+                            >
+                                <span>{{
+                                    $gettext(
+                                        "Map unavailable in this browser: the place list and the timeline still work.",
+                                    )
+                                }}</span>
+                            </p>
+                        </div>
+                        <SmallMultiples
+                            v-if="mode === 'multiples'"
+                            :maps="minis"
+                            :bounds="bounds"
+                            :background="background"
+                            :page="page"
+                            :pages="pages"
+                            :axis="store.mapState.multiples"
+                            :tracked="tracked"
+                            @open="openMini"
+                            @page="page = $event"
+                        />
+                        <div
+                            v-if="response && response.events.length === 0"
+                            class="no-events"
+                        >
+                            <p>
+                                <span>{{
+                                    $gettext("No event matches these filters.")
+                                }}</span>
+                            </p>
+                            <button
+                                v-for="filter in activeFilters"
+                                :key="filter.id"
+                                type="button"
+                                class="remove-filter"
+                                @click="filter.clear"
+                            >
+                                <span>{{
+                                    interpolate(
+                                        $gettext("Remove: %{label}"),
+                                        { label: filter.label },
+                                        true,
+                                    )
+                                }}</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div
+                        v-if="mode === 'territories' && narrow && !failed"
+                        class="territory-note static"
+                        role="note"
+                    >
+                        <p class="title">
+                            <span>{{
+                                $gettext("Influence model, not data")
+                            }}</span>
+                        </p>
+                        <p class="sentence">
+                            <span>{{ territorySentence }}</span>
+                        </p>
+                        <p class="radius">
+                            <label for="explorer-map-radius-narrow">{{
+                                $gettext("Radius")
+                            }}</label>
+                            <input
+                                id="explorer-map-radius-narrow"
+                                type="range"
+                                :min="RADIUS_MIN"
+                                :max="RADIUS_MAX"
+                                :step="RADIUS_STEP"
+                                :value="radiusDraft"
+                                @input="onRadiusInput"
+                                @change="commitRadius"
+                            />
+                            <output for="explorer-map-radius-narrow">{{
+                                radiusText
+                            }}</output>
+                        </p>
+                    </div>
+                </section>
+                <section
+                    ref="timeline-box"
+                    class="timeline-box"
+                    tabindex="-1"
+                    :aria-label="$gettext('Timeline')"
+                    :aria-busy="refetching ? 'true' : 'false'"
+                >
+                    <MapTimeline
+                        :events="events"
+                        :tracked="tracked"
+                        :brush="store.mapState.brush"
+                        @brush="store.setMapState({ brush: $event })"
+                        @open-period="
+                            openSubject({
+                                kind: 'period',
+                                from: $event.from,
+                                to: $event.to,
+                            })
+                        "
+                        @open-document="
+                            openSubject({ kind: 'document', id: $event })
+                        "
+                    />
+                </section>
+            </div>
+            <aside
+                v-if="!narrow"
+                class="side"
+                :aria-label="$gettext('Details')"
+            >
+                <MapPanel
+                    v-if="subject && response"
+                    :subject="subject"
+                    :events="panelEvents"
+                    :places="places"
+                    :analysis-names="response.analysisNames"
+                    :tracked="tracked"
+                    :low="low"
+                    :materials="response.materials"
+                    :certainty="response.certaintyScale"
+                    @close="closePanel"
+                />
+                <p
+                    v-else
+                    class="hint"
+                >
+                    <span>{{
+                        $gettext(
+                            "Select a place on the map, a period on the timeline or a document to see its analyses.",
+                        )
+                    }}</span>
+                </p>
+            </aside>
+        </div>
+        <Drawer
+            v-model:visible="drawerVisible"
+            class="explorer-card-drawer"
+            :position="phone ? 'bottom' : 'right'"
+            :header="$gettext('Details')"
+            :pt="{
+                root: { role: 'dialog', 'aria-label': $gettext('Details') },
+            }"
+        >
+            <MapPanel
+                v-if="subject && response"
+                :subject="subject"
+                :events="panelEvents"
+                :places="places"
+                :analysis-names="response.analysisNames"
+                :tracked="tracked"
+                :low="low"
+                :materials="response.materials"
+                :certainty="response.certaintyScale"
+                @close="closePanel"
+            />
+        </Drawer>
+        <p class="third-party">
+            <span>{{
+                $gettext(
+                    "Background tiles: OpenFreeMap © OpenMapTiles, data from OpenStreetMap; historical borders: OpenHistoricalMap contributors. These services receive your IP address when the map loads.",
+                )
+            }}</span>
+        </p>
+    </section>
+</template>
+
+<style scoped>
+.map-view {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    padding-block: 0.5rem 2rem;
+}
+
+.map-view .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.map-view .skip-links {
+    position: absolute;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.map-view .skip {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.map-view .skip:focus {
+    position: fixed;
+    inset-block-start: var(--explorer-top);
+    inset-inline-start: 1rem;
+    z-index: 1100;
+    inline-size: auto;
+    block-size: auto;
+    padding: 0.5rem 1rem;
+    overflow: visible;
+    clip-path: none;
+    border: 0.125rem solid var(--blue-text);
+    border-radius: 0.375rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+}
+
+/* CorpusDocument .workspace */
+.map-view .workspace {
+    display: grid;
+    grid-template-columns: var(--explorer-rail) minmax(0, 1fr) var(
+            --explorer-side
+        );
+    grid-template-areas: "rail main side";
+    gap: 1rem;
+    align-items: start;
+}
+
+.map-view .rail {
+    grid-area: rail;
+}
+
+.map-view .main {
+    grid-area: main;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    min-inline-size: 0;
+}
+
+.map-view .skeleton .rail-block,
+.map-view .skeleton .side-block {
+    block-size: 24rem;
+}
+
+.map-view .skeleton .rail-block {
+    grid-area: rail;
+}
+
+.map-view .skeleton .side-block {
+    grid-area: side;
+}
+
+.map-view .skeleton .stage-block {
+    block-size: 36rem;
+}
+
+.map-view .skeleton .timeline-block {
+    block-size: 9rem;
+}
+
+.map-view .stage,
+.map-view .timeline-box,
+.map-view .side {
+    min-inline-size: 0;
+    border: 0.0625rem solid var(--border);
+    border-radius: var(--explorer-radius);
+    background: var(--surface);
+}
+
+.map-view .stage {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding: 0.5rem;
+}
+
+.map-view .timeline-box {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    scroll-margin-block-start: var(--explorer-top);
+}
+
+.map-view .side {
+    grid-area: side;
+    position: sticky;
+    inset-block-start: var(--explorer-top);
+    display: grid;
+    align-content: start;
+    gap: 1.25rem;
+    max-block-size: calc(100dvh - var(--explorer-top) - 1rem);
+    padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.map-view .side .hint {
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+}
+
+/* The rail groups: FacetRail .group */
+.map-view .map-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+.map-view .map-rail .group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+}
+
+.map-view .map-rail > * + * {
+    padding-block-start: 0.75rem;
+    border-block-start: 0.0625rem solid var(--border);
+}
+
+.map-view .map-rail .group-title {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    background: var(--surface);
+}
+
+.map-view .map-rail .disclosure {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 2rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant: all-small-caps;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.map-view .map-rail .disclosure .chevron {
+    color: var(--ink-muted);
+}
+
+.map-view .map-rail .group-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+    list-style: none;
+}
+
+/* FacetValues .values.fixed .value */
+.map-view .map-rail .value {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: var(--explorer-target);
+    min-inline-size: 0;
+    padding-inline: 0.5rem;
+    border: 0.0625rem solid transparent;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.map-view .map-rail .value.checked {
+    border-color: var(--border-hover);
+    background: var(--surface-soft, var(--surface));
+    font-weight: 600;
+}
+
+.map-view .map-rail .value input {
+    flex: none;
+    accent-color: var(--blue-text);
+}
+
+.map-view .map-rail .value .label {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-view .map-rail .value .label.wrap {
+    white-space: normal;
+}
+
+.map-view .map-rail .value .count {
+    flex: none;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.map-view .map-rail .hint,
+.map-view .map-rail .rail-note {
+    color: var(--ink-dim);
+    font-size: 0.75rem;
+}
+
+/* Toolbar: CorpusDocument .stage-head */
+.map-view .stage-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+/* XyWorkshop .segmented (gold) */
+.map-view .segmented {
+    display: inline-flex;
+    padding: 0.1875rem;
+    border-radius: 999rem;
+    background: var(--bg-alt);
+    box-shadow: inset 0 0 0 0.0625rem var(--border);
+}
+
+.map-view .segmented button {
+    min-block-size: 1.75rem;
+    padding-inline: 0.75rem;
+    border: none;
+    border-radius: 999rem;
+    background: none;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 0.78125rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color var(--dur-fast, 160ms),
+        color var(--dur-fast, 160ms);
+}
+
+.map-view .segmented button:hover {
+    color: var(--ink);
+}
+
+.map-view .segmented button[aria-pressed="true"] {
+    background: var(--surface);
+    box-shadow:
+        0 0.0625rem 0.125rem rgb(26 26 46 / 0.08),
+        inset 0 0 0 0.0625rem var(--seg-on-rule);
+    color: var(--seg-on-ink);
+    font-weight: 600;
+}
+
+.map-view .segmented button[aria-disabled="true"] {
+    color: var(--ink-dim);
+    cursor: default;
+}
+
+.map-view .options {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* FacetRail .title kicker */
+.map-view .options .kicker {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* SelectionIndicator .segments (ink) */
+.map-view .segments {
+    display: inline-flex;
+    padding: 0.125rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+}
+
+.map-view .segments button {
+    min-block-size: 1.75rem;
+    padding-inline: 0.75rem;
+    border: 0;
+    border-radius: 999rem;
+    background: none;
+    color: var(--ink-muted);
+    font: inherit;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.map-view .segments button[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--surface);
+    font-weight: 600;
+}
+
+.map-view .tools {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-inline-start: auto;
+}
+
+.map-view .borders {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: var(--explorer-target);
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.map-view .borders input {
+    accent-color: var(--blue-text);
+}
+
+.map-view .export {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: var(--explorer-target);
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.8125rem;
+    text-decoration: none;
+}
+
+.map-view .export:hover {
+    border-color: var(--ink-muted);
+}
+
+.map-view .export svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    fill: currentcolor;
+}
+
+.map-view .borders-hint {
+    flex-basis: 100%;
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+    text-align: end;
+}
+
+/* FacetRail .more */
+.map-view .unplaced {
+    min-block-size: var(--explorer-target);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.map-view .unplaced:hover {
+    text-decoration: underline;
+}
+
+.map-view .frame {
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+}
+
+.map-view .frame.multiples {
+    overflow: hidden;
+}
+
+.map-view .frame .parked {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.map-view .map-unavailable-frame {
+    display: grid;
+    place-items: center;
+    block-size: 12rem;
+    padding: 1rem;
+    border-radius: var(--explorer-radius);
+    background: var(--stage-soft);
+}
+
+/* FolioMap .no-image */
+.map-view .map-unavailable,
+.map-view .no-events {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.map-view .no-events {
+    position: absolute;
+    inset-block-start: 1rem;
+    inset-inline: 1rem 3.75rem;
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+/* CorpusResults .empty button */
+.map-view .no-events .remove-filter {
+    min-block-size: var(--explorer-target);
+    padding-inline: 0.875rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+/* FolioLegend */
+.map-view .legend {
+    position: absolute;
+    inset-block-start: 0.75rem;
+    inset-inline-start: 0.75rem;
+    z-index: 2;
+    display: grid;
+    justify-items: start;
+    gap: 0.375rem;
+    max-inline-size: min(22rem, 100% - 4rem);
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--stage) 88%, transparent);
+    color: var(--surface);
+    font-size: 0.75rem;
+}
+
+.map-view .legend .toggle {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 1.5rem;
+    padding: 0 0.25rem;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-align: start;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.map-view .legend .dots {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.map-view .legend .dots :deep(.focus-slot-dot),
+.map-view .tooltip :deep(.focus-slot-dot) {
+    box-shadow: 0 0 0 0.125rem var(--surface);
+}
+
+.map-view .legend .entries {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.map-view .legend ul {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0;
+    list-style: none;
+}
+
+.map-view .legend .followed li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.map-view .legend .followed .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-view .legend .count {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+
+.map-view .legend .key li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.map-view .legend .symbol {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    border-radius: 50%;
+}
+
+.map-view .legend .symbol.ring {
+    border: 0.0625rem solid var(--surface);
+    background: color-mix(in srgb, var(--surface) 22%, transparent);
+}
+
+.map-view .legend .symbol.ring.dashed {
+    border-style: dashed;
+}
+
+.map-view .legend .symbol.pip {
+    background: var(--focus-1);
+    box-shadow: 0 0 0 0.09375rem var(--surface);
+    color: var(--focus-on);
+    font-family: var(--font-mono);
+    font-size: 0.5625rem;
+    font-weight: 700;
+}
+
+.map-view .legend .symbol.pip.hollow {
+    border: 0.09375rem solid var(--focus-1);
+    background: var(--surface);
+    box-shadow: none;
+    color: var(--focus-1);
+}
+
+.map-view .legend .symbol.hex {
+    border-radius: 0;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: color-mix(in srgb, var(--focus-1) 70%, var(--surface));
+}
+
+.map-view .legend .symbol.hex.hatched {
+    background: repeating-linear-gradient(
+        45deg,
+        color-mix(in srgb, var(--focus-1) 70%, var(--surface)) 0 0.125rem,
+        var(--bg) 0.125rem 0.1875rem
+    );
+}
+
+/* The stage note: Territories only, permanent */
+.map-view .territory-note {
+    position: absolute;
+    inset-block-end: 0.75rem;
+    inset-inline-start: 0.75rem;
+    z-index: 2;
+    display: grid;
+    gap: 0.375rem;
+    max-inline-size: min(27.5rem, 100% - 7rem);
+    padding: 0.75rem 0.875rem;
+    border-radius: 0.625rem;
+    background: color-mix(in srgb, var(--stage) 92%, transparent);
+    color: var(--surface);
+    font-size: 0.8125rem;
+}
+
+.map-view .territory-note.static {
+    position: static;
+    max-inline-size: none;
+}
+
+.map-view .territory-note .title {
+    font-weight: 600;
+}
+
+.map-view .territory-note .sentence {
+    color: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.map-view .territory-note .radius {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.map-view .territory-note output {
+    flex: none;
+    min-inline-size: 3.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+/* RangeSlider, recoloured for the stage */
+.map-view .territory-note input[type="range"] {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    block-size: 1.5rem;
+    background: transparent;
+    accent-color: var(--surface);
+    cursor: pointer;
+    appearance: none;
+}
+
+.map-view .territory-note input[type="range"]::-webkit-slider-runnable-track {
+    block-size: 0.25rem;
+    border-radius: 0.125rem;
+    background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+
+.map-view .territory-note input[type="range"]::-moz-range-track {
+    block-size: 0.25rem;
+    border-radius: 0.125rem;
+    background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+
+.map-view .territory-note input[type="range"]::-moz-range-progress {
+    block-size: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--surface);
+}
+
+.map-view .territory-note input[type="range"]::-webkit-slider-thumb {
+    box-sizing: border-box;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-block-start: -0.5rem;
+    border: 0.125rem solid var(--stage);
+    border-radius: 50%;
+    background: var(--surface);
+    appearance: none;
+}
+
+.map-view .territory-note input[type="range"]::-moz-range-thumb {
+    box-sizing: border-box;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    border: 0.125rem solid var(--stage);
+    border-radius: 50%;
+    background: var(--surface);
+}
+
+.map-view .territory-note input[type="range"]:focus-visible,
+.map-view .legend .toggle:focus-visible {
+    outline: 0.125rem solid var(--surface);
+    outline-offset: 0.125rem;
+}
+
+/* FocusTrail bubble */
+.map-view .tooltip {
+    position: absolute;
+    inset-block-start: calc(var(--tip-y) + 0.75rem);
+    inset-inline-start: calc(var(--tip-x) + 0.75rem);
+    z-index: 3;
+    display: grid;
+    gap: 0.25rem;
+    max-inline-size: 20rem;
+    padding-block: 0.5rem;
+    padding-inline: 0.625rem;
+    border-radius: 0.5rem;
+    background: var(--ink);
+    box-shadow: var(--shadow-md);
+    color: var(--surface);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    pointer-events: none;
+}
+
+.map-view .tooltip.flip-x {
+    inset-inline-start: calc(var(--tip-x) - 0.75rem);
+    translate: -100% 0;
+}
+
+.map-view .tooltip.flip-y {
+    inset-block-start: calc(var(--tip-y) - 0.75rem);
+    translate: 0 -100%;
+}
+
+.map-view .tooltip.flip-x.flip-y {
+    translate: -100% -100%;
+}
+
+.map-view .tooltip .name {
+    font-weight: 600;
+}
+
+.map-view .tooltip em {
+    color: color-mix(in srgb, var(--surface) 75%, transparent);
+    font-style: normal;
+}
+
+.map-view .tooltip .rows {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0;
+    list-style: none;
+}
+
+.map-view .tooltip .rows li {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-inline-size: 0;
+    white-space: nowrap;
+}
+
+.map-view .tooltip .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.map-view .tooltip .attributed {
+    color: color-mix(in srgb, var(--surface) 75%, transparent);
+    font-style: italic;
+}
+
+/* AnalysisCard .attribution */
+.map-view .third-party {
+    max-inline-size: 60rem;
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+}
+
+.map-view button:focus-visible,
+.map-view a:focus-visible,
+.map-view input:focus-visible,
+.map-view .timeline-box:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+@media (forced-colors: active) {
+    .map-view .segmented button[aria-pressed="true"],
+    .map-view .segments button[aria-pressed="true"] {
+        outline: 0.125rem solid Highlight;
+    }
+}
+
+@media (max-width: 80rem) {
+    .map-view .workspace {
+        grid-template-columns: minmax(0, 1fr) var(--explorer-side);
+        grid-template-areas:
+            "rail rail"
+            "main side";
+    }
+
+    .map-view .skeleton .rail-block {
+        display: none;
+    }
+}
+
+@media (max-width: 48rem) {
+    .map-view .workspace {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "rail"
+            "main";
+    }
+
+    .map-view .skeleton .side-block {
+        display: none;
+    }
+
+    .map-view .mode-switch {
+        display: flex;
+        inline-size: 100%;
+    }
+
+    .map-view .mode-switch > button,
+    .map-view .mode-switch > :deep(.help-tip) {
+        flex: 1 1 0;
+    }
+
+    .map-view .mode-switch button {
+        inline-size: 100%;
+        white-space: normal;
+    }
+
+    .map-view .tools {
+        margin-inline-start: 0;
+    }
+}
+</style>

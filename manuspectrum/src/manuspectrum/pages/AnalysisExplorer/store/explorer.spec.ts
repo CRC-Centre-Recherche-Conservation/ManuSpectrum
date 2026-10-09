@@ -9,6 +9,8 @@ import {
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
+import type { ExplorerView } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+
 function uuid(n: number): string {
     return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 }
@@ -188,10 +190,16 @@ describe("setPeriod", () => {
 });
 
 describe("navigation", () => {
-    it("ignores a view that is not available yet", () => {
+    it("ignores a view that is not available", () => {
+        const store = useExplorerStore();
+        store.setView("nowhere" as ExplorerView);
+        expect(store.view).toBe("corpus");
+    });
+
+    it("opens the map view", () => {
         const store = useExplorerStore();
         store.setView("map");
-        expect(store.view).toBe("corpus");
+        expect(store.view).toBe("map");
     });
 
     it("opens a document on the corpus view and clears the focus", () => {
