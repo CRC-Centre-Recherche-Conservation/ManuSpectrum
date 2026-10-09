@@ -2,11 +2,10 @@
 import { computed, inject, ref, toRef, useTemplateRef, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Slider from "primevue/slider";
-
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LayerThumb from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerThumb.vue";
 
+import { useRegistration } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { nextId } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
 import { groupLayers } from "@/manuspectrum/pages/AnalysisExplorer/viewers/layer-groups.ts";
 import {
@@ -15,8 +14,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     CURTAIN_KEY,
+    FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type {
@@ -27,8 +28,6 @@ import type {
 
 const DEFAULT_OPACITY = 0.7;
 const PREVIEW_SIZE = 480;
-const PERCENT = 100;
-const OPACITY_STEP = 5;
 const ROVING_KEYS = new Set([
     "ArrowLeft",
     "ArrowRight",
@@ -45,7 +44,8 @@ const ROVING_KEYS = new Set([
  * thumbnails step through the file's own layers, by their stored label, the
  * strip grouped by the element or band the layers declare; previous and next
  * follow the strip's order. The laid layers live in `store.overlays` (the
- * document screen's folio).
+ * document screen's folio), where the layer's own toolbar holds opacity,
+ * curtain, turns and reset.
  */
 const props = defineProps<{
     file: FileEntry;
@@ -53,6 +53,7 @@ const props = defineProps<{
 }>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
+const folioCanvas = inject(FOLIO_CANVAS_KEY, ref<string | null>(null));
 const zones = inject(FOLIO_ZONES_KEY, ref<ReadonlySet<string>>(new Set()));
 
 const store = useExplorerStore();
@@ -62,10 +63,7 @@ const overlays = {
 };
 const { $gettext, interpolate } = useGettext();
 const strip = useTemplateRef<HTMLElement>("strip");
-const percentFormat = new Intl.NumberFormat(
-    document.documentElement.lang || "en",
-    { style: "percent" },
-);
+const registration = useRegistration();
 
 /** Opens on the layer of this file laid on the page, if any, else the first. */
 const position = ref(
@@ -96,8 +94,15 @@ const setting = computed(() =>
 );
 const laid = computed(() => Boolean(setting.value?.on));
 const opacity = computed(() => setting.value?.opacity ?? DEFAULT_OPACITY);
-const opacityPercent = computed(() => Math.round(opacity.value * PERCENT));
-const opacityText = computed(() => percentFormat.format(opacity.value));
+/** True when the analysis has a place of its own on the page shown. */
+const registered = computed(() => {
+    const held = registration.get(props.analysis.id);
+    return (
+        held !== null &&
+        held.canvas === folioCanvas.value &&
+        !(held.box.w === UNPLACED.w && held.box.h === UNPLACED.h)
+    );
+});
 const canLay = computed(() => zones.value.has(props.analysis.id));
 const underCurtain = computed(
     () => key.value !== "" && curtain.value === key.value,
@@ -158,10 +163,6 @@ function retryImage(): void {
     step.value = 0;
 }
 
-function firstValue(value: number | number[]): number {
-    return Array.isArray(value) ? value[0] : value;
-}
-
 function lay(on: boolean): void {
     if (!layer.value) return;
     overlays.set(key.value, {
@@ -174,15 +175,6 @@ function lay(on: boolean): void {
 
 function onLayChange(event: Event): void {
     lay((event.target as HTMLInputElement).checked);
-}
-
-function setOpacity(value: number | number[]): void {
-    if (!layer.value) return;
-    overlays.set(key.value, {
-        element: layer.value.label,
-        opacity: firstValue(value) / PERCENT,
-        on: laid.value,
-    });
 }
 
 function stepBy(by: number): void {
@@ -226,12 +218,6 @@ function moveTo(value: number): void {
         });
         if (wasUnderCurtain) curtain.value = key.value;
     }
-}
-
-function onCurtainChange(event: Event): void {
-    curtain.value = (event.target as HTMLInputElement).checked
-        ? key.value
-        : null;
 }
 </script>
 
@@ -349,39 +335,18 @@ function onCurtainChange(event: Event): void {
                 )
             }}</span>
         </p>
-        <template v-if="laid">
-            <div class="opacity">
-                <p class="opacity-value">
-                    <span aria-hidden="true">{{ $gettext("Opacity") }}</span>
-                    <span class="value">{{ opacityText }}</span>
-                </p>
-                <Slider
-                    :model-value="opacityPercent"
-                    :min="0"
-                    :max="PERCENT"
-                    :step="OPACITY_STEP"
-                    :aria-label="$gettext('Opacity')"
-                    @update:model-value="setOpacity"
-                />
-            </div>
-            <label class="toggle">
-                <input
-                    class="curtain"
-                    type="checkbox"
-                    :checked="underCurtain"
-                    @change="onCurtainChange"
-                />
-                <span>{{ $gettext("Curtain: compare with the page") }}</span>
-            </label>
-            <p
-                class="note"
-                role="note"
-            >
-                <span>{{
-                    $gettext("Indicative positioning, not registered.")
-                }}</span>
-            </p>
-        </template>
+        <p
+            v-if="laid"
+            class="note"
+            role="note"
+        >
+            <span v-if="registered">{{
+                $gettext("Registered in this browser.")
+            }}</span>
+            <span v-else>{{
+                $gettext("Indicative positioning, not registered.")
+            }}</span>
+        </p>
     </section>
 </template>
 
@@ -391,8 +356,7 @@ function onCurtainChange(event: Event): void {
     gap: 0.75rem;
 }
 
-.imaging-preview .layer-nav,
-.imaging-preview .opacity-value {
+.imaging-preview .layer-nav {
     display: flex;
     gap: 0.5rem;
 }
@@ -445,12 +409,6 @@ function onCurtainChange(event: Event): void {
 
 .imaging-preview .value {
     font-family: var(--font-mono);
-}
-
-.imaging-preview .opacity {
-    display: grid;
-    gap: 0.5rem;
-    padding-inline: 0.625rem;
 }
 
 .imaging-preview .layer-image {

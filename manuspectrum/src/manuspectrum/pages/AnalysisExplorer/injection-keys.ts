@@ -43,6 +43,10 @@ export const CURTAIN_KEY: InjectionKey<Ref<string | null>> = Symbol("curtain");
 export const FOLIO_ZONES_KEY: InjectionKey<Ref<ReadonlySet<string>>> =
     Symbol("folio-zones");
 
+/** Id of the canvas the document folio shows, or null before it shows one; provided by the document screen. */
+export const FOLIO_CANVAS_KEY: InjectionKey<Readonly<Ref<string | null>>> =
+    Symbol("folio-canvas");
+
 /** A folio asked of the folio image tools of Compare; `count` grows with each request, so the same folio asked again is a new one. */
 export interface FolioRequest {
     canvas: string;

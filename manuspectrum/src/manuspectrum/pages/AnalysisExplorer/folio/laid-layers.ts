@@ -19,6 +19,8 @@ export interface LaidLayers {
     draw(overlays: readonly FolioOverlay[], curtain: string | null): void;
     /** Takes these layers off the map: the next `draw` lays them as new images. */
     forget(keys: Iterable<string>): void;
+    /** The image overlay laid for `key`, or null when none is. */
+    layerOf(key: string): L.ImageOverlay | null;
     /** Takes the curtain off; the layers go with the map. */
     remove(): void;
 }
@@ -47,9 +49,15 @@ export function laidLayers(
     const images = new Map<string, L.ImageOverlay>();
     /** How many of its `fallbackUrls` each layer has already tried. */
     const fallenBack = new Map<string, number>();
+    /** The address each layer was last asked for, apart from any fallback in use. */
+    const asked = new Map<string, string>();
+    /** The overlay each layer was last drawn from, read by its error handler. */
+    const latest = new Map<string, FolioOverlay>();
     let sideBySide: L.SideBySide | null = null;
 
-    function onError(overlay: FolioOverlay): void {
+    function onError(key: string): void {
+        const overlay = latest.get(key);
+        if (!overlay) return;
         const layer = images.get(overlay.key);
         const tried = fallenBack.get(overlay.key) ?? 0;
         const next = overlay.fallbackUrls[tried];
@@ -71,13 +79,21 @@ export function laidLayers(
                 layer.remove();
                 images.delete(key);
                 fallenBack.delete(key);
+                asked.delete(key);
+                latest.delete(key);
             }
         }
         for (const overlay of overlays) {
+            latest.set(overlay.key, overlay);
             const existing = images.get(overlay.key);
             if (existing) {
                 existing.setOpacity(overlay.opacity);
                 existing.setBounds(L.latLngBounds(overlay.bounds));
+                if (asked.get(overlay.key) !== overlay.url) {
+                    asked.set(overlay.key, overlay.url);
+                    fallenBack.delete(overlay.key);
+                    existing.setUrl(overlay.url);
+                }
             } else {
                 const pane = overlayPane(map, overlay.key);
                 const layer = L.imageOverlay(overlay.url, overlay.bounds, {
@@ -86,7 +102,8 @@ export function laidLayers(
                     alt: overlay.label,
                     pane,
                 });
-                layer.on("error", () => onError(overlay));
+                layer.on("error", () => onError(overlay.key));
+                asked.set(overlay.key, overlay.url);
                 images.set(
                     overlay.key,
                     curtainable(layer.addTo(map), map.getPane(pane)!),
@@ -115,6 +132,8 @@ export function laidLayers(
             images.get(key)?.remove();
             images.delete(key);
             fallenBack.delete(key);
+            asked.delete(key);
+            latest.delete(key);
         }
     }
 
@@ -123,7 +142,13 @@ export function laidLayers(
         sideBySide = null;
         images.clear();
         fallenBack.clear();
+        asked.clear();
+        latest.clear();
     }
 
-    return { draw, forget, remove };
+    function layerOf(key: string): L.ImageOverlay | null {
+        return images.get(key) ?? null;
+    }
+
+    return { draw, forget, layerOf, remove };
 }

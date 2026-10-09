@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolioMap from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue";
 
+import { handleClearance } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
 import { shapeCentre } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { techniqueStyles } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
@@ -30,6 +31,8 @@ vi.hoisted(() => {
 });
 vi.mock("leaflet-iiif", () => ({}));
 vi.mock("utils/leaflet-stack", () => ({ stackSmallestOnTop: vi.fn() }));
+
+import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 
 const LAYERS = { points: true, zones: true, characterizations: true };
 
@@ -801,6 +804,10 @@ describe("FolioMap", () => {
                 ] as [[number, number], [number, number]],
                 opacity,
                 label: key,
+                analysis: "a",
+                quarter: 0 as const,
+                registered: false,
+                canTurn: true,
             };
         }
 
@@ -851,6 +858,637 @@ describe("FolioMap", () => {
                 "Curtain position",
             );
             wrapper.unmount();
+        });
+    });
+
+    describe("with the layer controls", () => {
+        function laidLayer(key: string, patch: Record<string, unknown> = {}) {
+            return {
+                key,
+                url: `https://iiif.example/${key}/full/!2048,2048/0/default.jpg`,
+                fallbackUrls: [],
+                bounds: [
+                    [-20, 0],
+                    [0, 30],
+                ] as [[number, number], [number, number]],
+                opacity: 0.5,
+                label: key,
+                analysis: "a",
+                quarter: 0 as const,
+                registered: true,
+                canTurn: true,
+                ...patch,
+            };
+        }
+
+        function bars(wrapper: { element: Element }): HTMLElement[] {
+            return [
+                ...wrapper.element.querySelectorAll<HTMLElement>(
+                    "[role=toolbar]",
+                ),
+            ];
+        }
+
+        function press(bar: HTMLElement, action: string): void {
+            bar.querySelector<HTMLElement>(`[data-action=${action}]`)!.click();
+        }
+
+        it("puts one toolbar on the map for each laid layer and drops it with the layer", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+            });
+            await flushPromises();
+            expect(bars(wrapper)).toHaveLength(2);
+            expect(
+                bars(wrapper).map((bar) => bar.getAttribute("aria-label")),
+            ).toEqual(["Layer on the page: a:0", "Layer on the page: a:1"]);
+            await wrapper.setProps({ overlays: [laidLayer("a:1")] });
+            await flushPromises();
+            expect(bars(wrapper)).toHaveLength(1);
+            await wrapper.setProps({ overlays: [] });
+            await flushPromises();
+            expect(bars(wrapper)).toHaveLength(0);
+            expect(
+                wrapper.element.querySelectorAll(".layer-controls-host"),
+            ).toHaveLength(0);
+            wrapper.unmount();
+        });
+
+        it("anchors each toolbar to its layer's corner on the map", async () => {
+            const wrapper = mountFolio({ overlays: [laidLayer("a:0")] });
+            await flushPromises();
+            const host = bars(wrapper)[0].parentElement!;
+            expect(host.parentElement?.classList).toContain(
+                "leaflet-container",
+            );
+            expect(host.style.position).toBe("absolute");
+            expect(host.style.left).not.toBe("");
+            expect(host.style.top).not.toBe("");
+            wrapper.unmount();
+        });
+
+        it("emits the layer's key with each control", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0")],
+                adjusting: "a:0",
+                curtain: "a:0",
+            });
+            await flushPromises();
+            const [bar] = bars(wrapper);
+            press(bar, "turn-right");
+            press(bar, "turn-left");
+            press(bar, "adjust");
+            press(bar, "curtain");
+            press(bar, "capture");
+            press(bar, "reset");
+            expect(wrapper.emitted("layer-turn")).toEqual([
+                ["a:0", 1],
+                ["a:0", -1],
+            ]);
+            expect(wrapper.emitted("layer-adjust")).toEqual([["a:0", false]]);
+            expect(wrapper.emitted("layer-curtain")).toEqual([["a:0", false]]);
+            expect(wrapper.emitted("layer-capture")).toEqual([["a:0"]]);
+            expect(wrapper.emitted("layer-reset")).toEqual([["a:0"]]);
+            wrapper.unmount();
+        });
+
+        describe("capturing the folio under a layer", () => {
+            function stubImage(outcome: "load" | "error") {
+                class Fake {
+                    onload: (() => void) | null = null;
+                    onerror: (() => void) | null = null;
+                    set src(_: string) {
+                        queueMicrotask(() => this[`on${outcome}`]?.());
+                    }
+                }
+                vi.stubGlobal("Image", Fake);
+            }
+
+            beforeEach(() => {
+                iiif = stubIiifLayer({ size: { w: 2000, h: 3000 } });
+                vi.stubGlobal(
+                    "fetch",
+                    vi.fn(async () => ({
+                        ok: true,
+                        json: async () => ({ width: 800, height: 600 }),
+                    })),
+                );
+            });
+
+            afterEach(() => vi.unstubAllGlobals());
+
+            it("emits the url of the region, at most the layer's size, with the analysis and page it was taken for", async () => {
+                stubImage("load");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [-5, 0],
+                                [0, 5],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                const [key, capture, origin] = (
+                    wrapper.emitted("captured") as unknown as [
+                        [
+                            string,
+                            { url: string; width: number; height: number },
+                            { analysis: string; canvas: string },
+                        ],
+                    ]
+                )[0];
+                expect(key).toBe("a:0");
+                expect(origin).toEqual({
+                    analysis: "a",
+                    canvas: expect.any(String),
+                });
+                expect(capture.width).toBe(800);
+                expect(capture.height).toBe(600);
+                expect(capture.url).toMatch(
+                    /^https:\/\/iiif\.example\/image\/f12r\/\d+,\d+,\d+,\d+\/\d+,\d+\/0\/default\.jpg$/,
+                );
+                const [region, size] = capture.url.split("/").slice(-4);
+                const [, , rw, rh] = region.split(",").map(Number);
+                const [w, h] = size.split(",").map(Number);
+                expect(w).toBeLessThanOrEqual(rw);
+                expect(h).toBeLessThanOrEqual(rh);
+                expect(wrapper.emitted("capture-failed")).toBeUndefined();
+                wrapper.unmount();
+            });
+
+            it("emits capture-failed when the image server does not answer", async () => {
+                stubImage("error");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [-5, 0],
+                                [0, 5],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                expect(wrapper.emitted("capture-failed")).toEqual([
+                    ["a:0", "server"],
+                ]);
+                expect(wrapper.emitted("captured")).toBeUndefined();
+                wrapper.unmount();
+            });
+
+            it("emits capture-failed for a layer off the page", async () => {
+                stubImage("load");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [900, 900],
+                                [905, 905],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                expect(wrapper.emitted("capture-failed")).toEqual([
+                    ["a:0", "off-page"],
+                ]);
+                wrapper.unmount();
+            });
+
+            it("captures the part of a box that runs off the page and says where it lies in the layer", async () => {
+                stubImage("load");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [-5, -2],
+                                [0, 5],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                const [, capture] = (
+                    wrapper.emitted("captured") as unknown as [
+                        [
+                            string,
+                            {
+                                url: string;
+                                width: number;
+                                height: number;
+                                frame?: object;
+                            },
+                        ],
+                    ]
+                )[0];
+                expect(capture.width).toBe(800);
+                expect(capture.height).toBe(600);
+                expect(capture.frame).toEqual({ x: 229, y: 0, w: 571, h: 600 });
+                expect(capture.url).toContain("/0,");
+                expect(wrapper.emitted("capture-failed")).toBeUndefined();
+                wrapper.unmount();
+            });
+        });
+
+        it("disables the camera on a folio without an image service", async () => {
+            const wrapper = mountFolio({
+                canvas: {
+                    ...canvasWithImage(),
+                    image: { service: null, url: null, width: 0, height: 0 },
+                },
+                overlays: [laidLayer("a:0")],
+            });
+            await flushPromises();
+            const camera = bars(wrapper)[0].querySelector<HTMLElement>(
+                "[data-action=capture]",
+            )!;
+            expect(camera.getAttribute("aria-disabled")).toBe("true");
+            wrapper.unmount();
+        });
+
+        it("stacks the toolbars of two layers laid at the same corner", async () => {
+            vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                L.point(800, 600),
+            );
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+            });
+            await flushPromises();
+            const [first, second, extra] = [
+                ...wrapper.element.querySelectorAll(".layer-controls-host"),
+            ] as HTMLElement[];
+            expect(extra).toBeUndefined();
+            const gap =
+                Number.parseFloat(second.style.top) -
+                Number.parseFloat(first.style.top);
+            expect(gap).toBeGreaterThan(0);
+            expect(second.style.left).toBe(first.style.left);
+            wrapper.unmount();
+        });
+
+        it("puts the toolbar above the top edge of the layer while it is adjusted, on the corner otherwise", async () => {
+            vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                L.point(800, 600),
+            );
+            vi.spyOn(
+                HTMLElement.prototype,
+                "offsetHeight",
+                "get",
+            ).mockReturnValue(38);
+            const wrapper = mountFolio({ overlays: [laidLayer("a:0")] });
+            await flushPromises();
+            const host = wrapper.element.querySelector(
+                ".layer-controls-host",
+            ) as HTMLElement;
+            const onCorner = Number.parseFloat(host.style.top);
+            await wrapper.setProps({ adjusting: "a:0" });
+            await flushPromises();
+            const above = Number.parseFloat(host.style.top);
+            expect(above).toBe(onCorner - 38 - handleClearance());
+            await wrapper.setProps({ adjusting: null });
+            await flushPromises();
+            expect(Number.parseFloat(host.style.top)).toBe(onCorner);
+            wrapper.unmount();
+        });
+
+        it("hides and disables the toolbars of the other layers while one is adjusted", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+            });
+            await flushPromises();
+            const hosts = Array.from(
+                wrapper.element.querySelectorAll(".layer-controls-host"),
+            ) as HTMLElement[];
+            expect(hosts).toHaveLength(2);
+            expect(hosts.map((host) => host.style.visibility)).toEqual([
+                "",
+                "",
+            ]);
+            await wrapper.setProps({ adjusting: "a:1" });
+            await flushPromises();
+            expect(hosts[0].style.visibility).toBe("hidden");
+            expect(hosts[0].hasAttribute("inert")).toBe(true);
+            expect(hosts[1].style.visibility).toBe("");
+            expect(hosts[1].hasAttribute("inert")).toBe(false);
+            await wrapper.setProps({ adjusting: null });
+            await flushPromises();
+            expect(hosts[0].style.visibility).toBe("");
+            expect(hosts[0].hasAttribute("inert")).toBe(false);
+            wrapper.unmount();
+        });
+
+        it("keeps the toolbar on the box being adjusted when the layer is redrawn", async () => {
+            vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                L.point(800, 600),
+            );
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0")],
+                adjusting: "a:0",
+            });
+            await flushPromises();
+            const host = wrapper.element.querySelector(
+                ".layer-controls-host",
+            ) as HTMLElement;
+            const img = wrapper.element.querySelector(
+                "img.folio-overlay",
+            ) as HTMLElement;
+            img.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "ArrowDown",
+                    shiftKey: true,
+                    bubbles: true,
+                }),
+            );
+            const moved = host.style.top;
+            await wrapper.setProps({
+                overlays: [laidLayer("a:0", { opacity: 0.9 })],
+            });
+            await flushPromises();
+            expect(host.style.top).toBe(moved);
+            wrapper.unmount();
+        });
+
+        it("shows adjust and curtain pressed only on the layer they name", async () => {
+            const wrapper = mountFolio({
+                overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                adjusting: "a:1",
+                curtain: "a:0",
+            });
+            await flushPromises();
+            const pressed = bars(wrapper).map((bar) => [
+                bar
+                    .querySelector("[data-action=adjust]")
+                    ?.getAttribute("aria-pressed"),
+                bar
+                    .querySelector("[data-action=curtain]")
+                    ?.getAttribute("aria-pressed"),
+            ]);
+            expect(pressed).toEqual([
+                ["false", "true"],
+                ["true", "false"],
+            ]);
+            wrapper.unmount();
+        });
+
+        it("emits the opacity chosen for a layer as a fraction", async () => {
+            const wrapper = mountFolio({ overlays: [laidLayer("a:0")] });
+            await flushPromises();
+            press(bars(wrapper)[0], "opacity");
+            await flushPromises();
+            const slider = wrapper.findComponent({ name: "Slider" });
+            expect(slider.exists()).toBe(true);
+            slider.vm.$emit("update:modelValue", 40);
+            expect(wrapper.emitted("layer-opacity")).toEqual([["a:0", 0.4]]);
+            wrapper.unmount();
+        });
+
+        describe("while a layer is adjusted", () => {
+            function image(wrapper: { element: Element }, index = 0) {
+                return wrapper.element.querySelectorAll<HTMLImageElement>(
+                    "img.folio-overlay",
+                )[index];
+            }
+
+            function drag(
+                target: Element,
+                from: [number, number],
+                to: [number, number],
+            ): void {
+                for (const [type, [x, y]] of [
+                    ["pointerdown", from],
+                    ["pointermove", to],
+                    ["pointerup", to],
+                ] as const) {
+                    target.dispatchEvent(
+                        new MouseEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: x,
+                            clientY: y,
+                        }),
+                    );
+                }
+            }
+
+            it("makes only the named layer adjustable, with its handles", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                    adjusting: "a:1",
+                });
+                await flushPromises();
+                expect(image(wrapper, 0).classList).not.toContain(
+                    "is-adjusting",
+                );
+                expect(image(wrapper, 1).classList).toContain("is-adjusting");
+                expect(image(wrapper, 1).getAttribute("aria-label")).toBe(
+                    "Adjusting a:1",
+                );
+                const help = document.getElementById(
+                    image(wrapper, 1).getAttribute("aria-describedby") ?? "",
+                );
+                expect(help?.textContent?.trim()).toBe(
+                    "Arrows move, plus and minus scale, [ and ] turn, Escape stops.",
+                );
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(4);
+                wrapper.unmount();
+            });
+
+            it("emits the box of a dragged layer once the pointer is up", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                drag(image(wrapper), [100, 100], [130, 160]);
+                const placed = wrapper.emitted("layer-place") as unknown as [
+                    string,
+                    Box,
+                ][];
+                expect(placed).toHaveLength(1);
+                expect(placed[0]?.[0]).toBe("a:0");
+                expect(placed[0]?.[1]).toMatchObject({ w: 960, h: 640 });
+                expect(placed[0]?.[1].x).not.toBe(0);
+                wrapper.unmount();
+            });
+
+            it("keeps the toolbar on the corner of the layer while it is dragged", async () => {
+                vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                    L.point(800, 600),
+                );
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                const host = wrapper.element.querySelector(
+                    ".layer-controls-host",
+                ) as HTMLElement;
+                const before = host.style.top;
+                drag(image(wrapper), [100, 100], [130, 160]);
+                expect(host.style.top).not.toBe(before);
+                wrapper.unmount();
+            });
+
+            it("emits the box and the end of the adjustment on Escape, and hands the focus back to the Adjust button of that layer's own bar", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                    adjusting: "a:1",
+                });
+                await flushPromises();
+                image(wrapper, 1).dispatchEvent(
+                    new KeyboardEvent("keydown", {
+                        key: "ArrowRight",
+                        bubbles: true,
+                    }),
+                );
+                image(wrapper, 1).dispatchEvent(
+                    new KeyboardEvent("keydown", {
+                        key: "Escape",
+                        bubbles: true,
+                    }),
+                );
+                expect(wrapper.emitted("layer-place")).toHaveLength(1);
+                expect(wrapper.emitted("layer-adjust")).toEqual([
+                    ["a:1", false],
+                ]);
+                expect(document.activeElement).toBe(
+                    bars(wrapper)[1].querySelector("[data-action=adjust]"),
+                );
+                wrapper.unmount();
+            });
+
+            it("keeps nothing when Escape ends an adjustment that changed nothing", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                image(wrapper).dispatchEvent(
+                    new KeyboardEvent("keydown", {
+                        key: "Escape",
+                        bubbles: true,
+                    }),
+                );
+                expect(wrapper.emitted("layer-place")).toBeUndefined();
+                expect(wrapper.emitted("layer-adjust")).toEqual([
+                    ["a:0", false],
+                ]);
+                wrapper.unmount();
+            });
+
+            it("turns the adjusted layer with the bracket keys", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                image(wrapper).dispatchEvent(
+                    new KeyboardEvent("keydown", { key: "]", bubbles: true }),
+                );
+                image(wrapper).dispatchEvent(
+                    new KeyboardEvent("keydown", { key: "[", bubbles: true }),
+                );
+                expect(wrapper.emitted("layer-turn")).toEqual([
+                    ["a:0", 1],
+                    ["a:0", -1],
+                ]);
+                wrapper.unmount();
+            });
+
+            it("does not turn a layer that cannot turn, and says so in the key help", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0", { canTurn: false })],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                image(wrapper).dispatchEvent(
+                    new KeyboardEvent("keydown", { key: "]", bubbles: true }),
+                );
+                expect(wrapper.emitted("layer-turn")).toBeUndefined();
+                const help = document.getElementById(
+                    image(wrapper).getAttribute("aria-describedby") ?? "",
+                );
+                expect(help?.textContent?.trim()).toBe(
+                    "Arrows move, plus and minus scale, Escape stops.",
+                );
+                wrapper.unmount();
+            });
+
+            it("hands the turn in progress to the toolbars", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    turning: true,
+                });
+                await flushPromises();
+                expect(
+                    bars(wrapper)[0]
+                        .querySelector("[data-action=turn-right]")
+                        ?.getAttribute("aria-disabled"),
+                ).toBe("true");
+                wrapper.unmount();
+            });
+
+            it("takes the handles off when the adjustment is switched off, persisting nothing", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                await wrapper.setProps({ adjusting: null });
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(0);
+                expect(image(wrapper).classList).not.toContain("is-adjusting");
+                expect(wrapper.emitted("layer-place")).toBeUndefined();
+                wrapper.unmount();
+            });
+
+            it("stops adjusting a layer that leaves the page", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                await wrapper.setProps({ overlays: [] });
+                await flushPromises();
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(0);
+                wrapper.unmount();
+            });
+
+            it("moves the adjustment to another layer when the named one changes", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                await wrapper.setProps({ adjusting: "a:1" });
+                expect(image(wrapper, 0).classList).not.toContain(
+                    "is-adjusting",
+                );
+                expect(image(wrapper, 1).classList).toContain("is-adjusting");
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(4);
+                wrapper.unmount();
+            });
         });
     });
 

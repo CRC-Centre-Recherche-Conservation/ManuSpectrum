@@ -34,6 +34,7 @@ import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-ke
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import {
     canStack,
+    isCapture,
     layerById,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
@@ -305,7 +306,12 @@ function lay(canvas: string): void {
                 statuses[canvas] = "failed";
             },
         },
-        { pane: entry.pane, scale: scale ?? undefined, tileFormat: "png" },
+        {
+            pane: entry.pane,
+            scale: scale ?? undefined,
+            tileFormat: "png",
+            declaredSize: isCapture(found),
+        },
     );
 }
 

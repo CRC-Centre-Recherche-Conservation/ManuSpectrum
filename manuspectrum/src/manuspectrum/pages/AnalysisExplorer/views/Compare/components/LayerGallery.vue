@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId, useTemplateRef } from "vue";
+import { computed, nextTick, ref, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
@@ -19,7 +19,11 @@ import {
     compareFamilies,
     layerTag,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
-import { PANES_SHOWN } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
+import {
+    CAPTURE_PREFIX,
+    captureThumbnail,
+    PANES_SHOWN,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import {
     analysisNode,
     elementNode,
@@ -30,6 +34,7 @@ import { atomicNumber } from "@/manuspectrum/pages/AnalysisExplorer/views/Compar
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LayerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import type {
+    Captures,
     TableGrouping,
     TableState,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
@@ -52,6 +57,8 @@ interface Entry {
     tag: LayerTag;
     text: string;
     nodes: ReturnType<typeof elementNode>[];
+    /** The analysis whose folio capture this entry is, null for a manifest layer. */
+    capture: string | null;
 }
 
 interface Group {
@@ -78,11 +85,14 @@ interface Group {
  * thumbnail and offered as targets are those the layout shows (A for one pane,
  * A and B for the curtain and two panes, A to D for four); a layer in the
  * stack is marked only in the Stack layout. The state of the other panes is
- * kept, not drawn.
+ * kept, not drawn. A folio capture of a selected analysis comes last in its
+ * group (under « Unclassified » when grouped by tag), marked « this browser »
+ * and deletable (`delete-capture`).
  */
 const props = defineProps<{
     maps: readonly MapLine[];
     state: TableState;
+    captures?: Captures;
 }>();
 const emit = defineEmits<{
     place: [canvas: string];
@@ -91,6 +101,7 @@ const emit = defineEmits<{
     "group-change": [grouping: TableGrouping];
     "place-group": [canvases: string[]];
     compare: [canvases: string[]];
+    "delete-capture": [analysisId: string];
 }>();
 
 const { $gettext, $ngettext, interpolate } = useGettext();
@@ -103,26 +114,38 @@ const query = ref("");
 const only = ref<string | null>(null);
 const roving = ref<string | null>(null);
 
-const entries = computed<Entry[]>(() =>
-    [...props.maps]
-        .sort((a, b) => a.slot - b.slot)
-        .flatMap((line) =>
-            line.file.layers.map((layer) => {
-                const tag = layerTag(layer);
-                return {
-                    layer,
-                    line,
-                    tag,
-                    text: tag
-                        ? tagText(tag.parts, { $gettext, interpolate })
-                        : "",
-                    nodes: layer.elements.flatMap((item) =>
-                        item.symbol ? [elementNode(item.symbol)] : [],
-                    ),
-                };
-            }),
-        ),
-);
+const entries = computed<Entry[]>(() => {
+    const sorted = [...props.maps].sort((a, b) => a.slot - b.slot);
+    const last = new Map(sorted.map((line) => [line.analysis.id, line]));
+    return sorted.flatMap((line) => {
+        const own = line.file.layers.map((layer): Entry => {
+            const tag = layerTag(layer);
+            return {
+                layer,
+                line,
+                tag,
+                text: tag ? tagText(tag.parts, { $gettext, interpolate }) : "",
+                nodes: layer.elements.flatMap((item) =>
+                    item.symbol ? [elementNode(item.symbol)] : [],
+                ),
+                capture: null,
+            };
+        });
+        const id = line.analysis.id;
+        const layer = props.captures?.[id];
+        if (last.get(id) === line && layer?.id === CAPTURE_PREFIX + id) {
+            own.push({
+                layer,
+                line,
+                tag: null,
+                text: "",
+                nodes: [],
+                capture: id,
+            });
+        }
+        return own;
+    });
+});
 const analyses = computed(() => {
     const found = new Map<string, MapLine>();
     for (const line of [...props.maps].sort((a, b) => a.slot - b.slot)) {
@@ -304,15 +327,42 @@ function groupsByTag(list: Entry[]): Group[] {
                           true,
                       ),
                       meta: "",
-                      note: $gettext(
-                          "The canvas has no “Imaging layers” tile: the stored label is shown as is.",
-                      ),
+                      note: unclassified.some((entry) => !entry.capture)
+                          ? $gettext(
+                                "The canvas has no “Imaging layers” tile: the stored label is shown as is.",
+                            )
+                          : null,
                       entries: unclassified,
                       compare: false,
                   },
               ]
             : [];
     return [...familyGroups, ...kindGroups, ...rest];
+}
+
+/**
+ * Deletes a capture and keeps the keyboard where it was: the focus goes to the
+ * next thumbnail of its group, else the previous one, else the group's title,
+ * else (the group went with it) the gallery's first control.
+ */
+async function deleteCapture(entry: Entry, group: Group): Promise<void> {
+    const members = group.entries.filter((member) => member !== entry);
+    const index = group.entries.indexOf(entry);
+    const neighbour = members[index] ?? members[members.length - 1] ?? null;
+    emit("delete-capture", entry.capture ?? "");
+    await nextTick();
+    const target = neighbour
+        ? [
+              ...(root.value?.querySelectorAll<HTMLElement>(".layer-thumb") ??
+                  []),
+          ].find((thumb) => thumb.dataset.canvas === neighbour.layer.id)
+        : document.getElementById(`${group.id}-title`);
+    (
+        target ??
+        root.value?.querySelector<HTMLElement>(
+            "button:not(:disabled), [tabindex='0']",
+        )
+    )?.focus();
 }
 
 function panesOf(canvas: string): string[] {
@@ -622,6 +672,7 @@ function onKeydown(event: KeyboardEvent): void {
                         <h4
                             :id="`${group.id}-title`"
                             class="group-title"
+                            tabindex="-1"
                             :title="group.fullTitle ?? group.note ?? undefined"
                         >
                             {{ group.title }}
@@ -655,28 +706,77 @@ function onKeydown(event: KeyboardEvent): void {
                         {{ group.note }}
                     </p>
                     <div class="grid">
-                        <LayerThumb
+                        <template
                             v-for="entry in group.entries"
                             :key="entry.layer.id"
-                            :canvas="entry.layer.id"
-                            :label="entry.layer.label"
-                            :service="entry.layer.image.service"
-                            :tag="entry.tag ? entry.text : null"
-                            :panes="panesOf(entry.layer.id)"
-                            :in-stack="inStack(entry.layer.id)"
-                            :stop="entry.layer.id === stop"
-                            :data-rel="
-                                entry.nodes.length > 0
-                                    ? marks.rel(entry.nodes)
-                                    : undefined
-                            "
-                            :style="
-                                entry.nodes.length > 0
-                                    ? marks.rowStyle(entry.nodes)
-                                    : undefined
-                            "
-                            @pick="pick(entry.layer.id)"
-                        />
+                        >
+                            <div
+                                v-if="entry.capture"
+                                class="capture-cell"
+                            >
+                                <LayerThumb
+                                    :canvas="entry.layer.id"
+                                    :label="entry.layer.label"
+                                    :service="null"
+                                    :url="
+                                        entry.layer.image.url
+                                            ? captureThumbnail(
+                                                  entry.layer.image.url,
+                                              )
+                                            : null
+                                    "
+                                    :tag="null"
+                                    :panes="panesOf(entry.layer.id)"
+                                    :in-stack="inStack(entry.layer.id)"
+                                    :stop="entry.layer.id === stop"
+                                    @pick="pick(entry.layer.id)"
+                                />
+                                <span class="capture-badge">{{
+                                    $gettext("this browser")
+                                }}</span>
+                                <button
+                                    type="button"
+                                    class="capture-delete"
+                                    :title="$gettext('Delete the capture')"
+                                    :aria-label="$gettext('Delete the capture')"
+                                    @click="deleteCapture(entry, group)"
+                                >
+                                    <svg
+                                        class="icon"
+                                        :viewBox="ICON_VIEW_BOX"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        <path
+                                            v-for="(path, index) in ICONS.trash"
+                                            :key="index"
+                                            :d="path"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                            <LayerThumb
+                                v-else
+                                :canvas="entry.layer.id"
+                                :label="entry.layer.label"
+                                :service="entry.layer.image.service"
+                                :tag="entry.tag ? entry.text : null"
+                                :panes="panesOf(entry.layer.id)"
+                                :in-stack="inStack(entry.layer.id)"
+                                :stop="entry.layer.id === stop"
+                                :data-rel="
+                                    entry.nodes.length > 0
+                                        ? marks.rel(entry.nodes)
+                                        : undefined
+                                "
+                                :style="
+                                    entry.nodes.length > 0
+                                        ? marks.rowStyle(entry.nodes)
+                                        : undefined
+                                "
+                                @pick="pick(entry.layer.id)"
+                            />
+                        </template>
                     </div>
                 </section>
             </div>
@@ -1191,5 +1291,50 @@ function onKeydown(event: KeyboardEvent): void {
 
 .layer-gallery :deep(.layer-thumb[data-rel="none"]) {
     opacity: 0.45;
+}
+
+.layer-gallery .capture-cell {
+    position: relative;
+    display: grid;
+    min-inline-size: 0;
+}
+
+.layer-gallery .capture-badge {
+    position: absolute;
+    inset-block-start: 0.3125rem;
+    inset-inline-end: 0.3125rem;
+    max-inline-size: calc(100% - 0.625rem);
+    padding: 0.0625rem 0.25rem;
+    border-radius: 0.1875rem;
+    background: color-mix(in srgb, var(--ink) 80%, transparent);
+    color: var(--surface);
+    font: 500 0.5625rem/1.2 var(--font-mono);
+    text-align: end;
+}
+
+.layer-gallery .capture-delete {
+    position: absolute;
+    inset-block-end: 1.5rem;
+    inset-inline-end: 0.3125rem;
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.layer-gallery .capture-delete:hover {
+    color: var(--blue-text);
+}
+
+.layer-gallery .capture-delete .icon {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    fill: currentcolor;
 }
 </style>

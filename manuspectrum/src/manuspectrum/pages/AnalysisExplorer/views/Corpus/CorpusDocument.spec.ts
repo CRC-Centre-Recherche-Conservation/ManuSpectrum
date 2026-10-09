@@ -2,13 +2,24 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, ref } from "vue";
+import { defineComponent, h, inject, ref } from "vue";
 
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import {
+    reloadRegistrations,
+    useRegistration,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
-import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    fitInside,
+    turn,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import {
+    FOLIO_CANVAS_KEY,
+    RESULTS_MEMO_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     snapshotOf,
@@ -19,6 +30,7 @@ import {
     analysisPayload,
     annotation,
     characterization,
+    imagingEntry,
     documentComponent,
     documentPayload,
     documentResponses,
@@ -35,7 +47,16 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
-import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    ANNOUNCE_KEY,
+    SELECTION_HINTS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+
+import type {
+    ResultsMemo,
+    SelectionHint,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { DocumentShown } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -75,10 +96,23 @@ const FolioStub = defineComponent({
         components: { type: Array, default: () => [] },
         overlays: { type: Array, default: () => [] },
         curtain: { type: String, default: null },
+        adjusting: { type: String, default: null },
+        capturing: { type: String, default: null },
+        turning: { type: Boolean, default: false },
         caption: { type: String, default: "" },
         stage: { type: String, default: "dark" },
     },
-    emits: ["select"],
+    emits: [
+        "select",
+        "layer-adjust",
+        "layer-turn",
+        "layer-opacity",
+        "layer-curtain",
+        "layer-capture",
+        "captured",
+        "capture-failed",
+        "layer-reset",
+    ],
     setup(_props, { expose }) {
         expose({ focusTarget, focusCurrent });
         return () => h("div", { class: "folio-stub" });
@@ -1618,6 +1652,598 @@ describe("CorpusDocument", () => {
             expect(card.props("closable")).toBe(false);
             expect(card.props("headingId")).toBe("explorer-card-heading");
             wrapper.unmount();
+        });
+    });
+    describe("layer controls", () => {
+        const LAYER = `${uuid(101)}:0`;
+
+        let imageLoads = true;
+        let held: Array<() => void> | null = null;
+        beforeEach(() => {
+            window.localStorage.clear();
+            reloadRegistrations();
+            imageLoads = true;
+            held = null;
+            vi.stubGlobal(
+                "Image",
+                class {
+                    onload: (() => void) | null = null;
+                    onerror: (() => void) | null = null;
+                    set src(_: string) {
+                        const settle = () =>
+                            (imageLoads ? this.onload : this.onerror)?.();
+                        if (held) held.push(settle);
+                        else queueMicrotask(settle);
+                    }
+                },
+            );
+        });
+        afterEach(() => {
+            window.localStorage.clear();
+            reloadRegistrations();
+            vi.unstubAllGlobals();
+        });
+        const ZONE_BOX = { x: 100, y: 100, w: 800, h: 400 };
+        const FITTED_BOX = fitInside(ZONE_BOX, 2000 / 3000);
+
+        /** Answers the held probes one after the other, as the chain of urls asks them. */
+        async function settleHeld(): Promise<void> {
+            while (held && held.length > 0) {
+                held.shift()!();
+                await flushPromises();
+            }
+        }
+
+        async function mountLaidLayer(
+            announce?: (message: string) => void,
+            entry = imagingEntry(),
+        ) {
+            const base = stubFetch({
+                annotations: [
+                    annotation(1, {
+                        dataKind: "chemical-imaging",
+                        shape: { type: "rect", ...ZONE_BOX },
+                    }),
+                ],
+            });
+            const fetchMock = vi.fn(async (url: string) =>
+                url.includes("/analysis/")
+                    ? jsonResponse(analysisPayload({ files: [entry] }))
+                    : base(url),
+            );
+            vi.stubGlobal("fetch", fetchMock);
+            const { wrapper, store } = mountScreen(
+                (opened) => {
+                    opened.openDocument(uuid(1));
+                    opened.focusOn({ kind: "analysis", id: uuid(101) });
+                    opened.setOverlay(LAYER, {
+                        element: "Pb",
+                        opacity: 0.7,
+                        on: true,
+                    });
+                },
+                announce
+                    ? {
+                          provide: {
+                              [ANNOUNCE_KEY as unknown as symbol]: announce,
+                          },
+                      }
+                    : {},
+            );
+            await flushPromises();
+            const folio = wrapper.getComponent({ name: "FolioMap" });
+            return { wrapper, store, folio };
+        }
+
+        it("lays the layer and hands its controls to the folio", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            expect(folio.props("overlays")).toHaveLength(1);
+            expect(folio.props("adjusting")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("keeps a new opacity in the layer's setting", async () => {
+            const { wrapper, store, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-opacity", LAYER, 0.4);
+            expect(store.overlays[LAYER]).toEqual({
+                element: "Pb",
+                opacity: 0.4,
+                on: true,
+            });
+            wrapper.unmount();
+        });
+
+        it("puts the layer under the curtain and takes it off", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-curtain", LAYER, true);
+            await flushPromises();
+            expect(folio.props("curtain")).toBe(LAYER);
+            folio.vm.$emit("layer-curtain", LAYER, false);
+            await flushPromises();
+            expect(folio.props("curtain")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("tells the folio which layer is being adjusted", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-adjust", LAYER, true);
+            await flushPromises();
+            expect(folio.props("adjusting")).toBe(LAYER);
+            folio.vm.$emit("layer-adjust", LAYER, false);
+            await flushPromises();
+            expect(folio.props("adjusting")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("turns the layer from its fitted box, then from the registered box, and registers it", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            const held = useRegistration().get(uuid(101))!;
+            expect(held).toMatchObject({
+                canvas: "https://iiif.example/c1",
+                quarter: 1,
+            });
+            for (const [side, value] of Object.entries(
+                turn(FITTED_BOX, 0, 1).box,
+            )) {
+                expect(held.box[side as "x"]).toBeCloseTo(value, 6);
+            }
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: true,
+                quarter: 1,
+            });
+            folio.vm.$emit("layer-turn", LAYER, -1);
+            await flushPromises();
+            const back = useRegistration().get(uuid(101))!;
+            expect(back.quarter).toBe(0);
+            for (const [side, value] of Object.entries(FITTED_BOX)) {
+                expect(back.box[side as "x"]).toBeCloseTo(value, 6);
+            }
+            wrapper.unmount();
+        });
+
+        it("keeps the layer unturned and says so when the image server cannot turn it", async () => {
+            const announce = vi.fn();
+            const { wrapper, folio } = await mountLaidLayer(announce);
+            imageLoads = false;
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            expect(announce).toHaveBeenCalledWith(
+                "This image server cannot turn this layer.",
+            );
+            wrapper.unmount();
+        });
+
+        it("does not turn a layer that has no image service", async () => {
+            const entry = imagingEntry();
+            const flat = {
+                ...entry,
+                layers: entry.layers.map((layer) => ({
+                    ...layer,
+                    image: {
+                        service: null,
+                        url: "https://x/hg.png",
+                        width: 10,
+                        height: 10,
+                    },
+                })),
+            };
+            const { wrapper, folio } = await mountLaidLayer(undefined, flat);
+            expect(folio.props("overlays")[0]).toMatchObject({
+                canTurn: false,
+            });
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("tells the folio a turn is being checked and ignores a second one meanwhile", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            held = [];
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(folio.props("turning")).toBe(true);
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(held).toHaveLength(1);
+            await settleHeld();
+            expect(folio.props("turning")).toBe(false);
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 1,
+            });
+            wrapper.unmount();
+        });
+
+        it("still registers a turn when the layer was redrawn while it was checked", async () => {
+            const { wrapper, store, folio } = await mountLaidLayer();
+            held = [];
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            store.setOverlay(LAYER, { element: "Pb", opacity: 0.3, on: true });
+            await flushPromises();
+            await settleHeld();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 1,
+            });
+            wrapper.unmount();
+        });
+
+        it("frees the turn when the check fails and says nothing once the page changed", async () => {
+            const announce = vi.fn();
+            const { wrapper, store, folio } = await mountLaidLayer(announce);
+            held = [];
+            imageLoads = false;
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            store.setOverlay(LAYER, { element: "Pb", opacity: 0.7, on: false });
+            await flushPromises();
+            await settleHeld();
+            expect(announce).not.toHaveBeenCalled();
+            expect(folio.props("turning")).toBe(false);
+            wrapper.unmount();
+        });
+
+        it("says nothing of a failed check once the screen is gone", async () => {
+            const announce = vi.fn();
+            const { wrapper, folio } = await mountLaidLayer(announce);
+            held = [];
+            imageLoads = false;
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            wrapper.unmount();
+            await settleHeld();
+            expect(announce).not.toHaveBeenCalled();
+        });
+
+        it("registers the box a layer was moved or resized to, keeping its turn", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            const moved = { x: 10, y: 20, w: 400, h: 800 };
+            folio.vm.$emit("layer-place", LAYER, moved);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                canvas: "https://iiif.example/c1",
+                quarter: 1,
+                box: moved,
+            });
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: true,
+                quarter: 1,
+            });
+            wrapper.unmount();
+        });
+
+        it("registers a first move from a layer still at its zone", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            const moved = { x: 150, y: 120, w: 800, h: 400 };
+            folio.vm.$emit("layer-place", LAYER, moved);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 0,
+                box: moved,
+            });
+            wrapper.unmount();
+        });
+
+        it("ignores a place for a layer that is no longer laid", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-place", "unknown:0", {
+                x: 1,
+                y: 1,
+                w: 9,
+                h: 9,
+            });
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("tells the cards which page the folio shows", async () => {
+            const seen: (string | null)[] = [];
+            const Probe: Component = {
+                setup() {
+                    const canvas = inject(FOLIO_CANVAS_KEY, ref("unprovided"));
+                    return () => {
+                        seen.push(canvas.value);
+                        return h("article");
+                    };
+                },
+            };
+            vi.stubGlobal("fetch", stubFetch({}));
+            const { wrapper } = mountScreen(
+                (opened) => {
+                    opened.openDocument(uuid(1));
+                    opened.focusOn({ kind: "analysis", id: uuid(101) });
+                },
+                { stubs: { AnalysisCard: Probe } },
+            );
+            await flushPromises();
+            expect(seen.at(-1)).toBe("https://iiif.example/c1");
+            wrapper.unmount();
+        });
+
+        it("forgets the registered place on reset", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: true,
+            });
+            folio.vm.$emit("layer-reset", LAYER);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: false,
+                quarter: 0,
+            });
+            wrapper.unmount();
+        });
+
+        describe("capturing the folio", () => {
+            const CAPTURE = {
+                url: "https://iiif.example/image/f12r/0,0,400,300/800,600/0/default.jpg",
+                width: 800,
+                height: 600,
+            };
+            const ORIGIN = {
+                analysis: uuid(101),
+                canvas: "https://iiif.example/c1",
+            };
+
+            function mountCapturing() {
+                const announce = vi.fn();
+                return mountLaidLayer(announce).then((mounted) => ({
+                    ...mounted,
+                    announce,
+                }));
+            }
+
+            it("keeps the capture of the layer's analysis on the current canvas and announces it once", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                await flushPromises();
+                expect(folio.props("capturing")).toBe(LAYER);
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                const held = useRegistration().get(uuid(101));
+                expect(held?.capture).toMatchObject({
+                    ...CAPTURE,
+                    canvas: expect.any(String),
+                    at: expect.any(Number),
+                });
+                expect(held?.capture?.canvas).toBe(held?.canvas);
+                expect(announce).toHaveBeenCalledTimes(1);
+                expect(announce).toHaveBeenCalledWith(
+                    "Capture saved in this browser.",
+                );
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
+            it("keeps the frame of a capture taken over part of the layer", async () => {
+                const { wrapper, folio } = await mountCapturing();
+                const frame = { x: 10, y: 0, w: 400, h: 600 };
+                folio.vm.$emit(
+                    "captured",
+                    LAYER,
+                    { ...CAPTURE, frame },
+                    ORIGIN,
+                );
+                await flushPromises();
+                expect(
+                    useRegistration().get(uuid(101))?.capture?.frame,
+                ).toEqual(frame);
+                wrapper.unmount();
+            });
+
+            it("files a capture under the page it was taken on, and drops one that finished elsewhere", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, {
+                    analysis: uuid(101),
+                    canvas: "https://iiif.example/c2",
+                });
+                await flushPromises();
+                expect(useRegistration().get(uuid(101))).toBeNull();
+                expect(announce).toHaveBeenCalledWith(
+                    "Capture dropped: the page changed.",
+                );
+                expect(wrapper.find(".capture-status").exists()).toBe(false);
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
+            it("drops a capture whose layer was taken off meanwhile", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("captured", "gone:0", CAPTURE, ORIGIN);
+                await flushPromises();
+                expect(useRegistration().get(uuid(101))).toBeNull();
+                expect(announce).toHaveBeenCalledWith(
+                    "Capture dropped: the page changed.",
+                );
+                wrapper.unmount();
+            });
+
+            it("says once that a capture was saved: the status line is not a live region", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                const status = wrapper.get(".capture-status");
+                expect(status.attributes("role")).toBeUndefined();
+                expect(announce).toHaveBeenCalledTimes(1);
+                wrapper.unmount();
+            });
+
+            it("forgets the saved line when the page changes", async () => {
+                const { wrapper, store, folio } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                expect(wrapper.find(".capture-status").exists()).toBe(true);
+                store.setCanvas("https://iiif.example/c2");
+                await flushPromises();
+                expect(wrapper.find(".capture-status").exists()).toBe(false);
+                wrapper.unmount();
+            });
+
+            it("puts the analysis in the Selection when Compare is asked and there is room", async () => {
+                const announce = vi.fn();
+                const { wrapper, store, folio } =
+                    await mountLaidLayer(announce);
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                await wrapper.get("button.capture-compare").trigger("click");
+                expect(store.view).toBe("compare");
+                expect(store.basket.map((item) => item.key)).toEqual([
+                    analysisKey(uuid(101)),
+                ]);
+                expect(announce).toHaveBeenCalledWith(
+                    expect.stringMatching(/^Added to the Selection/),
+                );
+                wrapper.unmount();
+            });
+
+            it("hands the analysis's name to the Selection as its hint", async () => {
+                const hints = ref(new Map<string, SelectionHint>());
+                const base = stubFetch({
+                    annotations: [
+                        annotation(1, {
+                            dataKind: "chemical-imaging",
+                            shape: { type: "rect", ...ZONE_BOX },
+                        }),
+                    ],
+                });
+                vi.stubGlobal(
+                    "fetch",
+                    vi.fn(async (url: string) =>
+                        url.includes("/analysis/")
+                            ? jsonResponse(
+                                  analysisPayload({ files: [imagingEntry()] }),
+                              )
+                            : base(url),
+                    ),
+                );
+                const { wrapper, folio } = await (async () => {
+                    const mounted = mountScreen(
+                        (opened) => {
+                            opened.openDocument(uuid(1));
+                            opened.focusOn({
+                                kind: "analysis",
+                                id: uuid(101),
+                            });
+                            opened.setOverlay(LAYER, {
+                                element: "Pb",
+                                opacity: 0.7,
+                                on: true,
+                            });
+                        },
+                        {
+                            provide: {
+                                [SELECTION_HINTS_KEY as unknown as symbol]:
+                                    hints,
+                            },
+                        },
+                    );
+                    await flushPromises();
+                    return {
+                        ...mounted,
+                        folio: mounted.wrapper.getComponent({
+                            name: "FolioMap",
+                        }),
+                    };
+                })();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                await wrapper.get("button.capture-compare").trigger("click");
+                const hint = hints.value.get(analysisKey(uuid(101)));
+                expect(hint?.kind).toBe("analysis");
+                expect(hint?.title.value).toBeTruthy();
+                wrapper.unmount();
+            });
+
+            it("does not add the analysis twice when it is already in the Selection", async () => {
+                const { wrapper, store, folio } = await mountLaidLayer();
+                store.addToBasket(analysisKey(uuid(101)));
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                await wrapper.get("button.capture-compare").trigger("click");
+                expect(store.basket).toHaveLength(1);
+                expect(store.view).toBe("compare");
+                wrapper.unmount();
+            });
+
+            it("asks for room instead of linking to an empty Compare when the Selection is full", async () => {
+                const { wrapper, store, folio } = await mountLaidLayer();
+                store.addManyToBasket(
+                    Array.from({ length: 30 }, (_, index) =>
+                        analysisKey(uuid(500 + index)),
+                    ),
+                );
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                expect(wrapper.find("button.capture-compare").exists()).toBe(
+                    false,
+                );
+                expect(wrapper.get(".capture-status").text()).toContain(
+                    "Add the analysis to the Selection to see the capture in Compare.",
+                );
+                wrapper.unmount();
+            });
+
+            it("offers to see the capture in Compare", async () => {
+                const { wrapper, store, folio } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                const link = wrapper.find("button.capture-compare");
+                expect(link.text()).toBe("See it in Compare");
+                await link.trigger("click");
+                expect(store.view).toBe("compare");
+                wrapper.unmount();
+            });
+
+            it("says why a box wholly off the page is not captured", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                folio.vm.$emit("capture-failed", LAYER, "off-page");
+                await flushPromises();
+                expect(announce).toHaveBeenCalledWith(
+                    "The layer is entirely off the page: nothing to capture.",
+                );
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
+            it("says the page is not loaded yet when no page is there to capture from", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                folio.vm.$emit("capture-failed", LAYER, "no-page");
+                await flushPromises();
+                expect(announce).toHaveBeenCalledWith(
+                    "The page is not loaded yet: try again in a moment.",
+                );
+                wrapper.unmount();
+            });
+
+            it("announces a failed capture and stores nothing", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                folio.vm.$emit("capture-failed", LAYER, "server");
+                await flushPromises();
+                expect(announce).toHaveBeenCalledTimes(1);
+                expect(announce).toHaveBeenCalledWith(
+                    "The capture could not be taken: the image server did not answer.",
+                );
+                expect(
+                    useRegistration().get(uuid(101))?.capture ?? null,
+                ).toBeNull();
+                expect(wrapper.find("button.capture-compare").exists()).toBe(
+                    false,
+                );
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
         });
     });
 });

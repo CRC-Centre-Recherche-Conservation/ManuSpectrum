@@ -3,6 +3,7 @@ import {
     computed,
     inject,
     nextTick,
+    onScopeDispose,
     provide,
     ref,
     useTemplateRef,
@@ -37,13 +38,16 @@ import {
     useDocumentMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
+import { useRegistration } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
     characterizationComponents,
     componentAnalyses,
     componentMaterials,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
+import { probeTurn } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -53,11 +57,17 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import { folioOverlays } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
+    boxOfBounds,
+    turn,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import {
     techniqueKey,
     techniqueStyles,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
+    ANNOUNCE_KEY,
     CURTAIN_KEY,
+    FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
     RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -65,6 +75,7 @@ import {
     INTRO_BAR_ID,
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { warmViewer } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 import {
@@ -87,8 +98,14 @@ import type {
     Focus,
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
+import type {
+    Box,
+    Frame,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 
@@ -127,6 +144,8 @@ const focusedAnalysis = computed(() =>
     store.focus?.kind === "analysis" ? store.focus.id : null,
 );
 const analysis = useAnalysis(() => focusedAnalysis.value);
+const registration = useRegistration();
+const selection = useSelectionToggle();
 const narrow = useMediaQuery(NARROW_QUERY);
 const phone = useMediaQuery(PHONE_QUERY);
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -141,6 +160,19 @@ const side = useTemplateRef<HTMLElement>("side");
 
 const hasIntroBar = introBar() !== null;
 const curtain = ref<string | null>(null);
+/** The key of the laid layer being adjusted on the folio. */
+const adjusting = ref<string | null>(null);
+/** The key of the laid layer whose capture is being taken. */
+const capturing = ref<string | null>(null);
+/** Whether a capture was just saved: the status line offers Compare. */
+const captureSaved = ref(false);
+/** Whether a turn is being checked with the image server. */
+const turning = ref(false);
+let mounted = true;
+onScopeDispose(() => {
+    mounted = false;
+});
+const announce = inject(ANNOUNCE_KEY, () => undefined);
 let pageToFollow = store.focus !== null;
 /** The document whose first payload has placed the page. */
 let landedOn: string | null = null;
@@ -502,6 +534,13 @@ const overlays = computed(() =>
             : null,
         store.overlays,
         pageAnnotations.value,
+        {
+            canvas: currentCanvas.value?.id ?? null,
+            registration:
+                focusedAnalysis.value === null
+                    ? null
+                    : registration.get(focusedAnalysis.value),
+        },
     ),
 );
 const pageCount = computed(() => {
@@ -619,6 +658,10 @@ const drawerVisible = computed({
 
 provide(CURTAIN_KEY, curtain);
 provide(FOLIO_ZONES_KEY, zones);
+provide(
+    FOLIO_CANVAS_KEY,
+    computed(() => currentCanvas.value?.id ?? null),
+);
 
 useScreenHeading(
     () =>
@@ -640,6 +683,17 @@ watch(
         followFocus();
     },
 );
+watch([() => currentCanvas.value?.id, focusedAnalysis], () => {
+    captureSaved.value = false;
+});
+watch(overlays, (laid) => {
+    if (
+        adjusting.value &&
+        !laid.some((entry) => entry.key === adjusting.value)
+    ) {
+        adjusting.value = null;
+    }
+});
 watch(data, () => {
     if (pageToFollow) followFocus();
 });
@@ -747,6 +801,156 @@ function followFocus(): void {
 function retry(): void {
     if (hasFailed(payload.status.value)) payload.retry();
     if (hasFailed(match.status.value)) match.retry();
+}
+
+function laidLayer(key: string): FolioOverlay | undefined {
+    return overlays.value.find((entry) => entry.key === key);
+}
+
+function onLayerAdjust(key: string, on: boolean): void {
+    adjusting.value = on ? key : null;
+}
+
+/**
+ * Turns the layer a quarter about the centre of the box it lies in (the
+ * registered one, else the zone's), once the image server has shown it can
+ * serve the turned image; otherwise the layer stays as it was.
+ */
+async function onLayerTurn(key: string, by: 1 | -1): Promise<void> {
+    if (turning.value) return;
+    const layer = laidLayer(key);
+    const canvas = currentCanvas.value?.id;
+    if (!layer || !canvas || !layer.canTurn) return;
+    const turned = turn(boxOfBounds(layer.bounds), layer.quarter, by);
+    if (turned.quarter !== 0 && layer.image) {
+        turning.value = true;
+        let ok: boolean;
+        try {
+            ok = await probeTurn(layer.image, turned.quarter);
+        } finally {
+            turning.value = false;
+        }
+        const now = laidLayer(key);
+        if (
+            !mounted ||
+            !now ||
+            now.analysis !== layer.analysis ||
+            now.quarter !== layer.quarter ||
+            !sameBounds(now.bounds, layer.bounds) ||
+            currentCanvas.value?.id !== canvas
+        ) {
+            return;
+        }
+        if (!ok) {
+            announce($gettext("This image server cannot turn this layer."));
+            return;
+        }
+    }
+    registration.setPlace(layer.analysis, canvas, turned.box, turned.quarter);
+}
+
+function sameBounds(a: FolioOverlay["bounds"], b: FolioOverlay["bounds"]) {
+    return a.every((corner, index) => {
+        const other = b[index];
+        return corner[0] === other[0] && corner[1] === other[1];
+    });
+}
+
+/** Keeps the box the reader gave the layer, with the turn it has. */
+function onLayerPlace(key: string, box: Box): void {
+    const layer = laidLayer(key);
+    const canvas = currentCanvas.value?.id;
+    if (!layer || !canvas) return;
+    registration.setPlace(layer.analysis, canvas, box, layer.quarter);
+}
+
+function onLayerOpacity(key: string, value: number): void {
+    const layer = laidLayer(key);
+    const setting = store.overlays[key];
+    if (!layer || !setting) return;
+    store.setOverlay(key, { ...setting, opacity: value });
+}
+
+function onLayerCurtain(key: string, on: boolean): void {
+    curtain.value = on ? key : null;
+}
+
+function onLayerCapture(key: string): void {
+    capturing.value = key;
+    captureSaved.value = false;
+}
+
+/**
+ * Keeps the capture under the analysis and the page it was taken for; one that
+ * finished after the page changed or the layer went is dropped, and says so.
+ */
+function onCaptured(
+    key: string,
+    capture: {
+        url: string;
+        width: number;
+        height: number;
+        frame?: Frame;
+    },
+    origin: { analysis: string; canvas: string },
+): void {
+    capturing.value = null;
+    if (
+        !laidLayer(key) ||
+        currentCanvas.value?.id !== origin.canvas ||
+        focusedAnalysis.value !== origin.analysis
+    ) {
+        announce($gettext("Capture dropped: the page changed."));
+        return;
+    }
+    registration.setCapture(origin.analysis, {
+        ...capture,
+        canvas: origin.canvas,
+        at: Date.now(),
+    });
+    captureSaved.value = true;
+    announce($gettext("Capture saved in this browser."));
+}
+
+function onCaptureFailed(_key: string, reason: CaptureFailure): void {
+    capturing.value = null;
+    announce(
+        reason === "off-page"
+            ? $gettext(
+                  "The layer is entirely off the page: nothing to capture.",
+              )
+            : reason === "no-page"
+              ? $gettext("The page is not loaded yet: try again in a moment.")
+              : $gettext(
+                    "The capture could not be taken: the image server did not answer.",
+                ),
+    );
+}
+
+/** Shows the capture in Compare, which lists only the Selection's analyses: adds the analysis when it is not held. */
+function seeCaptureInCompare(): void {
+    const id = focusedAnalysis.value;
+    const name = id === null ? undefined : analysisNames.value.get(id);
+    if (id !== null && !selection.isHeld(analysisKey(id))) {
+        selection.toggle(
+            analysisKey(id),
+            name ? { title: name, kind: $gettext("analysis") } : undefined,
+        );
+    }
+    store.setView("compare");
+}
+
+/** Whether Compare can show the capture: its analysis is in the Selection or fits in it. */
+const compareReachable = computed(
+    () =>
+        focusedAnalysis.value !== null &&
+        (selection.isHeld(analysisKey(focusedAnalysis.value)) ||
+            store.basketFree > 0),
+);
+
+function onLayerReset(key: string): void {
+    const layer = laidLayer(key);
+    if (layer) registration.reset(layer.analysis);
 }
 
 function onSelect(focus: Focus): void {
@@ -1004,15 +1208,48 @@ function goHome(): void {
                             :components="pageComponents"
                             :overlays="overlays"
                             :curtain="curtain"
+                            :adjusting="adjusting"
+                            :capturing="capturing"
+                            :turning="turning"
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"
+                            @layer-adjust="onLayerAdjust"
+                            @layer-turn="onLayerTurn"
+                            @layer-place="onLayerPlace"
+                            @layer-opacity="onLayerOpacity"
+                            @layer-curtain="onLayerCurtain"
+                            @layer-capture="onLayerCapture"
+                            @captured="onCaptured"
+                            @capture-failed="onCaptureFailed"
+                            @layer-reset="onLayerReset"
                         />
                         <FolioLegend
                             class="legend"
                             :entries="pageLegend"
                         />
                     </div>
+                    <p
+                        v-if="captureSaved"
+                        class="capture-status"
+                    >
+                        {{ $gettext("Capture saved in this browser.") }}
+                        <button
+                            v-if="compareReachable"
+                            type="button"
+                            class="capture-compare"
+                            @click="seeCaptureInCompare"
+                        >
+                            {{ $gettext("See it in Compare") }}
+                        </button>
+                        <template v-else>
+                            {{
+                                $gettext(
+                                    "Add the analysis to the Selection to see the capture in Compare.",
+                                )
+                            }}
+                        </template>
+                    </p>
                     <CanvasStrip
                         :canvases="canvases"
                         :current="currentCanvas?.id ?? null"
@@ -1285,6 +1522,22 @@ function goHome(): void {
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.75rem;
+}
+
+.corpus-document .capture-status {
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: var(--p-text-sm-font-size, 0.875rem);
+}
+
+.corpus-document .capture-compare {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .corpus-document .viewer {

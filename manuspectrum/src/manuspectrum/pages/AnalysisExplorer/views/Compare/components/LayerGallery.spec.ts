@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { nextTick } from "vue";
 
 import LayerGallery from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue";
 
@@ -16,6 +17,7 @@ import {
 import { startLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import {
+    captureLayer,
     defaultState,
     setGrouping,
     toggleInStack,
@@ -102,8 +104,9 @@ const TILED = [
 function gallery(
     maps: MapLine[],
     state: TableState = defaultState(maps),
+    captures: Record<string, FileLayer> = {},
 ): VueWrapper {
-    return mount(LayerGallery, { props: { maps, state } });
+    return mount(LayerGallery, { props: { maps, state, captures } });
 }
 
 function titles(view: VueWrapper): string[] {
@@ -458,5 +461,186 @@ describe("LayerGallery header and filters disclosure", () => {
         await view.find(".filter").setValue("");
         await view.findAll(".analysis-tab")[0].trigger("click");
         expect(view.find(".filters-toggle .active-count").exists()).toBe(false);
+    });
+});
+
+describe("LayerGallery with a folio capture", () => {
+    const stored = {
+        url: "https://iiif.example/folio/full/200,/0/default.jpg",
+        width: 200,
+        height: 300,
+        canvas: "https://iiif.example/canvas/1",
+        at: 1,
+    };
+    const capture = captureLayer(
+        PLAIN[0].analysis.id,
+        stored,
+        "Folio photo · capture",
+    );
+    const captures = { [PLAIN[0].analysis.id]: capture };
+
+    it("lists it last in its analysis group with the badge", () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), captures);
+        const first = view.findAll(".group")[0];
+        const thumbs = first.findAll(".layer-thumb");
+        expect(thumbs).toHaveLength(4);
+        expect(thumbs[3].attributes("data-canvas")).toBe(capture.id);
+        expect(thumbs[3].find("img").attributes("src")).toBe(
+            "https://iiif.example/folio/full/!120,150/0/default.jpg",
+        );
+        expect(first.findAll(".capture-badge")).toHaveLength(1);
+        expect(view.findAll(".capture-badge")[0].text()).toBe("this browser");
+    });
+
+    it("emits delete-capture with the analysis id from its delete button", async () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), captures);
+        const button = view.find("button.capture-delete");
+        expect(button.attributes("aria-label")).toBe("Delete the capture");
+        await button.trigger("click");
+        expect(view.emitted("delete-capture")?.[0]).toEqual([
+            PLAIN[0].analysis.id,
+        ]);
+        expect(view.emitted("place")).toBeUndefined();
+    });
+
+    it("names its badge for screen readers", () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), captures);
+        expect(
+            view.get(".capture-badge").attributes("aria-hidden"),
+        ).toBeUndefined();
+    });
+
+    it("hands the focus to the next thumbnail once a capture is deleted, else the previous, else the group title", async () => {
+        const view = mount(LayerGallery, {
+            props: {
+                maps: PLAIN,
+                state: defaultState(PLAIN),
+                captures,
+            },
+            attachTo: document.body,
+        });
+        await view.get("button.capture-delete").trigger("click");
+        await view.setProps({ captures: {} });
+        await nextTick();
+        const group = view.findAll(".group")[0];
+        const thumbs = group.findAll(".layer-thumb");
+        expect(document.activeElement).toBe(thumbs[thumbs.length - 1].element);
+        view.unmount();
+    });
+
+    it("hands the focus to the next capture of the group when the first is deleted", async () => {
+        const maps = [
+            line(1, [element("Cu", "MS59_Cu")]),
+            line(2, [element("Pb", "MS59_Pb")]),
+        ];
+        const both = {
+            [maps[0].analysis.id]: captureLayer(
+                maps[0].analysis.id,
+                stored,
+                "First · capture",
+            ),
+            [maps[1].analysis.id]: captureLayer(
+                maps[1].analysis.id,
+                stored,
+                "Second · capture",
+            ),
+        };
+        const view = mount(LayerGallery, {
+            props: {
+                maps,
+                state: setGrouping(defaultState(maps), "tag"),
+                captures: both,
+                onDeleteCapture: () =>
+                    view.setProps({
+                        captures: {
+                            [maps[1].analysis.id]: both[maps[1].analysis.id],
+                        },
+                    }),
+            },
+            attachTo: document.body,
+        });
+        const group = view
+            .findAll(".group")
+            .find((g) =>
+                g.find(".group-title").text().startsWith("Unclassified"),
+            )!;
+        const deletes = group.findAll("button.capture-delete");
+        expect(deletes).toHaveLength(2);
+        const second = group.findAll(".layer-thumb")[1].element;
+        await deletes[0].trigger("click");
+        await flushPromises();
+        expect(document.activeElement).toBe(
+            view
+                .findAll(".layer-thumb")
+                .find(
+                    (thumb) =>
+                        thumb.attributes("data-canvas") ===
+                        second.getAttribute("data-canvas"),
+                )!.element,
+        );
+        view.unmount();
+    });
+
+    it("hands the focus to the first control of the gallery when the group goes with its only capture", async () => {
+        const maps = [line(1, [element("Cu", "MS59_Cu")])];
+        const only = {
+            [maps[0].analysis.id]: captureLayer(
+                maps[0].analysis.id,
+                stored,
+                "Folio photo · capture",
+            ),
+        };
+        const view = mount(LayerGallery, {
+            props: {
+                maps,
+                state: setGrouping(defaultState(maps), "tag"),
+                captures: only,
+                onDeleteCapture: () => view.setProps({ captures: {} }),
+            },
+            attachTo: document.body,
+        });
+        const root = view.element as HTMLElement;
+        await view.get("button.capture-delete").trigger("click");
+        await flushPromises();
+        expect(root.contains(document.activeElement)).toBe(true);
+        expect(document.activeElement).not.toBe(document.body);
+        view.unmount();
+    });
+
+    it("says no “Unclassified” note of a group that holds only a capture", () => {
+        const maps = [line(1, [element("Cu", "MS59_Cu")])];
+        const view = gallery(maps, setGrouping(defaultState(maps), "tag"), {
+            [maps[0].analysis.id]: captureLayer(
+                maps[0].analysis.id,
+                stored,
+                "Folio photo · capture",
+            ),
+        });
+        const group = view
+            .findAll(".group")
+            .find((g) =>
+                g.find(".group-title").text().startsWith("Unclassified"),
+            );
+        expect(group?.find(".note").exists()).toBe(false);
+    });
+
+    it("ignores a capture whose analysis is not in the maps", () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), {
+            other: captureLayer("other", stored, "x"),
+        });
+        expect(view.find(".capture-badge").exists()).toBe(false);
+    });
+
+    it("puts it under Unclassified when grouped by tag", () => {
+        const maps = TILED;
+        const view = gallery(maps, setGrouping(defaultState(maps), "tag"), {
+            [maps[0].analysis.id]: capture,
+        });
+        const unclassified = view
+            .findAll(".group")
+            .find((g) =>
+                g.find(".group-title").text().startsWith("Unclassified"),
+            );
+        expect(unclassified?.find(".capture-badge").exists()).toBe(true);
     });
 });
