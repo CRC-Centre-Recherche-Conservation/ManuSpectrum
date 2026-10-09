@@ -467,13 +467,23 @@ class RuleContractTests(unittest.TestCase):
         self.assertIn("--duration=48h", recipe)
         self.assertIn("--comment=", recipe)
 
-    def test_slow_build_alerts_need_a_minimum_of_builds(self):
+    def test_slow_build_alerts_are_a_share_of_builds_with_a_minimum_count(self):
         by_name = {r["alert"]: r["expr"] for _, r in self.alerts}
-        for name in ("ExplorerBundleBuildSlow", "ExplorerBundleBuildVerySlow"):
+        for name, le in (
+            ("ExplorerBundleBuildSlow", "13"),
+            ("ExplorerBundleBuildVerySlow", "55"),
+        ):
             with self.subTest(alert=name):
-                self.assertRegex(
-                    by_name[name], r"bundle_build_seconds_count\[1h\].*>= 3"
-                )
+                expr = by_name[name]
+                self.assertNotIn("histogram_quantile", expr)
+                self.assertIn(f'bundle_build_seconds_bucket{{le="{le}"}}', expr)
+                self.assertIn("> 0.5", expr)
+                self.assertRegex(expr, r"bundle_build_seconds_count\[1h\].*>= 3")
+
+    def test_slow_build_thresholds_are_bucket_boundaries(self):
+        text = METRICS_PY.read_text(encoding="utf-8")
+        buckets = re.search(r"^SECONDS_BUNDLE = \(([^)]*)\)", text, re.M).group(1)
+        self.assertLessEqual({"13", "55"}, {b.strip() for b in buckets.split(",")})
 
     def test_certificate_invalid_is_off_on_rehearsal_names(self):
         rule = {r["alert"]: r["expr"] for _, r in self.alerts}["CertificateInvalid"]
