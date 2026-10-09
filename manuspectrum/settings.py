@@ -210,6 +210,9 @@ INSTALLED_APPS = (
     "django.contrib.staticfiles",
     "django.contrib.sitemaps",
     "django.contrib.gis",
+    # Before "arches" so its `packages` command (which also loads controlled
+    # lists) takes precedence over the core one.
+    "arches_controlled_lists",
     "arches",
     "arches.app.models",
     "arches.management",
@@ -225,11 +228,10 @@ INSTALLED_APPS = (
     "django_migrate_sql",
     "arches_querysets",
     "rest_framework",
-    # Arches applications. They must precede the "arches.app" append below,
-    # which is what actually provides the core templates — that ordering, not
-    # the position relative to "arches", is what lets them win.
+    # Arches applications. Project templates win through TEMPLATES[0]["DIRS"];
+    # these precede the "arches.app" append below, which provides the core
+    # templates.
     "arches_vue_components",
-    "arches_controlled_lists",
     "django.contrib.postgres",
 )
 
