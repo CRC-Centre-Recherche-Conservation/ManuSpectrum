@@ -234,14 +234,16 @@ assert "a relative METRICS_TEXTFILE_DIR is refused" $?
 
 # --- lib-metrics.sh
 (
-  # shellcheck source=../lib-metrics.sh
+  # shellcheck source=lib-metrics.sh
+  # shellcheck source-path=SCRIPTDIR/..
   source "$LIB"
   metrics_open "$TMP/lib.prom"
   ! metric_sample 'bad name' 1
 )
 assert "lib: a bad metric name is refused" $?
 (
-  # shellcheck source=../lib-metrics.sh
+  # shellcheck source=lib-metrics.sh
+  # shellcheck source-path=SCRIPTDIR/..
   source "$LIB"
   metrics_open "$TMP/lib2.prom"
   metric_family manuspectrum_x gauge "Help text"

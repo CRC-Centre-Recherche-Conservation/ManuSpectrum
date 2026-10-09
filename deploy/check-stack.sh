@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
 # publish-static, entrypoint guard, load-snapshot, backup, restore-test, restore, restic round trip,
-# secret-set, local CA, nginx edge, logrotate and systemd unit tests, the Compose rules, actionlint, uv.lock freshness and
+# secret-set, monitoring-init, host-metrics, local CA, nginx edge, logrotate and systemd unit tests, the monthly report
+# tests, the Compose rules, the Prometheus, blackbox and Alertmanager configuration with the rule unit tests
+# (pinned images, pulled once, no network at run time), actionlint, uv.lock freshness and
 # gitleaks (its tests, then a scan of the whole tree). Builds no image and
 # starts no stack (the tests run small stub containers; logrotate needs the
 # network once): safe on the development VM.
@@ -25,6 +27,7 @@ docker run --rm -v "$ROOT:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" -x \
   deploy/check-stack.sh deploy/docker/*.sh deploy/docker/tests/*.sh deploy/compose/*.sh \
   deploy/compose/certbot/*.sh deploy/compose/nginx/tests/*.sh \
   deploy/scripts/*.sh deploy/scripts/tests/*.sh \
+  deploy/compose/observability/check.sh deploy/compose/observability/alertmanager/render.sh \
   deploy/certs/*.sh deploy/certs/tests/*.sh deploy/logrotate/tests/*.sh deploy/systemd/tests/*.sh
 echo "shellcheck: no warning"
 
@@ -56,6 +59,15 @@ bash deploy/scripts/tests/test_restic_roundtrip.sh
 step "secret-set tests"
 bash deploy/scripts/tests/test_secret_set.sh
 
+step "monitoring-init tests"
+bash deploy/scripts/tests/test_monitoring_init.sh
+
+step "host-metrics tests"
+bash deploy/scripts/tests/test_host_metrics.sh
+
+step "monthly-report tests"
+python3 -m unittest discover -s deploy/scripts/tests -p 'test_monthly_report.py'
+
 step "local CA tests"
 bash deploy/certs/tests/test_make_local_ca.sh
 
@@ -70,6 +82,9 @@ bash deploy/systemd/tests/test_units.sh
 
 step "Compose rules"
 python3 -m unittest discover -s deploy/compose/tests -p 'test_*.py'
+
+step "observability configuration"
+bash deploy/compose/observability/check.sh
 
 step "actionlint"
 docker run --rm -v "$ROOT:/repo:ro" -w /repo "$ACTIONLINT_IMAGE" \

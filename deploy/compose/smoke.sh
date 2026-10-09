@@ -10,6 +10,12 @@
 #                are refused on a live database
 #   observability /readyz, /metrics, JSON logs and the request id, the worker's
 #                metrics after one prune task (CI and rehearsal)
+#   monitoring   Prometheus targets and rules, the series the rules and dashboards
+#                read, Grafana and its four dashboards (CI and rehearsal; run
+#                `make container-metrics disk-usage` and a backup first)
+#   mail alert|report
+#                the e-mail of `make alert-test` / `make report-test` reached
+#                Mailpit with its subject and category header (CI and rehearsal)
 #   edge         nginx over HTTPS: the only published ports, redirect, headers,
 #                denied routes, uploaded files, IIIF image server, rate limit,
 #                access log, and web reaching the public name (CI and
@@ -20,7 +26,7 @@
 #                disaster would; `survived` must then fail until a restore
 #                (CI and rehearsal only)
 #   clean        remove the markers
-# mark, lose, static-swap, init-guard, edge, readiness and clean are for CI and rehearsal only.
+# mark, lose, static-swap, init-guard, monitoring, mail, edge, readiness and clean are for CI and rehearsal only.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -272,6 +278,110 @@ print(result.get(timeout=120))
   ok "request id followed the task into the worker"
 }
 
+# --- monitoring ---------------------------------------------------------------
+
+# The Prometheus API from inside the network: it publishes no port.
+prom_get() { compose exec -T prometheus wget -qO- "http://127.0.0.1:9090$1"; } # prom_get PATH-WITH-ENCODED-QUERY
+url_encode() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
+prom_scalar() { # prom_scalar EXPR: the first value of an instant query, "none" without a sample
+  prom_get "/api/v1/query?query=$(url_encode "$1")" \
+    | json_field 'r["data"]["result"][0]["value"][1] if r["data"]["result"] else "none"'
+}
+# retry DESCRIPTION SECONDS COMMAND...: the command until it succeeds
+retry() {
+  local what="$1" deadline=$((SECONDS + $2))
+  shift 2
+  until "$@" >/dev/null 2>&1; do
+    [ "$SECONDS" -lt "$deadline" ] || fail "$what"
+    sleep 5
+  done
+  ok "$what"
+}
+targets_all_up() {
+  [ "$(prom_get '/api/v1/targets?state=active' | json_field \
+    'len(r["data"]["activeTargets"]) > 0 and all(t["health"] == "up" for t in r["data"]["activeTargets"])')" = True ]
+}
+rules_all_ok() {
+  [ "$(prom_get /api/v1/rules | json_field \
+    'len(r["data"]["groups"]) > 0 and all(x["health"] == "ok" for g in r["data"]["groups"] for x in g["rules"])')" = True ]
+}
+series_is() { [ "$(prom_scalar "$1")" = "$2" ]; } # series_is EXPR VALUE
+
+gf_password() { cat "$(env_value SECRETS_DIR)/grafana_admin_password"; }
+# The credential travels in a curl config on stdin, never in an argument.
+gf_get() { printf 'user = "admin:%s"\n' "$(gf_password)" | curl -fsS --max-time 20 -K - "http://127.0.0.1:3000$1"; }
+grafana_has_dashboards() {
+  [ "$(gf_get '/api/search?type=dash-db' | json_field '",".join(sorted(d["uid"] for d in r))')" \
+    = "ms-application,ms-infrastructure,ms-overview,ms-storage" ]
+}
+mail_get() { compose exec -T prometheus wget -qO- "http://mailpit:8025$1"; } # Mailpit shares the monitoring network
+
+cmd_monitoring() {
+  local queries query tmp missing line
+  retry "every Prometheus target is up" 240 targets_all_up
+  retry "every rule evaluates without error" 120 rules_all_ok
+  retry "Watchdog is firing" 120 series_is 'count(ALERTS{alertname="Watchdog",alertstate="firing"})' 1
+  retry "pg_up is 1 (the ms_monitor role connects)" 120 series_is 'min(pg_up)' 1
+  retry "redis_up is 1" 120 series_is 'min(redis_up)' 1
+  retry "container metrics reach Prometheus through the textfile collector" 120 \
+    series_is 'count(manuspectrum_container_up == 1) > bool 5' 1
+  retry "disk usage reaches Prometheus for the four areas" 120 series_is 'count(manuspectrum_disk_usage_bytes)' 4
+  expect "no textfile scrape error" 0 "$(prom_scalar 'sum(node_textfile_scrape_error)')"
+  # The backup gauges exist from the first backup on: required when SMOKE_EXPECT_BACKUP is set.
+  if [ -n "${SMOKE_EXPECT_BACKUP:-}" ]; then
+    retry "Prometheus reads the backup and restore-test gauges (both 0)" 120 \
+      series_is 'max(manuspectrum_backup_failed) + max(manuspectrum_restore_test_failed)' 0
+  fi
+
+  queries="$(python3 "$HERE/observability/smoke_queries.py" dashboard-queries "$HERE/observability/grafana/dashboards")"
+  [ -n "$queries" ] || fail "no dashboard expression found"
+  while IFS= read -r query; do
+    [ "$(prom_get "/api/v1/query?query=$query" | json_field 'r["status"]')" = success ] \
+      || fail "Prometheus rejects the dashboard expression $query (URL-encoded)"
+  done <<<"$queries"
+  ok "$(wc -l <<<"$queries") dashboard expressions evaluate"
+
+  tmp="$(mktemp -d)"
+  prom_get /api/v1/rules >"$tmp/rules.json"
+  prom_get /api/v1/label/__name__/values >"$tmp/names.json"
+  missing="$(python3 "$HERE/observability/smoke_queries.py" missing-metrics "$tmp/rules.json" "$tmp/names.json")"
+  rm -rf "$tmp"
+  [ -z "$missing" ] || fail "rules read series that Prometheus does not have: $(tr '\n' ' ' <<<"$missing")"
+  ok "every series the rules read exists"
+
+  retry "Grafana is healthy" 120 gf_get /api/health
+  retry "Grafana lists the four dashboards" 120 grafana_has_dashboards
+  line="$(curl -fsS --max-time 20 http://127.0.0.1:3000/metrics | grep '^grafana_stat_totals_dashboard ' || true)"
+  echo "info: Grafana ${line:-reports no dashboard total yet}"
+}
+
+# The e-mail of `make alert-test` (alert) or `make report-test` (report) in Mailpit.
+cmd_mail() {
+  local kind="$1" prefix match deadline id headers
+  case "$kind" in
+    alert) prefix="[ManuSpectrum][Alert] "; match="AlertTest" ;;
+    report) prefix="[ManuSpectrum][Report] Rapport mensuel"; match="" ;;
+    *) fail "usage: smoke.sh mail alert|report" ;;
+  esac
+  deadline=$((SECONDS + 150))
+  while :; do
+    id="$(mail_get '/api/v1/messages?limit=100' | PREFIX="$prefix" MATCH="$match" python3 -c '
+import json, os, sys
+for m in json.load(sys.stdin)["messages"]:
+    if m["Subject"].startswith(os.environ["PREFIX"]) and os.environ["MATCH"] in m["Subject"]:
+        print(m["ID"])
+        break
+')"
+    [ -z "$id" ] || break
+    [ "$SECONDS" -lt "$deadline" ] || fail "no Mailpit message with subject '$prefix$match...' within 150 s"
+    sleep 5
+  done
+  ok "Mailpit holds a message with subject '$prefix$match...'"
+  headers="$(mail_get "/api/v1/message/$id/headers")"
+  expect "X-ManuSpectrum-Category" "$kind" \
+    "$(json_field 'next((v[0] for k, v in r.items() if k.lower() == "x-manuspectrum-category"), "none")' <<<"$headers")"
+}
+
 # nginx over HTTPS, from the host: the published port, the CA of CERTS_DIR/ca when
 # it holds one (CERT_MODE=local) and the public name pinned to 127.0.0.1.
 edge_init() {
@@ -336,11 +446,14 @@ cmd_edge() {
   edge_init
   trap cleanup_edge EXIT
 
-  expect "published ports" "nginx:443,nginx:80" "$(compose ps --format json | python3 -c '
+  # Grafana is published on the loopback of the host only (SSH tunnel), never elsewhere.
+  published="nginx:443,nginx:80"
+  [ -z "$(compose ps -q grafana)" ] || published="grafana:3000@127.0.0.1,nginx:443,nginx:80"
+  expect "published ports" "$published" "$(compose ps --format json | python3 -c '
 import json, sys
 text = sys.stdin.read().strip()
 rows = json.loads(text) if text.startswith("[") else [json.loads(l) for l in text.splitlines() if l]
-found = {r["Service"] + ":" + str(p["TargetPort"]) for r in rows for p in r.get("Publishers") or [] if p.get("PublishedPort")}
+found = {r["Service"] + ":" + str(p["TargetPort"]) + ("@" + p["URL"] if r["Service"] == "grafana" else "") for r in rows for p in r.get("Publishers") or [] if p.get("PublishedPort")}
 print(",".join(sorted(found)))
 ')"
   expect "http redirects to https" "301 https://$PUBLIC/en/" \
@@ -459,8 +572,10 @@ case "${1:-}" in
   static-swap) cmd_static_swap ;;
   init-guard) cmd_init_guard ;;
   observability) cmd_observability ;;
+  monitoring) cmd_monitoring ;;
+  mail) cmd_mail "${2:-}" ;;
   edge) cmd_edge ;;
   readiness) cmd_readiness ;;
   clean) cmd_clean ;;
-  *) sed -n '2,23p' "$0" >&2; exit 2 ;;
+  *) sed -n '2,28p' "$0" >&2; exit 2 ;;
 esac

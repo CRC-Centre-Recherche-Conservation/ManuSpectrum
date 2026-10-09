@@ -47,7 +47,7 @@ jobs:
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
-          stack='deploy/(docker|compose|certs|logrotate|systemd)/|deploy/(check-stack\.sh|Makefile)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
+          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
           build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/rewrite_dev_origin\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
@@ -181,11 +181,21 @@ jobs:
               -e "s#^RESTIC_REPOSITORY_DIR=.*#RESTIC_REPOSITORY_DIR=$RUNNER_TEMP/restic#" \
               -e "s#^METRICS_TEXTFILE_DIR=.*#METRICS_TEXTFILE_DIR=$RUNNER_TEMP/metrics#" \
               -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca/ca.crt#" \
+              -e "s#^COMPOSE_PROFILES=.*#COMPOSE_PROFILES=observability,mailpit#" \
+              -e "s#^EMAIL_HOST=.*#EMAIL_HOST=mailpit#" \
+              -e "s#^EMAIL_PORT=.*#EMAIL_PORT=1025#" \
+              -e "s#^ALERT_EMAILS=.*#ALERT_EMAILS=alerts@manuspectrum.test#" \
+              -e "s#^ALERT_EMAIL_FROM=.*#ALERT_EMAIL_FROM=noreply@manuspectrum.test#" \
               -e "s#^PKG_DIR=.*#PKG_DIR=$GITHUB_WORKSPACE/pkg#" \
               deploy/compose/.env.example > "$ENV_FILE"
 
       - name: First installation
         run: make -C deploy volumes init up
+
+      # The ms_monitor role and pg_stat_statements; postgres-exporter reconnects
+      # on its next scrape.
+      - name: Monitoring role
+        run: make -C deploy monitoring-init
 
       - name: Check the stack
         run: |
@@ -194,6 +204,17 @@ jobs:
           deploy/compose/smoke.sh edge
           deploy/compose/smoke.sh mark
           deploy/compose/smoke.sh init-guard
+
+      # Mailpit (profile mailpit) stands in for the SMTP relay: the alert and
+      # report e-mails must reach it with their subject and category header.
+      - name: "Monitoring: targets, rules, dashboards and e-mails"
+        run: |
+          make -C deploy container-metrics disk-usage
+          deploy/compose/smoke.sh monitoring
+          make -C deploy alert-test
+          deploy/compose/smoke.sh mail alert
+          make -C deploy report-test
+          deploy/compose/smoke.sh mail report
 
       - name: Readiness follows Elasticsearch
         run: deploy/compose/smoke.sh readiness
@@ -210,6 +231,8 @@ jobs:
           deploy/compose/smoke.sh wait
           deploy/compose/smoke.sh check
           deploy/compose/smoke.sh survived
+          make -C deploy container-metrics
+          deploy/compose/smoke.sh monitoring
 
       - name: Static files follow the image
         run: deploy/compose/smoke.sh static-swap
@@ -218,7 +241,7 @@ jobs:
         run: |
           docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
             -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml down -v
-          for volume in ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache; do
+          for volume in ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms_prometheus_data; do
             docker volume inspect "$volume" >/dev/null
           done
           make -C deploy up
@@ -240,6 +263,14 @@ jobs:
           make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes
           deploy/compose/smoke.sh check
           deploy/compose/smoke.sh survived
+
+      # The backup and restore-test gauges exist now: Prometheus must read them.
+      - name: Monitoring reads the backup gauges
+        env:
+          SMOKE_EXPECT_BACKUP: "1"
+        run: |
+          make -C deploy container-metrics disk-usage
+          deploy/compose/smoke.sh monitoring
 
       - name: Collect the service logs
         if: failure()
