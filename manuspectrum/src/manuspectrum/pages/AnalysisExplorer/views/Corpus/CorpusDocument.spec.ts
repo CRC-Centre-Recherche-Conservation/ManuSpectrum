@@ -44,9 +44,15 @@ import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
-import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    SELECTION_HINTS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
-import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import type {
+    ResultsMemo,
+    SelectionHint,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { DocumentShown } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -88,6 +94,7 @@ const FolioStub = defineComponent({
         curtain: { type: String, default: null },
         adjusting: { type: String, default: null },
         capturing: { type: String, default: null },
+        turning: { type: Boolean, default: false },
         caption: { type: String, default: "" },
         stage: { type: String, default: "dark" },
     },
@@ -1647,19 +1654,22 @@ describe("CorpusDocument", () => {
         const LAYER = `${uuid(101)}:0`;
 
         let imageLoads = true;
+        let held: Array<() => void> | null = null;
         beforeEach(() => {
             window.localStorage.clear();
             reloadRegistrations();
             imageLoads = true;
+            held = null;
             vi.stubGlobal(
                 "Image",
                 class {
                     onload: (() => void) | null = null;
                     onerror: (() => void) | null = null;
                     set src(_: string) {
-                        queueMicrotask(() =>
-                            (imageLoads ? this.onload : this.onerror)?.(),
-                        );
+                        const settle = () =>
+                            (imageLoads ? this.onload : this.onerror)?.();
+                        if (held) held.push(settle);
+                        else queueMicrotask(settle);
                     }
                 },
             );
@@ -1671,7 +1681,18 @@ describe("CorpusDocument", () => {
         });
         const ZONE_BOX = { x: 100, y: 100, w: 800, h: 400 };
 
-        async function mountLaidLayer(announce?: (message: string) => void) {
+        /** Answers the held probes one after the other, as the chain of urls asks them. */
+        async function settleHeld(): Promise<void> {
+            while (held && held.length > 0) {
+                held.shift()!();
+                await flushPromises();
+            }
+        }
+
+        async function mountLaidLayer(
+            announce?: (message: string) => void,
+            entry = imagingEntry(),
+        ) {
             const base = stubFetch({
                 annotations: [
                     annotation(1, {
@@ -1682,7 +1703,7 @@ describe("CorpusDocument", () => {
             });
             const fetchMock = vi.fn(async (url: string) =>
                 url.includes("/analysis/")
-                    ? jsonResponse(analysisPayload({ files: [imagingEntry()] }))
+                    ? jsonResponse(analysisPayload({ files: [entry] }))
                     : base(url),
             );
             vi.stubGlobal("fetch", fetchMock);
@@ -1782,6 +1803,88 @@ describe("CorpusDocument", () => {
                 "This image server cannot turn this layer.",
             );
             wrapper.unmount();
+        });
+
+        it("does not turn a layer that has no image service", async () => {
+            const entry = imagingEntry();
+            const flat = {
+                ...entry,
+                layers: entry.layers.map((layer) => ({
+                    ...layer,
+                    image: {
+                        service: null,
+                        url: "https://x/hg.png",
+                        width: 10,
+                        height: 10,
+                    },
+                })),
+            };
+            const { wrapper, folio } = await mountLaidLayer(undefined, flat);
+            expect(folio.props("overlays")[0]).toMatchObject({
+                canTurn: false,
+            });
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("tells the folio a turn is being checked and ignores a second one meanwhile", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            held = [];
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(folio.props("turning")).toBe(true);
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(held).toHaveLength(1);
+            await settleHeld();
+            expect(folio.props("turning")).toBe(false);
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 1,
+            });
+            wrapper.unmount();
+        });
+
+        it("still registers a turn when the layer was redrawn while it was checked", async () => {
+            const { wrapper, store, folio } = await mountLaidLayer();
+            held = [];
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            store.setOverlay(LAYER, { element: "Pb", opacity: 0.3, on: true });
+            await flushPromises();
+            await settleHeld();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 1,
+            });
+            wrapper.unmount();
+        });
+
+        it("frees the turn when the check fails and says nothing once the page changed", async () => {
+            const announce = vi.fn();
+            const { wrapper, store, folio } = await mountLaidLayer(announce);
+            held = [];
+            imageLoads = false;
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            store.setOverlay(LAYER, { element: "Pb", opacity: 0.7, on: false });
+            await flushPromises();
+            await settleHeld();
+            expect(announce).not.toHaveBeenCalled();
+            expect(folio.props("turning")).toBe(false);
+            wrapper.unmount();
+        });
+
+        it("says nothing of a failed check once the screen is gone", async () => {
+            const announce = vi.fn();
+            const { wrapper, folio } = await mountLaidLayer(announce);
+            held = [];
+            imageLoads = false;
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            wrapper.unmount();
+            await settleHeld();
+            expect(announce).not.toHaveBeenCalled();
         });
 
         it("registers the box a layer was moved or resized to, keeping its turn", async () => {
@@ -1975,6 +2078,64 @@ describe("CorpusDocument", () => {
                 wrapper.unmount();
             });
 
+            it("hands the analysis's name to the Selection as its hint", async () => {
+                const hints = ref(new Map<string, SelectionHint>());
+                const base = stubFetch({
+                    annotations: [
+                        annotation(1, {
+                            dataKind: "chemical-imaging",
+                            shape: { type: "rect", ...ZONE_BOX },
+                        }),
+                    ],
+                });
+                vi.stubGlobal(
+                    "fetch",
+                    vi.fn(async (url: string) =>
+                        url.includes("/analysis/")
+                            ? jsonResponse(
+                                  analysisPayload({ files: [imagingEntry()] }),
+                              )
+                            : base(url),
+                    ),
+                );
+                const { wrapper, folio } = await (async () => {
+                    const mounted = mountScreen(
+                        (opened) => {
+                            opened.openDocument(uuid(1));
+                            opened.focusOn({
+                                kind: "analysis",
+                                id: uuid(101),
+                            });
+                            opened.setOverlay(LAYER, {
+                                element: "Pb",
+                                opacity: 0.7,
+                                on: true,
+                            });
+                        },
+                        {
+                            provide: {
+                                [SELECTION_HINTS_KEY as unknown as symbol]:
+                                    hints,
+                            },
+                        },
+                    );
+                    await flushPromises();
+                    return {
+                        ...mounted,
+                        folio: mounted.wrapper.getComponent({
+                            name: "FolioMap",
+                        }),
+                    };
+                })();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                await wrapper.get("button.capture-compare").trigger("click");
+                const hint = hints.value.get(analysisKey(uuid(101)));
+                expect(hint?.kind).toBe("analysis");
+                expect(hint?.title.value).toBeTruthy();
+                wrapper.unmount();
+            });
+
             it("does not add the analysis twice when it is already in the Selection", async () => {
                 const { wrapper, store, folio } = await mountLaidLayer();
                 store.addToBasket(analysisKey(uuid(101)));
@@ -2024,6 +2185,17 @@ describe("CorpusDocument", () => {
                     "The layer runs off the page: move it inside to capture.",
                 );
                 expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
+            it("says the page is not loaded yet when no page is there to capture from", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                folio.vm.$emit("capture-failed", LAYER, "no-page");
+                await flushPromises();
+                expect(announce).toHaveBeenCalledWith(
+                    "The page is not loaded yet: try again in a moment.",
+                );
                 wrapper.unmount();
             });
 

@@ -342,7 +342,8 @@ function groupsByTag(list: Entry[]): Group[] {
 
 /**
  * Deletes a capture and keeps the keyboard where it was: the focus goes to the
- * next thumbnail of its group, else the previous one, else the group's title.
+ * next thumbnail of its group, else the previous one, else the group's title,
+ * else (the group went with it) the gallery's first control.
  */
 async function deleteCapture(entry: Entry, group: Group): Promise<void> {
     const members = group.entries.filter((member) => member !== entry);
@@ -356,7 +357,12 @@ async function deleteCapture(entry: Entry, group: Group): Promise<void> {
                   []),
           ].find((thumb) => thumb.dataset.canvas === neighbour.layer.id)
         : document.getElementById(`${group.id}-title`);
-    target?.focus();
+    (
+        target ??
+        root.value?.querySelector<HTMLElement>(
+            "button:not(:disabled), [tabindex='0']",
+        )
+    )?.focus();
 }
 
 function panesOf(canvas: string): string[] {

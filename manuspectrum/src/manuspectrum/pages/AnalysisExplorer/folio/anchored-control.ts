@@ -6,8 +6,11 @@ import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometr
 const CONTROL_Z_INDEX = "1000";
 
 export interface AnchoredControl {
-    /** Keeps the element's top-right corner on the top-right corner of `bounds`. */
-    place(bounds: [LatLng, LatLng]): void;
+    /**
+     * Keeps the element's top-right corner on the top-right corner of
+     * `bounds`, `stack` pixels lower (the room of the controls laid before it).
+     */
+    place(bounds: [LatLng, LatLng], stack?: number): void;
     /** Stops following the map and takes the element off it. */
     remove(): void;
 }
@@ -25,6 +28,7 @@ export function anchoredControl(
     element: HTMLElement,
 ): AnchoredControl {
     let bounds: [LatLng, LatLng] | null = null;
+    let offset = 0;
     element.style.position = "absolute";
     element.style.zIndex = CONTROL_Z_INDEX;
     L.DomEvent.disableClickPropagation(element);
@@ -43,7 +47,7 @@ export function anchoredControl(
             Math.max(corner.x - element.offsetWidth, 0),
             maxLeft,
         );
-        const top = Math.min(Math.max(corner.y, 0), maxTop);
+        const top = Math.min(Math.max(corner.y + offset, 0), maxTop);
         element.style.left = `${left}px`;
         element.style.top = `${top}px`;
     }
@@ -56,8 +60,9 @@ export function anchoredControl(
     observer?.observe(element);
 
     return {
-        place(next) {
+        place(next, stack = 0) {
             bounds = next;
+            offset = stack;
             reposition();
         },
         remove() {

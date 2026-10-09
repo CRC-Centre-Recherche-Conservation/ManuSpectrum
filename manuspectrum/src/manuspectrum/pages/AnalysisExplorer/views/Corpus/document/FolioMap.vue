@@ -88,6 +88,8 @@ const PINNED_PANE = "folio-pinned";
 const PINNED_PANE_Z_INDEX = "620";
 const MARKER_PANE = "markerPane";
 const CONTROLS_HOST_CLASS = "layer-controls-host";
+/** Pixels between the toolbars of layers laid at the same corner. */
+const CONTROLS_STACK_STEP = 44;
 const SAME_BOX = 0.01;
 
 const props = withDefaults(
@@ -111,6 +113,8 @@ const props = withDefaults(
         adjusting?: string | null;
         /** The key of the laid layer whose capture is being taken, if any. */
         capturing?: string | null;
+        /** True while a turn is being checked with the image server. */
+        turning?: boolean;
         /** The line under the page: document, page, position. */
         caption?: string;
         /** `soft` lightens the stage (`--stage-soft`), for the Corpus; the light table and Compare keep `dark`. */
@@ -122,6 +126,7 @@ const props = withDefaults(
         curtain: null,
         adjusting: null,
         capturing: null,
+        turning: false,
         caption: "",
         stage: "dark",
     },
@@ -174,6 +179,16 @@ const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
 let laid: LaidLayers | null = null;
 const anchors = new Map<string, AnchoredControl>();
+
+/** What the keys do on the adjusted image; `[` and `]` only when its layer can turn. */
+const adjustHelp = computed((): string =>
+    props.overlays.find((entry) => entry.key === props.adjusting)?.canTurn ===
+    false
+        ? $gettext("Arrows move, plus and minus scale, Escape stops.")
+        : $gettext(
+              "Arrows move, plus and minus scale, [ and ] turn, Escape stops.",
+          ),
+);
 
 /** The layer being adjusted (`adjustLayer`), the box the parent was last given, and the one on screen. */
 interface Adjustment {
@@ -467,14 +482,27 @@ async function captureUnder(overlay: FolioOverlay): Promise<void> {
     const served = servedSize(page);
     const box = boxOfBounds(overlay.bounds);
     const element = laid?.layerOf(overlay.key)?.getElement() ?? null;
+    const onPage = bounds && served ? { bounds, served } : null;
+    const service = props.canvas?.image.service ?? null;
+    const early = planCapture({
+        page: onPage,
+        service,
+        box,
+        quarter: overlay.quarter,
+        layerSize: { w: 0, h: 0 },
+    });
+    if ("refused" in early) {
+        emit("capture-failed", overlay.key, early.refused);
+        return;
+    }
     const layerSize = (await layerSizeOf(
         overlay.service ?? null,
         element,
         overlay.quarter,
     )) ?? { w: 0, h: 0 };
     const plan = planCapture({
-        page: bounds && served ? { bounds, served } : null,
-        service: props.canvas?.image.service ?? null,
+        page: onPage,
+        service,
         box,
         quarter: overlay.quarter,
         layerSize,
@@ -727,6 +755,16 @@ function sameBox(a: Box, b: Box): boolean {
     );
 }
 
+/** How far down the toolbar of a layer sits under those of the layers laid before it. */
+function stackOffsetOf(key: string): number {
+    return (
+        Math.max(
+            props.overlays.findIndex((overlay) => overlay.key === key),
+            0,
+        ) * CONTROLS_STACK_STEP
+    );
+}
+
 /** Ends the adjustment; `quiet` drops a change not yet kept instead of handing it to the parent. */
 function stopAdjusting(quiet: boolean): void {
     if (!adjustment) return;
@@ -778,21 +816,20 @@ function startAdjustment(
         quiet: false,
         stop: () => undefined,
     };
+    const turnable = props.overlays.find((entry) => entry.key === key)?.canTurn;
     const control = adjustLayer(map, layer, given, {
         label: interpolate($gettext("Adjusting %{label}"), { label: name }),
         describedBy: adjustHelpId,
         onChange(box) {
             current.shown = box;
-            anchors.get(key)?.place(boundsOfBox(box));
+            anchors.get(key)?.place(boundsOfBox(box), stackOffsetOf(key));
         },
         onDone(box) {
             if (current.quiet) return;
             current.kept = box;
             emit("layer-place", key, box);
         },
-        onTurn(by) {
-            emit("layer-turn", key, by);
-        },
+        onTurn: turnable ? (by) => emit("layer-turn", key, by) : undefined,
         onExit() {
             adjustment = null;
             emit("layer-adjust", key, false);
@@ -831,13 +868,11 @@ function drawControls(): void {
             anchors.set(overlay.key, anchor);
             hosts.set(overlay.key, element);
         }
-        hosts.get(overlay.key)!.style.marginBlockStart = index
-            ? `calc(${index} * var(--layer-controls-step, 2.75rem))`
-            : "";
         anchor.place(
             adjustment?.key === overlay.key
                 ? boundsOfBox(adjustment.shown)
                 : overlay.bounds,
+            index * CONTROLS_STACK_STEP,
         );
     }
     if (
@@ -1057,11 +1092,7 @@ function wholePage(): void {
             :id="adjustHelpId"
             class="visually-hidden"
         >
-            {{
-                $gettext(
-                    "Arrows move, plus and minus scale, [ and ] turn, Escape stops.",
-                )
-            }}
+            {{ adjustHelp }}
         </p>
         <div class="controls">
             <button
@@ -1160,6 +1191,7 @@ function wholePage(): void {
                     :under-curtain="props.curtain === overlay.key"
                     :capturing="props.capturing === overlay.key"
                     :can-capture="hasImage"
+                    :turning="props.turning"
                     @adjust="emit('layer-adjust', overlay.key, $event)"
                     @turn="emit('layer-turn', overlay.key, $event)"
                     @opacity="emit('layer-opacity', overlay.key, $event)"

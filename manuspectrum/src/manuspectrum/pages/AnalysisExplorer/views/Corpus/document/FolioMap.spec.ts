@@ -1103,6 +1103,13 @@ describe("FolioMap", () => {
                     ["a:0", "off-page"],
                 ]);
                 expect(asked).not.toHaveBeenCalled();
+                expect(
+                    vi
+                        .mocked(fetch)
+                        .mock.calls.filter(([url]) =>
+                            String(url).includes("layer"),
+                        ),
+                ).toEqual([]);
                 wrapper.unmount();
             });
         });
@@ -1124,15 +1131,22 @@ describe("FolioMap", () => {
         });
 
         it("stacks the toolbars of two layers laid at the same corner", async () => {
+            vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                L.point(800, 600),
+            );
             const wrapper = mountFolio({
                 overlays: [laidLayer("a:0"), laidLayer("a:1")],
             });
             await flushPromises();
-            const [first, second] = [
+            const [first, second, extra] = [
                 ...wrapper.element.querySelectorAll(".layer-controls-host"),
             ] as HTMLElement[];
-            expect(first.style.marginBlockStart).toBe("");
-            expect(second.style.marginBlockStart).not.toBe("");
+            expect(extra).toBeUndefined();
+            const gap =
+                Number.parseFloat(second.style.top) -
+                Number.parseFloat(first.style.top);
+            expect(gap).toBeGreaterThan(0);
+            expect(second.style.left).toBe(first.style.left);
             wrapper.unmount();
         });
 
@@ -1353,6 +1367,39 @@ describe("FolioMap", () => {
                     ["a:0", 1],
                     ["a:0", -1],
                 ]);
+                wrapper.unmount();
+            });
+
+            it("does not turn a layer that cannot turn, and says so in the key help", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0", { canTurn: false })],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                image(wrapper).dispatchEvent(
+                    new KeyboardEvent("keydown", { key: "]", bubbles: true }),
+                );
+                expect(wrapper.emitted("layer-turn")).toBeUndefined();
+                const help = document.getElementById(
+                    image(wrapper).getAttribute("aria-describedby") ?? "",
+                );
+                expect(help?.textContent?.trim()).toBe(
+                    "Arrows move, plus and minus scale, Escape stops.",
+                );
+                wrapper.unmount();
+            });
+
+            it("hands the turn in progress to the toolbars", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    turning: true,
+                });
+                await flushPromises();
+                expect(
+                    bars(wrapper)[0]
+                        .querySelector("[data-action=turn-right]")
+                        ?.getAttribute("aria-disabled"),
+                ).toBe("true");
                 wrapper.unmount();
             });
 

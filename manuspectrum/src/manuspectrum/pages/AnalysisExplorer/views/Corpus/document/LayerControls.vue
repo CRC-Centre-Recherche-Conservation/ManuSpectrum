@@ -39,8 +39,10 @@ const props = withDefaults(
         capturing: boolean;
         /** False when the folio has no image service to take a capture from. */
         canCapture?: boolean;
+        /** True while a turn is being checked with the image server. */
+        turning?: boolean;
     }>(),
-    { canCapture: true },
+    { canCapture: true, turning: false },
 );
 
 const emit = defineEmits<{
@@ -177,7 +179,7 @@ function tabindexOf(index: number): number {
             data-action="turn-left"
             :label="$gettext('Turn left')"
             :description="noTurn"
-            :disabled="!props.overlay.canTurn"
+            :disabled="!props.overlay.canTurn || props.turning"
             :tabindex="tabindexOf(1)"
             @click="emit('turn', -1)"
         />
@@ -186,7 +188,7 @@ function tabindexOf(index: number): number {
             data-action="turn-right"
             :label="$gettext('Turn right')"
             :description="noTurn"
-            :disabled="!props.overlay.canTurn"
+            :disabled="!props.overlay.canTurn || props.turning"
             :tabindex="tabindexOf(2)"
             @click="emit('turn', 1)"
         />

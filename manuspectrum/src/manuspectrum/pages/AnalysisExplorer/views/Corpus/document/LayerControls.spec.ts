@@ -39,6 +39,7 @@ function mountBar(
         underCurtain: boolean;
         capturing: boolean;
         canCapture: boolean;
+        turning: boolean;
     }> = {},
 ) {
     return mount(LayerControls, {
@@ -107,6 +108,16 @@ describe("LayerControls", () => {
             expect(described?.textContent).toContain(
                 "This layer has no image service: it cannot turn",
             );
+            await button.trigger("click");
+        }
+        expect(wrapper.emitted("turn")).toBeUndefined();
+    });
+
+    it("disables the turns while a turn is being checked", async () => {
+        const wrapper = mountBar({ turning: true });
+        for (const name of ["Turn left", "Turn right"]) {
+            const button = buttonNamed(wrapper, name);
+            expect(button.attributes("aria-disabled")).toBe("true");
             await button.trigger("click");
         }
         expect(wrapper.emitted("turn")).toBeUndefined();

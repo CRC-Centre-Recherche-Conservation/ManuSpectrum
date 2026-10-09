@@ -3,6 +3,7 @@ import {
     computed,
     inject,
     nextTick,
+    onScopeDispose,
     provide,
     ref,
     useTemplateRef,
@@ -163,7 +164,11 @@ const capturing = ref<string | null>(null);
 /** Whether a capture was just saved: the status line offers Compare. */
 const captureSaved = ref(false);
 /** Whether a turn is being checked with the image server. */
-let turning = false;
+const turning = ref(false);
+let mounted = true;
+onScopeDispose(() => {
+    mounted = false;
+});
 const announce = inject(ANNOUNCE_KEY, () => undefined);
 let pageToFollow = store.focus !== null;
 /** The document whose first payload has placed the page. */
@@ -809,24 +814,43 @@ function onLayerAdjust(key: string, on: boolean): void {
  * serve the turned image; otherwise the layer stays as it was.
  */
 async function onLayerTurn(key: string, by: 1 | -1): Promise<void> {
-    if (turning) return;
+    if (turning.value) return;
     const layer = laidLayer(key);
     const canvas = currentCanvas.value?.id;
-    if (!layer || !canvas) return;
+    if (!layer || !canvas || !layer.canTurn) return;
     const turned = turn(boxOfBounds(layer.bounds), layer.quarter, by);
     if (turned.quarter !== 0 && layer.image) {
-        turning = true;
-        const ok = await probeTurn(layer.image, turned.quarter);
-        turning = false;
+        turning.value = true;
+        let ok: boolean;
+        try {
+            ok = await probeTurn(layer.image, turned.quarter);
+        } finally {
+            turning.value = false;
+        }
+        const now = laidLayer(key);
+        if (
+            !mounted ||
+            !now ||
+            now.analysis !== layer.analysis ||
+            now.quarter !== layer.quarter ||
+            !sameBounds(now.bounds, layer.bounds) ||
+            currentCanvas.value?.id !== canvas
+        ) {
+            return;
+        }
         if (!ok) {
             announce($gettext("This image server cannot turn this layer."));
             return;
         }
-        if (laidLayer(key) !== layer || currentCanvas.value?.id !== canvas) {
-            return;
-        }
     }
     registration.setPlace(layer.analysis, canvas, turned.box, turned.quarter);
+}
+
+function sameBounds(a: FolioOverlay["bounds"], b: FolioOverlay["bounds"]) {
+    return a.every((corner, index) => {
+        const other = b[index];
+        return corner[0] === other[0] && corner[1] === other[1];
+    });
 }
 
 /** Keeps the box the reader gave the layer, with the turn it has. */
@@ -887,17 +911,23 @@ function onCaptureFailed(_key: string, reason: CaptureFailure): void {
             ? $gettext(
                   "The layer runs off the page: move it inside to capture.",
               )
-            : $gettext(
-                  "The capture could not be taken: the image server did not answer.",
-              ),
+            : reason === "no-page"
+              ? $gettext("The page is not loaded yet: try again in a moment.")
+              : $gettext(
+                    "The capture could not be taken: the image server did not answer.",
+                ),
     );
 }
 
 /** Shows the capture in Compare, which lists only the Selection's analyses: adds the analysis when it is not held. */
 function seeCaptureInCompare(): void {
     const id = focusedAnalysis.value;
+    const name = id === null ? undefined : analysisNames.value.get(id);
     if (id !== null && !selection.isHeld(analysisKey(id))) {
-        selection.toggle(analysisKey(id));
+        selection.toggle(
+            analysisKey(id),
+            name ? { title: name, kind: $gettext("analysis") } : undefined,
+        );
     }
     store.setView("compare");
 }
@@ -1172,6 +1202,7 @@ function goHome(): void {
                             :curtain="curtain"
                             :adjusting="adjusting"
                             :capturing="capturing"
+                            :turning="turning"
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"

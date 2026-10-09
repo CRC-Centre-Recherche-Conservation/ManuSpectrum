@@ -290,6 +290,33 @@ describe("adjustLayer", () => {
         expect(map.dragging.enabled()).toBe(true);
     });
 
+    it("ignores the moves and the end of a second pointer, and swallows its press", () => {
+        begin();
+        function fire(type: string, id: number, x: number, y: number) {
+            const event = new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                clientX: x,
+                clientY: y,
+            });
+            Object.defineProperty(event, "pointerId", { value: id });
+            image.dispatchEvent(event);
+            return event;
+        }
+        fire("pointerdown", 1, 100, 100);
+        const second = fire("pointerdown", 2, 300, 300);
+        expect(second.defaultPrevented).toBe(true);
+        fire("pointermove", 2, 400, 400);
+        expect(changes).toEqual([]);
+        fire("pointerup", 2, 400, 400);
+        expect(map.dragging.enabled()).toBe(false);
+        fire("pointermove", 1, 110, 100);
+        expect(changes).toHaveLength(1);
+        fire("pointerup", 1, 110, 100);
+        expect(map.dragging.enabled()).toBe(true);
+        expect(done).toHaveLength(1);
+    });
+
     it("ignores a press that is not the primary pointer's main button", () => {
         begin();
         const press = new MouseEvent("pointerdown", {

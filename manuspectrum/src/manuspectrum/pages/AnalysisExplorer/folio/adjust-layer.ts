@@ -147,10 +147,17 @@ export function adjustLayer(
         freeze(event);
         let moved = false;
         function onMove(next: Event): void {
+            if ((next as PointerEvent).pointerId !== event.pointerId) return;
             moved = true;
             change(move(next as PointerEvent));
         }
-        function onEnd(): void {
+        function onEnd(ended?: Event): void {
+            if (
+                ended &&
+                (ended as PointerEvent).pointerId !== event.pointerId
+            ) {
+                return;
+            }
             target.removeEventListener("pointermove", onMove);
             target.removeEventListener("pointerup", onEnd);
             target.removeEventListener("pointercancel", onEnd);
@@ -168,7 +175,12 @@ export function adjustLayer(
 
     /** Only the main button of the primary pointer starts a drag, and one at a time. */
     function startsDrag(down: PointerEvent): boolean {
-        return drag === null && down.isPrimary !== false && down.button === 0;
+        if (drag !== null) {
+            down.preventDefault();
+            down.stopPropagation();
+            return false;
+        }
+        return down.isPrimary !== false && down.button === 0;
     }
 
     function onImageDown(event: Event): void {
