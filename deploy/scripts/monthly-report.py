@@ -6,22 +6,30 @@ Run once a month by `make -C deploy monthly-report` (systemd timer, the 1st at
 month that just ended. Python standard library only: the Make target runs it in
 a throwaway container of the application image on the Compose network.
 
-Every figure comes from the Prometheus HTTP API (PROMETHEUS_URL, default
-http://prometheus:9090). Nothing personal is read: only aggregated metrics (the
-active-accounts section reads one count, `manuspectrum_active_accounts`). A section whose query fails reads "données indisponibles"; the report
-is sent anyway and the exit status is then 1. Prometheus keeps 30 days: a
-figure older than that reads "n/d". The growth lines (free space, database)
-compare the end of the month with its start, or with 29 days before the run
-when the month began earlier than that, and then say "depuis le <date>".
+Most figures come from the Prometheus HTTP API (PROMETHEUS_URL, default
+http://prometheus:9090); the content, workflow and bulk import sections come
+from the database through `--activity-command`, a management command run in the
+same container that prints the month's aggregates as one line of JSON
+(`manage.py activity_summary --month YYYY-MM`). Nothing personal is read: only
+counts (the active-accounts section reads one number,
+`manuspectrum_active_accounts`). A section whose source fails reads "données
+indisponibles"; the report is sent anyway and the exit status is then 1.
+Prometheus keeps 35 days: a figure older than that reads "n/d". The growth
+lines (free space, database) compare the end of the month with its start, or
+with 34 days before the run when the month began earlier than that, and then
+say "depuis le <date>".
 
 Environment: EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS (true = STARTTLS),
 EMAIL_HOST_USER and EMAIL_HOST_PASSWORD_FILE (login only when the user is set),
 ALERT_EMAILS (comma-separated recipients), ALERT_EMAIL_FROM.
 
 Usage: monthly-report.py [--dry-run] [--month YYYY-MM] [--now ISO-8601]
-  --dry-run  print the message instead of sending it
-  --month    report this month instead of the previous one
-  --now      the clock for the default month (tests)
+                         [--activity-command COMMAND]
+  --dry-run           print the message instead of sending it
+  --month             report this month instead of the previous one
+  --now               the clock for the default month (tests)
+  --activity-command  command that takes `--month YYYY-MM` and prints the
+                      activity JSON; without it those sections are unavailable
 
 Exit: 0 sent and complete, 1 sent with a section unavailable, 2 not sent
 (configuration or SMTP failure).
@@ -32,7 +40,9 @@ import calendar
 import json
 import os
 import re
+import shlex
 import smtplib
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -45,7 +55,7 @@ UNAVAILABLE = "données indisponibles"
 NO_DATA = "n/d"
 ADDRESS = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 STEP = 300
-RETENTION_DAYS = 29  # Prometheus keeps 30; one day of margin for block deletion
+RETENTION_DAYS = 34  # Prometheus keeps 35; one day of margin for block deletion
 MONTHS_FR = (
     "janvier février mars avril mai juin juillet août "
     "septembre octobre novembre décembre"
@@ -54,6 +64,41 @@ MONTHS_FR = (
 
 class Unavailable(Exception):
     """Prometheus did not answer, or answered something unreadable."""
+
+
+class Activity:
+    """The month's aggregates printed by the activity command, read once."""
+
+    def __init__(self, command, label, timeout=120):
+        self.command = command
+        self.label = label
+        self.timeout = timeout
+        self.failed = False
+        self._data = None
+
+    def get(self):
+        if self._data is not None:
+            return self._data
+        try:
+            if not self.command:
+                raise ValueError("no activity command")
+            done = subprocess.run(
+                shlex.split(self.command) + ["--month", self.label],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+            )
+            if done.returncode != 0:
+                raise ValueError(f"exit status {done.returncode}")
+            lines = [line for line in done.stdout.splitlines() if line.strip()]
+            data = json.loads(lines[-1])
+            if data.get("month") != self.label:
+                raise ValueError("answer for another month")
+        except (OSError, ValueError, IndexError, subprocess.SubprocessError) as exc:
+            self.failed = True
+            raise Unavailable(str(exc)) from exc
+        self._data = data
+        return data
 
 
 class Prometheus:
@@ -372,12 +417,219 @@ def accounts(prom, start, end, since):
     ]
 
 
-def build_body(prom, label, start, end, now):
+def count(value):
+    return str(int(round(value)))
+
+
+def plural(n, one, many=None):
+    return f"{n} {one if n < 2 else many or one + 's'}"
+
+
+def number(n):
+    return f"{int(n):,}".replace(",", " ")
+
+
+def by_label(rows, name):
+    return {labels.get(name, "?"): value for labels, value in rows}
+
+
+CONSULTATION_LINES = (
+    (
+        "pages publiques",
+        (
+            ("home", "accueil"),
+            ("about", "« À propos »"),
+            ("explorer_open", "ouvertures de l'Explorateur"),
+        ),
+    ),
+    (
+        "Explorateur",
+        (
+            ("explorer_search", "recherches"),
+            ("explorer_document", "fiches document"),
+            ("explorer_analysis", "fiches analyse"),
+            ("explorer_compare", "comparaisons"),
+        ),
+    ),
+    (
+        "exports",
+        (
+            ("export_csv", "séries CSV"),
+            ("export_zip", "paquets de données"),
+            ("export_manifest", "manifestes IIIF"),
+            ("share", "partages"),
+        ),
+    ),
+    (
+        "back-office",
+        (
+            ("resource_report", "fiches"),
+            ("resource_summary", "aperçus"),
+            ("search", "recherches"),
+        ),
+    ),
+    (
+        "IIIF",
+        (
+            ("iiif_annotations", "requêtes d'annotations"),
+            ("iiif_manifest", "manifestes"),
+        ),
+    ),
+    ("fichiers", (("file_download", "fichiers téléchargés"),)),
+)
+
+
+def consultations(prom, start, end):
+    at = end.timestamp()
+    window = f"{int((end - start).total_seconds())}s"
+    kinds = by_label(
+        prom.query(
+            f"sum by (kind) (increase(manuspectrum:consultations:total[{window}]))", at
+        ),
+        "kind",
+    )
+    if not kinds:
+        return [NO_DATA]
+    zip_bytes = prom.scalar(
+        f"sum(increase(manuspectrum_explorer_export_bytes_sum[{window}]))", at
+    )
+    lines = ["(requêtes servies, robots compris ; une réponse 304 compte)"]
+    for title, entries in CONSULTATION_LINES:
+        parts = []
+        for kind, label in entries:
+            text = f"{label} {number(kinds.get(kind, 0))}"
+            if kind == "export_zip" and zip_bytes:
+                text += f" ({size(zip_bytes)})"
+            parts.append(text)
+        lines.append(f"{title} : " + ", ".join(parts))
+    return lines
+
+
+WORKFLOW_NAMES = {
+    "create-project-workflow": "Nouveau projet",
+    "import-biblissima-workflow": "Import Biblissima",
+}
+
+
+def model_name(slug):
+    return "modèle supprimé" if slug == "deleted_model" else slug
+
+
+def contents(activity):
+    models = activity.get()["models"]
+    lines = []
+    saves = changes = 0
+    for slug, row in sorted(models.items()):
+        saves += row["tile_saves"]
+        changes += row["publication_changes"]
+        if not (row["created"] or row["modified"] or row["deleted"]):
+            continue
+        created = plural(row["created"], "créée")
+        if row["created_deleted"]:
+            created += (
+                f" (dont {plural(row['created_deleted'], 'supprimée')} dans le mois)"
+            )
+        lines.append(
+            f"{model_name(slug)} : {created}, "
+            f"{plural(row['modified'], 'modifiée')}, "
+            f"{plural(row['deleted'], 'supprimée')} ; "
+            f"{number(row['total'])} au total"
+        )
+    if not lines:
+        return ["aucune activité"]
+    lines.append(
+        f"saisies enregistrées : {number(saves)} ; "
+        f"changements d'état de publication : {number(changes)}"
+    )
+    lines.append("(journal des éditions Arches ; totaux à la date du rapport)")
+    return lines
+
+
+def workflows(prom, activity, start, end):
+    data = activity.get()
+    at = end.timestamp()
+    window = f"{int((end - start).total_seconds())}s"
+    lines = []
+    open_total = stale_total = 0
+    for name, row in sorted(data["workflows"].items()):
+        open_total += row["open"]
+        stale_total += row["stale"]
+        if row["started"]:
+            lines.append(
+                f"{WORKFLOW_NAMES.get(name, name)} : "
+                f"{plural(row['started'], 'commencé')}, dont {row['completed']} terminé(s)"
+            )
+    created = prom.query(
+        "sum by (resource_type, outcome) "
+        f"(increase(manuspectrum_biblissima_created_items_total[{window}]))",
+        at,
+    )
+    made = {
+        labels.get("resource_type", "?"): value
+        for labels, value in created
+        if labels.get("outcome") == "created" and round(value) > 0
+    }
+    failed = sum(v for labels, v in created if labels.get("outcome") == "failed")
+    if made or failed:
+        detail = ", ".join(f"{kind} {count(v)}" for kind, v in sorted(made.items()))
+        lines.append(
+            f"Import Biblissima : {count(sum(made.values()))} ressource(s) créée(s)"
+            + (f" ({detail})" if detail else "")
+            + f", {count(failed)} échec(s)"
+        )
+    cancelled = prom.scalar(
+        "sum(increase(django_http_responses_total_by_status_view_method_total"
+        '{view="transaction_reverse",method="POST",status="200"}'
+        f"[{window}]))",
+        at,
+    )
+    if cancelled is not None and round(cancelled) > 0:
+        lines.append(f"annulés par l'utilisateur : {count(cancelled)}")
+    if open_total:
+        days = data["workflow_stale_after_days"]
+        lines.append(
+            f"inachevés à la date du rapport : {open_total}, dont {stale_total} "
+            f"commencés il y a plus de {days} jours (délai provisoire)"
+        )
+    return lines or ["aucune activité"]
+
+
+def bulk_runs(activity):
+    lines = []
+    for slug, row in sorted(activity.get()["etl"].items()):
+        text = f"{slug} : {plural(row['started'], 'lancé')}"
+        text += f", {row['succeeded']} réussi(s)"
+        if row["failed"]:
+            text += f", {row['failed']} en échec"
+        if row["unfinished"]:
+            text += f", {row['unfinished']} non terminé(s)"
+        lines.append(text)
+    return lines or ["aucune activité"]
+
+
+def logins(prom, start, end):
+    window = f"{int((end - start).total_seconds())}s"
+    rows = by_label(
+        prom.query(
+            f"sum by (outcome) (increase(manuspectrum_auth_logins_total[{window}]))",
+            end.timestamp(),
+        ),
+        "outcome",
+    )
+    if not rows:
+        return [NO_DATA]
+    return [
+        f"connexions réussies : {count(rows.get('success', 0))}, "
+        f"échouées : {count(rows.get('failure', 0))}"
+    ]
+
+
+def build_body(prom, activity, label, start, end, now):
     last_day = end - timedelta(days=1)
     head = [
         f"Rapport mensuel ManuSpectrum, {MONTHS_FR[start.month - 1]} {start.year}",
         f"Période : du 1er au {last_day.day} {MONTHS_FR[last_day.month - 1]} {last_day.year} (UTC)",
-        "Source : Prometheus (conservation de 30 jours : un chiffre plus ancien s'affiche n/d)",
+        "Source : Prometheus (conservation de 35 jours : un chiffre plus ancien s'affiche n/d) et base de données (agrégats uniquement)",
         "",
     ]
     blocks = []
@@ -389,12 +641,21 @@ def build_body(prom, label, start, end, now):
         ("Sauvegardes et tests de restauration", backups),
         ("Redémarrages et manques de mémoire", restarts),
         ("Alertes du mois", alerts),
+        ("Consultations", consultations),
+        ("Contenus", lambda p, a, b: contents(activity)),
+        ("Assistants", lambda p, a, b: workflows(p, activity, a, b)),
+        ("Imports et exports en masse", lambda p, a, b: bulk_runs(activity)),
+        ("Connexions", logins),
         ("Comptes actifs", lambda p, a, b: accounts(p, a, b, since)),
     ):
         blocks += section(prom, title, lambda b=build: b(prom, start, end))
     if prom.failed:
         blocks.append(
             "Prometheus n'a pas répondu à au moins une requête : voir deploy/runbooks/monitoring.md."
+        )
+    if activity.failed:
+        blocks.append(
+            "Le journal d'activité n'a pas pu être lu (commande activity_summary) : voir deploy/runbooks/monitoring.md."
         )
     return "\n".join(head + blocks).rstrip() + "\n"
 
@@ -448,6 +709,7 @@ def main(argv=None, env=None, out=sys.stdout, err=sys.stderr):
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--month")
     parser.add_argument("--now")
+    parser.add_argument("--activity-command", default="")
     args = parser.parse_args(argv)
 
     now = datetime.fromisoformat(args.now) if args.now else datetime.now(timezone.utc)
@@ -460,7 +722,8 @@ def main(argv=None, env=None, out=sys.stdout, err=sys.stderr):
     start, end = month_bounds(label)
 
     prom = Prometheus(env.get("PROMETHEUS_URL", "http://prometheus:9090"))
-    body = build_body(prom, label, start, end, now.astimezone(timezone.utc))
+    activity = Activity(args.activity_command, label)
+    body = build_body(prom, activity, label, start, end, now.astimezone(timezone.utc))
     try:
         message = build_message(env, label, body, now)
         if args.dry_run:
@@ -470,9 +733,10 @@ def main(argv=None, env=None, out=sys.stdout, err=sys.stderr):
     except (ValueError, OSError, smtplib.SMTPException) as exc:
         print(f"monthly-report: not sent: {exc}", file=err)
         return 2
-    if prom.failed:
+    if prom.failed or activity.failed:
         print(
-            "monthly-report: sent, but Prometheus did not answer every query", file=err
+            "monthly-report: sent, but a source did not answer (Prometheus or the activity command)",
+            file=err,
         )
         return 1
     return 0

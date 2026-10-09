@@ -222,12 +222,16 @@ silence-fresh-install: ## Silence for 48 h the alerts a new install raises befor
 # runs in a throwaway container of the application image on the Compose
 # network, where `prometheus` and the SMTP relay resolve; the relay settings
 # come from the env file the container already reads. The script is mounted
-# read-only. Exit 1: sent with a section "données indisponibles".
+# read-only. The content, workflow and bulk import sections come from
+# `manage.py activity_summary`, which the script runs itself in the same
+# container (read-only SQL, aggregates as JSON; no metrics files, no statement
+# timeout). Exit 1: sent with a section "données indisponibles".
 monthly-report: ## Send the report of the previous month to ALERT_EMAILS (the timer runs it on the 1st at 08:00)
 	$(COMPOSE) run --rm --no-deps -T --entrypoint python3 \
 		-v '$(SCRIPTS_DIR)/monthly-report.py:/monthly-report.py:ro' \
 		-e ALERT_EMAILS="$(call envval,ALERT_EMAILS)" -e ALERT_EMAIL_FROM="$(call envval,ALERT_EMAIL_FROM)" \
-		web -I /monthly-report.py $(ARGS)
+		web -I /monthly-report.py \
+		--activity-command "env -u PROMETHEUS_MULTIPROC_DIR PG_STATEMENT_TIMEOUT_MS=0 python manage.py activity_summary" $(ARGS)
 
 report-test: ## Send the report now to ALERT_EMAILS to check the chain: make -C deploy report-test [ARGS="--month YYYY-MM"]
 	$(MAKE) --no-print-directory monthly-report
