@@ -47,3 +47,14 @@ groups:
           summary: "The active accounts count is not refreshed"
           description: "The active accounts count is {{ $value | humanizeDuration }} old; it is refreshed daily."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#activeaccountsstale
+      - alert: ActivityStale
+        expr: |
+          time() - max(manuspectrum_activity_timestamp_seconds) > 3 * 3600
+        for: 30m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The activity gauges are not refreshed"
+          description: "The activity gauges are {{ $value | humanizeDuration }} old; they are refreshed hourly."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#activitystale

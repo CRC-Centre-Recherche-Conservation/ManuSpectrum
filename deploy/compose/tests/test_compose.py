@@ -812,9 +812,9 @@ class ComposeStackTests(unittest.TestCase):
         )
         self.assertEqual(steady, sum(PROD_LIMITS.values()))
 
-    def test_prometheus_keeps_30_days_on_an_external_volume(self):
+    def test_prometheus_keeps_35_days_on_an_external_volume(self):
         prometheus = self.observability["services"]["prometheus"]
-        self.assertIn("--storage.tsdb.retention.time=30d", prometheus["command"])
+        self.assertIn("--storage.tsdb.retention.time=35d", prometheus["command"])
         self.assertIn("--storage.tsdb.retention.size=8GB", prometheus["command"])
         self.assertIn("--storage.tsdb.path=/prometheus", prometheus["command"])
         mounts = {v["target"]: v for v in prometheus["volumes"]}

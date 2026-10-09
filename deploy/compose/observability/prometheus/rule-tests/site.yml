@@ -145,3 +145,37 @@ tests:
       value: 1
     - labels: ALERTS{alertname="MetricsDirFilling", alertstate="firing", job="worker", service="application", severity="warning"}
       value: 1
+- name: three server errors on writes in half an hour warn, reads and fewer errors do not
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST"}
+    values: 0 0 0 0 0 1 1 2 2x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET"}
+    values: 0+1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="404", view="tile", method="POST"}
+    values: 0+5x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE"}
+    values: 0 0 0 0 0 0 0 0 0 0 0 1 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 14m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 50m
+    exp_samples: []
+- name: a single write error and a flood of read errors do not warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST"}
+    values: 0 0 0 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET"}
+    values: 0+10x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []

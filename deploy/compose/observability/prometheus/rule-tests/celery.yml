@@ -78,3 +78,20 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="ActiveAccountsStale", alertstate="firing", service="celery", severity="warning"}
       value: 1
+- name: activity gauges older than three hours warn after half an hour, fresh ones do not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x180 10800x2000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 2h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 6h20m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 7h
+    exp_samples:
+    - labels: ALERTS{alertname="ActivityStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1

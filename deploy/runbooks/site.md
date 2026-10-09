@@ -121,3 +121,27 @@ Wait for a running rebuild to end. A host short of memory: see `MemoryPressure`.
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## WriteRequestsFailing
+
+Severity: warning. At least three write requests (POST, PUT or DELETE) answered a server error in the last 30 minutes. Severity is warning on purpose: the site is up and the failures are few, which `ErrorRateHigh` (critical) does not see; a curator's input may be lost, so it is read the same working day.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout. Grafana through the SSH tunnel (dashboard Activity, panel "Failing writes (5xx) by view").
+
+### Symptom
+
+A curator reports that a save, an import step or a deletion failed with an error page, or no one has noticed yet.
+
+### Diagnosis
+
+The panel "Failing writes (5xx) by view" gives the `view` of the failing requests (`tile`, `plugins`, `workflow_history`, `biblissima-create-resource`, ...). Read the web log for that period (`make -C deploy logs`, lines at ERROR with the request id). A database, Elasticsearch or Redis outage shows in `NotReady` or in the datastore alerts. A series seen for the first time counts from its second sample, so the first error on a view that never failed before may not raise this alert; the panel still shows it.
+
+### Remediation
+
+Fix the cause the log names. Tell the curators whose save failed to repeat it and check the record afterwards: a write that died halfway can leave a resource without its cards.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

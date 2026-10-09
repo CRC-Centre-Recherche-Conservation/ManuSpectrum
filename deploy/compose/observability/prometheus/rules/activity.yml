@@ -1,0 +1,97 @@
+# Recording rules of the activity figures: consultations by kind.
+# One rule per kind maps route names (the `view` label of django-prometheus) to a closed
+# vocabulary; GET answers 2xx or 304 only. Robots are counted. `manuspectrum:consultations:total`
+# keeps job and instance so that it stays a counter per target; the dashboards and the monthly
+# report read `sum by (kind) (increase(manuspectrum:consultations:total[...]))`.
+# tests/test_rules_contract.py checks that every route of urls.py is mapped or ignored.
+groups:
+  - name: activity
+    rules:
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"root|home"})
+        labels:
+          kind: home
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"about-model|about-explorer|about-team|about-contact"})
+        labels:
+          kind: about
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"analysis-explorer"})
+        labels:
+          kind: explorer_open
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-search"})
+        labels:
+          kind: explorer_search
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-document"})
+        labels:
+          kind: explorer_document
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-analysis"})
+        labels:
+          kind: explorer_analysis
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-synthesis"})
+        labels:
+          kind: explorer_compare
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-series-csv|iiif-data-series"})
+        labels:
+          kind: export_csv
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-export"})
+        labels:
+          kind: export_zip
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"iiif-v3-explorer-manifest"})
+        labels:
+          kind: export_manifest
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-share"})
+        labels:
+          kind: share
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"resource_report"})
+        labels:
+          kind: resource_report
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"api-summary|api-summary-batch"})
+        labels:
+          kind: resource_summary
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"search_results"})
+        labels:
+          kind: search
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"iiif-v2-annotation-collection|iiif-v3-annotation-collection|iiif-v2-annotation|iiif-v3-annotation|iiif-v2-annotation-zone|iiif-v3-annotation-zone|iiif-v2-annotation-page|iiif-v3-annotation-page|iiif-v2-characterization-collection|iiif-v3-characterization-collection|iiif-v2-characterization-page|iiif-v3-characterization-page|iiif-v3-content-state"})
+        labels:
+          kind: iiif_annotations
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"manifest"})
+        labels:
+          kind: iiif_manifest
+      - record: manuspectrum:consultations:total
+        expr: |
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"file_access|download_files|iiif-data-raw"})
+        labels:
+          kind: file_download
+      - record: manuspectrum:consultations:rate1h
+        expr: |
+          sum by (kind) (rate(manuspectrum:consultations:total[1h]))

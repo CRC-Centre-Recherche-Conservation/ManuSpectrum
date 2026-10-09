@@ -35,6 +35,7 @@ from test_rules_contract import (
 
 COMPOSE_DIR = Path(__file__).resolve().parents[1]
 GRAFANA_DIR = COMPOSE_DIR / "observability" / "grafana"
+RULES_DIR = COMPOSE_DIR / "observability" / "prometheus" / "rules"
 DASHBOARDS_DIR = GRAFANA_DIR / "dashboards"
 PROVISIONING_DIR = GRAFANA_DIR / "provisioning"
 ALERT_TEMPLATE = (
@@ -46,6 +47,7 @@ EXPECTED_DASHBOARDS = {
     "ms-application": "ManuSpectrum - Application",
     "ms-infrastructure": "ManuSpectrum - Infrastructure",
     "ms-storage": "ManuSpectrum - Storage and backups",
+    "ms-activity": "ManuSpectrum - Activity",
 }
 
 # Series the dashboards read that no rule reads.
@@ -76,9 +78,16 @@ DASHBOARD_METRICS = {
 DISK_TARGETS = {"media", "restic", "dumps", "nginx_logs"}
 
 
+def recorded_metrics():
+    """Names recorded by prometheus/rules/activity.yml."""
+    text = (RULES_DIR / "activity.yml").read_text("utf-8")
+    return set(re.findall(r"^\s*- record: (\S+)$", text, re.M))
+
+
 def known_metrics():
     return (
-        registry_metrics()
+        recorded_metrics()
+        | registry_metrics()
         | textfile_metrics()
         | HOST_METRICS
         | EXPORTER_METRICS
@@ -113,7 +122,7 @@ class DashboardFileTests(unittest.TestCase):
     def by_uid(self):
         return {d["uid"]: d for d in self.dashboards.values()}
 
-    def test_the_four_dashboards_exist_with_stable_uids_and_titles(self):
+    def test_the_dashboards_exist_with_stable_uids_and_titles(self):
         self.assertEqual(
             {d["uid"]: d["title"] for d in self.dashboards.values()},
             EXPECTED_DASHBOARDS,
@@ -221,6 +230,42 @@ class DashboardFileTests(unittest.TestCase):
         panels = {p["title"]: p for p in walk_panels(self.by_uid()["ms-application"])}
         self.assertEqual(panels["Active accounts, last 30 days"]["timeFrom"], "30d")
         self.assertEqual(panels["Active accounts"]["options"]["graphMode"], "none")
+
+    def test_the_activity_dashboard_inventory(self):
+        panels = {
+            p["title"]: p
+            for p in walk_panels(self.by_uid()["ms-activity"])
+            if p.get("targets")
+        }
+        text = "\n".join(e for _, e in exprs(self.by_uid()["ms-activity"]))
+        for series in (
+            "manuspectrum:consultations:total",
+            "manuspectrum:consultations:rate1h",
+            "manuspectrum_explorer_export_bytes_count",
+            "manuspectrum_explorer_export_bytes_sum",
+            "manuspectrum_auth_logins_total",
+            "manuspectrum_biblissima_created_items_total",
+            "manuspectrum_resources",
+            "manuspectrum_resource_changes",
+            "manuspectrum_workflows",
+            "manuspectrum_activity_timestamp_seconds",
+            'view="transaction_reverse"',
+        ):
+            with self.subTest(series=series):
+                self.assertIn(series, text)
+        self.assertEqual(
+            panels["Consultations per day by kind"]["targets"][0]["interval"], "1d"
+        )
+        for title in ("Failing writes (5xx) by view", "Refused writes (4xx) by view"):
+            with self.subTest(panel=title):
+                (target,) = panels[title]["targets"]
+                self.assertIn('method=~"POST|PUT|DELETE"', target["expr"])
+                self.assertIn("sum by (view)", target["expr"])
+
+    def test_the_activity_dashboard_counts_nobody(self):
+        text = json.dumps(self.by_uid()["ms-activity"])
+        for word in ("user", "email", "resource_id", "ip"):
+            self.assertNotRegex(text, r'\b%s\b="' % word)
 
     def test_container_panels_use_the_container_label(self):
         for dashboard in self.dashboards.values():
@@ -430,7 +475,7 @@ class ProvisioningTests(unittest.TestCase):
     "set GRAFANA_E2E=1 (starts the pinned Grafana image)",
 )
 class GrafanaLoadsTheFilesTests(unittest.TestCase):
-    def test_grafana_serves_the_four_dashboards(self):
+    def test_grafana_serves_the_dashboards(self):
         compose = yaml.safe_load((COMPOSE_DIR / "compose.yaml").read_text("utf-8"))
         image = compose["services"]["grafana"]["image"]
         environment = dict(compose["services"]["grafana"]["environment"])
