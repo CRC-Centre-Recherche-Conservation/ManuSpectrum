@@ -37,6 +37,7 @@ BASE_ENV = {
     "CANTALOUPE_HOST": "cantaloupe",
     "CANTALOUPE_PORT": "8182",
     "CONTACT_EMAIL": "contact@manuspectrum.test",
+    "DEFAULT_FROM_EMAIL": "noreply@manuspectrum.test",
     "EMAIL_HOST": "smtp.manuspectrum.test",
     "EMAIL_PORT": "25",
 }
@@ -75,6 +76,7 @@ NAMES = [
     "CANTALOUPE_INTERNAL_ENDPOINT",
     "CONTACT_EMAIL",
     "DEFAULT_FROM_EMAIL",
+    "SERVER_EMAIL",
     "EMAIL_HOST",
     "EMAIL_PORT",
     "EMAIL_USE_TLS",
@@ -357,7 +359,18 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertEqual(
             (values["EMAIL_HOST_USER"], values["EMAIL_HOST_PASSWORD"]), ("", "")
         )
-        self.assertEqual(values["DEFAULT_FROM_EMAIL"], "contact@manuspectrum.test")
+        self.assertEqual(values["DEFAULT_FROM_EMAIL"], "noreply@manuspectrum.test")
+        self.assertEqual(values["SERVER_EMAIL"], "noreply@manuspectrum.test")
+
+    def test_sender_never_falls_back_to_the_contact_address(self):
+        for value in (None, "", "   "):
+            with self.subTest(value=value):
+                env = dict(BASE_ENV)
+                if value is None:
+                    del env["DEFAULT_FROM_EMAIL"]
+                else:
+                    env["DEFAULT_FROM_EMAIL"] = value
+                self.assertRefused(env, "DEFAULT_FROM_EMAIL")
 
     def test_booleans_are_parsed_strictly(self):
         self.assertIs(load(dict(BASE_ENV, EMAIL_USE_TLS="true"))["EMAIL_USE_TLS"], True)
