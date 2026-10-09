@@ -59,10 +59,10 @@ describe("PlaceList", () => {
             "Paris",
         ]);
         expect(rows[2].attributes("aria-label")).toBe(
-            "Paris — 9 documents, 14 Composants",
+            "Paris — 9 documents, 14 Components",
         );
         expect(rows[1].attributes("aria-label")).toBe(
-            "Évreux — 1 document, 1 Composant",
+            "Évreux — 1 document, 1 Component",
         );
         expect(rows[2].find(".counts").text()).toBe("9 · 14");
         expect(rows[0].classes()).toContain("attributed");

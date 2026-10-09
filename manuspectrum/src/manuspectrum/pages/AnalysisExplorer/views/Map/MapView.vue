@@ -466,7 +466,7 @@ function countsText(
             { n: documents },
         ),
         components: interpolate(
-            $ngettext("%{n} Composant", "%{n} Composants", components),
+            $ngettext("%{n} Component", "%{n} Components", components),
             { n: components },
         ),
         analyses: interpolate(
@@ -816,7 +816,7 @@ function skipToTimeline(): void {
                     <p class="rail-note">
                         <span>{{
                             $gettext(
-                                "+ the Corpus filters (Composant, technique, place…)",
+                                "+ the Corpus filters (Component, technique, place…)",
                             )
                         }}</span>
                     </p>

@@ -10,7 +10,7 @@ import type { PlaceSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/M
 
 /**
  * The text equivalent of the map: one button per mapped place, by folded
- * name, named « Paris — 9 documents, 14 Composants »; an attributed place
+ * name, named « Paris — 9 documents, 14 Components »; an attributed place
  * (an area, or reached through its parent) is in italics. The selected one
  * is `aria-current`. Under the list, the events without a mapped place
  * open their own panel. Folds into « Places (n) » with its counts; `open`
@@ -86,7 +86,7 @@ function nameOf(summary: PlaceSummary): string {
                 true,
             ),
             components: interpolate(
-                $ngettext("%{n} Composant", "%{n} Composants", components),
+                $ngettext("%{n} Component", "%{n} Components", components),
                 { n: components },
                 true,
             ),

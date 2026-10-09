@@ -180,7 +180,7 @@ describe("MapPanel", () => {
         const wrapper = mountPanel();
         expect(wrapper.find("h2").text()).toBe("Paris");
         expect(wrapper.find(".counts-line").text()).toBe(
-            "2 documents · 2 Composants · 4 analyses",
+            "2 documents · 2 Components · 4 analyses",
         );
         const links = wrapper.findAll("a.authority");
         expect(links.map((link) => link.attributes("href"))).toEqual([
@@ -205,7 +205,7 @@ describe("MapPanel", () => {
         expect(wrapper.findAll("a.authority")).toHaveLength(0);
     });
 
-    it("groups by document name, the document itself first, then each Composant", () => {
+    it("groups by document name, the document itself first, then each Component", () => {
         const wrapper = mountPanel();
         const documents = wrapper.findAll(".panel-document");
         expect(documents.map((d) => d.find("h4 .group-title").text())).toEqual([

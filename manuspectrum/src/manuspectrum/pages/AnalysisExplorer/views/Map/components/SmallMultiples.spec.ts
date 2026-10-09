@@ -122,7 +122,7 @@ describe("SmallMultiples", () => {
         const wrapper = mountMultiples({ maps: [map] });
         const button = wrapper.find("figure button");
         expect(button.attributes("aria-label")).toBe(
-            "Open Material 1: 1 place, 1 Composant",
+            "Open Material 1: 1 place, 1 Component",
         );
         await button.trigger("click");
         expect(wrapper.emitted("open")).toEqual([[map]]);

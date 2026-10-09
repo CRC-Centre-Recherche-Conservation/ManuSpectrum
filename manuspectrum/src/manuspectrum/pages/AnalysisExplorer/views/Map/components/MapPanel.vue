@@ -88,7 +88,7 @@ const OWN = "own";
  * « Attributed place » for an area or a place reached through its parent,
  * its GeoNames and Wikidata records); then the materials attested here,
  * followed first, a sentence for each followed material absent here, and
- * the analyses by document and Composant with the Selection's select-all,
+ * the analyses by document and Component with the Selection's select-all,
  * capacity notice and bulk line. The heading takes the focus when the panel
  * opens or changes subject; Escape and « Close » emit `close`.
  */
@@ -266,8 +266,8 @@ const countsLine = computed(() =>
             ),
             components: interpolate(
                 $ngettext(
-                    "%{n} Composant",
-                    "%{n} Composants",
+                    "%{n} Component",
+                    "%{n} Components",
                     content.value.components,
                 ),
                 { n: content.value.components },
@@ -493,7 +493,7 @@ function selectName(subject: string): string {
     );
 }
 
-/** Whether `event` is a production whose Composant (or document) has no modification in this panel. */
+/** Whether `event` is a production whose Component (or document) has no modification in this panel. */
 function placedOnProduction(event: MapEvent): boolean {
     if (event.type !== "production" || event.materials.length === 0) {
         return false;

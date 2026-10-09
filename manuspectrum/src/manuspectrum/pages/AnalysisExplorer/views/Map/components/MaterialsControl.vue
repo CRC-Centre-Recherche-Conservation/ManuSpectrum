@@ -121,7 +121,7 @@ function countsText(documents: number, components: number): string {
 
 function countsName(documents: number, components: number): string {
     return interpolate(
-        $gettext("%{documents} documents, %{components} Composants"),
+        $gettext("%{documents} documents, %{components} Components"),
         { documents, components },
         true,
     );
@@ -462,7 +462,7 @@ function onSearch(text: string | undefined): void {
                     aria-hidden="true"
                 >
                     <span>{{
-                        $gettext("counts: documents · Composants")
+                        $gettext("counts: documents · Components")
                     }}</span>
                 </p>
             </section>

@@ -124,7 +124,7 @@ function openName(map: MiniMap): string {
                 true,
             ),
             components: interpolate(
-                $ngettext("%{n} Composant", "%{n} Composants", map.components),
+                $ngettext("%{n} Component", "%{n} Components", map.components),
                 { n: map.components },
                 true,
             ),
@@ -215,7 +215,7 @@ function go(next: number): void {
                             :width="WIDTH"
                             :height="HEIGHT"
                         />
-                        <template v-else>
+                        <g v-else>
                             <rect
                                 class="land"
                                 :width="WIDTH"
@@ -228,12 +228,12 @@ function go(next: number): void {
                                 :width="WIDTH - 2"
                                 :height="HEIGHT - 2"
                             />
-                        </template>
-                        <template
+                        </g>
+                        <g
                             v-for="entry in map.dots"
                             :key="entry.id"
                         >
-                            <template v-if="byCenturyPips(map, entry)">
+                            <g v-if="byCenturyPips(map, entry)">
                                 <circle
                                     v-for="pip in pipsOf(entry)"
                                     :key="pip.slot"
@@ -243,7 +243,7 @@ function go(next: number): void {
                                     :r="PIP_RADIUS"
                                     :style="{ '--h': focusHue(pip.slot) }"
                                 />
-                            </template>
+                            </g>
                             <circle
                                 v-else
                                 class="dot"
@@ -253,7 +253,7 @@ function go(next: number): void {
                                 :r="radiusOf(entry)"
                                 :style="dotStyle(map)"
                             />
-                        </template>
+                        </g>
                     </svg>
                 </button>
                 <figcaption>
