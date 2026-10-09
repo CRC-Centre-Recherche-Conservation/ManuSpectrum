@@ -7,7 +7,8 @@ Usage:
 import csv
 import json
 
-from tests.explorer_events_fixtures import EventsCase
+from tests.explorer_events_fixtures import VERMILION, EventsCase
+from tests.test_explorer_service import RED
 
 from manuspectrum.views.explorer.events_export import HEADER
 
@@ -100,3 +101,33 @@ class EventsExportTests(EventsCase):
             b"territor",
             self.client.get("/api/explorer/events.geojson?lang=en").content.lower(),
         )
+
+
+class EventsExportColourTests(EventsCase):
+    csv = EventsExportTests.csv
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tile(
+            cls.materials["vermilion"],
+            "color_aspect",
+            cls.reference_value(RED, "Red", "Rouge"),
+        )
+
+    def test_the_csv_column_carries_the_colour_labels_and_the_geojson_their_uris(self):
+        _, rows = self.csv("&eventType=alteration")
+        [row] = [r for r in rows if r["material"] == VERMILION]
+        self.assertEqual(row["material_colours"], "Red")
+        body = json.loads(
+            self.client.get(
+                "/api/explorer/events.geojson?lang=en&eventType=alteration"
+            ).content
+        )
+        [material] = [
+            m
+            for f in body["features"]
+            for m in f["properties"]["materials"]
+            if m["id"] == VERMILION
+        ]
+        self.assertEqual(material["colours"], [RED])

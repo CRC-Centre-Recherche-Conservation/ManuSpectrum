@@ -29,7 +29,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 from manuspectrum.utils.public_visibility import readable_nodegroup_ids
-from manuspectrum.views.explorer.material_families import families_of
 from manuspectrum.views.explorer.places import (
     authorities_of,
     derived_only,
@@ -595,17 +594,22 @@ def build_events(
                 "colour", ()
             ):
                 colours[m["id"]][colour] += 1
-    family = families_of(labels)
+
+    def colours_of(uri):
+        return [
+            colour
+            for colour, _ in sorted(
+                colours[uri].items(),
+                key=lambda kv: (
+                    -kv[1],
+                    colour_rank(kv[0]) if colour_rank(kv[0]) is not None else 999,
+                    kv[0],
+                ),
+            )
+        ]
 
     def swatch_of(uri):
-        for colour, _ in sorted(
-            colours[uri].items(),
-            key=lambda kv: (
-                -kv[1],
-                colour_rank(kv[0]) if colour_rank(kv[0]) is not None else 999,
-                kv[0],
-            ),
-        ):
+        for colour in colours_of(uri):
             if swatches.get(colour):
                 return swatches[colour]
         return None
@@ -614,7 +618,7 @@ def build_events(
         uri: {
             "uri": uri,
             "label": labels[uri],
-            "family": family.get(uri, "other"),
+            "colours": colours_of(uri),
             "swatch": swatch_of(uri),
         }
         for uri in sorted(labels)
@@ -715,6 +719,9 @@ def events_payload(query, user, language, ticket=None):
     events, keep, filters = kept_events(bundle, query)
     places = place_subset(bundle.event_places, {e["place"] for e in events})
     event = filters["periodEvent"]
+    materials = {
+        m["id"]: bundle.event_materials[m["id"]] for e in events for m in e["materials"]
+    }
     return {
         "events": events,
         "places": places,
@@ -722,13 +729,14 @@ def events_payload(query, user, language, ticket=None):
             1 for e in events if not e["place"] or places[e["place"]]["lngLat"] is None
         ),
         "period": period_facet(bundle.rows, keep, event, bundle.period_bounds[event]),
-        "materials": {
-            m["id"]: bundle.event_materials[m["id"]]
-            for e in events
-            for m in e["materials"]
-        },
+        "materials": materials,
         "analysisNames": {
             a: bundle.by_id[a]["name"] for e in events for a in e["analyses"]
+        },
+        "colours": {
+            colour: bundle.event_colours[colour]
+            for m in materials.values()
+            for colour in m["colours"]
         },
         "certaintyScale": bundle.certainty,
     }

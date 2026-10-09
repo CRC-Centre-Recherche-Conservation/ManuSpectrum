@@ -962,7 +962,8 @@ class CorpusBundle:
     bool}``; ``period_bounds`` holds per event the ``(min start, max end)``
     years of the dated rows, or None. ``events`` are the map's events
     (``events.build_events``), ``event_places`` the ``MapPlace`` of their
-    places and ancestors, ``event_materials`` the ``MapMaterial`` by uri,
+    places and ancestors, ``event_materials`` the ``MapMaterial`` by uri, ``event_colours`` the
+    ``MapColour`` of every colour they use,
     ``material_terms`` the folded labels (preferred and alternative) of each
     material uri, ``histories`` the ``HistoryLine`` tuple of each document,
     ``certainty`` the ``certainty_scale``.
@@ -990,6 +991,7 @@ class CorpusBundle:
     events: tuple = ()
     event_places: dict = None
     event_materials: dict = None
+    event_colours: dict = None
     material_terms: dict = None
     histories: dict = None
     certainty: dict = None
@@ -1085,6 +1087,16 @@ def build_bundle(user, language, visible):
         linked,
         swatches,
     )
+    labels = _with_colour_labels(_facet_labels(rows, language, user), colour_labels)
+    event_colours = {
+        colour: {
+            "uri": colour,
+            "label": labels["colour"].get(colour, {"value": colour, "lang": language}),
+            "swatch": swatches.get(colour),
+        }
+        for material in event_set.materials.values()
+        for colour in material["colours"]
+    }
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -1093,7 +1105,7 @@ def build_bundle(user, language, visible):
         by_id={row["id"]: row for row in rows},
         by_document=dict(by_document),
         universe=facet_universe(rows),
-        labels=_with_colour_labels(_facet_labels(rows, language, user), colour_labels),
+        labels=labels,
         marks={
             row["technique"]["uri"]: {
                 k: row["technique"][k] for k in ("code", "colour", "family")
@@ -1124,6 +1136,7 @@ def build_bundle(user, language, visible):
         events=event_set.events,
         event_places=event_set.places,
         event_materials=event_set.materials,
+        event_colours=event_colours,
         material_terms=event_set.material_terms,
         histories=event_set.histories,
         certainty=certainty_scale(language),

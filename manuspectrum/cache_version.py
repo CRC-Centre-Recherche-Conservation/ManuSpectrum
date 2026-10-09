@@ -35,9 +35,8 @@ CACHE_SHAPE_MODULES = (
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "views/explorer/swatches.py",
-    # The map's events, their places and material families, stored in the bundle.
+    # The map's events, their places, materials and colours, stored in the bundle.
     "views/explorer/events.py",
-    "views/explorer/material_families.py",
     "views/explorer/places.py",
     "utils/role_links.py",
     "utils/roles.py",

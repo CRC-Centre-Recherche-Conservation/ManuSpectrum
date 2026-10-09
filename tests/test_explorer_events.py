@@ -12,7 +12,7 @@ from tests.explorer_events_fixtures import (
     VERMILION,
     EventsCase,
 )
-from tests.test_explorer_service import AZURITE
+from tests.test_explorer_service import AZURITE, GREEN, RED
 
 
 class EventsTests(EventsCase):
@@ -194,7 +194,7 @@ class EventsTests(EventsCase):
 
     def test_materials_info_and_terms(self):
         bundle = self.bundle()
-        self.assertEqual(bundle.event_materials[VERMILION]["family"], "other")
+        self.assertEqual(bundle.event_materials[VERMILION]["colours"], [])
         self.assertIn("cinnabar", bundle.material_terms[VERMILION])
         self.assertEqual(
             bundle.event_materials[VERMILION]["label"]["value"], "Vermilion"
@@ -221,3 +221,52 @@ class BoundsMeetTests(EventsCase):
         self.assertFalse(bounds_meet((1380, 1430), within))
         self.assertFalse(bounds_meet(None, within))
         self.assertTrue(bounds_meet(None, undated))
+
+
+class MaterialColourTests(EventsCase):
+    """Vermilion is cited by three alterations whose characterizations are red, red and green."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref = cls.reference_value
+        cls.tile(cls.materials["vermilion"], "color_aspect", ref(RED, "Red", "Rouge"))
+        for colour, label in ((RED, "Red"), (GREEN, "Green")):
+            found = cls.characterized(
+                f"Vermilion, {label}",
+                cls.components["open"],
+                cls.analyses["open"],
+                VERMILION,
+                LOW,
+            )
+            cls.tile(found, "color_aspect", ref(colour, label, label))
+            alteration = cls.new_resource("alteration", f"Fading {label}")
+            cls.tile(alteration, "object_altered", cls.refs(cls.documents["open"]))
+            cls.tile_values(
+                alteration,
+                "alteration",
+                alteration_process_start_date="1650-01-01",
+                alteration_process_end_date="1660-12-31",
+            )
+            cls.tile(
+                alteration,
+                "occured_in_presence_of_material",
+                ref(VERMILION, "Vermilion"),
+            )
+
+    def test_a_material_lists_its_observed_colours_most_cited_first(self):
+        material = self.bundle().event_materials[VERMILION]
+        self.assertEqual(material["colours"], [RED, GREEN])
+
+    def test_a_material_without_colour_has_none(self):
+        self.assertEqual(self.bundle().event_materials[LEAD_WHITE]["colours"], [])
+
+    def test_the_colour_map_holds_the_colours_the_materials_use_with_label_and_swatch(
+        self,
+    ):
+        bundle = self.bundle()
+        used = {c for m in bundle.event_materials.values() for c in m["colours"]}
+        self.assertEqual(set(bundle.event_colours), used)
+        self.assertEqual(bundle.event_colours[RED]["label"]["value"], "Red")
+        self.assertEqual(bundle.event_colours[RED]["uri"], RED)
+        self.assertIn("swatch", bundle.event_colours[RED])

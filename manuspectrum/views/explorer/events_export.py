@@ -51,7 +51,7 @@ HEADER = (
     "approximate",
     "material",
     "material_name",
-    "material_family",
+    "material_colours",
     "reliability",
     "characterization",
     "analyses",
@@ -115,9 +115,10 @@ def _levels(bundle):
 
 def csv_lines(language, bundle, events, query_text):
     """The CSV body: comment lines (title, day, filters, citation, reading of the fields), the header, then the rows."""
-    places, materials, levels = (
+    places, materials, colours, levels = (
         bundle.event_places,
         bundle.event_materials,
+        bundle.event_colours,
         _levels(bundle),
     )
     writer = csv.writer(_Line(), lineterminator="\r\n")
@@ -169,7 +170,14 @@ def csv_lines(language, bundle, events, query_text):
                 [
                     material["id"],
                     neutralise(material["name"]["value"]),
-                    materials.get(material["id"], {}).get("family", ""),
+                    neutralise(
+                        "; ".join(
+                            colours[c]["label"]["value"]
+                            for c in materials.get(material["id"], {}).get(
+                                "colours", []
+                            )
+                        )
+                    ),
                     neutralise(levels.get(material["reliability"], "")),
                     material["characterization"],
                 ]
@@ -223,7 +231,7 @@ def geojson_body(language, bundle, events, query_text):
                     "materials": [
                         {
                             **m,
-                            "family": materials.get(m["id"], {}).get("family"),
+                            "colours": materials.get(m["id"], {}).get("colours", []),
                             "reliabilityLabel": levels.get(m["reliability"]),
                         }
                         for m in event["materials"]

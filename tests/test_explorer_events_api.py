@@ -39,6 +39,12 @@ class EventsRouteTests(EventsCase):
             assert_shape(self, place, "MapPlace")
         for material in payload["materials"].values():
             assert_shape(self, material, "MapMaterial")
+        for colour in payload["colours"].values():
+            assert_shape(self, colour, "MapColour")
+        self.assertEqual(
+            set(payload["colours"]),
+            {c for m in payload["materials"].values() for c in m["colours"]},
+        )
         self.assertEqual(
             set(payload["analysisNames"]),
             {a for e in payload["events"] for a in e["analyses"]},
