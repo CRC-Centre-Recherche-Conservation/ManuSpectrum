@@ -1,0 +1,113 @@
+rule_files:
+  - ../rules/containers.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: more than 3 restarts in an hour fires, 3 does not
+  interval: 5m
+  input_series:
+  - series: manuspectrum_container_restarts{container="worker"}
+    values: 0 0 1 2 3 4 4 4 4 4 4 4 4 4
+  - series: manuspectrum_container_restarts{container="beat"}
+    values: 0 0 1 1 2 2 3 3 3 3 3 3 3 3
+  promql_expr_test:
+  - expr: ALERTS{alertname="ContainerRestartLoop", alertstate="firing"}
+    eval_time: 65m
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerRestartLoop", alertstate="firing", container="worker", service="containers", severity="warning"}
+      value: 1
+- name: an oom kill fires and clears after 15 minutes
+  interval: 1m
+  input_series:
+  - series: manuspectrum_container_oom_kills{container="web"}
+    values: 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+  promql_expr_test:
+  - expr: ALERTS{alertname="ContainerOOMKilled", alertstate="firing"}
+    eval_time: 2m
+    exp_samples: []
+  - expr: ALERTS{alertname="ContainerOOMKilled", alertstate="firing"}
+    eval_time: 5m
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerOOMKilled", alertstate="firing", container="web", service="containers", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ContainerOOMKilled", alertstate="firing"}
+    eval_time: 21m
+    exp_samples: []
+- name: web warns at 80 percent, others only at 90 percent
+  interval: 1m
+  input_series:
+  - series: manuspectrum_container_memory_limit_bytes{container="web"}
+    values: 1000x60
+  - series: manuspectrum_container_memory_working_set_bytes{container="web"}
+    values: 850x60
+  - series: manuspectrum_container_memory_limit_bytes{container="worker"}
+    values: 1000x60
+  - series: manuspectrum_container_memory_working_set_bytes{container="worker"}
+    values: 850x60
+  - series: manuspectrum_container_memory_limit_bytes{container="postgres"}
+    values: 1000x60
+  - series: manuspectrum_container_memory_working_set_bytes{container="postgres"}
+    values: 950x60
+  - series: manuspectrum_container_memory_limit_bytes{container="cantaloupe"}
+    values: '0x60'
+  - series: manuspectrum_container_memory_working_set_bytes{container="cantaloupe"}
+    values: 950x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="WebMemoryNearLimit", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []
+  - expr: ALERTS{alertname="WebMemoryNearLimit", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="WebMemoryNearLimit", alertstate="firing", container="web", service="containers", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ContainerMemoryNearLimit", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerMemoryNearLimit", alertstate="firing", container="postgres", service="containers", severity="warning"}
+      value: 1
+- name: an unhealthy container warns after 10 minutes
+  interval: 1m
+  input_series:
+  - series: manuspectrum_container_healthy{container="web"}
+    values: 1 0x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="ContainerUnhealthy", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="ContainerUnhealthy", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerUnhealthy", alertstate="firing", container="web", service="containers", severity="warning"}
+      value: 1
+- name: a core container that disappears warns, all nine up does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_container_up{container="postgres"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="elasticsearch"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="redis-broker"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="redis-cache"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="cantaloupe"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="web"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="worker"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="beat"}
+    values: 1x40
+  - series: manuspectrum_container_up{container="nginx"}
+    values: 1x10 0x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="ContainerMissing", alertstate="firing"}
+    eval_time: 9m
+    exp_samples: []
+  - expr: ALERTS{alertname="ContainerMissing", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerMissing", alertstate="firing", service="containers", severity="warning"}
+      value: 1

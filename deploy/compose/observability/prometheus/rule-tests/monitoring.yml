@@ -1,0 +1,57 @@
+rule_files:
+  - ../rules/monitoring.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: the watchdog always fires
+  interval: 1m
+  input_series:
+  - series: up{job="prometheus"}
+    values: 1x10
+  promql_expr_test:
+  - expr: ALERTS{alertname="Watchdog", alertstate="firing"}
+    eval_time: 1m
+    exp_samples:
+    - labels: ALERTS{alertname="Watchdog", alertstate="firing", service="monitoring", severity="none"}
+      value: 1
+  - expr: ALERTS{alertname="Watchdog", alertstate="firing"}
+    eval_time: 9m
+    exp_samples:
+    - labels: ALERTS{alertname="Watchdog", alertstate="firing", service="monitoring", severity="none"}
+      value: 1
+- name: a target down for 5 minutes warns
+  interval: 1m
+  input_series:
+  - series: up{job="node", instance="node-exporter:9100"}
+    values: 1x3 0x20
+  promql_expr_test:
+  - expr: ALERTS{alertname="TargetDown", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="TargetDown", alertstate="firing"}
+    eval_time: 12m
+    exp_samples:
+    - labels: ALERTS{alertname="TargetDown", alertstate="firing", instance="node-exporter:9100", job="node", service="monitoring", severity="warning"}
+      value: 1
+- name: stale collectors and textfile errors warn
+  interval: 1m
+  input_series:
+  - series: manuspectrum_container_metrics_last_run_timestamp_seconds
+    values: '0x30'
+  - series: node_textfile_scrape_error
+    values: 1x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="HostMetricsStale", alertstate="firing"}
+    eval_time: 3m
+    exp_samples: []
+  - expr: ALERTS{alertname="HostMetricsStale", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="HostMetricsStale", alertstate="firing", service="monitoring", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="TextfileError", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="TextfileError", alertstate="firing", service="monitoring", severity="warning"}
+      value: 1

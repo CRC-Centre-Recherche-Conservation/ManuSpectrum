@@ -1,0 +1,101 @@
+rule_files:
+  - ../rules/site.yml
+  - ../rules/application.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: 2 percent of 5xx with traffic fires
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET"}
+    values: 0+60x40
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET"}
+    values: 0+1.5x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 4m
+    exp_samples: []
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="ErrorRateHigh", alertstate="firing", service="site", severity="critical"}
+      value: 1
+- name: one failure in three requests is silent below the traffic guard
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET"}
+    values: 0+0.2x40
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET"}
+    values: 0+0.1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+- name: probe views never count as errors
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET"}
+    values: 0+60x40
+  - series: django_http_responses_total_by_status_view_method_total{status="503", view="readyz", method="GET"}
+    values: 0+30x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+- name: probes that fail for 5 minutes are critical
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-edge", instance="https://manuspectrum.test/healthz"}
+    values: 1x5 0x30
+  - series: probe_success{job="blackbox-readyz", instance="http://web:8000/readyz"}
+    values: 1x40
+  - series: probe_success{job="blackbox-cantaloupe", instance="http://cantaloupe:8182/iiif/3"}
+    values: 1x5 0x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="SiteDown", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname="SiteDown", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="SiteDown", alertstate="firing", instance="https://manuspectrum.test/healthz", job="blackbox-edge", service="site", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="CantaloupeDown", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="CantaloupeDown", alertstate="firing", instance="http://cantaloupe:8182/iiif/3", job="blackbox-cantaloupe", service="site", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="NotReady", alertstate="firing"}
+    eval_time: 15m
+    exp_samples: []
+- name: the multiprocess directory alert fires above 45 MB
+  interval: 1m
+  input_series:
+  - series: manuspectrum_metrics_dir_bytes{job="web"}
+    values: 30000000x5 46000000x30
+  - series: manuspectrum_metrics_dir_bytes{job="worker"}
+    values: 1000000x35
+  promql_expr_test:
+  - expr: ALERTS{alertname="MetricsDirFilling", alertstate="firing"}
+    eval_time: 12m
+    exp_samples: []
+  - expr: ALERTS{alertname="MetricsDirFilling", alertstate="firing"}
+    eval_time: 25m
+    exp_samples:
+    - labels: ALERTS{alertname="MetricsDirFilling", alertstate="firing", job="web", service="application", severity="warning"}
+      value: 1
+- name: web saturation needs 18 requests for 5 minutes
+  interval: 1m
+  input_series:
+  - series: manuspectrum_inflight_requests{job="web"}
+    values: 5x5 19x20
+  promql_expr_test:
+  - expr: ALERTS{alertname="WebSaturated", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname="WebSaturated", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="WebSaturated", alertstate="firing", service="application", severity="warning"}
+      value: 1

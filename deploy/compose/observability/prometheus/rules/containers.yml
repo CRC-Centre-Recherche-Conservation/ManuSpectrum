@@ -1,0 +1,71 @@
+# Alert rules of the monitoring stack: containers.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: containers
+    rules:
+      - alert: ContainerRestartLoop
+        expr: |
+          delta(manuspectrum_container_restarts[1h]) > 3
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A container restarts in a loop"
+          description: "{{ $labels.container }} restarted {{ $value }} times in the last hour."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containerrestartloop
+      - alert: ContainerOOMKilled
+        expr: |
+          increase(manuspectrum_container_oom_kills[15m]) > 0
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A container was killed for lack of memory"
+          description: "{{ $labels.container }} was killed by the kernel for exceeding its memory limit."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containeroomkilled
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          manuspectrum_container_memory_working_set_bytes{container!="web"}
+          / (manuspectrum_container_memory_limit_bytes{container!="web"} > 0) > 0.9
+        for: 30m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A container is close to its memory limit"
+          description: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its memory limit."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containermemorynearlimit
+      - alert: WebMemoryNearLimit
+        expr: |
+          manuspectrum_container_memory_working_set_bytes{container="web"}
+          / (manuspectrum_container_memory_limit_bytes{container="web"} > 0) > 0.8
+        for: 30m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "The web container is close to its memory limit"
+          description: "web uses {{ $value | humanizePercentage }} of its memory limit; each gunicorn worker holds the Explorer corpus."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#webmemorynearlimit
+      - alert: ContainerUnhealthy
+        expr: |
+          manuspectrum_container_healthy == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A container is unhealthy"
+          description: "{{ $labels.container }} fails its health check."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containerunhealthy
+      - alert: ContainerMissing
+        expr: |
+          (count(manuspectrum_container_up{container=~"postgres|elasticsearch|redis-broker|redis-cache|cantaloupe|web|worker|beat|nginx"} == 1) or vector(0)) < 9
+        for: 10m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A core container is not running"
+          description: "{{ $value }} of the 9 core containers run."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containermissing

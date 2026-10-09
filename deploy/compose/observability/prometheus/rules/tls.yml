@@ -1,0 +1,27 @@
+# Alert rules of the monitoring stack: tls.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: tls
+    rules:
+      - alert: CertificateExpiringSoon
+        expr: |
+          (probe_ssl_earliest_cert_expiry{job="blackbox-edge"} - time()) < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+          service: tls
+        annotations:
+          summary: "The TLS certificate expires within 14 days"
+          description: "The certificate served at {{ $labels.instance }} expires in {{ $value | humanizeDuration }}."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/tls.md#certificateexpiringsoon
+      - alert: CertificateExpiryCritical
+        expr: |
+          (probe_ssl_earliest_cert_expiry{job="blackbox-edge"} - time()) < 3 * 86400
+        for: 5m
+        labels:
+          severity: critical
+          service: tls
+        annotations:
+          summary: "The TLS certificate expires within 3 days"
+          description: "The certificate served at {{ $labels.instance }} expires in {{ $value | humanizeDuration }}."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/tls.md#certificateexpirycritical

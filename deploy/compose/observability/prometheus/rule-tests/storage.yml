@@ -1,0 +1,97 @@
+rule_files:
+  - ../rules/storage.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: usage of / and /data is judged separately
+  interval: 1m
+  input_series:
+  - series: node_filesystem_size_bytes{mountpoint="/", fstype="ext4"}
+    values: 1000x60
+  - series: node_filesystem_avail_bytes{mountpoint="/", fstype="ext4"}
+    values: 150x60
+  - series: node_filesystem_size_bytes{mountpoint="/data", fstype="nfs4"}
+    values: 1000x60
+  - series: node_filesystem_avail_bytes{mountpoint="/data", fstype="nfs4"}
+    values: 300x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="DiskUsageHigh", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []
+  - expr: ALERTS{alertname="DiskUsageHigh", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="DiskUsageHigh", alertstate="firing", fstype="ext4", mountpoint="/", service="storage", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="DiskAlmostFull", alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+- name: a /data above 95 percent is critical after 5 minutes
+  interval: 1m
+  input_series:
+  - series: node_filesystem_size_bytes{mountpoint="/data", fstype="nfs4"}
+    values: 1000x30
+  - series: node_filesystem_avail_bytes{mountpoint="/data", fstype="nfs4"}
+    values: 40x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="DiskAlmostFull", alertstate="firing"}
+    eval_time: 3m
+    exp_samples: []
+  - expr: ALERTS{alertname="DiskAlmostFull", alertstate="firing"}
+    eval_time: 10m
+    exp_samples:
+    - labels: ALERTS{alertname="DiskAlmostFull", alertstate="firing", fstype="nfs4", mountpoint="/data", service="storage", severity="critical"}
+      value: 1
+- name: tmpfs mounts are ignored
+  interval: 1m
+  input_series:
+  - series: node_filesystem_size_bytes{mountpoint="/", fstype="tmpfs"}
+    values: 1000x60
+  - series: node_filesystem_avail_bytes{mountpoint="/", fstype="tmpfs"}
+    values: 10x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="DiskUsageHigh", alertstate="firing"}
+    eval_time: 50m
+    exp_samples: []
+- name: a disk that empties in a day fires, a steady one does not
+  interval: 1m
+  input_series:
+  - series: node_filesystem_avail_bytes{mountpoint="/", fstype="ext4"}
+    values: 5000000000-3000000x800
+  - series: node_filesystem_avail_bytes{mountpoint="/data", fstype="nfs4"}
+    values: 1000000000x800
+  promql_expr_test:
+  - expr: ALERTS{alertname="DiskFillingUp", alertstate="firing"}
+    eval_time: 12h
+    exp_samples:
+    - labels: ALERTS{alertname="DiskFillingUp", alertstate="firing", fstype="ext4", mountpoint="/", service="storage", severity="warning"}
+      value: 1
+- name: a device error on /data fires
+  interval: 1m
+  input_series:
+  - series: node_filesystem_device_error{mountpoint="/data"}
+    values: 0x5 1x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="NfsUnavailable", alertstate="firing"}
+    eval_time: 4m
+    exp_samples: []
+  - expr: ALERTS{alertname="NfsUnavailable", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="NfsUnavailable", alertstate="firing", mountpoint="/data", service="storage", severity="critical"}
+      value: 1
+- name: /data missing from the filesystem list fires
+  interval: 1m
+  input_series:
+  - series: node_filesystem_device_error{mountpoint="/"}
+    values: '0x30'
+  promql_expr_test:
+  - expr: ALERTS{alertname="NfsUnavailable", alertstate="firing"}
+    eval_time: 3m
+    exp_samples: []
+  - expr: ALERTS{alertname="NfsUnavailable", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="NfsUnavailable", alertstate="firing", mountpoint="/data", service="storage", severity="critical"}
+      value: 1

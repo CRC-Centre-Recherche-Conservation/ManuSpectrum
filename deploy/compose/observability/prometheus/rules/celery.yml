@@ -1,0 +1,38 @@
+# Alert rules of the monitoring stack: celery.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: celery
+    rules:
+      - alert: CeleryQueueBacklog
+        expr: |
+          max(redis_key_size{key="celery"}) > 100
+        for: 30m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The Celery queue is backing up"
+          description: "{{ $value }} tasks wait in the broker queue."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#celeryqueuebacklog
+      - alert: CeleryTaskFailures
+        expr: |
+          sum by (task) (increase(manuspectrum_celery_tasks_total{outcome="failure"}[30m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "A Celery task fails"
+          description: "Task {{ $labels.task }} failed {{ $value | humanize }} times in 30 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#celerytaskfailures
+      - alert: IndexingFailures
+        expr: |
+          sum by (mode) (increase(manuspectrum_index_resources_total{outcome="failed"}[30m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "Search indexing fails"
+          description: "{{ $value | humanize }} indexing runs ({{ $labels.mode }}) failed in 30 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#indexingfailures

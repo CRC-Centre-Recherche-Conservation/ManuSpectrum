@@ -1,0 +1,30 @@
+# Alert rules of the monitoring stack: biblissima.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: biblissima
+    rules:
+      - alert: BiblissimaBusy
+        expr: |
+          (
+            (sum(rate(manuspectrum_biblissima_upstream_requests_total{outcome="busy"}[15m])) or vector(0))
+            / sum(rate(manuspectrum_biblissima_upstream_requests_total[15m]))
+          ) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+          service: biblissima
+        annotations:
+          summary: "Biblissima calls are refused as busy"
+          description: "{{ $value | humanizePercentage }} of the Biblissima calls in 15 minutes found no free concurrency slot."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/biblissima.md#biblissimabusy
+      - alert: WriteBudgetSpent
+        expr: |
+          sum(increase(manuspectrum_upstream_budget_spent_total{kind="write"}[30m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: biblissima
+        annotations:
+          summary: "A Biblissima write ran out of time"
+          description: "A create-from-Biblissima item spent its 60 s budget {{ $value | humanize }} times in 30 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/biblissima.md#writebudgetspent

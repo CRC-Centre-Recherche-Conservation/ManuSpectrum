@@ -1,0 +1,85 @@
+# Alert rules of the monitoring stack: monitoring.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: monitoring
+    rules:
+      - alert: TargetDown
+        expr: |
+          up == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "A scrape target is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#targetdown
+      - alert: HostMetricsStale
+        expr: |
+          time() - manuspectrum_container_metrics_last_run_timestamp_seconds > 300
+          or
+          absent(manuspectrum_container_metrics_last_run_timestamp_seconds)
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Container metrics are stale"
+          description: "The container metrics collector has not written for more than 5 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#hostmetricsstale
+      - alert: DiskUsageStale
+        expr: |
+          time() - manuspectrum_disk_usage_last_run_timestamp_seconds > 3 * 3600
+          or
+          absent(manuspectrum_disk_usage_last_run_timestamp_seconds)
+        for: 15m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Directory size metrics are stale"
+          description: "The hourly directory size measure has not run for more than 3 hours."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#diskusagestale
+      - alert: TextfileError
+        expr: |
+          node_textfile_scrape_error == 1
+        for: 15m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "node_exporter cannot read a textfile"
+          description: "A .prom file in the textfile directory is malformed or unreadable."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#textfileerror
+      - alert: AlertmanagerNotificationsFailing
+        expr: |
+          sum by (integration) (rate(alertmanager_notifications_failed_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Alert e-mails fail to send"
+          description: "Alertmanager fails to deliver notifications ({{ $labels.integration }})."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#alertmanagernotificationsfailing
+      - alert: PrometheusRuleFailures
+        expr: |
+          sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Prometheus fails to evaluate rules"
+          description: "Rule group {{ $labels.rule_group }} fails to evaluate."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#prometheusrulefailures
+      - alert: Watchdog
+        expr: |
+          vector(1)
+        labels:
+          severity: none
+          service: monitoring
+        annotations:
+          summary: "Heartbeat of the alert chain"
+          description: "Always firing. It proves that Prometheus evaluates rules and that Alertmanager receives alerts; it becomes the Monday 08:00 heartbeat e-mail."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#watchdog

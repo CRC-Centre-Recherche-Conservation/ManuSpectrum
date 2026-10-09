@@ -1,0 +1,61 @@
+rule_files:
+  - ../rules/host.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a boot is info for an hour and inhibits for 15 minutes
+  interval: 1m
+  input_series:
+  - series: node_boot_time_seconds
+    values: 0x10 1200x100
+  promql_expr_test:
+  - expr: ALERTS{alertname="HostRebooted", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="HostRebooted", alertstate="firing"}
+    eval_time: 11m
+    exp_samples:
+    - labels: ALERTS{alertname="HostRebooted", alertstate="firing", service="host", severity="info"}
+      value: 1
+  - expr: ALERTS{alertname="HostRebooted", alertstate="firing"}
+    eval_time: 80m
+    exp_samples: []
+  - expr: ALERTS{alertname="RecentlyRebooted", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="RecentlyRebooted", alertstate="firing", service="host", severity="none"}
+      value: 1
+  - expr: ALERTS{alertname="RecentlyRebooted", alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+- name: swap, memory pressure and an unsynchronised clock warn
+  interval: 1m
+  input_series:
+  - series: node_memory_SwapTotal_bytes
+    values: 4000000000x120
+  - series: node_memory_SwapFree_bytes
+    values: 3000000000x120
+  - series: node_pressure_memory_waiting_seconds_total
+    values: 0+12x120
+  - series: node_timex_sync_status
+    values: '0x120'
+  promql_expr_test:
+  - expr: ALERTS{alertname="SwapInUse", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []
+  - expr: ALERTS{alertname="SwapInUse", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="SwapInUse", alertstate="firing", service="host", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="MemoryPressure", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="MemoryPressure", alertstate="firing", service="host", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ClockNotSynchronised", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="ClockNotSynchronised", alertstate="firing", service="host", severity="warning"}
+      value: 1
