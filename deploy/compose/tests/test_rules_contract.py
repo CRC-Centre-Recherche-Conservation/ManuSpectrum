@@ -123,6 +123,10 @@ HOST_METRICS = {
     "manuspectrum_container_memory_limit_bytes",
     "manuspectrum_container_metrics_last_run_timestamp_seconds",
     "manuspectrum_disk_usage_last_run_timestamp_seconds",
+    "manuspectrum_container_oom_cgroup",
+    "manuspectrum_disk_usage_last_success_timestamp_seconds",
+    "manuspectrum_docker_disk_bytes",
+    "manuspectrum_docker_volume_bytes",
 }
 # Series of the exporters and of Prometheus itself that the rules may read.
 EXPORTER_METRICS = {
@@ -402,6 +406,52 @@ class RuleContractTests(unittest.TestCase):
         for name in ("DiskUsageHigh", "DiskAlmostFull", "DiskFillingUp"):
             with self.subTest(alert=name):
                 self.assertRegex(by_name[name], r'mountpoint=~"/\|/data"')
+
+    def test_event_warnings_keep_firing_until_the_next_working_window(self):
+        events = {
+            "ContainerOOMKilled",
+            "ContainerRestartLoop",
+            "CeleryTaskFailures",
+            "IndexingFailures",
+            "ExplorerRebuildFailing",
+            "WriteBudgetSpent",
+            "PrometheusRuleFailures",
+        }
+        by_name = {r["alert"]: r for _, r in self.alerts}
+        for name in events:
+            with self.subTest(alert=name):
+                keep = duration_seconds(by_name[name].get("keep_firing_for"))
+                # Friday 19:00 to Monday 08:00 is 61 hours.
+                self.assertGreaterEqual(keep, 61 * 3600)
+                self.assertLessEqual(keep, 96 * 3600)
+
+    def test_absent_based_alerts_wait_for_node_exporter(self):
+        for _, rule in self.alerts:
+            if "absent(" in rule["expr"]:
+                with self.subTest(alert=rule["alert"]):
+                    self.assertIn('up{job="node"} == 1', rule["expr"])
+
+    def test_the_fresh_install_silence_covers_the_alerts_a_new_host_raises(self):
+        makefile = (REPO / "deploy" / "Makefile").read_text(encoding="utf-8")
+        recipe = makefile.split("\nsilence-fresh-install:")[1].split("\n\n")[0]
+        matcher = re.search(r"alertname=~\"([^\"]+)\"", recipe)[1]
+        silenced = set(matcher.split("|"))
+        absent_based = {r["alert"] for _, r in self.alerts if "absent(" in r["expr"]}
+        self.assertLessEqual(absent_based - {"NfsUnavailable"}, silenced)
+        self.assertIn("--duration=48h", recipe)
+        self.assertIn("--comment=", recipe)
+
+    def test_slow_build_alerts_need_a_minimum_of_builds(self):
+        by_name = {r["alert"]: r["expr"] for _, r in self.alerts}
+        for name in ("ExplorerBundleBuildSlow", "ExplorerBundleBuildVerySlow"):
+            with self.subTest(alert=name):
+                self.assertRegex(
+                    by_name[name], r"bundle_build_seconds_count\[1h\].*>= 3"
+                )
+
+    def test_certificate_invalid_is_off_on_rehearsal_names(self):
+        rule = {r["alert"]: r["expr"] for _, r in self.alerts}["CertificateInvalid"]
+        self.assertIn('rehearsal="false"', rule)
 
     def test_labelled_counters_default_to_zero(self):
         by_name = {r["alert"]: r["expr"] for _, r in self.alerts}

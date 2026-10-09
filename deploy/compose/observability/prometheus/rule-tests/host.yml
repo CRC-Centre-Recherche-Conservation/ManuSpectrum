@@ -59,3 +59,16 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="ClockNotSynchronised", alertstate="firing", service="host", severity="warning"}
       value: 1
+- name: a clock step of a few seconds is not a reboot, a real boot is
+  interval: 1m
+  input_series:
+  - series: node_boot_time_seconds{instance="node"}
+    values: 1000x10 1020x20 1020x40
+  - series: node_boot_time_seconds{instance="other"}
+    values: 1000x10 90000x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="HostRebooted", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="HostRebooted", alertstate="firing", instance="other", service="host", severity="info"}
+      value: 1

@@ -38,14 +38,17 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/storage.md#diskfillingup
       - alert: NfsUnavailable
         expr: |
-          node_filesystem_device_error{mountpoint="/data"} == 1
-          or
-          absent(node_filesystem_device_error{mountpoint="/data"})
+          (
+            node_filesystem_device_error{mountpoint="/data"} == 1
+            or
+            absent(node_filesystem_device_error{mountpoint="/data"})
+          )
+          and on() (up{job="node"} == 1)
         for: 5m
         labels:
           severity: critical
           service: storage
         annotations:
           summary: "The /data network filesystem is unavailable"
-          description: "/data is unmounted or does not answer."
+          description: "/data is unmounted or does not answer. Missing series count only while node_exporter is up; if it is down, TargetDown reports that."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/storage.md#nfsunavailable

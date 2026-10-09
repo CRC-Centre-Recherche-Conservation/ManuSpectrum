@@ -6,6 +6,7 @@
 global:
   smtp_smarthost: '@SMTP_SMARTHOST@'
   smtp_from: '@ALERT_EMAIL_FROM@'
+  smtp_hello: '@SMTP_HELLO@'
   smtp_require_tls: @SMTP_REQUIRE_TLS@
 @SMTP_AUTH@
 
@@ -62,8 +63,9 @@ route:
 inhibit_rules:
   # The 15 minutes after a boot: everything that could be mailed waits, so the
   # nightly reboot is silent and a stack that has not recovered fires after.
+  # AlertTest (make alert-test) is the proof that mail works: never held back.
   - source_matchers: ['alertname="RecentlyRebooted"']
-    target_matchers: ['severity=~"critical|warning"']
+    target_matchers: ['severity=~"critical|warning"', 'alertname!="AlertTest"']
   # A critical alert covers the warnings of its service.
   - source_matchers: ['severity="critical"']
     target_matchers: ['severity="warning"']

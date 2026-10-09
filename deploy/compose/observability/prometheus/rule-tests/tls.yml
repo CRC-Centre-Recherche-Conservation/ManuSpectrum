@@ -28,3 +28,34 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="CertificateExpiryCritical", alertstate="firing", instance="https://manuspectrum.test/healthz", job="blackbox-edge", service="tls", severity="critical"}
       value: 1
+- name: an untrusted certificate on a real name warns, a rehearsal name does not
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-edge", instance="https://example.org/healthz", rehearsal="false"}
+    values: 1x120
+  - series: probe_success{job="blackbox-edge-verified", instance="https://example.org/healthz", rehearsal="false"}
+    values: 0x120
+  - series: probe_success{job="blackbox-edge", instance="https://manuspectrum.test/healthz", rehearsal="true"}
+    values: 1x120
+  - series: probe_success{job="blackbox-edge-verified", instance="https://manuspectrum.test/healthz", rehearsal="true"}
+    values: 0x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="CertificateInvalid", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="CertificateInvalid", alertstate="firing"}
+    eval_time: 90m
+    exp_samples:
+    - labels: ALERTS{alertname="CertificateInvalid", alertstate="firing", instance="https://example.org/healthz", job="blackbox-edge-verified", rehearsal="false", service="tls", severity="warning"}
+      value: 1
+- name: a site that is down is SiteDown, not CertificateInvalid
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-edge", instance="https://example.org/healthz", rehearsal="false"}
+    values: 0x120
+  - series: probe_success{job="blackbox-edge-verified", instance="https://example.org/healthz", rehearsal="false"}
+    values: 0x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="CertificateInvalid", alertstate="firing"}
+    eval_time: 90m
+    exp_samples: []

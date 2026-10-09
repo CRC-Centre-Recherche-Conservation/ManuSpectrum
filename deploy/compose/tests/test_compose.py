@@ -823,7 +823,7 @@ class ComposeStackTests(unittest.TestCase):
         for target, mount in mounts.items():
             if target != "/prometheus":
                 self.assertTrue(mount["read_only"], target)
-        self.assertEqual([c["source"] for c in prometheus["configs"]], ["edge_targets"])
+        self.assertNotIn("configs", prometheus)
         self.assertIn("ms_prometheus_data", (DEPLOY_DIR / "Makefile").read_text())
         makefile = (DEPLOY_DIR / "Makefile").read_text()
         volumes = re.search(r"^EXTERNAL_VOLUMES := (.+)$", makefile, re.M)[1].split()
@@ -906,6 +906,10 @@ class ComposeStackTests(unittest.TestCase):
         self.assertRegex(env, r"(?m)^ALERT_EMAILS=\S+$")
         self.assertNotIn("ALERT_EMAIL_TO", env)
 
+    def test_alertmanager_runs_alone_without_a_gossip_listener(self):
+        command = self.observability["services"]["alertmanager"]["command"]
+        self.assertIn("--cluster.listen-address=", command)
+
     def test_env_example_sets_one_sender_on_the_host_domain(self):
         env = (COMPOSE_DIR / ".env.example").read_text()
         values = dict(re.findall(r"(?m)^([A-Z_]+)=(.*)$", env))
@@ -913,9 +917,29 @@ class ComposeStackTests(unittest.TestCase):
         self.assertEqual(values["DEFAULT_FROM_EMAIL"], values["ALERT_EMAIL_FROM"])
         self.assertNotEqual(values["DEFAULT_FROM_EMAIL"], values["CONTACT_EMAIL"])
 
-    def test_edge_probe_target_is_an_inline_config(self):
-        config = self.observability["configs"]["edge_targets"]
-        self.assertIn("https://manuspectrum.test/healthz", config["content"])
+    def test_edge_probe_target_is_written_by_the_prometheus_entrypoint(self):
+        prometheus = self.observability["services"]["prometheus"]
+        self.assertEqual(
+            prometheus["entrypoint"], ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
+        )
+        self.assertEqual(prometheus["environment"]["PUBLIC_HOST"], "manuspectrum.test")
+        self.assertTrue(prometheus["read_only"])
+        self.assertNotIn("edge_targets", self.observability.get("configs", {}))
+        mounts = {v["target"]: v for v in prometheus["volumes"]}
+        self.assertTrue(mounts["/etc/prometheus/entrypoint.sh"]["read_only"])
+
+    def test_no_read_only_service_mounts_a_content_or_environment_config(self):
+        for label, stack in self.stacks.items():
+            for name, service in stack["services"].items():
+                if not service.get("read_only"):
+                    continue
+                for entry in service.get("configs", []):
+                    source = entry["source"] if isinstance(entry, dict) else entry
+                    with self.subTest(stack=label, service=name, config=source):
+                        config = stack["configs"][source]
+                        self.assertIn("file", config)
+                        self.assertNotIn("content", config)
+                        self.assertNotIn("environment", config)
 
     def test_mailpit_only_under_its_profile(self):
         for label, stack in self.stacks.items():

@@ -5,7 +5,8 @@ groups:
     rules:
       - alert: ContainerRestartLoop
         expr: |
-          delta(manuspectrum_container_restarts[1h]) > 3
+          (manuspectrum_container_restarts - min_over_time(manuspectrum_container_restarts[1h])) > 3
+        keep_firing_for: 64h
         labels:
           severity: warning
           service: containers
@@ -16,6 +17,7 @@ groups:
       - alert: ContainerOOMKilled
         expr: |
           increase(manuspectrum_container_oom_kills[15m]) > 0
+        keep_firing_for: 64h
         labels:
           severity: warning
           service: containers
@@ -23,6 +25,17 @@ groups:
           summary: "A container was killed for lack of memory"
           description: "{{ $labels.container }} was killed by the kernel for exceeding its memory limit."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containeroomkilled
+      - alert: OomSourceDegraded
+        expr: |
+          manuspectrum_container_oom_cgroup == 0
+        for: 1h
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "OOM kills of a container are no longer counted from the kernel"
+          description: "For {{ $labels.container }} the collector fell back on Docker's OOMKilled flag, which misses most kills; the cgroup memory.events file is unreadable."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#oomsourcedegraded
       - alert: ContainerMemoryNearLimit
         expr: |
           manuspectrum_container_memory_working_set_bytes{container!="web"}
@@ -61,6 +74,7 @@ groups:
       - alert: ContainerMissing
         expr: |
           (count(manuspectrum_container_up{container=~"postgres|elasticsearch|redis-broker|redis-cache|cantaloupe|web|worker|beat|nginx"} == 1) or vector(0)) < 9
+          and on() (up{job="node"} == 1)
         for: 10m
         labels:
           severity: warning

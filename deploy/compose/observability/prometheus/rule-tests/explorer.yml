@@ -1,0 +1,80 @@
+rule_files:
+  - ../rules/explorer.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: one slow cold build is not an alert, three slow builds in an hour are
+  interval: 1m
+  input_series:
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="en", le="15"}
+    values: 0x120
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="en", le="60"}
+    values: 0x120
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="en", le="+Inf"}
+    values: 0x10 1x110
+  - series: manuspectrum_explorer_bundle_build_seconds_count{language="en"}
+    values: 0x10 1x110
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="fr", le="15"}
+    values: 0x120
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="fr", le="60"}
+    values: 0x120
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="fr", le="+Inf"}
+    values: 0x10 1x10 2x10 3x90
+  - series: manuspectrum_explorer_bundle_build_seconds_count{language="fr"}
+    values: 0x10 1x10 2x10 3x90
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ExplorerBundleBuildSlow|ExplorerBundleBuildVerySlow", alertstate="firing"}
+    eval_time: 65m
+    exp_samples:
+    - labels: ALERTS{alertname="ExplorerBundleBuildVerySlow", alertstate="firing", language="fr", service="explorer", severity="critical"}
+      value: 1
+- name: slow builds below 45 seconds warn at 15 seconds
+  interval: 1m
+  input_series:
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="en", le="15"}
+    values: 0x20 0+0x100
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="en", le="45"}
+    values: 0+1x120
+  - series: manuspectrum_explorer_bundle_build_seconds_bucket{language="en", le="+Inf"}
+    values: 0+1x120
+  - series: manuspectrum_explorer_bundle_build_seconds_count{language="en"}
+    values: 0+1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ExplorerBundleBuildSlow|ExplorerBundleBuildVerySlow", alertstate="firing"}
+    eval_time: 110m
+    exp_samples:
+    - labels: ALERTS{alertname="ExplorerBundleBuildSlow", alertstate="firing", language="en", service="explorer", severity="warning"}
+      value: 1
+- name: a failing background rebuild warns and keeps firing until the next working window
+  interval: 1m
+  input_series:
+  - series: manuspectrum_explorer_rebuild_failures_total{language="en"}
+    values: 0+1x40 40x5000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing"}
+    eval_time: 10m
+    exp_samples: []
+  - expr: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing"}
+    eval_time: 62h
+    exp_samples:
+    - labels: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing", language="en", service="explorer", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing"}
+    eval_time: 70h
+    exp_samples: []
+- name: a rebuild running all the time is info, an unpruned ledger warns
+  interval: 5m
+  input_series:
+  - series: manuspectrum_explorer_bundle_build_seconds_sum{language="en"}
+    values: 0+290x100
+  - series: manuspectrum_data_change_rows
+    values: 300000x100
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ExplorerRebuildContinuous|DataChangeLedgerNotPruned", alertstate="firing"}
+    eval_time: 8h
+    exp_samples:
+    - labels: ALERTS{alertname="ExplorerRebuildContinuous", alertstate="firing", language="en", service="explorer", severity="info"}
+      value: 1
+    - labels: ALERTS{alertname="DataChangeLedgerNotPruned", alertstate="firing", service="celery", severity="warning"}
+      value: 1

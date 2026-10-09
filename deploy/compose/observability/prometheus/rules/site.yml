@@ -23,7 +23,7 @@ groups:
           service: site
         annotations:
           summary: "The application reports it is not ready"
-          description: "/readyz has failed for 5 minutes. The failing components are the series of manuspectrum_readyz_component_up that equal 0."
+          description: "/readyz has failed for 5 minutes. Failing components: {{ range query \"manuspectrum_readyz_component_up == 0\" | sortByLabel \"component\" }}{{ .Labels.component }} {{ else }}none reported{{ end }}"
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#notready
       - alert: CantaloupeDown
         expr: |

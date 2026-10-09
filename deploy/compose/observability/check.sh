@@ -48,9 +48,38 @@ chmod -R a+rX "$TMP"
 docker run --rm --network none --user 65534:65534 --read-only \
   -v "$TMP/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
   -v "$TMP/rules:/etc/prometheus/rules:ro" \
-  -v "$TMP/edge_targets.json:/etc/prometheus/edge_targets.json:ro" \
+  -v "$TMP/edge_targets.json:/tmp/edge_targets.json:ro" \
   --entrypoint /bin/promtool "$PROMETHEUS_IMAGE" \
   check config /etc/prometheus/prometheus.yml
+
+# The service as compose runs it: read-only root, tmpfs /tmp, entrypoint.sh
+# writing the edge target from PUBLIC_HOST. The target must be discovered.
+cp "$HERE/prometheus/entrypoint.sh" "$TMP/entrypoint.sh"
+chmod a+r "$TMP/entrypoint.sh"
+PROM_CONTAINER="$(docker run -d --rm --network none --user 65534:65534 --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777 \
+  -e PUBLIC_HOST=manuspectrum.test \
+  -v "$TMP/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+  -v "$TMP/rules:/etc/prometheus/rules:ro" \
+  -v "$TMP/entrypoint.sh:/etc/prometheus/entrypoint.sh:ro" \
+  --entrypoint /bin/sh "$PROMETHEUS_IMAGE" /etc/prometheus/entrypoint.sh \
+  --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/tmp/tsdb)"
+trap 'docker rm -f "$PROM_CONTAINER" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
+found=""
+for _ in $(seq 1 30); do
+  found="$(docker exec "$PROM_CONTAINER" wget -q -O - http://127.0.0.1:9090/api/v1/targets 2>/dev/null || true)"
+  case "$found" in *'"https://manuspectrum.test/healthz"'*'"rehearsal":"true"'*) break ;; esac
+  found=""
+  sleep 1
+done
+[ -n "$found" ] || {
+  echo "prometheus (read-only, entrypoint.sh) did not discover the edge target" >&2
+  docker logs "$PROM_CONTAINER" >&2 || true
+  exit 1
+}
+docker rm -f "$PROM_CONTAINER" >/dev/null
+trap 'rm -rf "$TMP"' EXIT
+echo "SUCCESS: prometheus starts read-only and discovers the edge target"
 
 # The test files name their rules as ../rules/<file>.yml.
 unit_tests=()

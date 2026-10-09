@@ -145,3 +145,27 @@ Start the stack with `make -C deploy up`.
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## OomSourceDegraded
+
+Severity: warning. The OOM kill counter of a container is read from Docker's `OOMKilled` flag instead of the cgroup v2 `memory.events` file.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+`ContainerOOMKilled` and the OOM panels may miss kills: Docker resets the flag when a container restarts, and a killed child process never sets it for a running container.
+
+### Diagnosis
+
+`ls /sys/fs/cgroup/system.slice/docker-<container id>.scope/memory.events` as the service account; `stat -fc %T /sys/fs/cgroup` should print `cgroup2fs`. Run `make -C deploy container-metrics` and read its log lines.
+
+### Remediation
+
+Restore read access to the cgroup files (cgroup v2 hierarchy, systemd cgroup driver) or fix the path the collector reads, then run `make -C deploy container-metrics` and check `manuspectrum_container_oom_cgroup` is 1.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

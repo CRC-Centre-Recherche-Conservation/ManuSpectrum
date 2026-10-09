@@ -25,7 +25,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms
 # A value of the env file, read the way the file is written (KEY=value, no quoting).
 envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
 
-.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence monthly-report report-test
+.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence silence-fresh-install monthly-report report-test
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -194,8 +194,8 @@ alert-recipients: ## After editing ALERT_EMAILS (or the sender or relay) in .env
 	@ALERT_EMAILS="$(call envval,ALERT_EMAILS)" ALERT_EMAIL_FROM="$(call envval,ALERT_EMAIL_FROM)" \
 		EMAIL_HOST="$(call envval,EMAIL_HOST)" EMAIL_PORT="$(call envval,EMAIL_PORT)" \
 		EMAIL_USE_TLS="$(call envval,EMAIL_USE_TLS)" EMAIL_HOST_USER="$(call envval,EMAIL_HOST_USER)" \
-		ALERTMANAGER_DIR='$(COMPOSE_DIR)/observability/alertmanager' ALERTMANAGER_RENDER_ONLY=1 \
-		ALERTMANAGER_OUT=/dev/null sh '$(COMPOSE_DIR)/observability/alertmanager/render.sh' \
+		ALERTMANAGER_DIR='$(COMPOSE_DIR)/observability/alertmanager' ALERTMANAGER_VALIDATE_ONLY=1 \
+		sh '$(COMPOSE_DIR)/observability/alertmanager/render.sh' \
 		|| { echo "alert-recipients: fix $(ENV_FILE); alertmanager was left running unchanged" >&2; exit 1; }
 	$(COMPOSE) --profile observability up -d --no-deps --wait alertmanager
 
@@ -211,6 +211,12 @@ alerts: ## Alerts Alertmanager holds now
 silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh --duration=2h --comment="why"'
 	@[ -n "$(ARGS)" ] || { echo "usage: make silence ARGS='matcher... --duration=2h --comment=\"why\"'" >&2; exit 1; }
 	$(AMTOOL) silence add $(ARGS)
+
+# A new install raises, until the first backup, the first restore test and the
+# first run of the systemd timers, alerts that say nothing about a fault.
+silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test and timers
+	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
+		--duration=48h --comment="fresh install: first backup, restore test and timers pending"
 
 # The monthly report (scripts/monthly-report.py, Python standard library only)
 # runs in a throwaway container of the application image on the Compose

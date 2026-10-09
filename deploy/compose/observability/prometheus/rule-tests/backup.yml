@@ -9,6 +9,8 @@ tests:
   input_series:
   - series: manuspectrum_backup_last_success_timestamp_seconds
     values: 0+0x1700
+  - series: up{job="node"}
+    values: 1x1700
   promql_expr_test:
   - expr: ALERTS{alertname="BackupMissing", alertstate="firing"}
     eval_time: 25h
@@ -23,6 +25,8 @@ tests:
   input_series:
   - series: node_boot_time_seconds
     values: 0+0x40
+  - series: up{job="node"}
+    values: 1x40
   promql_expr_test:
   - expr: ALERTS{alertname="BackupMissing", alertstate="firing"}
     eval_time: 5m
@@ -68,6 +72,8 @@ tests:
   input_series:
   - series: manuspectrum_restore_test_last_success_timestamp_seconds
     values: 0+0x13000
+  - series: up{job="node"}
+    values: 1x13000
   promql_expr_test:
   - expr: ALERTS{alertname="RestoreTestMissing", alertstate="firing"}
     eval_time: 7d
@@ -82,6 +88,8 @@ tests:
   input_series:
   - series: node_boot_time_seconds
     values: 0+0x40
+  - series: up{job="node"}
+    values: 1x40
   promql_expr_test:
   - expr: ALERTS{alertname="RestoreTestMissing", alertstate="firing"}
     eval_time: 30m

@@ -99,3 +99,49 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="WebSaturated", alertstate="firing", service="application", severity="warning"}
       value: 1
+- name: the readiness alert names the failing components
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-readyz", instance="http://web:8000/readyz"}
+    values: 1 0x20
+  - series: manuspectrum_readyz_component_up{component="postgres"}
+    values: 1x21
+  - series: manuspectrum_readyz_component_up{component="elasticsearch"}
+    values: 0x21
+  - series: manuspectrum_readyz_component_up{component="redis"}
+    values: 0x21
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NotReady
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        service: site
+        job: blackbox-readyz
+        instance: http://web:8000/readyz
+      exp_annotations:
+        summary: The application reports it is not ready
+        description: "/readyz has failed for 5 minutes. Failing components: elasticsearch redis "
+        runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#notready
+- name: application warnings need their duration
+  interval: 1m
+  input_series:
+  - series: manuspectrum_log_records_total{level="error", source="app"}
+    values: 0+60x60
+  - series: manuspectrum_inflight_requests{job="web"}
+    values: 5x10 19x50
+  - series: manuspectrum_metrics_dir_bytes{job="worker"}
+    values: 50000000x60
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ErrorLogRateHigh|WebSaturated|MetricsDirFilling", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname=~"ErrorLogRateHigh|WebSaturated|MetricsDirFilling", alertstate="firing"}
+    eval_time: 45m
+    exp_samples:
+    - labels: ALERTS{alertname="ErrorLogRateHigh", alertstate="firing", service="application", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="WebSaturated", alertstate="firing", service="application", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="MetricsDirFilling", alertstate="firing", job="worker", service="application", severity="warning"}
+      value: 1

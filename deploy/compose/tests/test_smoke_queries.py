@@ -6,6 +6,7 @@ copy of the metric extractor; the first test keeps it equal to the one that
 pins the rules offline.
 """
 
+import ast
 import importlib.util
 import json
 import subprocess
@@ -69,6 +70,58 @@ class MissingMetricsTests(unittest.TestCase):
                     smoke_queries.metric_names_in(rule["expr"]),
                     contract.metric_names_in(rule["expr"]),
                 )
+
+
+class OptionalMetricsTests(unittest.TestCase):
+    METRICS_PY = (
+        COMPOSE_DIR.parents[1] / "manuspectrum" / "observability" / "metrics.py"
+    )
+
+    def derived(self):
+        """Series of every labelled Counter/Histogram declared in metrics.py."""
+        names = set()
+        for node in ast.walk(ast.parse(self.METRICS_PY.read_text(encoding="utf-8"))):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in ("Counter", "Histogram")
+            ):
+                continue
+            labels = node.args[2] if len(node.args) > 2 else None
+            for keyword in node.keywords:
+                if keyword.arg == "labelnames":
+                    labels = keyword.value
+            if labels is None or not labels.elts:
+                continue
+            base = node.args[0].value
+            if node.func.id == "Counter":
+                names.add(base + "_total")
+            else:
+                names.update({base + "_bucket", base + "_count", base + "_sum"})
+        return names
+
+    def test_every_labelled_counter_and_histogram_is_optional(self):
+        derived = self.derived()
+        self.assertIn("manuspectrum_explorer_rebuild_failures_total", derived)
+        self.assertEqual(smoke_queries.LABELLED_APP_METRICS, derived)
+        self.assertLessEqual(derived, smoke_queries.OPTIONAL_METRICS)
+
+    def test_unlabelled_application_metrics_stay_strict(self):
+        text = self.METRICS_PY.read_text(encoding="utf-8")
+        for name in ("manuspectrum_biblissima_slot_timeouts_total",):
+            self.assertIn(name[: -len("_total")], text)
+            self.assertNotIn(name, smoke_queries.OPTIONAL_METRICS)
+
+    def test_the_event_series_a_fresh_stack_lacks_are_not_reported(self):
+        answer = rules_answer(
+            alert("increase(manuspectrum_explorer_rebuild_failures_total[30m]) > 0"),
+            alert('max(redis_key_size{key="celery"}) > 100'),
+            alert("manuspectrum_unknown_total > 1"),
+        )
+        self.assertEqual(
+            smoke_queries.missing_metrics(answer, {"data": ["up"]}),
+            ["manuspectrum_unknown_total"],
+        )
 
 
 class DashboardQueriesTests(unittest.TestCase):

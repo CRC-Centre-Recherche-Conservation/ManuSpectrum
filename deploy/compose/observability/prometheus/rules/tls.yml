@@ -25,3 +25,16 @@ groups:
           summary: "The TLS certificate expires within 3 days"
           description: "The certificate served at {{ $labels.instance }} expires in {{ $value | humanizeDuration }}."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/tls.md#certificateexpirycritical
+      - alert: CertificateInvalid
+        expr: |
+          probe_success{job="blackbox-edge-verified", rehearsal="false"} == 0
+          and on(instance)
+          probe_success{job="blackbox-edge"} == 1
+        for: 1h
+        labels:
+          severity: warning
+          service: tls
+        annotations:
+          summary: "The TLS certificate of the public site is not trusted"
+          description: "The site at {{ $labels.instance }} answers, but its certificate chain or name does not verify. The alert is off on a `.test` rehearsal name."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/tls.md#certificateinvalid

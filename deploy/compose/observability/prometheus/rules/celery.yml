@@ -18,6 +18,7 @@ groups:
         expr: |
           sum by (task) (increase(manuspectrum_celery_tasks_total{outcome="failure"}[30m])) > 0
         for: 15m
+        keep_firing_for: 64h
         labels:
           severity: warning
           service: celery
@@ -29,6 +30,7 @@ groups:
         expr: |
           sum by (mode) (increase(manuspectrum_index_resources_total{outcome="failed"}[30m])) > 0
         for: 15m
+        keep_firing_for: 64h
         labels:
           severity: warning
           service: celery

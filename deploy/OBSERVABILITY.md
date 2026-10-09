@@ -38,6 +38,7 @@ Make targets (`make -C deploy <target>`):
 | `alert-test` | Raise a critical `AlertTest` for five minutes: a mail must arrive |
 | `alerts` | List the alerts Alertmanager holds |
 | `silence` | Silence an alert for maintenance |
+| `silence-fresh-install` | Silence for 48 h the alerts a new install raises before its first backup, restore test and timers |
 | `report-test`, `monthly-report` | Send the monthly report now |
 | `container-metrics`, `disk-usage` | Write the host metrics (the timers call them) |
 
@@ -84,7 +85,7 @@ a mount root.
 
 ## Alerts
 
-49 rules in `compose/observability/prometheus/rules/*.yml`, one file per area
+51 rules in `compose/observability/prometheus/rules/*.yml`, one file per area
 (site, application, containers, host, storage, backup, tls, celery, datastores,
 explorer, biblissima, monitoring). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of
@@ -96,7 +97,17 @@ explorer, biblissima, monitoring). Every rule has a `severity`, a `service`, a
 | `warning` | Grouped by service, sent only on weekdays 08:00-19:00 (Europe/Paris); one raised outside waits for the window | First mail 2 min after the alert is grouped, then at most every 30 min for new alerts, repeated every 24 h |
 | `info`, `none` | Never | Visible in Grafana and `make alerts` |
 
-Each alert also waits for its `for:` duration in Prometheus. Disk thresholds:
+Each alert also waits for its `for:` duration in Prometheus. **Event warnings**
+(`ContainerOOMKilled`, `ContainerRestartLoop`, `CeleryTaskFailures`,
+`IndexingFailures`, `ExplorerRebuildFailing`, `WriteBudgetSpent`,
+`PrometheusRuleFailures`) fire on a single event and carry `keep_firing_for: 64h`.
+A warning raised at night or on a weekend would otherwise clear before the next
+weekday window and, since Alertmanager drops the resolved alerts of a muted group,
+never be mailed. 64 h covers Friday 19:00 to Monday 08:00 (61 h); a public holiday
+delays the mail to the next working day. The cost: an event of Tuesday noon is
+repeated every 24 h until 64 h have passed, then a `RESOLVED` mail follows.
+`ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` need at least three
+builds in the hour, so one slow cold build alerts nobody. Disk thresholds:
 `DiskUsageHigh` warning above 80 %, `DiskAlmostFull` critical above 95 %,
 `DiskFillingUp` warning when the 6 h trend fills a disk within 24 h. There is no
 "no traffic" alert: a quiet site is not a fault.
@@ -105,12 +116,31 @@ Each alert also waits for its `for:` duration in Prometheus. Disk thresholds:
 
 - A critical alert hides the warnings of the same `service`.
 - `RecentlyRebooted` (the host booted less than 15 minutes ago) hides every
-  critical and warning alert. The nightly 04:50 reboot is therefore silent; a
+  critical and warning alert except the `AlertTest` of `make alert-test`. The nightly 04:50 reboot is therefore silent; a
   stack that is not back after 15 minutes fires normally.
 
 **Maintenance.** `make -C deploy silence ARGS='alertname=DiskUsageHigh --duration=2h --comment="why"'`
 silences one alert; silences live on a volume and survive a restart.
 `make -C deploy observability-off` stops the stack (volumes kept).
+
+**Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`,
+`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` read series that only
+node_exporter carries. They count a missing series only while node_exporter is up,
+so its outage raises `TargetDown` alone.
+
+**Certificate trust.** `http_edge` measures the expiry without verifying the chain
+(so the local and staging authorities pass); `http_edge_verified` verifies it and
+`CertificateInvalid` (warning) fires when the site answers but the chain or name
+does not verify. The Prometheus entrypoint marks a target `rehearsal="true"` when
+`PUBLIC_HOST` ends in `.test`, which turns the alert off in CI and rehearsal. With
+`CERT_MODE=acme` against the Let's Encrypt staging authority it fires, as it should.
+
+**Fresh install.** Until the first backup, the first Sunday restore test and the
+first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing`,
+`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` fire. Install the
+timers and take a first backup before `observability-on`, or run
+`make -C deploy silence-fresh-install` (48 h, with a comment) and let the first
+backup, restore test and timers land within it.
 
 **Heartbeat.** The always-firing `Watchdog` alert becomes one mail on Monday at
 08:00 (Europe/Paris, a five-minute window). It proves that Prometheus evaluates
@@ -170,7 +200,9 @@ sort on either.
 
 On the 1st at 08:00 the `manuspectrum-monthly-report` timer sends a report of the
 previous month, in French, to `ALERT_EMAILS`: availability, disks, sizes, backups and
-restore tests, restarts and out-of-memory kills, alerts of the month, active accounts. Metrics that could not be read are listed
+restore tests, restarts and out-of-memory kills, alerts of the month, active accounts. Growth is given "sur le mois"
+when Prometheus still holds the start of the month, else "depuis le <date>" from its oldest sample (retention is 30
+days). Metrics that could not be read are listed
 under "données indisponibles" and the command exits 1. `make -C deploy report-test
 [ARGS="--month YYYY-MM"]` sends one now.
 
@@ -183,7 +215,16 @@ Two timers write Prometheus textfiles that `node-exporter` reads from
 | Unit | Schedule | Metrics |
 | --- | --- | --- |
 | `manuspectrum-container-metrics` | Every 30 s | Per Compose service: running, health, restarts, OOM kills, memory against its limit |
-| `manuspectrum-disk-usage` | Every hour at :17 | Size of the uploads, the backup repository, the dumps and the nginx logs. The unit file carries the four-times-a-day calendar to use if a measure proves slow on the network filesystem |
+| `manuspectrum-disk-usage` | Every hour at :17 | Size of the uploads, the backup repository, the dumps and the nginx logs, plus the Docker sizes below. The unit file carries the four-times-a-day calendar to use if a measure proves slow on the network filesystem |
+
+Docker sizes (from `docker system df`, about four significant digits):
+`manuspectrum_docker_disk_bytes{kind=images|build_cache|containers|volumes}` and
+`manuspectrum_docker_volume_bytes{volume=ms_*}` (the external data volumes).
+`manuspectrum_container_oom_cgroup` is 1 when a container's OOM kills are counted
+from the cgroup v2 `memory.events` file (a kill of a child process included) and 0
+when the collector fell back on Docker's `OOMKilled` flag, which misses most kills;
+0 for an hour raises `OomSourceDegraded`. A disk run has a budget of 840 s: `du`
+300 s per target and `df` 120 s, so a hung mount cannot hold the timer.
 
 The backup and restore-test timers write their own textfiles (`BACKUP.md`). A
 stale file raises `HostMetricsStale` or `DiskUsageStale`.

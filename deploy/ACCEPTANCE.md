@@ -1155,6 +1155,8 @@ reboot.
   `DEFAULT_FROM_EMAIL` (`grep -E '^(COMPOSE_PROFILES|ALERT_EMAILS|ALERT_EMAIL_FROM|DEFAULT_FROM_EMAIL)=' deploy/compose/.env`
   → four lines; both senders are the same address on the VM's own domain).
   - On failure: without `DEFAULT_FROM_EMAIL`, `web` refuses to start (`Set the DEFAULT_FROM_EMAIL environment variable`).
+- [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test and timer runs:
+  `make -C deploy silence-fresh-install` (48 h), or install the timers and take a backup before `observability-on`.
 - [ ] `make -C deploy volumes secrets up monitoring-init observability-on` → `grafana_admin_password: created`,
   `pg_monitor_password: created`, the others `kept`; `monitoring-init` ends without error; then
   `make -C deploy status` → the seven monitoring containers `healthy`.
@@ -1192,14 +1194,15 @@ reboot.
   (`curl -w '%{time_total}\n' -o /dev/null -s https://<name>/en/` in a second terminal): switch the timer to
   `OnCalendar=*-*-* 00,06,12,18:17` (the line is in `manuspectrum-disk-usage.timer.in`) and record it.
 - [ ] `grep -c . "$METRICS_TEXTFILE_DIR"/manuspectrum_disk_usage.prom` is non-zero and `manuspectrum_disk_usage_failed 0`.
-- [ ] A path that is a mountpoint is refused: `DISK_USAGE_AREAS="data=/data" deploy/scripts/host-metrics.sh disk`
-  exits 2 and writes nothing.
+- [ ] A path that is a mountpoint is refused: `METRICS_TEXTFILE_DIR=<existing absolute dir> DISK_USAGE_AREAS="media=/data" deploy/scripts/host-metrics.sh disk`
+  exits 2 with `is a mountpoint` and writes nothing.
 
 ### 7.5 Alert e-mail, report and recipients
 
 - [ ] `make -C deploy alert-test`, then within 2 minutes the Mailpit API lists a message whose `Subject` starts with
   `[ManuSpectrum][Alert] CRITICAL AlertTest`, whose `From` is the `ALERT_EMAIL_FROM` address and which carries the
-  header `X-ManuSpectrum-Category: alert` (`smoke.sh mail alert`). Five minutes later a `RESOLVED` message arrives.
+  header `X-ManuSpectrum-Category: alert` (`smoke.sh mail alert`), even in the 15 minutes after a boot. A `RESOLVED`
+  message arrives 5 to 10 minutes after the alert ends (resolution, then the next 5-minute flush).
 - [ ] `make -C deploy report-test` → a message `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>`, in French, header
   `report`; `smoke.sh mail report` agrees. `make -C deploy report-test ARGS="--month 2020-01"` shows "n/d" for
   data older than 30 days and exits 1 only when Prometheus did not answer.
@@ -1215,7 +1218,7 @@ reboot.
 
 ### 7.6 Real triggers
 
-- [ ] `dc stop worker` → after the rule's duration `ContainerMissing` (critical) mails at once; `dc start worker`
+- [ ] `dc stop worker` → after the rule's duration `ContainerMissing` (warning) is in `make -C deploy alerts`, mailed only on a weekday between 08:00 and 19:00; `dc start worker`
   → a `RESOLVED` mail.
 - [ ] `chmod 000 "$RESTIC_REPOSITORY_DIR"`, `make -C deploy backup TAG=manual` fails, `BackupFailed` mails;
   `chmod 700` it back and run the backup again.

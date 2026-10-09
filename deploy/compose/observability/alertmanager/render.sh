@@ -6,13 +6,15 @@
 # Reads EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS (true|false), EMAIL_HOST_USER
 # (optional: when set, EMAIL_HOST_PASSWORD_FILE is given to Alertmanager as
 # smtp_auth_password_file; the password is never read or printed here),
-# ALERT_EMAILS (comma-separated recipients) and ALERT_EMAIL_FROM. Any missing
+# ALERT_EMAILS (comma-separated recipients) and ALERT_EMAIL_FROM (its domain is
+# also the SMTP HELO name, which some relays check). Any missing
 # or malformed value exits 1 with a message on stderr, so the container does
 # not start with a configuration that would drop alerts.
 #
 # ALERTMANAGER_DIR (templates), ALERTMANAGER_OUT, ALERTMANAGER_BIN and
-# ALERTMANAGER_RENDER_ONLY=1 (render, then exit 0) let the tests and
-# `make alert-recipients` run the same script without Alertmanager.
+# ALERTMANAGER_RENDER_ONLY=1 (render, then exit 0) let the tests run the same
+# script without Alertmanager. ALERTMANAGER_VALIDATE_ONLY=1 checks every value
+# and exits 0 without creating any file; `make alert-recipients` uses it.
 set -eu
 
 DIR="${ALERTMANAGER_DIR:-$(cd "$(dirname "$0")" && pwd)}"
@@ -73,6 +75,8 @@ build_recipients() {
 }
 build_recipients
 
+[ "${ALERTMANAGER_VALIDATE_ONLY:-}" = 1 ] && exit 0
+
 auth="$(mktemp)"
 trap 'rm -f "$auth"' EXIT
 if [ -n "$EMAIL_HOST_USER" ]; then
@@ -86,6 +90,7 @@ sed \
   -e "s|@SMTP_SMARTHOST@|$EMAIL_HOST:$EMAIL_PORT|" \
   -e "s|@SMTP_REQUIRE_TLS@|$EMAIL_USE_TLS|" \
   -e "s|@ALERT_EMAIL_FROM@|$ALERT_EMAIL_FROM|" \
+  -e "s|@SMTP_HELLO@|${ALERT_EMAIL_FROM#*@}|" \
   -e "s|@ALERT_EMAILS@|$recipients|g" \
   -e "/^@SMTP_AUTH@\$/{r $auth
 d

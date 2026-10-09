@@ -20,11 +20,56 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-# Series that can be legitimately absent from a running stack: the backup and
-# restore-test gauges exist only after the first run of those jobs, ALERTS
-# only while an alert is pending or firing.
-OPTIONAL_METRICS = frozenset(
+# Every labelled Counter and Histogram of manuspectrum/observability/metrics.py
+# (with the _total, _bucket, _count and _sum suffixes): under prometheus_client
+# multiprocess a labelled metric is exposed only after its first `.labels()`
+# call, so on a fresh stack these names do not exist yet. An unlabelled one
+# exports 0 from the start and stays strict.
+# tests/test_smoke_queries.py derives this set from metrics.py and compares.
+LABELLED_APP_METRICS = frozenset(
     {
+        "manuspectrum_auth_logins_total",
+        "manuspectrum_biblissima_cache_total",
+        "manuspectrum_biblissima_created_items_total",
+        "manuspectrum_biblissima_suggest_prefix_total",
+        "manuspectrum_biblissima_upstream_latency_seconds_bucket",
+        "manuspectrum_biblissima_upstream_latency_seconds_count",
+        "manuspectrum_biblissima_upstream_latency_seconds_sum",
+        "manuspectrum_biblissima_upstream_requests_total",
+        "manuspectrum_celery_task_seconds_bucket",
+        "manuspectrum_celery_task_seconds_count",
+        "manuspectrum_celery_task_seconds_sum",
+        "manuspectrum_celery_tasks_total",
+        "manuspectrum_explorer_bundle_build_seconds_bucket",
+        "manuspectrum_explorer_bundle_build_seconds_count",
+        "manuspectrum_explorer_bundle_build_seconds_sum",
+        "manuspectrum_explorer_bundle_builds_total",
+        "manuspectrum_explorer_rebuild_failures_total",
+        "manuspectrum_explorer_stale_served_total",
+        "manuspectrum_iiif_answers_total",
+        "manuspectrum_iiif_auth_tokens_total",
+        "manuspectrum_index_resources_total",
+        "manuspectrum_log_records_total",
+        "manuspectrum_memo_lookups_total",
+        "manuspectrum_outbound_fetch_seconds_bucket",
+        "manuspectrum_outbound_fetch_seconds_count",
+        "manuspectrum_outbound_fetch_seconds_sum",
+        "manuspectrum_outbound_fetches_total",
+        "manuspectrum_read_refusals_total",
+        "manuspectrum_spectrum_previews_total",
+        "manuspectrum_ssrf_rejections_total",
+        "manuspectrum_upstream_budget_spent_total",
+    }
+)
+
+# Series that can be legitimately absent from a running stack: the labelled
+# application metrics above, the backup and restore-test gauges (they exist
+# only after the first run of those jobs), ALERTS (only while an alert is
+# pending or firing) and redis_key_size (Redis deletes the empty `celery`
+# list and the exporter then emits nothing for the key).
+OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
+    {
+        "redis_key_size",
         "ALERTS",
         "manuspectrum_backup_failed",
         "manuspectrum_backup_last_attempt_timestamp_seconds",

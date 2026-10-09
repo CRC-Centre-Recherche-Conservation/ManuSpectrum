@@ -29,6 +29,18 @@ modules:
       tls_config:
         insecure_skip_verify: true
 
+  # The same probe with the certificate chain verified against the system
+  # roots: a self-signed, wrong-name or untrusted certificate fails it.
+  http_edge_verified:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      follow_redirects: false
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4
+
   http_cantaloupe:
     prober: http
     timeout: 10s

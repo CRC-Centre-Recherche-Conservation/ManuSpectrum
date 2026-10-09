@@ -6,10 +6,12 @@ each job scrapes and how often; the real `promtool` and blackbox exporter
 checks run through observability/check.sh when docker is available.
 """
 
+import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -32,6 +34,7 @@ JOB_INTERVALS = {
     "redis": "60s",
     "blackbox-readyz": "30s",
     "blackbox-edge": "60s",
+    "blackbox-edge-verified": "60s",
     "blackbox-cantaloupe": "60s",
 }
 # Compose service names a job may address: the monitoring services and the
@@ -150,18 +153,18 @@ class PrometheusConfigTests(unittest.TestCase):
             "blackbox-cantaloupe", "http_cantaloupe", "http://cantaloupe:8182/iiif/3"
         )
 
-    def test_edge_probe_targets_the_public_host(self):
-        job = self.probe("blackbox-edge", "http_edge", None)
-        files = [f for entry in job["file_sd_configs"] for f in entry["files"]]
-        self.assertEqual(files, ["/etc/prometheus/edge_targets.json"])
-        compose = load(COMPOSE_YAML)
-        content = compose["configs"]["edge_targets"]["content"]
-        self.assertRegex(content, r"https://\$\{PUBLIC_HOST\}/healthz")
-        prometheus = compose["services"]["prometheus"]
-        self.assertIn(
-            "/etc/prometheus/edge_targets.json",
-            [c["target"] for c in prometheus["configs"]],
-        )
+    def test_edge_probes_read_the_file_the_entrypoint_writes(self):
+        for name, module in (
+            ("blackbox-edge", "http_edge"),
+            ("blackbox-edge-verified", "http_edge_verified"),
+        ):
+            job = self.probe(name, module, None)
+            files = [f for entry in job["file_sd_configs"] for f in entry["files"]]
+            self.assertEqual(files, ["/tmp/edge_targets.json"])
+        text = (OBSERVABILITY / "prometheus" / "entrypoint.sh").read_text()
+        self.assertIn("edge_targets.json", text)
+        prometheus = load(COMPOSE_YAML)["services"]["prometheus"]
+        self.assertNotIn("configs", prometheus)
 
     def test_labels_stay_bounded(self):
         names = {
@@ -184,13 +187,20 @@ class BlackboxConfigTests(unittest.TestCase):
 
     def test_modules(self):
         self.assertEqual(
-            set(self.modules), {"http_readyz", "http_edge", "http_cantaloupe"}
+            set(self.modules),
+            {"http_readyz", "http_edge", "http_edge_verified", "http_cantaloupe"},
         )
         for name, module in self.modules.items():
             with self.subTest(module=name):
                 self.assertEqual(module["prober"], "http")
                 self.assertEqual(module["http"]["valid_status_codes"], [200])
                 self.assertFalse(module["http"]["follow_redirects"])
+
+    def test_the_verified_edge_module_checks_the_certificate_chain(self):
+        http = self.modules["http_edge_verified"]["http"]
+        self.assertNotIn("tls_config", http)
+        self.assertTrue(http["fail_if_not_ssl"])
+        self.assertNotIn("headers", http)
 
     def test_readyz_sends_the_internal_host(self):
         http = self.modules["http_readyz"]["http"]
@@ -202,6 +212,58 @@ class BlackboxConfigTests(unittest.TestCase):
         self.assertTrue(http["tls_config"]["insecure_skip_verify"])
         self.assertTrue(http["fail_if_not_ssl"])
         self.assertNotIn("headers", http)
+
+
+class EdgeEntrypointTests(unittest.TestCase):
+    ENTRYPOINT = OBSERVABILITY / "prometheus" / "entrypoint.sh"
+
+    def run_entrypoint(self, host, *args):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {
+                "PATH": os.environ["PATH"],
+                "PROMETHEUS_TARGETS_DIR": tmp,
+                "PROMETHEUS_BIN": "/bin/echo",
+            }
+            if host is not None:
+                env["PUBLIC_HOST"] = host
+            result = subprocess.run(
+                ["sh", str(self.ENTRYPOINT), *args],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            written = Path(tmp) / "edge_targets.json"
+            return result, written.read_text() if written.exists() else None
+
+    def test_it_writes_the_target_and_starts_prometheus_with_the_arguments(self):
+        result, written = self.run_entrypoint("example.org", "--config.file=/x.yml")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "--config.file=/x.yml")
+        self.assertEqual(
+            json.loads(written),
+            [
+                {
+                    "targets": ["https://example.org/healthz"],
+                    "labels": {"rehearsal": "false"},
+                }
+            ],
+        )
+
+    def test_a_test_name_is_marked_as_a_rehearsal(self):
+        _, written = self.run_entrypoint("manuspectrum.test")
+        self.assertEqual(json.loads(written)[0]["labels"], {"rehearsal": "true"})
+        _, written = self.run_entrypoint("attest.example.org")
+        self.assertEqual(json.loads(written)[0]["labels"], {"rehearsal": "false"})
+
+    def test_a_value_that_is_not_a_host_name_starts_nothing(self):
+        for host in (None, "", "a b", 'x"y', "a/b", "a.b/c", "-a.org", "a..org", "a;b"):
+            with self.subTest(host=host):
+                result, written = self.run_entrypoint(host)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("PUBLIC_HOST", result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertIsNone(written)
 
 
 @unittest.skipUnless(

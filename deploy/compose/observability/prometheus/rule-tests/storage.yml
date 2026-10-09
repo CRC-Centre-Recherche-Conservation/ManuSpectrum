@@ -72,6 +72,8 @@ tests:
   input_series:
   - series: node_filesystem_device_error{mountpoint="/data"}
     values: 0x5 1x30
+  - series: up{job="node"}
+    values: 1x35
   promql_expr_test:
   - expr: ALERTS{alertname="NfsUnavailable", alertstate="firing"}
     eval_time: 4m
@@ -86,6 +88,8 @@ tests:
   input_series:
   - series: node_filesystem_device_error{mountpoint="/"}
     values: '0x30'
+  - series: up{job="node"}
+    values: 1x30
   promql_expr_test:
   - expr: ALERTS{alertname="NfsUnavailable", alertstate="firing"}
     eval_time: 3m

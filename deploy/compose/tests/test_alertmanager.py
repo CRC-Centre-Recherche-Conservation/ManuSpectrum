@@ -81,6 +81,7 @@ class RenderTests(RenderBase):
         )
         self.assertIs(config["global"]["smtp_require_tls"], False)
         self.assertNotIn("smtp_auth_username", config["global"])
+        self.assertEqual(config["global"]["smtp_hello"], "manuspectrum.test")
 
     def test_every_mail_receiver_gets_every_recipient(self):
         result = self.render(
@@ -201,6 +202,87 @@ class RenderTests(RenderBase):
         self.assertEqual(result.stdout, "")
 
 
+class ValidateOnlyTests(RenderBase):
+    def test_a_good_environment_validates_without_writing_anything(self):
+        before = set(Path(self.tmp.name).iterdir())
+        result = self.render(
+            ALERTMANAGER_VALIDATE_ONLY="1",
+            ALERTMANAGER_RENDER_ONLY="",
+            ALERTMANAGER_BIN="/bin/false",
+            TMPDIR=self.tmp.name,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(set(Path(self.tmp.name).iterdir()), before)
+        self.assertFalse(Path(str(self.out) + ".new").exists())
+
+    def test_a_bad_environment_is_refused_in_validate_only_mode(self):
+        result = self.render(ALERTMANAGER_VALIDATE_ONLY="1", ALERT_EMAILS="oops")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("ALERT_EMAILS", result.stderr)
+
+    def test_an_output_path_that_cannot_be_written_is_never_touched(self):
+        result = self.render(
+            ALERTMANAGER_VALIDATE_ONLY="1",
+            ALERTMANAGER_OUT="/nonexistent-dir/alertmanager.yml",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class AlertRecipientsTargetTests(unittest.TestCase):
+    """`make alert-recipients`, run as the current (unprivileged) user."""
+
+    MAKE_DIR = COMPOSE_DIR.parent
+
+    def run_make(self, **values):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = Path(tmp) / "env"
+            lines = {**{k: v for k, v in GOOD.items()}, **values}
+            env_file.write_text(
+                "".join(f"{k}={v}\n" for k, v in lines.items()), encoding="utf-8"
+            )
+            marker = Path(tmp) / "compose-called"
+            fake = Path(tmp) / "fake-compose"
+            fake.write_text(f'#!/bin/sh\necho "$@" >{marker}\n', encoding="utf-8")
+            fake.chmod(0o755)
+            before = set(Path(tmp).iterdir())
+            result = subprocess.run(
+                [
+                    "make",
+                    "-C",
+                    str(self.MAKE_DIR),
+                    "alert-recipients",
+                    f"ENV_FILE={env_file}",
+                    f"COMPOSE={fake}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=tmp,
+            )
+            created = set(Path(tmp).iterdir()) - before - {marker}
+            return result, marker.exists(), created
+
+    def test_good_values_recreate_alertmanager_and_write_nothing_else(self):
+        result, compose_called, created = self.run_make()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(compose_called)
+        self.assertEqual(created, set())
+
+    def test_a_bad_list_stops_before_compose_is_called(self):
+        result, compose_called, _ = self.run_make(ALERT_EMAILS="oops")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(compose_called)
+        self.assertIn("left running unchanged", result.stderr)
+
+    def test_the_recipe_never_names_dev_null_as_an_output(self):
+        makefile = (self.MAKE_DIR / "Makefile").read_text(encoding="utf-8")
+        recipe = makefile.split("\nalert-recipients:")[1].split("\n\n")[0]
+        self.assertNotIn("/dev/null", recipe)
+        self.assertNotIn("ALERTMANAGER_OUT", recipe)
+        self.assertIn("ALERTMANAGER_VALIDATE_ONLY=1", recipe)
+
+
 @unittest.skipIf(yaml is None, "PyYAML is required")
 class RoutingTests(RenderBase):
     def setUp(self):
@@ -310,7 +392,10 @@ class RoutingTests(RenderBase):
             r for r in rules if r["source_matchers"] == ['alertname="RecentlyRebooted"']
         ]
         self.assertEqual(len(reboot), 1)
-        self.assertEqual(reboot[0]["target_matchers"], ['severity=~"critical|warning"'])
+        self.assertEqual(
+            reboot[0]["target_matchers"],
+            ['severity=~"critical|warning"', 'alertname!="AlertTest"'],
+        )
         self.assertNotIn("equal", reboot[0])
         severity = [r for r in rules if r["source_matchers"] == ['severity="critical"']]
         self.assertEqual(len(severity), 1)

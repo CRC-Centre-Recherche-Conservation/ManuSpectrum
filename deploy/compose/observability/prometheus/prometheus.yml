@@ -84,16 +84,33 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # The public name through nginx; the target comes from the `edge_targets`
-  # Compose config (https://${PUBLIC_HOST}/healthz). The probe also measures
-  # the certificate expiry.
+  # The public name through nginx; entrypoint.sh writes the target
+  # (https://${PUBLIC_HOST}/healthz) to /tmp/edge_targets.json. The probe also
+  # measures the certificate expiry, without verifying the chain.
   - job_name: blackbox-edge
     scrape_interval: 60s
     metrics_path: /probe
     params:
       module: [http_edge]
     file_sd_configs:
-      - files: ["/etc/prometheus/edge_targets.json"]
+      - files: ["/tmp/edge_targets.json"]
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # The same target with the certificate chain verified, for CertificateInvalid.
+  - job_name: blackbox-edge-verified
+    scrape_interval: 60s
+    metrics_path: /probe
+    params:
+      module: [http_edge_verified]
+    file_sd_configs:
+      - files: ["/tmp/edge_targets.json"]
         refresh_interval: 1m
     relabel_configs:
       - source_labels: [__address__]

@@ -15,9 +15,12 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#backupfailed
       - alert: BackupMissing
         expr: |
-          time() - manuspectrum_backup_last_success_timestamp_seconds > 26 * 3600
-          or
-          absent(manuspectrum_backup_last_success_timestamp_seconds)
+          (
+            time() - manuspectrum_backup_last_success_timestamp_seconds > 26 * 3600
+            or
+            absent(manuspectrum_backup_last_success_timestamp_seconds)
+          )
+          and on() (up{job="node"} == 1)
         for: 15m
         labels:
           severity: critical
@@ -38,9 +41,12 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#restoretestfailed
       - alert: RestoreTestMissing
         expr: |
-          time() - manuspectrum_restore_test_last_success_timestamp_seconds > 8 * 86400
-          or
-          absent(manuspectrum_restore_test_last_success_timestamp_seconds)
+          (
+            time() - manuspectrum_restore_test_last_success_timestamp_seconds > 8 * 86400
+            or
+            absent(manuspectrum_restore_test_last_success_timestamp_seconds)
+          )
+          and on() (up{job="node"} == 1)
         for: 15m
         labels:
           severity: warning

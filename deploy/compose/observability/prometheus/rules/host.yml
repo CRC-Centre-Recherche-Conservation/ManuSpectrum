@@ -38,13 +38,13 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#clocknotsynchronised
       - alert: HostRebooted
         expr: |
-          changes(node_boot_time_seconds[1h]) > 0
+          max_over_time(node_boot_time_seconds[1h]) - min_over_time(node_boot_time_seconds[1h]) > 60
         labels:
           severity: info
           service: host
         annotations:
           summary: "The host rebooted"
-          description: "The host booted within the last hour. The nightly 04:50 reboot is expected."
+          description: "The boot time moved by more than a minute within the last hour. The nightly 04:50 reboot is expected; a clock step of a minute or less is not counted."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#hostrebooted
       - alert: RecentlyRebooted
         expr: |
