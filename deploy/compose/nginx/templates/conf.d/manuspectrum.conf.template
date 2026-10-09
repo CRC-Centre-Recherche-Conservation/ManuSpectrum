@@ -80,7 +80,8 @@ server {
     include snippets/media.conf;
     include snippets/iiifserver.conf;
 
-    # location /grafana/ { ... }  (PP-6)
+    # Grafana is never proxied here: it listens on the loopback of the host and is
+    # reached by an SSH tunnel (deploy/OBSERVABILITY.md).
 
     location / {
         include snippets/proxy-web.conf;

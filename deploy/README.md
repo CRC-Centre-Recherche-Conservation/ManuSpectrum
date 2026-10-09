@@ -25,7 +25,10 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/certbot/` | Deploy hook of the `certbot` service (`CERT_MODE=acme`) |
 | `certs/` | `make-local-ca.sh` (rehearsal CA, self-signed placeholder), `README.md` (modes, trust), tests |
 | `logrotate/` | Host `logrotate` template for the nginx logs (thirty days) |
-| `systemd/` | Service and timer templates: certificate renewal, nightly backup (02:00), weekly restore test (Sunday 05:30) |
+| `systemd/` | Service and timer templates: certificate renewal, nightly backup (02:00), weekly restore test (Sunday 05:30), container metrics (30 s), disk usage metrics (hourly), monthly report (the 1st, 08:00) |
+| `OBSERVABILITY.md` | Monitoring: services, Grafana by SSH tunnel, dashboards, alerts and their timing, recipients and sender, mail categories, monthly report, host metrics, upgrade note |
+| `compose/observability/` | Prometheus, Alertmanager, Grafana and blackbox configuration: scrape jobs, alert rules and their unit tests, e-mail templates, the four dashboards, `check.sh` |
+| `runbooks/` | One file per alert area, one section per alert: symptom, diagnosis, remediation, escalation |
 | `compose/smoke.sh` | Checks of a running stack |
 | `compose/tests/` | Rules of the rendered Compose files (no container is started) |
 | `Makefile` | Operator commands |
@@ -64,6 +67,13 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `restore` | `RESTIC_SNAPSHOT=<id\|latest>` or `ASIDE=<dir>`, `CONFIRM=yes ERASURES_CHECKED=yes`: replace the database and the uploads from a backup |
 | `restore-files` | `INCLUDE=/backup/... TARGET=<dir> [RESTIC_SNAPSHOT=<id>]`: pull files from a backup into a separate directory |
 | `restic` | `ARGS="snapshots"`: run restic on the repository, interactive |
+| `monitoring-init` | Once per host, `postgres` up: create or update the `ms_monitor` role and `pg_stat_statements` |
+| `observability-on`, `observability-off` | Start, or stop and remove, the monitoring containers (volumes kept) |
+| `alert-recipients` | After editing `ALERT_EMAILS`, the sender or the relay in `.env`: validate, recreate Alertmanager |
+| `alert-test` | Raise a critical `AlertTest` for five minutes: an e-mail must reach `ALERT_EMAILS` |
+| `alerts`, `silence` | List the alerts Alertmanager holds; `ARGS='alertname=… --duration=2h --comment="why"'` silences one |
+| `monthly-report`, `report-test` | Send the monthly report (the timer runs it on the 1st); `report-test [ARGS="--month YYYY-MM"]` sends one now |
+| `container-metrics`, `disk-usage` | Write the host metrics for node_exporter (the timers run them) |
 
 ## Rules
 
@@ -135,6 +145,15 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   profile too, so without the three keys every Compose command, `up` included,
   fails with `set BACKUP_DUMP_DIR in .env`. Then create the directories and run
   `make -C deploy backup-init` (`BACKUP.md`, "Setup on a host").
+- Monitoring (`OBSERVABILITY.md`): the `observability` profile, on through
+  `COMPOSE_PROFILES` in `.env`. Grafana listens on the loopback of the host only
+  and is reached by an SSH tunnel (`ssh -L 3000:localhost:3000`), never through
+  nginx. Alerts go to the single list `ALERT_EMAILS`; the sender
+  `ALERT_EMAIL_FROM` and the application's `DEFAULT_FROM_EMAIL` are an address on
+  the host's own domain, never an institutional one. Upgrading a host that has a
+  `.env`: add `COMPOSE_PROFILES`, `ALERT_EMAILS`, `ALERT_EMAIL_FROM` and
+  `DEFAULT_FROM_EMAIL` before pulling, then
+  `make -C deploy volumes secrets up monitoring-init observability-on`.
 - `web` and `init` run Django's deployment checks first
   (`check --deploy --tag security --fail-level WARNING`) and refuse to start
   on any warning.
@@ -227,6 +246,5 @@ every commit for secrets with a pinned image, so it needs Docker
 
 ## What comes next
 
-- PP-5: `/readyz` and JSON logs.
 - PP-8: Ansible writes `.env` and creates the volumes.
 - PP-10: image publication and the update command.

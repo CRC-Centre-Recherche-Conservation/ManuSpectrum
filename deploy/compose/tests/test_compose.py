@@ -891,9 +891,7 @@ class ComposeStackTests(unittest.TestCase):
         alertmanager = self.observability["services"]["alertmanager"]
         environment = alertmanager["environment"]
         self.assertEqual(environment["ALERT_EMAILS"], "alerts@manuspectrum.test")
-        self.assertEqual(
-            environment["ALERT_EMAIL_FROM"], "manuspectrum@manuspectrum.test"
-        )
+        self.assertEqual(environment["ALERT_EMAIL_FROM"], "noreply@manuspectrum.test")
         self.assertEqual(environment["EMAIL_HOST"], "smtp.manuspectrum.test")
         self.assertEqual(environment["EMAIL_PORT"], "25")
         self.assertEqual(environment["EMAIL_USE_TLS"], "false")
@@ -907,6 +905,13 @@ class ComposeStackTests(unittest.TestCase):
         env = (COMPOSE_DIR / ".env.example").read_text()
         self.assertRegex(env, r"(?m)^ALERT_EMAILS=\S+$")
         self.assertNotIn("ALERT_EMAIL_TO", env)
+
+    def test_env_example_sets_one_sender_on_the_host_domain(self):
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        values = dict(re.findall(r"(?m)^([A-Z_]+)=(.*)$", env))
+        self.assertTrue(values["DEFAULT_FROM_EMAIL"])
+        self.assertEqual(values["DEFAULT_FROM_EMAIL"], values["ALERT_EMAIL_FROM"])
+        self.assertNotEqual(values["DEFAULT_FROM_EMAIL"], values["CONTACT_EMAIL"])
 
     def test_edge_probe_target_is_an_inline_config(self):
         config = self.observability["configs"]["edge_targets"]
