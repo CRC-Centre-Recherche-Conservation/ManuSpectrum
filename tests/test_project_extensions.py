@@ -5,15 +5,12 @@ that reference the real one then fail to import. Functions and plugins are
 registered the same way from their own files.
 """
 
+import ast
 import json
 import uuid
 from pathlib import Path
 
 from django.test import SimpleTestCase
-
-from arches.app.models.models import DDataType  # noqa: F401  (datatype key)
-
-from manuspectrum.datatypes import manifest
 
 ROOT = Path(__file__).resolve().parent.parent / "manuspectrum"
 
@@ -84,4 +81,20 @@ class ProjectExtensionTests(SimpleTestCase):
         self.assertEqual(len(ids), len(set(ids)))
 
     def test_the_datatype_is_keyed_by_its_name(self):
-        self.assertTrue(manifest.details.get("datatype"))
+        # Read without importing: the datatype module queries the database at import.
+        tree = ast.parse((ROOT / "datatypes" / "manifest.py").read_text("utf-8"))
+        details = next(
+            node.value
+            for node in tree.body
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            and any(
+                getattr(target, "id", None) == "details"
+                for target in getattr(node, "targets", [getattr(node, "target", None)])
+            )
+        )
+        keys = {
+            k.value: v.value
+            for k, v in zip(details.keys, details.values)
+            if isinstance(k, ast.Constant) and isinstance(v, ast.Constant)
+        }
+        self.assertTrue(keys.get("datatype"))
