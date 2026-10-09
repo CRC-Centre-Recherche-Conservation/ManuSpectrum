@@ -1,5 +1,5 @@
 import L from "leaflet";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { anchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 
@@ -75,6 +75,30 @@ describe("anchoredControl", () => {
         ]);
         expect(Number.parseFloat(host.style.left)).toBe(0);
         expect(Number.parseFloat(host.style.top)).toBe(600);
+    });
+
+    it("is placed again when its own size changes", () => {
+        let notify: () => void = () => {};
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: () => void) {
+                    notify = callback;
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
+        const bounds: Bounds = [
+            [-20, -30],
+            [30, 40],
+        ];
+        anchoredControl(map, host).place(bounds);
+        const point = corner(bounds);
+        Object.defineProperty(host, "offsetWidth", { value: 120 });
+        notify();
+        vi.unstubAllGlobals();
+        expect(host.style.left).toBe(`${point.x - 120}px`);
     });
 
     it("stops following the map once removed", () => {

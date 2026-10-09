@@ -146,7 +146,11 @@ export function captureRegion(
     };
 }
 
-/** A region of the page with the layer's turn undone. */
+/**
+ * A region of the page with the layer's turn undone. `size` is the layer's own
+ * size, the one the photo has once turned back; IIIF scales the region before
+ * it rotates it, so an odd turn asks for the sides swapped.
+ */
 export function captureUrl(
     service: string,
     region: { x: number; y: number; w: number; h: number },
@@ -154,5 +158,6 @@ export function captureUrl(
     quarter: Quarter,
 ): string {
     const back = ((4 - quarter) % 4) * 90;
-    return `${service.replace(/\/$/, "")}/${region.x},${region.y},${region.w},${region.h}/${Math.round(size.w)},${Math.round(size.h)}/${back}/default.jpg`;
+    const [w, h] = quarter % 2 === 1 ? [size.h, size.w] : [size.w, size.h];
+    return `${service.replace(/\/$/, "")}/${region.x},${region.y},${region.w},${region.h}/${Math.round(w)},${Math.round(h)}/${back}/default.jpg`;
 }

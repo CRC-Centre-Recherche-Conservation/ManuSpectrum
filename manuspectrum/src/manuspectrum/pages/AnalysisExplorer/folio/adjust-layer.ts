@@ -40,7 +40,8 @@ export interface AdjustOptions {
  * move it by one screen pixel (ten with Shift), `+` and `-` scale it about its
  * centre, and Escape ends the adjustment. The layer is redrawn as the box
  * changes; `onDone` is the moment to keep it. The map does not pan while a
- * drag runs. `stop()` leaves the image as it was found.
+ * drag runs; a press on the image or a handle focuses the image, so the keys
+ * (and Escape) reach it. `stop()` leaves the image as it was found.
  */
 export function adjustLayer(
     map: L.Map,
@@ -138,6 +139,7 @@ export function adjustLayer(
     ): void {
         event.preventDefault();
         event.stopPropagation();
+        image.focus({ preventScroll: true });
         freeze(event);
         let moved = false;
         function onMove(next: Event): void {

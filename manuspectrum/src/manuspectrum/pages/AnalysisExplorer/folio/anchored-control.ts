@@ -17,7 +17,8 @@ export interface AnchoredControl {
  * a rectangle of the map: placed in container pixels, again on every `zoom`,
  * `move` and `resize`, and held inside the container so a corner scrolled out
  * of view leaves the control at the nearest edge. Clicks, double clicks and
- * wheel turns on it do not reach the map.
+ * wheel turns on it do not reach the map. It is placed again whenever its own
+ * size changes (its content arrives after it is placed).
  */
 export function anchoredControl(
     map: L.Map,
@@ -48,6 +49,11 @@ export function anchoredControl(
     }
 
     map.on("zoom move resize", reposition);
+    const observer =
+        typeof ResizeObserver === "undefined"
+            ? null
+            : new ResizeObserver(reposition);
+    observer?.observe(element);
 
     return {
         place(next) {
@@ -56,6 +62,7 @@ export function anchoredControl(
         },
         remove() {
             map.off("zoom move resize", reposition);
+            observer?.disconnect();
             bounds = null;
             element.remove();
         },

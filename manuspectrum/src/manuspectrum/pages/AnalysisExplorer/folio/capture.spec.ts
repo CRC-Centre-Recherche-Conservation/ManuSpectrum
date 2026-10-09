@@ -28,7 +28,7 @@ describe("planCapture", () => {
             layerSize: { w: 900, h: 600 },
         });
         expect(plan).toEqual({
-            url: `${SERVICE}/640,1280,1280,1720/900,600/270/default.jpg`,
+            url: `${SERVICE}/640,1280,1280,1720/600,900/270/default.jpg`,
             width: 900,
             height: 600,
         });

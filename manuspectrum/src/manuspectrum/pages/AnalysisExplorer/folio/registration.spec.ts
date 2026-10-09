@@ -123,7 +123,17 @@ describe("registration math", () => {
                 1,
             ),
         ).toBe(
-            "https://img.example/iiif/p/400,800,1200,400/600,200/270/default.jpg",
+            "https://img.example/iiif/p/400,800,1200,400/200,600/270/default.jpg",
+        );
+        expect(
+            captureUrl(
+                "https://img.example/iiif/p",
+                { x: 400, y: 800, w: 1200, h: 400 },
+                { w: 600, h: 200 },
+                2,
+            ),
+        ).toBe(
+            "https://img.example/iiif/p/400,800,1200,400/600,200/180/default.jpg",
         );
     });
 });

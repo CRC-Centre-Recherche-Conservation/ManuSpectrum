@@ -1272,15 +1272,13 @@ function onKeydown(event: KeyboardEvent): void {
     position: absolute;
     inset-block-start: 0.3125rem;
     inset-inline-end: 0.3125rem;
-    max-inline-size: 60%;
-    overflow: hidden;
+    max-inline-size: calc(100% - 0.625rem);
     padding: 0.0625rem 0.25rem;
     border-radius: 0.1875rem;
     background: color-mix(in srgb, var(--ink) 80%, transparent);
     color: var(--surface);
-    font: 500 0.5625rem var(--font-mono);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font: 500 0.5625rem/1.2 var(--font-mono);
+    text-align: end;
 }
 
 .layer-gallery .capture-delete {

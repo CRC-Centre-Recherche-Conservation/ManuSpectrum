@@ -145,6 +145,16 @@ describe("adjustLayer", () => {
         expect(done).toEqual([changes.at(-1)]);
     });
 
+    it("focuses the image on a press of the image or of a handle, so Escape reaches it", () => {
+        document.body.append(map.getContainer());
+        begin();
+        pointer(image, "pointerdown", 100, 100);
+        expect(document.activeElement).toBe(image);
+        image.blur();
+        pointer(handle("se"), "pointerdown", 0, 0);
+        expect(document.activeElement).toBe(image);
+    });
+
     it("measures a drag from where it started, not from the last move", () => {
         begin();
         pointer(image, "pointerdown", 100, 100);
