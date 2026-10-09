@@ -28,7 +28,7 @@ Those values (resources, accounts, NFS options, SSH settings...) go in
 ## Prerequisites
 
 Anyone with (a) a Linux host with KVM/libvirt and (b) a clone of the repository
-(`git clone https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git`)
+(`git clone --recurse-submodules https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git`)
 can follow this page. No other machine is needed.
 
 - Supported host OS families: Debian/Ubuntu and Fedora.
@@ -205,8 +205,9 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   `group_add: APP_GID`. Files that web or worker write later get `0644` (umask 022).
   Over NFS the export must keep the uid and gid (no `root_squash` remapping of them).
 - [ ] *(service account)* the repository is at `~/manuspectrum` at the commit under test:
-  `git clone https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`,
-  `git -C manuspectrum checkout <commit>`, `git -C manuspectrum log -1 --format=%H` → `<commit>`.
+  `git clone --recurse-submodules https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`,
+  `git -C manuspectrum checkout <commit>`, `git -C manuspectrum submodule update --init`,
+  `git -C manuspectrum log -1 --format=%H` → `<commit>`.
 - [ ] *(service account)* `cp deploy/compose/.env.example deploy/compose/.env`, then set
   `APP_UID`, `APP_GID` (`id -u`, `id -g`), `MEDIA_HOST_DIR`, `DOMAIN_NAMES` and
   `PUBLIC_SERVER_ADDRESS` to the rehearsal values; leave `MANUSPECTRUM_IMAGE=manuspectrum:local`.
@@ -253,8 +254,19 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   again → four `… exists`.
 - [ ] *(service account)* `make -C deploy config` → `compose files valid`.
   - On failure: the message names the unset variable of `.env`.
-- [ ] *(service account)* `make -C deploy init` → Arches `setup_db` output, exit 0
-  (`echo $?`).
+- [ ] *(service account)* The package is present: `ls pkg/graphs/resource_models | head -3` and
+  `test -f pkg/expected-inventory.json` (`git submodule update --init` otherwise).
+- [ ] *(service account)* `make -C deploy init` → Arches `setup_db` output, then the lines
+  `entrypoint: admin password set from the admin_password secret`,
+  `entrypoint: loading the data package /srv/pkg (several minutes)`, the `load_package`
+  output, `Inventory check passed: the database matches expected-inventory.json` and
+  `entrypoint: data package loaded`, exit 0 (`echo $?`). A line `Inventory check FAILED` lists the
+  differences and stops `init`. It takes noticeably
+  longer than `setup_db` alone.
+  - Refusals before `setup_db`: `holds no data package` (submodule not initialised),
+    `pkg/ is not at the commit this checkout pins` (`make init` itself;
+    `git submodule update --init`), `PUBLIC_SERVER_ADDRESS … must end with a slash`
+    (the deployment checks, before anything else).
   - On failure: `dc logs --tail=100 postgres elasticsearch`; an Elasticsearch that never
     gets healthy: `sysctl vm.max_map_count` → at least `262144`.
   - A failed first installation (Elasticsearch flapping, out of memory, Ctrl-C) leaves a
@@ -278,7 +290,9 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 - [ ] *(service account)* Run `make -C deploy init` again → exit ≠ 0 with
   `refusing: database <PGDBNAME> exists and setup_db would drop it`, and the data is intact
   (`deploy/compose/smoke.sh init-guard` → four `ok:` lines: `init`, `manage setup_db`,
-  `manage packages ... -db`, `manage packages -o setup`). **(CI too)**
+  `manage packages ... -db`, `manage packages -o setup`). Without the package directory,
+  Compose fails on the bind mount before the entrypoint can refuse, and the script says
+  `init-guard needs the data package` (`git submodule update --init`). **(CI too)**
 - [ ] *(service account)* `make -C deploy certs-local` (4.1), then `make -C deploy up` → returns without error (it waits for every
   service but `beat`, then starts `beat`); up to 15 minutes on a first start.
   The `nginx` service needs `CERTS_DIR` and `NGINX_LOG_HOST_DIR` to exist: `up` fails otherwise.
@@ -368,7 +382,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   `current` is replaced on restart, the previous release kept once, pruned at the next
   restart). **(CI too)**
 - [ ] *(service account)* After a new image: `docker exec manuspectrum-web-1 cat /app/static/.build-id` → note
-  `<id1>`. Build the next commit (`git checkout <next commit>`,
+  `<id1>`. Build the next commit (`git checkout <next commit>`, `git submodule update --init`,
   `make -C deploy build IMAGE=manuspectrum:next`), set `MANUSPECTRUM_IMAGE=manuspectrum:next`
   in `.env`, `make -C deploy up`. Then
   `docker exec manuspectrum-web-1 cat /app/static/.build-id` → `<id2>` and

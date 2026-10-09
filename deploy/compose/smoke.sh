@@ -197,7 +197,12 @@ cmd_static_swap() {
 
 cmd_init_guard() {
   local out
-  if out="$(compose run --rm --no-deps -T web init 2>&1)"; then fail "init ran on a live database"; fi
+  if out="$(compose run --rm --no-deps -T init 2>&1)"; then fail "init ran on a live database"; fi
+  # Compose fails on the package bind mount (create_host_path: false) before the
+  # entrypoint can refuse: say what is missing instead of a misleading failure.
+  if grep -q "bind source path does not exist" <<<"$out"; then
+    fail "init-guard needs the data package: PKG_DIR must name the pkg submodule (git submodule update --init), $out"
+  fi
   grep -q "refusing" <<<"$out" || fail "init failed without refusing: $out"
   ok "init refused on a live database"
   if out="$(compose run --rm --no-deps -T web manage setup_db --force 2>&1)"; then fail "manage setup_db ran"; fi

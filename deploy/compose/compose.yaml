@@ -228,6 +228,46 @@ services:
       retries: 3
       start_period: 300s
 
+  # First installation only (`make -C deploy init`): setup_db, the admin password,
+  # then the data package (the pkg submodule) mounted read-only. Not started by
+  # `up`. load_package copies the package's System_Settings.json into
+  # APP_ROOT/system_settings, which the read-only image cannot take: a tmpfs
+  # stands there for this run (the image's own copy is not read, the package
+  # carries the settings).
+  init:
+    <<: *app
+    profiles: [init]
+    restart: "no"
+    command: ["init"]
+    environment:
+      <<: *app_environment
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+    secrets: [pg_password, elastic_password, django_secret_key, email_password, admin_password]
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=1g"
+      - "/app/manuspectrum/system_settings:rw,noexec,nosuid,nodev,size=8m,mode=1777"
+    volumes:
+      - *media
+      - type: bind
+        source: ${PKG_DIR:-../../pkg}
+        target: /srv/pkg
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LOCAL_CA_CERT:-/dev/null}
+        target: /run/ms-ca/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres: {condition: service_healthy}
+      elasticsearch: {condition: service_healthy}
+      redis-broker: {condition: service_healthy}
+      redis-cache: {condition: service_healthy}
+
   worker:
     <<: *app
     command: ["worker"]

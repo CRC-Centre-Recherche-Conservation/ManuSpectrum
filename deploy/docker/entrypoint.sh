@@ -6,9 +6,14 @@
 #   worker         wait for PostgreSQL and Elasticsearch, then the Celery worker
 #   beat           wait for PostgreSQL, then Celery beat
 #   init           deployment checks as for web; first installation: Arches
-#                  setup_db, then the admin
-#                  password from the admin_password secret; refused when the
-#                  database already exists (setup_db drops and recreates it)
+#                  setup_db, then the admin password from the admin_password
+#                  secret, then the data package mounted at PKG_MOUNT
+#                  (/srv/pkg: load_package, i18n synclanguages, then
+#                  check_pkg_inventory against the package's
+#                  expected-inventory.json); refused when the database already
+#                  exists (setup_db drops and recreates it) or when the package
+#                  is missing. A PUBLIC_SERVER_ADDRESS without its trailing
+#                  slash stops the deployment checks (settings_docker.py)
 #   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
 #                  packages -db / -o setup) only through `init`
 #   anything else  executed as given
@@ -19,6 +24,7 @@
 set -euo pipefail
 
 WAIT_SECONDS="${WAIT_SECONDS:-300}"
+PKG_MOUNT="${PKG_MOUNT:-/srv/pkg}"
 
 log() { echo "entrypoint: $*" >&2; }
 
@@ -46,6 +52,28 @@ oneoff() { env -u PROMETHEUS_MULTIPROC_DIR "$@"; }
 deploy_checks() {
   oneoff python manage.py check --deploy --tag security --fail-level WARNING \
     || { log "Django's deployment checks failed (above); not starting"; exit 1; }
+}
+
+# Refuses (exit 1) unless PKG_MOUNT holds the data package: a resource model
+# and the inventory the package states about itself. An empty directory is
+# what a submodule that was never initialised looks like.
+require_package() {
+  if ! compgen -G "$PKG_MOUNT/graphs/resource_models/*.json" >/dev/null \
+    || [ ! -f "$PKG_MOUNT/expected-inventory.json" ]; then
+    log "refusing: ${PKG_MOUNT} holds no data package (graphs/resource_models/*.json and expected-inventory.json expected); on the host run git submodule update --init (PKG_DIR in the env file points at the package), then make -C deploy init again"
+    exit 1
+  fi
+}
+
+# Warns (never refuses: a rehearsal host has another origin) when the origin the
+# package's lists were written for differs from PUBLIC_SERVER_ADDRESS.
+warn_origin_mismatch() {
+  local origin
+  origin="$(sed -n 's/^[[:space:]]*"public_origin":[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$PKG_MOUNT/expected-inventory.json" | head -n 1)"
+  [ -n "$origin" ] || return 0
+  [ "$origin" != "${PUBLIC_SERVER_ADDRESS:-}" ] || return 0
+  log "WARNING: the package was written for ${origin} but PUBLIC_SERVER_ADDRESS is ${PUBLIC_SERVER_ADDRESS}: the controlled lists will load WITHOUT their sort order (they will show alphabetically). Acceptable on a rehearsal host only; production must load with PUBLIC_SERVER_ADDRESS=${origin}"
 }
 
 wait_for() { # wait_for NAME COMMAND...
@@ -255,6 +283,7 @@ case "$command" in
       1) ;;
       *) log "refusing: cannot tell whether database ${PGDBNAME} exists"; exit 1 ;;
     esac
+    require_package
     export PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
     oneoff python manage.py setup_db --force
     # setup_db creates the superuser admin with the publicly known password
@@ -264,6 +293,17 @@ case "$command" in
       exit 1
     fi
     log "admin password set from the admin_password secret (the admin_password file of SECRETS_DIR on the host); create named accounts next and keep admin for emergencies (deploy/compose/secrets/README.md)"
+    # The package: models, branches, controlled lists, System Settings. No -db
+    # (setup_db has just run). Each step stops init.
+    warn_origin_mismatch
+    log "loading the data package ${PKG_MOUNT} (several minutes)"
+    oneoff python manage.py packages -o load_package -s "$PKG_MOUNT" -y \
+      || { log "load_package failed: drop the database and run make -C deploy init again (deploy/README.md, \"A failed first installation\")"; exit 1; }
+    oneoff python manage.py i18n synclanguages \
+      || { log "i18n synclanguages failed; run make -C deploy manage ARGS=\"i18n synclanguages\""; exit 1; }
+    oneoff python manage.py check_pkg_inventory "$PKG_MOUNT/expected-inventory.json" \
+      || { log "the loaded database differs from the package inventory (above); drop the database and run make -C deploy init again, or inspect the differences first"; exit 1; }
+    log "data package loaded"
     ;;
   manage)
     shift

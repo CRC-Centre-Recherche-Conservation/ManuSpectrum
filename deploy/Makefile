@@ -72,9 +72,34 @@ secrets-dir: ## Print the secrets directory the make targets use
 build: ## Build the image (CI or rehearsal VM, 10 GB free RAM; never the development VM)
 	docker build -f $(COMPOSE_DIR)/../docker/Dockerfile -t $(IMAGE) $(COMPOSE_DIR)/../..
 
-init: ## First installation only: Arches setup_db, refused when the database exists
+# The package that init loads is the commit the application pins. After a
+# `git pull` or `git checkout`, pkg/ keeps the old commit until
+# `git submodule update --init`: `git submodule status` then starts with `-`
+# (not initialised), `+` (another commit) or `U` (merge conflict), and init
+# refuses. PKG_DIR (command line, environment or env file) is resolved to a real
+# path and compared with the submodule's: any spelling of that path is checked,
+# any other directory is used as given, with a notice. Without git, or outside
+# a Git checkout (a release archive), init refuses while PKG_DIR is the
+# submodule: set PKG_DIR to an extracted package to skip the check.
+PKG_SUBMODULE := ../../pkg
+REPO_ROOT := $(abspath $(COMPOSE_DIR)/../..)
+
+init: ## First installation only: Arches setup_db, then the pkg submodule (PKG_DIR); refused when the database exists or pkg/ is not at the pinned commit
+	@pkg_dir="$${PKG_DIR:-$$(sed -n 's/^PKG_DIR=//p' '$(ENV_FILE)' 2>/dev/null | tail -n 1)}"; \
+	pkg_dir="$${pkg_dir:-$(PKG_SUBMODULE)}"; \
+	case "$$pkg_dir" in /*) ;; *) pkg_dir='$(COMPOSE_DIR)'/"$$pkg_dir" ;; esac; \
+	if [ "$$(realpath -m "$$pkg_dir")" != "$$(realpath -m '$(REPO_ROOT)/pkg')" ]; then \
+		echo "notice: PKG_DIR=$$pkg_dir is not the pkg submodule; its commit is not checked" >&2; \
+	elif ! command -v git >/dev/null 2>&1 || ! git -C '$(REPO_ROOT)' rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
+		echo "refusing: cannot check that pkg/ is at the pinned commit (git is missing or $(REPO_ROOT) is not a Git checkout); set PKG_DIR to an extracted package directory to skip this check" >&2; exit 1; \
+	else \
+		state="$$(git -C '$(REPO_ROOT)' submodule status -- pkg 2>/dev/null | cut -c1)"; \
+		case "$$state" in \
+			-|+|U) echo "refusing: pkg/ is not at the commit this checkout pins (git submodule status: '$$state'); run: git submodule update --init  (then make -C deploy init again)" >&2; exit 1 ;; \
+		esac; \
+	fi
 	$(COMPOSE) up -d --wait postgres elasticsearch redis-broker redis-cache
-	$(COMPOSE) run --rm -T web init
+	$(COMPOSE) run --rm -T init
 
 admin-password: ## Set the admin password from the admin_password secret (first install, rotation)
 	$(COMPOSE) run --rm --no-deps -T web manage set_admin_password

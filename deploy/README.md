@@ -78,14 +78,40 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   image into `/srv/static/current`.
 - `web`, `worker` and `beat` run as `APP_UID:APP_GID` on a read-only root
   filesystem; the image works under any uid.
-- The first installation goes through `make init` only. It refuses to run when
-  the database exists, because `setup_db` drops and recreates it. The
+- The data package (graphs, controlled lists, System Settings) is the `pkg`
+  git submodule. Clone with `git clone --recurse-submodules …`, or run
+  `git submodule update --init` in an existing clone. `PKG_DIR` in the env file
+  (default `../../pkg`, relative to `deploy/compose`) names the directory; the
+  image never contains it.
+- The first installation goes through `make init` only. It runs the `init`
+  service (profile `init`, not started by `up`): `setup_db`, the admin password,
+  then `packages -o load_package -s /srv/pkg -y` (the package, mounted
+  read-only) and `i18n synclanguages`; the controlled lists are made searchable
+  by the package's own post SQL.
+  It takes several minutes longer than `setup_db` alone (graphs, 30 000 list
+  values, a full reindex). It refuses to run when the database exists, because
+  `setup_db` drops and recreates it; before `setup_db` it also refuses an empty
+  or missing package (`git submodule update --init`); `make init` itself refuses
+  when `git submodule status pkg` shows the package is not at the commit the
+  checkout pins (`-`, `+` or `U`: `git submodule update --init` first; the check
+  is skipped, with a notice, when `PKG_DIR` resolves to another directory; outside a
+  Git checkout (a release archive) or without `git`, `make init` refuses until
+  `PKG_DIR` names an extracted package). A
+  `PUBLIC_SERVER_ADDRESS` without trailing slash is refused by the deployment
+  checks (`settings_docker.py`): the lists would lose their sort order. `load_package` copies the package's `System_Settings.json` into
+  the application directory, so the `init` service puts a tmpfs on
+  `/app/manuspectrum/system_settings`; the image's own copy is not read during
+  `init`. At the end `init` runs the application's
+  `manage.py check_pkg_inventory` against the package's `expected-inventory.json`
+  (a difference fails `init`) and warns when the origin the package was
+  written for differs from `PUBLIC_SERVER_ADDRESS` (the list sort orders are
+  then not loaded; acceptable on a rehearsal host only). The
   entrypoint's `manage` refuses every command that would do it: `setup_db`,
   `packages ... -db` / `--setup_db`, `packages -o setup`. `web` refuses to
   start on a database that exists without the Arches system settings.
-- A failed first installation (the database is half created): `make init`
-  refuses because the database exists, and `web` logs
-  `has no Arches system settings`. Drop the database and start again:
+- A failed first installation (the database is half created, a package
+  step failed): `make init` refuses because the database exists, and `web` may
+  log `has no Arches system settings`. Drop the database and start again:
   `docker compose ... exec postgres sh -c 'dropdb -U "$POSTGRES_USER" <PGDBNAME>'`
   (the `dc` alias of `ACCEPTANCE.md`), then `make -C deploy init`.
 - Secrets: `make -C deploy secrets` creates the `0700` directory and the

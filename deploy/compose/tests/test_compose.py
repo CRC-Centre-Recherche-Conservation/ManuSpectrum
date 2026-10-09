@@ -120,6 +120,7 @@ class ComposeStackTests(unittest.TestCase):
         cls.backup, _ = render(
             "compose.yaml", "compose.prod.yaml", profiles=("backup",)
         )
+        cls.init, _ = render("compose.yaml", "compose.prod.yaml", profiles=("init",))
 
     def each_service(self):
         for label, stack in self.stacks.items():
@@ -382,7 +383,9 @@ class ComposeStackTests(unittest.TestCase):
     def test_source_declares_create_host_path_false_for_every_media_bind(self):
         # `docker compose config` omits a false value; the source must state it.
         source = (COMPOSE_DIR / "compose.yaml").read_text()
-        self.assertEqual(source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 5)
+        self.assertEqual(
+            source.count("create_host_path: false"), 2 + 4 + 4 + 1 + 5 + 2
+        )  # + init: package, CA
         self.assertNotIn("create_host_path: true", source)
 
     def test_nothing_mounts_the_docker_socket(self):
@@ -670,8 +673,250 @@ class ComposeStackTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertRegex(text, rf"(?m)^{name}=/[^\s]+$")
 
+    def test_init_runs_only_under_its_profile(self):
+        for stack in (self.base, self.prod, self.acme, self.backup):
+            self.assertNotIn("init", stack["services"])
+        self.assertIn("init", self.init["services"])
+
+    def test_init_mounts_the_package_read_only_from_pkg_dir(self):
+        init = self.init["services"]["init"]
+        mounts = {v["target"]: v for v in init["volumes"]}
+        package = mounts["/srv/pkg"]
+        self.assertEqual(package["type"], "bind")
+        self.assertTrue(package["read_only"])
+        self.assertFalse(package.get("bind", {}).get("create_host_path", False))
+        self.assertEqual(Path(package["source"]).name, "pkg")
+        self.assertFalse(Path(package["source"]).is_relative_to("/srv/pkg"))
+
+    def test_source_declares_create_host_path_false_for_the_package(self):
+        source = (COMPOSE_DIR / "compose.yaml").read_text()
+        block = source.split("source: ${PKG_DIR:-../../pkg}", 1)[1].split("- type", 1)[
+            0
+        ]
+        self.assertIn("create_host_path: false", block)
+
+    def test_only_init_mounts_the_package(self):
+        for label, name, service in self.each_service():
+            targets = [v["target"] for v in service.get("volumes", [])]
+            self.assertNotIn("/srv/pkg", targets, f"{label}/{name}")
+
+    def test_init_gives_load_package_a_writable_system_settings_directory(self):
+        init = self.init["services"]["init"]
+        self.assertTrue(init["read_only"])
+        self.assertTrue(
+            any(
+                t.startswith("/app/manuspectrum/system_settings:") and "noexec" in t
+                for t in init["tmpfs"]
+            )
+        )
+        for name in ("web", "worker", "beat"):
+            self.assertFalse(
+                any(
+                    "system_settings" in t for t in self.base["services"][name]["tmpfs"]
+                )
+            )
+
+    def test_init_is_a_one_shot_on_the_application_image_and_account(self):
+        init = self.init["services"]["init"]
+        self.assertEqual(init["command"], ["init"])
+        self.assertEqual(init["restart"], "no")
+        self.assertEqual(init["user"], "10001:10001")
+        self.assertEqual(init["cap_drop"], ["ALL"])
+        self.assertTrue(init["healthcheck"]["disable"])
+        self.assertEqual(init["image"], self.init["services"]["web"]["image"])
+        self.assertIn(
+            "admin_password", init["secrets"] and [s["source"] for s in init["secrets"]]
+        )
+        self.assertEqual(init["environment"]["PG_STATEMENT_TIMEOUT_MS"], "0")
+        self.assertFalse(init.get("ports"))
+
+    def test_the_image_build_context_still_excludes_the_package(self):
+        lines = (DEPLOY_DIR.parent / ".dockerignore").read_text().splitlines()
+        self.assertEqual(lines[1], "*")
+        self.assertNotIn("!pkg", [line.rstrip("/") for line in lines])
+
+    def test_env_example_declares_the_package_directory(self):
+        text = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(text, r"(?m)^PKG_DIR=[^\s]+$")
+
+    def test_make_init_runs_the_init_service(self):
+        makefile = (DEPLOY_DIR / "Makefile").read_text()
+        self.assertRegex(makefile, r"(?m)^\t\$\(COMPOSE\) run --rm -T init$")
+        self.assertNotIn("run --rm -T web init", makefile)
+
+
+@unittest.skipUnless(shutil.which("git") and shutil.which("make"), "git and make")
+class MakeInitSubmoduleTests(unittest.TestCase):
+    """`make -C deploy init` against throw-away repositories: docker is a stub
+    that logs its arguments, so only the submodule check can stop the run."""
+
+    GIT = (
+        "git",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "protocol.file.allow=always",
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+    )
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.base = Path(tmp.name)
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        self.dockerlog = self.base / "docker.log"
+        stub = self.bin / "docker"
+        stub.write_text(f'#!/bin/sh\necho "$*" >>"{self.dockerlog}"\n')
+        stub.chmod(0o755)
+        package = self.base / "package"
+        package.mkdir()
+        self.git(package, "init", "-q", "-b", "main")
+        (package / "expected-inventory.json").write_text("{}\n")
+        self.git(package, "add", ".")
+        self.git(package, "commit", "-q", "-m", "package")
+        self.app = self.base / "app"
+        (self.app / "deploy" / "compose").mkdir(parents=True)
+        shutil.copy(DEPLOY_DIR / "Makefile", self.app / "deploy" / "Makefile")
+        (self.app / "deploy" / "compose" / ".gitkeep").write_text("")
+        self.git(self.app, "init", "-q", "-b", "main")
+        self.git(self.app, "submodule", "add", "-q", str(package), "pkg")
+        self.git(self.app, "add", ".")
+        self.git(self.app, "commit", "-q", "-m", "app")
+
+    def git(self, cwd, *args):
+        subprocess.run([*self.GIT, *args], cwd=cwd, check=True, capture_output=True)
+
+    def init(self, root, **env):
+        environment = {
+            k: v for k, v in os.environ.items() if k not in ("PKG_DIR", "MAKEFLAGS")
+        }
+        environment.update(PATH=f"{self.bin}:{environment['PATH']}", **env)
+        return subprocess.run(
+            ["make", "-C", str(root / "deploy"), "init"],
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+
+    def docker_calls(self):
+        return self.dockerlog.read_text() if self.dockerlog.exists() else ""
+
+    def test_the_pinned_commit_goes_on_to_compose(self):
+        result = self.init(self.app)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("run --rm -T init", self.docker_calls())
+
+    def test_a_submodule_that_was_never_initialised_is_refused(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        result = self.init(clone)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("git submodule update --init", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
+    def test_a_submodule_at_another_commit_is_refused(self):
+        (self.app / "pkg" / "later.txt").write_text("later\n")
+        self.git(self.app / "pkg", "add", ".")
+        self.git(self.app / "pkg", "commit", "-q", "-m", "later")
+        result = self.init(self.app)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("is not at the commit this checkout pins", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
+    def test_another_package_directory_is_used_as_given(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        result = self.init(clone, PKG_DIR="/srv/elsewhere")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PKG_DIR=/srv/elsewhere is not the pkg submodule", result.stderr)
+        self.assertIn("run --rm -T init", self.docker_calls())
+
+    def test_another_package_directory_in_the_env_file_is_used_as_given(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        (clone / "deploy" / "compose" / ".env").write_text("PKG_DIR=/srv/elsewhere\n")
+        result = self.init(clone)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("is not the pkg submodule", result.stderr)
+
+    def test_other_spellings_of_the_submodule_path_are_still_checked(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        for value in (
+            "./../../pkg",
+            "../../pkg/",
+            str(clone / "pkg"),
+            "../compose/../../pkg",
+        ):
+            with self.subTest(value=value):
+                result = self.init(clone, PKG_DIR=value)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("git submodule update --init", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
+    def test_a_tree_that_is_not_a_git_checkout_is_refused(self):
+        archive = self.base / "archive"
+        shutil.copytree(self.app / "deploy", archive / "deploy")
+        result = self.init(archive)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("set PKG_DIR to an extracted package", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
+    def test_an_extracted_package_skips_the_check_outside_a_git_checkout(self):
+        archive = self.base / "archive"
+        shutil.copytree(self.app / "deploy", archive / "deploy")
+        result = self.init(archive, PKG_DIR="/srv/extracted")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("is not the pkg submodule", result.stderr)
+
+    def test_a_missing_git_is_refused(self):
+        bare_path = self.bin
+        for tool in (
+            "make",
+            "sh",
+            "sed",
+            "tail",
+            "cut",
+            "realpath",
+            "env",
+            "cat",
+            "dirname",
+            "grep",
+        ):
+            found = shutil.which(tool)
+            if found and not (bare_path / tool).exists():
+                (bare_path / tool).symlink_to(found)
+        result = subprocess.run(
+            [shutil.which("make"), "-C", str(self.app / "deploy"), "init"],
+            capture_output=True,
+            text=True,
+            env={"PATH": str(bare_path)},
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("git is missing", result.stderr)
+
+    def test_the_default_path_in_the_env_file_is_still_checked(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        (clone / "deploy" / "compose" / ".env").write_text("PKG_DIR=../../pkg\n")
+        self.assertEqual(self.init(clone).returncode, 2)
+
 
 class RepositoryRulesTests(unittest.TestCase):
+    def test_the_init_guard_smoke_names_a_missing_package_directory(self):
+        smoke = (COMPOSE_DIR / "smoke.sh").read_text()
+        guard = smoke.split("cmd_init_guard() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("bind source path does not exist", guard)
+        self.assertIn("init-guard needs the data package", guard)
+        self.assertLess(
+            guard.index("bind source path does not exist"),
+            guard.index('grep -q "refusing"'),
+        )
+
     def test_no_make_target_removes_a_volume(self):
         makefile = (DEPLOY_DIR / "Makefile").read_text()
         for forbidden in ("down -v", "--volumes", "volume rm", "prune"):
