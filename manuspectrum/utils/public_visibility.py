@@ -292,6 +292,9 @@ EXPLORER_MODELS = (
     "project",
     "sample",
     "characterization",
+    "place",
+    "modification",
+    "alteration",
 )
 
 
@@ -302,6 +305,9 @@ _VISIBLE_KINDS = (
     "projects",
     "samples",
     "characterizations",
+    "places",
+    "modifications",
+    "alterations",
 )
 
 
@@ -315,6 +321,9 @@ class VisibleSet:
     projects: frozenset = frozenset()
     samples: frozenset = frozenset()
     characterizations: frozenset = frozenset()
+    places: frozenset = frozenset()
+    modifications: frozenset = frozenset()
+    alterations: frozenset = frozenset()
     unpublished: frozenset = frozenset()
     evidence: dict = field(default_factory=dict)
     digest: str = ""
@@ -349,7 +358,9 @@ def visible_set(user, version=None):
     nodegroup and no hidden Project (a Draft Project hides nothing), a Sample
     a visible Analysis using it, an identified material a visible object
     observed and at least one visible analysis cited in evidence. Links are
-    read off the tiles.
+    read off the tiles. A Place is visible unless restricted; a Modification
+    or an Alteration needs a visible Document or Component it modified or
+    altered, through a readable link.
 
     Memoised per reader, permission epoch and data version (*version*, a
     ``data_version()`` the caller already read, else read here) for
@@ -434,6 +445,11 @@ def _visible_for(user):
         if observed_by[c] & objects and cited:
             evidence[c] = tuple(sorted(cited))
 
+    modified = links("modification", "document_modified")
+    altered = links("alteration", "object_altered")
+    modifications = {m for m in candidates["modification"] if modified[m] & objects}
+    alterations = {a for a in candidates["alteration"] if altered[a] & objects}
+
     published_objects = {d for d in documents if d not in unpublished} | {
         c
         for c in components
@@ -450,6 +466,9 @@ def _visible_for(user):
         "projects": frozenset(projects),
         "samples": frozenset(samples),
         "characterizations": frozenset(evidence),
+        "places": frozenset(candidates["place"]),
+        "modifications": frozenset(modifications),
+        "alterations": frozenset(alterations),
         "unpublished": frozenset(unpublished),
     }
     digest = hashlib.sha1(usedforsecurity=False)
