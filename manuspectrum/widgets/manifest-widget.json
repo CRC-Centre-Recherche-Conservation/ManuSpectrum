@@ -1,4 +1,5 @@
 {
+    "widgetid": "0ce30e75-f724-4c7c-9731-d46b4077e06d",
     "name": "manifest-widget",
     "component": "views/components/widgets/manifest-widget",
     "defaultconfig": {},
