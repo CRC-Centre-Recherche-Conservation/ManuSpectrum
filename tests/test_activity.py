@@ -23,7 +23,7 @@ from django.test.utils import CaptureQueriesContext
 from unittest.mock import patch
 
 from manuspectrum import tasks
-from manuspectrum.observability import activity, metrics
+from manuspectrum.observability import activity, celery_signals, metrics
 from tests.explorer_fixtures import ACTIVE, LIFECYCLE
 from tests.observability_helpers import sample
 
@@ -228,11 +228,48 @@ class WorkflowAndEtlTests(ActivityCase):
         at = START + timedelta(days=4)
         self.load("import-single-csv", "indexed", at)
         self.load("import-single-csv", "failed", at)
-        self.load("import-single-csv", "validated", at)
+        self.load("import-single-csv", "running", at)
         self.load("import-single-csv", "indexed", START - timedelta(days=1))
         row = self.figures()["etl"]["import-single-csv"]
         self.assertEqual(
-            row, {"started": 3, "succeeded": 1, "failed": 1, "unfinished": 1}
+            row,
+            {
+                "started": 3,
+                "succeeded": 1,
+                "failed": 1,
+                "unindexed": 0,
+                "unloaded": 0,
+                "validated": 0,
+                "unfinished": 1,
+            },
+        )
+
+    def test_every_terminal_status_arches_writes_has_its_own_count(self):
+        at = START + timedelta(days=4)
+        for status in (
+            "completed",
+            "indexed",
+            "unindexed",
+            "unloaded",
+            "validated",
+            "validated",
+            "failed",
+            "running",
+            "reversing",
+        ):
+            self.load("import-single-csv", status, at)
+        row = self.figures()["etl"]["import-single-csv"]
+        self.assertEqual(
+            row,
+            {
+                "started": 9,
+                "succeeded": 2,
+                "failed": 1,
+                "unindexed": 1,
+                "unloaded": 1,
+                "validated": 2,
+                "unfinished": 2,
+            },
         )
 
 
@@ -243,6 +280,18 @@ class ReadOnlyTests(ActivityCase):
                 cursor.execute("DELETE FROM edit_log WHERE false")
         with connection.cursor() as cursor:
             cursor.execute("DELETE FROM edit_log WHERE false")
+
+    def test_the_block_bounds_its_statements_and_restores_the_setting(self):
+        def timeout():
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW statement_timeout")
+                return cursor.fetchone()[0]
+
+        before = timeout()
+        with activity.read_only_cursor() as cursor:
+            cursor.execute("SHOW statement_timeout")
+            self.assertEqual(cursor.fetchone()[0], activity.STATEMENT_TIMEOUT)
+        self.assertEqual(timeout(), before)
 
     def test_collect_only_reads(self):
         with CaptureQueriesContext(connection) as captured:
@@ -402,6 +451,15 @@ class TaskTests(TestCase):
         close.assert_called()
         with (
             patch.object(activity, "publish_gauges", side_effect=RuntimeError),
-            patch("django.db.connections.close_all"),
+            patch("django.db.connections.close_all") as close,
+            patch.object(metrics.RESOURCES, "labels") as resources,
+            patch.object(metrics.ACTIVITY_MEASURED, "set") as measured,
+            self.assertLogs(
+                "manuspectrum.observability.celery_signals", "WARNING"
+            ) as logs,
         ):
-            worker_ready.send(sender=None)
+            celery_signals.record_activity_gauges()
+        self.assertIn("activity gauges not set", logs.output[0])
+        resources.assert_not_called()
+        measured.assert_not_called()
+        close.assert_called()

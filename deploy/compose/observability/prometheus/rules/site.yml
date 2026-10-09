@@ -67,7 +67,10 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchlatencyhigh
       - alert: WriteRequestsFailing
         expr: |
-          sum(increase(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"}[30m])) >= 3
+          (
+            (sum(increase(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"}[30m]) and django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) or vector(0))
+            + (sum(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} unless django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) or vector(0))
+          ) >= 3
         labels:
           severity: warning
           service: site

@@ -44,7 +44,6 @@ KINDS = {
 # Arches core routes that the kinds name (arches/urls.py).
 ARCHES_VIEWS = {
     "root",
-    "home",
     "resource_report",
     "search_results",
     "file_access",
@@ -140,10 +139,12 @@ def kind_views():
     for rule in document["groups"][0]["rules"]:
         if rule["record"] != "manuspectrum:consultations:total":
             continue
-        pattern = re.search(r'view=~"([^"]+)"', rule["expr"])[1]
+        views = set()
+        for pattern in re.findall(r'view=~?"([^"]+)"', rule["expr"]):
+            views |= set(pattern.split("|"))
         kind = rule["labels"]["kind"]
         assert kind not in result, f"two rules for {kind}"
-        result[kind] = set(pattern.split("|"))
+        result[kind] = views
     return result
 
 
@@ -175,6 +176,10 @@ class ConsultationKindTests(unittest.TestCase):
     def test_every_mapped_view_is_a_route_of_the_project_or_a_known_arches_view(self):
         self.assertEqual(self.mapped - self.routes - ARCHES_VIEWS, set())
 
+    def test_the_homepage_is_the_root_route_only(self):
+        self.assertIn("root", self.mapped)
+        self.assertNotIn("home", self.mapped)
+
     def test_the_extractor_reads_the_iiif_f_string_names(self):
         self.assertIn("iiif-v2-annotation-page", self.routes)
         self.assertIn("iiif-v3-characterization-collection", self.routes)
@@ -200,8 +205,25 @@ class ConsultationKindTests(unittest.TestCase):
         for rule in document["groups"][0]["rules"]:
             if rule["record"].endswith(":total"):
                 with self.subTest(kind=rule["labels"]["kind"]):
-                    self.assertIn('method="GET"', rule["expr"])
-                    self.assertIn('status=~"2..|304"', rule["expr"])
+                    selectors = re.findall(r"\{[^}]*\}", rule["expr"])
+                    self.assertTrue(selectors)
+                    for selector in selectors:
+                        self.assertIn('method="GET"', selector)
+                        if 'status="302"' in selector:
+                            self.assertIn('view="file_access"', selector)
+                        else:
+                            self.assertIn('status=~"2..|304"', selector)
+
+    def test_a_file_download_is_the_redirect_of_file_access_not_its_thumbnail(self):
+        document = yaml.safe_load(RULES.read_text(encoding="utf-8"))
+        (rule,) = [
+            r
+            for r in document["groups"][0]["rules"]
+            if r.get("labels", {}).get("kind") == "file_download"
+        ]
+        self.assertIn('{method="GET",status="302",view="file_access"}', rule["expr"])
+        self.assertNotRegex(rule["expr"], r'status=~"2\.\.\|304"[^}]*file_access')
+        self.assertNotRegex(rule["expr"], r'file_access[^}]*status=~"2\.\.\|304"')
 
 
 if __name__ == "__main__":

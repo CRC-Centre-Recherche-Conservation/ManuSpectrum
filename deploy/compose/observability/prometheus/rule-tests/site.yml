@@ -168,6 +168,51 @@ tests:
   - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
     eval_time: 50m
     exp_samples: []
+- name: the first error of three new series warns, the exporter creating each series at 1
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST"}
+    values: _ _ _ _ _ 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE"}
+    values: _ _ _ _ _ _ 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="502", view="biblissima-create-resource", method="POST"}
+    values: _ _ _ _ _ _ _ 1 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 6m
+    exp_samples: []
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 12m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 55m
+    exp_samples: []
+- name: a mix of old and new series counts both, and one new series alone does not warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST"}
+    values: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE"}
+    values: _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="workflow_history", method="PUT"}
+    values: _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 1 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 25m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+- name: one new series with two errors does not warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST"}
+    values: _ _ _ _ _ 2 2x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []
 - name: a single write error and a flood of read errors do not warn
   interval: 1m
   input_series:

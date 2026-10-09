@@ -5,9 +5,15 @@ hourly gauges (`manuspectrum.record_activity`). Every query is a SELECT in a
 read-only transaction and returns aggregates per resource model, workflow or ETL
 module; no user column is read and no resource id leaves this module.
 
-Rules, over a window ``[start, end)`` of UTC instants (passed as ``timestamptz``:
-the project keeps Arches' ``TIME_ZONE`` with ``USE_TZ = False``, so the
-``timestamp`` columns hold local time and the session compares them in that zone):
+Rules, over a window ``[start, end)`` of UTC instants (passed as ``timestamptz``).
+The Arches columns read here (``edit_log.timestamp``, ``workflow_history.created``,
+``load_event.load_start_time``) are ``timestamptz``: Arches writes a naive
+``datetime.now()`` in the process zone (``TIME_ZONE``, ``USE_TZ = False``) and
+PostgreSQL converts it with the session zone, so the stored values are true instants.
+That holds while a writer's process zone equals its session zone, as it does under
+Django; a naive value written from a session in another zone is misplaced. Naive
+values written during the repeated hour of the autumn change are ambiguous, so one
+hour a year may be placed an hour off.
 
 - created: distinct resources with an ``edit_log`` row ``create`` (Arches writes one
   per ``Resource.save()``, not only the first) or a ``tile create`` noted
@@ -20,7 +26,10 @@ the project keeps Arches' ``TIME_ZONE`` with ``USE_TZ = False``, so the
 - workflows: ``workflow_history`` rows, one per run; a run cancelled by its user is
   deleted by Arches and leaves no row; an open run is stale once older than
   ``WORKFLOW_STALE_AFTER_DAYS`` (a placeholder until the cleanup delay is decided);
-- ETL: ``load_event`` rows started in the window, by module and outcome.
+- ETL: ``load_event`` rows started in the window, by module and outcome: succeeded
+  (``indexed``, ``completed``), failed, unindexed (written, indexing failed), unloaded
+  (reversed after a success), validated (checked, nothing written); the rest
+  (``running``, ``reversing``) is unfinished.
 """
 
 import re
@@ -34,8 +43,16 @@ from manuspectrum.observability import metrics
 SYSTEM_GRAPH_SLUG = "arches_system_settings"
 DELETED_MODEL = "deleted_model"
 WORKFLOW_STALE_AFTER_DAYS = 30
-ETL_OUTCOMES = ("succeeded", "failed", "unfinished")
+ETL_OUTCOMES = (
+    "succeeded",
+    "failed",
+    "unindexed",
+    "unloaded",
+    "validated",
+    "unfinished",
+)
 ETL_SUCCEEDED_STATUSES = ("indexed", "completed")
+STATEMENT_TIMEOUT = "30s"
 RECENT_HOURS = 24
 MONTH = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 
@@ -115,7 +132,10 @@ ETL_SQL = """
 SELECT m.slug,
        count(*),
        count(*) FILTER (WHERE l.status = ANY(%(done)s)),
-       count(*) FILTER (WHERE l.status = 'failed')
+       count(*) FILTER (WHERE l.status = 'failed'),
+       count(*) FILTER (WHERE l.status = 'unindexed'),
+       count(*) FILTER (WHERE l.status = 'unloaded'),
+       count(*) FILTER (WHERE l.status = 'validated')
 FROM load_event l
 JOIN etl_modules m ON m.etlmoduleid = l.etl_module_id
 WHERE l.load_start_time >= %(start)s::timestamptz
@@ -128,12 +148,14 @@ GROUP BY m.slug
 def read_only_cursor():
     """A cursor in a read-only transaction that is always rolled back.
 
-    ``SET LOCAL`` is undone by the rollback, so the setting does not outlive the
-    block when it runs inside an enclosing transaction.
+    Statements are bounded by ``STATEMENT_TIMEOUT``. ``SET LOCAL`` is undone by the
+    rollback, so the settings do not outlive the block when it runs inside an
+    enclosing transaction.
     """
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL transaction_read_only = on")
+            cursor.execute(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'")
             try:
                 yield cursor
             finally:
@@ -191,12 +213,24 @@ def etl_runs(cursor, start, end):
         {"start": start, "end": end, "done": list(ETL_SUCCEEDED_STATUSES)},
     )
     runs = {}
-    for slug, started, succeeded, failed in cursor.fetchall():
+    for (
+        slug,
+        started,
+        succeeded,
+        failed,
+        unindexed,
+        unloaded,
+        validated,
+    ) in cursor.fetchall():
         runs[slug] = {
             "started": started,
             "succeeded": succeeded,
             "failed": failed,
-            "unfinished": started - succeeded - failed,
+            "unindexed": unindexed,
+            "unloaded": unloaded,
+            "validated": validated,
+            "unfinished": started
+            - (succeeded + failed + unindexed + unloaded + validated),
         }
     return runs
 

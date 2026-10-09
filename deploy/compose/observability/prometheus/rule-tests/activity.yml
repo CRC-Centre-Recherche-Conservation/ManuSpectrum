@@ -9,7 +9,7 @@ tests:
   input_series:
   - series: django_http_responses_total_by_status_view_method_total{status="200", view="root", method="GET", job="web", instance="web:8000"}
     values: 0+60x120
-  - series: django_http_responses_total_by_status_view_method_total{status="304", view="home", method="GET", job="web", instance="web:8000"}
+  - series: django_http_responses_total_by_status_view_method_total{status="304", view="root", method="GET", job="web", instance="web:8000"}
     values: 0+60x120
   - series: django_http_responses_total_by_status_view_method_total{status="500", view="root", method="GET", job="web", instance="web:8000"}
     values: 0+60x120
@@ -56,3 +56,20 @@ tests:
       value: 2
     - labels: 'manuspectrum:consultations:rate1h{kind="iiif_annotations"}'
       value: 2
+- name: a file download is the 302 of file_access, its 200 thumbnails are not counted
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="302", view="file_access", method="GET", job="web", instance="web:8000"}
+    values: 0+10x60
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="file_access", method="GET", job="web", instance="web:8000"}
+    values: 0+100x60
+  - series: django_http_responses_total_by_status_view_method_total{status="404", view="file_access", method="GET", job="web", instance="web:8000"}
+    values: 0+100x60
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="iiif-data-raw", method="GET", job="web", instance="web:8000"}
+    values: 0+5x60
+  promql_expr_test:
+  - expr: manuspectrum:consultations:total{kind="file_download"}
+    eval_time: 30m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:total{kind="file_download", job="web", instance="web:8000"}'
+      value: 450

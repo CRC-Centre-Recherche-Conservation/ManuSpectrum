@@ -62,6 +62,18 @@ MONTHS_FR = (
 ).split()
 
 
+MODEL_FIELDS = (
+    "created",
+    "created_deleted",
+    "modified",
+    "deleted",
+    "tile_saves",
+    "publication_changes",
+)
+WORKFLOW_FIELDS = ("started", "completed", "open", "stale")
+ETL_FIELDS = ("succeeded", "failed", "unfinished", "unloaded", "unindexed", "validated")
+
+
 class Unavailable(Exception):
     """Prometheus did not answer, or answered something unreadable."""
 
@@ -75,6 +87,42 @@ class Activity:
         self.timeout = timeout
         self.failed = False
         self._data = None
+
+    def parse(self, output):
+        """The answer of the command: the last JSON object of its output naming a month.
+
+        Log lines (JSON in the image) may precede or follow it. A reshaped answer
+        raises ValueError.
+        """
+        for line in reversed(output.splitlines()):
+            try:
+                data = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(data, dict) and "month" in data:
+                break
+        else:
+            raise ValueError("no activity answer in the output")
+        if data["month"] != self.label:
+            raise ValueError("answer for another month")
+        try:
+            for key in ("models", "workflows", "etl"):
+                if not isinstance(data[key], dict):
+                    raise TypeError(key)
+            int(data["workflow_stale_after_days"])
+            for row in data["models"].values():
+                for key in ("total", *MODEL_FIELDS):
+                    int(row[key])
+            for row in data["workflows"].values():
+                for key in WORKFLOW_FIELDS:
+                    int(row[key])
+            for row in data["etl"].values():
+                for key in ETL_FIELDS:
+                    int(row.get(key, 0))
+                int(row["started"])
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise ValueError(f"activity answer reshaped: {exc!r}") from exc
+        return data
 
     def get(self):
         if self._data is not None:
@@ -90,11 +138,8 @@ class Activity:
             )
             if done.returncode != 0:
                 raise ValueError(f"exit status {done.returncode}")
-            lines = [line for line in done.stdout.splitlines() if line.strip()]
-            data = json.loads(lines[-1])
-            if data.get("month") != self.label:
-                raise ValueError("answer for another month")
-        except (OSError, ValueError, IndexError, subprocess.SubprocessError) as exc:
+            data = self.parse(done.stdout)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
             self.failed = True
             raise Unavailable(str(exc)) from exc
         self._data = data
@@ -426,7 +471,7 @@ def plural(n, one, many=None):
 
 
 def number(n):
-    return f"{int(n):,}".replace(",", " ")
+    return f"{int(round(n)):,}".replace(",", " ")
 
 
 def by_label(rows, name):
@@ -577,10 +622,14 @@ def workflows(prom, activity, start, end):
             + (f" ({detail})" if detail else "")
             + f", {count(failed)} échec(s)"
         )
-    cancelled = prom.scalar(
-        "sum(increase(django_http_responses_total_by_status_view_method_total"
+    series = (
+        "django_http_responses_total_by_status_view_method_total"
         '{view="transaction_reverse",method="POST",status="200"}'
-        f"[{window}]))",
+    )
+    increase = f"increase({series}[{window}]) and {series} offset {window}"
+    fresh = f"{series} unless {series} offset {window}"
+    cancelled = prom.scalar(
+        f"sum(({increase}) or ({fresh}))",
         at,
     )
     if cancelled is not None and round(cancelled) > 0:
@@ -601,8 +650,14 @@ def bulk_runs(activity):
         text += f", {row['succeeded']} réussi(s)"
         if row["failed"]:
             text += f", {row['failed']} en échec"
-        if row["unfinished"]:
-            text += f", {row['unfinished']} non terminé(s)"
+        for key, label in (
+            ("unindexed", "chargé(s) mais non indexé(s)"),
+            ("unloaded", "défait(s) après chargement"),
+            ("validated", "validé(s) sans chargement"),
+            ("unfinished", "non terminé(s)"),
+        ):
+            if row.get(key):
+                text += f", {row[key]} {label}"
         lines.append(text)
     return lines or ["aucune activité"]
 

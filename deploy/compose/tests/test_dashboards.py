@@ -261,6 +261,9 @@ class DashboardFileTests(unittest.TestCase):
                 (target,) = panels[title]["targets"]
                 self.assertIn('method=~"POST|PUT|DELETE"', target["expr"])
                 self.assertIn("sum by (view)", target["expr"])
+                self.assertIn(" unless ", target["expr"])
+        (cancelled,) = panels["Workflows cancelled per day"]["targets"]
+        self.assertIn(" unless ", cancelled["expr"])
 
     def test_the_activity_dashboard_counts_nobody(self):
         text = json.dumps(self.by_uid()["ms-activity"])

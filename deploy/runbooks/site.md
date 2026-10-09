@@ -136,7 +136,7 @@ A curator reports that a save, an import step or a deletion failed with an error
 
 ### Diagnosis
 
-The panel "Failing writes (5xx) by view" gives the `view` of the failing requests (`tile`, `plugins`, `workflow_history`, `biblissima-create-resource`, ...). Read the web log for that period (`make -C deploy logs`, lines at ERROR with the request id). A database, Elasticsearch or Redis outage shows in `NotReady` or in the datastore alerts. A series seen for the first time counts from its second sample, so the first error on a view that never failed before may not raise this alert; the panel still shows it.
+The panel "Failing writes (5xx) by view" gives the `view` of the failing requests (`tile`, `plugins`, `workflow_history`, `biblissima-create-resource`, ...). Read the web log for that period (`make -C deploy logs`, lines at ERROR with the request id). A database, Elasticsearch or Redis outage shows in `NotReady` or in the datastore alerts. The first error of a view that never failed counts too (the rule adds the series created within the window to the increase of the older ones); the panel counts it the same way.
 
 ### Remediation
 

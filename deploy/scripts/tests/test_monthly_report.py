@@ -171,6 +171,9 @@ if data.get("fail"):
 data["month"] = data.get("month_override") or month
 print("noise before the answer")
 print(json.dumps(data))
+if data.get("trailer"):
+    print(json.dumps({"level": "INFO", "message": "closing"}))
+    print("not json at all")
 """
 
 ALERT_SERIES = [
@@ -492,6 +495,75 @@ class MonthlyReport(unittest.TestCase):
         self.assertEqual(
             body_of(self.servers.smtp.messages[0]).get_content().count(UNAVAILABLE), 3
         )
+
+    def test_log_lines_after_the_answer_are_ignored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = activity_command(directory, {**ACTIVITY, "trailer": True})
+            result, text = self.report(extra=["--activity-command", command])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(UNAVAILABLE, text)
+        self.assertIn("analysis : 12 créées", text)
+
+    def test_a_reshaped_answer_marks_its_sections_and_still_sends(self):
+        without_models = {k: v for k, v in ACTIVITY.items() if k != "models"}
+        short_row = {
+            **ACTIVITY,
+            "models": {"analysis": {"total": 1, "created": 1}},
+        }
+        for name, data in (("no models", without_models), ("short row", short_row)):
+            with self.subTest(name), tempfile.TemporaryDirectory() as directory:
+                command = activity_command(directory, data)
+                result, text = self.report(extra=["--activity-command", command])
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(text.count(UNAVAILABLE), 3)
+                self.assertIn("journal d'activité n'a pas pu être lu", text)
+
+    def test_consultation_counts_are_rounded_not_truncated(self):
+        entry = (
+            "manuspectrum:consultations:total",
+            [vector(1233.97, kind="home"), vector(2.5, kind="about")],
+        )
+        ANSWERS.insert(0, entry)
+        self.addCleanup(ANSWERS.remove, entry)
+        _, text = self.report()
+        self.assertIn("accueil 1 234, « À propos » 2", text)
+
+    def test_cancellations_count_the_first_sample_of_a_new_series(self):
+        self.report()
+        (query,) = [
+            q for q, _ in self.servers.prom.queries if 'view="transaction_reverse"' in q
+        ]
+        self.assertIn(" unless ", query)
+        self.assertIn(" offset 2678400s", query)
+
+    def test_etl_runs_name_every_terminal_state(self):
+        etl = {
+            "import-single-csv": {
+                "started": 9,
+                "succeeded": 3,
+                "failed": 1,
+                "unindexed": 2,
+                "unloaded": 1,
+                "validated": 1,
+                "unfinished": 1,
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            command = activity_command(directory, {**ACTIVITY, "etl": etl})
+            _, text = self.report(extra=["--activity-command", command])
+        self.assertIn(
+            "import-single-csv : 9 lancés, 3 réussi(s), 1 en échec, "
+            "2 chargé(s) mais non indexé(s), 1 défait(s) après chargement, "
+            "1 validé(s) sans chargement, 1 non terminé(s)",
+            text,
+        )
+
+    def test_the_history_window_is_one_day_under_the_prometheus_retention(self):
+        compose = (SERVICE_DIR.parent / "compose" / "compose.yaml").read_text()
+        days = int(re.search(r"retention\.time=(\d+)d", compose).group(1))
+        source = SCRIPT.read_text()
+        match = re.search(r"^RETENTION_DAYS = (\d+)", source, re.M)
+        self.assertEqual(int(match.group(1)), days - 1)
 
     def test_quiet_month_reads_no_activity(self):
         quiet = {**ACTIVITY, "models": {}, "workflows": {}, "etl": {}}

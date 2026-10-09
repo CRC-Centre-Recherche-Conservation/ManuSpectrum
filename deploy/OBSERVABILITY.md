@@ -262,14 +262,35 @@ route names of `django_http_*` (the `view` label) to a closed `kind` vocabulary 
 memoises payloads for five minutes per tab, and the IIIF kinds count requests, not views. Map tiles,
 the thumbnail route, plugin pages and the back-office plumbing are not consultations.
 
+A file download is the 302 that `file_access` answers (Arches' `FileView` redirects to the stored file and
+nginx follows it); the 200 answers of that route are card thumbnails and are not counted. The homepage is
+the route `root` (`/index.htm` is an unnamed redirect). The `explorer_search` kind counts API calls
+(debounced filter changes and the first search of each page), not searches typed by a user.
+
+Caveats of the other sources. `saisies enregistrées` (tile saves) include the `tile delete` rows that a
+workflow cancellation writes and the provisional edits of non-reviewers. A later `Resource.save()` of an
+existing resource writes a new `create` row, so it would read as created that month (no project path does
+this today). `biblissima-create-*` answers 504 when its write budget is spent, so an upstream slowdown
+also raises `WriteRequestsFailing` next to `WriteBudgetSpent`. Prometheus creates a labelled series at its
+first increment, so the first error of a new `(view, method, status)` series is invisible to a bare
+`increase()`: the alert and the 4xx/5xx and cancellation panels add the series that did not exist one
+window earlier. History is 35 days, capped at 8 GB (`--storage.tsdb.retention.size`): if the cap cuts
+earlier, the consultation and sign-in figures of the monthly report undercount the start of the month
+without a mark, as does the first month after the recording rules are deployed (they have no history
+before their first evaluation).
+
 **Content, workflows and bulk runs** are read from the database by
 `manuspectrum/observability/activity.py`, in a read-only transaction. Created, modified and
 deleted are counted per model as distinct resources from the Arches `edit_log` (a `create` row is
 written by every save, and the Biblissima bulk path writes only tile rows noted `resource creation`);
 totals come from `resource_instances`, workflows from `workflow_history` (a run cancelled by its user
 is deleted by Arches: it is counted from the `transaction_reverse` requests), bulk runs from
-`load_event`. Month bounds are UTC instants; Arches stores local time (`America/Chicago`,
-`USE_TZ = False`). The window of a month counts the log as it is: rows written outside Arches
+`load_event`. Month bounds are UTC instants and the Arches columns read are `timestamptz`: Arches writes
+a naive `datetime.now()` in the process zone (`America/Chicago`, `USE_TZ = False`) and PostgreSQL
+converts it with the session zone, so the stored values are true instants. That holds while a writer's
+process zone equals its session zone (Django guarantees it; a hand `psql` session in another zone writing
+naive values would not), and a value written during the repeated hour of the autumn change is ambiguous
+(at most one hour a year is placed an hour off). The window of a month counts the log as it is: rows written outside Arches
 (`load_package`, SQL) have no `edit_log` entry but are in the totals. A workflow open for more than 30
 days is "stale": a provisional delay until the cleanup of abandoned workflows is decided.
 `python manage.py activity_summary --month YYYY-MM` prints the month as one line of JSON; the monthly

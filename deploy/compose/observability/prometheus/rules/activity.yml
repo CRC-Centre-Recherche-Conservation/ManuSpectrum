@@ -1,15 +1,17 @@
 # Recording rules of the activity figures: consultations by kind.
 # One rule per kind maps route names (the `view` label of django-prometheus) to a closed
-# vocabulary; GET answers 2xx or 304 only. Robots are counted. `manuspectrum:consultations:total`
+# vocabulary; GET answers 2xx or 304 only. A file download is the 302 of `file_access`
+# (Arches' FileView redirects to the stored file, which nginx then serves); its 200 answers
+# are thumbnails and are not consultations. Robots are counted. `manuspectrum:consultations:total`
 # keeps job and instance so that it stays a counter per target; the dashboards and the monthly
 # report read `sum by (kind) (increase(manuspectrum:consultations:total[...]))`.
-# tests/test_rules_contract.py checks that every route of urls.py is mapped or ignored.
+# deploy/compose/tests/test_consultation_kinds.py checks that every route of urls.py is mapped or ignored.
 groups:
   - name: activity
     rules:
       - record: manuspectrum:consultations:total
         expr: |
-          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"root|home"})
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view="root"})
         labels:
           kind: home
       - record: manuspectrum:consultations:total
@@ -89,7 +91,7 @@ groups:
           kind: iiif_manifest
       - record: manuspectrum:consultations:total
         expr: |
-          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"file_access|download_files|iiif-data-raw"})
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status="302",view="file_access"} or django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"download_files|iiif-data-raw"})
         labels:
           kind: file_download
       - record: manuspectrum:consultations:rate1h

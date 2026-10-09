@@ -641,7 +641,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(django_http_responses_total_by_status_view_method_total{view=\"transaction_reverse\",method=\"POST\",status=\"200\"}[1d]))",
+          "expr": "sum((increase(django_http_responses_total_by_status_view_method_total{view=\"transaction_reverse\",method=\"POST\",status=\"200\"}[1d]) and django_http_responses_total_by_status_view_method_total{view=\"transaction_reverse\",method=\"POST\",status=\"200\"} offset 1d) or (django_http_responses_total_by_status_view_method_total{view=\"transaction_reverse\",method=\"POST\",status=\"200\"} unless django_http_responses_total_by_status_view_method_total{view=\"transaction_reverse\",method=\"POST\",status=\"200\"} offset 1d))",
           "legendFormat": "cancelled",
           "instant": false,
           "range": true,
@@ -776,7 +776,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (view) (increase(django_http_responses_total_by_status_view_method_total{status=~\"5..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"}[1h]))",
+          "expr": "sum by (view) ((increase(django_http_responses_total_by_status_view_method_total{status=~\"5..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"}[1h]) and django_http_responses_total_by_status_view_method_total{status=~\"5..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"} offset 1h) or (django_http_responses_total_by_status_view_method_total{status=~\"5..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"} unless django_http_responses_total_by_status_view_method_total{status=~\"5..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"} offset 1h))",
           "legendFormat": "{{view}}",
           "instant": false,
           "range": true
@@ -834,7 +834,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (view) (increase(django_http_responses_total_by_status_view_method_total{status=~\"4..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"}[1h]))",
+          "expr": "sum by (view) ((increase(django_http_responses_total_by_status_view_method_total{status=~\"4..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"}[1h]) and django_http_responses_total_by_status_view_method_total{status=~\"4..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"} offset 1h) or (django_http_responses_total_by_status_view_method_total{status=~\"4..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"} unless django_http_responses_total_by_status_view_method_total{status=~\"4..\",method=~\"POST|PUT|DELETE\",view!~\"healthz|readyz|metrics\"} offset 1h))",
           "legendFormat": "{{view}}",
           "instant": false,
           "range": true
