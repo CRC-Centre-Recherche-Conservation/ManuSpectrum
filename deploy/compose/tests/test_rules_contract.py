@@ -20,13 +20,16 @@ try:
 except ImportError:  # pragma: no cover
     yaml = None
 
+
+def _go_string(value):
+    """Subset of prometheus_client.utils.floatToGoString, equal below 1e6."""
+    return "+Inf" if value == float("inf") else repr(float(value))
+
+
 try:
     from prometheus_client.utils import floatToGoString
 except ImportError:  # pragma: no cover
-
-    def floatToGoString(value):
-        """Plain-decimal subset of prometheus_client.utils.floatToGoString."""
-        return "+Inf" if value == float("inf") else repr(float(value))
+    floatToGoString = _go_string
 
 
 COMPOSE_DIR = Path(__file__).resolve().parents[1]
@@ -509,13 +512,19 @@ class RuleContractTests(unittest.TestCase):
         self.assertTrue(found)
         self.assertLessEqual(found, written)
 
+    def test_every_le_a_rule_selects_is_below_the_fallback_limit(self):
+        for path in sorted(RULES_DIR.glob("*.yml")):
+            for le in re.findall(r'\ble="([^"]*)"', path.read_text("utf-8")):
+                with self.subTest(rule_file=path.name, le=le):
+                    self.assertTrue(le == "+Inf" or float(le) < 1e6)
+
     def test_go_string_fallback_matches_prometheus_client(self):
         try:
             from prometheus_client import utils
         except ImportError:  # pragma: no cover
             self.skipTest("prometheus_client missing")
-        for bound in seconds_bundle() + (0.5, float("inf")):
-            self.assertEqual(floatToGoString(bound), utils.floatToGoString(bound))
+        for bound in seconds_bundle() + (0.5, 999999.5, float("inf")):
+            self.assertEqual(_go_string(bound), utils.floatToGoString(bound))
 
     def test_certificate_invalid_is_off_on_rehearsal_names(self):
         rule = {r["alert"]: r["expr"] for _, r in self.alerts}["CertificateInvalid"]

@@ -317,7 +317,7 @@ grafana_has_dashboards() {
 mail_get() { compose exec -T prometheus wget -qO- "http://mailpit:8025$1"; } # Mailpit shares the monitoring network
 
 cmd_monitoring() {
-  local queries query tmp missing line bucket_bounds metric le
+  local queries query tmp missing line bucket_bounds metric le checked skipped
   retry "every Prometheus target is up" 240 targets_all_up
   retry "every rule evaluates without error" 120 rules_all_ok
   retry "Watchdog is firing" 120 series_is 'count(ALERTS{alertname="Watchdog",alertstate="firing"})' 1
@@ -352,16 +352,19 @@ cmd_monitoring() {
 
   # A `le` value a rule selects must be spelled as the exporter writes it; a
   # histogram without a sample yet is skipped.
+  checked=0 skipped=0
   while read -r metric le; do
     [ -n "$metric" ] || continue
     if [ "$(prom_scalar "count($metric)")" = none ]; then
+      skipped=$((skipped + 1))
       echo "info: $metric has no sample yet, its le=\"$le\" is not checked"
     else
       [ "$(prom_scalar "count($metric{le=\"$le\"})")" != none ] \
         || fail "no $metric series carries le=\"$le\", a rule reads it"
+      checked=$((checked + 1))
     fi
   done <<<"$bucket_bounds"
-  ok "every histogram bound a rule reads exists"
+  ok "histogram bounds a rule reads: $checked found, $skipped skipped (no sample yet)"
 
   retry "Grafana is healthy" 120 gf_get /api/health
   retry "Grafana lists the four dashboards" 120 grafana_has_dashboards
