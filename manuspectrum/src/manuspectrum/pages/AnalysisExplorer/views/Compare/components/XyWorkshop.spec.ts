@@ -2090,6 +2090,8 @@ describe("XyWorkshop XRF lens", () => {
                 "xaxis.range[1]": 15,
             });
             await flushPromises();
+            await nextFrame();
+            await flushPromises();
             expect(plotly.relayout).toHaveBeenCalledWith(chart, {
                 "yaxis.range": [0, 210],
             });
