@@ -100,12 +100,19 @@ explorer, biblissima, monitoring). Every rule has a `severity`, a `service`, a
 Each alert also waits for its `for:` duration in Prometheus. **Event warnings**
 (`ContainerOOMKilled`, `ContainerRestartLoop`, `CeleryTaskFailures`,
 `IndexingFailures`, `ExplorerRebuildFailing`, `WriteBudgetSpent`,
-`PrometheusRuleFailures`) fire on a single event and carry `keep_firing_for: 64h`.
-A warning raised at night or on a weekend would otherwise clear before the next
-weekday window and, since Alertmanager drops the resolved alerts of a muted group,
-never be mailed. 64 h covers Friday 19:00 to Monday 08:00 (61 h); a public holiday
-delays the mail to the next working day. The cost: an event of Tuesday noon is
-repeated every 24 h until 64 h have passed, then a `RESOLVED` mail follows.
+`PrometheusRuleFailures`) fire on a single event and read a 64 h window of stored
+samples (`increase(counter[64h]) > 0`; `ContainerRestartLoop` takes the
+maximum over 64 h of its hourly rise). A warning raised at night or on a weekend
+would otherwise clear before the next weekday window and, since Alertmanager drops
+the resolved alerts of a muted group, never be mailed. 64 h covers Friday 19:00 to
+Monday 08:00 (61 h); a public holiday delays the mail to the next working day. The
+window lives in the TSDB, so a Prometheus restart or a reboot does not lose the
+event. The cost: an event of Tuesday noon is repeated every 24 h until 64 h have
+passed. The alert then resolves; its `RESOLVED` mail follows only when that moment
+falls inside the weekday 08:00-19:00 window (Alertmanager drops the resolved
+notification of a muted warning group, so an event of Tuesday noon, resolved on
+Friday 04:00, is usually never closed by a mail). The monthly report counts one
+episode per 64 h of such an event.
 `ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` need at least three
 builds in the hour, so one slow cold build alerts nobody. Disk thresholds:
 `DiskUsageHigh` warning above 80 %, `DiskAlmostFull` critical above 95 %,
@@ -126,7 +133,8 @@ silences one alert; silences live on a volume and survive a restart.
 **Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`,
 `HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` read series that only
 node_exporter carries. They count a missing series only while node_exporter is up,
-so its outage raises `TargetDown` alone.
+so its outage raises `NodeExporterDown` alone (critical, after 15 minutes, since it
+blinds the backup and NFS alerts; `TargetDown` covers the other targets).
 
 **Certificate trust.** `http_edge` measures the expiry without verifying the chain
 (so the local and staging authorities pass); `http_edge_verified` verifies it and
@@ -148,7 +156,7 @@ the rules, that Alertmanager routes them and that the relay delivers. Its limit:
 the absence of the mail is the signal, so someone has to notice it. If the whole
 VM is down, nothing is sent; the external probe of PP-9 covers that case.
 
-**Monitoring the monitors.** `TargetDown`, `HostMetricsStale`, `DiskUsageStale`,
+**Monitoring the monitors.** `TargetDown`, `NodeExporterDown`, `HostMetricsStale`, `DiskUsageStale`,
 `TextfileError`, `AlertmanagerNotificationsFailing`, `PrometheusRuleFailures` and
 `Watchdog` watch the stack itself ([`runbooks/monitoring.md`](runbooks/monitoring.md#targetdown)).
 
@@ -179,6 +187,9 @@ is required: the settings refuse to start without it and never fall back to
   DMARC policy; when it is `p=quarantine` with strict alignment and the relay is
   not in its SPF, the mail is quarantined.
 - A sender on the host's own domain needs no permission and passes.
+
+Alertmanager introduces itself to the relay (SMTP HELO) with `PUBLIC_HOST`, the host's
+own validated name, whatever the sender's domain.
 
 ## Sorting the mail
 
@@ -217,14 +228,20 @@ Two timers write Prometheus textfiles that `node-exporter` reads from
 | `manuspectrum-container-metrics` | Every 30 s | Per Compose service: running, health, restarts, OOM kills, memory against its limit |
 | `manuspectrum-disk-usage` | Every hour at :17 | Size of the uploads, the backup repository, the dumps and the nginx logs, plus the Docker sizes below. The unit file carries the four-times-a-day calendar to use if a measure proves slow on the network filesystem |
 
-Docker sizes (from `docker system df`, about four significant digits):
+Docker sizes (one `docker system df -v` call under `nice` and `ionice`, each kind
+the sum of its entries, about four significant digits; the images figure counts
+the unique size of each image, so it is about 0.3 % under `docker system df`):
 `manuspectrum_docker_disk_bytes{kind=images|build_cache|containers|volumes}` and
 `manuspectrum_docker_volume_bytes{volume=ms_*}` (the external data volumes).
 `manuspectrum_container_oom_cgroup` is 1 when a container's OOM kills are counted
 from the cgroup v2 `memory.events` file (a kill of a child process included) and 0
 when the collector fell back on Docker's `OOMKilled` flag, which misses most kills;
 0 for an hour raises `OomSourceDegraded`. A disk run has a budget of 840 s: `du`
-300 s per target and `df` 120 s, so a hung mount cannot hold the timer.
+300 s per target and `docker system df -v` 120 s, all under `timeout`. The
+checks that stat a directory before `du` (existence, mountpoint) run outside any
+timeout, so a hard-hung mount can hold the run until systemd stops the unit at
+`TimeoutStartSec` (15 min); a `du` stuck in uninterruptible I/O is not killed by
+its timeout either. Either case leaves `DiskUsageStale` to report it.
 
 The backup and restore-test timers write their own textfiles (`BACKUP.md`). A
 stale file raises `HostMetricsStale` or `DiskUsageStale`.

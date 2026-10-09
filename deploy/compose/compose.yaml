@@ -540,6 +540,7 @@ services:
       EMAIL_HOST_PASSWORD_FILE: /run/secrets/email_password
       ALERT_EMAILS: ${ALERT_EMAILS:-}
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env (the host name of PUBLIC_SERVER_ADDRESS)}
     secrets: [email_password]
     volumes:
       - alertmanager_data:/alertmanager

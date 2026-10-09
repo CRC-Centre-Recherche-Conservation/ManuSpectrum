@@ -213,6 +213,19 @@ class MonthlyReport(unittest.TestCase):
         self.assertIn("worker 1", text)
         self.assertNotIn(UNAVAILABLE, text)
 
+    def test_reboots_are_boot_time_moves_above_a_minute_not_any_change(self):
+        result = run(self.servers)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (query,) = [
+            q for q, _ in self.servers.prom.queries if "node_boot_time_seconds" in q
+        ]
+        self.assertNotIn("changes(", query)
+        self.assertRegex(
+            query,
+            r"max\(node_boot_time_seconds\) - max\(node_boot_time_seconds offset 5m\)\) > 60",
+        )
+        self.assertIn("redémarrages de la machine : 31 ", self.sent().get_content())
+
     def growth_lines(self, now, month=None, floor_days=30):
         """Report as sent at `now` by a Prometheus that keeps `floor_days`."""
         from datetime import datetime, timedelta

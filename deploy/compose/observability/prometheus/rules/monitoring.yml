@@ -5,7 +5,7 @@ groups:
     rules:
       - alert: TargetDown
         expr: |
-          up == 0
+          up{job!="node"} == 0
         for: 5m
         labels:
           severity: warning
@@ -14,6 +14,17 @@ groups:
           summary: "A scrape target is down"
           description: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#targetdown
+      - alert: NodeExporterDown
+        expr: |
+          up{job="node"} == 0
+        for: 15m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "node_exporter is down: backup, NFS and host alerts are blind"
+          description: "Prometheus cannot scrape node_exporter ({{ $labels.instance }}). BackupFailed, BackupMissing, NfsUnavailable and every host-metrics alert read nothing until it is back."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#nodeexporterdown
       - alert: HostMetricsStale
         expr: |
           (
@@ -70,9 +81,8 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#alertmanagernotificationsfailing
       - alert: PrometheusRuleFailures
         expr: |
-          sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[10m])) > 0
+          sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[64h])) > 0
         for: 10m
-        keep_firing_for: 64h
         labels:
           severity: warning
           service: monitoring

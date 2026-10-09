@@ -269,7 +269,15 @@ def restarts(prom, start, end):
     at = end.timestamp()
     window = f"{int((end - start).total_seconds())}s"
     lines = []
-    reboots = prom.scalar(f"changes(max(node_boot_time_seconds)[{window}:])", at)
+    # A boot time that moves by more than a minute is a reboot; the smaller
+    # moves of an NTP step are not (same rule as the HostRebooted alert). The
+    # `or` keeps "no data" distinct from "no reboot".
+    reboots = prom.scalar(
+        "count_over_time("
+        "((max(node_boot_time_seconds) - max(node_boot_time_seconds offset 5m)) > 60)"
+        f"[{window}:5m]) or (max(node_boot_time_seconds) * 0)",
+        at,
+    )
     lines.append(
         "redémarrages de la machine : "
         + (

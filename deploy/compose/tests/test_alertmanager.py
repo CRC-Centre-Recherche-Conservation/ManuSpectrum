@@ -34,6 +34,7 @@ GOOD = {
     "EMAIL_HOST_PASSWORD_FILE": "/run/secrets/email_password",
     "ALERT_EMAILS": "alerts@manuspectrum.test",
     "ALERT_EMAIL_FROM": "manuspectrum@manuspectrum.test",
+    "PUBLIC_HOST": "vm.manuspectrum.test",
 }
 PASSWORD = "S3cretPassw0rd-do-not-print"
 
@@ -81,7 +82,21 @@ class RenderTests(RenderBase):
         )
         self.assertIs(config["global"]["smtp_require_tls"], False)
         self.assertNotIn("smtp_auth_username", config["global"])
-        self.assertEqual(config["global"]["smtp_hello"], "manuspectrum.test")
+        self.assertEqual(config["global"]["smtp_hello"], "vm.manuspectrum.test")
+
+    def test_the_hello_name_is_the_public_host_not_the_sender_domain(self):
+        result = self.render(
+            PUBLIC_HOST="node1.example.test", ALERT_EMAIL_FROM="alerts@institute.test"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.config()["global"]["smtp_hello"], "node1.example.test")
+
+    def test_a_missing_or_malformed_public_host_exits_one(self):
+        for value in ("", "bad host", "a|b.test", "x&y.test", "-a.test", "a" * 254):
+            with self.subTest(value=value):
+                result = self.render(PUBLIC_HOST=value)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("PUBLIC_HOST", result.stderr)
 
     def test_every_mail_receiver_gets_every_recipient(self):
         result = self.render(
@@ -274,6 +289,12 @@ class AlertRecipientsTargetTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(compose_called)
         self.assertIn("left running unchanged", result.stderr)
+
+    def test_a_bad_public_host_stops_before_compose_is_called(self):
+        result, compose_called, _ = self.run_make(PUBLIC_HOST="bad host")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(compose_called)
+        self.assertIn("PUBLIC_HOST", result.stderr)
 
     def test_the_recipe_never_names_dev_null_as_an_output(self):
         makefile = (self.MAKE_DIR / "Makefile").read_text(encoding="utf-8")

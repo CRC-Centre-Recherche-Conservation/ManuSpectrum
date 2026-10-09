@@ -21,13 +21,12 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/biblissima.md#biblissimabusy
       - alert: WriteBudgetSpent
         expr: |
-          sum(increase(manuspectrum_upstream_budget_spent_total{kind="write"}[30m])) > 0
+          sum(increase(manuspectrum_upstream_budget_spent_total{kind="write"}[64h])) > 0
         for: 15m
-        keep_firing_for: 64h
         labels:
           severity: warning
           service: biblissima
         annotations:
           summary: "A Biblissima write ran out of time"
-          description: "A create-from-Biblissima item spent its 60 s budget {{ $value | humanize }} times in 30 minutes."
+          description: "A create-from-Biblissima item spent its 60 s budget {{ $value | humanize }} times in the last 64 hours."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/biblissima.md#writebudgetspent

@@ -7,7 +7,7 @@ evaluation_interval: 1m
 
 
 tests:
-- name: a node_exporter outage reports TargetDown only, not the series it carries
+- name: a node_exporter outage reports NodeExporterDown (critical) only, not the series it carries
   interval: 1m
   input_series:
   - series: up{job="node", instance="node-exporter:9100"}
@@ -15,11 +15,17 @@ tests:
   - series: up{job="web", instance="web:8000"}
     values: 1x90
   promql_expr_test:
-  - expr: ALERTS{alertname="TargetDown", alertstate="firing"}
+  - expr: ALERTS{alertname="NodeExporterDown", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []
+  - expr: ALERTS{alertname="NodeExporterDown", alertstate="firing"}
     eval_time: 30m
     exp_samples:
-    - labels: ALERTS{alertname="TargetDown", alertstate="firing", instance="node-exporter:9100", job="node", service="monitoring", severity="warning"}
+    - labels: ALERTS{alertname="NodeExporterDown", alertstate="firing", instance="node-exporter:9100", job="node", service="monitoring", severity="critical"}
       value: 1
+  - expr: ALERTS{alertname="TargetDown", alertstate="firing"}
+    eval_time: 60m
+    exp_samples: []
   - expr: ALERTS{alertstate="firing", alertname=~"NfsUnavailable|BackupMissing|RestoreTestMissing|HostMetricsStale|DiskUsageStale|ContainerMissing"}
     eval_time: 60m
     exp_samples: []

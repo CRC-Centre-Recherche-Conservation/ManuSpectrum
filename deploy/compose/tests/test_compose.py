@@ -892,6 +892,7 @@ class ComposeStackTests(unittest.TestCase):
         environment = alertmanager["environment"]
         self.assertEqual(environment["ALERT_EMAILS"], "alerts@manuspectrum.test")
         self.assertEqual(environment["ALERT_EMAIL_FROM"], "noreply@manuspectrum.test")
+        self.assertIn("PUBLIC_HOST", environment)
         self.assertEqual(environment["EMAIL_HOST"], "smtp.manuspectrum.test")
         self.assertEqual(environment["EMAIL_PORT"], "25")
         self.assertEqual(environment["EMAIL_USE_TLS"], "false")

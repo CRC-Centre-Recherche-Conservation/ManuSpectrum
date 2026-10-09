@@ -110,7 +110,7 @@ render_am() { # render_am OUTFILE [VAR=value...]
   env EMAIL_HOST=smtp.manuspectrum.test EMAIL_PORT=25 EMAIL_USE_TLS=false \
     EMAIL_HOST_USER= EMAIL_HOST_PASSWORD_FILE=/am/email_password \
     ALERT_EMAILS='alerts@manuspectrum.test, ops@manuspectrum.test' \
-    ALERT_EMAIL_FROM=manuspectrum@manuspectrum.test \
+    ALERT_EMAIL_FROM=manuspectrum@manuspectrum.test PUBLIC_HOST=manuspectrum.test \
     "$@" ALERTMANAGER_DIR="$ALERTMANAGER_DIR" ALERTMANAGER_OUT="$out" \
     ALERTMANAGER_RENDER_ONLY=1 sh "$ALERTMANAGER_DIR/render.sh"
 }

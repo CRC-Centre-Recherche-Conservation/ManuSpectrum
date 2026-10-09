@@ -48,8 +48,8 @@
 # directory. Each `du` runs under nice, ionice and the smaller of
 # HOST_METRICS_DU_TIMEOUT (default 300 s) and what is left of the budget.
 # The whole run is bounded: HOST_METRICS_DISK_BUDGET (default 840 s) must stay
-# under the unit's TimeoutStartSec (15 min); two `docker system df` calls of
-# HOST_METRICS_DF_TIMEOUT (default 120 s) are reserved inside it, the `du`
+# under the unit's TimeoutStartSec (15 min); the `docker system df -v` call of
+# HOST_METRICS_DF_TIMEOUT (default 120 s) is reserved inside it, the `du`
 # runs share the rest, and a target left without time counts as failed.
 # `[ -d ]`, `realpath` and `findmnt` stat the path before any timeout: on a
 # hard-hung NFS mount they block until systemd stops the unit.
@@ -57,9 +57,12 @@
 # Docker disk use, same run, own file manuspectrum_docker_disk.prom (left as it
 # was when `docker system df` fails, which also gives failed 1):
 #   manuspectrum_docker_disk_bytes{kind}   kind images|build_cache|containers|volumes
-#                                          (`docker system df`, Size column)
-#   manuspectrum_docker_volume_bytes{volume}  `docker system df -v`, volumes named
-#                                          ms_* or <COMPOSE_PROJECT>_* only
+#   manuspectrum_docker_volume_bytes{volume}  volumes named ms_* or
+#                                          <COMPOSE_PROJECT>_* only
+# Both come from ONE `docker system df -v` call (one walk of the volumes by
+# dockerd, run under nice and ionice): each kind is the sum of its entries.
+# The images figure is the sum of the images' unique sizes, so layers shared
+# by several images are left out (about 0.3 % under `docker system df`).
 # Docker prints decimal units with four significant digits (1.405GB, 512kB,
 # 0B): sizes are accurate to about 0.1 %, and a volume it cannot size
 # (N/A) is left out.
@@ -138,7 +141,6 @@ containers() {
   local raw delta ev cgroup_ok=0 reset s_total s_raw s_id s_restarts s_finished s_epoch
   declare -A mem_used raw_of
   declare -A st_total st_raw st_id st_restarts st_finished st_epoch
-  run_start="$(date +%s)"
   ids="$(timeout "$DOCKER_TIMEOUT" docker ps -a -q --no-trunc \
     --filter "label=com.docker.compose.project=$PROJECT" \
     --filter "label=com.docker.compose.oneoff=False")" || { log "docker ps failed or timed out"; return 1; }
@@ -173,6 +175,9 @@ containers() {
     raw="$(cgroup_oom_kills "$id")"
     if [ -n "$raw" ]; then raw_of["$svc"]="$raw"; cgroup_ok=1; fi
   done <<<"$inspect"
+  # The event window of the next run opens here: a kill is counted by the
+  # counters read above or by the events after this instant, never by both.
+  run_start="$(date +%s)"
 
   metrics_open "$out_dir/manuspectrum_container.prom"
   metric_family manuspectrum_container_up gauge "1 when the container is running"
@@ -265,32 +270,38 @@ containers() {
 # returns 1 when docker did not answer or a size could not be read (the file
 # is then left as it was, or written without that sample).
 docker_disk() {
-  local summary volumes line type size bytes kind rc=0 name
-  local -a kinds=() kind_bytes=() vol_names=() vol_bytes=()
-  summary="$(timeout "$DF_TIMEOUT" docker system df --format '{{println .Type .Size}}')" || { log "docker system df failed or timed out"; return 1; }
-  volumes="$(timeout "$DF_TIMEOUT" docker system df -v --format '{{range .Volumes}}{{println .Name .Size}}{{end}}')" || { log "docker system df -v failed or timed out"; return 1; }
-  while read -r line; do
-    [ -n "$line" ] || continue
-    type="${line% *}" size="${line##* }"
-    case "$type" in
-      Images) kind=images ;;
-      "Build Cache") kind=build_cache ;;
-      Containers) kind=containers ;;
-      "Local Volumes") kind=volumes ;;
+  local report tag size bytes kind rc=0 name
+  local -a ionice_cmd=()
+  command -v ionice >/dev/null 2>&1 && ionice_cmd=(ionice -c3)
+  local -A kind_total=([images]=0 [containers]=0 [volumes]=0 [build_cache]=0)
+  local -a vol_names=() vol_bytes=()
+  report="$(nice -n 19 "${ionice_cmd[@]}" timeout "$DF_TIMEOUT" docker system df -v --format \
+    '{{range .Images}}{{println "I" .UniqueSize}}{{end}}{{range .Containers}}{{println "C" .Size}}{{end}}{{range .Volumes}}{{println "V" .Size .Name}}{{end}}{{range .BuildCache}}{{println "B" .Size}}{{end}}')" \
+    || { log "docker system df -v failed or timed out"; return 1; }
+  while read -r tag size name; do
+    case "$tag" in
+      I) kind=images ;;
+      C) kind=containers ;;
+      V) kind=volumes ;;
+      B) kind=build_cache ;;
       *) continue ;;
     esac
-    if bytes="$(to_bytes "$size")"; then kinds+=("$kind") kind_bytes+=("$bytes"); else rc=1; log "docker system df: unreadable size for $kind"; fi
-  done <<<"$summary"
-  while read -r name size; do
-    [[ "$name" =~ ^(ms|${PROJECT//[^a-z0-9_-]/})_[a-z0-9_-]+$ ]] || continue
-    if bytes="$(to_bytes "$size")"; then vol_names+=("$name") vol_bytes+=("$bytes"); else log "docker system df -v: no size for a volume"; fi
-  done <<<"$volumes"
+    if bytes="$(to_bytes "$size")"; then
+      kind_total[$kind]=$((kind_total[$kind] + bytes))
+      if [ "$tag" = V ] && [[ "$name" =~ ^(ms|${PROJECT//[^a-z0-9_-]/})_[a-z0-9_-]+$ ]]; then vol_names+=("$name") vol_bytes+=("$bytes"); fi
+    elif [ "$tag" = V ]; then
+      log "docker system df -v: no size for a volume"
+    else
+      rc=1
+      log "docker system df -v: unreadable size for $kind"
+    fi
+  done <<<"$report"
 
   local i
   metrics_open "$out_dir/manuspectrum_docker_disk.prom"
   metric_family manuspectrum_docker_disk_bytes gauge "Docker disk use by kind, from docker system df"
-  for i in "${!kinds[@]}"; do
-    metric_sample manuspectrum_docker_disk_bytes "${kind_bytes[$i]}" kind "${kinds[$i]}"
+  for kind in images build_cache containers volumes; do
+    metric_sample manuspectrum_docker_disk_bytes "${kind_total[$kind]}" kind "$kind"
   done
   metric_family manuspectrum_docker_volume_bytes gauge "Size of a Compose volume, from docker system df -v"
   for i in "${!vol_names[@]}"; do
@@ -305,7 +316,7 @@ disk() {
   local -a names=() paths=()
   start=$SECONDS
   [ -n "${DISK_USAGE_AREAS:-}" ] || usage_die "DISK_USAGE_AREAS is empty"
-  [ "$DISK_BUDGET" -gt $((2 * DF_TIMEOUT)) ] || usage_die "HOST_METRICS_DISK_BUDGET must exceed twice HOST_METRICS_DF_TIMEOUT"
+  [ "$DISK_BUDGET" -gt "$DF_TIMEOUT" ] || usage_die "HOST_METRICS_DISK_BUDGET must exceed HOST_METRICS_DF_TIMEOUT"
   for pair in $DISK_USAGE_AREAS; do
     name="${pair%%=*}" path="${pair#*=}"
     [[ " ${AREA_NAMES[*]} " == *" $name "* ]] || usage_die "unknown area '$name' (allowed: ${AREA_NAMES[*]})"
@@ -321,7 +332,7 @@ disk() {
   local -a lines=()
   local i
   for i in "${!names[@]}"; do
-    remaining=$((DISK_BUDGET - 2 * DF_TIMEOUT - (SECONDS - start)))
+    remaining=$((DISK_BUDGET - DF_TIMEOUT - (SECONDS - start)))
     limit="$DU_TIMEOUT"
     [ "$remaining" -ge "$limit" ] || limit="$remaining"
     if [ "$limit" -le 0 ]; then

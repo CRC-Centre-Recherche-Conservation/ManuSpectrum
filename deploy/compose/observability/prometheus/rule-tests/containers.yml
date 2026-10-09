@@ -17,7 +17,7 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="ContainerRestartLoop", alertstate="firing", container="worker", service="containers", severity="warning"}
       value: 1
-- name: an oom kill fires and keeps firing for 64 hours after the window
+- name: an oom kill fires and still fires 62 hours later
   interval: 1m
   input_series:
   - series: manuspectrum_container_oom_kills{container="web"}
@@ -36,6 +36,42 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="ContainerOOMKilled", alertstate="firing", container="web", service="containers", severity="warning"}
       value: 1
+- name: an oom kill is still reported 62 hours later and cleared after 64 hours, from the stored samples alone
+  interval: 5m
+  input_series:
+  - series: manuspectrum_container_oom_kills{container="web"}
+    values: 0 0 0 1x1000
+  promql_expr_test:
+  - expr: increase(manuspectrum_container_oom_kills[64h]) > 0
+    eval_time: 62h
+    exp_samples:
+    - labels: '{container="web"}'
+      value: 1
+  - expr: increase(manuspectrum_container_oom_kills[64h]) > 0
+    eval_time: 70h
+    exp_samples: []
+  - expr: ALERTS{alertname="ContainerOOMKilled", alertstate="firing"}
+    eval_time: 62h
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerOOMKilled", alertstate="firing", container="web", service="containers", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ContainerOOMKilled", alertstate="firing"}
+    eval_time: 70h
+    exp_samples: []
+- name: a restart loop stays reported for 62 hours after it ends
+  interval: 5m
+  input_series:
+  - series: manuspectrum_container_restarts{container="worker"}
+    values: 0 1 2 3 4 5 5x1000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ContainerRestartLoop", alertstate="firing"}
+    eval_time: 62h
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerRestartLoop", alertstate="firing", container="worker", service="containers", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ContainerRestartLoop", alertstate="firing"}
+    eval_time: 70h
+    exp_samples: []
 - name: web warns at 80 percent, others only at 90 percent
   interval: 1m
   input_series:
@@ -138,10 +174,8 @@ tests:
 - name: an OOM counter that fell back on the Docker flag warns after an hour
   interval: 1m
   input_series:
-  - series: manuspectrum_container_oom_cgroup{container="web"}
+  - series: manuspectrum_container_oom_cgroup
     values: 1x10 0x120
-  - series: manuspectrum_container_oom_cgroup{container="worker"}
-    values: 1x130
   promql_expr_test:
   - expr: ALERTS{alertname="OomSourceDegraded", alertstate="firing"}
     eval_time: 50m
@@ -149,5 +183,5 @@ tests:
   - expr: ALERTS{alertname="OomSourceDegraded", alertstate="firing"}
     eval_time: 100m
     exp_samples:
-    - labels: ALERTS{alertname="OomSourceDegraded", alertstate="firing", container="web", service="containers", severity="warning"}
+    - labels: ALERTS{alertname="OomSourceDegraded", alertstate="firing", service="containers", severity="warning"}
       value: 1

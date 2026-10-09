@@ -407,7 +407,7 @@ class RuleContractTests(unittest.TestCase):
             with self.subTest(alert=name):
                 self.assertRegex(by_name[name], r'mountpoint=~"/\|/data"')
 
-    def test_event_warnings_keep_firing_until_the_next_working_window(self):
+    def test_event_warnings_read_a_stored_window_not_in_memory_state(self):
         events = {
             "ContainerOOMKilled",
             "ContainerRestartLoop",
@@ -420,10 +420,36 @@ class RuleContractTests(unittest.TestCase):
         by_name = {r["alert"]: r for _, r in self.alerts}
         for name in events:
             with self.subTest(alert=name):
-                keep = duration_seconds(by_name[name].get("keep_firing_for"))
+                self.assertNotIn("keep_firing_for", by_name[name])
                 # Friday 19:00 to Monday 08:00 is 61 hours.
-                self.assertGreaterEqual(keep, 61 * 3600)
-                self.assertLessEqual(keep, 96 * 3600)
+                hours = {
+                    int(h)
+                    for h in re.findall(r"\[(\d+)h(?::\d+m)?\]", by_name[name]["expr"])
+                }
+                self.assertTrue(
+                    any(61 <= h <= 96 for h in hours), by_name[name]["expr"]
+                )
+
+    def test_no_rule_uses_keep_firing_for(self):
+        for _, rule in self.alerts:
+            with self.subTest(alert=rule["alert"]):
+                self.assertNotIn("keep_firing_for", rule)
+
+    def test_node_exporter_outage_is_critical_and_not_a_target_down(self):
+        by_name = {r["alert"]: r for _, r in self.alerts}
+        down = by_name["NodeExporterDown"]
+        self.assertEqual(down["labels"]["severity"], "critical")
+        self.assertEqual(down["labels"]["service"], "monitoring")
+        self.assertIn('up{job="node"} == 0', down["expr"])
+        self.assertIn('job!="node"', by_name["TargetDown"]["expr"])
+
+    def test_annotations_use_only_labels_the_series_carries(self):
+        by_name = {r["alert"]: r for _, r in self.alerts}
+        # manuspectrum_container_oom_cgroup is one unlabelled gauge.
+        self.assertNotIn(
+            "$labels.container",
+            by_name["OomSourceDegraded"]["annotations"]["description"],
+        )
 
     def test_absent_based_alerts_wait_for_node_exporter(self):
         for _, rule in self.alerts:

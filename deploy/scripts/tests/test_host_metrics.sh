@@ -19,6 +19,7 @@ OUT="$TMP/out"
 cat >"$TMP/bin/docker" <<'STUB'
 #!/bin/sh
 printf 'docker %s\n' "$*" >>"$CALLS"
+[ "$1 $2" != "system df" ] || printf 'docker-nice %s\n' "$(nice)" >>"$CALLS"
 [ -z "$STUB_DOCKER_HANG" ] || exec sleep 30
 [ -z "$STUB_DOCKER_FAIL" ] || exit 1
 [ -z "$STUB_DF_FAIL" ] || [ "$1" != system ] || exit 1
@@ -28,12 +29,13 @@ case "$1" in
   stats) cat "$STUB_STATS" ;;
   events) cat "${STUB_EVENTS:-/dev/null}" ;;
   system)
-    case "$*" in
-      *" -v "*) cat "${STUB_DF_VERBOSE:-/dev/null}" ;;
-      *) cat "${STUB_DF:-/dev/null}" ;;
-    esac
+    cat "${STUB_DF_VERBOSE:-/dev/null}"
     ;;
 esac
+STUB
+cat >"$TMP/bin/date" <<'STUB'
+#!/bin/sh
+if [ -n "$STUB_DATE_BY_DOCKER_CALLS" ] && [ "$1" = +%s ]; then grep -c '^docker ' "$CALLS" || true; else exec /bin/date "$@"; fi
 STUB
 cat >"$TMP/bin/du" <<'STUB'
 #!/bin/sh
@@ -85,7 +87,7 @@ run() { # run MODE [VAR=value ...]; stdout in $TMP/stdout, stderr in $TMP/stderr
   shift
   : >"$TMP/calls"
   env PATH="$TMP/bin:$PATH" CALLS="$TMP/calls" STUB_PS="$TMP/ps" STUB_INSPECT="$TMP/inspect" STUB_STATS="$TMP/stats" \
-    STUB_DF="$TMP/df" STUB_DF_VERBOSE="$TMP/df_v" STUB_EVENTS="$TMP/events" HOST_METRICS_CGROUP_ROOT="$TMP/cgroup" \
+    STUB_DF_VERBOSE="$TMP/df_v" STUB_EVENTS="$TMP/events" HOST_METRICS_CGROUP_ROOT="$TMP/cgroup" \
     METRICS_TEXTFILE_DIR="$OUT" HOST_METRICS_DOCKER_TIMEOUT=2 HOST_METRICS_DU_TIMEOUT=2 \
     HOST_METRICS_DF_TIMEOUT=2 HOST_METRICS_DISK_BUDGET=60 \
     DISK_USAGE_AREAS="media=$TMP/data/media restic=$TMP/data/restic dumps=$TMP/data/dumps nginx_logs=$TMP/data/logs" \
@@ -199,6 +201,13 @@ run containers
 [ "$(oom web)" = 8 ]
 assert "oom: a recreated container keeps the total and counts its own kills" $?
 
+# the event window opens after the cgroup counters are read
+set_containers
+set_cgroup "$IDA" 1
+run containers STUB_DATE_BY_DOCKER_CALLS=1
+[ "$(awk '$1 == "web" {print $7}' "$OUT/.manuspectrum-container-oom.state")" -eq 3 ]
+assert "oom: the next event window starts after docker and memory.events were read" $?
+
 # cgroupfs driver layout
 set_containers
 rm -rf "$TMP/cgroup"
@@ -266,11 +275,11 @@ rc=$?
 assert "containers: a hung docker is cut by the timeout" $?
 
 # --- disk
-printf '%s\n' 'Images 3.807GB' 'Containers 2.9MB' 'Local Volumes 152.4MB' 'Build Cache 512kB' >"$TMP/df"
 printf '%s\n' \
-  'ms_pg_data 1.405GB' 'ms_es_data 2.5GB' 'ms_prometheus_data 0B' 'ms_cantaloupe_cache 87.65MB' \
-  'manuspectrum_beat 4kB' 'other_data 9GB' 'ms_unsized N/A' 'Bad_Name 1MB' 'ms_bad.name 1MB' \
-  '5e5038ad36bdc6357260df2fa3073a2801ceb848226341359f4235b233e4ed8d 47.97MB' >"$TMP/df_v"
+  'I 3.5GB' 'I 307MB' 'C 1.4MB' 'C 1.5MB' 'B 500kB' 'B 12kB' \
+  'V 1.405GB ms_pg_data' 'V 2.5GB ms_es_data' 'V 0B ms_prometheus_data' 'V 87.65MB ms_cantaloupe_cache' \
+  'V 4kB manuspectrum_beat' 'V 9GB other_data' 'V N/A ms_unsized' 'V 1MB Bad_Name' 'V 1MB ms_bad.name' \
+  'V 47.97MB 5e5038ad36bdc6357260df2fa3073a2801ceb848226341359f4235b233e4ed8d' >"$TMP/df_v"
 G=manuspectrum_docker_disk.prom
 D=manuspectrum_disk_usage.prom
 S=manuspectrum_disk_usage_success.prom
@@ -297,7 +306,7 @@ sleep 1
 
 [ "$(sample 'manuspectrum_docker_disk_bytes{kind="images"}' $G)" = 3807000000 ] \
   && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="containers"}' $G)" = 2900000 ] \
-  && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="volumes"}' $G)" = 152400000 ] \
+  && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="volumes"}' $G)" = 13042624000 ] \
   && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="build_cache"}' $G)" = 512000 ]
 assert "docker disk: images, containers, volumes and build cache are exported in bytes" $?
 [ "$(sample 'manuspectrum_docker_volume_bytes{volume="ms_pg_data"}' $G)" = 1405000000 ] \
@@ -308,8 +317,10 @@ assert "docker disk: images, containers, volumes and build cache are exported in
 assert "docker disk: named volumes are exported with their size (0B, decimal units, project prefix)" $?
 [ "$(grep -c '^manuspectrum_docker_volume_bytes{' "$OUT/$G")" -eq 5 ]
 assert "docker disk: anonymous, foreign, unsized and oddly named volumes are left out" $?
-grep -q 'system df -v' "$TMP/calls" && grep -q 'system df --format' "$TMP/calls"
-assert "docker disk: docker system df is asked for the totals and for the volumes" $?
+[ "$(grep -c '^docker system' "$TMP/calls")" -eq 1 ] && grep -q 'system df -v' "$TMP/calls"
+assert "docker disk: one docker system df -v call gives the totals and the volumes" $?
+[ "$(sed -n 's/^docker-nice //p' "$TMP/calls")" -gt "$(nice)" ]
+assert "docker disk: the docker system df call runs at a lowered priority" $?
 ! grep -q "$TMP" "$OUT/$G"
 assert "docker disk: no host path in the output" $?
 
@@ -338,18 +349,18 @@ grep -q '^manuspectrum_disk_usage_last_run_timestamp_seconds' "$OUT/$D"
 assert "disk: a failed run still records its last run" $?
 
 start=$SECONDS
-run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=300 HOST_METRICS_DISK_BUDGET=6
+run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=300 HOST_METRICS_DISK_BUDGET=4
 rc=$?
 [ "$rc" -eq 1 ] && [ $((SECONDS - start)) -lt 10 ] && ! grep -q 'target="media"' "$OUT/$D"
 assert "disk: the per-target timeout is cut to what is left of the run budget" $?
 start=$SECONDS
-run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=300 HOST_METRICS_DISK_BUDGET=5
+run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=300 HOST_METRICS_DISK_BUDGET=3
 rc=$?
 [ "$rc" -eq 1 ] && [ $((SECONDS - start)) -lt 10 ] && grep -q 'budget is spent' "$TMP/stderr" && ! grep -q 'target="restic"' "$OUT/$D"
 assert "disk: a target left without time is skipped and counted as failed" $?
-run disk HOST_METRICS_DISK_BUDGET=4
+run disk HOST_METRICS_DISK_BUDGET=2
 [ $? -eq 2 ]
-assert "disk: a budget that cannot hold the docker calls is refused" $?
+assert "disk: a budget that cannot hold the docker call is refused" $?
 grep -q 'HOST_METRICS_DU_TIMEOUT:-300' "$SCRIPT" && grep -q 'HOST_METRICS_DISK_BUDGET:-840' "$SCRIPT"
 assert "disk: the defaults are 300 s per target and 840 s in all (unit limit 15 min)" $?
 

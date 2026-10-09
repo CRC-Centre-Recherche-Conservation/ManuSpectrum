@@ -184,7 +184,7 @@ observability-off: ## Stop and remove the monitoring containers (volumes kept); 
 # amtool inside the running container: no published port, no host install.
 AMTOOL = $(COMPOSE) --profile observability exec -T alertmanager amtool --alertmanager.url=http://127.0.0.1:9093
 
-# Alertmanager reads ALERT_EMAILS, ALERT_EMAIL_FROM and the EMAIL_* relay from
+# Alertmanager reads ALERT_EMAILS, ALERT_EMAIL_FROM, PUBLIC_HOST and the EMAIL_* relay from
 # its environment, fixed when the container is created, so a /-/reload could
 # not see a changed .env. The values are checked on the host with the same
 # render.sh first (a bad list must not take the running instance down), then
@@ -192,7 +192,7 @@ AMTOOL = $(COMPOSE) --profile observability exec -T alertmanager amtool --alertm
 # silences and the notification log live on a volume and survive.
 alert-recipients: ## After editing ALERT_EMAILS (or the sender or relay) in .env: validate, recreate alertmanager, wait until ready
 	@ALERT_EMAILS="$(call envval,ALERT_EMAILS)" ALERT_EMAIL_FROM="$(call envval,ALERT_EMAIL_FROM)" \
-		EMAIL_HOST="$(call envval,EMAIL_HOST)" EMAIL_PORT="$(call envval,EMAIL_PORT)" \
+		PUBLIC_HOST="$(call envval,PUBLIC_HOST)" EMAIL_HOST="$(call envval,EMAIL_HOST)" EMAIL_PORT="$(call envval,EMAIL_PORT)" \
 		EMAIL_USE_TLS="$(call envval,EMAIL_USE_TLS)" EMAIL_HOST_USER="$(call envval,EMAIL_HOST_USER)" \
 		ALERTMANAGER_DIR='$(COMPOSE_DIR)/observability/alertmanager' ALERTMANAGER_VALIDATE_ONLY=1 \
 		sh '$(COMPOSE_DIR)/observability/alertmanager/render.sh' \

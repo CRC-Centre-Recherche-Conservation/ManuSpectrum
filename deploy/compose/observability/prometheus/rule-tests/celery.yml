@@ -50,3 +50,14 @@ tests:
   - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
     eval_time: 70h
     exp_samples: []
+- name: a restarted Prometheus still sees a failure of 62 hours ago, from the stored samples
+  interval: 5m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="failure"}
+    values: 0+1x8 8x1000
+  promql_expr_test:
+  - expr: sum by (task) (increase(manuspectrum_celery_tasks_total{outcome="failure"}[64h])) > 0
+    eval_time: 62h
+    exp_samples:
+    - labels: '{task="index_resources"}'
+      value: 8

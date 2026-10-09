@@ -31,15 +31,14 @@ groups:
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerbundlebuildveryslow
       - alert: ExplorerRebuildFailing
         expr: |
-          sum by (language) (increase(manuspectrum_explorer_rebuild_failures_total[30m])) > 0
+          sum by (language) (increase(manuspectrum_explorer_rebuild_failures_total[64h])) > 0
         for: 15m
-        keep_firing_for: 64h
         labels:
           severity: warning
           service: explorer
         annotations:
           summary: "Background Explorer rebuilds fail"
-          description: "{{ $value | humanize }} background rebuilds failed in 30 minutes for language {{ $labels.language }}; readers keep the previous corpus."
+          description: "{{ $value | humanize }} background rebuilds failed in the last 64 hours for language {{ $labels.language }}; readers keep the previous corpus."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerrebuildfailing
       - alert: ExplorerRebuildContinuous
         expr: |

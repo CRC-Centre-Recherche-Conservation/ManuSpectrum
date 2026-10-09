@@ -5,19 +5,17 @@ groups:
     rules:
       - alert: ContainerRestartLoop
         expr: |
-          (manuspectrum_container_restarts - min_over_time(manuspectrum_container_restarts[1h])) > 3
-        keep_firing_for: 64h
+          max_over_time((manuspectrum_container_restarts - min_over_time(manuspectrum_container_restarts[1h]))[64h:5m]) > 3
         labels:
           severity: warning
           service: containers
         annotations:
           summary: "A container restarts in a loop"
-          description: "{{ $labels.container }} restarted {{ $value }} times in the last hour."
+          description: "{{ $labels.container }} restarted {{ $value }} times within an hour in the last 64 hours."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containerrestartloop
       - alert: ContainerOOMKilled
         expr: |
-          increase(manuspectrum_container_oom_kills[15m]) > 0
-        keep_firing_for: 64h
+          increase(manuspectrum_container_oom_kills[64h]) > 0
         labels:
           severity: warning
           service: containers
@@ -34,7 +32,7 @@ groups:
           service: containers
         annotations:
           summary: "OOM kills of a container are no longer counted from the kernel"
-          description: "For {{ $labels.container }} the collector fell back on Docker's OOMKilled flag, which misses most kills; the cgroup memory.events file is unreadable."
+          description: "For every container the collector fell back on Docker's OOMKilled flag, which misses most kills; the cgroup memory.events file is unreadable."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#oomsourcedegraded
       - alert: ContainerMemoryNearLimit
         expr: |

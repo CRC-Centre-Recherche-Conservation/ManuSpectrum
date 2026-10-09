@@ -6,8 +6,9 @@
 # Reads EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS (true|false), EMAIL_HOST_USER
 # (optional: when set, EMAIL_HOST_PASSWORD_FILE is given to Alertmanager as
 # smtp_auth_password_file; the password is never read or printed here),
-# ALERT_EMAILS (comma-separated recipients) and ALERT_EMAIL_FROM (its domain is
-# also the SMTP HELO name, which some relays check). Any missing
+# ALERT_EMAILS (comma-separated recipients), ALERT_EMAIL_FROM and PUBLIC_HOST
+# (the host's own name, sent as the SMTP HELO name, which some relays check
+# against the connecting address). Any missing
 # or malformed value exits 1 with a message on stderr, so the container does
 # not start with a configuration that would drop alerts.
 #
@@ -35,6 +36,7 @@ EMAIL_HOST_USER="${EMAIL_HOST_USER:-}"
 EMAIL_HOST_PASSWORD_FILE="${EMAIL_HOST_PASSWORD_FILE:-/run/secrets/email_password}"
 ALERT_EMAILS="${ALERT_EMAILS:-}"
 ALERT_EMAIL_FROM="${ALERT_EMAIL_FROM:-}"
+PUBLIC_HOST="${PUBLIC_HOST:-}"
 
 ADDRESS='^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$'
 
@@ -51,6 +53,9 @@ if [ -n "$EMAIL_HOST_USER" ]; then
 fi
 [ -n "$ALERT_EMAIL_FROM" ] || fail "ALERT_EMAIL_FROM is empty: set the sender in .env"
 valid "$ALERT_EMAIL_FROM" "$ADDRESS" || fail "ALERT_EMAIL_FROM is not an e-mail address"
+[ -n "$PUBLIC_HOST" ] || fail "PUBLIC_HOST is empty: set the public host name in .env"
+valid "$PUBLIC_HOST" '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$' || fail "PUBLIC_HOST is not a host name"
+[ "${#PUBLIC_HOST}" -le 253 ] || fail "PUBLIC_HOST is longer than 253 characters"
 [ -n "$(printf '%s' "$ALERT_EMAILS" | tr -d '[:space:]')" ] || fail "ALERT_EMAILS is empty: set a comma-separated list of recipients in .env"
 
 # Sets `recipients` to the validated list. The positional parameters it
@@ -90,7 +95,7 @@ sed \
   -e "s|@SMTP_SMARTHOST@|$EMAIL_HOST:$EMAIL_PORT|" \
   -e "s|@SMTP_REQUIRE_TLS@|$EMAIL_USE_TLS|" \
   -e "s|@ALERT_EMAIL_FROM@|$ALERT_EMAIL_FROM|" \
-  -e "s|@SMTP_HELLO@|${ALERT_EMAIL_FROM#*@}|" \
+  -e "s|@SMTP_HELLO@|$PUBLIC_HOST|" \
   -e "s|@ALERT_EMAILS@|$recipients|g" \
   -e "/^@SMTP_AUTH@\$/{r $auth
 d

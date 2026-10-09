@@ -26,6 +26,30 @@ Restart the exporter (`make -C deploy observability-on`). A web or worker target
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
 
+## NodeExporterDown
+
+Severity: critical. Prometheus cannot scrape node_exporter.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+Backup, NFS and host alerts (`BackupFailed`, `BackupMissing`, `NfsUnavailable`, disk and textfile alerts) read nothing while node_exporter is down: a failed backup or a lost `/data` is invisible until it is back.
+
+### Diagnosis
+
+`make -C deploy status` for the node-exporter container; its logs with `docker logs`; the Targets page of Prometheus through the SSH tunnel.
+
+### Remediation
+
+Restart the exporter (`make -C deploy observability-on`). Once it answers, check the backup and `/data` by hand (`deploy/BACKUP.md`) without waiting for their alerts.
+
+### Escalation
+
+The technical lead. If the cause is the host, open a ticket with the hosting provider.
+
 ## HostMetricsStale
 
 Severity: warning. Container metrics are stale.
