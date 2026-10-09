@@ -27,7 +27,7 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `logrotate/` | Host `logrotate` template for the nginx logs (thirty days) |
 | `systemd/` | Service and timer templates: certificate renewal, nightly backup (02:00), weekly restore test (Sunday 05:30), container metrics (30 s), disk usage metrics (hourly), monthly report (the 1st, 08:00) |
 | `OBSERVABILITY.md` | Monitoring: services, Grafana by SSH tunnel, dashboards, alerts and their timing, recipients and sender, mail categories, monthly report, host metrics, upgrade note |
-| `compose/observability/` | Prometheus, Alertmanager, Grafana and blackbox configuration: scrape jobs, alert rules and their unit tests, e-mail templates, the four dashboards, `check.sh` |
+| `compose/observability/` | Prometheus, Alertmanager, Grafana and blackbox configuration: scrape jobs, alert rules and their unit tests, e-mail templates, the five dashboards, `check.sh` |
 | `runbooks/` | One file per alert area, one section per alert: symptom, diagnosis, remediation, escalation |
 | `compose/smoke.sh` | Checks of a running stack |
 | `compose/tests/` | Rules of the rendered Compose files (no container is started) |

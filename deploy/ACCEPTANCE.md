@@ -1173,7 +1173,7 @@ reboot.
   - On failure: `ss -ltn | grep 3000` on the VM must show `127.0.0.1:3000` only. Anything else is a bug: stop here.
 - [ ] *(host)* From the host without the tunnel, `curl -m 5 http://192.168.123.10:3000/` fails (connection refused or
   timeout), and `curl -k -m 5 https://192.168.123.10/grafana/` is the site's 404.
-- [ ] The four dashboards (Overview, Application, Infrastructure, Storage and backups) open without a "No data" panel,
+- [ ] The five dashboards (Overview, Application, Infrastructure, Storage and backups, Activity) open without a "No data" panel,
   except those that wait for an event (a restart, an OOM kill, a restore test not yet run). Editing a panel and
   saving is refused (read-only provisioning).
 - [ ] `deploy/compose/smoke.sh monitoring` (after `make -C deploy container-metrics disk-usage` and a backup,
