@@ -278,7 +278,10 @@ class ReadRightsTests(ReadRightsCase):
     def test_a_restricted_production_nodegroup_leaves_dates_and_places_out(self):
         document = str(self.documents["open"].pk)
         shown = self.document(self.documents["open"].pk)
-        self.assertEqual(len(shown["history"]), 1)
+        self.assertEqual(
+            len([l for l in shown["history"] if l["carrier"]["model"] == "document"]),
+            1,
+        )
 
         self.deny(("document", "production_at_place"))
 
@@ -290,7 +293,14 @@ class ReadRightsTests(ReadRightsCase):
             if r["id"] == document
         )
         self.assertIsNone(hit["dates"])
-        self.assertEqual(self.document(self.documents["open"].pk)["history"], [])
+        self.assertEqual(
+            [
+                l
+                for l in self.document(self.documents["open"].pk)["history"]
+                if l["carrier"]["model"] == "document"
+            ],
+            [],
+        )
         self.assertNotIn("Paris", str(self.document(self.documents["open"].pk)))
 
     def test_a_value_nodegroup_the_visitor_cannot_read_leaves_its_values_out(self):
@@ -408,7 +418,7 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         assert_shape(self, payload, "DocumentPayload")
-        self.assertEqual(len(payload["history"]), 1)
+        self.assertEqual(payload["history"][0]["carrier"]["model"], "document")
         for line in payload["history"]:
             assert_shape(self, line, "HistoryLine")
             for place in line["places"]:

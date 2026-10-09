@@ -39,6 +39,7 @@ from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import anonymous_user, is_connected
 from manuspectrum.views.explorer import memo as explorer_memo
+from manuspectrum.views.explorer.events import events_payload, parse_event_types
 from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
@@ -370,3 +371,23 @@ class ExplorerManifestView(View):
         if manifest is None:
             return _not_found()
         return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)
+
+
+@method_decorator(gzip_page, name="dispatch")
+class ExplorerEventsView(View):
+    """``GET /{lang}/api/explorer/events``: the map's events kept by the Corpus filters and ``eventType``.
+
+    The visitor's ETag is computed before building, from the bundle key, the route, the filters and the event types: a revalidation answers 304 without building.
+    """
+
+    def get(self, request):
+        reader = anonymous_user()
+        ticket, language = _ticket(reader), translation.get_language()
+        token = _token(
+            "events", ticket, _filters(request.GET), parse_event_types(request.GET)
+        )
+        return _answer(
+            request,
+            lambda: events_payload(request.GET, reader, language, ticket),
+            token,
+        )

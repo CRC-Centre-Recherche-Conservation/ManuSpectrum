@@ -1798,6 +1798,12 @@ def facet_payload(key, query, user, language, ticket=None):
             for value in facet["values"]
             if needle in fold(value["label"]["value"])
         }
+        if key == "material":
+            matching |= {
+                v["id"]
+                for v in facet["values"]
+                if any(needle in t for t in bundle.material_terms.get(v["id"], ()))
+            }
         if key == "place":
             matching |= place_ancestors(matching | selected, bundle.places)
         facet["values"] = [
@@ -2336,22 +2342,9 @@ def component_zones(document_id, bundle, dims, position, readable):
     return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
 
 
-def history_of(values, document_id, places, label_of):
-    """The ``HistoryLine`` list of a document: its Production, or none without a bound or a place.
-
-    *places* are the production places a reference may show, in stored
-    order; *label_of* names them.
-    """
-    dates = production_dates(values, document_id)
-    if dates is None and not places:
-        return []
-    return [
-        {
-            "type": "production",
-            "places": [{"id": p, "name": label_of[p]} for p in places if p in label_of],
-            "date": dates or {"start": None, "end": None, "approximate": False},
-        }
-    ]
+def history_of(bundle, document_id):
+    """The ``HistoryLine`` list of a document: every event of its own carriers (``CorpusBundle.histories``), its Production first, then by start year."""
+    return [dict(line) for line in bundle.histories.get(document_id, ())]
 
 
 def document_payload(document_id, user, language, ticket=None):
@@ -2366,8 +2359,7 @@ def document_payload(document_id, user, language, ticket=None):
     visible Components placed on its pages (``component_zones``) or observed
     by one of its analyses, the placed ones by first page then name, the
     others by name after them. ``document_match`` says what the filters keep. ``history`` holds
-    the document's Production line when it has a bound or a place a linked
-    reference may show (a Draft place included, a hidden one left out).
+    the events of the document's own carriers (``history_of``).
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible
@@ -2382,10 +2374,6 @@ def document_payload(document_id, user, language, ticket=None):
             "doc_name",
             "doc_manifest",
             "doc_owner",
-            "doc_start",
-            "doc_end",
-            "doc_approx",
-            "doc_place",
         ],
         user,
     )
@@ -2437,12 +2425,9 @@ def document_payload(document_id, user, language, ticket=None):
         for v in values.get(document_id, "doc_owner")
         if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    produced = _ordered_refs(values.get(document_id, "doc_place"))
-    shown_places = set(linkable(produced, user))
-    produced_at = [p for p in produced if p in shown_places]
     observed = {row["component"] for row in rows if row["component"]}
     label_of = names(
-        {document_id} | set(owners[:1]) | set(placed) | observed | set(produced_at),
+        {document_id} | set(owners[:1]) | set(placed) | observed,
         language,
         user,
     )
@@ -2485,7 +2470,7 @@ def document_payload(document_id, user, language, ticket=None):
             for c in components
         ],
         "characterizations": summaries,
-        "history": history_of(values, document_id, produced_at, label_of),
+        "history": history_of(bundle, document_id),
         "unpublishedCount": sum(1 for row in rows if row["unpublished"])
         + sum(1 for s in summaries if s["unpublished"]),
         "unpublished": document_id in visible.unpublished,

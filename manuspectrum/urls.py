@@ -53,6 +53,7 @@ from manuspectrum.views.explorer.api import (
     ExplorerAnalysisView,
     ExplorerDocumentMatchView,
     ExplorerDocumentView,
+    ExplorerEventsView,
     ExplorerFacetView,
     ExplorerHomeView,
     ExplorerItemsView,
@@ -274,6 +275,13 @@ urlpatterns.append(
         "api/explorer/synthesis",
         ExplorerSynthesisView.as_view(),
         name="explorer-synthesis",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events",
+        ExplorerEventsView.as_view(),
+        name="explorer-events",
     )
 )
 

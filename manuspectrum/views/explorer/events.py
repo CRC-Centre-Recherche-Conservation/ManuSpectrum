@@ -41,8 +41,14 @@ from manuspectrum.views.explorer.service import (
     _bound_year,
     _links,
     _ordered_refs,
+    bounds_meet,
+    characterization_wanted,
+    corpus_bundle,
+    meets,
     names,
+    period_facet,
     qualified_values,
+    row_filter,
 )
 from manuspectrum.views.explorer.swatches import colour_rank
 from manuspectrum.views.explorer.values import fold, reference_items, string_texts
@@ -141,14 +147,18 @@ class EventSet:
 
 
 def parse_event_types(query):
-    """The event types ``eventType`` names (repeated or comma-separated), in ``EVENT_TYPES`` order; others ignored."""
+    """The event types ``eventType`` names (repeated or comma-separated), in ``EVENT_TYPES`` order; others ignored.
+
+    Without a known type, the ``MATERIAL_EVENTS``: ``analysis`` and ``sampling`` come only when asked.
+    """
     asked = {
         v.strip()
         for raw in query.getlist("eventType")
         for v in raw.split(",")
         if v.strip()
     }
-    return [t for t in EVENT_TYPES if t in asked]
+    wanted = asked & set(EVENT_TYPES) or MATERIAL_EVENTS
+    return [t for t in EVENT_TYPES if t in wanted]
 
 
 def _keys(model):
@@ -648,3 +658,77 @@ def build_events(
             for d, lines in histories.items()
         },
     )
+
+
+def kept_events(bundle, query):
+    """``(events, keep, filters)``: the public ``MapEvent`` of the events *query* keeps, in bundle order.
+
+    An event is kept when its type is among ``eventType`` (all without one), its own
+    dates meet the period (``bounds_meet``; ``periodEvent`` does not apply), one of
+    its supporting analyses is kept by the Corpus rule with the period left out, and,
+    for a production, modification or alteration under characterization filters,
+    one of its materials meets them. ``analyses`` keeps the kept ones.
+    """
+    keep, active, filters, *_ = row_filter(bundle.rows, query, universe=bundle.universe)
+    kept_rows = {row["id"] for row in bundle.rows if keep(row, "period")}
+    wanted = characterization_wanted(active)
+    types = set(parse_event_types(query))
+    found = []
+    for event in bundle.events:
+        if types and event["type"] not in types:
+            continue
+        date = event["date"]
+        if not bounds_meet(
+            None if date["start"] is None else (date["start"], date["end"]), filters
+        ):
+            continue
+        analyses = [a for a in event["analyses"] if a in kept_rows]
+        if not analyses:
+            continue
+        if (
+            wanted
+            and event["type"] in MATERIAL_EVENTS
+            and not any(
+                meets(bundle.characterization_values[m["characterization"]], wanted)
+                for m in event["materials"]
+            )
+        ):
+            continue
+        found.append({**event, "analyses": analyses})
+    return found, keep, filters
+
+
+def place_subset(places, used):
+    """The ``MapPlace`` of *used* and of their ancestors, by id."""
+    wanted, frontier = set(), {p for p in used if p}
+    while frontier:
+        wanted |= frontier
+        frontier = {
+            places[p]["parent"] for p in frontier if p in places and places[p]["parent"]
+        } - wanted
+    return {p: places[p] for p in sorted(wanted) if p in places}
+
+
+def events_payload(query, user, language, ticket=None):
+    """``EventsResponse`` of the events *query* keeps (``kept_events``)."""
+    bundle = corpus_bundle(user, language, ticket)
+    events, keep, filters = kept_events(bundle, query)
+    places = place_subset(bundle.event_places, {e["place"] for e in events})
+    event = filters["periodEvent"]
+    return {
+        "events": events,
+        "places": places,
+        "unplaced": sum(
+            1 for e in events if not e["place"] or places[e["place"]]["lngLat"] is None
+        ),
+        "period": period_facet(bundle.rows, keep, event, bundle.period_bounds[event]),
+        "materials": {
+            m["id"]: bundle.event_materials[m["id"]]
+            for e in events
+            for m in e["materials"]
+        },
+        "analysisNames": {
+            a: bundle.by_id[a]["name"] for e in events for a in e["analyses"]
+        },
+        "certaintyScale": bundle.certainty,
+    }
