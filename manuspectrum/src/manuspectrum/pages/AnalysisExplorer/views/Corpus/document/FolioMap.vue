@@ -1,0 +1,1656 @@
+<script setup lang="ts">
+import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    shallowRef,
+    useId,
+    useTemplateRef,
+    watch,
+} from "vue";
+import { usePreferredReducedMotion, useResizeObserver } from "@vueuse/core";
+import L from "leaflet";
+import "leaflet.markercluster";
+import { useGettext } from "vue3-gettext";
+import { stackSmallestOnTop } from "utils/leaflet-stack";
+
+import LayerControls from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue";
+
+import { adjustLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
+import { anchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
+import {
+    markedZones,
+    shapeCentre,
+    shapeFeature,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import {
+    layerSizeOf,
+    planCapture,
+    probeImage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
+import {
+    boundsOfBox,
+    boxOfBounds,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
+import {
+    fitPage,
+    layPage,
+    pageBoundsOf,
+    servedSize,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import {
+    nextId,
+    offsetInside,
+    readingOrder,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
+import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import {
+    folioLayerOf,
+    viewerFor,
+} from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
+
+import type {
+    CharacterizationSummary,
+    DocumentCanvas,
+    DocumentComponent,
+    SampleSummary,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
+import type {
+    Box,
+    Frame,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
+import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
+import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
+import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import type {
+    Focus,
+    FolioView,
+    LayerToggles,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+
+const CLUSTER_RADIUS = 36;
+const MAX_ZOOM = 8;
+const INITIAL_ZOOM = 2;
+const MARKER_SIZE = 28;
+const CLUSTER_SIZE = 32;
+const MATERIAL_POINT_RADIUS = 8;
+const NO_IMAGE_PADDING = 0.5;
+const HATCH_ID = "ms-folio-hatch";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const CLUSTER_PREFIX = "cluster:";
+const SAMPLE_PREFIX = "sample:";
+const FOCUS_PADDING = 48;
+const PINNED_PANE = "folio-pinned";
+// Above Leaflet's marker pane (600), below its tooltips (650).
+const PINNED_PANE_Z_INDEX = "620";
+const MARKER_PANE = "markerPane";
+const CONTROLS_HOST_CLASS = "layer-controls-host";
+/** Pixels between the toolbars of layers laid at the same corner. */
+const CONTROLS_STACK_STEP = 44;
+const SAME_BOX = 0.01;
+
+const props = withDefaults(
+    defineProps<{
+        canvas: DocumentCanvas | null;
+        annotations: Annotation[];
+        characterizations: CharacterizationSummary[];
+        styles: Map<string, TechniqueStyle>;
+        focus: Focus | null;
+        slots: Map<string, string[]>;
+        lit: ReadonlySet<string> | null;
+        dimmedMaterials: ReadonlySet<string>;
+        layers: LayerToggles;
+        view: FolioView;
+        samples: SampleSummary[];
+        /** The Components with their zones on this page: an outline each, opening its card. */
+        components?: DocumentComponent[];
+        overlays?: FolioOverlay[];
+        curtain?: string | null;
+        /** The key of the laid layer being adjusted, if any. */
+        adjusting?: string | null;
+        /** The key of the laid layer whose capture is being taken, if any. */
+        capturing?: string | null;
+        /** True while a turn is being checked with the image server. */
+        turning?: boolean;
+        /** The line under the page: document, page, position. */
+        caption?: string;
+        /** `soft` lightens the stage (`--stage-soft`), for the Corpus; the light table and Compare keep `dark`. */
+        stage?: "dark" | "soft";
+    }>(),
+    {
+        components: () => [],
+        overlays: () => [],
+        curtain: null,
+        adjusting: null,
+        capturing: null,
+        turning: false,
+        caption: "",
+        stage: "dark",
+    },
+);
+const emit = defineEmits<{
+    select: [focus: Focus];
+    "layer-adjust": [key: string, on: boolean];
+    "layer-turn": [key: string, by: 1 | -1];
+    "layer-opacity": [key: string, value: number];
+    "layer-curtain": [key: string, on: boolean];
+    "layer-capture": [key: string];
+    captured: [
+        key: string,
+        capture: {
+            url: string;
+            width: number;
+            height: number;
+            frame?: Frame;
+        },
+        origin: { analysis: string; canvas: string },
+    ];
+    "capture-failed": [key: string, reason: CaptureFailure];
+    "layer-reset": [key: string];
+    "layer-place": [key: string, box: Box];
+}>();
+defineExpose({ focusTarget, focusCurrent });
+
+const { $gettext, interpolate } = useGettext();
+const adjustHelpId = useId();
+const motion = usePreferredReducedMotion();
+const host = useTemplateRef<HTMLDivElement>("host");
+
+const active = ref<string | null>(null);
+const pageFailed = ref(false);
+/** Keys of laid maps whose image did not load. */
+const failedOverlays = ref<ReadonlySet<string>>(new Set());
+/** The element each laid layer's toolbar is teleported into, by layer key. */
+const controlHosts = shallowRef<ReadonlyMap<string, HTMLElement>>(new Map());
+// Leaflet objects live outside Vue reactivity.
+let map: L.Map | null = null;
+let page: PageLayer | null = null;
+let cluster: L.MarkerClusterGroup | null = null;
+// The open analysis or sample and the lit evidence: drawn above the groups, never inside one.
+let pinned: L.LayerGroup | null = null;
+const matchOf = new Map<L.Marker, boolean>();
+let frames: L.GeoJSON | null = null;
+let materials: L.GeoJSON | null = null;
+let sampleZones: L.GeoJSON | null = null;
+let componentZones: L.GeoJSON | null = null;
+let order: string[] = [];
+let openedGroup: Set<string> | null = null;
+// An imageless page is fitted to its markers once; later redraws keep the reader's view.
+let fittedCanvas: string | null | undefined;
+const markers = new Map<string, L.Marker>();
+const targets = new Map<string, L.Marker>();
+let laid: LaidLayers | null = null;
+const anchors = new Map<string, AnchoredControl>();
+
+/** What the keys do on the adjusted image; `[` and `]` only when its layer can turn. */
+const adjustHelp = computed((): string =>
+    props.overlays.find((entry) => entry.key === props.adjusting)?.canTurn ===
+    false
+        ? $gettext("Arrows move, plus and minus scale, Escape stops.")
+        : $gettext(
+              "Arrows move, plus and minus scale, [ and ] turn, Escape stops.",
+          ),
+);
+
+/** The layer being adjusted (`adjustLayer`), the box the parent was last given, and the one on screen. */
+interface Adjustment {
+    key: string;
+    layer: L.ImageOverlay;
+    stop: () => void;
+    kept: Box;
+    shown: Box;
+    quiet: boolean;
+}
+let adjustment: Adjustment | null = null;
+
+const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
+
+watch(() => props.canvas?.id, drawPage);
+watch(
+    () => [
+        props.annotations,
+        props.characterizations,
+        props.styles,
+        props.slots,
+        props.layers,
+        props.dimmedMaterials,
+        props.view,
+        props.samples,
+        props.components,
+        props.lit,
+    ],
+    drawMarks,
+);
+watch(
+    () => props.focus,
+    () => {
+        repin();
+        computeTargets();
+    },
+);
+watch(() => [props.overlays, props.curtain], drawOverlays);
+watch(
+    () => props.adjusting,
+    () => {
+        syncAdjustment();
+        drawControls();
+    },
+);
+
+onMounted(() => {
+    const surface = host.value?.querySelector<HTMLElement>(".surface");
+    if (!surface) return;
+    map = L.map(surface, {
+        crs: L.CRS.Simple,
+        zoomControl: false,
+        attributionControl: false,
+        keyboard: false,
+        minZoom: 0,
+        maxZoom: MAX_ZOOM,
+        zoomSnap: 0.25,
+    });
+    map.setView([0, 0], INITIAL_ZOOM);
+    map.createPane(PINNED_PANE).style.zIndex = PINNED_PANE_Z_INDEX;
+    pinned = L.layerGroup().addTo(map);
+    stackSmallestOnTop(map);
+    laid = laidLayers(map, {
+        curtainLabel: $gettext("Curtain position"),
+        failed: markOverlayFailed,
+    });
+    map.on("zoomend moveend", computeTargets);
+    drawPage();
+    drawMarks();
+    drawOverlays();
+});
+
+useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
+
+onBeforeUnmount(() => {
+    page?.remove();
+    page = null;
+    stopAdjusting(true);
+    laid?.remove();
+    laid = null;
+    for (const anchor of anchors.values()) anchor.remove();
+    anchors.clear();
+    map?.remove();
+    map = null;
+});
+
+function markerLabel(
+    annotation: Annotation,
+    style: TechniqueStyle | undefined,
+): string {
+    const parts = [
+        annotation.name.value,
+        style?.label.value ?? $gettext("Analysis"),
+    ];
+    const slots = props.slots.get(annotation.analysis) ?? [];
+    if (slots.length > 0) {
+        parts.push(
+            interpolate(
+                $gettext("in the Selection as %{slots}"),
+                { slots: slots.join(", ") },
+                true,
+            ),
+        );
+    }
+    if (annotation.unpublished) parts.push($gettext("Draft"));
+    return parts.join(", ");
+}
+
+function markerIcon(annotation: Annotation): L.DivIcon {
+    const style = props.styles.get(techniqueKey(annotation.technique));
+    const element = document.createElement("span");
+    element.id = `folio-marker-${annotation.analysis}`;
+    element.dataset.target = annotation.analysis;
+    element.setAttribute("role", "button");
+    element.setAttribute("aria-label", markerLabel(annotation, style));
+    element.tabIndex = -1;
+    element.className = [
+        "folio-marker",
+        style?.colour
+            ? `folio-marker--tech-${style.colour}`
+            : "folio-marker--ink",
+    ].join(" ");
+    const code = document.createElement("span");
+    code.className = "code";
+    code.textContent = style?.code ?? "?";
+    element.append(code);
+    const slots = props.slots.get(annotation.analysis) ?? [];
+    if (slots.length > 0) {
+        const badge = document.createElement("span");
+        badge.className = "slot";
+        badge.textContent = slots.join(" ");
+        element.append(badge);
+    }
+    if (annotation.unpublished) {
+        const draft = document.createElement("span");
+        draft.className = "draft";
+        draft.setAttribute("aria-hidden", "true");
+        element.append(draft);
+    }
+    return L.divIcon({
+        html: element,
+        className: "folio-marker-host",
+        iconSize: [MARKER_SIZE, MARKER_SIZE],
+    });
+}
+
+/** The label of a marker group: how many analyses it holds and how many of them the filters keep. */
+function clusterLabel(count: number, matching: number): string {
+    if (props.view === "samples") {
+        return interpolate(
+            $gettext("%{n} samples here, zoom in"),
+            { n: count },
+            true,
+        );
+    }
+    if (matching === 0) {
+        return interpolate(
+            $gettext("%{n} analyses here, none in the filters"),
+            { n: count },
+            true,
+        );
+    }
+    if (matching < count) {
+        return interpolate(
+            $gettext("%{n} analyses here, %{kept} in the filters, zoom in"),
+            { n: count, kept: matching },
+            true,
+        );
+    }
+    return interpolate(
+        $gettext("%{n} analyses here, zoom in"),
+        { n: count },
+        true,
+    );
+}
+
+/**
+ * The group's icon host takes no tab stop: the roving `span` inside is the
+ * target. A group writes « kept/all » when the filters drop some of its
+ * analyses, and is dimmed when they drop them all.
+ */
+function clusterIcon(group: L.MarkerCluster): L.DivIcon {
+    group.options.keyboard = false;
+    const children = group.getAllChildMarkers();
+    const count = children.length;
+    const matching = children.filter(
+        (marker) => matchOf.get(marker) !== false,
+    ).length;
+    const element = document.createElement("span");
+    element.dataset.target = `${CLUSTER_PREFIX}${L.stamp(group)}`;
+    element.setAttribute("role", "button");
+    element.setAttribute("aria-label", clusterLabel(count, matching));
+    element.tabIndex = -1;
+    element.className = `folio-cluster${matching === 0 ? " is-dimmed" : ""}`;
+    element.textContent =
+        matching < count ? `${matching}/${count}` : String(count);
+    return L.divIcon({
+        html: element,
+        className: "folio-marker-host",
+        iconSize: [CLUSTER_SIZE, CLUSTER_SIZE],
+    });
+}
+
+function materialLabel(summary: CharacterizationSummary): HTMLElement {
+    const element = document.createElement("span");
+    element.textContent =
+        summary.materials.map((entry) => entry.value.label.value).join(", ") ||
+        summary.name.value;
+    return element;
+}
+
+/**
+ * An analysis is drawn in the analyses view, and in the identified-materials
+ * view when it is evidence of the open material; its layer toggle applies in
+ * both.
+ */
+function isShown(annotation: Annotation): boolean {
+    const inView =
+        props.view === "analyses" ||
+        (props.view === "characterizations" &&
+            (props.lit?.has(annotation.analysis) ?? false));
+    return inView && props.layers[folioLayerOf(annotation.dataKind)];
+}
+
+function sampleIcon(sample: SampleSummary): L.DivIcon {
+    const element = document.createElement("span");
+    element.id = `folio-sample-${sample.id}`;
+    element.dataset.target = `${SAMPLE_PREFIX}${sample.id}`;
+    element.setAttribute("role", "button");
+    const parts = [sample.name.value, $gettext("Sample")];
+    if (sample.unpublished) parts.push($gettext("Draft"));
+    element.setAttribute("aria-label", parts.join(", "));
+    element.tabIndex = -1;
+    element.className = "folio-sample";
+    if (sample.unpublished) {
+        const draft = document.createElement("span");
+        draft.className = "draft";
+        draft.setAttribute("aria-hidden", "true");
+        element.append(draft);
+    }
+    return L.divIcon({
+        html: element,
+        className: "folio-marker-host",
+        iconSize: [MARKER_SIZE, MARKER_SIZE],
+    });
+}
+
+function ensureHatch(): void {
+    const svg = map?.getPanes().overlayPane.querySelector("svg");
+    if (!svg || svg.querySelector(`#${HATCH_ID}`)) return;
+    const defs = document.createElementNS(SVG_NS, "defs");
+    const pattern = document.createElementNS(SVG_NS, "pattern");
+    pattern.id = HATCH_ID;
+    pattern.setAttribute("patternUnits", "userSpaceOnUse");
+    pattern.setAttribute("width", "8");
+    pattern.setAttribute("height", "8");
+    pattern.setAttribute("patternTransform", "rotate(45)");
+    const line = document.createElementNS(SVG_NS, "line");
+    line.setAttribute("x1", "0");
+    line.setAttribute("y1", "0");
+    line.setAttribute("x2", "0");
+    line.setAttribute("y2", "8");
+    line.setAttribute("class", "folio-hatch-line");
+    pattern.append(line);
+    defs.append(pattern);
+    svg.prepend(defs);
+}
+
+/**
+ * Lays the page's IIIF image (`layPage`); an info.json that cannot be read
+ * leaves the markers on the bare stage and says so (`pageFailed`).
+ */
+function drawPage(): void {
+    if (!map) return;
+    page?.remove();
+    page = null;
+    pageFailed.value = false;
+    const service = props.canvas?.image.service;
+    if (!service) return;
+    page = layPage(map, service, () => {
+        pageFailed.value = true;
+    });
+}
+
+/**
+ * Takes the folio region under a layer: `layer-capture` says it started, then
+ * `captured` once the image server answers the url, with the analysis and
+ * page it was taken for, else `capture-failed` with the reason.
+ */
+async function captureUnder(overlay: FolioOverlay): Promise<void> {
+    emit("layer-capture", overlay.key);
+    const origin = {
+        analysis: overlay.analysis,
+        canvas: props.canvas?.id ?? "",
+    };
+    const bounds = pageBoundsOf(page);
+    const served = servedSize(page);
+    const box = boxOfBounds(overlay.bounds);
+    const element = laid?.layerOf(overlay.key)?.getElement() ?? null;
+    const onPage = bounds && served ? { bounds, served } : null;
+    const service = props.canvas?.image.service ?? null;
+    const early = planCapture({
+        page: onPage,
+        service,
+        box,
+        quarter: overlay.quarter,
+        layerSize: { w: 0, h: 0 },
+    });
+    if ("refused" in early) {
+        emit("capture-failed", overlay.key, early.refused);
+        return;
+    }
+    const layerSize = (await layerSizeOf(
+        overlay.service ?? null,
+        element,
+        overlay.quarter,
+    )) ?? { w: 0, h: 0 };
+    const plan = planCapture({
+        page: onPage,
+        service,
+        box,
+        quarter: overlay.quarter,
+        layerSize,
+    });
+    if ("refused" in plan) emit("capture-failed", overlay.key, plan.refused);
+    else if (await probeImage(plan.url)) {
+        emit("captured", overlay.key, plan, origin);
+    } else emit("capture-failed", overlay.key, "server");
+}
+
+/** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
+function pinnedTargets(): Set<string> {
+    const targets = new Set<string>(props.lit ?? []);
+    if (props.focus?.kind === "analysis") targets.add(props.focus.id);
+    if (props.focus?.kind === "sample")
+        targets.add(`${SAMPLE_PREFIX}${props.focus.id}`);
+    return targets;
+}
+
+/** Moves each marker between the groups and the pinned layer as `pinnedTargets` says. */
+function repin(): void {
+    if (!cluster || !pinned) return;
+    const wanted = pinnedTargets();
+    for (const [id, marker] of markers) {
+        const isPinned = pinned.hasLayer(marker);
+        if (wanted.has(id) && !isPinned) {
+            cluster.removeLayer(marker);
+            marker.options.pane = PINNED_PANE;
+            pinned.addLayer(marker);
+        } else if (!wanted.has(id) && isPinned) {
+            pinned.removeLayer(marker);
+            marker.options.pane = MARKER_PANE;
+            cluster.addLayer(marker);
+        }
+    }
+}
+
+/**
+ * A dashed outline per area zone of the components, under the markers; only
+ * while the zones layer is on, so a hidden outline is not a click target.
+ * The outline is a button of the SVG, named by its component.
+ */
+function drawComponentZones(): L.GeoJSON {
+    const features = props.layers.zones
+        ? props.components.flatMap((component) =>
+              component.zones.flatMap((zone) => {
+                  const feature =
+                      zone.shape.type !== "point"
+                          ? shapeFeature(zone.shape, { id: component.id })
+                          : null;
+                  return feature ? [feature] : [];
+              }),
+          )
+        : [];
+    const group = L.geoJSON(features, {
+        style: () => ({
+            className: "folio-component-zone",
+            dashArray: "2 4",
+            weight: 1.5,
+            fill: false,
+        }),
+        onEachFeature: (feature, layer) => {
+            const id = String(feature.properties.id);
+            const component = props.components.find((entry) => entry.id === id);
+            if (component) layer.bindTooltip(component.name.value);
+            layer.on("click", () => emit("select", { kind: "component", id }));
+            layer.on("add", () => {
+                (layer as L.Path)
+                    .getElement()
+                    ?.setAttribute("aria-hidden", "true");
+            });
+        },
+    });
+    return group;
+}
+
+function drawMarks(): void {
+    if (!map) return;
+    openedGroup = null;
+    pinned?.clearLayers();
+    matchOf.clear();
+    cluster?.remove();
+    frames?.remove();
+    materials?.remove();
+    sampleZones?.remove();
+    componentZones?.remove();
+    markers.clear();
+
+    componentZones = drawComponentZones().addTo(map);
+
+    cluster = L.markerClusterGroup({
+        maxClusterRadius: CLUSTER_RADIUS,
+        showCoverageOnHover: false,
+        spiderfyOnMaxZoom: true,
+        removeOutsideVisibleBounds: false,
+        iconCreateFunction: clusterIcon,
+    });
+    for (const annotation of markedZones(props.annotations)) {
+        if (!isShown(annotation)) continue;
+        const centre = shapeCentre(annotation.shape);
+        if (!centre) continue;
+        const marker = L.marker(centre, {
+            icon: markerIcon(annotation),
+            keyboard: false,
+        });
+        marker.on("click", () => activate(annotation.analysis));
+        markers.set(annotation.analysis, marker);
+        matchOf.set(marker, annotation.match);
+    }
+    const shownSamples = props.view === "samples" ? props.samples : [];
+    for (const sample of shownSamples) {
+        const centre = sample.zone ? shapeCentre(sample.zone.shape) : null;
+        if (!centre) continue;
+        const target = `${SAMPLE_PREFIX}${sample.id}`;
+        const marker = L.marker(centre, {
+            icon: sampleIcon(sample),
+            keyboard: false,
+        });
+        marker.on("click", () => activate(target));
+        markers.set(target, marker);
+    }
+    const frameFeatures = [];
+    for (const annotation of props.annotations) {
+        if (
+            !isShown(annotation) ||
+            viewerFor(annotation.dataKind).folio !== "frame" ||
+            annotation.shape.type === "point"
+        ) {
+            continue;
+        }
+        const style = props.styles.get(techniqueKey(annotation.technique));
+        const feature = shapeFeature(annotation.shape, {
+            analysis: annotation.analysis,
+            colour: style?.colour ?? null,
+        });
+        if (feature) frameFeatures.push(feature);
+    }
+    const wanted = pinnedTargets();
+    for (const [id, marker] of markers) {
+        if (wanted.has(id)) {
+            marker.options.pane = PINNED_PANE;
+            pinned?.addLayer(marker);
+        }
+    }
+    cluster.addLayers(
+        [...markers]
+            .filter(([id]) => !wanted.has(id))
+            .map(([, marker]) => marker),
+    );
+    cluster.on("animationend spiderfied unspiderfied", settleGroups);
+    map.addLayer(cluster);
+
+    frames = L.geoJSON(frameFeatures, {
+        style: (feature) => ({
+            className: `folio-frame${feature?.properties.colour ? ` folio-frame--tech-${feature.properties.colour}` : ""}`,
+            dashArray: "4 4",
+            weight: 2,
+            fill: false,
+            interactive: false,
+        }),
+    }).addTo(map);
+
+    sampleZones = L.geoJSON(
+        shownSamples.flatMap((sample) => {
+            const feature =
+                sample.zone && sample.zone.shape.type !== "point"
+                    ? shapeFeature(sample.zone.shape, { id: sample.id })
+                    : null;
+            return feature ? [feature] : [];
+        }),
+        {
+            style: () => ({
+                className: "folio-sample-zone",
+                weight: 2,
+                fill: false,
+                interactive: false,
+            }),
+        },
+    ).addTo(map);
+
+    const materialFeatures =
+        props.view === "characterizations" && props.layers.characterizations
+            ? props.characterizations.flatMap((summary) => {
+                  const feature = summary.zone
+                      ? shapeFeature(summary.zone.shape, { id: summary.id })
+                      : null;
+                  return feature ? [feature] : [];
+              })
+            : [];
+    materials = L.geoJSON(materialFeatures, {
+        pointToLayer: (_feature, latlng) =>
+            L.circleMarker(latlng, { radius: MATERIAL_POINT_RADIUS }),
+        style: (feature) => ({
+            className: `folio-material${props.dimmedMaterials.has(String(feature?.properties.id)) ? " is-dimmed" : ""}`,
+            weight: 2,
+        }),
+        onEachFeature: (feature, layer) => {
+            const id = String(feature.properties.id);
+            const summary = props.characterizations.find(
+                (entry) => entry.id === id,
+            );
+            if (summary) {
+                layer.bindTooltip(materialLabel(summary), {
+                    permanent: true,
+                    direction: "center",
+                    className: "folio-material-label",
+                });
+            }
+            layer.on("click", () =>
+                emit("select", { kind: "characterization", id }),
+            );
+        },
+    }).addTo(map);
+    ensureHatch();
+
+    if (
+        !hasImage.value &&
+        markers.size > 0 &&
+        fittedCanvas !== (props.canvas?.id ?? null)
+    ) {
+        fittedCanvas = props.canvas?.id ?? null;
+        map.fitBounds(
+            L.featureGroup([...markers.values()])
+                .getBounds()
+                .pad(NO_IMAGE_PADDING),
+            { animate: false },
+        );
+    }
+    computeTargets();
+}
+
+/** Lays the layers switched on, the curtain over the one `curtain` names (`laidLayers`). */
+function drawOverlays(): void {
+    if (!laid) return;
+    const wanted = new Set(props.overlays.map((overlay) => overlay.key));
+    failedOverlays.value = new Set(
+        [...failedOverlays.value].filter((key) => wanted.has(key)),
+    );
+    laid.draw(props.overlays, props.curtain);
+    syncAdjustment();
+    drawControls();
+}
+
+function sameBox(a: Box, b: Box): boolean {
+    return (
+        Math.abs(a.x - b.x) < SAME_BOX &&
+        Math.abs(a.y - b.y) < SAME_BOX &&
+        Math.abs(a.w - b.w) < SAME_BOX &&
+        Math.abs(a.h - b.h) < SAME_BOX
+    );
+}
+
+/** How far down the toolbar of a layer sits under those of the layers laid before it. */
+function stackOffsetOf(key: string): number {
+    return (
+        Math.max(
+            props.overlays.findIndex((overlay) => overlay.key === key),
+            0,
+        ) * CONTROLS_STACK_STEP
+    );
+}
+
+/** Ends the adjustment; `quiet` drops a change not yet kept instead of handing it to the parent. */
+function stopAdjusting(quiet: boolean): void {
+    if (!adjustment) return;
+    const ending = adjustment;
+    adjustment = null;
+    ending.quiet = quiet;
+    ending.stop();
+}
+
+/**
+ * Keeps the adjustment on the layer `adjusting` names: starts it from the
+ * layer's box, ends it when the layer or the name goes, and starts it again
+ * when the parent gave the layer another box (a turn, a reset). A redraw
+ * leaves the box on screen where the reader put it.
+ */
+function syncAdjustment(): void {
+    const key = props.adjusting;
+    const layer = key ? laid?.layerOf(key) ?? null : null;
+    const overlay = props.overlays.find((entry) => entry.key === key);
+    if (!key || !layer || !overlay) {
+        stopAdjusting(false);
+        return;
+    }
+    const given = boxOfBounds(overlay.bounds);
+    if (adjustment?.key === key && adjustment.layer === layer) {
+        if (sameBox(given, adjustment.kept)) {
+            layer.setBounds(L.latLngBounds(boundsOfBox(adjustment.shown)));
+            return;
+        }
+        stopAdjusting(true);
+    } else {
+        stopAdjusting(false);
+    }
+    startAdjustment(key, layer, given, overlay.label);
+}
+
+function startAdjustment(
+    key: string,
+    layer: L.ImageOverlay,
+    given: Box,
+    name: string,
+): void {
+    if (!map) return;
+    const current: Adjustment = {
+        key,
+        layer,
+        kept: given,
+        shown: given,
+        quiet: false,
+        stop: () => undefined,
+    };
+    const turnable = props.overlays.find((entry) => entry.key === key)?.canTurn;
+    const control = adjustLayer(map, layer, given, {
+        label: interpolate($gettext("Adjusting %{label}"), { label: name }),
+        describedBy: adjustHelpId,
+        onChange(box) {
+            current.shown = box;
+            anchors.get(key)?.place(boundsOfBox(box), stackOffsetOf(key), true);
+        },
+        onDone(box) {
+            if (current.quiet) return;
+            current.kept = box;
+            emit("layer-place", key, box);
+        },
+        onTurn: turnable ? (by) => emit("layer-turn", key, by) : undefined,
+        onExit() {
+            adjustment = null;
+            emit("layer-adjust", key, false);
+            controlHosts.value
+                .get(key)
+                ?.querySelector<HTMLElement>("[data-action=adjust]")
+                ?.focus();
+        },
+    });
+    current.stop = control.stop;
+    adjustment = current;
+}
+
+/**
+ * One host element per laid layer, in the map's container and on the
+ * corner of the layer (`anchoredControl`), for its toolbar to be teleported
+ * into; the host of a layer that is gone is removed. While a layer is
+ * adjusted the hosts of the others are hidden and inert, so no toolbar covers
+ * the handles of the adjusted one.
+ */
+function drawControls(): void {
+    if (!map) return;
+    const wanted = new Set(props.overlays.map((overlay) => overlay.key));
+    const hosts = new Map(controlHosts.value);
+    for (const [key, anchor] of anchors) {
+        if (wanted.has(key)) continue;
+        anchor.remove();
+        anchors.delete(key);
+        hosts.delete(key);
+    }
+    for (const [index, overlay] of props.overlays.entries()) {
+        let anchor = anchors.get(overlay.key);
+        if (!anchor) {
+            const element = document.createElement("div");
+            element.className = CONTROLS_HOST_CLASS;
+            map.getContainer().append(element);
+            anchor = anchoredControl(map, element);
+            anchors.set(overlay.key, anchor);
+            hosts.set(overlay.key, element);
+        }
+        const element = hosts.get(overlay.key);
+        if (element) {
+            const aside =
+                props.adjusting !== null && props.adjusting !== overlay.key;
+            element.style.visibility = aside ? "hidden" : "";
+            element.toggleAttribute("inert", aside);
+        }
+        anchor.place(
+            adjustment?.key === overlay.key
+                ? boundsOfBox(adjustment.shown)
+                : overlay.bounds,
+            index * CONTROLS_STACK_STEP,
+            props.adjusting === overlay.key,
+        );
+    }
+    if (
+        hosts.size !== controlHosts.value.size ||
+        [...hosts.keys()].some((key) => !controlHosts.value.has(key))
+    ) {
+        controlHosts.value = hosts;
+    }
+}
+
+function markOverlayFailed(key: string): void {
+    failedOverlays.value = new Set(failedOverlays.value).add(key);
+}
+
+/** Lays the maps that did not load again, as new images. */
+function retryOverlays(): void {
+    laid?.forget(failedOverlays.value);
+    failedOverlays.value = new Set();
+    drawOverlays();
+}
+
+/** The id of the marker, or of the marker group, that shows an analysis or a sample (`sample:<id>`) now; null when neither is on the map. */
+function visibleTargetOf(id: string): string | null {
+    const marker = markers.get(id);
+    const parent = marker ? cluster?.getVisibleParent(marker) : null;
+    if (!marker || !parent) return null;
+    return parent === marker ? id : `${CLUSTER_PREFIX}${L.stamp(parent)}`;
+}
+
+/** The markers and marker groups the reader can reach now, in reading order. */
+function computeTargets(): void {
+    targets.clear();
+    for (const [id, marker] of markers) {
+        const target = visibleTargetOf(id);
+        const parent = cluster?.getVisibleParent(marker);
+        if (target !== null && parent) targets.set(target, parent);
+    }
+    order = readingOrder(
+        [...targets].map(([id, layer]) => {
+            const { lat, lng } = layer.getLatLng();
+            return { id, lat, lng };
+        }),
+    );
+    if (active.value === null || !targets.has(active.value)) {
+        active.value = order[0] ?? null;
+    }
+    refreshStates();
+}
+
+function targetElement(id: string): HTMLElement | null {
+    return (
+        host.value?.querySelector<HTMLElement>(`[data-target="${id}"]`) ?? null
+    );
+}
+
+/** Classes and tab stops follow focus, evidence and filters without redrawing the markers. */
+function refreshStates(): void {
+    for (const sample of props.samples) {
+        targetElement(`${SAMPLE_PREFIX}${sample.id}`)?.classList.toggle(
+            "is-focused",
+            props.focus?.kind === "sample" && props.focus.id === sample.id,
+        );
+    }
+    for (const annotation of props.annotations) {
+        const element = targetElement(annotation.analysis);
+        if (!element) continue;
+        const lit = props.lit?.has(annotation.analysis) ?? false;
+        element.classList.toggle(
+            "is-dimmed",
+            !annotation.match || (props.lit !== null && !lit),
+        );
+        element.classList.toggle("is-lit", lit);
+        element.classList.toggle(
+            "is-focused",
+            props.focus?.kind === "analysis" &&
+                props.focus.id === annotation.analysis,
+        );
+    }
+    for (const id of order) {
+        const element = targetElement(id);
+        if (element) element.tabIndex = id === active.value ? 0 : -1;
+    }
+}
+
+function activate(id: string): void {
+    if (id.startsWith(CLUSTER_PREFIX)) {
+        openGroup(id);
+        return;
+    }
+    active.value = id;
+    if (id.startsWith(SAMPLE_PREFIX)) {
+        emit("select", { kind: "sample", id: id.slice(SAMPLE_PREFIX.length) });
+        return;
+    }
+    emit("select", { kind: "analysis", id });
+}
+
+/**
+ * Opens a marker group the way a click does: markercluster zooms to it, or
+ * spreads its markers when they stay grouped at the last zoom. The first
+ * target of the group then takes the keyboard focus.
+ */
+function openGroup(id: string): void {
+    const group = targets.get(id) as unknown as L.MarkerCluster | undefined;
+    if (!group || !cluster) return;
+    const children = new Set<L.Marker>(group.getAllChildMarkers());
+    openedGroup = new Set(
+        [...markers]
+            .filter(([, marker]) => children.has(marker))
+            .map(([target]) => target),
+    );
+    // The group turns a click carrying a cluster into its `clusterclick`.
+    cluster.fire("click", { layer: group });
+}
+
+/** Targets follow markercluster's regrouping; after `openGroup` the first target of the opened group takes the focus. */
+function settleGroups(): void {
+    computeTargets();
+    if (!openedGroup) return;
+    const opened = [...openedGroup];
+    openedGroup = null;
+    const first = order.find((target) =>
+        opened.some((analysis) => visibleTargetOf(analysis) === target),
+    );
+    if (first) moveTo(first);
+}
+
+/**
+ * Gives the keyboard focus to a marker or marker group without scrolling the
+ * page, then pans the map until it sits `FOCUS_PADDING` inside the viewer.
+ */
+function moveTo(id: string): void {
+    active.value = id;
+    refreshStates();
+    targetElement(id)?.focus({ preventScroll: true });
+    const layer = targets.get(id);
+    if (!map || !layer) return;
+    const size = map.getSize();
+    const shift = offsetInside(
+        map.latLngToContainerPoint(layer.getLatLng()),
+        size.x,
+        size.y,
+        FOCUS_PADDING,
+    );
+    if (shift.x !== 0 || shift.y !== 0) {
+        map.panBy([shift.x, shift.y], { animate: motion.value !== "reduce" });
+    }
+}
+
+function onKeydown(event: KeyboardEvent): void {
+    const element = (event.target as HTMLElement).closest<HTMLElement>(
+        "[data-target]",
+    );
+    const id = element?.dataset.target;
+    if (!id) return;
+    if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        activate(id);
+        return;
+    }
+    const next = nextId(order, id, event.key);
+    if (next === null) return;
+    event.preventDefault();
+    moveTo(next);
+}
+
+/** Puts the keyboard focus on the marker of an analysis or a sample (`sample:<id>`), or on the marker group that holds it. */
+function focusTarget(id: string): void {
+    const target = visibleTargetOf(id);
+    if (target !== null && targets.has(target)) moveTo(target);
+}
+
+/** Puts the keyboard focus on the folio's tab stop: its current marker, else the viewer. */
+function focusCurrent(): void {
+    if (active.value !== null && targets.has(active.value)) {
+        moveTo(active.value);
+        return;
+    }
+    host.value?.focus({ preventScroll: true });
+}
+
+function zoomIn(): void {
+    openedGroup = null;
+    map?.zoomIn();
+}
+
+function zoomOut(): void {
+    openedGroup = null;
+    map?.zoomOut();
+}
+
+function wholePage(): void {
+    openedGroup = null;
+    if (map && fitPage(map, page)) return;
+    if (markers.size > 0) {
+        map?.fitBounds(
+            L.featureGroup([...markers.values()])
+                .getBounds()
+                .pad(NO_IMAGE_PADDING),
+        );
+    }
+}
+</script>
+
+<template>
+    <div
+        ref="host"
+        class="folio"
+        :class="{ soft: props.stage === 'soft' }"
+        role="group"
+        tabindex="-1"
+        :aria-label="$gettext('Page and its analyses')"
+        @keydown="onKeydown"
+    >
+        <div class="surface"></div>
+        <p
+            :id="adjustHelpId"
+            class="visually-hidden"
+        >
+            {{ adjustHelp }}
+        </p>
+        <div class="controls">
+            <button
+                type="button"
+                class="control"
+                :aria-label="$gettext('Zoom in')"
+                :title="$gettext('Zoom in')"
+                @click="zoomIn"
+            >
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M8 3v10M3 8h10" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                class="control"
+                :aria-label="$gettext('Zoom out')"
+                :title="$gettext('Zoom out')"
+                @click="zoomOut"
+            >
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M3 8h10" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                class="control"
+                :aria-label="$gettext('Whole page')"
+                :title="$gettext('Whole page')"
+                @click="wholePage"
+            >
+                <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                >
+                    <path d="M2.5 7.5 8 3l5.5 4.5M4 6.5V13h8V6.5" />
+                </svg>
+            </button>
+        </div>
+        <p
+            v-if="!hasImage"
+            class="no-image"
+            role="status"
+        >
+            <span>{{ $gettext("No image for this page.") }}</span>
+        </p>
+        <p
+            v-else-if="pageFailed"
+            class="no-image page-failed"
+            role="status"
+        >
+            <span>{{
+                $gettext(
+                    "Page image unavailable (the institution's IIIF server).",
+                )
+            }}</span>
+            <button
+                type="button"
+                class="retry"
+                @click="drawPage"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
+        <p
+            v-if="failedOverlays.size > 0"
+            class="no-image overlay-failed"
+            role="status"
+        >
+            <span>{{ $gettext("Map unavailable (image server)") }}</span>
+            <button
+                type="button"
+                class="retry"
+                @click="retryOverlays"
+            >
+                <span>{{ $gettext("Retry") }}</span>
+            </button>
+        </p>
+        <template
+            v-for="overlay in props.overlays"
+            :key="overlay.key"
+        >
+            <Teleport
+                v-if="controlHosts.get(overlay.key)"
+                :to="controlHosts.get(overlay.key)!"
+            >
+                <LayerControls
+                    :overlay="overlay"
+                    :adjusting="props.adjusting === overlay.key"
+                    :under-curtain="props.curtain === overlay.key"
+                    :capturing="props.capturing === overlay.key"
+                    :can-capture="hasImage"
+                    :turning="props.turning"
+                    @adjust="emit('layer-adjust', overlay.key, $event)"
+                    @turn="emit('layer-turn', overlay.key, $event)"
+                    @opacity="emit('layer-opacity', overlay.key, $event)"
+                    @curtain="emit('layer-curtain', overlay.key, $event)"
+                    @capture="captureUnder(overlay)"
+                    @reset="emit('layer-reset', overlay.key)"
+                />
+            </Teleport>
+        </template>
+        <p
+            v-if="props.caption"
+            class="caption"
+        >
+            <span>{{ props.caption }}</span>
+        </p>
+    </div>
+</template>
+
+<style scoped>
+.folio {
+    position: relative;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    min-block-size: 20rem;
+    background: var(--stage);
+    border-radius: var(--explorer-radius, 0.625rem);
+    overflow: hidden;
+}
+
+.folio.soft,
+.folio.soft .surface {
+    background: var(--stage-soft);
+}
+
+.folio.soft {
+    --stage: var(--stage-soft);
+}
+
+.folio.soft .caption {
+    background: color-mix(in srgb, var(--stage-soft) 85%, black);
+}
+
+.folio:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.folio .surface {
+    min-block-size: 0;
+    background: var(--stage);
+}
+
+.folio .controls {
+    position: absolute;
+    inset-block-start: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 1000;
+    display: grid;
+    gap: 0.375rem;
+}
+
+.folio .control {
+    display: grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    padding: 0;
+    border: 0.0625rem solid color-mix(in srgb, var(--surface) 30%, transparent);
+    border-radius: 0.375rem;
+    background: color-mix(in srgb, var(--stage) 85%, transparent);
+    color: var(--surface);
+    cursor: pointer;
+}
+
+.folio .control:hover {
+    background: var(--stage);
+    border-color: var(--surface);
+}
+
+.folio .control svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.folio .control:focus-visible,
+.folio :deep([data-target]:focus-visible) {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.folio .control:focus-visible {
+    outline-color: var(--surface);
+}
+
+.folio .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.folio .caption {
+    position: absolute;
+    inset-block-end: 0.5rem;
+    inset-inline-start: 0.5rem;
+    z-index: 1000;
+    max-inline-size: calc(100% - 1rem);
+    padding: 0.125rem 0.5rem;
+    overflow: hidden;
+    border-radius: 0.25rem;
+    background: color-mix(in srgb, var(--stage) 85%, transparent);
+    color: var(--surface);
+    font: 0.6875rem var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.folio .no-image {
+    position: absolute;
+    inset-block-start: 1rem;
+    inset-inline: 1rem 3.75rem;
+    z-index: 1000;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.folio .no-image {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.folio .overlay-failed {
+    inset-block: auto 2.5rem;
+}
+
+.folio .retry {
+    min-block-size: 2rem;
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.folio .retry:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.folio :deep(.folio-marker-host) {
+    display: flex;
+    justify-content: center;
+    background: none;
+    border: none;
+}
+
+.folio :deep(.folio-marker) {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    box-sizing: border-box;
+    min-inline-size: 1.75rem;
+    block-size: 1.75rem;
+    padding-inline: 0.25rem;
+    border: 0.125rem solid var(--surface);
+    border-radius: 999rem;
+    background: var(--ink);
+    color: var(--stage);
+    font: 600 0.625rem var(--font-body);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.folio :deep(.folio-marker--tech-1) {
+    background: var(--tech-1);
+}
+
+.folio :deep(.folio-marker--tech-2) {
+    background: var(--tech-2);
+}
+
+.folio :deep(.folio-marker--tech-3) {
+    background: var(--tech-3);
+}
+
+.folio :deep(.folio-marker--tech-4) {
+    background: var(--tech-4);
+}
+
+.folio :deep(.folio-marker--tech-5) {
+    background: var(--tech-5);
+}
+
+.folio :deep(.folio-marker--tech-6) {
+    background: var(--tech-6);
+}
+
+.folio :deep(.folio-marker--tech-7) {
+    background: var(--tech-7);
+}
+
+.folio :deep(.folio-marker--tech-8) {
+    background: var(--tech-8);
+}
+
+.folio :deep(.folio-marker--tech-9) {
+    background: var(--tech-9);
+}
+
+.folio :deep(.folio-marker--tech-10) {
+    background: var(--tech-10);
+}
+
+.folio :deep(.folio-marker--ink) {
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.folio :deep(.folio-marker .slot) {
+    position: absolute;
+    inset-block-start: -0.75rem;
+    inset-inline-start: 1.25rem;
+    padding: 0 0.25rem;
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: 600 0.625rem var(--font-mono);
+    white-space: nowrap;
+}
+
+.folio :deep(.folio-marker .draft) {
+    position: absolute;
+    inset-block-end: -0.125rem;
+    inset-inline-end: -0.125rem;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border: 0.0625rem solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent-text);
+}
+
+.folio :deep(.folio-marker.is-dimmed) {
+    border-color: color-mix(in srgb, var(--surface) 75%, transparent);
+    background: color-mix(in srgb, var(--stage) 40%, transparent);
+    color: var(--surface);
+    opacity: 0.6;
+}
+
+.folio :deep(.folio-material.is-dimmed) {
+    opacity: 0.35;
+}
+
+.folio :deep(.folio-marker.is-lit) {
+    box-shadow: 0 0 0 0.25rem
+        color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.folio :deep(.folio-marker.is-focused),
+.folio :deep(.folio-sample.is-focused) {
+    box-shadow:
+        0 0 0 0.1875rem var(--ink),
+        0 0 0 0.375rem var(--surface);
+}
+
+.folio :deep(.folio-sample) {
+    position: relative;
+    display: block;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin: 0.25rem;
+    border: 0.1875rem solid var(--ink);
+    border-radius: 0.125rem;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.folio :deep(.folio-sample .draft) {
+    position: absolute;
+    inset-block-end: -0.375rem;
+    inset-inline-end: -0.375rem;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border: 0.0625rem solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent-text);
+}
+
+.folio :deep(.folio-sample-zone) {
+    stroke: var(--ink);
+}
+
+.folio :deep(.folio-component-zone) {
+    stroke: var(--surface);
+    stroke-opacity: 0.6;
+    cursor: pointer;
+}
+
+.folio :deep(.folio-component-zone:hover) {
+    stroke-opacity: 1;
+}
+
+.folio :deep(.folio-cluster) {
+    display: grid;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    border: 0.125rem solid var(--surface);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--ink);
+    font: 600 0.75rem var(--font-mono);
+    cursor: pointer;
+}
+
+.folio :deep(.folio-cluster.is-dimmed) {
+    border-color: color-mix(in srgb, var(--surface) 75%, transparent);
+    background: color-mix(in srgb, var(--stage) 40%, transparent);
+    color: var(--surface);
+    opacity: 0.6;
+}
+
+.folio :deep(.folio-frame) {
+    stroke: var(--surface);
+}
+
+.folio :deep(.folio-frame--tech-1) {
+    stroke: var(--tech-1);
+}
+
+.folio :deep(.folio-frame--tech-2) {
+    stroke: var(--tech-2);
+}
+
+.folio :deep(.folio-frame--tech-3) {
+    stroke: var(--tech-3);
+}
+
+.folio :deep(.folio-frame--tech-4) {
+    stroke: var(--tech-4);
+}
+
+.folio :deep(.folio-frame--tech-5) {
+    stroke: var(--tech-5);
+}
+
+.folio :deep(.folio-frame--tech-6) {
+    stroke: var(--tech-6);
+}
+
+.folio :deep(.folio-frame--tech-7) {
+    stroke: var(--tech-7);
+}
+
+.folio :deep(.folio-frame--tech-8) {
+    stroke: var(--tech-8);
+}
+
+.folio :deep(.folio-frame--tech-9) {
+    stroke: var(--tech-9);
+}
+
+.folio :deep(.folio-frame--tech-10) {
+    stroke: var(--tech-10);
+}
+
+.folio :deep(.folio-material) {
+    stroke: var(--accent-text);
+    fill: url(#ms-folio-hatch);
+    fill-opacity: 1;
+    cursor: pointer;
+}
+
+.folio :deep(.folio-hatch-line) {
+    stroke: var(--accent-text);
+    stroke-width: 2;
+}
+
+.folio :deep(.folio-material-label) {
+    background: var(--surface);
+    color: var(--ink);
+    font: 0.75rem var(--font-body);
+    border: none;
+    box-shadow: none;
+}
+
+.folio :deep(.folio-overlay) {
+    image-rendering: pixelated;
+}
+
+.folio :deep(.folio-overlay.is-adjusting) {
+    cursor: move;
+    touch-action: none;
+}
+
+.folio :deep(.adjust-handle) {
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 0.125rem solid var(--blue-text);
+    border-radius: 0.25rem;
+    touch-action: none;
+}
+
+.folio :deep(.adjust-handle[data-corner="nw"]),
+.folio :deep(.adjust-handle[data-corner="se"]) {
+    cursor: nwse-resize;
+}
+
+.folio :deep(.adjust-handle[data-corner="ne"]),
+.folio :deep(.adjust-handle[data-corner="sw"]) {
+    cursor: nesw-resize;
+}
+
+.folio :deep(.folio-overlay.is-adjusting:focus-visible) {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .folio :deep(.leaflet-zoom-anim .leaflet-zoom-animated) {
+        transition: none;
+    }
+}
+</style>

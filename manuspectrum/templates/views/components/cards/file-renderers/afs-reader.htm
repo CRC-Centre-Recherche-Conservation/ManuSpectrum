@@ -9,6 +9,18 @@
     <div class="preview file-viewer" style="position: relative;">
         <div class='loading-mask' data-bind="visible: loading()"></div>
         <!--ko if: chartData -->
+        <div class="xy-scale-control btn-group btn-group-sm" role="group"
+             aria-label="{% trans 'Y axis scale' %}">
+            <button type="button" class="btn btn-default"
+                    data-bind="click: function() { yLog(false); },
+                               css: { active: !yLog() },
+                               attr: { 'aria-pressed': yLog() ? 'false' : 'true' }">{% trans "Lin" %}</button>
+            <button type="button" class="btn btn-default"
+                    data-bind="click: function() { yLog(true); },
+                               css: { active: yLog() },
+                               attr: { 'aria-pressed': yLog() ? 'true' : 'false' },
+                               enable: canLogScale">{% trans "Log" %}</button>
+        </div>
         <div class="chart" data-bind='plotly: {
             data: chartData,
             title: chartTitle,
@@ -19,6 +31,7 @@
             yAxisLabelSize: yAxisLabelSize,
             yAxisRightLabel: yAxisRightLabel,
             xReversed: xReversed,
+            yLog: yLog,
             options: chartOptions,
             seriesStyles: seriesStyles,
             primarySeriesColor: primarySeriesColor,

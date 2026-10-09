@@ -448,7 +448,7 @@ function relationSummary(rels) {
 
 function countLabel(n) {
     return n === 1
-        ? t("msGeRelation1", "1 relation")
+        ? t("msGeRelationOne", "1 relation")
         : tv("msGeRelationN", "{n} relations", { n });
 }
 
@@ -2451,7 +2451,7 @@ function fieldRows() {
                     cardinality: n.is_collector
                         ? n.cardinality === "n"
                             ? t("msGeStructCardN", "Repeatable")
-                            : t("msGeStructCard1", "Once")
+                            : t("msGeStructCardOnce", "Once")
                         : "",
                     target: ((n.config || {}).target_graphs || [])
                         .map((id) => (state.index.byId.get(id) || {}).name)
@@ -2944,7 +2944,7 @@ function openNodeInspector(view, node) {
                     ? esc(
                           node.cardinality === "n"
                               ? t("msGeStructCardN", "Repeatable")
-                              : t("msGeStructCard1", "Once"),
+                              : t("msGeStructCardOnce", "Once"),
                       )
                     : "",
             )}

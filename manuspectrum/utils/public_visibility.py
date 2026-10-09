@@ -30,22 +30,32 @@ Both sets are memoised per reader for ``PERM_SCOPE_TTL`` under a permission
 epoch. ``manuspectrum.signals`` drops the epoch once a transaction writing an
 object grant, a group membership or a model permission commits, so every
 memo starts over. Guardian's bulk ``assign_perm`` on a queryset
-(``bulk_create``) sends no signal; the TTL bounds that case.
+(``bulk_create``) sends no signal; the TTL bounds that case, up to about
+twice ``PERM_SCOPE_TTL`` for ``visible_set``, whose memo is built from the
+other memos.
 """
 
+import contextlib
+import contextvars
+import hashlib
 import logging
 import uuid
+from dataclasses import dataclass, field
+from functools import cached_property
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import TextField
+from django.db.models.functions import Cast
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
-from arches.app.models.models import ResourceInstance
+from arches.app.models.models import Node, ResourceInstance
 from arches.app.utils.permission_backend import user_can_read_resource
 
 from manuspectrum.utils.cache import get_or_build
+from manuspectrum.utils.data_version import data_version
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +63,7 @@ PERM_SCOPE_TTL = 60
 RESTRICTED_CACHE_KEY = "summary-restricted-resources"
 RESTRICTED_NODEGROUPS_CACHE_KEY = "summary-restricted-nodegroups"
 EPOCH_CACHE_KEY = "public-visibility-epoch"
+ANONYMOUS_USERNAME = "anonymous"
 
 _ON_RESOURCE = {
     "content_type__app_label": "models",
@@ -60,13 +71,44 @@ _ON_RESOURCE = {
 }
 
 
+_request_memo = contextvars.ContextVar("public_visibility_request", default=None)
+
+
+@contextlib.contextmanager
+def request_memo(user=None):
+    """Inside the block, ``anonymous_user()`` and each ``visible_set`` key are read once.
+
+    The block is one request: nothing read in it outlives it. *user* is the
+    request's ``request.user``; when it is the ``anonymous`` row
+    ``SetAnonymousUser`` installed, it stands for ``anonymous_user()``.
+    """
+    found = {}
+    if (
+        isinstance(user, User)
+        and user.pk is not None
+        and user.username == ANONYMOUS_USERNAME
+    ):
+        found[ANONYMOUS_USERNAME] = user
+    token = _request_memo.set(found)
+    try:
+        yield
+    finally:
+        _request_memo.reset(token)
+
+
 def anonymous_user():
     """The ``anonymous`` row ``SetAnonymousUser`` installs on a visitor.
 
     Without that row the Django ``AnonymousUser`` stands in, which Arches
-    lets read nothing.
+    lets read nothing. Read once inside a ``request_memo`` block.
     """
-    return User.objects.filter(username="anonymous").first() or AnonymousUser()
+    found = _request_memo.get()
+    if found is not None and ANONYMOUS_USERNAME in found:
+        return found[ANONYMOUS_USERNAME]
+    user = User.objects.filter(username=ANONYMOUS_USERNAME).first() or AnonymousUser()
+    if found is not None:
+        found[ANONYMOUS_USERNAME] = user
+    return user
 
 
 def granted_resource_ids():
@@ -121,11 +163,42 @@ def readable_nodegroup_ids(user):
     )
 
 
+def readable_graph_ids(user):
+    """Ids of the resource models ``user`` may read, as strings.
+
+    A model is readable when at least one of its nodegroups is in
+    ``readable_nodegroup_ids(user)``: the rule ``user_can_read_resource``
+    applies to a resource without an object grant
+    (``user_has_resource_model_permissions``,
+    arches/app/permissions/arches_permission_base.py:277-302, 322-326).
+    Memoised per reader and permission epoch.
+    """
+    key = f"public-visibility:graphs:{_epoch()}:{getattr(user, 'id', None)}"
+    return get_or_build(key, lambda: _graphs_of(user), PERM_SCOPE_TTL) or (frozenset())
+
+
+def _graphs_of(user):
+    readable = readable_nodegroup_ids(user)
+    if not readable:
+        return frozenset()
+    return frozenset(
+        str(graph_id)
+        for graph_id in Node.objects.filter(nodegroup_id__in=list(readable))
+        .values_list("graph_id", flat=True)
+        .distinct()
+    )
+
+
 def forget_visibility():
     """Start every visibility memo over."""
     cache.delete_many(
         [EPOCH_CACHE_KEY, RESTRICTED_CACHE_KEY, RESTRICTED_NODEGROUPS_CACHE_KEY]
     )
+
+
+def permission_epoch():
+    """The token every visibility memo key carries; ``forget_visibility`` replaces it."""
+    return _epoch()
 
 
 def _epoch():
@@ -156,3 +229,243 @@ def _nodegroups_of(user):
     except (AttributeError, ObjectDoesNotExist) as error:
         logger.warning("visibility: no profile for reader %s: %s", user, error)
         return None
+
+
+def is_connected(user):
+    """Whether *user* is a signed-in account, not the visitor.
+
+    ``SetAnonymousUser`` installs the ``anonymous`` database row on a visitor,
+    whose ``is_authenticated`` is True, so the test compares primary keys.
+    """
+    if (
+        not getattr(user, "is_authenticated", False)
+        or getattr(user, "pk", None) is None
+    ):
+        return False
+    anonymous = anonymous_user()
+    return user.pk != getattr(anonymous, "pk", None)
+
+
+def reader_scope(user):
+    """``"anonymous"`` for a visitor, else the user id: the key of what a reader sees."""
+    return str(user.pk) if is_connected(user) else "anonymous"
+
+
+def draft_state_id_set():
+    """Ids, as strings, of the lifecycle states that mean "not published yet"."""
+    from arches.app.models.models import ResourceInstanceLifecycleState
+
+    from manuspectrum.views.model_graph_service import draft_state_ids
+
+    return frozenset(
+        str(state_id)
+        for state_id in draft_state_ids(
+            ResourceInstanceLifecycleState.objects.values(
+                "id", "is_initial_state", "resource_instance_lifecycle_id"
+            )
+        )
+    )
+
+
+def unpublished_resource_ids(resource_ids):
+    """The ids among *resource_ids*, as strings, whose lifecycle state is a Draft (D50).
+
+    Reads the lifecycle state of every id in one query; an id without a
+    resource is not in the result.
+    """
+    wanted = [str(i) for i in resource_ids if i]
+    drafts = draft_state_id_set()
+    if not wanted or not drafts:
+        return frozenset()
+    return frozenset(
+        str(rid)
+        for rid in ResourceInstance.objects.filter(
+            pk__in=wanted, resource_instance_lifecycle_state_id__in=list(drafts)
+        ).values_list("resourceinstanceid", flat=True)
+    )
+
+
+EXPLORER_MODELS = (
+    "document",
+    "component",
+    "analysis",
+    "project",
+    "sample",
+    "characterization",
+)
+
+
+_VISIBLE_KINDS = (
+    "documents",
+    "components",
+    "analyses",
+    "projects",
+    "samples",
+    "characterizations",
+)
+
+
+@dataclass(frozen=True)
+class VisibleSet:
+    """What one reader may see through the Explorer and the project IIIF collection."""
+
+    documents: frozenset = frozenset()
+    components: frozenset = frozenset()
+    analyses: frozenset = frozenset()
+    projects: frozenset = frozenset()
+    samples: frozenset = frozenset()
+    characterizations: frozenset = frozenset()
+    unpublished: frozenset = frozenset()
+    evidence: dict = field(default_factory=dict)
+    digest: str = ""
+    gates: str = ""
+
+    def __contains__(self, resource_id):
+        """Whether the id *resource_id* (a string) is visible, without building ``ids``."""
+        return any(resource_id in getattr(self, kind) for kind in _VISIBLE_KINDS)
+
+    @cached_property
+    def ids(self):
+        """Every visible id, computed once per instance and never pickled."""
+        return frozenset().union(*(getattr(self, kind) for kind in _VISIBLE_KINDS))
+
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        state.pop("ids", None)
+        return state
+
+
+def visible_set(user, version=None):
+    """The resources *user* may see in the Explorer, decided once (spec §4, D33, D37, D50).
+
+    A resource is hidden only by a read restriction: it is in
+    ``hidden_resource_ids(user)``, its model is outside
+    ``readable_graph_ids(user)``, or a link it needs runs through a nodegroup
+    outside ``readable_nodegroup_ids(user)``. A resource in a Draft lifecycle
+    state is visible to every reader, the visitor included, and belongs to
+    ``unpublished``; an analysis whose visible objects observed are all
+    unpublished is unpublished too. A Component needs a visible Document, an
+    Analysis a visible Component or Document through a readable relation
+    nodegroup and no hidden Project (a Draft Project hides nothing), a Sample
+    a visible Analysis using it, an identified material a visible object
+    observed and at least one visible analysis cited in evidence. Links are
+    read off the tiles.
+
+    Memoised per reader, permission epoch and data version (*version*, a
+    ``data_version()`` the caller already read, else read here) for
+    ``PERM_SCOPE_TTL``, and read once per key inside a ``request_memo``
+    block: a lifecycle change or a new link shows at the next
+    request; a grant written without a signal can take up to about twice
+    that delay, the visible set being built from a ``hidden_resource_ids``
+    memo that may be as old. ``digest``
+    names the sets and the reader's gates they were decided with (hidden
+    resources, readable nodegroups and models): two readers with the same
+    digest see the same thing. ``gates`` names those gates alone: two states
+    with the same gates differ by their data, never by what the reader may
+    read.
+    """
+    version = data_version() if version is None else version
+    key = f"public-visibility:visible:{_epoch()}:{version}:{reader_scope(user)}"
+    found = _request_memo.get()
+    if found is not None and key in found:
+        return found[key]
+    visible = get_or_build(key, lambda: _visible_for(user), PERM_SCOPE_TTL)
+    if found is not None:
+        found[key] = visible
+    return visible
+
+
+def _visible_for(user):
+    from manuspectrum.utils.role_links import graph_id_of, readable_links
+
+    hidden = hidden_resource_ids(user)
+    nodegroups = readable_nodegroup_ids(user)
+    graphs = readable_graph_ids(user)
+    drafts = draft_state_id_set()
+    slug_of = {graph_id_of(slug): slug for slug in EXPLORER_MODELS}
+    slug_of.pop(None, None)
+
+    existing = {slug: set() for slug in EXPLORER_MODELS}
+    candidates = {slug: set() for slug in EXPLORER_MODELS}
+    unpublished = set()
+    for rid, graph_id, state in ResourceInstance.objects.filter(
+        graph_id__in=list(slug_of)
+    ).values_list(
+        *(
+            Cast(name, TextField())
+            for name in (
+                "resourceinstanceid",
+                "graph_id",
+                "resource_instance_lifecycle_state_id",
+            )
+        )
+    ):
+        slug = slug_of[graph_id]
+        existing[slug].add(rid)
+        if rid in hidden or graph_id not in graphs:
+            continue
+        if state is not None and state in drafts:
+            unpublished.add(rid)
+        candidates[slug].add(rid)
+
+    def links(slug, alias, readable_only=True):
+        return readable_links(slug, alias, nodegroups if readable_only else None)
+
+    documents = candidates["document"]
+    part_of = links("component", "item_visual_is_part_of_document")
+    components = {c for c in candidates["component"] if part_of[c] & documents}
+    projects = candidates["project"]
+    observed = links("analysis", "component_observed")
+    project_of = links("analysis", "analysis_by_project", readable_only=False)
+    objects = documents | components
+    analyses = {
+        a
+        for a in candidates["analysis"]
+        if observed[a] & objects
+        and not ((project_of[a] & existing["project"]) - projects)
+    }
+    sample_of = links("analysis", "sample_used")
+    samples = {s for a in analyses for s in sample_of[a] if s in candidates["sample"]}
+    observed_by = links("characterization", "object_observed")
+    evidence_of = links("characterization", "evidence_analyses")
+    evidence = {}
+    for c in candidates["characterization"]:
+        cited = evidence_of[c] & analyses
+        if observed_by[c] & objects and cited:
+            evidence[c] = tuple(sorted(cited))
+
+    published_objects = {d for d in documents if d not in unpublished} | {
+        c
+        for c in components
+        if c not in unpublished and part_of[c] & documents - unpublished
+    }
+    for a in analyses:
+        if not (observed[a] & published_objects):
+            unpublished.add(a)
+
+    sets = {
+        "documents": frozenset(documents),
+        "components": frozenset(components),
+        "analyses": frozenset(analyses),
+        "projects": frozenset(projects),
+        "samples": frozenset(samples),
+        "characterizations": frozenset(evidence),
+        "unpublished": frozenset(unpublished),
+    }
+    digest = hashlib.sha1(usedforsecurity=False)
+    gates = hashlib.sha1(usedforsecurity=False)
+    for name, ids in sets.items():
+        digest.update(f"{name}:{','.join(sorted(map(str, ids)))};".encode())
+    for name, ids in (
+        ("hidden", hidden),
+        ("nodegroups", nodegroups),
+        ("graphs", graphs),
+    ):
+        part = f"{name}:{','.join(sorted(map(str, ids)))};".encode()
+        digest.update(part)
+        gates.update(part)
+    for c in sorted(evidence):
+        digest.update(f"{c}>{','.join(evidence[c])};".encode())
+    return VisibleSet(
+        **sets, evidence=evidence, digest=digest.hexdigest(), gates=gates.hexdigest()
+    )

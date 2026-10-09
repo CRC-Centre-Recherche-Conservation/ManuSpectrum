@@ -39,6 +39,10 @@ function generateConfig(): Promise<UserConfig> {
             // `arches.js`.
             'arches/arches/app': path.join(parsedData['ROOT_DIR'], 'app'),
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
+            // Mirrors the project's `nodeModulesPaths` entry (package.json).
+            'uuid-esm': path.join(filePath, 'node_modules', 'uuid', 'dist', 'esm-browser', 'index.js'),
+            // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
+            'leaflet-side-by-side': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'plugins', 'leaflet-side-by-side', 'index.js'),
         };
 
         for (
@@ -111,6 +115,11 @@ function generateConfig(): Promise<UserConfig> {
 
         resolve({
             plugins: [vue() as any, webpackCompatStubs],
+            resolve: {
+                // Bare imports inside Arches application sources resolve from
+                // the project root, as `resolve.modules` does in webpack.common.js.
+                dedupe: ['pinia', 'primevue', 'vue3-gettext', '@primeuix/themes'],
+            },
             test: {
                 alias: alias,
                 coverage: {

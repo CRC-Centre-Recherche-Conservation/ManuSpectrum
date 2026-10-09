@@ -1,0 +1,999 @@
+// Contract of the explorer API (spec §5 and its dated amendments). The Python
+// mirror is tests/explorer_contract.py; types.spec.ts compares the two.
+
+export type Label = { value: string; lang: string };
+export type Ref = { id: string; model: string; name: Label };
+export type ValueRef = { id: string; uri: string; label: Label };
+/** A colour concept with its display colour: a CSS colour or gradient, by INHA uri then by label word; null when neither names one. */
+export type ColourRef = ValueRef & { swatch: string | null };
+/** A resource named in the request language. */
+export type NamedRef = { id: string; name: Label };
+export type RankedValue = ValueRef & { rank: number };
+/**
+ * Identity of a technique on every screen, the same in every language and
+ * document: `code` is its acronym (else first letters), `colour` the
+ * `--tech-n` of its family (null: ink), `family` the uri of that family.
+ */
+export type TechniqueMark = {
+    code: string;
+    colour: number | null;
+    family: string;
+};
+export type Technique = ValueRef & TechniqueMark;
+export type DataKind = "xy" | "chemical-imaging" | "micro-imaging" | "file";
+export type Shape =
+    | { type: "point"; x: number; y: number }
+    | { type: "rect"; x: number; y: number; w: number; h: number }
+    | { type: "polygon"; points: [number, number][] };
+export type ImageRef = {
+    service: string | null;
+    url: string | null;
+    width: number;
+    height: number;
+};
+export type EventType =
+    | "production"
+    | "current-location"
+    | "modification"
+    | "alteration"
+    | "analysis"
+    | "sampling";
+export type FacetKey =
+    | "place"
+    | "partType"
+    | "part"
+    | "technique"
+    | "operator"
+    | "year"
+    | "material"
+    | "colour"
+    | "element"
+    | "layer"
+    | "project";
+/** Level of the chain a facet filters: the document, the studied component, the analysis, the identified material. */
+export type FacetGroup = "document" | "part" | "analysis" | "characterization";
+export type PeriodMatch = "overlap" | "within";
+export type PeriodEvent = "production" | "modification";
+export type DateRange = { start: string | null; end: string | null };
+/** Production bounds as stored (YYYY, YYYY-MM or YYYY-MM-DD) and whether the date is approximate. */
+export interface ProductionDates {
+    start: string | null;
+    end: string | null;
+    approximate: boolean;
+}
+
+export interface FacetValue {
+    id: string;
+    label: Label;
+    count: number;
+    /** Technique values only. */
+    mark: TechniqueMark | null;
+    /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
+    swatch: string | null;
+    /** Place values only: the id of the parent shown; null elsewhere and for a root. */
+    parent: string | null;
+    /** Place values only: the place is a Draft; false elsewhere. */
+    unpublished: boolean;
+}
+
+/** Century histogram of the `period` filter, counted open to the other selections. */
+export interface RangeFacet {
+    key: "period";
+    group: "document";
+    /** The event counted (`periodEvent` of the query). */
+    event: PeriodEvent;
+    /** Lowest start year and highest end year of the dated rows. */
+    min: number;
+    max: number;
+    /** One per century from `min` to `max`: from = 100k + 1, to = 100(k + 1). */
+    buckets: { from: number; to: number; count: number }[];
+    /** Rows kept by the other filters without a date for the event. */
+    undated: number;
+}
+
+/**
+ * A facet of the search. On the whole-corpus search a lazy facet (`part`)
+ * lists its first values and the selected ones; `total` is the number of
+ * values it has, which `GET facet/<key>` lists in full; with `document=<id>`
+ * that route answers the facet of one document's match.
+ */
+export interface Facet {
+    key: FacetKey;
+    group: FacetGroup;
+    values: FacetValue[];
+    total: number;
+}
+
+export interface DocumentHit {
+    type: "document";
+    id: string;
+    name: Label;
+    holding: Label | null;
+    analysisCount: number;
+    thumbnail: string | null;
+    unpublished: boolean;
+    shelfmark: Label | null;
+    dates: ProductionDates | null;
+    /** Plain text, cut on a word at about 220 characters with « … ». */
+    description: Label | null;
+    documentType: Label | null;
+}
+
+export interface AnalysisHit {
+    type: "analysis";
+    id: string;
+    name: Label;
+    technique: Technique | null;
+    document: Ref;
+    component: Ref | null;
+    canvas: string | null;
+    date: string | null;
+    dataKinds: DataKind[];
+    materials: ValueRef[];
+    unpublished: boolean;
+}
+
+export interface SearchResponse {
+    total: number;
+    page: { number: number; size: number; count: number };
+    results: (DocumentHit | AnalysisHit)[];
+    /** Null when the query said `facets=0`. */
+    facets: Facet[] | null;
+    unpublishedCount: number;
+    /** Documents without analyses the query would list with `empty=1` (0 outside the documents grain). */
+    withoutAnalyses: number;
+    /** Null with `facets=0` or when no visible row is dated for the event. */
+    period: RangeFacet | null;
+}
+
+/** Body of `GET home?day=YYYY-MM-DD`: the explorer home of the reader's day. */
+export interface HomeResponse {
+    /** Documents with a visible analysis. */
+    documentCount: number;
+    techniques: FacetValue[];
+    projects: FacetValue[];
+    /** The document of the day among those, in name order; null without any. */
+    featured: DocumentHit | null;
+    unpublishedCount: number;
+}
+
+/** One zone of an analysis on a page: `canvas` is the position of the page in `DocumentPayload.canvases`, `feature` the id of the zone. */
+export interface AnalysisZone {
+    canvas: number;
+    shape: Shape;
+    feature: string;
+}
+
+/** The published IIIF Content State of one zone of an analysis: `url` its absolute id. */
+export interface ContentStateLink {
+    feature: string;
+    url: string;
+}
+
+/** An analysis of a document; `technique` is a key of `DocumentPayload.techniques`; no zone: not located on a page. */
+export interface DocumentAnalysis {
+    id: string;
+    name: Label;
+    technique: string | null;
+    dataKind: DataKind;
+    unpublished: boolean;
+    zones: AnalysisZone[];
+    /** Id of the Component the analysis observed (a key of `DocumentPayload.components`); null on the document itself. */
+    component: string | null;
+}
+
+/** A visible Component of a document, placed on its pages (own zones, by page then feature id) or observed by one of its analyses (no zone). */
+export interface DocumentComponent {
+    id: string;
+    name: Label;
+    zones: AnalysisZone[];
+    unpublished: boolean;
+}
+
+export interface MatchKept {
+    /** The analyses the filters keep; null when no filter is active (every analysis kept). */
+    analyses: string[] | null;
+    characterizations: string[];
+}
+
+/** Body of `GET document/<id>/match`: what the Corpus filters keep in one document, by the rule of the search. */
+export interface DocumentMatch {
+    /** The values the document's analyses carry plus the selected ones. */
+    facets: Facet[];
+    kept: MatchKept;
+    /** Number of analyses kept. */
+    total: number;
+    /** The range facet over the document's analyses; null when none is dated. */
+    period: RangeFacet | null;
+}
+
+export interface SampleSummary {
+    id: string;
+    name: Label;
+    zone: { canvas: string; shape: Shape } | null;
+    analyses: string[];
+    unpublished: boolean;
+}
+
+export interface HistoryLine {
+    type: EventType;
+    places: NamedRef[];
+    date: ProductionDates;
+}
+
+export interface CharacterizationSummary {
+    id: string;
+    name: Label;
+    objects: Ref[];
+    /** The visible components linked to it, by id: those it observes and those of the analyses it cites. */
+    components: Ref[];
+    materials: {
+        value: ValueRef;
+        confidence: RankedValue | null;
+        proportion: { value: number; unit: ValueRef | null } | null;
+    }[];
+    colours: ColourRef[];
+    layers: ValueRef[];
+    elements: { level: RankedValue | null; values: ValueRef[] }[];
+    zone: { canvas: string; shape: Shape; source: "own" | "component" } | null;
+    /** The visible analyses cited, in id order. */
+    evidence: NamedRef[];
+    note: { html: string; lang: string } | null;
+    sources: { title: Label | null; url: string | null; ref: Ref | null }[];
+    authors: Ref[];
+    date: DateRange;
+    unpublished: boolean;
+}
+
+export interface CertaintyScale {
+    levels: RankedValue[];
+}
+
+export interface DocumentCanvas {
+    id: string;
+    label: string;
+    image: ImageRef;
+    analysisCount: number;
+    characterizationCount: number;
+}
+
+/** Body of `GET document/<id>`, the same whatever the filters (`DocumentMatch` says what they keep). */
+export interface DocumentPayload {
+    id: string;
+    name: Label;
+    holding: Label | null;
+    manifest: string | null;
+    canvases: DocumentCanvas[];
+    /** Each technique of the document's analyses, by uri. */
+    techniques: Record<string, Technique>;
+    analyses: DocumentAnalysis[];
+    /** The Components placed on its pages, by first page then name. */
+    components: DocumentComponent[];
+    characterizations: CharacterizationSummary[];
+    history: HistoryLine[];
+    unpublishedCount: number;
+    unpublished: boolean;
+    certaintyScale: CertaintyScale;
+    samples: SampleSummary[];
+}
+
+/** A chemical element declared for a layer; `symbol` is the altLabel of its list item when it reads as one (`Pb`). */
+export interface LayerElement {
+    value: ValueRef;
+    symbol: string | null;
+}
+
+/** The unit of a layer's band; `symbol` is the altLabel of its list item (`nm`), null when it has none. */
+export interface LayerUnit extends ValueRef {
+    symbol: string | null;
+}
+
+/** The processing method of a layer; `symbol` is the altLabel of its list item (`PCA`), null when it has none. */
+export interface LayerMethod extends ValueRef {
+    symbol: string | null;
+}
+
+/** The spectral band of a layer: a value, or its bounds, and the unit. */
+export interface LayerBand {
+    value: number | null;
+    lower: number | null;
+    upper: number | null;
+    unit: LayerUnit | null;
+}
+
+/** How a layer was derived: the method, its component number and the inputs as stored. */
+export interface LayerProcessing {
+    method: LayerMethod | null;
+    index: number | null;
+    inputs: string | null;
+}
+
+/**
+ * One canvas of a chemical-imaging manifest. `index`, `label` and `image` come from the
+ * manifest (`label` as stored, never interpreted); `id` is the canvas id as the server
+ * rewrites it; the rest comes from the layer tile of that canvas, and a canvas without a
+ * tile is unclassified: `content` null, the others empty.
+ */
+export interface FileLayer {
+    index: number;
+    id: string;
+    label: string;
+    image: ImageRef;
+    content: ValueRef | null;
+    elements: LayerElement[];
+    emissionLine: ValueRef | null;
+    band: LayerBand | null;
+    processing: LayerProcessing | null;
+    note: string | null;
+}
+
+/** How a file is drawn: its stored renderer configuration, as the server read it. */
+export interface FileViewer {
+    rendererConfigId: string | null;
+    /** `presetKey` of the stored configuration: the key of the treatments in `utils/xy-views.js`. */
+    presetKey: string | null;
+    /** `renderer_config.name` of the stored configuration. */
+    configName: string | null;
+    xLabel: string | null;
+    yLabel: string | null;
+    axisKey: string | null;
+    points: number | null;
+    decimated: boolean;
+}
+
+export interface FileEntry {
+    id: string;
+    name: string;
+    size: number | null;
+    format: string;
+    role: "readable" | "raw" | "other";
+    pairedWith: string | null;
+    dataKind: DataKind;
+    viewer: FileViewer;
+    layers: FileLayer[];
+    license: {
+        id: string;
+        url: string | null;
+        label: Label;
+        attribution: string | null;
+        noDerivatives: boolean;
+        inRightsRegistry: boolean;
+        isDefault: boolean;
+    };
+    downloadUrl: string;
+    previewUrl: string | null;
+    zone: Shape | null;
+}
+
+/** A dataset citation: its recommended text and its BibTeX entry (the data package carries RIS and CSL-JSON too). */
+export interface Citation {
+    text: string;
+    bibtex: string;
+}
+
+export type ShareScopeKind = "ids" | "document" | "project";
+
+export interface ShareScope {
+    kind: ShareScopeKind;
+    /** Canonical query of the scope (`ids=…`, `document=…`, `project=…`, then `canvases=all` when asked). */
+    key: string;
+    analyses: number;
+    characterizations: number;
+    spectra: number;
+    drafts: number;
+    missing: string[];
+}
+
+/** One product of a scope: `path` is followed on this site, `url` is copied or handed to what leaves it. */
+export interface ProductLink {
+    /** Absolute URL from `PUBLIC_SERVER_ADDRESS`. */
+    url: string;
+    /** Path on this site (`/…?…&lang=…`). */
+    path: string;
+}
+
+/** The data package of this document alone. */
+export interface ShareDocument extends ProductLink {
+    id: string;
+    name: Label;
+}
+
+export interface ShareExport {
+    files: number;
+    bytes: number;
+    overLimit: boolean;
+    /** One export per document, only when over the limit and the scope spans several documents. */
+    documents: ShareDocument[];
+}
+
+/** The scope's products. */
+export interface ShareLinks {
+    /** Only when the scope's manifest holds a canvas within the canvas bound. */
+    manifest: ProductLink | null;
+    /** The scope's manifest is over the canvas bound: its route answers 413. */
+    manifestTooLarge: boolean;
+    /** Only for a Selection holding spectra. */
+    seriesCsv: ProductLink | null;
+    export: ProductLink;
+}
+
+/** `GET /{lang}/api/explorer/share`: what « Share and export » offers for one scope. */
+export interface SharePayload {
+    scope: ShareScope;
+    /** One per dataset, then one per project (else document) of the analyses without dataset. */
+    citations: Citation[];
+    availability: string;
+    export: ShareExport;
+    links: ShareLinks;
+}
+
+export interface AnalysisPayload {
+    id: string;
+    name: Label;
+    technique: Technique | null;
+    instrument: Ref | null;
+    operators: Ref[];
+    projects: Ref[];
+    date: DateRange;
+    document: Ref;
+    component: Ref | null;
+    sample: Ref | null;
+    files: FileEntry[];
+    conditions: { type: ValueRef | null; html: string; lang: string }[];
+    /** The identified materials citing this analysis as evidence. */
+    evidenceOf: NamedRef[];
+    dataset: { url: string; isDoi: boolean; label: string | null } | null;
+    bibliography: Label[];
+    citation: Citation;
+    /** The data availability statement of this analysis. */
+    availability: string;
+    /** Absolute URL of the IIIF manifest of this analysis (every language); null when it places no canvas. */
+    manifest: string | null;
+    /** The content state of each located zone of this analysis, by feature id. */
+    contentStates: ContentStateLink[];
+    permalink: string;
+    /** Path of the Arches report on this site, in the request language. */
+    reportUrl: string;
+    certaintyScale: CertaintyScale;
+    unpublished: boolean;
+}
+
+/** The X-ray tube read from the analysis's measurement conditions; each field is null when not found or ambiguous. */
+export interface Excitation {
+    anode: string | null;
+    kV: number | null;
+    /** Where the value comes from; only the free-text conditions today. */
+    source: "conditions";
+}
+
+/** A whole analysis in the Selection, with the files a viewer shows (raw files left out; possibly none). */
+export interface AnalysisItem {
+    key: string;
+    kind: "analysis";
+    analysis: AnalysisHit;
+    excitation: Excitation | null;
+    files: FileEntry[];
+}
+
+export type Item =
+    | AnalysisItem
+    | {
+          key: string;
+          kind: "analysis-file";
+          analysis: AnalysisHit;
+          excitation: Excitation | null;
+          file: FileEntry;
+      }
+    | { key: string; kind: "imaging"; analysis: AnalysisHit; file: FileEntry }
+    | {
+          key: string;
+          kind: "characterization";
+          characterization: CharacterizationSummary;
+      };
+
+export interface ItemsResponse {
+    items: Item[];
+    missing: string[];
+}
+
+/** The analyses of a coverage row observing one component (null: the folio itself, no component), by technique id. */
+export interface SynthesisCoverageComponent {
+    component: Ref | null;
+    counts: Record<string, number>;
+}
+
+/** A row of the coverage matrix: the Selection's analyses on one canvas, by technique id. */
+export interface SynthesisCoverage {
+    canvas: string;
+    /** The canvas label, as in `SynthesisCanvas`. */
+    label: string;
+    /** Id of the document whose manifest lists the canvas. */
+    document: string;
+    counts: Record<string, number>;
+    /**
+     * `counts` split by the component each analysis observes (`AnalysisHit.component`),
+     * summing to `counts`: null first, then the components by the first row of
+     * the response they appear in, then name.
+     */
+    components: SynthesisCoverageComponent[];
+}
+
+/** A canvas an item of the synthesis is placed on. */
+export interface SynthesisCanvas {
+    canvas: string;
+    /** Id of the document whose manifest lists the canvas. */
+    document: string;
+    /**
+     * The manifest label, prefixed with its document's name when the placed
+     * canvases span several documents, then followed by its 1-based position
+     * in the manifest (« f. · view 23 ») when another canvas of the response
+     * shares it; the one label of the canvas in the payload.
+     */
+    label: string;
+    /** Whether an item of the Selection itself (an analysis or a `ch:` material) is placed on it, not only a material citing one. */
+    selected: boolean;
+    /** Ids of the Selection's analyses placed on it, sorted. */
+    analyses: string[];
+    /** Ids of the identified materials of the synthesis placed on it, sorted. */
+    materials: string[];
+}
+
+/** An element of an identified material; `symbol` null when its labels give none. */
+export type SynthesisElementRef = ValueRef & { symbol: string | null };
+
+/** One colour × material value over the identified materials carrying both (colour null: none given). */
+export interface SynthesisPair {
+    colour: ColourRef | null;
+    material: ValueRef;
+    elements: SynthesisElementRef[];
+    /** Number of identified materials. */
+    count: number;
+    /** Ids of its identified materials, sorted; `count` is their number. */
+    materials: string[];
+}
+
+/** An element with a symbol, counted once per identified material naming it, with its best level. */
+export interface SynthesisElement {
+    symbol: string;
+    level: RankedValue | null;
+    count: number;
+    /** Ids of the identified materials naming it, sorted; `count` is their number. */
+    materials: string[];
+}
+
+/** An identified material of the synthesis with the ids it links. */
+export interface SynthesisMaterial {
+    id: string;
+    /** Ids of the Selection's analyses it cites in evidence, sorted. */
+    evidence: string[];
+    /** Ids of the canvases it is placed on, in document then page order. */
+    canvases: string[];
+    /** Ids of its visible objects observed (documents and components), sorted. */
+    objects: string[];
+    /** Its summary, as `ItemsResponse` gives it for its `ch:` key (`zone` null), with the visitor's view. */
+    summary: CharacterizationSummary;
+    /** Whether it is a `ch:` item of the Selection itself rather than only citing one of its analyses. */
+    selected: boolean;
+}
+
+/**
+ * Body of `GET synthesis?ids=`: the Compare tools' synthesis of the Selection
+ * (D60). The identified materials are those of its `ch:` keys and the
+ * visible ones citing one of its analyses.
+ */
+export interface SynthesisResponse {
+    coverage: SynthesisCoverage[];
+    /** Every canvas an analysis (with or without technique) or identified material is placed on, in document then page order; the folio image offers the `selected` ones. */
+    canvases: SynthesisCanvas[];
+    /** The techniques `coverage` counts, by label. */
+    techniques: Technique[];
+    /** Most frequent first. */
+    pairs: SynthesisPair[];
+    /** Most frequent first. */
+    elements: SynthesisElement[];
+    /** The identified materials of `pairs` and `elements`, by id. */
+    materials: SynthesisMaterial[];
+    unpublishedCount: number;
+}
+
+/** Body of `GET /api/spectrum-preview/<file_id>?n=` (already through its renderer configuration). */
+export interface Series {
+    x: number[];
+    y: number[];
+    n_source: number;
+    decimated: boolean;
+    x_reversed: boolean;
+}
+
+export const SHAPE_KEYS = {
+    Label: { value: true, lang: true } satisfies Record<keyof Label, true>,
+    Ref: { id: true, model: true, name: true } satisfies Record<
+        keyof Ref,
+        true
+    >,
+    Citation: { text: true, bibtex: true } satisfies Record<
+        keyof Citation,
+        true
+    >,
+    ColourRef: {
+        id: true,
+        uri: true,
+        label: true,
+        swatch: true,
+    } satisfies Record<keyof ColourRef, true>,
+    ValueRef: { id: true, uri: true, label: true } satisfies Record<
+        keyof ValueRef,
+        true
+    >,
+    RankedValue: {
+        id: true,
+        uri: true,
+        label: true,
+        rank: true,
+    } satisfies Record<keyof RankedValue, true>,
+    NamedRef: { id: true, name: true } satisfies Record<keyof NamedRef, true>,
+    ProductionDates: {
+        start: true,
+        end: true,
+        approximate: true,
+    } satisfies Record<keyof ProductionDates, true>,
+    HistoryLine: {
+        type: true,
+        places: true,
+        date: true,
+    } satisfies Record<keyof HistoryLine, true>,
+    ImageRef: {
+        service: true,
+        url: true,
+        width: true,
+        height: true,
+    } satisfies Record<keyof ImageRef, true>,
+    FileLayer: {
+        index: true,
+        id: true,
+        label: true,
+        image: true,
+        content: true,
+        elements: true,
+        emissionLine: true,
+        band: true,
+        processing: true,
+        note: true,
+    } satisfies Record<keyof FileLayer, true>,
+    LayerElement: { value: true, symbol: true } satisfies Record<
+        keyof LayerElement,
+        true
+    >,
+    LayerUnit: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerUnit, true>,
+    LayerMethod: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof LayerMethod, true>,
+    LayerBand: {
+        value: true,
+        lower: true,
+        upper: true,
+        unit: true,
+    } satisfies Record<keyof LayerBand, true>,
+    LayerProcessing: {
+        method: true,
+        index: true,
+        inputs: true,
+    } satisfies Record<keyof LayerProcessing, true>,
+    Technique: {
+        id: true,
+        uri: true,
+        label: true,
+        code: true,
+        colour: true,
+        family: true,
+    } satisfies Record<keyof Technique, true>,
+    TechniqueMark: { code: true, colour: true, family: true } satisfies Record<
+        keyof TechniqueMark,
+        true
+    >,
+    Facet: {
+        key: true,
+        group: true,
+        values: true,
+        total: true,
+    } satisfies Record<keyof Facet, true>,
+    FacetValue: {
+        id: true,
+        label: true,
+        count: true,
+        mark: true,
+        swatch: true,
+        parent: true,
+        unpublished: true,
+    } satisfies Record<keyof FacetValue, true>,
+    RangeFacet: {
+        key: true,
+        group: true,
+        event: true,
+        min: true,
+        max: true,
+        buckets: true,
+        undated: true,
+    } satisfies Record<keyof RangeFacet, true>,
+    SearchResponse: {
+        total: true,
+        page: true,
+        results: true,
+        facets: true,
+        unpublishedCount: true,
+        withoutAnalyses: true,
+        period: true,
+    } satisfies Record<keyof SearchResponse, true>,
+    HomeResponse: {
+        documentCount: true,
+        techniques: true,
+        projects: true,
+        featured: true,
+        unpublishedCount: true,
+    } satisfies Record<keyof HomeResponse, true>,
+    DocumentHit: {
+        type: true,
+        id: true,
+        name: true,
+        holding: true,
+        analysisCount: true,
+        thumbnail: true,
+        unpublished: true,
+        shelfmark: true,
+        dates: true,
+        description: true,
+        documentType: true,
+    } satisfies Record<keyof DocumentHit, true>,
+    AnalysisHit: {
+        type: true,
+        id: true,
+        name: true,
+        technique: true,
+        document: true,
+        component: true,
+        canvas: true,
+        date: true,
+        dataKinds: true,
+        materials: true,
+        unpublished: true,
+    } satisfies Record<keyof AnalysisHit, true>,
+    DocumentPayload: {
+        id: true,
+        name: true,
+        holding: true,
+        manifest: true,
+        canvases: true,
+        techniques: true,
+        analyses: true,
+        components: true,
+        characterizations: true,
+        history: true,
+        unpublishedCount: true,
+        unpublished: true,
+        certaintyScale: true,
+        samples: true,
+    } satisfies Record<keyof DocumentPayload, true>,
+    DocumentAnalysis: {
+        id: true,
+        name: true,
+        technique: true,
+        dataKind: true,
+        unpublished: true,
+        zones: true,
+        component: true,
+    } satisfies Record<keyof DocumentAnalysis, true>,
+    AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
+        keyof AnalysisZone,
+        true
+    >,
+    DocumentComponent: {
+        id: true,
+        name: true,
+        zones: true,
+        unpublished: true,
+    } satisfies Record<keyof DocumentComponent, true>,
+    ContentStateLink: {
+        feature: true,
+        url: true,
+    } satisfies Record<keyof ContentStateLink, true>,
+    DocumentMatch: {
+        facets: true,
+        kept: true,
+        total: true,
+        period: true,
+    } satisfies Record<keyof DocumentMatch, true>,
+    MatchKept: { analyses: true, characterizations: true } satisfies Record<
+        keyof MatchKept,
+        true
+    >,
+    SampleSummary: {
+        id: true,
+        name: true,
+        zone: true,
+        analyses: true,
+        unpublished: true,
+    } satisfies Record<keyof SampleSummary, true>,
+    CharacterizationSummary: {
+        id: true,
+        name: true,
+        objects: true,
+        components: true,
+        materials: true,
+        colours: true,
+        layers: true,
+        elements: true,
+        zone: true,
+        evidence: true,
+        note: true,
+        sources: true,
+        authors: true,
+        date: true,
+        unpublished: true,
+    } satisfies Record<keyof CharacterizationSummary, true>,
+    AnalysisPayload: {
+        id: true,
+        name: true,
+        technique: true,
+        instrument: true,
+        operators: true,
+        projects: true,
+        date: true,
+        document: true,
+        component: true,
+        sample: true,
+        files: true,
+        conditions: true,
+        evidenceOf: true,
+        dataset: true,
+        bibliography: true,
+        citation: true,
+        availability: true,
+        manifest: true,
+        contentStates: true,
+        permalink: true,
+        reportUrl: true,
+        certaintyScale: true,
+        unpublished: true,
+    } satisfies Record<keyof AnalysisPayload, true>,
+    FileEntry: {
+        id: true,
+        name: true,
+        size: true,
+        format: true,
+        role: true,
+        pairedWith: true,
+        dataKind: true,
+        viewer: true,
+        layers: true,
+        license: true,
+        downloadUrl: true,
+        previewUrl: true,
+        zone: true,
+    } satisfies Record<keyof FileEntry, true>,
+    FileViewer: {
+        rendererConfigId: true,
+        presetKey: true,
+        configName: true,
+        xLabel: true,
+        yLabel: true,
+        axisKey: true,
+        points: true,
+        decimated: true,
+    } satisfies Record<keyof FileViewer, true>,
+    Excitation: { anode: true, kV: true, source: true } satisfies Record<
+        keyof Excitation,
+        true
+    >,
+    AnalysisItem: {
+        key: true,
+        kind: true,
+        analysis: true,
+        excitation: true,
+        files: true,
+    } satisfies Record<keyof AnalysisItem, true>,
+    ItemsResponse: { items: true, missing: true } satisfies Record<
+        keyof ItemsResponse,
+        true
+    >,
+    SharePayload: {
+        scope: true,
+        citations: true,
+        availability: true,
+        export: true,
+        links: true,
+    } satisfies Record<keyof SharePayload, true>,
+    ShareScope: {
+        kind: true,
+        key: true,
+        analyses: true,
+        characterizations: true,
+        spectra: true,
+        drafts: true,
+        missing: true,
+    } satisfies Record<keyof ShareScope, true>,
+    ShareExport: {
+        files: true,
+        bytes: true,
+        overLimit: true,
+        documents: true,
+    } satisfies Record<keyof ShareExport, true>,
+    ShareDocument: {
+        id: true,
+        name: true,
+        url: true,
+        path: true,
+    } satisfies Record<keyof ShareDocument, true>,
+    ProductLink: { url: true, path: true } satisfies Record<
+        keyof ProductLink,
+        true
+    >,
+    ShareLinks: {
+        manifest: true,
+        manifestTooLarge: true,
+        seriesCsv: true,
+        export: true,
+    } satisfies Record<keyof ShareLinks, true>,
+    SynthesisResponse: {
+        coverage: true,
+        canvases: true,
+        techniques: true,
+        pairs: true,
+        elements: true,
+        materials: true,
+        unpublishedCount: true,
+    } satisfies Record<keyof SynthesisResponse, true>,
+    SynthesisCoverage: {
+        canvas: true,
+        label: true,
+        document: true,
+        counts: true,
+        components: true,
+    } satisfies Record<keyof SynthesisCoverage, true>,
+    SynthesisCoverageComponent: {
+        component: true,
+        counts: true,
+    } satisfies Record<keyof SynthesisCoverageComponent, true>,
+    SynthesisCanvas: {
+        canvas: true,
+        document: true,
+        label: true,
+        selected: true,
+        analyses: true,
+        materials: true,
+    } satisfies Record<keyof SynthesisCanvas, true>,
+    SynthesisPair: {
+        colour: true,
+        material: true,
+        elements: true,
+        count: true,
+        materials: true,
+    } satisfies Record<keyof SynthesisPair, true>,
+    SynthesisElementRef: {
+        id: true,
+        uri: true,
+        label: true,
+        symbol: true,
+    } satisfies Record<keyof SynthesisElementRef, true>,
+    SynthesisElement: {
+        symbol: true,
+        level: true,
+        count: true,
+        materials: true,
+    } satisfies Record<keyof SynthesisElement, true>,
+    SynthesisMaterial: {
+        id: true,
+        evidence: true,
+        canvases: true,
+        objects: true,
+        summary: true,
+        selected: true,
+    } satisfies Record<keyof SynthesisMaterial, true>,
+} as const;

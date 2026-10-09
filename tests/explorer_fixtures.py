@@ -1,0 +1,567 @@
+"""Explorer fixtures: real model slugs and graph ids, the roles the Explorer reads, and the Active lifecycle state.
+
+A resource created without a lifecycle state lands in the initial state of its
+lifecycle, which is a Draft for the default lifecycle; every fixture resource
+here is created Active on purpose. The test database lists the core
+datatypes only; the project datatype ``manifest`` is registered here.
+"""
+
+import mimetypes
+import shutil
+import tempfile
+import uuid
+from unittest import mock
+
+from django.contrib.auth.models import Group, User
+from django.core.cache import cache, caches
+from django.core.files.base import ContentFile
+from django.test import TestCase, override_settings
+
+from arches.app.models.models import (
+    DDataType,
+    File,
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    TileModel,
+)
+from arches.app.utils.permission_backend import assign_perm
+from manuspectrum.views.explorer import memo as explorer_memo
+
+LIFECYCLE = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
+DRAFT = "9375c9a7-dad2-4f14-a5c1-d7e329fdde4f"
+ACTIVE = "f75bb034-36e3-4ab4-8167-f520cf0b4c58"
+
+GRAPHS = {
+    "document": "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b",
+    "component": "d47595b4-f8a6-419c-8f33-b388206280c4",
+    "analysis": "60c85aba-f079-45bc-997f-21cdd4f77b6d",
+    "project": "87a4319d-3ca5-43f6-88cc-a7379fba67f6",
+    "sample": "7a5eda79-6b48-49d0-826d-931d5681e84e",
+    "characterization": "af6eed4f-04a3-40d8-baef-1ad37b86c4dd",
+    "person": "5bf45c85-84cd-4a76-b64a-3ffe86eea1b8",
+    "place": "3f2b036a-b65d-474d-b692-0b21903655c5",
+    "group": "0f6a1c52-3d8e-4b7a-9c14-6e2b8a5d7f31",
+}
+
+# (slug, alias, datatype, nodegroup key): nodes sharing a key share a nodegroup.
+ROLE_NODES = [
+    ("document", "label_of_name", "string", "doc_name"),
+    ("document", "facsimiles", "manifest", "doc_facsimile"),
+    ("component", "label_of_name", "string", "comp_name"),
+    ("component", "item_visual_is_part_of_document", "resource-instance", "comp_doc"),
+    ("component", "location_in_document", "annotation", "comp_zone"),
+    ("component", "type", "reference", "comp_type"),
+    ("component", "color_features", "reference", "comp_colour"),
+    ("analysis", "label_of_name", "string", "an_name"),
+    ("analysis", "component_observed", "resource-instance", "an_observed"),
+    ("analysis", "analysis_by_project", "resource-instance", "an_project"),
+    ("analysis", "sample_used", "resource-instance", "an_sample"),
+    ("analysis", "analysis_technique_used", "reference", "an_technique"),
+    ("analysis", "performed_by_actor", "resource-instance-list", "an_actor"),
+    ("analysis", "analysis_start_date", "date", "an_dates"),
+    ("analysis", "analysis_end_date", "date", "an_dates"),
+    ("analysis", "measurement_point_data", "file-list", "an_files"),
+    ("analysis", "micro_macro_imaging", "file-list", "an_micro"),
+    ("analysis", "literal_location_of_analysis", "annotation", "an_zone"),
+    ("analysis", "dataset_url", "url", "an_dataset"),
+    ("analysis", "bibliographic_title", "string", "an_biblio"),
+    ("analysis", "type_of_statement", "reference", "an_statement"),
+    ("analysis", "content_of_statement", "string", "an_statement"),
+    ("project", "label_of_name", "string", "proj_name"),
+    ("sample", "label_of_name", "string", "sample_name"),
+    ("sample", "location_in_object_of_sampling_taking", "annotation", "sample_zone"),
+    ("person", "label_of_name", "string", "person_name"),
+    ("group", "label_of_name", "string", "group_name"),
+    ("characterization", "label_of_name", "string", "char_name"),
+    ("characterization", "object_observed", "resource-instance-list", "char_object"),
+    (
+        "characterization",
+        "evidence_analyses",
+        "resource-instance-list",
+        "char_evidence",
+    ),
+    ("characterization", "identified_material", "reference", "char_material"),
+    ("characterization", "material_confidence", "reference", "char_material"),
+    ("characterization", "color_aspect", "reference", "char_colour"),
+    ("characterization", "layer_type", "reference", "char_layer"),
+    ("characterization", "detected_elements", "reference", "char_elements"),
+    ("characterization", "element_level", "reference", "char_elements"),
+    ("characterization", "location_of_characterization", "annotation", "char_zone"),
+    ("characterization", "inference_making", "string", "char_note"),
+    (
+        "characterization",
+        "authors_of_inference",
+        "resource-instance-list",
+        "char_authors",
+    ),
+    ("characterization", "inference_making_start_date", "date", "char_dates"),
+    ("characterization", "inference_making_end_date", "date", "char_dates"),
+    ("characterization", "source_of_statement", "url", "char_source"),
+    ("analysis", "instrument", "resource-instance", "an_instrument"),
+    ("analysis", "chemical_imaging_manifest", "manifest", "an_imaging"),
+    ("analysis", "imaging_layer_canvas", "non-localized-string", "an_layer"),
+    ("analysis", "imaging_layer_label", "non-localized-string", "an_layer"),
+    ("analysis", "imaging_layer_content", "reference", "an_layer"),
+    ("analysis", "imaging_layer_elements", "reference", "an_layer"),
+    ("analysis", "imaging_layer_emission_line", "reference", "an_layer"),
+    ("analysis", "imaging_layer_band_value", "number", "an_layer"),
+    ("analysis", "imaging_layer_band_lower", "number", "an_layer"),
+    ("analysis", "imaging_layer_band_upper", "number", "an_layer"),
+    ("analysis", "imaging_layer_band_unit", "reference", "an_layer"),
+    ("analysis", "imaging_layer_processing_method", "reference", "an_layer"),
+    ("analysis", "imaging_layer_component_index", "number", "an_layer"),
+    ("analysis", "imaging_layer_processing_inputs", "non-localized-string", "an_layer"),
+    ("analysis", "imaging_layer_note", "string", "an_layer"),
+    ("document", "current_owner", "resource-instance-list", "doc_owner"),
+    ("document", "value_of_identifier", "string", "doc_identifier"),
+    ("document", "type_of_identifier", "reference", "doc_identifier"),
+    ("document", "date_start_of_production_time", "date", "doc_production"),
+    ("document", "date_end_of_production_time", "date", "doc_production"),
+    ("document", "production_at_place", "resource-instance-list", "doc_production"),
+    ("document", "type_of_production_time", "boolean", "doc_production"),
+    ("component", "date_start_of_production_time", "date", "comp_production"),
+    ("component", "date_end_of_production_time", "date", "comp_production"),
+    ("component", "type_of_production_time", "boolean", "comp_production"),
+    ("component", "production_at_place", "resource-instance-list", "comp_production"),
+    ("place", "label_of_name", "string", "place_name"),
+    ("place", "part_of_places", "resource-instance-list", "place_parent"),
+    ("document", "content_of_statement", "string", "doc_statement"),
+    ("document", "type", "reference", "doc_type"),
+]
+
+# Roles whose node carries the id it has in the ManuSpectrum model, for readers
+# that still address a node by id.
+REAL_NODE_IDS = {
+    ("analysis", "measurement_point_data"): "8fe5161a-7bf2-11ef-b1e5-dd514ecd97bc",
+}
+
+CANVAS = "https://example.org/iiif/ms59/canvas/f1v"
+MANIFEST = "https://example.org/iiif/ms59/manifest"
+XY_CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a01"
+
+
+class ExplorerCase(TestCase):
+    """Two Documents with a Component each, four Analyses, two Projects, a Sample and one identified material.
+
+    The open Document is produced in Paris from 1401-01 to 1500-12
+    (approximate); its Component in Lyon, undated. Paris falls within France
+    (a Draft), which falls within Europe; ``places["hidden"]`` is linked to
+    nothing until a test restricts it.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.graphs = {
+            slug: GraphModel.objects.create(
+                graphid=graph_id,
+                name=slug,
+                slug=slug,
+                isresource=True,
+                is_active=True,
+                resource_instance_lifecycle_id=LIFECYCLE,
+            )
+            for slug, graph_id in GRAPHS.items()
+        }
+        DDataType.objects.get_or_create(
+            datatype="manifest",
+            defaults={
+                "iconclass": "fa fa-file-image-o",
+                "modulename": "manifest.py",
+                "classname": "ManifestDataType",
+                "isgeometric": False,
+            },
+        )
+        nodegroups, cls.nodes = {}, {}
+        for slug, alias, datatype, key in ROLE_NODES:
+            if key not in nodegroups:
+                nodegroups[key] = NodeGroup.objects.create(
+                    nodegroupid=uuid.uuid4(), cardinality="n"
+                )
+            cls.nodes[(slug, alias)] = Node.objects.create(
+                nodeid=REAL_NODE_IDS.get((slug, alias)) or uuid.uuid4(),
+                graph=cls.graphs[slug],
+                nodegroup=nodegroups[key],
+                name=alias,
+                alias=alias,
+                datatype=datatype,
+                istopnode=False,
+            )
+        NodeGroup.objects.filter(pk=nodegroups["an_layer"].pk).update(
+            parentnodegroup=nodegroups["an_imaging"]
+        )
+        cls.anonymous = User.objects.get(username="anonymous")
+        cls.editor = User.objects.create_user("explorer_editor", password="pw")
+        cls.editor.groups.add(Group.objects.get(name="Resource Editor"))
+
+        new = cls.new_resource
+        cls.documents = {
+            "open": new("document", "Ms 59"),
+            "embargoed": new("document", "Ms 211"),
+        }
+        cls.components = {
+            "open": new("component", "f. 1v — initial"),
+            "embargoed": new("component", "f. 3r"),
+        }
+        cls.projects = {
+            "main": new("project", "EMMA"),
+            "side": new("project", "Side project"),
+        }
+        cls.samples = {"s1": new("sample", "S1")}
+        cls.operator = new("person", "Robinet, L.")
+        cls.group = new("group", "CNRS, CRC")
+        cls.places = {
+            "paris": new("place", "Paris"),
+            "france": new("place", "France", state=DRAFT),
+            "europe": new("place", "Europe"),
+            "lyon": new("place", "Lyon"),
+            "hidden": new("place", "Hidden place"),
+        }
+        cls.analyses = {
+            "open": new("analysis", "X01 — f. 1v"),
+            "on_document": new("analysis", "FORS_009 — f. 1v"),
+            "embargoed": new("analysis", "X02 — f. 3r"),
+            "draft": new("analysis", "X03 — draft", state=DRAFT),
+        }
+        cls.characterization = new("characterization", "Azurite, blue ground")
+
+        tile = cls.tile
+        tile(cls.places["paris"], "part_of_places", cls.refs(cls.places["france"]))
+        tile(cls.places["france"], "part_of_places", cls.refs(cls.places["europe"]))
+        cls.tile_values(
+            cls.documents["open"],
+            "document",
+            date_start_of_production_time="1401-01",
+            date_end_of_production_time="1500-12",
+            type_of_production_time=True,
+            production_at_place=cls.refs(cls.places["paris"]),
+        )
+        cls.tile_values(
+            cls.components["open"],
+            "component",
+            production_at_place=cls.refs(cls.places["lyon"]),
+        )
+        tile(
+            cls.components["open"],
+            "item_visual_is_part_of_document",
+            cls.refs(cls.documents["open"]),
+        )
+        tile(
+            cls.components["embargoed"],
+            "item_visual_is_part_of_document",
+            cls.refs(cls.documents["embargoed"]),
+        )
+        tile(
+            cls.analyses["open"], "component_observed", cls.refs(cls.components["open"])
+        )
+        tile(
+            cls.analyses["open"], "analysis_by_project", cls.refs(cls.projects["main"])
+        )
+        tile(cls.analyses["open"], "sample_used", cls.refs(cls.samples["s1"]))
+        tile(
+            cls.analyses["on_document"],
+            "component_observed",
+            cls.refs(cls.documents["open"]),
+        )
+        tile(
+            cls.analyses["on_document"],
+            "analysis_by_project",
+            cls.refs(cls.projects["side"]),
+        )
+        tile(
+            cls.analyses["embargoed"],
+            "component_observed",
+            cls.refs(cls.components["embargoed"]),
+        )
+        tile(
+            cls.analyses["draft"],
+            "component_observed",
+            cls.refs(cls.components["open"]),
+        )
+        tile(cls.characterization, "object_observed", cls.refs(cls.components["open"]))
+        tile(
+            cls.characterization,
+            "evidence_analyses",
+            cls.refs(cls.analyses["open"], cls.analyses["on_document"]),
+        )
+
+    @classmethod
+    def new_resource(cls, slug, name, state=ACTIVE):
+        resource = ResourceInstance.objects.create(
+            graph=cls.graphs[slug], resource_instance_lifecycle_state_id=state
+        )
+        cls.tile(resource, "label_of_name", cls.string_value(name))
+        return resource
+
+    @classmethod
+    def tile(cls, resource, alias, value, slug=None):
+        slug = slug or next(
+            s for s, g in cls.graphs.items() if g.pk == resource.graph_id
+        )
+        node = cls.nodes[(slug, alias)]
+        return TileModel.objects.create(
+            resourceinstance=resource,
+            nodegroup_id=node.nodegroup_id,
+            data={str(node.nodeid): value},
+        )
+
+    @classmethod
+    def tile_values(cls, resource, slug, **values):
+        """One tile holding several nodes of one nodegroup, ``alias=value``."""
+        nodes = [cls.nodes[(slug, alias)] for alias in values]
+        return TileModel.objects.create(
+            resourceinstance=resource,
+            nodegroup_id=nodes[0].nodegroup_id,
+            data={str(n.nodeid): values[n.alias] for n in nodes},
+        )
+
+    @staticmethod
+    def string_value(en, fr=None):
+        value = {"en": {"value": en, "direction": "ltr"}}
+        if fr:
+            value["fr"] = {"value": fr, "direction": "ltr"}
+        return value
+
+    @staticmethod
+    def refs(*resources):
+        return [
+            {
+                "resourceId": str(r.pk),
+                "ontologyProperty": "",
+                "inverseOntologyProperty": "",
+            }
+            for r in resources
+        ]
+
+    @staticmethod
+    def reference_value(uri, en, fr=None, list_id=None, alt=None):
+        item = str(uuid.uuid5(uuid.NAMESPACE_URL, uri))
+        labels = [
+            {
+                "id": str(uuid.uuid4()),
+                "value": en,
+                "language_id": "en",
+                "list_item_id": item,
+                "valuetype_id": "prefLabel",
+            }
+        ]
+        if fr:
+            labels.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "value": fr,
+                    "language_id": "fr",
+                    "list_item_id": item,
+                    "valuetype_id": "prefLabel",
+                }
+            )
+        if alt:
+            labels.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "value": alt,
+                    "language_id": "en",
+                    "list_item_id": item,
+                    "valuetype_id": "altLabel",
+                }
+            )
+        return [{"uri": uri, "list_id": list_id or str(uuid.uuid4()), "labels": labels}]
+
+    @staticmethod
+    def annotation_value(canvas, geometry):
+        return {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "type": "Feature",
+                    "geometry": geometry,
+                    "properties": {"canvas": canvas, "manifest": MANIFEST},
+                }
+            ],
+        }
+
+    def setUp(self):
+        """Clear the caches, give the test its own rebuild guard and ``MEDIA_ROOT``.
+
+        The guard set of ``memo`` is process-wide: a test that mocks
+        ``memo.spawn`` leaves its slot taken, and every later rebuild in the
+        process is skipped, so readers are answered from a stale bundle.
+
+        The media override is enabled before a method-level
+        ``override_settings`` and disabled after it: the two nest, and each
+        restores the settings it found.
+        """
+        cache.clear()
+        caches["user_permission"].clear()
+        self.addCleanup(cache.clear)
+        self.addCleanup(caches["user_permission"].clear)
+        guard = mock.patch.object(explorer_memo, "_rebuilding", set())
+        guard.start()
+        self.addCleanup(guard.stop)
+        self._media_root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._media_root, True)
+        media = override_settings(MEDIA_ROOT=self._media_root)
+        media.enable()
+        self.addCleanup(media.disable)
+
+    def embargo(self, resource):
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_resourceinstance", self.anonymous, resource)
+
+    def stored_file(
+        self,
+        analysis,
+        name,
+        content,
+        *,
+        licence=None,
+        config=None,
+        node_alias="measurement_point_data",
+    ):
+        """Store *content* as the file *name* of *analysis*; returns its file id.
+
+        The bytes go under the test's own ``MEDIA_ROOT`` (``setUp``), the ``File``
+        row hangs from the analysis's tile of *node_alias* (created when
+        missing), and that tile's file list gets the entry, with *licence*
+        (``{"id", "url"}``) and the renderer configuration id *config* when
+        given.
+        """
+        node = self.nodes[("analysis", node_alias)]
+        tile = TileModel.objects.filter(
+            resourceinstance=analysis, nodegroup_id=node.nodegroup_id
+        ).first() or self.tile(analysis, node_alias, [])
+        row = File(fileid=uuid.uuid4(), tile=tile)
+        row.path.save(name, ContentFile(content), save=False)
+        File.objects.bulk_create([row])
+        file_id = str(row.fileid)
+        entry = {
+            "file_id": file_id,
+            "name": name,
+            "size": len(content),
+            "type": mimetypes.guess_type(name)[0] or "",
+            "url": f"/files/{file_id}",
+            "status": "uploaded",
+        }
+        if licence:
+            entry["license"] = licence
+        if config:
+            entry["rendererConfig"] = config
+        data = dict(tile.data or {})
+        data[str(node.nodeid)] = [*(data.get(str(node.nodeid)) or []), entry]
+        TileModel.objects.filter(pk=tile.pk).update(data=data)
+        return file_id
+
+    def restrict_nodegroup(self, nodegroup_id, allowed_user):
+        """Take read access to *nodegroup_id* away from the visitor and grant it to *allowed_user*.
+
+        The visitor is the ``anonymous`` row; *allowed_user* gets an explicit
+        ``read_nodegroup``. Other accounts keep Arches' default (no object
+        grant of their own: every nodegroup readable).
+        """
+        nodegroup = NodeGroup.objects.get(pk=nodegroup_id)
+        with self.captureOnCommitCallbacks(execute=True):
+            assign_perm("no_access_to_nodegroup", self.anonymous, nodegroup)
+            assign_perm("read_nodegroup", allowed_user, nodegroup)
+
+    def hide_project(self, project):
+        """Restrict *project* from the visitor: its analyses are hidden with it (D33)."""
+        self.embargo(project)
+
+    def make_draft(self, resource):
+        ResourceInstance.objects.filter(pk=resource.pk).update(
+            resource_instance_lifecycle_state_id=DRAFT
+        )
+        cache.clear()
+
+
+CANVAS_2 = "https://example.org/iiif/ms59/canvas/f2r"
+CANVAS_3 = "https://example.org/iiif/ms59/canvas/f3r"
+FETCH = "manuspectrum.utils.iiif_tools.CanvasIIIF.fetch_manifest"
+SOURCE_MANIFEST = {
+    "@context": "http://iiif.io/api/presentation/3/context.json",
+    "id": MANIFEST,
+    "type": "Manifest",
+    "label": {"none": ["Ms 59"]},
+    "items": [
+        {
+            "id": canvas,
+            "type": "Canvas",
+            "label": {"none": [label]},
+            "width": 4000,
+            "height": 5000,
+        }
+        for canvas, label in (
+            (CANVAS, "f. 1v"),
+            (CANVAS_2, "f. 2r"),
+            (CANVAS_3, "f. 3r"),
+        )
+    ],
+}
+POINT = {"type": "Point", "coordinates": [10, -20]}
+RECT = {
+    "type": "Polygon",
+    "coordinates": [[[10, -10], [30, -10], [30, -30], [10, -30], [10, -10]]],
+}
+TRIANGLE = {
+    "type": "Polygon",
+    "coordinates": [[[10, -10], [40, -15], [20, -40], [10, -10]]],
+}
+FEATURES = {
+    "open": "0a0a0a0a-0000-4000-8000-000000000001",
+    "on_document_1": "0a0a0a0a-0000-4000-8000-000000000002",
+    "on_document_3": "0a0a0a0a-0000-4000-8000-000000000003",
+    "draft": "0a0a0a0a-0000-4000-8000-000000000004",
+}
+
+
+class IIIFCase(ExplorerCase):
+    """The ExplorerCase corpus with the open Document's manifest (three canvases) and located zones.
+
+    ``open`` has a point on f. 1v; ``on_document`` a triangle on f. 1v and a
+    rectangle on f. 3r; ``draft`` a point on f. 1v. f. 2r holds nothing. The
+    source manifest is fetched through a patched ``CanvasIIIF.fetch_manifest``.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tile(cls.documents["open"], "facsimiles", MANIFEST)
+        cls.zone(cls.analyses["open"], [(FEATURES["open"], CANVAS, POINT)])
+        cls.zone(
+            cls.analyses["on_document"],
+            [
+                (FEATURES["on_document_1"], CANVAS, TRIANGLE),
+                (FEATURES["on_document_3"], CANVAS_3, RECT),
+            ],
+        )
+        cls.zone(cls.analyses["draft"], [(FEATURES["draft"], CANVAS, POINT)])
+
+    @classmethod
+    def zone(cls, analysis, features, alias="literal_location_of_analysis"):
+        """One annotation tile of *analysis* holding ``(feature id, canvas, geometry)`` features."""
+        return cls.tile(
+            analysis,
+            alias,
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "id": feature,
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {"canvas": canvas, "manifest": MANIFEST},
+                    }
+                    for feature, canvas, geometry in features
+                ],
+            },
+        )
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch(
+            FETCH, side_effect=lambda url: SOURCE_MANIFEST if url == MANIFEST else None
+        )
+        self.fetch = patcher.start()
+        self.addCleanup(patcher.stop)

@@ -1,0 +1,480 @@
+<script setup lang="ts">
+import {
+    computed,
+    inject,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+    useTemplateRef,
+} from "vue";
+import { useGettext } from "vue3-gettext";
+
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
+import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
+import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
+
+import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
+import {
+    SCREEN_FOCUS_KEY,
+    SELECTION_HINTS_KEY,
+    SELECTION_ITEMS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { holdingsOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
+import {
+    BASKET_LIMIT,
+    slotLabel,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
+
+import type {
+    AnalysisItem,
+    Item,
+    Label,
+    Technique,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+
+/**
+ * The Selection, kept on this browser. Until an item is read, its row shows
+ * what the card that added it knew (`SELECTION_HINTS_KEY`). « Compare »
+ * opens the Compare view, asks for its heading to take the focus
+ * (`SCREEN_FOCUS_KEY`) and emits `compare`, so a drawer holding the panel
+ * closes. The panel is a column filling its container: the heading on top,
+ * the list as the only scrolling region, the footer (actions, undo line)
+ * pinned below it. « Empty… » empties the Selection at once and leaves a status
+ * line with « Undo » that puts every item back at its slot. When the reading of the Selection fails, the rows not read lose
+ * their placeholder and the panel offers Retry.
+ */
+const emit = defineEmits<{ (event: "compare"): void }>();
+
+const hints = inject(
+    SELECTION_HINTS_KEY,
+    () => ref(new Map<string, SelectionHint>()),
+    true,
+);
+const selectionItems = inject(SELECTION_ITEMS_KEY, useSelectionItems, false);
+const screenFocus = inject(SCREEN_FOCUS_KEY, null);
+
+const store = useExplorerStore();
+const { $gettext, $ngettext, interpolate } = useGettext();
+const { dataKindBadge } = useVocabulary();
+
+const { byKey, missing, status, retry } = selectionItems();
+const { clearAll, lastBulk, undo, dismiss } = useSelectionToggle();
+const panel = useTemplateRef<HTMLElement>("panel");
+
+const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
+const failed = computed(
+    () => status.value === "error" || status.value === "unavailable",
+);
+const canCompare = computed(() => isViewAvailable("compare"));
+const emptied = computed(() =>
+    lastBulk.value?.kind === "emptied" ? lastBulk.value : null,
+);
+const compareLabel = computed(() =>
+    interpolate($gettext("Compare (%{n})"), { n: store.basket.length }, true),
+);
+
+onBeforeUnmount(() => {
+    if (emptied.value) dismiss();
+});
+
+/** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */
+function holdingsText(item: AnalysisItem): string {
+    const held = holdingsOf(item.files);
+    const parts = [
+        [
+            held.spectra,
+            $ngettext("%{n} spectrum", "%{n} spectra", held.spectra),
+        ],
+        [held.maps, $ngettext("%{n} map", "%{n} maps", held.maps)],
+        [
+            held.microImages,
+            $ngettext(
+                "%{n} micro-image",
+                "%{n} micro-images",
+                held.microImages,
+            ),
+        ],
+    ] as const;
+    const written = parts
+        .filter(([count]) => count > 0)
+        .map(([count, text]) => interpolate(text, { n: count }, true));
+    return written.length > 0
+        ? written.join(" · ")
+        : $gettext("no data to show");
+}
+
+function kindText(item: Item): string {
+    if (item.kind === "analysis") return holdingsText(item);
+    if (item.kind === "characterization")
+        return $gettext("identified material");
+    if (item.kind === "imaging") return $gettext("map layer");
+    return dataKindBadge(item.file.dataKind);
+}
+
+function titleOf(item: Item): Label {
+    return item.kind === "characterization"
+        ? item.characterization.name
+        : item.analysis.name;
+}
+
+/** The label of a map layer, written after the analysis name (a label from the file, language unknown). */
+function techniqueOf(item: Item): Technique | null {
+    return item.kind === "characterization" ? null : item.analysis.technique;
+}
+
+function layerOf(item: Item): string | null {
+    if (item.kind !== "imaging") return null;
+    const index = Number(item.key.split(":")[2]);
+    return (
+        item.file.layers.find((entry) => entry.index === index)?.label ?? null
+    );
+}
+
+function documentOf(item: Item): Label | null {
+    return item.kind === "characterization"
+        ? null
+        : item.analysis.document.name;
+}
+
+function compare(): void {
+    if (screenFocus) screenFocus.value = true;
+    store.setView("compare");
+    emit("compare");
+}
+
+/** Empties the Selection; the buttons go, so the keyboard focus moves to « Undo ». */
+async function empty(): Promise<void> {
+    clearAll();
+    await nextTick();
+    panel.value?.querySelector<HTMLElement>('[data-action="undo"]')?.focus();
+}
+
+function removeLabel(slot: number): string {
+    return interpolate(
+        $gettext("Remove %{slot}"),
+        { slot: slotLabel(slot) },
+        true,
+    );
+}
+</script>
+
+<template>
+    <section
+        ref="panel"
+        class="selection-panel"
+        aria-labelledby="selection-title"
+    >
+        <header class="head">
+            <h3 id="selection-title">
+                <span>{{ $gettext("Selection") }}</span>
+                <span class="count"
+                    >{{ store.basket.length }} / {{ BASKET_LIMIT }}</span
+                >
+            </h3>
+            <p class="kept">
+                <span>{{ $gettext("Kept on this browser") }}</span>
+            </p>
+        </header>
+        <p
+            v-if="store.basket.length === 0"
+            class="empty"
+        >
+            <span>
+                {{
+                    $gettext(
+                        "Your Selection is empty. Add analyses or identified materials with « + Selection ».",
+                    )
+                }}
+            </span>
+        </p>
+        <UnavailableState
+            v-if="store.basket.length > 0 && failed"
+            status="error"
+            :hide-home="true"
+            @retry="retry"
+        />
+        <ol v-if="store.basket.length > 0">
+            <li
+                v-for="row in rows"
+                :key="row.key"
+                :data-key="row.key"
+            >
+                <span class="slot">{{ slotLabel(row.slot) }}</span>
+                <span class="info">
+                    <template v-if="byKey.get(row.key)">
+                        <TechniqueTag
+                            v-if="
+                                byKey.get(row.key)!.kind === 'analysis' &&
+                                techniqueOf(byKey.get(row.key)!)
+                            "
+                            :code="techniqueOf(byKey.get(row.key)!)!.code"
+                            :colour="techniqueOf(byKey.get(row.key)!)!.colour"
+                        />
+                        <span class="kind">{{
+                            kindText(byKey.get(row.key)!)
+                        }}</span>
+                        <span class="title">
+                            <span :lang="titleOf(byKey.get(row.key)!).lang">{{
+                                titleOf(byKey.get(row.key)!).value
+                            }}</span>
+                            <span v-if="layerOf(byKey.get(row.key)!)">
+                                · {{ layerOf(byKey.get(row.key)!) }}
+                            </span>
+                        </span>
+                        <span
+                            v-if="documentOf(byKey.get(row.key)!)"
+                            class="document"
+                            :lang="documentOf(byKey.get(row.key)!)!.lang"
+                        >
+                            {{ documentOf(byKey.get(row.key)!)!.value }}
+                        </span>
+                    </template>
+                    <span
+                        v-else-if="missing.has(row.key)"
+                        class="gone"
+                    >
+                        {{ $gettext("no longer available") }}
+                    </span>
+                    <template v-else-if="hints.get(row.key)">
+                        <span class="kind">{{ hints.get(row.key)!.kind }}</span>
+                        <span class="title">
+                            <span :lang="hints.get(row.key)!.title.lang">{{
+                                hints.get(row.key)!.title.value
+                            }}</span>
+                            <span v-if="hints.get(row.key)!.detail">
+                                · {{ hints.get(row.key)!.detail }}
+                            </span>
+                        </span>
+                    </template>
+                    <span
+                        v-else-if="!failed"
+                        class="pending ms-skeleton"
+                        role="img"
+                        :aria-label="$gettext('Loading…')"
+                    ></span>
+                </span>
+                <button
+                    type="button"
+                    class="remove"
+                    :aria-label="removeLabel(row.slot)"
+                    @click="store.removeFromBasket(row.key)"
+                >
+                    <span aria-hidden="true">×</span>
+                </button>
+            </li>
+        </ol>
+        <footer
+            v-if="store.basket.length > 0 || emptied"
+            class="foot"
+        >
+            <div
+                v-if="store.basket.length > 0"
+                class="actions"
+            >
+                <button
+                    v-if="canCompare"
+                    type="button"
+                    class="compare primary"
+                    @click="compare"
+                >
+                    <span>{{ compareLabel }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="clear secondary"
+                    @click="empty"
+                >
+                    <span>{{ $gettext("Empty…") }}</span>
+                </button>
+            </div>
+            <BulkStatusLine
+                :status="emptied"
+                @undo="undo"
+                @dismiss="dismiss"
+            />
+        </footer>
+    </section>
+</template>
+
+<style scoped>
+.selection-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    block-size: 100%;
+    min-block-size: 0;
+}
+
+.selection-panel > * {
+    flex: none;
+}
+
+.selection-panel h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.selection-panel .count {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-weight: 400;
+}
+
+.selection-panel .head {
+    display: grid;
+    gap: 0.125rem;
+}
+
+.selection-panel .kept {
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+}
+
+.selection-panel .empty {
+    color: var(--ink-muted);
+}
+
+.selection-panel ol {
+    display: grid;
+    flex: 1 1 0;
+    align-content: start;
+    gap: 0;
+    min-block-size: 0;
+    overflow-y: auto;
+    padding: 0;
+    border-block-start: 0.0625rem solid var(--border-hover);
+    list-style: none;
+}
+
+.selection-panel li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: 0 0.5rem;
+    padding-block: 0.375rem;
+    padding-inline: 0.25rem;
+    border-block-end: 0.0625rem solid var(--border-hover);
+}
+
+.selection-panel li:nth-child(even) {
+    background: var(--bg);
+}
+
+.selection-panel li:hover {
+    background: var(--bg-alt);
+}
+
+.selection-panel .slot {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 2rem;
+    padding-block: 0.125rem;
+    border-radius: 0.25rem;
+    background: var(--ink);
+    color: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.selection-panel .info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 0.375rem;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+}
+
+.selection-panel .title {
+    font-weight: 500;
+}
+
+.selection-panel .kind,
+.selection-panel .document,
+.selection-panel .gone {
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+}
+
+.selection-panel .pending {
+    inline-size: 70%;
+    block-size: 0.875rem;
+}
+
+.selection-panel .remove {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+@media (pointer: coarse) {
+    .selection-panel .remove {
+        inline-size: var(--explorer-target, 2.75rem);
+        block-size: var(--explorer-target, 2.75rem);
+    }
+}
+
+.selection-panel .remove:focus-visible,
+.selection-panel .clear:focus-visible,
+.selection-panel .compare:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.selection-panel .foot {
+    display: grid;
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+    border-block-start: 0.0625rem solid var(--border-hover);
+    background: var(--surface);
+}
+
+.selection-panel .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.selection-panel .clear,
+.selection-panel .compare {
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.selection-panel .compare.primary {
+    border-color: var(--blue-text);
+    background: var(--blue-text);
+    color: var(--surface);
+    font-weight: 600;
+}
+
+.selection-panel .clear.secondary {
+    border-color: transparent;
+    background: transparent;
+    color: var(--blue-text);
+}
+</style>

@@ -40,3 +40,11 @@ agents_*.md
 .claude/
 docs/
 docs_claude/
+
+# Local working notes and screenshots
+/.superpowers/
+deploy/rehearsal/rehearsal.env
+
+# Compose stack (deploy/)
+deploy/compose/.env
+deploy/compose/.smoke-state

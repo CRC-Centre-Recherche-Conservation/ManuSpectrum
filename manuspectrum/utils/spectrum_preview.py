@@ -5,6 +5,8 @@ list the XY reader and ``functions.xy_technique_config`` call canonical: an
 instrument export that is not one of them is converted upstream, not parsed
 here. Everything else — the binary formats, and ``.mca``, whose channel axis
 means nothing without the per-file calibration in its header — has no preview.
+The extension of a file's entry name, not of its stored path, names its format
+(``format_source``).
 
 The curve is the one the XY reader opens on, not the raw first two columns: the
 renderer configuration stamped on the file entry says which column holds x,
@@ -14,15 +16,18 @@ the reader's own. Only it is stored — the views a reader picks afterwards
 (log(1/R), Kubelka-Munk) are not — so applying it reproduces the reader's
 default drawing.
 
-The canonical export reaches 2.8 MB and 136 805 points, so the file is never
-held in memory: the parser yields one row at a time and the decimator keeps the
-extremes of a bounded number of spans. Peak memory is the same for a ten-line
-file and for the largest one.
+The canonical export reaches 2.8 MB and 136 805 points, so the preview never
+holds the file in memory: the parser yields one row at a time and the decimator
+keeps the extremes of a bounded number of spans. Peak memory is the same for a
+ten-line file and for the largest one. ``series_points`` streams every point,
+for the exports that must not decimate; ``read_series`` holds them in memory.
 """
 
+import itertools
 import math
 import os
 import re
+from contextlib import contextmanager
 
 from django.conf import settings
 
@@ -39,6 +44,16 @@ def is_supported(path):
     return extension in {
         entry.lower().lstrip(".") for entry in settings.XY_TEXT_FILE_FORMATS
     }
+
+
+def format_source(path, name=None):
+    """What names the format of a stored file: its entry *name* when known, else its *path*."""
+    return name or path
+
+
+def is_readable(path, name=None):
+    """Whether ``read_series`` reads the format (``format_source``): one of `XY_TEXT_FILE_FORMATS`."""
+    return is_supported(str(format_source(path, name)))
 
 
 def parse_rows(lines):
@@ -164,18 +179,55 @@ def _regroup(spans, budget):
     return groups
 
 
-def build_preview(path, n, config=None):
-    """The decimated series of one file, or ``None`` when it draws nothing.
-
-    `config` is the stored renderer configuration of the file entry, which
-    decides the columns, the normalisation and the direction of x.
+@contextmanager
+def _points(path, config):
+    """The configured points of one file, streamed from a single open.
 
     Decoding errors are replaced rather than raised: a text export with one
     stray byte still has a spectrum in it, and the offending row reads as NaN
-    and is dropped on its own.
+    and is dropped on its own. The caller checks the format (``is_readable``).
     """
     with open(path, encoding="utf-8", errors="replace") as handle:
-        series = decimate(apply_config(parse_rows(handle), config), n)
+        yield apply_config(parse_rows(handle), config)
+
+
+def series_points(path, config=None):
+    """Every ``(x, y)`` of one file as the reader draws it, streamed; nothing when it holds fewer than two.
+
+    `config` is the stored renderer configuration of the file entry, which
+    decides the columns and the normalisation. The file is read one row at a
+    time, never decimated; the caller checks the format (``is_readable``).
+    """
+    with _points(path, config) as points:
+        first = list(itertools.islice(points, 2))
+        if len(first) < 2:
+            return
+        yield from first
+        yield from points
+
+
+def read_series(path, config=None):
+    """Every point of one file (``series_points``) held in memory, or ``None`` when it draws nothing.
+
+    Returns ``{"x", "y", "x_reversed"}``.
+    """
+    xs, ys = [], []
+    for x, y in series_points(path, config):
+        xs.append(x)
+        ys.append(y)
+    if not xs:
+        return None
+    return {"x": xs, "y": ys, "x_reversed": is_x_reversed(config)}
+
+
+def build_preview(path, n, config=None):
+    """The decimated series of one file, or ``None`` when it draws nothing.
+
+    The points are those ``read_series`` reads, streamed into ``decimate``
+    without holding the series in memory.
+    """
+    with _points(path, config) as points:
+        series = decimate(points, n)
     if series is not None:
         series["x_reversed"] = is_x_reversed(config)
     return series

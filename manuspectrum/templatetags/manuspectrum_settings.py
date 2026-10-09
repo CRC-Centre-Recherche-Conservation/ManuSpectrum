@@ -1,5 +1,6 @@
 from django import template
 from django.conf import settings
+from django.core.exceptions import DisallowedHost
 from django.urls import translate_url
 
 register = template.Library()
@@ -31,6 +32,23 @@ def translated_page_url(context, lang_code):
         return ""
     path = translate_url(request.path, lang_code)
     return f"{request.scheme}://{request.get_host()}{path}"
+
+
+@register.simple_tag(takes_context=True)
+def site_origin(context):
+    """scheme://host of the current request, or "" when its Host is not allowed.
+
+    The 400 page renders for a request whose Host failed ALLOWED_HOSTS
+    (DisallowedHost raised by CommonMiddleware): calling request.get_host()
+    again while rendering it raises once more and turns the 400 into a 500.
+    """
+    request = context.get("request")
+    if request is None:
+        return ""
+    try:
+        return f"{request.scheme}://{request.get_host()}"
+    except DisallowedHost:
+        return ""
 
 
 @register.simple_tag

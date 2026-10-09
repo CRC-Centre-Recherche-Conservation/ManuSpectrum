@@ -1,0 +1,23 @@
+{% load i18n %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}<html lang="{{ LANGUAGE_CODE }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{% trans "Sign in to ManuSpectrum" %}</title>
+</head>
+<body>
+<main>
+  <p>{% trans "You are signed in. Return to the viewer." %}</p>
+  <button type="button" id="iiif-auth-close">{% trans "Return to the viewer" %}</button>
+</main>
+<script>
+(function () {
+  document.getElementById("iiif-auth-close").addEventListener("click", function () {
+    window.close();
+  });
+  window.close();
+})();
+</script>
+</body>
+</html>

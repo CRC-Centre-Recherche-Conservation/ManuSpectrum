@@ -44,6 +44,12 @@ $ms-maxw:    1240px;
 $ms-gutter:  2rem;
 $ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) reduction
 
+// Public applications (Analysis Explorer): full width up to $ms-app-maxw, and
+// the height of the fixed site header once scrolled (.ms-header.scrolled),
+// under which sticky panels stop.
+$ms-app-maxw:       105rem;
+$ms-header-stuck:   3.75rem;
+
 @mixin ms-spectral-gradient($angle: 90deg) {
     background: linear-gradient($angle, $ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
 }
@@ -71,9 +77,9 @@ $ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) re
     padding-bottom: clamp(3rem, 5.5vw, 5rem);
 }
 
-@mixin ms-reveal {
-    opacity: 0;
-    transform: translateY(24px);
-    transition: opacity 0.7s ease, transform 0.7s ease;
-    &.is-visible { opacity: 1; transform: none; }
+// Contract with utils/reveal-on-scroll: visible by default; `is-pending` hides
+// without transition, so removing it plays the transition declared here.
+@mixin ms-reveal($duration: 0.7s, $ease: ease, $hidden: translateY(24px)) {
+    transition: opacity $duration $ease, transform $duration $ease;
+    &.is-pending { opacity: 0; transform: $hidden; transition: none; }
 }

@@ -59,9 +59,19 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "user_permission_cache",
     },
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "iiif-auth-cache",
+        "KEY_PREFIX": "ms-iiif-auth",
+    },
 }
 
 LOGGING["loggers"]["arches"]["level"] = "ERROR"
+LOGGING["loggers"]["manuspectrum.explorer"]["level"] = "WARNING"
+
+# A test runs in one transaction another thread's connection cannot see.
+EXPLORER_BACKGROUND_REBUILD = False
+EXPLORER_REBUILD_MIN_INTERVAL = 0
 
 ELASTICSEARCH_PREFIX = "test"
 

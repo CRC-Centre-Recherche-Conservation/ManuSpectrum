@@ -238,10 +238,13 @@ INSTALLED_APPS = (
 INSTALLED_APPS += ("arches.app", "django.contrib.admin")
 
 MIDDLEWARE = [
+    "manuspectrum.observability.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     #'arches.app.utils.middleware.TokenMiddleware',
+    # Before LocaleMiddleware: drops the language headers it adds to /iiif/.
+    "manuspectrum.utils.iiif_middleware.IIIFLanguageNeutralMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -357,6 +360,12 @@ LOGGING = {
             "level": "DEBUG",  # or consider ERROR if this is too noisy
             "propagate": True,
         },
+        # One INFO line per Explorer corpus bundle build (explorer.memo).
+        "manuspectrum.explorer": {
+            "handlers": ["file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # consider adding your own project here if it logs
     },
 }
@@ -379,7 +388,10 @@ SESSION_COOKIE_NAME = "manuspectrum"
 CACHE_CODE_VERSION = cache_code_version(APP_ROOT)
 
 # Redis database allocation, shared with CELERY_BROKER_URL below:
-#   0 = Celery broker   1 = default cache   2 = permission checker
+#   0 = Celery broker
+#   1 = default cache + iiif_auth (IIIF sign-ins, key prefix "ms-iiif-auth"):
+#       a FLUSHDB on 1 signs every external viewer out
+#   2 = permission checker
 #
 # This is the ONLY definition. settings_local.py may point an entry at another
 # host or index, but must never reassign the dict.
@@ -399,7 +411,15 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": "redis://localhost:6379/2",
     },
+    # IIIF sign-ins (manuspectrum/iiif/tokens.py): a fixed prefix, so a new
+    # code version does not sign every external viewer out.
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/1",
+        "KEY_PREFIX": "ms-iiif-auth",
+    },
 }
+IIIF_AUTH_CACHE = "iiif_auth"
 
 # Hide nodes and cards in a report that have no data
 HIDE_EMPTY_NODES_IN_REPORT = False
@@ -474,6 +494,11 @@ CELERY_BEAT_SCHEDULE = {
     "delete-expired-search-export": {
         "task": "arches.app.tasks.delete_file",
         "schedule": CELERY_SEARCH_EXPORT_CHECK,
+    },
+    # Rows of the Explorer's data-version ledger older than a week.
+    "prune-data-changes": {
+        "task": "manuspectrum.prune_data_changes",
+        "schedule": 24 * 3600,
     },
     # Off: arches.app.tasks.message is `def message(arg): return arg`. It
     # notifies nothing and costs one broker round-trip plus an INSERT and an
@@ -810,8 +835,101 @@ SUMMARY_CACHE_TTL = 300
 SUMMARY_ES_TIMEOUT = 3
 SUMMARY_MAX_LIMIT = 10
 SUMMARY_MAX_VALUES = 10
-SPECTRUM_PREVIEW_POINTS = 200
 SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
+# Point budgets a spectrum preview may be asked for (?n=); the first is the
+# default. 4096 keeps a FORS spectrum (~2151 points) undecimated. ?n=full
+# serves every point of a file up to SPECTRUM_PREVIEW_MAX_BYTES (the workshop).
+SPECTRUM_PREVIEW_TIERS = (200, 4096)
+
+# Explorer (spec v3). Raw instrument formats are downloads only, never parsed.
+RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
+# A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
+EXPLORER_LEGACY_HOSTS = ()
+EXPLORER_ITEMS_MAX = 30
+# Seconds the homepage technique list is kept per language.
+EXPLORER_TECHNIQUES_TTL = 600
+# Seconds a compressed corpus bundle of the Explorer stays in the default cache
+# (~3 MB each). Entries stored under a previous code prefix are never read again
+# and expire by this TTL.
+EXPLORER_BUNDLE_TTL = 2 * 60 * 60
+# Rebuild a corpus bundle after a data change in a background thread, readers
+# answered from the previous bundle meanwhile; False rebuilds in the request.
+EXPLORER_BACKGROUND_REBUILD = True
+
+# Observability (manuspectrum/observability/README.md). Off on the development VM;
+# settings_docker turns them on.
+METRICS_ENABLED = False
+READYZ_ENABLED = False
+# Seconds each /readyz probe may take; the probes run concurrently.
+READYZ_TIMEOUT = 2.0
+# Redis instances /readyz pings, by component name.
+READYZ_REDIS_URLS = {}
+READYZ_CANTALOUPE = False
+# django-prometheus request latency buckets, aligned on the search SLO (2 s).
+PROMETHEUS_LATENCY_BUCKETS = (
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1,
+    1.5,
+    2,
+    3,
+    5,
+    8,
+    13,
+    float("inf"),
+)
+# Seconds no background rebuild of a language starts after one failed.
+EXPLORER_REBUILD_RETRY_AFTER = 60
+# Seconds no background rebuild of a language starts after one stored its
+# bundle; readers of newer data keep the previous bundle meanwhile. 0: none.
+EXPLORER_REBUILD_MIN_INTERVAL = 30
+# Largest data package the Explorer streams (sum of the stored file sizes); above it, 413.
+EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
+# Most files one data package holds; above it, 413.
+EXPLORER_EXPORT_MAX_FILES = 2000
+# Most canvases one Explorer IIIF manifest lists; above it, 413.
+EXPLORER_MANIFEST_MAX_CANVASES = 1000
+# Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
+# ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
+EXPLORER_MIRADOR_URL = ""
+
+# IIIF documents (manuspectrum/iiif/). Radius, in canvas pixels, of the circle
+# a point zone is drawn as (SvgSelector next to its PointSelector).
+IIIF_POINT_RADIUS = 12
+# Most analysis ids a page restricted by ?only= may name; above it, 400.
+IIIF_PAGE_FILTER_MAX = 100
+# Seconds a memoised IIIF document (visitor view) is kept; its key moves with
+# the data version, the permission epoch, the translations and the code version.
+IIIF_MEMO_TTL = 24 * 60 * 60
+# Seconds the visitor's 404 for a missing page or zone is kept under its key.
+IIIF_ABSENT_TTL = 5 * 60
+# Seconds a IIIF document built while its source manifest could not be read
+# (remote fetch failed, local manifest missing) is kept: a symptom, not a fact.
+IIIF_DEGRADED_TTL = 30
+# Seconds a request waits for another request building the same IIIF document
+# before building it itself: longer than a cold build (about 1 s on the densest
+# document), shorter than the worker timeout minus one build.
+IIIF_BUILD_WAIT = 10
+
+# IIIF Auth 1.0 / 2.0 (manuspectrum/iiif/tokens.py). A IIIF token is a
+# read-only credential for the /iiif/ read routes, bound to the Arches session
+# that minted it and to one viewer origin; it lives IIIF_AUTH_TOKEN_TTL
+# seconds. The access cookie (Path=/iiif/auth/) lives at most
+# IIIF_AUTH_COOKIE_TTL seconds and never beyond the session.
+IIIF_AUTH_TOKEN_TTL = 3600
+IIIF_AUTH_COOKIE_TTL = 8 * 3600
+# Viewer origins the token service answers, besides the origin of
+# PUBLIC_SERVER_ADDRESS (always trusted). Never "*".
+IIIF_AUTH_TRUSTED_ORIGINS = ["https://crc-centre-recherche-conservation.github.io"]
+# Token requests per client IP (django-ratelimit); over it: « unavailable ».
+IIIF_AUTH_TOKEN_RATE = "30/m"
+# django-cors-headers leaves /iiif/ alone: every IIIF view answers its own
+# CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
+# every status) and the auth pages answer none.
+CORS_URLS_REGEX = r"^(?!/iiif/).*$"
 
 try:
     from .package_settings import *

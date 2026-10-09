@@ -1,11 +1,13 @@
 """Signal receivers of the project, connected by ``ManuspectrumConfig.ready()``.
 
-Every receiver drops a cache entry once the writing transaction commits: a
-reader landing between the write and the commit would otherwise memoise the
-old rows again.
+Every model receiver drops a cache entry once the writing transaction
+commits: a reader landing between the write and the commit would otherwise
+memoise the old rows again. The logout receiver revokes the IIIF tokens of
+the session at once.
 """
 
 from django.contrib.auth.models import Group, User
+from django.contrib.auth.signals import user_logged_out
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models.signals import m2m_changed, post_delete, post_save
@@ -15,15 +17,17 @@ from guardian.models import GroupObjectPermission, UserObjectPermission
 from arches.app.models.models import File, FunctionXGraph, GraphXPublishedGraph
 
 from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_config
+from manuspectrum.iiif.tokens import revoke
 from manuspectrum.utils.public_visibility import forget_visibility
 from manuspectrum.views.spectrum_preview import file_record_key
-from manuspectrum.views.summary_service import SLUG_CACHE_KEY
+from manuspectrum.views.summary_service import SLUG_CACHE_KEY, graph_index_key
 
 
 @receiver([post_save, post_delete], sender=GraphXPublishedGraph)
-def drop_summary_graph_slugs(sender, **kwargs):
-    """Drop the memoised slug map when a publication is written or removed."""
-    transaction.on_commit(lambda: cache.delete(SLUG_CACHE_KEY))
+def drop_summary_graph_slugs(sender, instance, **kwargs):
+    """Drop the memoised slug map and the graph's index when a publication is written or removed."""
+    keys = [SLUG_CACHE_KEY, graph_index_key(instance.graph_id)]
+    transaction.on_commit(lambda: cache.delete_many(keys))
 
 
 @receiver([post_save, post_delete], sender=UserObjectPermission)
@@ -72,3 +76,10 @@ def drop_deleted_file_record(sender, instance, **kwargs):
     """
     key = file_record_key(instance.pk)
     transaction.on_commit(lambda: cache.delete(key))
+
+
+@receiver(user_logged_out)
+def revoke_iiif_tokens(sender, request=None, **kwargs):
+    """End the IIIF tokens and access cookie of the session signing out of Arches."""
+    session = getattr(request, "session", None)
+    revoke(getattr(session, "session_key", None))

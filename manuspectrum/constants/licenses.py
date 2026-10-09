@@ -12,7 +12,9 @@ in ``media/js/utils/file-license.js``.
 """
 
 import json
+from urllib.parse import urlparse, urlunparse
 
+from django.utils import translation
 from django.utils.translation import gettext_lazy as _
 
 LICENSE_KEY = "license"
@@ -85,6 +87,78 @@ def stored_license(license_id):
 def default_license():
     """The licence stored on a file that has none."""
     return stored_license(DEFAULT_LICENSE_ID)
+
+
+RIGHTS_REGISTRY_HOSTS = ("creativecommons.org", "rightsstatements.org")
+
+
+def _attribution_text(stored, language):
+    """The attribution text of a file entry in *language*, else English, else any; None when empty.
+
+    Arches stores it per language as ``{lang: {"value", "direction"}}``; a
+    plain string or a ``{lang: text}`` mapping reads the same way.
+    """
+
+    def text(value):
+        if isinstance(value, dict):
+            value = value.get("value")
+        return value.strip() if isinstance(value, str) else ""
+
+    if not isinstance(stored, dict):
+        return text(stored) or None
+    texts = {lang: text(value) for lang, value in stored.items()}
+    for lang in (language, "en"):
+        if texts.get(lang):
+            return texts[lang]
+    return next((value for value in texts.values() if value), None)
+
+
+def effective_license(entry, language):
+    """The licence of a file entry as the Explorer shows it (spec §5 ``FileEntry.license``).
+
+    A missing licence resolves to the default one, flagged ``isDefault``. The
+    label comes from the catalogue in *language*; a custom licence keeps the
+    label the curator typed. ``attribution`` is the entry's attribution text
+    in *language*, else English, else the first one.
+    """
+    entry = entry if isinstance(entry, dict) else {}
+    stored = entry.get(LICENSE_KEY)
+    is_default = not (isinstance(stored, dict) and stored.get("id"))
+    licence = default_license() if is_default else stored
+    catalogue = _BY_ID.get(licence["id"])
+    url = licence.get("url") or (catalogue or {}).get("url")
+    if catalogue and licence["id"] != CUSTOM_LICENSE_ID:
+        with translation.override(language):
+            text = str(catalogue["label"])
+    else:
+        text = licence.get("label") or licence["id"]
+    attribution = _attribution_text(entry.get("attribution"), language)
+    return {
+        "id": licence["id"],
+        "url": url,
+        "label": {"value": text, "lang": language},
+        "attribution": attribution or None,
+        "noDerivatives": "-ND" in licence["id"].upper(),
+        "inRightsRegistry": bool(url)
+        and (urlparse(url).hostname or "") in RIGHTS_REGISTRY_HOSTS,
+        "isDefault": is_default,
+    }
+
+
+def iiif_rights(licence):
+    """The IIIF ``rights`` value of an ``effective_license()`` result, or None.
+
+    IIIF Presentation 3 ``rights`` takes a Creative Commons or
+    RightsStatements.org URI in its ``http://`` form; a licence hosted
+    anywhere else, or without a URL, has none.
+    """
+    url = (licence or {}).get("url")
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if (parsed.hostname or "") not in RIGHTS_REGISTRY_HOSTS:
+        return None
+    return urlunparse(parsed._replace(scheme="http"))
 
 
 def catalogue_json():

@@ -19,10 +19,12 @@ from pathlib import Path
 from unittest import mock
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.db import connection
+from django.test import SimpleTestCase, TestCase
 
 from manuspectrum import sql_config
 from manuspectrum.sql_config import drop_trigger_sql, read_sql, sql_items
+from manuspectrum.utils.data_version import DATA_CHANGE_TABLES
 from manuspectrum.constants.xy_presets import (
     DATA_FILE_NODE_ID,
     DATA_FILE_NODEGROUP_ID,
@@ -34,6 +36,7 @@ from manuspectrum.constants.xy_presets import (
 ITEMS = {item.name: item for item in sql_items}
 STAMP = "ms_xy_stamp_file_config"
 REAPPLY = "ms_xy_reapply_on_technique"
+LEDGER = "ms_data_change"
 
 
 class ReadSqlTests(SimpleTestCase):
@@ -92,9 +95,9 @@ class DropTriggerSqlTests(SimpleTestCase):
 
 
 class SQLItemDeclarationTests(SimpleTestCase):
-    def test_exactly_the_two_xy_triggers_are_declared(self):
-        self.assertEqual(set(ITEMS), {STAMP, REAPPLY})
-        self.assertEqual(len(sql_items), 2)
+    def test_exactly_the_two_xy_triggers_and_the_data_ledger_are_declared(self):
+        self.assertEqual(set(ITEMS), {STAMP, REAPPLY, LEDGER})
+        self.assertEqual(len(sql_items), 3)
 
     def test_each_item_replaces_rather_than_drops(self):
         # Both bodies are CREATE OR REPLACE, so an AlterSQL migration must not
@@ -105,12 +108,25 @@ class SQLItemDeclarationTests(SimpleTestCase):
                 self.assertTrue(item.replace)
 
     def test_the_reverse_sql_removes_the_trigger_and_the_function(self):
-        for name, item in ITEMS.items():
+        for name in (STAMP, REAPPLY):
+            item = ITEMS[name]
             with self.subTest(item=name):
                 self.assertIn(
                     f"DROP TRIGGER IF EXISTS {name} ON tiles;", item.reverse_sql
                 )
                 self.assertIn(f"DROP FUNCTION IF EXISTS {name}();", item.reverse_sql)
+
+    def test_the_ledger_reverse_sql_removes_its_triggers_function_and_table(self):
+        reverse = ITEMS[LEDGER].reverse_sql
+
+        self.assertIn("DROP TRIGGER IF EXISTS ms_data_change ON %I", reverse)
+        self.assertIn("DROP FUNCTION IF EXISTS ms_data_change();", reverse)
+        self.assertIn("DROP TABLE IF EXISTS ms_data_change;", reverse)
+
+    def test_the_ledger_watches_every_table_the_explorer_reads(self):
+        for table in DATA_CHANGE_TABLES:
+            with self.subTest(table=table):
+                self.assertIn(f"'{table}'", ITEMS[LEDGER].sql)
 
     def test_no_placeholder_marker_survives_in_either_body(self):
         for name, item in ITEMS.items():
@@ -188,3 +204,16 @@ class ReapplyBodyTests(SimpleTestCase):
         touches = re.search(r"WHERE nodegroupid = '([^']+)'::uuid", self.sql)
 
         self.assertNotEqual(fires_on.group(1), touches.group(1))
+
+
+class InstalledLedgerTests(TestCase):
+    def test_the_migrated_database_has_a_ledger_trigger_on_every_watched_table(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT c.relname FROM pg_trigger t "
+                "JOIN pg_class c ON c.oid = t.tgrelid "
+                "WHERE t.tgname = 'ms_data_change' AND NOT t.tgisinternal"
+            )
+            installed = {name for (name,) in cursor.fetchall()}
+
+        self.assertEqual(installed, set(DATA_CHANGE_TABLES))

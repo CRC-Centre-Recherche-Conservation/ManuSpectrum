@@ -14,8 +14,6 @@ from pathlib import Path
 CACHE_SHAPE_MODULES = (
     "views/model_graph.py",
     "views/model_graph_service.py",
-    "views/iiif_annotation.py",
-    "views/serializers/iiif_annotation.py",
     "views/summary.py",
     "views/summary_service.py",
     # The summary payload reads its localized texts through graph_nodes.
@@ -29,6 +27,41 @@ CACHE_SHAPE_MODULES = (
     "utils/xy_transforms.py",
     # The per-reader visibility memos: hidden resources, readable nodegroups.
     "utils/public_visibility.py",
+    # The homepage technique memo (the Explorer search it reads, and its build).
+    "views/explorer/service.py",
+    "views/explorer/home.py",
+    # The Explorer's corpus bundle: its keys and what each layer keeps, the
+    # values of its rows (names, labels, references) and its link maps.
+    "views/explorer/memo.py",
+    "views/explorer/values.py",
+    "views/explorer/swatches.py",
+    "utils/role_links.py",
+    "utils/roles.py",
+    # IIIF documents: the sources and zones the Explorer memo reads, and the
+    # ids, language maps and selectors of the memoised IIIF payloads.
+    "iiif/constants.py",
+    "iiif/ids.py",
+    "iiif/language.py",
+    "iiif/selectors.py",
+    "iiif/sources.py",
+    "iiif/zones.py",
+    # The memoised IIIF pages, collections and annotations: facts, bodies,
+    # annotations, pages, their v2 form, the auth services they declare, the
+    # memo key and the view wrapping.
+    "iiif/facts.py",
+    "iiif/bodies.py",
+    "iiif/annotations.py",
+    "iiif/characterizations.py",
+    "iiif/data.py",
+    "iiif/xy_reading.py",
+    "iiif/pages.py",
+    "iiif/v2.py",
+    "iiif/memo.py",
+    "iiif/services.py",
+    "views/iiif/annotations.py",
+    # The memoised Content State of one zone, and the view wrapping it.
+    "iiif/content_state.py",
+    "views/iiif/content_state.py",
 )
 
 ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"
