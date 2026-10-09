@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId, useTemplateRef } from "vue";
+import { computed, nextTick, ref, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
@@ -21,6 +21,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import {
     CAPTURE_PREFIX,
+    captureThumbnail,
     PANES_SHOWN,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import {
@@ -326,15 +327,36 @@ function groupsByTag(list: Entry[]): Group[] {
                           true,
                       ),
                       meta: "",
-                      note: $gettext(
-                          "The canvas has no “Imaging layers” tile: the stored label is shown as is.",
-                      ),
+                      note: unclassified.some((entry) => !entry.capture)
+                          ? $gettext(
+                                "The canvas has no “Imaging layers” tile: the stored label is shown as is.",
+                            )
+                          : null,
                       entries: unclassified,
                       compare: false,
                   },
               ]
             : [];
     return [...familyGroups, ...kindGroups, ...rest];
+}
+
+/**
+ * Deletes a capture and keeps the keyboard where it was: the focus goes to the
+ * next thumbnail of its group, else the previous one, else the group's title.
+ */
+async function deleteCapture(entry: Entry, group: Group): Promise<void> {
+    const members = group.entries.filter((member) => member !== entry);
+    const index = group.entries.indexOf(entry);
+    const neighbour = members[index] ?? members[members.length - 1] ?? null;
+    emit("delete-capture", entry.capture ?? "");
+    await nextTick();
+    const target = neighbour
+        ? [
+              ...(root.value?.querySelectorAll<HTMLElement>(".layer-thumb") ??
+                  []),
+          ].find((thumb) => thumb.dataset.canvas === neighbour.layer.id)
+        : document.getElementById(`${group.id}-title`);
+    target?.focus();
 }
 
 function panesOf(canvas: string): string[] {
@@ -644,6 +666,7 @@ function onKeydown(event: KeyboardEvent): void {
                         <h4
                             :id="`${group.id}-title`"
                             class="group-title"
+                            tabindex="-1"
                             :title="group.fullTitle ?? group.note ?? undefined"
                         >
                             {{ group.title }}
@@ -689,26 +712,28 @@ function onKeydown(event: KeyboardEvent): void {
                                     :canvas="entry.layer.id"
                                     :label="entry.layer.label"
                                     :service="null"
-                                    :url="entry.layer.image.url"
+                                    :url="
+                                        entry.layer.image.url
+                                            ? captureThumbnail(
+                                                  entry.layer.image.url,
+                                              )
+                                            : null
+                                    "
                                     :tag="null"
                                     :panes="panesOf(entry.layer.id)"
                                     :in-stack="inStack(entry.layer.id)"
                                     :stop="entry.layer.id === stop"
                                     @pick="pick(entry.layer.id)"
                                 />
-                                <span
-                                    class="capture-badge"
-                                    aria-hidden="true"
-                                    >{{ $gettext("this browser") }}</span
-                                >
+                                <span class="capture-badge">{{
+                                    $gettext("this browser")
+                                }}</span>
                                 <button
                                     type="button"
                                     class="capture-delete"
                                     :title="$gettext('Delete the capture')"
                                     :aria-label="$gettext('Delete the capture')"
-                                    @click="
-                                        emit('delete-capture', entry.capture)
-                                    "
+                                    @click="deleteCapture(entry, group)"
                                 >
                                     <svg
                                         class="icon"
@@ -1287,8 +1312,8 @@ function onKeydown(event: KeyboardEvent): void {
     inset-inline-end: 0.3125rem;
     display: grid;
     place-items: center;
-    inline-size: 1.25rem;
-    block-size: 1.25rem;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
     padding: 0;
     border: 0;
     border-radius: 0.25rem;

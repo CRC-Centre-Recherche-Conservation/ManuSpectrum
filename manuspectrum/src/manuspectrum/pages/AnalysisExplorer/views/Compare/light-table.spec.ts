@@ -8,6 +8,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
     CAPTURE_PREFIX,
+    captureThumbnail,
     NEUTRAL_FILTERS,
     canStack,
     captureLayer,
@@ -354,6 +355,27 @@ describe("captures", () => {
             height: 300,
         });
         expect(layer.elements).toEqual([]);
+    });
+
+    it("carries the note it is given", () => {
+        expect(
+            captureLayer(id, capture, "Folio photo", "Kept in this browser")
+                .note,
+        ).toBe("Kept in this browser");
+        expect(captures[id].note).toBeNull();
+    });
+
+    it("rewrites the size of a stored IIIF address to the thumbnail's, keeping region and turn", () => {
+        expect(
+            captureThumbnail(
+                "https://iiif.example/folio/10,20,300,400/300,400/270/default.jpg",
+            ),
+        ).toBe(
+            "https://iiif.example/folio/10,20,300,400/!120,150/270/default.jpg",
+        );
+        expect(captureThumbnail("https://x.example/photo.png")).toBe(
+            "https://x.example/photo.png",
+        );
     });
 
     it("resolves a capture id with the line of its analysis", () => {

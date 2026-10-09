@@ -101,15 +101,23 @@ export function parseRegistrations(
     return entries;
 }
 
-/** Keeps the `REGISTRATION_LIMIT` most recently touched entries. */
+/** The `REGISTRATION_LIMIT` most recently touched entries. */
+export function keepRecent(
+    entries: Record<string, Registration>,
+): Record<string, Registration> {
+    return Object.fromEntries(
+        Object.entries(entries)
+            .sort(([, a], [, b]) => b.touched - a.touched)
+            .slice(0, REGISTRATION_LIMIT),
+    );
+}
+
+/** Writes the entries `keepRecent` keeps. */
 export function serializeRegistrations(
     entries: Record<string, Registration>,
 ): string {
-    const kept = Object.entries(entries)
-        .sort(([, a], [, b]) => b.touched - a.touched)
-        .slice(0, REGISTRATION_LIMIT);
     return JSON.stringify({
         version: VERSION,
-        entries: Object.fromEntries(kept),
+        entries: keepRecent(entries),
     });
 }

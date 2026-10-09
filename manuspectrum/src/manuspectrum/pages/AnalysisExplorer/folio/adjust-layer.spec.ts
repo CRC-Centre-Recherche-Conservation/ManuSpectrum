@@ -150,6 +150,7 @@ describe("adjustLayer", () => {
         begin();
         pointer(image, "pointerdown", 100, 100);
         expect(document.activeElement).toBe(image);
+        pointer(image, "pointerup", 100, 100);
         image.blur();
         pointer(handle("se"), "pointerdown", 0, 0);
         expect(document.activeElement).toBe(image);
@@ -258,6 +259,62 @@ describe("adjustLayer", () => {
         begin();
         expect(key("keydown", "ArrowRight").defaultPrevented).toBe(true);
         expect(key("keydown", "a").defaultPrevented).toBe(false);
+    });
+
+    it("points the image at the element that explains the keys, and puts back what it found", () => {
+        image.setAttribute("aria-describedby", "before");
+        const adjusting = adjustLayer(map, layer, START, {
+            label: LABEL,
+            describedBy: "keys-help",
+            onChange: () => {},
+            onDone: () => {},
+        });
+        expect(image.getAttribute("aria-describedby")).toBe("keys-help");
+        adjusting.stop();
+        expect(image.getAttribute("aria-describedby")).toBe("before");
+    });
+
+    it("ends with Escape without keeping anything when nothing changed", () => {
+        begin();
+        key("keydown", "Escape");
+        expect(done).toEqual([]);
+        expect(exits).toBe(1);
+    });
+
+    it("ignores a second pointer going down mid-drag and frees the map at the end", () => {
+        begin();
+        pointer(image, "pointerdown", 100, 100);
+        expect(map.dragging.enabled()).toBe(false);
+        pointer(image, "pointerdown", 300, 300, { button: 0 });
+        pointer(image, "pointerup", 100, 100);
+        expect(map.dragging.enabled()).toBe(true);
+    });
+
+    it("ignores a press that is not the primary pointer's main button", () => {
+        begin();
+        const press = new MouseEvent("pointerdown", {
+            bubbles: true,
+            button: 2,
+        });
+        image.dispatchEvent(press);
+        expect(map.dragging.enabled()).toBe(true);
+        const touch = new MouseEvent("pointerdown", { bubbles: true });
+        Object.defineProperty(touch, "isPrimary", { value: false });
+        image.dispatchEvent(touch);
+        expect(map.dragging.enabled()).toBe(true);
+    });
+
+    it("turns with [ and ] when the host handles turns", () => {
+        const turns: number[] = [];
+        adjustLayer(map, layer, START, {
+            label: LABEL,
+            onChange: () => {},
+            onDone: () => {},
+            onTurn: (by) => turns.push(by),
+        });
+        expect(key("keydown", "]").defaultPrevented).toBe(true);
+        key("keydown", "[");
+        expect(turns).toEqual([1, -1]);
     });
 
     it("ends with Escape: persists once, takes the handles away and says it ended", () => {

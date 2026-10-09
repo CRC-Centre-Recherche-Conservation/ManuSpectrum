@@ -143,6 +143,7 @@ const captures = computed<Captures>(() => {
                 id,
                 capture,
                 $gettext("Folio photo · capture"),
+                $gettext("Kept in this browser"),
             );
         }
     }
@@ -161,6 +162,11 @@ const tableMaps = computed<readonly MapLine[]>(() => {
             : line;
     });
 });
+
+function onDeleteCapture(analysisId: string): void {
+    registration.clearCapture(analysisId);
+    announce($gettext("Capture deleted."));
+}
 
 const stored = readImaging();
 const state = ref<TableState>(restoreState(stored, tableMaps.value));
@@ -816,7 +822,7 @@ function onGrouping(grouping: TableGrouping): void {
                     @group-change="onGrouping"
                     @place-group="onPlaceGroup"
                     @compare="onCompare"
-                    @delete-capture="registration.clearCapture"
+                    @delete-capture="onDeleteCapture"
                 />
             </div>
             <LayerGallery
@@ -831,7 +837,7 @@ function onGrouping(grouping: TableGrouping): void {
                 @group-change="onGrouping"
                 @place-group="onPlaceGroup"
                 @compare="onCompare"
-                @delete-capture="registration.clearCapture"
+                @delete-capture="onDeleteCapture"
             />
         </div>
     </section>

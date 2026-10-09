@@ -43,6 +43,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -1645,13 +1646,28 @@ describe("CorpusDocument", () => {
     describe("layer controls", () => {
         const LAYER = `${uuid(101)}:0`;
 
+        let imageLoads = true;
         beforeEach(() => {
             window.localStorage.clear();
             reloadRegistrations();
+            imageLoads = true;
+            vi.stubGlobal(
+                "Image",
+                class {
+                    onload: (() => void) | null = null;
+                    onerror: (() => void) | null = null;
+                    set src(_: string) {
+                        queueMicrotask(() =>
+                            (imageLoads ? this.onload : this.onerror)?.(),
+                        );
+                    }
+                },
+            );
         });
         afterEach(() => {
             window.localStorage.clear();
             reloadRegistrations();
+            vi.unstubAllGlobals();
         });
         const ZONE_BOX = { x: 100, y: 100, w: 800, h: 400 };
 
@@ -1755,6 +1771,19 @@ describe("CorpusDocument", () => {
             wrapper.unmount();
         });
 
+        it("keeps the layer unturned and says so when the image server cannot turn it", async () => {
+            const announce = vi.fn();
+            const { wrapper, folio } = await mountLaidLayer(announce);
+            imageLoads = false;
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            expect(announce).toHaveBeenCalledWith(
+                "This image server cannot turn this layer.",
+            );
+            wrapper.unmount();
+        });
+
         it("registers the box a layer was moved or resized to, keeping its turn", async () => {
             const { wrapper, folio } = await mountLaidLayer();
             folio.vm.$emit("layer-turn", LAYER, 1);
@@ -1846,6 +1875,10 @@ describe("CorpusDocument", () => {
                 width: 800,
                 height: 600,
             };
+            const ORIGIN = {
+                analysis: uuid(101),
+                canvas: "https://iiif.example/c1",
+            };
 
             function mountCapturing() {
                 const announce = vi.fn();
@@ -1860,7 +1893,7 @@ describe("CorpusDocument", () => {
                 folio.vm.$emit("layer-capture", LAYER);
                 await flushPromises();
                 expect(folio.props("capturing")).toBe(LAYER);
-                folio.vm.$emit("captured", LAYER, CAPTURE);
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
                 await flushPromises();
                 const held = useRegistration().get(uuid(101));
                 expect(held?.capture).toMatchObject({
@@ -1877,9 +1910,103 @@ describe("CorpusDocument", () => {
                 wrapper.unmount();
             });
 
+            it("files a capture under the page it was taken on, and drops one that finished elsewhere", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, {
+                    analysis: uuid(101),
+                    canvas: "https://iiif.example/c2",
+                });
+                await flushPromises();
+                expect(useRegistration().get(uuid(101))).toBeNull();
+                expect(announce).toHaveBeenCalledWith(
+                    "Capture dropped: the page changed.",
+                );
+                expect(wrapper.find(".capture-status").exists()).toBe(false);
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
+            it("drops a capture whose layer was taken off meanwhile", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("captured", "gone:0", CAPTURE, ORIGIN);
+                await flushPromises();
+                expect(useRegistration().get(uuid(101))).toBeNull();
+                expect(announce).toHaveBeenCalledWith(
+                    "Capture dropped: the page changed.",
+                );
+                wrapper.unmount();
+            });
+
+            it("says once that a capture was saved: the status line is not a live region", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                const status = wrapper.get(".capture-status");
+                expect(status.attributes("role")).toBeUndefined();
+                expect(announce).toHaveBeenCalledTimes(1);
+                wrapper.unmount();
+            });
+
+            it("forgets the saved line when the page changes", async () => {
+                const { wrapper, store, folio } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                expect(wrapper.find(".capture-status").exists()).toBe(true);
+                store.setCanvas("https://iiif.example/c2");
+                await flushPromises();
+                expect(wrapper.find(".capture-status").exists()).toBe(false);
+                wrapper.unmount();
+            });
+
+            it("puts the analysis in the Selection when Compare is asked and there is room", async () => {
+                const announce = vi.fn();
+                const { wrapper, store, folio } =
+                    await mountLaidLayer(announce);
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                await wrapper.get("button.capture-compare").trigger("click");
+                expect(store.view).toBe("compare");
+                expect(store.basket.map((item) => item.key)).toEqual([
+                    analysisKey(uuid(101)),
+                ]);
+                expect(announce).toHaveBeenCalledWith(
+                    expect.stringMatching(/^Added to the Selection/),
+                );
+                wrapper.unmount();
+            });
+
+            it("does not add the analysis twice when it is already in the Selection", async () => {
+                const { wrapper, store, folio } = await mountLaidLayer();
+                store.addToBasket(analysisKey(uuid(101)));
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                await wrapper.get("button.capture-compare").trigger("click");
+                expect(store.basket).toHaveLength(1);
+                expect(store.view).toBe("compare");
+                wrapper.unmount();
+            });
+
+            it("asks for room instead of linking to an empty Compare when the Selection is full", async () => {
+                const { wrapper, store, folio } = await mountLaidLayer();
+                store.addManyToBasket(
+                    Array.from({ length: 30 }, (_, index) =>
+                        analysisKey(uuid(500 + index)),
+                    ),
+                );
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
+                await flushPromises();
+                expect(wrapper.find("button.capture-compare").exists()).toBe(
+                    false,
+                );
+                expect(wrapper.get(".capture-status").text()).toContain(
+                    "Add the analysis to the Selection to see the capture in Compare.",
+                );
+                wrapper.unmount();
+            });
+
             it("offers to see the capture in Compare", async () => {
                 const { wrapper, store, folio } = await mountCapturing();
-                folio.vm.$emit("captured", LAYER, CAPTURE);
+                folio.vm.$emit("captured", LAYER, CAPTURE, ORIGIN);
                 await flushPromises();
                 const link = wrapper.find("button.capture-compare");
                 expect(link.text()).toBe("See it in Compare");
@@ -1888,10 +2015,22 @@ describe("CorpusDocument", () => {
                 wrapper.unmount();
             });
 
+            it("says why a box that runs off the page is not captured", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                folio.vm.$emit("capture-failed", LAYER, "off-page");
+                await flushPromises();
+                expect(announce).toHaveBeenCalledWith(
+                    "The layer runs off the page: move it inside to capture.",
+                );
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
             it("announces a failed capture and stores nothing", async () => {
                 const { wrapper, folio, announce } = await mountCapturing();
                 folio.vm.$emit("layer-capture", LAYER);
-                folio.vm.$emit("capture-failed", LAYER);
+                folio.vm.$emit("capture-failed", LAYER, "server");
                 await flushPromises();
                 expect(announce).toHaveBeenCalledTimes(1);
                 expect(announce).toHaveBeenCalledWith(

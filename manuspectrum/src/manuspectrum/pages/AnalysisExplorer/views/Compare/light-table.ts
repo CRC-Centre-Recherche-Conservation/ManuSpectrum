@@ -49,11 +49,31 @@ export const PANE_COUNT = 4;
 /** Canvas ids of the folio captures: this prefix and the analysis id. */
 export const CAPTURE_PREFIX = "capture:";
 
+const CAPTURE_THUMBNAIL_SIZE = "!120,150";
+
+/**
+ * The address of a stored capture asked at the gallery thumbnail's size: the
+ * size segment of its IIIF request is replaced, region and turn kept; an
+ * address of another shape is returned as it is.
+ */
+export function captureThumbnail(url: string): string {
+    return url.replace(
+        /(\/[^/]+)\/[^/]+(\/[^/]+\/default\.jpg)$/,
+        `$1/${CAPTURE_THUMBNAIL_SIZE}$2`,
+    );
+}
+
+/** Whether a layer is a folio capture (`captureLayer`). */
+export function isCapture(layer: FileLayer): boolean {
+    return layer.id.startsWith(CAPTURE_PREFIX);
+}
+
 /** The virtual layer a folio capture makes: an image with no IIIF service, last of its analysis. */
 export function captureLayer(
     analysisId: string,
     capture: Capture,
     label: string,
+    note: string | null = null,
 ): FileLayer {
     return {
         index: -1,
@@ -70,7 +90,7 @@ export function captureLayer(
         emissionLine: null,
         band: null,
         processing: null,
-        note: null,
+        note,
     };
 }
 

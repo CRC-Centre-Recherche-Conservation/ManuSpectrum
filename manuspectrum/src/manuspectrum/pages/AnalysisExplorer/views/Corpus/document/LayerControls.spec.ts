@@ -1,7 +1,7 @@
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import PrimeVue from "primevue/config";
 import Slider from "primevue/slider";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LayerControls from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue";
 
@@ -38,6 +38,7 @@ function mountBar(
         adjusting: boolean;
         underCurtain: boolean;
         capturing: boolean;
+        canCapture: boolean;
     }> = {},
 ) {
     return mount(LayerControls, {
@@ -182,6 +183,45 @@ describe("LayerControls", () => {
             .trigger("keydown", { key: "Escape" });
         expect(wrapper.findComponent(Slider).exists()).toBe(false);
         expect(document.activeElement).toBe(opacity.element);
+    });
+
+    it("closes the slider on Escape from the sun button without letting the key reach the page", async () => {
+        const seen = vi.fn();
+        document.addEventListener("keydown", seen);
+        const wrapper = mountBar();
+        const opacity = buttonNamed(wrapper, "Opacity");
+        expect(opacity.attributes("data-popover")).toBe("opacity");
+        await opacity.trigger("click");
+        (opacity.element as HTMLElement).focus();
+        await opacity.trigger("keydown", { key: "Escape" });
+        document.removeEventListener("keydown", seen);
+        expect(wrapper.findComponent(Slider).exists()).toBe(false);
+        expect(seen).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(opacity.element);
+    });
+
+    it("disables the camera, with the reason, when the folio has no image service", () => {
+        const wrapper = mountBar({ canCapture: false });
+        const camera = buttonNamed(
+            wrapper,
+            "Capture the folio under the layer",
+        );
+        expect(camera.attributes("aria-disabled")).toBe("true");
+        expect(
+            document.getElementById(camera.attributes("aria-describedby") ?? "")
+                ?.textContent,
+        ).toBe("This folio has no image service: it cannot be captured.");
+    });
+
+    it("lets Escape through when the slider is closed", async () => {
+        const seen = vi.fn();
+        document.addEventListener("keydown", seen);
+        const wrapper = mountBar();
+        await buttonNamed(wrapper, "Opacity").trigger("keydown", {
+            key: "Escape",
+        });
+        document.removeEventListener("keydown", seen);
+        expect(seen).toHaveBeenCalledTimes(1);
     });
 
     it("moves the focus between the buttons with the arrow keys, one tab stop", async () => {

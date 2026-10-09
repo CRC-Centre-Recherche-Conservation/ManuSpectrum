@@ -42,6 +42,19 @@ describe("useRegistration", () => {
         expect(a.get("nope")).toBeNull();
     });
 
+    it("keeps the same 100 entries in memory as in the storage", () => {
+        const r = useRegistration();
+        let nowTick = 0;
+        vi.spyOn(Date, "now").mockImplementation(() => nowTick);
+        for (let index = 0; index < 101; index += 1) {
+            nowTick = index + 1;
+            r.setPlace(`an${index}`, "c1", box, 0);
+        }
+        expect(Object.keys(r.entries.value)).toHaveLength(100);
+        expect(r.get("an0")).toBeNull();
+        expect(r.get("an100")).not.toBeNull();
+    });
+
     it("reset keeps a capture and drops an entry without one", () => {
         const r = useRegistration();
         r.setPlace("an1", "c1", box, 1);

@@ -5,6 +5,7 @@ import {
     onMounted,
     ref,
     shallowRef,
+    useId,
     useTemplateRef,
     watch,
 } from "vue";
@@ -31,7 +32,6 @@ import {
 import {
     boundsOfBox,
     boxOfBounds,
-    captureRegion,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import {
@@ -57,6 +57,7 @@ import type {
     DocumentComponent,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
 import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
@@ -87,6 +88,7 @@ const PINNED_PANE = "folio-pinned";
 const PINNED_PANE_Z_INDEX = "620";
 const MARKER_PANE = "markerPane";
 const CONTROLS_HOST_CLASS = "layer-controls-host";
+const SAME_BOX = 0.01;
 
 const props = withDefaults(
     defineProps<{
@@ -134,14 +136,16 @@ const emit = defineEmits<{
     captured: [
         key: string,
         capture: { url: string; width: number; height: number },
+        origin: { analysis: string; canvas: string },
     ];
-    "capture-failed": [key: string];
+    "capture-failed": [key: string, reason: CaptureFailure];
     "layer-reset": [key: string];
     "layer-place": [key: string, box: Box];
 }>();
 defineExpose({ focusTarget, focusCurrent });
 
 const { $gettext, interpolate } = useGettext();
+const adjustHelpId = useId();
 const motion = usePreferredReducedMotion();
 const host = useTemplateRef<HTMLDivElement>("host");
 
@@ -181,7 +185,6 @@ interface Adjustment {
     quiet: boolean;
 }
 let adjustment: Adjustment | null = null;
-const SAME_BOX = 0.01;
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
@@ -451,35 +454,35 @@ function drawPage(): void {
 
 /**
  * Takes the folio region under a layer: `layer-capture` says it started, then
- * `captured` once the image server answers the url, else `capture-failed`.
+ * `captured` once the image server answers the url, with the analysis and
+ * page it was taken for, else `capture-failed` with the reason.
  */
 async function captureUnder(overlay: FolioOverlay): Promise<void> {
     emit("layer-capture", overlay.key);
-    const service = props.canvas?.image.service ?? null;
+    const origin = {
+        analysis: overlay.analysis,
+        canvas: props.canvas?.id ?? "",
+    };
     const bounds = pageBoundsOf(page);
     const served = servedSize(page);
     const box = boxOfBounds(overlay.bounds);
-    const region =
-        bounds && served ? captureRegion(box, { bounds, served }) : null;
-    let capture: { url: string; width: number; height: number } | null = null;
-    if (region) {
-        const element = laid?.layerOf(overlay.key)?.getElement() ?? null;
-        const layerSize = (await layerSizeOf(
-            overlay.service ?? null,
-            element,
-            overlay.quarter,
-        )) ?? { w: region.w, h: region.h };
-        capture = planCapture({
-            page: bounds && served ? { bounds, served } : null,
-            service,
-            box,
-            quarter: overlay.quarter,
-            layerSize,
-        });
-    }
-    if (capture && (await probeImage(capture.url))) {
-        emit("captured", overlay.key, capture);
-    } else emit("capture-failed", overlay.key);
+    const element = laid?.layerOf(overlay.key)?.getElement() ?? null;
+    const layerSize = (await layerSizeOf(
+        overlay.service ?? null,
+        element,
+        overlay.quarter,
+    )) ?? { w: 0, h: 0 };
+    const plan = planCapture({
+        page: bounds && served ? { bounds, served } : null,
+        service: props.canvas?.image.service ?? null,
+        box,
+        quarter: overlay.quarter,
+        layerSize,
+    });
+    if ("refused" in plan) emit("capture-failed", overlay.key, plan.refused);
+    else if (await probeImage(plan.url)) {
+        emit("captured", overlay.key, plan, origin);
+    } else emit("capture-failed", overlay.key, "server");
 }
 
 /** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
@@ -776,12 +779,8 @@ function startAdjustment(
         stop: () => undefined,
     };
     const control = adjustLayer(map, layer, given, {
-        label: interpolate(
-            $gettext(
-                "Adjusting %{label}: arrows move, plus and minus scale, Escape stops",
-            ),
-            { label: name },
-        ),
+        label: interpolate($gettext("Adjusting %{label}"), { label: name }),
+        describedBy: adjustHelpId,
         onChange(box) {
             current.shown = box;
             anchors.get(key)?.place(boundsOfBox(box));
@@ -791,13 +790,15 @@ function startAdjustment(
             current.kept = box;
             emit("layer-place", key, box);
         },
+        onTurn(by) {
+            emit("layer-turn", key, by);
+        },
         onExit() {
             adjustment = null;
             emit("layer-adjust", key, false);
-            host.value
-                ?.querySelector<HTMLElement>(
-                    `.${CONTROLS_HOST_CLASS} [data-action=adjust]`,
-                )
+            controlHosts.value
+                .get(key)
+                ?.querySelector<HTMLElement>("[data-action=adjust]")
                 ?.focus();
         },
     });
@@ -820,7 +821,7 @@ function drawControls(): void {
         anchors.delete(key);
         hosts.delete(key);
     }
-    for (const overlay of props.overlays) {
+    for (const [index, overlay] of props.overlays.entries()) {
         let anchor = anchors.get(overlay.key);
         if (!anchor) {
             const element = document.createElement("div");
@@ -830,7 +831,14 @@ function drawControls(): void {
             anchors.set(overlay.key, anchor);
             hosts.set(overlay.key, element);
         }
-        anchor.place(overlay.bounds);
+        hosts.get(overlay.key)!.style.marginBlockStart = index
+            ? `calc(${index} * var(--layer-controls-step, 2.75rem))`
+            : "";
+        anchor.place(
+            adjustment?.key === overlay.key
+                ? boundsOfBox(adjustment.shown)
+                : overlay.bounds,
+        );
     }
     if (
         hosts.size !== controlHosts.value.size ||
@@ -1045,6 +1053,16 @@ function wholePage(): void {
         @keydown="onKeydown"
     >
         <div class="surface"></div>
+        <p
+            :id="adjustHelpId"
+            class="visually-hidden"
+        >
+            {{
+                $gettext(
+                    "Arrows move, plus and minus scale, [ and ] turn, Escape stops.",
+                )
+            }}
+        </p>
         <div class="controls">
             <button
                 type="button"
@@ -1141,6 +1159,7 @@ function wholePage(): void {
                     :adjusting="props.adjusting === overlay.key"
                     :under-curtain="props.curtain === overlay.key"
                     :capturing="props.capturing === overlay.key"
+                    :can-capture="hasImage"
                     @adjust="emit('layer-adjust', overlay.key, $event)"
                     @turn="emit('layer-turn', overlay.key, $event)"
                     @opacity="emit('layer-opacity', overlay.key, $event)"
@@ -1238,6 +1257,15 @@ function wholePage(): void {
 
 .folio .control:focus-visible {
     outline-color: var(--surface);
+}
+
+.folio .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .folio .caption {

@@ -22,14 +22,18 @@ const PERSIST_DELAY_MS = 200;
 const ADJUSTING_CLASS = "is-adjusting";
 
 export interface AdjustOptions {
-    /** The complete accessible name of the image while it is adjusted. */
+    /** The accessible name of the image while it is adjusted. */
     label: string;
+    /** The id of the element that says how to use the keys, read as the image's description. */
+    describedBy?: string;
     /** Called on every change, once the layer has been redrawn. */
     onChange(box: Box): void;
     /** Called when a change is to be kept: pointer up, a pause in the keys, Escape, `stop()` with one pending. */
     onDone(box: Box): void;
     /** Called when the reader ends the adjustment with Escape; not by `stop()`. */
     onExit?(): void;
+    /** Called for `]` (1, clockwise) and `[` (-1); without it those keys do nothing. */
+    onTurn?(by: 1 | -1): void;
 }
 
 /**
@@ -38,7 +42,7 @@ export interface AdjustOptions {
  * a drag of one of four corner handles resizes it about the opposite corner
  * (the ratio kept unless Shift is held); with the image focused, the arrows
  * move it by one screen pixel (ten with Shift), `+` and `-` scale it about its
- * centre, and Escape ends the adjustment. The layer is redrawn as the box
+ * centre, `[` and `]` turn it, and Escape ends the adjustment. The layer is redrawn as the box
  * changes; `onDone` is the moment to keep it. The map does not pan while a
  * drag runs; a press on the image or a handle focuses the image, so the keys
  * (and Escape) reach it. `stop()` leaves the image as it was found.
@@ -54,10 +58,10 @@ export function adjustLayer(
     const handles = new Map<Corner, HTMLElement>();
     const hadTabindex = image.getAttribute("tabindex");
     const hadLabel = image.getAttribute("aria-label");
+    const hadDescription = image.getAttribute("aria-describedby");
     const hadPointerEvents = image.style.pointerEvents;
     let box = start;
     let drag: { release: () => void } | null = null;
-    let wasDraggable = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pending = false;
     let stopped = false;
@@ -102,7 +106,7 @@ export function adjustLayer(
     }
 
     function freeze(event: PointerEvent): void {
-        wasDraggable = map.dragging.enabled();
+        const wasDraggable = map.dragging.enabled();
         map.dragging.disable();
         let captured = false;
         try {
@@ -162,8 +166,14 @@ export function adjustLayer(
 
     const releases = new Set<() => void>();
 
+    /** Only the main button of the primary pointer starts a drag, and one at a time. */
+    function startsDrag(down: PointerEvent): boolean {
+        return drag === null && down.isPrimary !== false && down.button === 0;
+    }
+
     function onImageDown(event: Event): void {
         const down = event as PointerEvent;
+        if (!startsDrag(down)) return;
         const origin = annotationAt(down);
         const from = box;
         track(down, image, (next) => {
@@ -174,6 +184,7 @@ export function adjustLayer(
 
     function onHandleDown(corner: Corner, event: Event): void {
         const down = event as PointerEvent;
+        if (!startsDrag(down)) return;
         const from = box;
         track(down, handles.get(corner)!, (next) =>
             resizeFromCorner(from, corner, annotationAt(next), !next.shiftKey),
@@ -203,12 +214,19 @@ export function adjustLayer(
         if (key.key === "Escape") {
             key.preventDefault();
             key.stopPropagation();
-            persist();
+            if (pending) persist();
             stop();
             options.onExit?.();
             return;
         }
         const arrow = arrows[key.key];
+        if ((key.key === "[" || key.key === "]") && options.onTurn) {
+            key.preventDefault();
+            key.stopPropagation();
+            if (pending) persist();
+            options.onTurn(key.key === "]" ? 1 : -1);
+            return;
+        }
         if (arrow) {
             const by = screenStep(arrow[0], arrow[1]);
             change(moveBox(box, by.x, by.y));
@@ -252,6 +270,7 @@ export function adjustLayer(
         image.style.pointerEvents = hadPointerEvents;
         restore("tabindex", hadTabindex);
         restore("aria-label", hadLabel);
+        restore("aria-describedby", hadDescription);
     }
 
     function restore(name: string, value: string | null): void {
@@ -261,6 +280,9 @@ export function adjustLayer(
 
     image.setAttribute("tabindex", "0");
     image.setAttribute("aria-label", options.label);
+    if (options.describedBy) {
+        image.setAttribute("aria-describedby", options.describedBy);
+    }
     image.classList.add(ADJUSTING_CLASS);
     image.style.pointerEvents = "auto";
     image.addEventListener("pointerdown", onImageDown);

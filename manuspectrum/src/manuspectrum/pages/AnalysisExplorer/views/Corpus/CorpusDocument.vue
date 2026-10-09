@@ -39,12 +39,14 @@ import {
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useRegistration } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
     characterizationComponents,
     componentAnalyses,
     componentMaterials,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/component-analyses.ts";
+import { probeTurn } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
 import { documentView } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -72,6 +74,7 @@ import {
     INTRO_BAR_ID,
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { warmViewer } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 import {
@@ -97,6 +100,7 @@ import type {
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
 import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
@@ -137,6 +141,7 @@ const focusedAnalysis = computed(() =>
 );
 const analysis = useAnalysis(() => focusedAnalysis.value);
 const registration = useRegistration();
+const selection = useSelectionToggle();
 const narrow = useMediaQuery(NARROW_QUERY);
 const phone = useMediaQuery(PHONE_QUERY);
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -157,6 +162,8 @@ const adjusting = ref<string | null>(null);
 const capturing = ref<string | null>(null);
 /** Whether a capture was just saved: the status line offers Compare. */
 const captureSaved = ref(false);
+/** Whether a turn is being checked with the image server. */
+let turning = false;
 const announce = inject(ANNOUNCE_KEY, () => undefined);
 let pageToFollow = store.focus !== null;
 /** The document whose first payload has placed the page. */
@@ -668,6 +675,9 @@ watch(
         followFocus();
     },
 );
+watch([() => currentCanvas.value?.id, focusedAnalysis], () => {
+    captureSaved.value = false;
+});
 watch(overlays, (laid) => {
     if (
         adjusting.value &&
@@ -793,12 +803,29 @@ function onLayerAdjust(key: string, on: boolean): void {
     adjusting.value = on ? key : null;
 }
 
-/** Turns the layer a quarter about the centre of the box it lies in (the registered one, else the zone's). */
-function onLayerTurn(key: string, by: 1 | -1): void {
+/**
+ * Turns the layer a quarter about the centre of the box it lies in (the
+ * registered one, else the zone's), once the image server has shown it can
+ * serve the turned image; otherwise the layer stays as it was.
+ */
+async function onLayerTurn(key: string, by: 1 | -1): Promise<void> {
+    if (turning) return;
     const layer = laidLayer(key);
     const canvas = currentCanvas.value?.id;
     if (!layer || !canvas) return;
     const turned = turn(boxOfBounds(layer.bounds), layer.quarter, by);
+    if (turned.quarter !== 0 && layer.image) {
+        turning = true;
+        const ok = await probeTurn(layer.image, turned.quarter);
+        turning = false;
+        if (!ok) {
+            announce($gettext("This image server cannot turn this layer."));
+            return;
+        }
+        if (laidLayer(key) !== layer || currentCanvas.value?.id !== canvas) {
+            return;
+        }
+    }
     registration.setPlace(layer.analysis, canvas, turned.box, turned.quarter);
 }
 
@@ -826,32 +853,62 @@ function onLayerCapture(key: string): void {
     captureSaved.value = false;
 }
 
-/** Keeps the capture of the layer's analysis, with the canvas it was taken on. */
+/**
+ * Keeps the capture under the analysis and the page it was taken for; one that
+ * finished after the page changed or the layer went is dropped, and says so.
+ */
 function onCaptured(
     key: string,
     capture: { url: string; width: number; height: number },
+    origin: { analysis: string; canvas: string },
 ): void {
     capturing.value = null;
-    const layer = laidLayer(key);
-    const canvas = currentCanvas.value?.id;
-    if (!layer || !canvas) return;
-    registration.setCapture(layer.analysis, {
+    if (
+        !laidLayer(key) ||
+        currentCanvas.value?.id !== origin.canvas ||
+        focusedAnalysis.value !== origin.analysis
+    ) {
+        announce($gettext("Capture dropped: the page changed."));
+        return;
+    }
+    registration.setCapture(origin.analysis, {
         ...capture,
-        canvas,
+        canvas: origin.canvas,
         at: Date.now(),
     });
     captureSaved.value = true;
     announce($gettext("Capture saved in this browser."));
 }
 
-function onCaptureFailed(): void {
+function onCaptureFailed(_key: string, reason: CaptureFailure): void {
     capturing.value = null;
     announce(
-        $gettext(
-            "The capture could not be taken: the image server did not answer.",
-        ),
+        reason === "off-page"
+            ? $gettext(
+                  "The layer runs off the page: move it inside to capture.",
+              )
+            : $gettext(
+                  "The capture could not be taken: the image server did not answer.",
+              ),
     );
 }
+
+/** Shows the capture in Compare, which lists only the Selection's analyses: adds the analysis when it is not held. */
+function seeCaptureInCompare(): void {
+    const id = focusedAnalysis.value;
+    if (id !== null && !selection.isHeld(analysisKey(id))) {
+        selection.toggle(analysisKey(id));
+    }
+    store.setView("compare");
+}
+
+/** Whether Compare can show the capture: its analysis is in the Selection or fits in it. */
+const compareReachable = computed(
+    () =>
+        focusedAnalysis.value !== null &&
+        (selection.isHeld(analysisKey(focusedAnalysis.value)) ||
+            store.basketFree > 0),
+);
 
 function onLayerReset(key: string): void {
     const layer = laidLayer(key);
@@ -1136,16 +1193,23 @@ function goHome(): void {
                     <p
                         v-if="captureSaved"
                         class="capture-status"
-                        role="status"
                     >
                         {{ $gettext("Capture saved in this browser.") }}
                         <button
+                            v-if="compareReachable"
                             type="button"
                             class="capture-compare"
-                            @click="store.setView('compare')"
+                            @click="seeCaptureInCompare"
                         >
                             {{ $gettext("See it in Compare") }}
                         </button>
+                        <template v-else>
+                            {{
+                                $gettext(
+                                    "Add the analysis to the Selection to see the capture in Compare.",
+                                )
+                            }}
+                        </template>
                     </p>
                     <CanvasStrip
                         :canvases="canvases"
@@ -1386,22 +1450,6 @@ function goHome(): void {
 }
 
 .corpus-document .stage,
-.corpus-document .capture-status {
-    margin: 0;
-    padding: 0.25rem 0.75rem;
-    font-size: var(--p-text-sm-font-size, 0.875rem);
-}
-
-.corpus-document .capture-compare {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-decoration: underline;
-    cursor: pointer;
-}
-
 .corpus-document .side {
     position: sticky;
     inset-block-start: var(--explorer-top);
@@ -1435,6 +1483,22 @@ function goHome(): void {
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.75rem;
+}
+
+.corpus-document .capture-status {
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: var(--p-text-sm-font-size, 0.875rem);
+}
+
+.corpus-document .capture-compare {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .corpus-document .viewer {

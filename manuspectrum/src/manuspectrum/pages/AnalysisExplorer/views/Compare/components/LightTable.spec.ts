@@ -1060,6 +1060,7 @@ describe("a folio capture", () => {
         writeImaging(stored({ panes: [`capture:${id}`, "c2-1", null, null] }));
         const view = await mountTable(PLAIN_TWO);
         await click(view, "button.capture-delete");
+        expect(announced).toContain("Capture deleted.");
         expect(useRegistration().get(id)?.capture ?? null).toBeNull();
         expect(tableState(view).panes).not.toContain(`capture:${id}`);
         expect(view.find(".capture-badge").exists()).toBe(false);

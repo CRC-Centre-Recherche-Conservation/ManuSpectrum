@@ -10,6 +10,7 @@ import {
     overlayPane,
     paneKey,
     removeOverlayPane,
+    rotatedImageUrl,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import { boundsOfBox } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
@@ -130,6 +131,50 @@ describe("folio overlays", () => {
         ).toEqual([]);
     });
 
+    it("turns every address of the chain, so a fallback of a turned layer is turned too", () => {
+        const large = {
+            service: "https://iiif.example/pb",
+            url: null,
+            width: 4000,
+            height: 3000,
+        };
+        expect(layerImageChain(large, 480, 1)).toEqual([
+            "https://iiif.example/pb/full/!480,480/90/default.jpg",
+            "https://iiif.example/pb/full/pct:12/90/default.jpg",
+            "https://iiif.example/pb/full/max/90/default.jpg",
+        ]);
+        expect(layerImageChain(large, 480, 0)).toEqual(
+            layerImageChain(large, 480),
+        );
+    });
+
+    it("asks the image service for the turned layer: scaled first, then rotated, sides not swapped", () => {
+        const image = {
+            service: "https://img.example/iiif/a",
+            url: null,
+            width: 4000,
+            height: 2000,
+        };
+        expect(rotatedImageUrl(image, 1)).toBe(
+            "https://img.example/iiif/a/full/!2048,2000/90/default.jpg",
+        );
+        expect(rotatedImageUrl(image, 3)).toBe(
+            "https://img.example/iiif/a/full/!2048,2000/270/default.jpg",
+        );
+        expect(rotatedImageUrl(image, 0)).toBe(
+            "https://img.example/iiif/a/full/!2048,2000/0/default.jpg",
+        );
+        expect(
+            rotatedImageUrl(
+                { ...image, service: null, url: "https://x.example/a.png" },
+                1,
+            ),
+        ).toBeNull();
+        expect(
+            rotatedImageUrl({ ...image, service: "javascript:alert(1)" }, 1),
+        ).toBeNull();
+    });
+
     it("lays the layers switched on in the bounding box of the analysis zone", () => {
         const analysis = analysisPayload({ files: [imagingEntry()] });
         const zone = annotation(1, {
@@ -171,6 +216,9 @@ describe("folio overlays", () => {
                 registered: false,
                 canTurn: true,
                 service: "https://iiif.example/image/hg",
+                image: expect.objectContaining({
+                    service: "https://iiif.example/image/hg",
+                }),
                 zoneBounds: [
                     [-1, 0],
                     [0, 2],
@@ -215,7 +263,7 @@ describe("folio overlays", () => {
                 boundsOfBox({ x: 64, y: 32, w: 128, h: 64 }),
             );
             expect(laid.url).toBe(
-                "https://iiif.example/image/hg/full/!2048,2000/90/default.jpg",
+                "https://iiif.example/image/hg/full/!2000,2048/90/default.jpg",
             );
             expect(laid.quarter).toBe(1);
             expect(laid.registered).toBe(true);
@@ -286,8 +334,8 @@ describe("folio overlays", () => {
                 registration: registration(),
             });
             expect(laid.fallbackUrls).toEqual([
-                "https://iiif.example/image/hg/full/pct:68/0/default.jpg",
-                "https://iiif.example/image/hg/full/max/0/default.jpg",
+                "https://iiif.example/image/hg/full/pct:68/90/default.jpg",
+                "https://iiif.example/image/hg/full/max/90/default.jpg",
             ]);
         });
     });

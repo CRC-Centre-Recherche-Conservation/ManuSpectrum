@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { nextTick } from "vue";
 
 import LayerGallery from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue";
 
@@ -484,7 +485,9 @@ describe("LayerGallery with a folio capture", () => {
         const thumbs = first.findAll(".layer-thumb");
         expect(thumbs).toHaveLength(4);
         expect(thumbs[3].attributes("data-canvas")).toBe(capture.id);
-        expect(thumbs[3].find("img").attributes("src")).toBe(capture.image.url);
+        expect(thumbs[3].find("img").attributes("src")).toBe(
+            "https://iiif.example/folio/full/!120,150/0/default.jpg",
+        );
         expect(first.findAll(".capture-badge")).toHaveLength(1);
         expect(view.findAll(".capture-badge")[0].text()).toBe("this browser");
     });
@@ -498,6 +501,48 @@ describe("LayerGallery with a folio capture", () => {
             PLAIN[0].analysis.id,
         ]);
         expect(view.emitted("place")).toBeUndefined();
+    });
+
+    it("names its badge for screen readers", () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), captures);
+        expect(
+            view.get(".capture-badge").attributes("aria-hidden"),
+        ).toBeUndefined();
+    });
+
+    it("hands the focus to the next thumbnail once a capture is deleted, else the previous, else the group title", async () => {
+        const view = mount(LayerGallery, {
+            props: {
+                maps: PLAIN,
+                state: defaultState(PLAIN),
+                captures,
+            },
+            attachTo: document.body,
+        });
+        await view.get("button.capture-delete").trigger("click");
+        await view.setProps({ captures: {} });
+        await nextTick();
+        const group = view.findAll(".group")[0];
+        const thumbs = group.findAll(".layer-thumb");
+        expect(document.activeElement).toBe(thumbs[thumbs.length - 1].element);
+        view.unmount();
+    });
+
+    it("says no “Unclassified” note of a group that holds only a capture", () => {
+        const maps = [line(1, [element("Cu", "MS59_Cu")])];
+        const view = gallery(maps, setGrouping(defaultState(maps), "tag"), {
+            [maps[0].analysis.id]: captureLayer(
+                maps[0].analysis.id,
+                stored,
+                "Folio photo · capture",
+            ),
+        });
+        const group = view
+            .findAll(".group")
+            .find((g) =>
+                g.find(".group-title").text().startsWith("Unclassified"),
+            );
+        expect(group?.find(".note").exists()).toBe(false);
     });
 
     it("ignores a capture whose analysis is not in the maps", () => {

@@ -17,37 +17,77 @@ const PAGE = {
 };
 
 describe("planCapture", () => {
-    const box = { x: 320, y: 640, w: 640, h: 960 };
+    const box = { x: 320, y: 640, w: 640, h: 800 };
 
-    it("builds the region url at the layer size with the turn undone", () => {
+    it("asks the region at the layer's size at most, the turn undone, and stores the layer's size", () => {
         const plan = planCapture({
             page: PAGE,
             service: SERVICE,
             box,
             quarter: 1,
-            layerSize: { w: 900, h: 600 },
+            layerSize: { w: 4000, h: 3000 },
         });
         expect(plan).toEqual({
-            url: `${SERVICE}/640,1280,1280,1720/600,900/270/default.jpg`,
-            width: 900,
-            height: 600,
+            url: `${SERVICE}/640,1280,1280,1600/1280,1600/270/default.jpg`,
+            width: 4000,
+            height: 3000,
         });
     });
 
-    it("answers null without a page, without a service or off the page", () => {
+    it("scales a region larger than the layer down to the layer's size", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box,
+            quarter: 1,
+            layerSize: { w: 960, h: 640 },
+        });
+        expect(plan).toMatchObject({
+            url: `${SERVICE}/640,1280,1280,1600/640,800/270/default.jpg`,
+        });
+    });
+
+    it("falls back to the region's own size, turned back, when the layer's is unknown", () => {
+        const plan = planCapture({
+            page: PAGE,
+            service: SERVICE,
+            box,
+            quarter: 1,
+            layerSize: { w: 0, h: 0 },
+        });
+        expect(plan).toEqual({
+            url: `${SERVICE}/640,1280,1280,1600/1280,1600/270/default.jpg`,
+            width: 1600,
+            height: 1280,
+        });
+    });
+
+    it("refuses without a page or a service", () => {
         const base = { box, quarter: 0 as const, layerSize: { w: 10, h: 10 } };
-        expect(
-            planCapture({ ...base, page: null, service: SERVICE }),
-        ).toBeNull();
-        expect(planCapture({ ...base, page: PAGE, service: null })).toBeNull();
-        expect(
-            planCapture({
-                ...base,
-                page: PAGE,
-                service: SERVICE,
-                box: { x: 90000, y: 90000, w: 10, h: 10 },
-            }),
-        ).toBeNull();
+        expect(planCapture({ ...base, page: null, service: SERVICE })).toEqual({
+            refused: "no-page",
+        });
+        expect(planCapture({ ...base, page: PAGE, service: null })).toEqual({
+            refused: "no-page",
+        });
+    });
+
+    it("refuses a box that runs off the page, with its own reason", () => {
+        const base = { quarter: 0 as const, layerSize: { w: 10, h: 10 } };
+        for (const off of [
+            { x: 90000, y: 90000, w: 10, h: 10 },
+            { x: 1000, y: 1000, w: 90000, h: 10 },
+            { x: -50, y: 640, w: 640, h: 800 },
+        ]) {
+            expect(
+                planCapture({
+                    ...base,
+                    page: PAGE,
+                    service: SERVICE,
+                    box: off,
+                }),
+            ).toEqual({ refused: "off-page" });
+        }
     });
 });
 
@@ -103,6 +143,14 @@ describe("layerSizeOf", () => {
             w: 800,
             h: 600,
         });
+    });
+
+    it("gives up on an info.json that does not answer within the probe timeout", async () => {
+        const fetcher = vi.fn(async () => ({ ok: false }));
+        vi.stubGlobal("fetch", fetcher);
+        await layerSizeOf("https://iiif.example/layer", null);
+        const init = (fetcher.mock.calls[0] as unknown[])[1] as RequestInit;
+        expect(init.signal).toBeInstanceOf(AbortSignal);
     });
 
     it("falls back to the laid image's natural size", async () => {

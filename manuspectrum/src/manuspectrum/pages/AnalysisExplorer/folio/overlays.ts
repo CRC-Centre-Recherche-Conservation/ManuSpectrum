@@ -7,10 +7,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
-import {
-    boundsOfBox,
-    rotatedImageUrl,
-} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import { boundsOfBox } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 
 import type {
@@ -23,7 +20,7 @@ import type { Quarter } from "@/manuspectrum/pages/AnalysisExplorer/folio/regist
 import type { Registration } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-const OVERLAY_SIZE = 2048;
+export const OVERLAY_SIZE = 2048;
 // Leaflet's own overlay pane level: a laid layer covers the zone outlines, as it did inside that pane.
 const OVERLAY_PANE_Z_INDEX = "400";
 
@@ -48,6 +45,8 @@ export interface FolioOverlay {
     canTurn: boolean;
     /** The layer's IIIF image service, when it has one. */
     service?: string | null;
+    /** The layer's image reference: the address and the declared size. */
+    image?: ImageRef;
     /** The bounding box of the analysis's marked zone on this page. */
     zoneBounds: [LatLng, LatLng];
 }
@@ -65,17 +64,26 @@ export function overlayKey(analysisId: string, index: number): string {
  * `pct:min(100, 100 × size / declared largest side)` (`max` when no size is
  * declared): a stale declared size cannot make it an upscale. `fallback:
  * "max"` asks for the full image, the only size a level-0 server gives. Only
- * an address `safeHref` accepts is returned; null otherwise.
+ * an address `safeHref` accepts is returned; null otherwise. `quarter` has
+ * the image service turn the image (scaled first, then rotated, so the sides
+ * of the bounded size are not swapped); an image with its own URL cannot turn.
  */
 export function layerImageUrl(
     image: ImageRef,
     size = OVERLAY_SIZE,
-    options?: { fallback?: boolean | "max" },
+    options?: { fallback?: boolean | "max"; quarter?: Quarter },
 ): string | null {
     if (image.url) return safeHref(image.url);
     if (image.service) {
+        const turned = (url: string): string | null =>
+            safeHref(
+                url.replace(
+                    /\/0\/default\.jpg$/,
+                    `/${(options?.quarter ?? 0) * 90}/default.jpg`,
+                ),
+            );
         if (options?.fallback === "max") {
-            return safeHref(imageUrl(image.service, { size: "max" }));
+            return turned(imageUrl(image.service, { size: "max" }));
         }
         if (options?.fallback) {
             const declared = Math.max(image.width, image.height);
@@ -83,7 +91,7 @@ export function layerImageUrl(
                 declared > 0
                     ? Math.min(100, Math.round((100 * size) / declared))
                     : 0;
-            return safeHref(
+            return turned(
                 imageUrl(image.service, {
                     size: percent > 0 ? `pct:${percent}` : "max",
                 }),
@@ -91,26 +99,34 @@ export function layerImageUrl(
         }
         const width = image.width > 0 ? Math.min(size, image.width) : size;
         const height = image.height > 0 ? Math.min(size, image.height) : size;
-        return safeHref(
-            imageUrl(image.service, { size: `!${width},${height}` }),
-        );
+        return turned(imageUrl(image.service, { size: `!${width},${height}` }));
     }
     return null;
 }
 
+/** The layer turned by its image service; null for an image without one. */
+export function rotatedImageUrl(
+    image: ImageRef,
+    quarter: Quarter,
+    size = OVERLAY_SIZE,
+): string | null {
+    return image.service ? layerImageUrl(image, size, { quarter }) : null;
+}
+
 /**
  * The addresses to try for a layer image, in order, none twice: bounded
- * `!w,h` (level 2), `pct:n` (level 1), `max` (level 0). An image with its
- * own URL has one; no usable address, none.
+ * `!w,h` (level 2), `pct:n` (level 1), `max` (level 0), each turned by
+ * `quarter`. An image with its own URL has one; no usable address, none.
  */
 export function layerImageChain(
     image: ImageRef,
     size = OVERLAY_SIZE,
+    quarter: Quarter = 0,
 ): string[] {
     const steps = [
-        layerImageUrl(image, size),
-        layerImageUrl(image, size, { fallback: true }),
-        layerImageUrl(image, size, { fallback: "max" }),
+        layerImageUrl(image, size, { quarter }),
+        layerImageUrl(image, size, { fallback: true, quarter }),
+        layerImageUrl(image, size, { fallback: "max", quarter }),
     ];
     return steps.filter(
         (url, index): url is string =>
@@ -150,14 +166,13 @@ export function folioOverlays(
             const setting = overlays[key];
             const canTurn = layer.image.service !== null;
             const quarter: Quarter = registered && canTurn ? held.quarter : 0;
-            const url =
-                (quarter ? rotatedImageUrl(layer.image, quarter) : null) ??
-                layerImageUrl(layer.image);
+            const chain = layerImageChain(layer.image, OVERLAY_SIZE, quarter);
+            const url = chain[0] ?? null;
             if (setting?.on && url) {
                 result.push({
                     key,
                     url,
-                    fallbackUrls: layerImageChain(layer.image).slice(1),
+                    fallbackUrls: chain.slice(1),
                     bounds: registered ? boundsOfBox(held.box) : bounds,
                     opacity: setting.opacity,
                     label: layer.label,
@@ -166,6 +181,7 @@ export function folioOverlays(
                     registered,
                     canTurn,
                     service: layer.image.service,
+                    image: layer.image,
                     zoneBounds: bounds,
                 });
             }

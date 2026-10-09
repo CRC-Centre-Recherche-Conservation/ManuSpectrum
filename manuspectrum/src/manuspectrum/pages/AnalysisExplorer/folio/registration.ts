@@ -1,12 +1,9 @@
-import { imageUrl } from "utils/iiif-image";
-
 import {
     ANNOTATION_SCALE,
     toLatLng,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
-import type { ImageRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /**
  * A laid layer's place on the folio, in the annotation pixels of `geometry.ts`
@@ -24,8 +21,9 @@ export interface Box {
     h: number;
 }
 
+/** How far a box may run past the page edge (annotation pixels) and still count as on it. */
+const PAGE_SLACK = 1;
 const MIN_SIDE = 8;
-const LAYER_SIZE = 2048;
 
 export function boundsOfBox(box: Box): [LatLng, LatLng] {
     return [toLatLng(box.x, box.y + box.h), toLatLng(box.x + box.w, box.y)];
@@ -107,30 +105,24 @@ export function resizeFromCorner(
 }
 
 /**
- * The layer turned by the image service. The bounded size `!w,h` is applied
- * before the rotation, so an odd quarter swaps the two sides.
+ * The box in served page pixels; null unless the box lies wholly on the page
+ * (within one annotation pixel), since a region cut short would not line up
+ * with the layer.
  */
-export function rotatedImageUrl(
-    image: ImageRef,
-    quarter: Quarter,
-    size = LAYER_SIZE,
-): string | null {
-    if (!image.service) return null;
-    const w = Math.min(size, image.width || size);
-    const h = Math.min(size, image.height || size);
-    const sides = quarter % 2 === 1 ? `!${h},${w}` : `!${w},${h}`;
-    return imageUrl(image.service, { size: sides }).replace(
-        /\/0\/default\.jpg$/,
-        `/${quarter * 90}/default.jpg`,
-    );
-}
-
-/** The box in served page pixels, clamped to the page; null when it misses it. */
 export function captureRegion(
     box: Box,
     page: { bounds: [LatLng, LatLng]; served: { w: number; h: number } },
 ): { x: number; y: number; w: number; h: number } | null {
     const p = boxOfBounds(page.bounds);
+    const slack = PAGE_SLACK;
+    if (
+        box.x < p.x - slack ||
+        box.y < p.y - slack ||
+        box.x + box.w > p.x + p.w + slack ||
+        box.y + box.h > p.y + p.h + slack
+    ) {
+        return null;
+    }
     const sx = page.served.w / p.w;
     const sy = page.served.h / p.h;
     const x0 = Math.max(box.x, p.x);
@@ -147,9 +139,13 @@ export function captureRegion(
 }
 
 /**
- * A region of the page with the layer's turn undone. `size` is the layer's own
- * size, the one the photo has once turned back; IIIF scales the region before
- * it rotates it, so an odd turn asks for the sides swapped.
+ * A region of the page with the layer's turn undone, asked at the region's own
+ * size or, when that is larger, scaled down to fit `size` (the layer's own
+ * size, the one the photo has once turned back) with the region's
+ * proportions; the server never scales up. IIIF scales the region before it
+ * rotates it, so the size asked is in the folio's orientation while the fit
+ * is judged in the layer's: an odd turn swaps the sides of the region for the
+ * fit. The image that comes back has the layer's orientation.
  */
 export function captureUrl(
     service: string,
@@ -158,6 +154,14 @@ export function captureUrl(
     quarter: Quarter,
 ): string {
     const back = ((4 - quarter) % 4) * 90;
-    const [w, h] = quarter % 2 === 1 ? [size.h, size.w] : [size.w, size.h];
-    return `${service.replace(/\/$/, "")}/${region.x},${region.y},${region.w},${region.h}/${Math.round(w)},${Math.round(h)}/${back}/default.jpg`;
+    const odd = quarter % 2 === 1;
+    const turnedW = odd ? region.h : region.w;
+    const turnedH = odd ? region.w : region.h;
+    const fit =
+        size.w > 0 && size.h > 0
+            ? Math.min(1, size.w / turnedW, size.h / turnedH)
+            : 1;
+    const w = Math.max(1, Math.round(region.w * fit));
+    const h = Math.max(1, Math.round(region.h * fit));
+    return `${service.replace(/\/$/, "")}/${region.x},${region.y},${region.w},${region.h}/${w},${h}/${back}/default.jpg`;
 }

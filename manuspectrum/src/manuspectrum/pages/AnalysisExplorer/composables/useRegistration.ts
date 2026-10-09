@@ -3,6 +3,7 @@ import { getCurrentScope, onScopeDispose, shallowRef } from "vue";
 import {
     REGISTRATION_STORAGE_KEY,
     UNPLACED,
+    keepRecent,
     parseRegistrations,
     serializeRegistrations,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
@@ -51,7 +52,8 @@ function onStorage(event: StorageEvent): void {
     }
 }
 
-function commit(next: Entries): void {
+function commit(entries: Entries): void {
+    const next = keepRecent(entries);
     state().value = next;
     if (Object.keys(next).length === 0) {
         removeStorage(REGISTRATION_STORAGE_KEY);

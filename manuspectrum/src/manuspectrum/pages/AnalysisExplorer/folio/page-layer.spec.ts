@@ -304,6 +304,32 @@ describe("layImage", () => {
         expect(drawnExtent(layer)).toEqual({ w: 600, h: 1000 });
     });
 
+    it("lays a capture at its declared size, not at the size the server sent", async () => {
+        const read = vi.fn();
+        const capture = { ...BY_URL, width: 1200, height: 2000 };
+        layImage(
+            map,
+            capture,
+            { read, failed: vi.fn() },
+            { declaredSize: true },
+        );
+        await settle();
+        const [size, , layer] = read.mock.calls[0];
+        expect(size).toEqual({ w: 1200, h: 2000 });
+        expect(drawnExtent(layer)).toEqual({ w: 1200, h: 2000 });
+    });
+
+    it("keeps the natural size of an image with a declared size when not told to use it", async () => {
+        const read = vi.fn();
+        layImage(
+            map,
+            { ...BY_URL, width: 1200, height: 2000 },
+            { read, failed: vi.fn() },
+        );
+        await settle();
+        expect(read.mock.calls[0][0]).toEqual({ w: 600, h: 1000 });
+    });
+
     it("fails when the image has no address or none answers, and reads one that answers", async () => {
         const image = {
             service: "https://iiif.example/image/p1",

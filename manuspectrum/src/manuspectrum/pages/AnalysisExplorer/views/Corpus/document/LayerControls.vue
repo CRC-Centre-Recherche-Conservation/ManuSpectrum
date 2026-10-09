@@ -31,12 +31,17 @@ const STOPS = Array.from({ length: BUTTON_COUNT }, (_, index) => String(index));
  * right, opacity (a slider in a popover), curtain (toggle), capture and
  * reset. The bar changes nothing itself; each control is an event.
  */
-const props = defineProps<{
-    overlay: FolioOverlay;
-    adjusting: boolean;
-    underCurtain: boolean;
-    capturing: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        overlay: FolioOverlay;
+        adjusting: boolean;
+        underCurtain: boolean;
+        capturing: boolean;
+        /** False when the folio has no image service to take a capture from. */
+        canCapture?: boolean;
+    }>(),
+    { canCapture: true },
+);
 
 const emit = defineEmits<{
     adjust: [on: boolean];
@@ -77,6 +82,11 @@ const noTurn = computed(() =>
         ? ""
         : $gettext("This layer has no image service: it cannot turn"),
 );
+const noCapture = computed(() =>
+    props.canCapture
+        ? ""
+        : $gettext("This folio has no image service: it cannot be captured."),
+);
 const opacityPercent = computed(() =>
     Math.round(props.overlay.opacity * PERCENT),
 );
@@ -93,6 +103,12 @@ function onFocusin(event: FocusEvent): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && opacityOpen.value) {
+        event.stopPropagation();
+        closeOpacity();
+        anchor.value?.focus();
+        return;
+    }
     if (!ROVING_KEYS.has(event.key)) return;
     if (!(event.target instanceof HTMLButtonElement)) return;
     const next = nextId(STOPS, String(stop.value), event.key);
@@ -127,13 +143,6 @@ async function toggleOpacity(): Promise<void> {
     opacityOpen.value = true;
     document.addEventListener("pointerdown", onOpacityPointerDown);
     await nextTick();
-}
-
-function onPopoverKeydown(event: KeyboardEvent): void {
-    if (event.key !== "Escape") return;
-    event.stopPropagation();
-    closeOpacity();
-    anchor.value?.focus();
 }
 
 function onOpacity(value: number | number[]): void {
@@ -185,6 +194,7 @@ function tabindexOf(index: number): number {
             ref="opacity-button"
             icon="sun"
             data-action="opacity"
+            data-popover="opacity"
             :label="$gettext('Opacity')"
             :aria-expanded="opacityOpen ? 'true' : 'false'"
             :tabindex="tabindexOf(OPACITY_INDEX)"
@@ -202,7 +212,8 @@ function tabindexOf(index: number): number {
             icon="camera"
             data-action="capture"
             :label="$gettext('Capture the folio under the layer')"
-            :disabled="props.capturing"
+            :description="noCapture"
+            :disabled="props.capturing || !props.canCapture"
             :tabindex="tabindexOf(5)"
             @click="emit('capture')"
         />
@@ -222,7 +233,6 @@ function tabindexOf(index: number): number {
             role="group"
             :aria-label="$gettext('Opacity')"
             :style="popoverStyle"
-            @keydown="onPopoverKeydown"
         >
             <Slider
                 :model-value="opacityPercent"
@@ -244,7 +254,7 @@ function tabindexOf(index: number): number {
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.5rem;
     background: var(--surface);
-    box-shadow: 0 0.125rem 0.5rem color-mix(in srgb, black 25%, transparent);
+    box-shadow: var(--shadow-md);
 }
 
 .layer-controls .opacity-popover {

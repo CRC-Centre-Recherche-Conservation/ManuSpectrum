@@ -492,6 +492,9 @@ function imageBounds(
  * image keeps its own pixel scale relative to the others (`ScaleGroup`).
  * `tileFormat` is the format of the IIIF tiles (`layPage`); a layer's element
  * carries `PIXELATED_CLASS` while the map is zoomed past its native zoom.
+ * `declaredSize` lays an image without a service at the size its `ImageRef`
+ * declares, when it declares one, instead of the size the server sent (a
+ * folio capture is asked smaller than the layer it was taken for).
  */
 export function layImage(
     map: L.Map,
@@ -509,6 +512,7 @@ export function layImage(
         scale?: ScaleGroup;
         curtain?: boolean;
         tileFormat?: TileFormat;
+        declaredSize?: boolean;
     } = {},
 ): LaidImage {
     let stopPixelating: (() => void) | null = null;
@@ -565,7 +569,10 @@ export function layImage(
         const probe = new Image();
         probe.onload = () => {
             if (removed) return;
-            const size = { w: probe.naturalWidth, h: probe.naturalHeight };
+            const size =
+                options.declaredSize && image.width > 0 && image.height > 0
+                    ? { w: image.width, h: image.height }
+                    : { w: probe.naturalWidth, h: probe.naturalHeight };
             const laid = L.imageOverlay(
                 url,
                 imageBounds(map, size, options.scale?.zoom() ?? 0),
