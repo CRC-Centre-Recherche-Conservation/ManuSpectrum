@@ -7,7 +7,7 @@ groups:
         expr: |
           (
             sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h]))
-            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="13"}[1h]))
+            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="13.0"}[1h]))
           )
           / sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) > 0.5
           and
@@ -24,7 +24,7 @@ groups:
         expr: |
           (
             sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h]))
-            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="55"}[1h]))
+            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="55.0"}[1h]))
           )
           / sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) > 0.5
           and

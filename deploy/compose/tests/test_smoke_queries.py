@@ -40,6 +40,21 @@ def alert(query):
     return {"type": "alerting", "name": "A", "query": query}
 
 
+class BucketBoundsTests(unittest.TestCase):
+    def test_the_le_values_rules_select_are_listed(self):
+        answer = rules_answer(
+            alert(
+                'sum(increase(m_seconds_bucket{le="13.0"}[1h])) '
+                '/ sum(increase(m_seconds_bucket{language="fr", le="55.0"}[1h]))'
+                " and rate(other_total[5m]) > 0"
+            )
+        )
+        self.assertEqual(
+            smoke_queries.bucket_bounds(answer),
+            [("m_seconds_bucket", "13.0"), ("m_seconds_bucket", "55.0")],
+        )
+
+
 class MissingMetricsTests(unittest.TestCase):
     def test_a_name_unknown_to_prometheus_is_reported(self):
         answer = rules_answer(alert("pg_stat_activity_cuont > 1 and up == 1"))

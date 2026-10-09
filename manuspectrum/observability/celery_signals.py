@@ -113,10 +113,10 @@ def record_active_accounts_gauge(**kwargs):
     """
     from django.db import connections
 
-    from manuspectrum.tasks import count_active_accounts
+    from manuspectrum.tasks import publish_active_accounts
 
     try:
-        metrics.ACTIVE_ACCOUNTS.set(count_active_accounts())
+        publish_active_accounts()
     except Exception:
         logger.warning("active accounts gauge not set at worker start", exc_info=True)
     finally:

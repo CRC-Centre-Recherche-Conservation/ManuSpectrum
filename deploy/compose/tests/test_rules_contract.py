@@ -8,6 +8,7 @@ case for the alerts that guard data and money. The rule semantics themselves
 are proved by `promtool test rules` (observability/check.sh).
 """
 
+import ast
 import re
 import shutil
 import subprocess
@@ -18,6 +19,15 @@ try:
     import yaml
 except ImportError:  # pragma: no cover
     yaml = None
+
+try:
+    from prometheus_client.utils import floatToGoString
+except ImportError:  # pragma: no cover
+
+    def floatToGoString(value):
+        """Plain-decimal subset of prometheus_client.utils.floatToGoString."""
+        return "+Inf" if value == float("inf") else repr(float(value))
+
 
 COMPOSE_DIR = Path(__file__).resolve().parents[1]
 REPO = COMPOSE_DIR.parents[1]
@@ -201,6 +211,13 @@ def textfile_metrics():
             )
         )
     return names
+
+
+def seconds_bundle():
+    """SECONDS_BUNDLE of metrics.py, read without importing Django settings."""
+    text = METRICS_PY.read_text(encoding="utf-8")
+    match = re.search(r"^SECONDS_BUNDLE = (\([^)]*\))", text, re.M)
+    return ast.literal_eval(match.group(1))
 
 
 def forbidden_label_names(label_names):
@@ -469,21 +486,36 @@ class RuleContractTests(unittest.TestCase):
 
     def test_slow_build_alerts_are_a_share_of_builds_with_a_minimum_count(self):
         by_name = {r["alert"]: r["expr"] for _, r in self.alerts}
-        for name, le in (
-            ("ExplorerBundleBuildSlow", "13"),
-            ("ExplorerBundleBuildVerySlow", "55"),
+        for name, bound in (
+            ("ExplorerBundleBuildSlow", 13),
+            ("ExplorerBundleBuildVerySlow", 55),
         ):
             with self.subTest(alert=name):
                 expr = by_name[name]
+                le = floatToGoString(bound)
                 self.assertNotIn("histogram_quantile", expr)
                 self.assertIn(f'bundle_build_seconds_bucket{{le="{le}"}}', expr)
                 self.assertIn("> 0.5", expr)
                 self.assertRegex(expr, r"bundle_build_seconds_count\[1h\].*>= 3")
 
     def test_slow_build_thresholds_are_bucket_boundaries(self):
-        text = METRICS_PY.read_text(encoding="utf-8")
-        buckets = re.search(r"^SECONDS_BUNDLE = \(([^)]*)\)", text, re.M).group(1)
-        self.assertLessEqual({"13", "55"}, {b.strip() for b in buckets.split(",")})
+        self.assertLessEqual({13, 55}, set(seconds_bundle()))
+
+    def test_every_le_in_a_rule_is_a_bound_the_exporter_writes(self):
+        written = {floatToGoString(b) for b in seconds_bundle()} | {"+Inf"}
+        found = set()
+        for path in sorted(RULES_DIR.glob("*.yml")):
+            found |= set(re.findall(r'\ble="([^"]*)"', path.read_text("utf-8")))
+        self.assertTrue(found)
+        self.assertLessEqual(found, written)
+
+    def test_go_string_fallback_matches_prometheus_client(self):
+        try:
+            from prometheus_client import utils
+        except ImportError:  # pragma: no cover
+            self.skipTest("prometheus_client missing")
+        for bound in seconds_bundle() + (0.5, float("inf")):
+            self.assertEqual(floatToGoString(bound), utils.floatToGoString(bound))
 
     def test_certificate_invalid_is_off_on_rehearsal_names(self):
         rule = {r["alert"]: r["expr"] for _, r in self.alerts}["CertificateInvalid"]

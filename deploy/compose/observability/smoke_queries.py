@@ -10,6 +10,9 @@
       RULES_JSON is the answer of `/api/v1/rules`, NAMES_JSON the one of
       `/api/v1/label/__name__/values`. Series of OPTIONAL_METRICS and the
       names recorded by the rules themselves are not reported.
+  smoke_queries.py bucket-bounds RULES_JSON
+      One `metric le` line per histogram bucket bound that a rule selects
+      (`metric_bucket{le="13.0"}`), from the answer of `/api/v1/rules`.
 
 Standard library only.
 """
@@ -150,6 +153,20 @@ def missing_metrics(rules_answer, names_answer):
     return sorted(wanted - known)
 
 
+def bucket_bounds(rules_answer):
+    """(metric, le) pairs selected by the rules on a `_bucket` series."""
+    found = set()
+    for group in rules_answer["data"]["groups"]:
+        for rule in group["rules"]:
+            found.update(
+                re.findall(
+                    r'([A-Za-z_:][A-Za-z0-9_:]*_bucket)\{[^{}]*?\ble="([^"]*)"',
+                    rule["query"],
+                )
+            )
+    return sorted(found)
+
+
 def main(argv):
     if len(argv) == 3 and argv[1] == "dashboard-queries":
         for expr in dashboard_expressions(argv[2]):
@@ -159,6 +176,11 @@ def main(argv):
         answers = [json.loads(Path(p).read_text(encoding="utf-8")) for p in argv[2:]]
         for name in missing_metrics(*answers):
             print(name)
+        return 0
+    if len(argv) == 3 and argv[1] == "bucket-bounds":
+        answer = json.loads(Path(argv[2]).read_text(encoding="utf-8"))
+        for metric, le in bucket_bounds(answer):
+            print(metric, le)
         return 0
     print(__doc__, file=sys.stderr)
     return 2

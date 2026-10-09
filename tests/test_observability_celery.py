@@ -1,4 +1,5 @@
 import os
+import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -233,6 +234,20 @@ class ActiveAccountsTests(TestCase):
 
     def test_the_gauge_carries_no_label(self):
         self.assertEqual(metrics.ACTIVE_ACCOUNTS._labelnames, ())
+        self.assertEqual(metrics.ACTIVE_ACCOUNTS_MEASURED._labelnames, ())
+
+    def test_the_task_stamps_the_time_of_the_count(self):
+        before = time.time()
+        tasks.record_active_accounts_task()
+        stamp = sample("manuspectrum_active_accounts_timestamp_seconds")
+        self.assertTrue(before <= stamp <= time.time())
+
+    def test_worker_ready_stamps_the_time_of_the_count(self):
+        with patch.object(metrics.ACTIVE_ACCOUNTS_MEASURED, "set") as stamp:
+            with patch("django.db.connections.close_all"):
+                worker_ready.send(sender=None)
+        stamp.assert_called_once()
+        self.assertGreater(stamp.call_args.args[0], 0)
 
     def test_worker_ready_sets_the_gauge(self):
         with patch.object(metrics.ACTIVE_ACCOUNTS, "set") as gauge_set:
@@ -244,9 +259,14 @@ class ActiveAccountsTests(TestCase):
     def test_a_database_error_does_not_break_worker_ready(self):
         with (
             patch("manuspectrum.tasks.count_active_accounts", side_effect=RuntimeError),
-            patch("django.db.connections.close_all"),
+            patch.object(metrics.ACTIVE_ACCOUNTS, "set") as count,
+            patch.object(metrics.ACTIVE_ACCOUNTS_MEASURED, "set") as stamp,
+            patch("django.db.connections.close_all") as close,
         ):
             worker_ready.send(sender=None)
+        count.assert_not_called()
+        stamp.assert_not_called()
+        close.assert_called()
 
     def test_the_task_is_scheduled_daily(self):
         from django.conf import settings

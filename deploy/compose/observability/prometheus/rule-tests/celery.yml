@@ -61,3 +61,20 @@ tests:
     exp_samples:
     - labels: '{task="index_resources"}'
       value: 8
+- name: an active accounts count older than two days warns after an hour, a fresh one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 80h
+    exp_samples:
+    - labels: ALERTS{alertname="ActiveAccountsStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1

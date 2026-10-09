@@ -105,7 +105,7 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   the start time standing for the last prune until the daily one records its own),
   `manuspectrum_active_accounts` (one number, no label: active accounts with a login in the
   last 30 days, `anonymous` excluded, refreshed daily by `manuspectrum.record_active_accounts`
-  and at worker start)
+  and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count)
 
 django-prometheus adds the HTTP request metrics (`django_http_*`).
 

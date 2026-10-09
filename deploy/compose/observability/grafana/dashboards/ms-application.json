@@ -1337,7 +1337,7 @@
       },
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1353,6 +1353,7 @@
       "id": 28,
       "type": "timeseries",
       "title": "Active accounts, last 30 days",
+      "timeFrom": "30d",
       "description": "Active accounts with a login in the last 30 days, as counted each day (Prometheus keeps 30 days).",
       "datasource": {
         "type": "prometheus",

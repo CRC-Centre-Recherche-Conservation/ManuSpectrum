@@ -241,7 +241,10 @@ under "données indisponibles" and the command exits 1.
 active accounts (staff and superusers included, the `anonymous` visitor not) whose last
 login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)
 and the worker start refresh it on `worker:9808`; no account is named or stored in
-Prometheus. Without a sample the report prints "n/d". `make -C deploy report-test
+Prometheus. `manuspectrum_active_accounts_timestamp_seconds` is the time of that count: the report prints it
+("mesuré le <date>") and flags a count more than two days old, and `ActiveAccountsStale` warns
+when it is. The maximum line says "depuis le <date>" when the month is longer than the
+retention. Without a sample the report prints "n/d". `make -C deploy report-test
 [ARGS="--month YYYY-MM"]` sends one now.
 
 ## Host metrics

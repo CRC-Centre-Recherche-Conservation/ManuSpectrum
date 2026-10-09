@@ -342,20 +342,32 @@ def alerts(prom, start, end):
     return lines
 
 
-def accounts(prom, start, end):
+ACCOUNTS_STALE_DAYS = 2
+
+
+def accounts(prom, start, end, since):
     at = end.timestamp()
     window = f"{int((end - start).total_seconds())}s"
     last = prom.scalar("max(manuspectrum_active_accounts)", at)
     peak = prom.scalar(
         f"max(max_over_time(manuspectrum_active_accounts[{window}]))", at
     )
+    measured = prom.scalar("max(manuspectrum_active_accounts_timestamp_seconds)", at)
 
     def count(value):
         return NO_DATA if value is None else str(int(round(value)))
 
+    age = ""
+    if last is not None and measured is not None:
+        age = f" (mesuré le {date_fr(measured)}"
+        if at - measured > ACCOUNTS_STALE_DAYS * 86400:
+            age += (
+                f", périmé : plus de {ACCOUNTS_STALE_DAYS} jours avant la fin du mois"
+            )
+        age += ")"
     return [
-        f"comptes ayant ouvert une session dans les 30 derniers jours, fin du mois : {count(last)}",
-        f"maximum sur le mois : {count(peak)}",
+        f"comptes ayant ouvert une session dans les 30 derniers jours, fin du mois : {count(last)}{age}",
+        f"maximum {growth_period(start, since)} : {count(peak)}",
         "(nombre agrégé, aucun compte n'est lu ni nommé)",
     ]
 
@@ -377,7 +389,7 @@ def build_body(prom, label, start, end, now):
         ("Sauvegardes et tests de restauration", backups),
         ("Redémarrages et manques de mémoire", restarts),
         ("Alertes du mois", alerts),
-        ("Comptes actifs", accounts),
+        ("Comptes actifs", lambda p, a, b: accounts(p, a, b, since)),
     ):
         blocks += section(prom, title, lambda b=build: b(prom, start, end))
     if prom.failed:

@@ -217,6 +217,11 @@ class DashboardFileTests(unittest.TestCase):
                     ["max(manuspectrum_active_accounts)"],
                 )
 
+    def test_the_active_accounts_panels_show_what_their_text_promises(self):
+        panels = {p["title"]: p for p in walk_panels(self.by_uid()["ms-application"])}
+        self.assertEqual(panels["Active accounts, last 30 days"]["timeFrom"], "30d")
+        self.assertEqual(panels["Active accounts"]["options"]["graphMode"], "none")
+
     def test_container_panels_use_the_container_label(self):
         for dashboard in self.dashboards.values():
             for panel, expr in exprs(dashboard):

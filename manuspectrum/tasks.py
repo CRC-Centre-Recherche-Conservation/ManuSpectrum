@@ -116,9 +116,15 @@ def count_active_accounts():
     )
 
 
+def publish_active_accounts():
+    """Count the active accounts and export the count with its time."""
+    total = count_active_accounts()
+    metrics.ACTIVE_ACCOUNTS.set(total)
+    metrics.ACTIVE_ACCOUNTS_MEASURED.set(time.time())
+    return total
+
+
 @shared_task(name="manuspectrum.record_active_accounts")
 def record_active_accounts_task():
     """Refresh ``manuspectrum_active_accounts`` (a single aggregated count)."""
-    total = count_active_accounts()
-    metrics.ACTIVE_ACCOUNTS.set(total)
-    return total
+    return publish_active_accounts()

@@ -1201,10 +1201,10 @@ reboot.
 
 - [ ] `make -C deploy alert-test`, then within 2 minutes the Mailpit API lists a message whose `Subject` starts with
   `[ManuSpectrum][Alert] CRITICAL AlertTest`, whose `From` is the `ALERT_EMAIL_FROM` address and which carries the
-  header `X-ManuSpectrum-Category: alert` (`smoke.sh mail alert`), even in the 15 minutes after a boot. A `RESOLVED`
+  header `X-ManuSpectrum-Category: Alert` (`smoke.sh mail alert`), even in the 15 minutes after a boot. A `RESOLVED`
   message arrives 5 to 10 minutes after the alert ends (resolution, then the next 5-minute flush).
 - [ ] `make -C deploy report-test` → a message `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>`, in French, header
-  `report`; `smoke.sh mail report` agrees. `make -C deploy report-test ARGS="--month 2020-01"` shows "n/d" for
+  `Report`; `smoke.sh mail report` agrees. `make -C deploy report-test ARGS="--month 2020-01"` shows "n/d" for
   data older than 30 days and exits 1 only when Prometheus did not answer.
 - [ ] Change the recipients: edit `ALERT_EMAILS` in `.env` to two addresses, `make -C deploy alert-recipients` →
   returns once Alertmanager is ready; `make -C deploy alert-test` reaches both. A bad value (`ALERT_EMAILS=a@b.test,`)
