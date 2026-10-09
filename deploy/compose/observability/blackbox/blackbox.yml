@@ -1,0 +1,51 @@
+# Probe modules of the blackbox exporter. Redirects are not followed: a 301 is
+# a failure, not a second URL to measure.
+modules:
+  # /readyz from inside the network; Host: web is in ALLOWED_HOSTS.
+  http_readyz:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      valid_http_versions: ["HTTP/1.1"]
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      headers:
+        Host: web
+
+  # /healthz of the public name through nginx. The chain is not verified, so
+  # the local CA and the ACME staging CA both pass; the expiry of the served
+  # certificate is still measured (probe_ssl_earliest_cert_expiry).
+  http_edge:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      follow_redirects: false
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4
+      tls_config:
+        insecure_skip_verify: true
+
+  # The same probe with the certificate chain verified against the system
+  # roots: a self-signed, wrong-name or untrusted certificate fails it.
+  http_edge_verified:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      follow_redirects: false
+      fail_if_not_ssl: true
+      preferred_ip_protocol: ip4
+
+  http_cantaloupe:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      follow_redirects: false
+      preferred_ip_protocol: ip4

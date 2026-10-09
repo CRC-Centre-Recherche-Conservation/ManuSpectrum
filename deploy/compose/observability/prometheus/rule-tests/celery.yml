@@ -1,0 +1,63 @@
+rule_files:
+  - ../rules/celery.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a queue above 100 for half an hour warns, a short burst does not
+  interval: 1m
+  input_series:
+  - series: redis_key_size{key="celery", instance="redis-broker:6379"}
+    values: 5x10 150x60
+  - series: redis_key_size{key="celery", instance="redis-cache:6379"}
+    values: 5x10 20x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="CeleryQueueBacklog", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="CeleryQueueBacklog", alertstate="firing"}
+    eval_time: 50m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryQueueBacklog", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: a failing task and a failed indexing run warn, and keep firing until the next working window
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="failure"}
+    values: 0+1x40 40x5000
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="success"}
+    values: 0+5x4000
+  - series: manuspectrum_index_resources_total{mode="batch", outcome="failed"}
+    values: 0+1x40 40x5000
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 10m
+    exp_samples: []
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", service="celery", severity="warning", task="index_resources"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="batch", service="celery", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 62h
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", service="celery", severity="warning", task="index_resources"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="batch", service="celery", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 70h
+    exp_samples: []
+- name: a restarted Prometheus still sees a failure of 62 hours ago, from the stored samples
+  interval: 5m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="failure"}
+    values: 0+1x8 8x1000
+  promql_expr_test:
+  - expr: sum by (task) (increase(manuspectrum_celery_tasks_total{outcome="failure"}[64h])) > 0
+    eval_time: 62h
+    exp_samples:
+    - labels: '{task="index_resources"}'
+      value: 8

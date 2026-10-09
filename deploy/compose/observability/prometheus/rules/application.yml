@@ -1,0 +1,38 @@
+# Alert rules of the monitoring stack: application.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: application
+    rules:
+      - alert: ErrorLogRateHigh
+        expr: |
+          sum(rate(manuspectrum_log_records_total{level=~"error|critical"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "The application logs errors steadily"
+          description: "{{ $value | humanize }} error records per second over 10 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#errorlogratehigh
+      - alert: WebSaturated
+        expr: |
+          max(manuspectrum_inflight_requests{job="web"}) >= 18
+        for: 5m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "The web server has almost no free thread"
+          description: "{{ $value }} requests are in flight; gunicorn serves at most 20 at the same time (5 workers of 4 threads)."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#websaturated
+      - alert: MetricsDirFilling
+        expr: |
+          max by (job) (manuspectrum_metrics_dir_bytes) > 45e6
+        for: 10m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "The multiprocess metrics directory is filling"
+          description: "The metrics directory of {{ $labels.job }} holds {{ $value | humanize1024 }}B; its volume is 64 MiB."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#metricsdirfilling

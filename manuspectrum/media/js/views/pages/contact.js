@@ -13,7 +13,7 @@ function composeBody(data) {
     );
 }
 
-function composeSubject(data) {
+export function composeSubject(data) {
     const subjectMap = {
         project: t("msContactSubjProject", "Project submission"),
         access: t("msContactSubjAccess", "Access request"),
@@ -21,7 +21,7 @@ function composeSubject(data) {
         other: t("msContactSubjOther", "Message"),
     };
     const label = subjectMap[data.type] || subjectMap.other;
-    return `[ManuSpectrum] ${label} — ${data.name}`;
+    return `[ManuSpectrum][Contact] ${label} — ${data.name}`;
 }
 
 function buildMailto(email, data) {

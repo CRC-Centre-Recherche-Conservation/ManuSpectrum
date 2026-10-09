@@ -1,0 +1,15 @@
+# Sends the monthly operations report (in French) to ALERT_EMAILS. The Make
+# target runs scripts/monthly-report.py in a throwaway container on the
+# Compose network; a failed Prometheus query still sends the report and ends
+# the unit as failed. PP-8 substitutes the two placeholders and installs this
+# file with the timer next to it.
+[Unit]
+Description=ManuSpectrum monthly operations report
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+ExecStart=/usr/bin/make -C @DEPLOY_DIR@ monthly-report
+TimeoutStartSec=10min

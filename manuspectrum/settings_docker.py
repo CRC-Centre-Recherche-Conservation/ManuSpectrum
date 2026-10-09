@@ -234,9 +234,12 @@ EMAIL_HOST_PASSWORD = (
     if "EMAIL_HOST_PASSWORD_FILE" in os.environ or "EMAIL_HOST_PASSWORD" in os.environ
     else ""
 )
-DEFAULT_FROM_EMAIL = get_optional_env_variable("DEFAULT_FROM_EMAIL") or CONTACT_EMAIL
+# The sender is an address on the host's own domain, never CONTACT_EMAIL: a
+# sender on an institutional domain with a DMARC policy is quarantined when it
+# goes through the host's relay (deploy/OBSERVABILITY.md, "Sender").
+DEFAULT_FROM_EMAIL = get_optional_env_variable("DEFAULT_FROM_EMAIL", "").strip()
 if not DEFAULT_FROM_EMAIL:
-    raise ImproperlyConfigured("Set DEFAULT_FROM_EMAIL or CONTACT_EMAIL")
+    raise ImproperlyConfigured("Set the DEFAULT_FROM_EMAIL environment variable")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 ADMINS = [("", address) for address in get_optional_env_variable("ADMINS", "").split()]
 

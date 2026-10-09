@@ -1,0 +1,16 @@
+# Measures the size of the uploads, the restic repository, the dumps and the
+# nginx logs (named directories only, never a mount root) for the
+# node_exporter textfile collector. Idle I/O and lowest CPU priority: du on
+# the NFS data volume must not slow the site. PP-8 substitutes the two
+# placeholders and installs this file with the timer next to it.
+[Unit]
+Description=ManuSpectrum disk usage metrics
+After=docker.service remote-fs.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+ExecStart=/usr/bin/make -C @DEPLOY_DIR@ disk-usage
+TimeoutStartSec=15min
+Nice=19
+IOSchedulingClass=idle

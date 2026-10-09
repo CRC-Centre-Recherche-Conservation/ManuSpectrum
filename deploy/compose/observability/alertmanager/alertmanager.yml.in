@@ -1,0 +1,102 @@
+# Alertmanager configuration template. render.sh substitutes the
+# placeholders between two at-signs from the environment (validated) and writes the result where
+# Alertmanager reads it. Routing: critical mails at once, warnings are grouped
+# and mailed on weekdays 08:00-19:00 Europe/Paris, info and none are never
+# mailed, Watchdog becomes the Monday heartbeat.
+global:
+  smtp_smarthost: '@SMTP_SMARTHOST@'
+  smtp_from: '@ALERT_EMAIL_FROM@'
+  smtp_hello: '@SMTP_HELLO@'
+  smtp_require_tls: @SMTP_REQUIRE_TLS@
+@SMTP_AUTH@
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+time_intervals:
+  - name: working-hours
+    time_intervals:
+      - weekdays: ['monday:friday']
+        times:
+          - start_time: '08:00'
+            end_time: '19:00'
+        location: Europe/Paris
+  # A window of five minutes at the group interval of its route: the notice
+  # leaves in the first flush that falls inside it, and repeat_interval keeps
+  # the later flushes of the window quiet.
+  - name: heartbeat-window
+    time_intervals:
+      - weekdays: ['monday']
+        times:
+          - start_time: '08:00'
+            end_time: '08:05'
+        location: Europe/Paris
+
+route:
+  receiver: blackhole
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ['alertname="Watchdog"']
+      receiver: heartbeat
+      group_by: [alertname]
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 24h
+      active_time_intervals: [heartbeat-window]
+    - matchers: ['severity="critical"']
+      receiver: email-now
+      group_by: [alertname, service]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    - matchers: ['severity="warning"']
+      receiver: email-working-hours
+      group_by: [service]
+      group_wait: 2m
+      group_interval: 30m
+      repeat_interval: 24h
+      active_time_intervals: [working-hours]
+
+inhibit_rules:
+  # The 15 minutes after a boot: everything that could be mailed waits, so the
+  # nightly reboot is silent and a stack that has not recovered fires after.
+  # AlertTest (make alert-test) is the proof that mail works: never held back.
+  - source_matchers: ['alertname="RecentlyRebooted"']
+    target_matchers: ['severity=~"critical|warning"', 'alertname!="AlertTest"']
+  # A critical alert covers the warnings of its service.
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: [service]
+
+receivers:
+  - name: blackhole
+  - name: email-now
+    email_configs:
+      - to: '@ALERT_EMAILS@'
+        send_resolved: true
+        headers:
+          Subject: '{{ template "ms.subject" . }}'
+          X-ManuSpectrum-Category: alert
+        html: ''
+        text: '{{ template "ms.body" . }}'
+  - name: email-working-hours
+    email_configs:
+      - to: '@ALERT_EMAILS@'
+        send_resolved: true
+        headers:
+          Subject: '{{ template "ms.subject" . }}'
+          X-ManuSpectrum-Category: alert
+        html: ''
+        text: '{{ template "ms.body" . }}'
+  - name: heartbeat
+    email_configs:
+      - to: '@ALERT_EMAILS@'
+        send_resolved: false
+        headers:
+          Subject: '[ManuSpectrum][Heartbeat] Alerting chain OK'
+          X-ManuSpectrum-Category: heartbeat
+        html: ''
+        text: '{{ template "ms.heartbeat" . }}'

@@ -15,7 +15,7 @@ CHECK="$HERE/../secrets-check.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-NAMES="pg_password elastic_password django_secret_key email_password admin_password restic_password"
+NAMES="pg_password elastic_password django_secret_key email_password admin_password restic_password grafana_admin_password pg_monitor_password"
 
 N=0
 FAILED=0
@@ -170,12 +170,16 @@ put email_password ""
 put admin_password "$ADM"
 RST="$(rand 48)"
 put restic_password "$RST"
+GRA="$(rand 24)"
+PGM="$(rand 48)"
+put grafana_admin_password "$GRA"
+put pg_monitor_password "$PGM"
 run_check
 expect "check-ok: a complete directory passes" zero
-for v in "$KEY" "$ADM" "$PGV" "$ESV" "$RST"; do
+for v in "$KEY" "$ADM" "$PGV" "$ESV" "$RST" "$GRA" "$PGM"; do
   grep -qF -- "$v" <<<"$OUT" && { not_ok "check-ok: a value reached the output"; break; }
 done
-[ "$(grep -v '^directory' <<<"$OUT" | grep -c ': ok')" -eq 6 ] && ok "check-ok: one ok line per name" || not_ok "check-ok: one ok line per name" "$OUT"
+[ "$(grep -v '^directory' <<<"$OUT" | grep -c ': ok')" -eq 8 ] && ok "check-ok: one ok line per name" || not_ok "check-ok: one ok line per name" "$OUT"
 
 rm "$C/pg_password"
 run_check
@@ -208,6 +212,22 @@ run_check
 expect "check-restic: a short restic password fails" nonzero
 grep -q 'restic_password.*32' <<<"$OUT" && ok "check-restic: the line gives the minimum" || not_ok "check-restic: the line gives the minimum" "$OUT"
 put restic_password "$RST"
+put grafana_admin_password "$(rand 15)"
+run_check
+expect "check-grafana: a short Grafana admin password fails" nonzero "$GRA"
+grep -q 'grafana_admin_password.*16' <<<"$OUT" && ok "check-grafana: the line gives the minimum" || not_ok "check-grafana: the line gives the minimum" "$OUT"
+put grafana_admin_password "$(rand 16)"
+run_check
+expect "check-grafana: sixteen characters pass" zero
+put grafana_admin_password "$GRA"
+put pg_monitor_password "$(rand 31)"
+run_check
+expect "check-monitor: a short monitoring password fails" nonzero "$PGM"
+grep -q 'pg_monitor_password.*32' <<<"$OUT" && ok "check-monitor: the line gives the minimum" || not_ok "check-monitor: the line gives the minimum" "$OUT"
+put pg_monitor_password "$(rand 32)"
+run_check
+expect "check-monitor: thirty-two characters pass" zero
+put pg_monitor_password "$PGM"
 chmod 755 "$C"
 run_check
 expect "check-dir: a directory that is not 0700 fails" nonzero

@@ -1,0 +1,98 @@
+rule_files:
+  - ../rules/backup.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a backup 25 hours old is fine, 27 hours old fires
+  interval: 1m
+  input_series:
+  - series: manuspectrum_backup_last_success_timestamp_seconds
+    values: 0+0x1700
+  - series: up{job="node"}
+    values: 1x1700
+  promql_expr_test:
+  - expr: ALERTS{alertname="BackupMissing", alertstate="firing"}
+    eval_time: 25h
+    exp_samples: []
+  - expr: ALERTS{alertname="BackupMissing", alertstate="firing"}
+    eval_time: 27h
+    exp_samples:
+    - labels: ALERTS{alertname="BackupMissing", alertstate="firing", service="backup", severity="critical"}
+      value: 1
+- name: a missing backup metric fires after the grace period
+  interval: 1m
+  input_series:
+  - series: node_boot_time_seconds
+    values: 0+0x40
+  - series: up{job="node"}
+    values: 1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="BackupMissing", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="BackupMissing", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="BackupMissing", alertstate="firing", service="backup", severity="critical"}
+      value: 1
+- name: a failed backup fires at once and clears with the next success
+  interval: 1m
+  input_series:
+  - series: manuspectrum_backup_failed
+    values: 0 0 1 1 0 0
+  promql_expr_test:
+  - expr: ALERTS{alertname="BackupFailed", alertstate="firing"}
+    eval_time: 1m
+    exp_samples: []
+  - expr: ALERTS{alertname="BackupFailed", alertstate="firing"}
+    eval_time: 3m
+    exp_samples:
+    - labels: ALERTS{alertname="BackupFailed", alertstate="firing", service="backup", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="BackupFailed", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+- name: a failed restore test fires at once
+  interval: 1m
+  input_series:
+  - series: manuspectrum_restore_test_failed
+    values: 0 1 1
+  promql_expr_test:
+  - expr: ALERTS{alertname="RestoreTestFailed", alertstate="firing"}
+    eval_time: 0m
+    exp_samples: []
+  - expr: ALERTS{alertname="RestoreTestFailed", alertstate="firing"}
+    eval_time: 2m
+    exp_samples:
+    - labels: ALERTS{alertname="RestoreTestFailed", alertstate="firing", service="backup", severity="critical"}
+      value: 1
+- name: a restore test 7 days old is fine, 9 days old fires, no metric fires
+  interval: 1m
+  input_series:
+  - series: manuspectrum_restore_test_last_success_timestamp_seconds
+    values: 0+0x13000
+  - series: up{job="node"}
+    values: 1x13000
+  promql_expr_test:
+  - expr: ALERTS{alertname="RestoreTestMissing", alertstate="firing"}
+    eval_time: 7d
+    exp_samples: []
+  - expr: ALERTS{alertname="RestoreTestMissing", alertstate="firing"}
+    eval_time: 9d
+    exp_samples:
+    - labels: ALERTS{alertname="RestoreTestMissing", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+- name: a missing restore test metric fires
+  interval: 1m
+  input_series:
+  - series: node_boot_time_seconds
+    values: 0+0x40
+  - series: up{job="node"}
+    values: 1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="RestoreTestMissing", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="RestoreTestMissing", alertstate="firing", service="backup", severity="warning"}
+      value: 1

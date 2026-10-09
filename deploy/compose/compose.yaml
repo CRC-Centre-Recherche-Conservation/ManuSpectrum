@@ -21,6 +21,13 @@ x-service: &service
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
 
+x-monitoring: &monitoring
+  <<: *service
+  profiles: [observability]
+  read_only: true
+  tmpfs:
+    - "/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777"
+
 x-media: &media
   type: bind
   source: ${MEDIA_HOST_DIR:?set MEDIA_HOST_DIR in .env}
@@ -477,6 +484,226 @@ services:
         bind:
           create_host_path: false
 
+  # Monitoring (profile observability, on through COMPOSE_PROFILES in .env).
+  # Prometheus, Alertmanager and Grafana share the `monitoring` network;
+  # Grafana is on no other, so it cannot reach web, and it is published on the
+  # loopback of the host only (reached through an SSH tunnel). No service
+  # mounts the Docker socket.
+  prometheus:
+    <<: *monitoring
+    # prometheus v3.15.0, read 2026-10-09
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=8GB
+    networks: [default, monitoring]
+    # The edge probe target comes from PUBLIC_HOST: the entrypoint writes it to
+    # the tmpfs /tmp (the container stays read-only; an inline Compose config
+    # cannot be mounted into a read-only service).
+    entrypoint: ["/bin/sh", "/etc/prometheus/entrypoint.sh"]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env (the host name of PUBLIC_SERVER_ADDRESS)}
+    volumes:
+      - prometheus_data:/prometheus
+      - {type: bind, source: ./observability/prometheus/entrypoint.sh, target: /etc/prometheus/entrypoint.sh, read_only: true}
+      - {type: bind, source: ./observability/prometheus/prometheus.yml, target: /etc/prometheus/prometheus.yml, read_only: true}
+      - {type: bind, source: ./observability/prometheus/rules, target: /etc/prometheus/rules, read_only: true}
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  alertmanager:
+    <<: *monitoring
+    # alertmanager v0.34.1, read 2026-10-09
+    image: prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+    user: "65534:65534"
+    # The configuration is rendered from the environment into /tmp at start.
+    entrypoint: ["/bin/sh", "/etc/alertmanager/render.sh"]
+    command:
+      - --config.file=/tmp/alertmanager.yml
+      - --storage.path=/alertmanager
+      # A single instance: no gossip listener on the monitoring network.
+      - --cluster.listen-address=
+    networks: [monitoring]
+    environment:
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-25}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-false}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD_FILE: /run/secrets/email_password
+      ALERT_EMAILS: ${ALERT_EMAILS:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env (the host name of PUBLIC_SERVER_ADDRESS)}
+    secrets: [email_password]
+    volumes:
+      - alertmanager_data:/alertmanager
+      - {type: bind, source: ./observability/alertmanager, target: /etc/alertmanager, read_only: true}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  grafana:
+    <<: *monitoring
+    # grafana 13.2.3, read 2026-10-09
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
+    user: "472:472"
+    networks: [monitoring]
+    ports:
+      - {host_ip: 127.0.0.1, target: 3000, published: "3000", protocol: tcp}
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
+      GF_AUTH_BASIC_ENABLED: "true"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_PLUGINS_PLUGIN_ADMIN_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_PUBLIC_KEY_RETRIEVAL_DISABLED: "true"
+      GF_UNIFIED_ALERTING_ENABLED: "false"
+      GF_ALERTING_ENABLED: "false"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+      GF_LOG_MODE: console
+    secrets: [grafana_admin_password]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - {type: bind, source: ./observability/grafana/provisioning, target: /etc/grafana/provisioning, read_only: true}
+      - {type: bind, source: ./observability/grafana/dashboards, target: /etc/grafana/dashboards, read_only: true}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # Reads the host through a read-only bind of `/` (rslave: the network
+  # filesystem mounted after the container started shows up) and the textfile
+  # directory of the backup metrics. The network collectors are off: the
+  # container's network namespace is not the host's.
+  node-exporter:
+    <<: *monitoring
+    # node_exporter v1.12.1, read 2026-10-09
+    image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    user: "65534:65534"
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/textfile
+      - --collector.filesystem.mount-timeout=5s
+      - --no-collector.netdev
+      - --no-collector.netstat
+      - --no-collector.sockstat
+    volumes:
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          propagation: rslave
+      - type: bind
+        source: ${METRICS_TEXTFILE_DIR:?set METRICS_TEXTFILE_DIR in .env}
+        target: /textfile
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Connects as the ms_monitor role (pg_monitor) to the postgres maintenance
+  # database; pg_stat_statements is read without the query text.
+  postgres-exporter:
+    <<: *monitoring
+    # postgres_exporter v0.20.1, read 2026-10-09
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
+    user: "65534:65534"
+    command:
+      - --collector.stat_statements
+      - --no-collector.stat_statements.include_query
+      - --no-collector.stat_user_tables
+      - --no-collector.statio_user_tables
+    environment:
+      DATA_SOURCE_URI: postgres:5432/postgres?sslmode=disable
+      DATA_SOURCE_USER: ms_monitor
+      DATA_SOURCE_PASS_FILE: /run/secrets/pg_monitor_password
+    secrets: [pg_monitor_password]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9187/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  redis-exporter:
+    <<: *monitoring
+    # redis_exporter v1.93.0 (alpine: the default image has no shell or wget), read 2026-10-09
+    image: oliver006/redis_exporter:v1.93.0-alpine@sha256:93831cd4d5d67687de67c9d5221b14312fea580af8d157583ed9d4459bf2dd70
+    user: "59000:59000"
+    environment:
+      REDIS_ADDR: redis://redis-broker:6379
+      REDIS_EXPORTER_CHECK_SINGLE_KEYS: db0=celery
+    depends_on:
+      redis-broker: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9121/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  blackbox-exporter:
+    <<: *monitoring
+    # blackbox_exporter v0.29.0, read 2026-10-09
+    image: quay.io/prometheus/blackbox-exporter:v0.29.0@sha256:9613f2884689b6fad9f1939f6a3b0388c93a022cfaededb19545b329b5c83dea
+    user: "65534:65534"
+    volumes:
+      - {type: bind, source: ./observability/blackbox/blackbox.yml, target: /etc/blackbox_exporter/config.yml, read_only: true}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9115/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # CI and rehearsal only (profile mailpit): receives the alert and report
+  # e-mails so that a run can prove they leave the stack. Not part of
+  # COMPOSE_PROFILES on a production host.
+  mailpit:
+    <<: *service
+    profiles: [mailpit]
+    # mailpit v1.31.4, read 2026-10-09
+    image: axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
+    user: "65534:65534"
+    read_only: true
+    networks: [default, monitoring]
+    environment:
+      MP_MAX_MESSAGES: "100"
+      MP_DATABASE: /tmp/mailpit.db
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 secrets:
   pg_password:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/pg_password
@@ -493,6 +720,12 @@ secrets:
   # Password of the restic repository; only the restic service mounts it.
   restic_password:
     file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/restic_password
+  # Administrator password of Grafana; only grafana mounts it.
+  grafana_admin_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/grafana_admin_password
+  # Password of the ms_monitor PostgreSQL role; only postgres-exporter mounts it.
+  pg_monitor_password:
+    file: ${SECRETS_DIR:?set SECRETS_DIR in .env}/pg_monitor_password
 
 volumes:
   pg_data:
@@ -511,3 +744,15 @@ volumes:
   static: {}
   # Celery beat schedule: only the time of the last runs.
   beat: {}
+  # Monitoring state, all derived data: never backed up. The Prometheus
+  # database is external (local disk) and created by `make volumes`.
+  prometheus_data:
+    external: true
+    name: ms_prometheus_data
+  alertmanager_data: {}
+  grafana_data: {}
+
+networks:
+  # Prometheus, Alertmanager and Grafana. Not internal: Alertmanager reaches
+  # the SMTP relay through it. Grafana is on no other network.
+  monitoring: {}

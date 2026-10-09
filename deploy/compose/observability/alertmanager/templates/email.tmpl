@@ -1,0 +1,29 @@
+{{ define "ms.subject" -}}
+{{- $state := "RESOLVED" -}}
+{{- if eq .Status "firing" }}{{ $state = (.CommonLabels.severity | toUpper) }}{{ end -}}
+[ManuSpectrum][Alert] {{ $state }} {{ if eq (len .Alerts) 1 -}}
+{{- $alert := index .Alerts 0 -}}
+{{ $alert.Labels.alertname }} - {{ $alert.Annotations.summary }}
+{{- else -}}
+{{ len .Alerts }} alerts: {{ range $i, $alert := .Alerts }}{{ if $i }}, {{ end }}{{ $alert.Labels.alertname }}{{ end }}
+{{- end }}
+{{- end }}
+
+{{ define "ms.body" -}}
+{{ range .Alerts -}}
+{{ if eq .Status "resolved" }}RESOLVED{{ else }}FIRING{{ end }} {{ .Labels.alertname }} ({{ .Labels.severity }}, {{ .Labels.service }})
+{{ .Annotations.summary }}
+{{ .Annotations.description }}
+Since: {{ .StartsAt.Format "2006-01-02 15:04 MST" }}
+Runbook: {{ .Annotations.runbook_url }}
+
+{{ end -}}
+Dashboards, over the SSH tunnel (ssh -L 3000:localhost:3000): http://localhost:3000/d/ms-overview
+{{- end }}
+
+{{ define "ms.heartbeat" -}}
+This is the weekly message that proves the alert chain works: Prometheus
+evaluates the rules, Alertmanager routes them and the mail relay delivers.
+If it does not arrive on Monday morning, the chain is broken; see
+https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/monitoring.md#watchdog
+{{- end }}

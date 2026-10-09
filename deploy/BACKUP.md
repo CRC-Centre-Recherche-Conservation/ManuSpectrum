@@ -155,6 +155,9 @@ the next boot.
   success for 26 hours, also when the timer never ran), `RestoreTestFailed` and
   `RestoreTestMissing` (no success for 8 days). Each points here.
 
+  The monitoring state itself (Prometheus data, Alertmanager silences, Grafana's database) is
+  not backed up: it is rebuilt from the configuration in Git (`OBSERVABILITY.md`).
+
 ## The restore test
 
 ```bash

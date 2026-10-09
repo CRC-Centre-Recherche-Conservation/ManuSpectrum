@@ -1134,10 +1134,137 @@ textfile directory; PP-10's `TAG=pre-update` backup in the update procedure.
 - [ ] The units are installed by the configuration management (PP-8) and `systemctl list-timers 'manuspectrum-*'`
   lists both (6.9).
 
+## Step 7 — Monitoring (`deploy/OBSERVABILITY.md`)
+
+Prometheus, Alertmanager, Grafana and the exporters, the alert e-mails and the monthly report, played on the
+rehearsal VM with the stack of step 2, the secrets of step 5 and the backups of step 6. Same conventions:
+*(service account)* commands run after `sudo -iu manuspectrum` and `cd ~/manuspectrum`; `dc` is the Compose alias
+of step 2. A rehearsal has no mail relay: it uses the Mailpit profile (`COMPOSE_PROFILES=observability,mailpit`,
+`EMAIL_HOST=mailpit`, `EMAIL_PORT=1025`), whose API is read from the `prometheus` container (same network):
+`dc exec -T prometheus wget -qO- http://mailpit:8025/api/v1/messages`.
+
+**What CI already proves.** `check-stack.sh` validates the configuration (`compose/observability/check.sh`: promtool
+and amtool checks, the rule unit tests, the dashboards), the host-metrics, monitoring-init and monthly-report
+tests, and the docs links. The image job runs `smoke.sh monitoring` and `smoke.sh mail alert` against Mailpit. What
+follows proves them on the production-shaped VM: real timings, the network filesystem, the systemd timers and a
+reboot.
+
+### 7.1 Setup
+
+- [ ] *(service account)* `.env` has `COMPOSE_PROFILES`, `ALERT_EMAILS`, `ALERT_EMAIL_FROM` and
+  `DEFAULT_FROM_EMAIL` (`grep -E '^(COMPOSE_PROFILES|ALERT_EMAILS|ALERT_EMAIL_FROM|DEFAULT_FROM_EMAIL)=' deploy/compose/.env`
+  → four lines; both senders are the same address on the VM's own domain).
+  - On failure: without `DEFAULT_FROM_EMAIL`, `web` refuses to start (`Set the DEFAULT_FROM_EMAIL environment variable`).
+- [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test and timer runs:
+  `make -C deploy silence-fresh-install` (48 h), or install the timers and take a backup before `observability-on`.
+- [ ] `make -C deploy volumes secrets up monitoring-init observability-on` → `grafana_admin_password: created`,
+  `pg_monitor_password: created`, the others `kept`; `monitoring-init` ends without error; then
+  `make -C deploy status` → the seven monitoring containers `healthy`.
+  - On failure: `monitoring-init` needs `postgres` up; read `docker compose logs <service>` of the unhealthy one.
+- [ ] The vault item has the fields `grafana_admin_password` and `pg_monitor_password` (`SECRETS.md`).
+- [ ] *(service account)* Install the timers (PP-8 does it in production): render `deploy/systemd/*.in`, copy to
+  `/etc/systemd/system/`, `systemctl enable --now manuspectrum-container-metrics.timer manuspectrum-disk-usage.timer manuspectrum-monthly-report.timer`;
+  `systemctl list-timers 'manuspectrum-*'` lists them.
+
+### 7.2 Tunnel and dashboards
+
+- [ ] *(host)* `ssh -L 3000:localhost:3000 <admin>@192.168.123.10`, then in a browser `http://localhost:3000`:
+  the login page. Log in as `admin` with `cat "$SECRETS_DIR/grafana_admin_password"`.
+  - On failure: `ss -ltn | grep 3000` on the VM must show `127.0.0.1:3000` only. Anything else is a bug: stop here.
+- [ ] *(host)* From the host without the tunnel, `curl -m 5 http://192.168.123.10:3000/` fails (connection refused or
+  timeout), and `curl -k -m 5 https://192.168.123.10/grafana/` is the site's 404.
+- [ ] The four dashboards (Overview, Application, Infrastructure, Storage and backups) open without a "No data" panel,
+  except those that wait for an event (a restart, an OOM kill, a restore test not yet run). Editing a panel and
+  saving is refused (read-only provisioning).
+- [ ] `deploy/compose/smoke.sh monitoring` (after `make -C deploy container-metrics disk-usage` and a backup,
+  `SMOKE_EXPECT_BACKUP=1`) → every line `ok`, exit 0.
+
+### 7.3 Disk truth
+
+- [ ] Each panel of Storage and backups against the host, within 2 %: `/ used` and `/data used` against `df -h / /data`;
+  each area against `du -sb <directory>` (uploads, restic repository, dumps, nginx logs); the database size
+  against `docker compose exec -T postgres psql -U postgres -tAc "select pg_database_size('manuspectrum')"`.
+  - On failure: a difference on `/data` only is the `.snapshot` directory of the network filesystem (counted by
+    `df`, not by the area panels): note it, it is expected.
+
+### 7.4 Cost of the disk measure (decides hourly or four times a day)
+
+- [ ] *(service account)* `time make -C deploy disk-usage` on the production-sized data (step 2.9). Record the real
+  time. Under 60 s: keep the hourly timer. Over 60 s, or `time` shows the site slower during the run
+  (`curl -w '%{time_total}\n' -o /dev/null -s https://<name>/en/` in a second terminal): switch the timer to
+  `OnCalendar=*-*-* 00,06,12,18:17` (the line is in `manuspectrum-disk-usage.timer.in`) and record it.
+- [ ] `grep -c . "$METRICS_TEXTFILE_DIR"/manuspectrum_disk_usage.prom` is non-zero and `manuspectrum_disk_usage_failed 0`.
+- [ ] A path that is a mountpoint is refused: `METRICS_TEXTFILE_DIR=<existing absolute dir> DISK_USAGE_AREAS="media=/data" deploy/scripts/host-metrics.sh disk`
+  exits 2 with `is a mountpoint` and writes nothing.
+
+### 7.5 Alert e-mail, report and recipients
+
+- [ ] `make -C deploy alert-test`, then within 2 minutes the Mailpit API lists a message whose `Subject` starts with
+  `[ManuSpectrum][Alert] CRITICAL AlertTest`, whose `From` is the `ALERT_EMAIL_FROM` address and which carries the
+  header `X-ManuSpectrum-Category: alert` (`smoke.sh mail alert`), even in the 15 minutes after a boot. A `RESOLVED`
+  message arrives 5 to 10 minutes after the alert ends (resolution, then the next 5-minute flush).
+- [ ] `make -C deploy report-test` → a message `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>`, in French, header
+  `report`; `smoke.sh mail report` agrees. `make -C deploy report-test ARGS="--month 2020-01"` shows "n/d" for
+  data older than 30 days and exits 1 only when Prometheus did not answer.
+- [ ] Change the recipients: edit `ALERT_EMAILS` in `.env` to two addresses, `make -C deploy alert-recipients` →
+  returns once Alertmanager is ready; `make -C deploy alert-test` reaches both. A bad value (`ALERT_EMAILS=a@b.test,`)
+  makes the target fail with `fix .env; alertmanager was left running unchanged`, and `make -C deploy alerts` still
+  answers.
+- [ ] Heartbeat window: the Monday 08:00 mail needs a Monday. Check the route instead:
+  `dc exec -T alertmanager amtool config routes test --config.file=/tmp/alertmanager.yml alertname=Watchdog`
+  → `heartbeat`. Then on the first Monday after installation, a message
+  `[ManuSpectrum][Heartbeat] Alerting chain OK` arrived between 08:00 and 08:05 (Europe/Paris), once.
+  - Limit: if the VM is down no mail is sent; a missing Monday mail is the signal.
+
+### 7.6 Real triggers
+
+- [ ] `dc stop worker` → after the rule's duration `ContainerMissing` (warning) is in `make -C deploy alerts`, mailed only on a weekday between 08:00 and 19:00; `dc start worker`
+  → a `RESOLVED` mail.
+- [ ] `chmod 000 "$RESTIC_REPOSITORY_DIR"`, `make -C deploy backup TAG=manual` fails, `BackupFailed` mails;
+  `chmod 700` it back and run the backup again.
+- [ ] Fill a sparse file on `/` beyond 80 %: `fallocate -l <size> /var/tmp/fill` → after 30 minutes `DiskUsageHigh`
+  (warning) is in `make -C deploy alerts`, mailed only on a weekday between 08:00 and 19:00; remove the file.
+- [ ] A certificate that expires within a few days (`make certs-local` with a short validity, or the renewal timer
+  cut) → `CertificateExpiringSoon`.
+- [ ] A hung network filesystem, only if the export can be stopped without harm to the rehearsal data
+  (`systemctl stop nfs-server` on the host, for under 10 minutes): `NfsUnavailable` (critical) fires after 5 minutes,
+  Prometheus and the site's pages that do not read `/data` keep answering, and the metric timers do not pile up
+  (`systemctl list-units 'manuspectrum-*' --state=activating`). Start the server again and check `/data` is readable.
+  Skip this check when the export carries other work.
+
+### 7.7 Reboot
+
+- [ ] `sudo reboot`. Within 15 minutes after boot no alert mail arrives (`RecentlyRebooted` holds them back);
+  `HostRebooted` is visible in `make -C deploy alerts`; once the stack is back, `smoke.sh monitoring` is `ok`
+  and every target is up. Stopping `worker` at boot for 20 minutes lets the held alert fire after the grace period.
+
+### 7.8 Memory
+
+- [ ] After 1 h and after 24 h: `docker stats --no-stream` for the seven monitoring containers, and
+  `prometheus_tsdb_head_series` (Prometheus through the tunnel). Record both; adjust `--storage.tsdb.retention.size`
+  if the 30-day estimate exceeds 8 GB.
+
+### 7.9 What cannot be tested in rehearsal
+
+The real SMTP relay and the acceptance of the sender `noreply@manuspectrum.<domain>` by it (SPF and DMARC of a real
+domain); delivery to the institution's generic address and who receives it; the external probe (PP-9); the real
+sizes of the data directories.
+
+### 7.10 Before production
+
+- [ ] `ALERT_EMAILS` holds the institution's generic address; `ALERT_EMAIL_FROM` and `DEFAULT_FROM_EMAIL` the same
+  sender on the host's own domain (never an institutional one).
+- [ ] The vault item has `grafana_admin_password` and `pg_monitor_password`.
+- [ ] On the production VM: `make -C deploy alert-test` arrives in the generic mailbox, not in quarantine, with its
+  prefix and header; `make -C deploy report-test` too. Mail filters sorting `[ManuSpectrum][<Category>]` are set up.
+- [ ] `AllowTcpForwarding yes` is set for the administrators' accounts and the tunnel of 7.2 works there.
+- [ ] The timers are installed by PP-8 and listed by `systemctl list-timers 'manuspectrum-*'`; the disk-usage
+  schedule decided in 7.4 is recorded.
+
 ---
 
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): deployed observability, accounts, Ansible, delivery, then
+what to do on failure): accounts, Ansible, delivery, then
 "Before production".

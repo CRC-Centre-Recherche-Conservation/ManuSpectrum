@@ -1,0 +1,59 @@
+rule_files:
+  - ../rules/biblissima.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a share of busy calls with volume warns, a single busy call does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_biblissima_upstream_requests_total{endpoint="search", outcome="busy"}
+    values: 0+1x60
+  - series: manuspectrum_biblissima_upstream_requests_total{endpoint="search", outcome="ok"}
+    values: 0+1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="BiblissimaBusy", alertstate="firing"}
+    eval_time: 10m
+    exp_samples: []
+  - expr: ALERTS{alertname="BiblissimaBusy", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="BiblissimaBusy", alertstate="firing", service="biblissima", severity="warning"}
+      value: 1
+- name: every call busy but only a handful of calls is not an alert
+  interval: 5m
+  input_series:
+  - series: manuspectrum_biblissima_upstream_requests_total{endpoint="search", outcome="busy"}
+    values: 0+1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="BiblissimaBusy", alertstate="firing"}
+    eval_time: 200m
+    exp_samples: []
+- name: no Biblissima traffic at all is silent
+  interval: 1m
+  input_series:
+  - series: up{job="web"}
+    values: 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="BiblissimaBusy", alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+- name: a spent write budget warns and keeps firing until the next working window
+  interval: 1m
+  input_series:
+  - series: manuspectrum_upstream_budget_spent_total{kind="write"}
+    values: 0+1x40 40x5000
+  - series: manuspectrum_upstream_budget_spent_total{kind="read"}
+    values: 0+1x40 40x5000
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteBudgetSpent", alertstate="firing"}
+    eval_time: 10m
+    exp_samples: []
+  - expr: ALERTS{alertname="WriteBudgetSpent", alertstate="firing"}
+    eval_time: 62h
+    exp_samples:
+    - labels: ALERTS{alertname="WriteBudgetSpent", alertstate="firing", service="biblissima", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="WriteBudgetSpent", alertstate="firing"}
+    eval_time: 70h
+    exp_samples: []

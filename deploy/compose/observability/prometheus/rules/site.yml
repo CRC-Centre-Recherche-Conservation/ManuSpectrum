@@ -1,0 +1,67 @@
+# Alert rules of the monitoring stack: site.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: site
+    rules:
+      - alert: SiteDown
+        expr: |
+          probe_success{job="blackbox-edge"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "The public site does not answer"
+          description: "The probe of the public /healthz through nginx has failed for 5 minutes ({{ $labels.instance }})."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#sitedown
+      - alert: NotReady
+        expr: |
+          probe_success{job="blackbox-readyz"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "The application reports it is not ready"
+          description: "/readyz has failed for 5 minutes. Failing components: {{ range query \"manuspectrum_readyz_component_up == 0\" | sortByLabel \"component\" }}{{ .Labels.component }} {{ else }}none reported{{ end }}"
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#notready
+      - alert: CantaloupeDown
+        expr: |
+          probe_success{job="blackbox-cantaloupe"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "The IIIF image server does not answer"
+          description: "The probe of Cantaloupe /iiif/3 has failed for 5 minutes. Images, the viewer and the Explorer thumbnails are affected."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#cantaloupedown
+      - alert: ErrorRateHigh
+        expr: |
+          (
+            (sum(rate(django_http_responses_total_by_status_view_method_total{status=~"5..",view!~"healthz|readyz|metrics"}[5m])) or vector(0))
+            / sum(rate(django_http_responses_total_by_status_view_method_total{view!~"healthz|readyz|metrics"}[5m]))
+          ) > 0.01
+          and
+          sum(rate(django_http_responses_total_by_status_view_method_total{view!~"healthz|readyz|metrics"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "More than 1 % of the requests fail with a 5xx"
+          description: "The share of 5xx answers over 5 minutes is {{ $value | humanizePercentage }}. Health, readiness and metrics views are excluded, and so is any period under 0.05 request per second."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#errorratehigh
+      - alert: SearchLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(django_http_requests_latency_seconds_by_view_method_bucket{view="explorer-search"}[10m]))) > 2
+          and
+          sum(rate(django_http_requests_latency_seconds_by_view_method_count{view="explorer-search"}[10m])) > 0.02
+        for: 15m
+        labels:
+          severity: warning
+          service: site
+        annotations:
+          summary: "The Explorer search is slow"
+          description: "The 95th percentile of the Explorer search is {{ $value | humanizeDuration }} over 10 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchlatencyhigh

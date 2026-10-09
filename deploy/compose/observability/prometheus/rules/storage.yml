@@ -1,0 +1,54 @@
+# Alert rules of the monitoring stack: storage.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: storage
+    rules:
+      - alert: DiskUsageHigh
+        expr: |
+          100 * (1 - node_filesystem_avail_bytes{mountpoint=~"/|/data",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{mountpoint=~"/|/data",fstype!~"tmpfs|overlay|squashfs"}) > 80
+        for: 30m
+        labels:
+          severity: warning
+          service: storage
+        annotations:
+          summary: "A disk is more than 80 % full"
+          description: "{{ $labels.mountpoint }} is {{ $value | humanize }} % used."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/storage.md#diskusagehigh
+      - alert: DiskAlmostFull
+        expr: |
+          100 * (1 - node_filesystem_avail_bytes{mountpoint=~"/|/data",fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{mountpoint=~"/|/data",fstype!~"tmpfs|overlay|squashfs"}) > 95
+        for: 5m
+        labels:
+          severity: critical
+          service: storage
+        annotations:
+          summary: "A disk is almost full"
+          description: "{{ $labels.mountpoint }} is {{ $value | humanize }} % used."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/storage.md#diskalmostfull
+      - alert: DiskFillingUp
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{mountpoint=~"/|/data",fstype!~"tmpfs|overlay|squashfs"}[6h], 24 * 3600) < 0
+        for: 1h
+        labels:
+          severity: warning
+          service: storage
+        annotations:
+          summary: "A disk will be full within a day"
+          description: "At the trend of the last 6 hours, {{ $labels.mountpoint }} is full in less than 24 hours."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/storage.md#diskfillingup
+      - alert: NfsUnavailable
+        expr: |
+          (
+            node_filesystem_device_error{mountpoint="/data"} == 1
+            or
+            absent(node_filesystem_device_error{mountpoint="/data"})
+          )
+          and on() (up{job="node"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+          service: storage
+        annotations:
+          summary: "The /data network filesystem is unavailable"
+          description: "/data is unmounted or does not answer. Missing series count only while node_exporter is up; if it is down, TargetDown reports that."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/storage.md#nfsunavailable

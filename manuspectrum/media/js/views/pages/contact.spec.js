@@ -39,6 +39,19 @@ beforeEach(() => {
     vi.restoreAllMocks();
 });
 
+describe("contact mail subject", () => {
+    it("starts with the Contact category prefix, then the reason and the name", async () => {
+        vi.resetModules();
+        const { composeSubject } = await import("./contact");
+        expect(composeSubject({ type: "access", name: "Ada" })).toBe(
+            "[ManuSpectrum][Contact] Access request — Ada",
+        );
+        expect(composeSubject({ type: "unknown", name: "Ada" })).toBe(
+            "[ManuSpectrum][Contact] Message — Ada",
+        );
+    });
+});
+
 describe("contact form validation", () => {
     it("flags every empty required field with its own ARIA-wired error", async () => {
         await boot();
