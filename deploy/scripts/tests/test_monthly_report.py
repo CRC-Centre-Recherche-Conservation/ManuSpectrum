@@ -51,6 +51,8 @@ ANSWERS = [
     ("restore_test_last_success", [vector(1793000000)]),
     ("manuspectrum_backup_failed", [vector(1)]),
     ("manuspectrum_restore_test_failed", [vector(0)]),
+    ("max_over_time(manuspectrum_active_accounts", [vector(14)]),
+    ("manuspectrum_active_accounts", [vector(12)]),
     ("node_boot_time_seconds", [vector(31)]),
     ("manuspectrum_container_restarts", [vector(2, container="web")]),
     ("manuspectrum_container_oom_kills", [vector(1, container="worker")]),
@@ -213,6 +215,30 @@ class MonthlyReport(unittest.TestCase):
         self.assertIn("worker 1", text)
         self.assertNotIn(UNAVAILABLE, text)
 
+    def test_active_accounts_give_the_end_of_month_value_and_the_peak(self):
+        result = run(self.servers)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = self.sent().get_content()
+        self.assertIn("fin du mois : 12", text)
+        self.assertIn("maximum sur le mois : 14", text)
+        self.assertNotIn("non disponible", text)
+        self.assertTrue(
+            any(
+                q.startswith("max(max_over_time(manuspectrum_active_accounts[2678400s]")
+                for q, _ in self.servers.prom.queries
+            )
+        )
+
+    def test_active_accounts_without_data_read_nd(self):
+        servers = Servers()
+        self.addCleanup(servers.close)
+        servers.prom.floor = 2**40
+        result = run(servers)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = body_of(servers.smtp.messages[0]).get_content()
+        self.assertIn("fin du mois : n/d", text)
+        self.assertIn("maximum sur le mois : n/d", text)
+
     def test_reboots_are_boot_time_moves_above_a_minute_not_any_change(self):
         result = run(self.servers)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -280,7 +306,7 @@ class MonthlyReport(unittest.TestCase):
         self.assertEqual(
             message["Subject"], "[ManuSpectrum][Report] Rapport mensuel 2026-10"
         )
-        self.assertEqual(message["X-ManuSpectrum-Category"], "report")
+        self.assertEqual(message["X-ManuSpectrum-Category"], "Report")
         self.assertEqual(message["From"], "noreply@manuspectrum.test")
         self.assertIn(
             "from:<noreply@manuspectrum.test>", self.servers.smtp.envelope[0].lower()
@@ -338,7 +364,7 @@ class MonthlyReport(unittest.TestCase):
     def test_dry_run_prints_and_does_not_send(self):
         result = run(self.servers, extra=["--dry-run"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("X-ManuSpectrum-Category: report", result.stdout)
+        self.assertIn("X-ManuSpectrum-Category: Report", result.stdout)
         self.assertEqual(self.servers.smtp.messages, [])
 
     def test_login_reads_the_password_file(self):

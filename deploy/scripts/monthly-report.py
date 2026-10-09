@@ -7,9 +7,8 @@ month that just ended. Python standard library only: the Make target runs it in
 a throwaway container of the application image on the Compose network.
 
 Every figure comes from the Prometheus HTTP API (PROMETHEUS_URL, default
-http://prometheus:9090). Nothing personal is read: only aggregated metrics, and
-the active-accounts line stays a note until the application exports such a
-metric. A section whose query fails reads "données indisponibles"; the report
+http://prometheus:9090). Nothing personal is read: only aggregated metrics (the
+active-accounts section reads one count, `manuspectrum_active_accounts`). A section whose query fails reads "données indisponibles"; the report
 is sent anyway and the exit status is then 1. Prometheus keeps 30 days: a
 figure older than that reads "n/d". The growth lines (free space, database)
 compare the end of the month with its start, or with 29 days before the run
@@ -344,9 +343,20 @@ def alerts(prom, start, end):
 
 
 def accounts(prom, start, end):
+    at = end.timestamp()
+    window = f"{int((end - start).total_seconds())}s"
+    last = prom.scalar("max(manuspectrum_active_accounts)", at)
+    peak = prom.scalar(
+        f"max(max_over_time(manuspectrum_active_accounts[{window}]))", at
+    )
+
+    def count(value):
+        return NO_DATA if value is None else str(int(round(value)))
+
     return [
-        "non disponible : l'application n'exporte pas encore de compteur de comptes actifs "
-        "(aucune donnée personnelle n'est lue pour ce rapport)"
+        f"comptes ayant ouvert une session dans les 30 derniers jours, fin du mois : {count(last)}",
+        f"maximum sur le mois : {count(peak)}",
+        "(nombre agrégé, aucun compte n'est lu ni nommé)",
     ]
 
 
@@ -396,7 +406,7 @@ def build_message(env, label, body, now):
     message["To"] = ", ".join(recipients(env.get("ALERT_EMAILS", "")))
     message["Date"] = format_datetime(now)
     message["Message-ID"] = make_msgid(domain=sender.rsplit("@", 1)[1])
-    message["X-ManuSpectrum-Category"] = "report"
+    message["X-ManuSpectrum-Category"] = "Report"
     message.set_content(body, charset="utf-8")
     return message
 

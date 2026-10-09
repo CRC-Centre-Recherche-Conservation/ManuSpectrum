@@ -202,3 +202,55 @@ class LedgerGaugesAtStartTests(TestCase):
     def test_a_database_error_does_not_break_worker_ready(self):
         with patch("django.db.connection.cursor", side_effect=RuntimeError("db")):
             worker_ready.send(sender=None)
+
+
+class ActiveAccountsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import timedelta
+
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        users = get_user_model().objects
+        now = timezone.now()
+        cls.baseline = tasks.count_active_accounts()
+        users.create_user("recent", last_login=now - timedelta(days=2))
+        users.create_user("edge", last_login=now - timedelta(days=29))
+        users.create_user("stale", last_login=now - timedelta(days=31))
+        users.create_user("never")
+        users.create_user("inactive", last_login=now, is_active=False)
+        users.create_superuser("root", password="x", last_login=now)
+        users.update_or_create(username="anonymous", defaults={"last_login": now})
+
+    def test_only_active_accounts_with_a_recent_login_are_counted(self):
+        self.assertEqual(tasks.count_active_accounts(), self.baseline + 3)
+
+    def test_the_task_sets_the_gauge_to_that_count(self):
+        total = tasks.record_active_accounts_task()
+        self.assertEqual(total, self.baseline + 3)
+        self.assertEqual(sample("manuspectrum_active_accounts"), total)
+
+    def test_the_gauge_carries_no_label(self):
+        self.assertEqual(metrics.ACTIVE_ACCOUNTS._labelnames, ())
+
+    def test_worker_ready_sets_the_gauge(self):
+        with patch.object(metrics.ACTIVE_ACCOUNTS, "set") as gauge_set:
+            with patch("django.db.connections.close_all") as close:
+                worker_ready.send(sender=None)
+        gauge_set.assert_called_once_with(self.baseline + 3)
+        close.assert_called()
+
+    def test_a_database_error_does_not_break_worker_ready(self):
+        with (
+            patch("manuspectrum.tasks.count_active_accounts", side_effect=RuntimeError),
+            patch("django.db.connections.close_all"),
+        ):
+            worker_ready.send(sender=None)
+
+    def test_the_task_is_scheduled_daily(self):
+        from django.conf import settings
+
+        entry = settings.CELERY_BEAT_SCHEDULE["record-active-accounts"]
+        self.assertEqual(entry["task"], "manuspectrum.record_active_accounts")
+        self.assertEqual(entry["schedule"], 24 * 3600)

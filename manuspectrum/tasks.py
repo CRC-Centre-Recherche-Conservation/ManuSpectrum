@@ -91,3 +91,34 @@ def prune_data_changes_task():
         metrics.DATA_CHANGE_ROWS.set(cursor.fetchone()[0])
     metrics.DATA_CHANGE_PRUNED.set(time.time())
     return deleted
+
+
+ACTIVE_ACCOUNT_DAYS = 30
+
+
+def count_active_accounts():
+    """Active accounts whose last login is within ``ACTIVE_ACCOUNT_DAYS`` days.
+
+    Every active account counts, staff and superusers included; the Arches
+    ``anonymous`` visitor never does. Only the number leaves this function.
+    """
+    from datetime import timedelta
+
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+
+    since = timezone.now() - timedelta(days=ACTIVE_ACCOUNT_DAYS)
+    return (
+        get_user_model()
+        .objects.filter(is_active=True, last_login__gte=since)
+        .exclude(username="anonymous")
+        .count()
+    )
+
+
+@shared_task(name="manuspectrum.record_active_accounts")
+def record_active_accounts_task():
+    """Refresh ``manuspectrum_active_accounts`` (a single aggregated count)."""
+    total = count_active_accounts()
+    metrics.ACTIVE_ACCOUNTS.set(total)
+    return total
