@@ -561,7 +561,8 @@ const pageCount = computed(() => {
 /** « Production: 15th century · Le Mont-Saint-Michel »: the date and the places of the production line, either one alone; empty without a line. */
 const production = computed(() => {
     const line = data.value?.history.find(
-        (entry) => entry.type === "production",
+        (entry) =>
+            entry.type === "production" && entry.carrier.model === "document",
     );
     if (!line) return "";
     const date = formatProductionDate(

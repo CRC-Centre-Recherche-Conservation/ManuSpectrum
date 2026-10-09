@@ -604,3 +604,31 @@ describe("Compare state", () => {
         expect(store.hiddenCurves).toEqual({});
     });
 });
+
+describe("map state", () => {
+    it("merges a patch and clamps the radius", () => {
+        const store = useExplorerStore();
+        store.setMapState({ mode: "territories", radius: 9000 });
+        expect(store.mapState.mode).toBe("territories");
+        expect(store.mapState.radius).toBe(400);
+        store.setMapState({ colour: "dominant" });
+        expect(store.mapState.radius).toBe(400);
+    });
+
+    it("follows up to four materials and refuses a fifth without changing", () => {
+        const store = useExplorerStore();
+        for (const uri of ["a", "b", "c", "d"]) {
+            expect(store.toggleTrack(uri)).toBe("pinned");
+        }
+        expect(store.toggleTrack("e")).toBe("refused");
+        expect(store.mapState.track).toEqual(["a", "b", "c", "d"]);
+        expect(store.toggleTrack("b")).toBe("unpinned");
+        expect(store.mapState.track).toEqual(["a", null, "c", "d"]);
+    });
+
+    it("sets the track mode", () => {
+        const store = useExplorerStore();
+        store.setTrackMode("all");
+        expect(store.trackMode).toBe("all");
+    });
+});

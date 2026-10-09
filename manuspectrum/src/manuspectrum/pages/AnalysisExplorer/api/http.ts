@@ -11,7 +11,8 @@ export type ExplorerRoute =
     | "manuspectrum:explorer-analysis"
     | "manuspectrum:explorer-items"
     | "manuspectrum:explorer-share"
-    | "manuspectrum:explorer-synthesis";
+    | "manuspectrum:explorer-synthesis"
+    | "manuspectrum:explorer-events";
 
 export interface JsonRequestOptions {
     urlParameters?: Record<string, string>;

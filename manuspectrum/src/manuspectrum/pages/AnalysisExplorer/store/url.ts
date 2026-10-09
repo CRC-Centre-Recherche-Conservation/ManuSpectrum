@@ -6,6 +6,10 @@ import {
     LIST_FILTER_KEYS,
     PAGE_SIZES,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import {
+    mapStateFromQuery,
+    writeMapState,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type { HistoryMode } from "@/manuspectrum/public/useUrlState.ts";
@@ -14,6 +18,7 @@ import type {
     PeriodEvent,
     PeriodMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { MapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type {
     CorpusScreen,
@@ -33,6 +38,7 @@ export interface UrlSnapshot {
     /** False when a document screen hides the analyses outside the filters (`outside=hide`). */
     outside: boolean;
     filters: Filters;
+    map: MapState;
 }
 
 const VIEWS: readonly ExplorerView[] = ["corpus", "map", "compare"];
@@ -50,7 +56,6 @@ const FOLIO_VIEWS: readonly FolioView[] = [
 ];
 const EVENT_TYPES: readonly EventType[] = [
     "production",
-    "current-location",
     "modification",
     "alteration",
     "analysis",
@@ -111,6 +116,7 @@ export function snapshotOf(store: ExplorerStore): UrlSnapshot {
             folioView: store.folioView,
             outside: store.showOutside,
             filters: store.filters,
+            map: store.mapState,
         }),
     ) as UrlSnapshot;
 }
@@ -148,6 +154,7 @@ export function toQuery(snapshot: UrlSnapshot): URLSearchParams {
     if (filters.undated) query.set("undated", "1");
     for (const type of [...filters.eventType].sort())
         query.append("eventType", type);
+    if (snapshot.view === "map") writeMapState(snapshot.map, query);
     return query;
 }
 
@@ -220,6 +227,7 @@ export function fromQuery(query: URLSearchParams): UrlSnapshot {
         folioView: document ? folioView : "analyses",
         outside: !(document && query.get("outside") === "hide"),
         filters,
+        map: mapStateFromQuery(query),
     };
 }
 
@@ -269,6 +277,7 @@ export function applySnapshot(
         state.folioView = snapshot.folioView;
         state.showOutside = snapshot.outside;
         state.filters = snapshot.filters;
+        state.mapState = snapshot.map;
     });
 }
 

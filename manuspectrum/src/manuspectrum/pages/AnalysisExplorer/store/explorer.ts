@@ -12,6 +12,11 @@ import {
     pinInSlots,
     unpinFromSlots,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
+import {
+    clampRadius,
+    defaultMapState,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
+import { toggleTracked } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type {
@@ -41,6 +46,8 @@ import type {
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { MapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
+import type { TrackResult } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import type { FocusMode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
@@ -190,6 +197,10 @@ export const useExplorerStore = defineStore("explorer", () => {
         mode: "any",
         tools: [],
     });
+    /** Map & timeline: mode, territory options, followed materials (by slot) and brushed years; in the address on the map view. */
+    const mapState = ref<MapState>(defaultMapState());
+    /** Whether the map lights the events carrying any or all of the followed materials. */
+    const trackMode = ref<FocusMode>("any");
     /** Rail groups folded to their heading; not in the address. */
     const collapsedGroups = ref<FacetGroup[]>([]);
     /** How the Materials window of Compare groups its rows; for the tab only, not in the address. */
@@ -585,6 +596,27 @@ export const useExplorerStore = defineStore("explorer", () => {
         return dropped;
     }
 
+    function setMapState(patch: Partial<MapState>): void {
+        mapState.value = {
+            ...mapState.value,
+            ...patch,
+            radius: clampRadius(patch.radius ?? mapState.value.radius),
+        };
+    }
+
+    /** Follows or stops following a material uri; a fifth is refused and changes nothing. */
+    function toggleTrack(uri: string): TrackResult {
+        const next = toggleTracked(mapState.value.track, uri);
+        if (next.result !== "refused") {
+            mapState.value = { ...mapState.value, track: next.slots };
+        }
+        return next.result;
+    }
+
+    function setTrackMode(mode: FocusMode): void {
+        trackMode.value = mode;
+    }
+
     return {
         view,
         corpusScreen,
@@ -598,6 +630,8 @@ export const useExplorerStore = defineStore("explorer", () => {
         overlays,
         basket,
         compare,
+        mapState,
+        trackMode,
         collapsedGroups,
         materialsGrouping,
         hiddenCurves,
@@ -638,6 +672,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         clearSelection,
         setFocusMode,
         pruneSelection,
+        setMapState,
+        toggleTrack,
+        setTrackMode,
     };
 });
 
