@@ -162,6 +162,24 @@ VM is down, nothing is sent; the external probe of PP-9 covers that case.
 
 ## Recipients and sender
 
+Every mail setting of the host `.env` at a glance. With one generic institutional
+address, the recipient settings all hold that address and the sender settings all
+hold an address on the host's own domain:
+
+| Setting | Role | Holds |
+| --- | --- | --- |
+| `CONTACT_EMAIL` | address shown on the public pages and used by the contact form | the generic address |
+| `ALERT_EMAILS` | receives alerts, the Monday heartbeat and the monthly report | the generic address |
+| `ADMINS` | receives Django's server-error mails (optional) | the generic address |
+| `ACME_EMAIL` | Let's Encrypt account, certificate notices (`CERT_MODE=acme`) | the generic address |
+| `ALERT_EMAIL_FROM` | sender of alerts, heartbeat and report | `noreply@<host domain>` |
+| `DEFAULT_FROM_EMAIL` | sender of application mail (password reset, Arches notices); required | `noreply@<host domain>` |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` | the outgoing relay | the hosting provider's relay |
+
+Outside `.env`, the host's `root` alias (system mail) points to the same generic
+address (set by the host role, PP-8). Every message carries a subject prefix and
+header to sort it (« Sorting the mail » below).
+
 **Recipients.** One comma-separated list, `ALERT_EMAILS`, in the host `.env`
 (never in Git). It serves the alerts, the monthly report and the Monday
 heartbeat. A generic list address managed by the institution is recommended: who
