@@ -23,7 +23,7 @@ from django.test import TestCase
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
 from manuspectrum.management.commands import check_pkg_inventory
-from tests.test_export_pkg import ORIGIN, SETTINGS_NODES, make_list
+from tests.test_export_pkg import ORIGIN, make_widget_row, SETTINGS_NODES, make_list
 
 
 class CheckPkgInventoryTests(TestCase):
@@ -196,6 +196,41 @@ class CheckPkgInventoryTests(TestCase):
         ]
         self.inventory_path.write_text(json.dumps(inventory), "utf-8")
         return graph
+
+    def widget_graph(self):
+        graph = models.GraphModel.objects.create(
+            name="Wid", isresource=True, slug="wid"
+        )
+        make_widget_row(graph)
+        self.publish(graph)
+        return graph
+
+    def reexport(self):
+        with mock.patch.object(
+            settings, "ARCHES_NAMESPACE_FOR_DATA_EXPORT", "http://localhost:8000/"
+        ):
+            self.inventory_path = self.export_inventory()
+
+    def test_a_graph_with_widgets_passes(self):
+        self.widget_graph()
+        self.reexport()
+        self.assertIn("Inventory check passed", self.check())
+
+    def test_a_graph_that_lost_widget_rows_is_reported(self):
+        graph = self.widget_graph()
+        self.reexport()
+        models.CardXNodeXWidget.objects.filter(card__graph=graph).delete()
+        message = self.failure()
+        self.assertIn("widget_rows", message)
+        self.assertIn("widgets referenced by the graphs", message)
+
+    def test_a_widget_missing_from_the_database_is_reported(self):
+        self.widget_graph()
+        self.reexport()
+        inventory = json.loads(self.inventory_path.read_text("utf-8"))
+        inventory["widgets"].append(str(uuid.uuid4()))
+        self.inventory_path.write_text(json.dumps(inventory), "utf-8")
+        self.assertIn("not registered in the database", self.failure())
 
     def test_the_publication_history_of_a_graph_is_not_counted(self):
         graph = self.inventory_with_graph("Model")

@@ -478,6 +478,38 @@ class RewriteOriginTests(SimpleTestCase):
         self.assertIn("http://localhost:80", text)
 
 
+def make_root(graph):
+    if not graph.node_set.filter(istopnode=True).exists():
+        models.Node.objects.create(
+            graph=graph,
+            alias="root",
+            name="root",
+            datatype="semantic",
+            istopnode=True,
+        )
+
+
+def make_widget_row(graph, widget=None):
+    widget = widget or models.Widget.objects.first()
+    make_root(graph)
+    group = models.NodeGroup.objects.create(nodegroupid=uuid.uuid4())
+    node = models.Node.objects.create(
+        nodeid=group.pk,
+        graph=graph,
+        alias=f"n{uuid.uuid4().hex[:8]}",
+        name="n",
+        datatype="string",
+        nodegroup=group,
+        istopnode=False,
+    )
+    card = models.CardModel.objects.create(
+        graph=graph, nodegroup=group, name="c", active=True
+    )
+    return models.CardXNodeXWidget.objects.create(
+        card=card, node=node, widget=widget, config={}, label="l"
+    )
+
+
 class ExportPkgTests(TestCase):
     def setUp(self):
         for model in (List, ListItem, ListItemValue):
@@ -941,6 +973,35 @@ class ExportPkgTests(TestCase):
             graphs["branches"],
             sorted(p.name for p in (out / "graphs" / "branches").iterdir()),
         )
+
+    def test_widgets_and_rows_per_graph_are_listed_in_the_inventory(self):
+        widgets = list(models.Widget.objects.all()[:2])
+        graph = models.GraphModel.objects.create(
+            name="With widgets", isresource=True, slug="with-widgets"
+        )
+        make_widget_row(graph, widgets[0])
+        make_widget_row(graph, widgets[0])
+        make_widget_row(graph, widgets[1])
+        inventory = json.loads(
+            (self.export() / "expected-inventory.json").read_text("utf-8")
+        )
+        self.assertEqual(sorted(str(w.widgetid) for w in widgets), inventory["widgets"])
+        self.assertEqual({str(graph.pk): 3}, inventory["widget_rows"])
+
+    def test_a_draft_graph_widgets_are_not_inventoried(self):
+        source = models.GraphModel.objects.create(
+            name="Src", isresource=True, slug="src"
+        )
+        make_root(source)
+        draft = models.GraphModel.objects.create(
+            name="Src draft", isresource=True, source_identifier=source
+        )
+        make_widget_row(draft)
+        inventory = json.loads(
+            (self.export() / "expected-inventory.json").read_text("utf-8")
+        )
+        self.assertEqual([], inventory["widgets"])
+        self.assertEqual({}, inventory["widget_rows"])
 
     def test_published_graphs_are_the_current_publications_per_language(self):
         graph = models.GraphModel.objects.create(

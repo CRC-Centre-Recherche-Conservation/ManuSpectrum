@@ -12,9 +12,10 @@ do not change the exit status.
 
 Compared: graphs (file names, cards with help, and the current publication of
 each graph per language; older publications are history and not counted),
-controlled lists (counts, `searchable`, and per list the item, value and
-sort-order digests of `export_pkg`; the item digest is always compared), map
-layers and sources, resource constraints, functions, plugins, renderer
+the widgets the graphs reference (each registered, the same set, and the
+number of card-node-widget rows per graph), controlled lists (counts,
+`searchable`, and per list the item, value and sort-order digests of
+`export_pkg`; the item digest is always compared), map layers and sources, resource constraints, functions, plugins, renderer
 configurations, and that the Mapbox key of the System Settings is empty.
 
 The loader reads each item's sort order under `ARCHES_NAMESPACE_FOR_DATA_EXPORT`.
@@ -38,6 +39,7 @@ from manuspectrum.management.commands.export_pkg import (
     list_digests,
     published_pairs,
     values_digest,
+    widget_usage,
 )
 from manuspectrum.models import RendererConfig
 
@@ -110,6 +112,23 @@ def compare(expected, warnings):
             help_cards += 1
     _diff("graphs.cards_with_help", graphs["cards_with_help"], help_cards, problems)
     _diff_sets("graphs.published", graphs["published"], published_pairs(), problems)
+
+    widgets, widget_rows = widget_usage()
+    registered = {
+        str(pk) for pk in models.Widget.objects.values_list("widgetid", flat=True)
+    }
+    unregistered = sorted(set(expected["widgets"]) - registered)
+    if unregistered:
+        problems.append(f"widgets: not registered in the database {unregistered}")
+    _diff_sets(
+        "widgets referenced by the graphs", expected["widgets"], widgets, problems
+    )
+    _diff(
+        "widget_rows (card-node-widget rows per graph)",
+        expected["widget_rows"],
+        widget_rows,
+        problems,
+    )
 
     wanted = expected["controlled_lists"]
     lists = list(List.objects.all())

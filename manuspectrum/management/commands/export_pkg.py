@@ -355,6 +355,18 @@ def published_pairs():
     return {f"{names[publication]}|{language}" for publication, language in rows}
 
 
+def widget_usage():
+    """(sorted widget ids, {graph id: number of card-node-widget rows}) of the
+    exported graphs. A graph whose widgets failed to import has fewer rows."""
+    rows = models.CardXNodeXWidget.objects.filter(
+        card__graph__in=exported_graphs()
+    ).values_list("card__graph_id", "widget_id")
+    per_graph = {}
+    for graph_id, _ in rows:
+        per_graph[str(graph_id)] = per_graph.get(str(graph_id), 0) + 1
+    return sorted({str(widget) for _, widget in rows}), dict(sorted(per_graph.items()))
+
+
 def expected_published():
     """What a fresh load holds: the importer publishes every graph of the
     package, in every language of `settings.LANGUAGES`, once."""
@@ -727,6 +739,7 @@ class Command(BaseCommand):
             "cards_with_help": help_cards,
             "published": sorted(published),
         }
+        self.inventory["widgets"], self.inventory["widget_rows"] = widget_usage()
 
     def export_lists(self, out, lists):
         stems = list_file_stems(lists)
