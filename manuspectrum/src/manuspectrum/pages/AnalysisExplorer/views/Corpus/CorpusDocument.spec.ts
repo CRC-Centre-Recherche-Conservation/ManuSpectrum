@@ -43,6 +43,8 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import type { Pinia } from "pinia";
 import type { Component, PropType } from "vue";
 
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { DocumentShown } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -95,6 +97,8 @@ const FolioStub = defineComponent({
         "layer-opacity",
         "layer-curtain",
         "layer-capture",
+        "captured",
+        "capture-failed",
         "layer-reset",
     ],
     setup(_props, { expose }) {
@@ -1651,7 +1655,7 @@ describe("CorpusDocument", () => {
         });
         const ZONE_BOX = { x: 100, y: 100, w: 800, h: 400 };
 
-        async function mountLaidLayer() {
+        async function mountLaidLayer(announce?: (message: string) => void) {
             const base = stubFetch({
                 annotations: [
                     annotation(1, {
@@ -1666,15 +1670,24 @@ describe("CorpusDocument", () => {
                     : base(url),
             );
             vi.stubGlobal("fetch", fetchMock);
-            const { wrapper, store } = mountScreen((opened) => {
-                opened.openDocument(uuid(1));
-                opened.focusOn({ kind: "analysis", id: uuid(101) });
-                opened.setOverlay(LAYER, {
-                    element: "Pb",
-                    opacity: 0.7,
-                    on: true,
-                });
-            });
+            const { wrapper, store } = mountScreen(
+                (opened) => {
+                    opened.openDocument(uuid(1));
+                    opened.focusOn({ kind: "analysis", id: uuid(101) });
+                    opened.setOverlay(LAYER, {
+                        element: "Pb",
+                        opacity: 0.7,
+                        on: true,
+                    });
+                },
+                announce
+                    ? {
+                          provide: {
+                              [ANNOUNCE_KEY as unknown as symbol]: announce,
+                          },
+                      }
+                    : {},
+            );
             await flushPromises();
             const folio = wrapper.getComponent({ name: "FolioMap" });
             return { wrapper, store, folio };
@@ -1825,6 +1838,74 @@ describe("CorpusDocument", () => {
                 quarter: 0,
             });
             wrapper.unmount();
+        });
+
+        describe("capturing the folio", () => {
+            const CAPTURE = {
+                url: "https://iiif.example/image/f12r/0,0,400,300/800,600/0/default.jpg",
+                width: 800,
+                height: 600,
+            };
+
+            function mountCapturing() {
+                const announce = vi.fn();
+                return mountLaidLayer(announce).then((mounted) => ({
+                    ...mounted,
+                    announce,
+                }));
+            }
+
+            it("keeps the capture of the layer's analysis on the current canvas and announces it once", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                await flushPromises();
+                expect(folio.props("capturing")).toBe(LAYER);
+                folio.vm.$emit("captured", LAYER, CAPTURE);
+                await flushPromises();
+                const held = useRegistration().get(uuid(101));
+                expect(held?.capture).toMatchObject({
+                    ...CAPTURE,
+                    canvas: expect.any(String),
+                    at: expect.any(Number),
+                });
+                expect(held?.capture?.canvas).toBe(held?.canvas);
+                expect(announce).toHaveBeenCalledTimes(1);
+                expect(announce).toHaveBeenCalledWith(
+                    "Capture saved in this browser.",
+                );
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
+
+            it("offers to see the capture in Compare", async () => {
+                const { wrapper, store, folio } = await mountCapturing();
+                folio.vm.$emit("captured", LAYER, CAPTURE);
+                await flushPromises();
+                const link = wrapper.find("button.capture-compare");
+                expect(link.text()).toBe("See it in Compare");
+                await link.trigger("click");
+                expect(store.view).toBe("compare");
+                wrapper.unmount();
+            });
+
+            it("announces a failed capture and stores nothing", async () => {
+                const { wrapper, folio, announce } = await mountCapturing();
+                folio.vm.$emit("layer-capture", LAYER);
+                folio.vm.$emit("capture-failed", LAYER);
+                await flushPromises();
+                expect(announce).toHaveBeenCalledTimes(1);
+                expect(announce).toHaveBeenCalledWith(
+                    "The capture could not be taken: the image server did not answer.",
+                );
+                expect(
+                    useRegistration().get(uuid(101))?.capture ?? null,
+                ).toBeNull();
+                expect(wrapper.find("button.capture-compare").exists()).toBe(
+                    false,
+                );
+                expect(folio.props("capturing")).toBeNull();
+                wrapper.unmount();
+            });
         });
     });
 });

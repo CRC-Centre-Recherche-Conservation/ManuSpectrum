@@ -170,6 +170,7 @@ describe("folio overlays", () => {
                 quarter: 0,
                 registered: false,
                 canTurn: true,
+                service: "https://iiif.example/image/hg",
                 zoneBounds: [
                     [-1, 0],
                     [0, 2],

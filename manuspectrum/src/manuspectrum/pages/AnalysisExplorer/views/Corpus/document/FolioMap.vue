@@ -24,13 +24,21 @@ import {
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
+    layerSizeOf,
+    planCapture,
+    probeImage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
+import {
     boundsOfBox,
     boxOfBounds,
+    captureRegion,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import {
     fitPage,
     layPage,
+    pageBoundsOf,
+    servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     nextId,
@@ -123,6 +131,11 @@ const emit = defineEmits<{
     "layer-opacity": [key: string, value: number];
     "layer-curtain": [key: string, on: boolean];
     "layer-capture": [key: string];
+    captured: [
+        key: string,
+        capture: { url: string; width: number; height: number },
+    ];
+    "capture-failed": [key: string];
     "layer-reset": [key: string];
     "layer-place": [key: string, box: Box];
 }>();
@@ -434,6 +447,39 @@ function drawPage(): void {
     page = layPage(map, service, () => {
         pageFailed.value = true;
     });
+}
+
+/**
+ * Takes the folio region under a layer: `layer-capture` says it started, then
+ * `captured` once the image server answers the url, else `capture-failed`.
+ */
+async function captureUnder(overlay: FolioOverlay): Promise<void> {
+    emit("layer-capture", overlay.key);
+    const service = props.canvas?.image.service ?? null;
+    const bounds = pageBoundsOf(page);
+    const served = servedSize(page);
+    const box = boxOfBounds(overlay.bounds);
+    const region =
+        bounds && served ? captureRegion(box, { bounds, served }) : null;
+    let capture: { url: string; width: number; height: number } | null = null;
+    if (region) {
+        const element = laid?.layerOf(overlay.key)?.getElement() ?? null;
+        const layerSize = (await layerSizeOf(
+            overlay.service ?? null,
+            element,
+            overlay.quarter,
+        )) ?? { w: region.w, h: region.h };
+        capture = planCapture({
+            page: bounds && served ? { bounds, served } : null,
+            service,
+            box,
+            quarter: overlay.quarter,
+            layerSize,
+        });
+    }
+    if (capture && (await probeImage(capture.url))) {
+        emit("captured", overlay.key, capture);
+    } else emit("capture-failed", overlay.key);
 }
 
 /** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
@@ -1099,7 +1145,7 @@ function wholePage(): void {
                     @turn="emit('layer-turn', overlay.key, $event)"
                     @opacity="emit('layer-opacity', overlay.key, $event)"
                     @curtain="emit('layer-curtain', overlay.key, $event)"
-                    @capture="emit('layer-capture', overlay.key)"
+                    @capture="captureUnder(overlay)"
                     @reset="emit('layer-reset', overlay.key)"
                 />
             </Teleport>

@@ -62,6 +62,7 @@ import {
     techniqueStyles,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
+    ANNOUNCE_KEY,
     CURTAIN_KEY,
     FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
@@ -152,6 +153,11 @@ const hasIntroBar = introBar() !== null;
 const curtain = ref<string | null>(null);
 /** The key of the laid layer being adjusted on the folio. */
 const adjusting = ref<string | null>(null);
+/** The key of the laid layer whose capture is being taken. */
+const capturing = ref<string | null>(null);
+/** Whether a capture was just saved: the status line offers Compare. */
+const captureSaved = ref(false);
+const announce = inject(ANNOUNCE_KEY, () => undefined);
 let pageToFollow = store.focus !== null;
 /** The document whose first payload has placed the page. */
 let landedOn: string | null = null;
@@ -815,6 +821,38 @@ function onLayerCurtain(key: string, on: boolean): void {
     curtain.value = on ? key : null;
 }
 
+function onLayerCapture(key: string): void {
+    capturing.value = key;
+    captureSaved.value = false;
+}
+
+/** Keeps the capture of the layer's analysis, with the canvas it was taken on. */
+function onCaptured(
+    key: string,
+    capture: { url: string; width: number; height: number },
+): void {
+    capturing.value = null;
+    const layer = laidLayer(key);
+    const canvas = currentCanvas.value?.id;
+    if (!layer || !canvas) return;
+    registration.setCapture(layer.analysis, {
+        ...capture,
+        canvas,
+        at: Date.now(),
+    });
+    captureSaved.value = true;
+    announce($gettext("Capture saved in this browser."));
+}
+
+function onCaptureFailed(): void {
+    capturing.value = null;
+    announce(
+        $gettext(
+            "The capture could not be taken: the image server did not answer.",
+        ),
+    );
+}
+
 function onLayerReset(key: string): void {
     const layer = laidLayer(key);
     if (layer) registration.reset(layer.analysis);
@@ -1076,6 +1114,7 @@ function goHome(): void {
                             :overlays="overlays"
                             :curtain="curtain"
                             :adjusting="adjusting"
+                            :capturing="capturing"
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"
@@ -1084,6 +1123,9 @@ function goHome(): void {
                             @layer-place="onLayerPlace"
                             @layer-opacity="onLayerOpacity"
                             @layer-curtain="onLayerCurtain"
+                            @layer-capture="onLayerCapture"
+                            @captured="onCaptured"
+                            @capture-failed="onCaptureFailed"
                             @layer-reset="onLayerReset"
                         />
                         <FolioLegend
@@ -1091,6 +1133,20 @@ function goHome(): void {
                             :entries="pageLegend"
                         />
                     </div>
+                    <p
+                        v-if="captureSaved"
+                        class="capture-status"
+                        role="status"
+                    >
+                        {{ $gettext("Capture saved in this browser.") }}
+                        <button
+                            type="button"
+                            class="capture-compare"
+                            @click="store.setView('compare')"
+                        >
+                            {{ $gettext("See it in Compare") }}
+                        </button>
+                    </p>
                     <CanvasStrip
                         :canvases="canvases"
                         :current="currentCanvas?.id ?? null"
@@ -1330,6 +1386,22 @@ function goHome(): void {
 }
 
 .corpus-document .stage,
+.corpus-document .capture-status {
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: var(--p-text-sm-font-size, 0.875rem);
+}
+
+.corpus-document .capture-compare {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .corpus-document .side {
     position: sticky;
     inset-block-start: var(--explorer-top);

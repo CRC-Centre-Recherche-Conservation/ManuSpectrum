@@ -959,6 +959,107 @@ describe("FolioMap", () => {
             wrapper.unmount();
         });
 
+        describe("capturing the folio under a layer", () => {
+            function stubImage(outcome: "load" | "error") {
+                class Fake {
+                    onload: (() => void) | null = null;
+                    onerror: (() => void) | null = null;
+                    set src(_: string) {
+                        queueMicrotask(() => this[`on${outcome}`]?.());
+                    }
+                }
+                vi.stubGlobal("Image", Fake);
+            }
+
+            beforeEach(() => {
+                iiif = stubIiifLayer({ size: { w: 2000, h: 3000 } });
+                vi.stubGlobal(
+                    "fetch",
+                    vi.fn(async () => ({
+                        ok: true,
+                        json: async () => ({ width: 800, height: 600 }),
+                    })),
+                );
+            });
+
+            afterEach(() => vi.unstubAllGlobals());
+
+            it("emits the url of the region at the layer's size once the image server answers", async () => {
+                stubImage("load");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [-5, 0],
+                                [0, 5],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                const [key, capture] = (
+                    wrapper.emitted("captured") as unknown as [
+                        [
+                            string,
+                            { url: string; width: number; height: number },
+                        ],
+                    ]
+                )[0];
+                expect(key).toBe("a:0");
+                expect(capture.width).toBe(800);
+                expect(capture.height).toBe(600);
+                expect(capture.url).toMatch(
+                    /^https:\/\/iiif\.example\/image\/f12r\/\d+,\d+,\d+,\d+\/800,600\/0\/default\.jpg$/,
+                );
+                expect(wrapper.emitted("capture-failed")).toBeUndefined();
+                wrapper.unmount();
+            });
+
+            it("emits capture-failed when the image server does not answer", async () => {
+                stubImage("error");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [-5, 0],
+                                [0, 5],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                expect(wrapper.emitted("capture-failed")).toEqual([["a:0"]]);
+                expect(wrapper.emitted("captured")).toBeUndefined();
+                wrapper.unmount();
+            });
+
+            it("emits capture-failed for a layer off the page", async () => {
+                stubImage("load");
+                const wrapper = mountFolio({
+                    overlays: [
+                        laidLayer("a:0", {
+                            bounds: [
+                                [900, 900],
+                                [905, 905],
+                            ],
+                            service: "https://iiif.example/layer",
+                        }),
+                    ],
+                });
+                await flushPromises();
+                press(bars(wrapper)[0], "capture");
+                await flushPromises();
+                expect(wrapper.emitted("capture-failed")).toEqual([["a:0"]]);
+                wrapper.unmount();
+            });
+        });
+
         it("shows adjust and curtain pressed only on the layer they name", async () => {
             const wrapper = mountFolio({
                 overlays: [laidLayer("a:0"), laidLayer("a:1")],

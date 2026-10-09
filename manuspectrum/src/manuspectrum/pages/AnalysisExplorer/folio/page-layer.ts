@@ -632,6 +632,23 @@ export function servedSize(
     return { w: largest.x as number, h: largest.y as number };
 }
 
+/**
+ * The Leaflet bounds `[[-h, 0], [0, w]]` of a laid page, in CRS.Simple units
+ * (leaflet-iiif places an image at `size / 2^nativeZoom`); null until the
+ * info.json is read.
+ */
+export function pageBoundsOf(
+    page: PageLayer | null,
+): [[number, number], [number, number]] | null {
+    const size = servedSize(page);
+    if (!size) return null;
+    const scale = 2 ** nativeZoomOf(page);
+    return [
+        [-size.h / scale, 0],
+        [0, size.w / scale],
+    ];
+}
+
 /** The map zoom at which the page shows at its served size, one pixel per unit. */
 export function nativeZoomOf(page: PageLayer | null): number {
     const layer = page?.layer as IiifLayer | undefined;

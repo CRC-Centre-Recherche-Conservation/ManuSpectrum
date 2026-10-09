@@ -123,7 +123,7 @@ msgstr ""
 msgid "%{n} / %{total}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:531
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:537
 msgid "%{n} / %{total} analysis on this page"
 msgid_plural "%{n} / %{total} analyses on this page"
 msgstr[0] ""
@@ -135,15 +135,15 @@ msgid_plural "%{n} %{techniques} spectra, not drawn"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:319
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:332
 msgid "%{n} analyses here, %{kept} in the filters, zoom in"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:312
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:325
 msgid "%{n} analyses here, none in the filters"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:325
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:338
 msgid "%{n} analyses here, zoom in"
 msgstr ""
 
@@ -152,7 +152,7 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:241
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialEvidence.vue:52
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue:40
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:566
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:572
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:148
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:132
 msgid "%{n} analysis"
@@ -230,7 +230,7 @@ msgstr[1] ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ComponentStrip.vue:40
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:268
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts:339
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:571
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:577
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CanvasStrip.vue:156
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OutsideFiltersToggle.vue:35
 msgid "%{n} identified material"
@@ -274,7 +274,7 @@ msgid_plural "%{n} in focus"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1019
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1057
 msgid "%{n} in this document"
 msgstr ""
 
@@ -421,7 +421,7 @@ msgid_plural "%{n} samples"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:305
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:318
 msgid "%{n} samples here, zoom in"
 msgstr ""
 
@@ -700,7 +700,7 @@ msgstr ""
 msgid "Adjust the layer"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:734
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:780
 msgid "Adjusting %{label}: arrows move, plus and minus scale, Escape stops"
 msgstr ""
 
@@ -779,8 +779,8 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:513
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:144
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue:59
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:392
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:247
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:398
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:260
 msgid "Analysis"
 msgstr ""
 
@@ -868,6 +868,11 @@ msgstr ""
 msgid "Candidates at %{energy} keV (± %{tolerance})"
 msgstr ""
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1141
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:844
+msgid "Capture saved in this browser."
+msgstr ""
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue:204
 msgid "Capture the folio under the layer"
 msgstr ""
@@ -904,7 +909,7 @@ msgstr ""
 msgid "cites %{slots}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1033
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1071
 msgid "Clear"
 msgstr ""
 
@@ -1080,7 +1085,7 @@ msgid "Curtain"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue:261
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:218
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:231
 msgid "Curtain position"
 msgstr ""
 
@@ -1177,8 +1182,8 @@ msgstr ""
 msgid "derivative"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1105
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1163
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1161
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1219
 msgid "Details"
 msgstr ""
 
@@ -1262,8 +1267,8 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:243
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:344
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:403
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:259
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:385
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:272
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:398
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:330
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:366
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:396
@@ -1402,7 +1407,7 @@ msgstr ""
 msgid "Explore what the analyses of written heritage revealed."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:629
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:635
 msgid "Explorer home"
 msgstr ""
 
@@ -1479,7 +1484,7 @@ msgstr ""
 msgid "Filters of the stack applied to every pane"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1013
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1051
 msgid "Filters of this document"
 msgstr ""
 
@@ -1601,15 +1606,15 @@ msgstr ""
 msgid "Gallery shown"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:930
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:968
 msgid "Go to the card"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:923
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:961
 msgid "Go to the filters"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:916
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:954
 msgid "Go to the page"
 msgstr ""
 
@@ -1771,7 +1776,7 @@ msgstr ""
 msgid "In the Selection (%{slot})"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:253
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:266
 msgid "in the Selection as %{slots}"
 msgstr ""
 
@@ -2014,7 +2019,7 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue:517
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:430
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:581
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1076
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1122
 msgid "Map unavailable (image server)"
 msgstr ""
 
@@ -2182,7 +2187,7 @@ msgid "No identified material on this page."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:805
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1051
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1097
 msgid "No image for this page."
 msgstr ""
 
@@ -2427,11 +2432,11 @@ msgstr ""
 msgid "Overlay"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1039
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1077
 msgid "Page"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:599
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:605
 msgid "page %{n} / %{total}"
 msgstr ""
 
@@ -2439,12 +2444,12 @@ msgstr ""
 msgid "Page %{page} of %{pages}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:998
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1044
 msgid "Page and its analyses"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:813
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1059
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1105
 msgid "Page image unavailable (the institution's IIIF server)."
 msgstr ""
 
@@ -2549,7 +2554,7 @@ msgstr ""
 msgid "Production"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:555
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:561
 msgid "Production: %{text}"
 msgstr ""
 
@@ -2710,18 +2715,18 @@ msgstr ""
 msgid "Restore"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:611
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:617
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:409
 msgid "Results"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:614
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:620
 msgid "Results · %{n} analysis"
 msgid_plural "Results · %{n} analyses"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:619
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:625
 msgid "Results · %{n} document"
 msgid_plural "Results · %{n} documents"
 msgstr[0] ""
@@ -2737,8 +2742,8 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:822
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:436
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2058
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1068
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1082
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1114
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1128
 msgid "Retry"
 msgstr ""
 
@@ -2752,7 +2757,7 @@ msgid "Rule for the period"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:522
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:384
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:397
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/SampleCard.vue:80
 msgid "Sample"
 msgstr ""
@@ -2798,7 +2803,7 @@ msgstr ""
 msgid "Second derivative"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:589
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:595
 msgid "See %{n} analysis"
 msgid_plural "See %{n} analyses"
 msgstr[0] ""
@@ -2809,6 +2814,10 @@ msgid "See %{n} result"
 msgid_plural "See %{n} results"
 msgstr[0] ""
 msgstr[1] ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1147
+msgid "See it in Compare"
+msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue:19
 msgid "See the whole corpus"
@@ -2968,7 +2977,7 @@ msgstr ""
 msgid "Size of « %{title} »"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:909
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:947
 msgid "Skip links"
 msgstr ""
 
@@ -3120,6 +3129,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:307
 msgid "The canvas has no “Imaging layers” tile: the stored label is shown as is."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:850
+msgid "The capture could not be taken: the image server did not answer."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1935
@@ -3369,8 +3382,8 @@ msgid "What to share"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:765
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1034
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1035
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1080
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1081
 msgid "Whole page"
 msgstr ""
 
@@ -3485,16 +3498,16 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue:630
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:518
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:479
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1006
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1007
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1052
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1053
 msgid "Zoom in"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue:636
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:524
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:485
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1020
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1021
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1066
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1067
 msgid "Zoom out"
 msgstr ""
 

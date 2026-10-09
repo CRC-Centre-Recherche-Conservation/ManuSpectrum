@@ -46,6 +46,8 @@ export interface FolioOverlay {
     registered: boolean;
     /** True when the image service can turn the layer. */
     canTurn: boolean;
+    /** The layer's IIIF image service, when it has one. */
+    service?: string | null;
     /** The bounding box of the analysis's marked zone on this page. */
     zoneBounds: [LatLng, LatLng];
 }
@@ -163,6 +165,7 @@ export function folioOverlays(
                     quarter,
                     registered,
                     canTurn,
+                    service: layer.image.service,
                     zoneBounds: bounds,
                 });
             }

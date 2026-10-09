@@ -8,6 +8,7 @@ import {
     layPage,
     layServed,
     nativeZoomOf,
+    pageBoundsOf,
     servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
@@ -163,6 +164,23 @@ describe("servedSize", () => {
         await Promise.resolve();
         expect(servedSize(page)).toEqual({ w: 1529, h: 2405 });
         expect(nativeZoomOf(page)).toBe(2);
+    });
+
+    it("lays the page bounds at size / 2^nativeZoom units, y down", async () => {
+        fake = pendingPage([
+            { x: 300, y: 500 },
+            { x: 1529, y: 2405 },
+        ]);
+        const page = layPage(map, "https://iiif.example/image/p1", vi.fn());
+        expect(pageBoundsOf(page)).toBeNull();
+        answer.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(pageBoundsOf(page)).toEqual([
+            [-2405 / 2, 0],
+            [0, 1529 / 2],
+        ]);
+        expect(pageBoundsOf(null)).toBeNull();
     });
 
     it("reads no size from a missing page or a size that is not a number", async () => {
