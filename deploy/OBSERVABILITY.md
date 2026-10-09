@@ -170,7 +170,7 @@ hold an address on the host's own domain:
 | --- | --- | --- |
 | `CONTACT_EMAIL` | address shown on the public pages and used by the contact form | the generic address |
 | `ALERT_EMAILS` | receives alerts, the Monday heartbeat and the monthly report | the generic address |
-| `ADMINS` | receives Django's server-error mails (optional) | the generic address |
+| `ADMINS` | unused: the image logs no `mail_admins` handler, server errors are counted and alerted (`ErrorRateHigh`, `ErrorLogRateHigh`) | leave empty |
 | `ACME_EMAIL` | Let's Encrypt account, certificate notices (`CERT_MODE=acme`) | the generic address |
 | `ALERT_EMAIL_FROM` | sender of alerts, heartbeat and report | `noreply@<host domain>` |
 | `DEFAULT_FROM_EMAIL` | sender of application mail (password reset, Arches notices); required | `noreply@<host domain>` |
