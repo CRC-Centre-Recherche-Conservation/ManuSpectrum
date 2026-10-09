@@ -304,6 +304,9 @@ export function adjustLayer(
     for (const corner of CORNERS) {
         const element = L.DomUtil.create("div", "adjust-handle", pane);
         element.dataset.corner = corner;
+        element.style.position = "absolute";
+        element.style.left = "0";
+        element.style.top = "0";
         element.style.pointerEvents = "auto";
         element.style.width = HANDLE_SIZE;
         element.style.height = HANDLE_SIZE;

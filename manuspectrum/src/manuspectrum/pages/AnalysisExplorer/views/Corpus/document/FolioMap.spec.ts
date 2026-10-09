@@ -1150,6 +1150,31 @@ describe("FolioMap", () => {
             wrapper.unmount();
         });
 
+        it("puts the toolbar above the top edge of the layer while it is adjusted, on the corner otherwise", async () => {
+            vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                L.point(800, 600),
+            );
+            vi.spyOn(
+                HTMLElement.prototype,
+                "offsetHeight",
+                "get",
+            ).mockReturnValue(38);
+            const wrapper = mountFolio({ overlays: [laidLayer("a:0")] });
+            await flushPromises();
+            const host = wrapper.element.querySelector(
+                ".layer-controls-host",
+            ) as HTMLElement;
+            const onCorner = Number.parseFloat(host.style.top);
+            await wrapper.setProps({ adjusting: "a:0" });
+            await flushPromises();
+            const above = Number.parseFloat(host.style.top);
+            expect(above).toBeLessThanOrEqual(onCorner - 38);
+            await wrapper.setProps({ adjusting: null });
+            await flushPromises();
+            expect(Number.parseFloat(host.style.top)).toBe(onCorner);
+            wrapper.unmount();
+        });
+
         it("keeps the toolbar on the box being adjusted when the layer is redrawn", async () => {
             vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
                 L.point(800, 600),

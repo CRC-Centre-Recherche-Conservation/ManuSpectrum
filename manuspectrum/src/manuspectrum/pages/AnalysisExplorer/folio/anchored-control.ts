@@ -4,13 +4,17 @@ import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometr
 
 // Above Leaflet's panes (up to 700) and level with the folio's own controls.
 const CONTROL_Z_INDEX = "1000";
+// The room above a top edge for the half of an adjust handle (0.625rem) and a margin.
+const ABOVE_GAP = 16;
 
 export interface AnchoredControl {
     /**
      * Keeps the element's top-right corner on the top-right corner of
      * `bounds`, `stack` pixels lower (the room of the controls laid before it).
+     * With `above`, the element sits instead right above the top edge of
+     * `bounds`, clear of the handles on its corners, and `stack` is ignored.
      */
-    place(bounds: [LatLng, LatLng], stack?: number): void;
+    place(bounds: [LatLng, LatLng], stack?: number, above?: boolean): void;
     /** Stops following the map and takes the element off it. */
     remove(): void;
 }
@@ -29,6 +33,7 @@ export function anchoredControl(
 ): AnchoredControl {
     let bounds: [LatLng, LatLng] | null = null;
     let offset = 0;
+    let above = false;
     element.style.position = "absolute";
     element.style.zIndex = CONTROL_Z_INDEX;
     L.DomEvent.disableClickPropagation(element);
@@ -47,7 +52,10 @@ export function anchoredControl(
             Math.max(corner.x - element.offsetWidth, 0),
             maxLeft,
         );
-        const top = Math.min(Math.max(corner.y + offset, 0), maxTop);
+        const wanted = above
+            ? corner.y - element.offsetHeight - ABOVE_GAP
+            : corner.y + offset;
+        const top = Math.min(Math.max(wanted, 0), maxTop);
         element.style.left = `${left}px`;
         element.style.top = `${top}px`;
     }
@@ -60,9 +68,10 @@ export function anchoredControl(
     observer?.observe(element);
 
     return {
-        place(next, stack = 0) {
+        place(next, stack = 0, over = false) {
             bounds = next;
             offset = stack;
+            above = over;
             reposition();
         },
         remove() {

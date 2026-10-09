@@ -46,6 +46,31 @@ describe("anchoredControl", () => {
         expect(host.style.top).toBe(`${point.y}px`);
     });
 
+    it("sits above the top edge, right-aligned, when asked to, kept inside the container", () => {
+        const bounds: Bounds = [
+            [-20, -30],
+            [30, 40],
+        ];
+        Object.defineProperty(host, "offsetWidth", { value: 120 });
+        Object.defineProperty(host, "offsetHeight", { value: 38 });
+        const control = anchoredControl(map, host);
+        control.place(bounds, 44, true);
+        const point = corner(bounds);
+        expect(host.style.left).toBe(`${point.x - 120}px`);
+        expect(Number.parseFloat(host.style.top)).toBeLessThanOrEqual(
+            point.y - 38,
+        );
+        control.place(
+            [
+                [4000, 4000],
+                [5000, 5000],
+            ],
+            44,
+            true,
+        );
+        expect(host.style.top).toBe("0px");
+    });
+
     it("sits lower by the stacking offset it is given, kept inside the container", () => {
         const bounds: Bounds = [
             [-20, -30],

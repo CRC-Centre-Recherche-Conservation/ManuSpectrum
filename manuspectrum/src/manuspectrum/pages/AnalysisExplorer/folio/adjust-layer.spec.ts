@@ -115,6 +115,14 @@ describe("adjustLayer", () => {
         ).toEqual(["nw", "ne", "se", "sw"]);
     });
 
+    it("lays each handle out of the flow, so the four sit on their corners and not under one another", () => {
+        begin();
+        for (const corner of ["nw", "ne", "se", "sw"]) {
+            const element = handle(corner);
+            expect(element.style.position).toBe("absolute");
+        }
+    });
+
     it("places each handle on its corner of the box and follows the map", () => {
         begin();
         const point = (x: number, y: number) =>

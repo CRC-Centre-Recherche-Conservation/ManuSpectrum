@@ -227,7 +227,13 @@ watch(
     },
 );
 watch(() => [props.overlays, props.curtain], drawOverlays);
-watch(() => props.adjusting, syncAdjustment);
+watch(
+    () => props.adjusting,
+    () => {
+        syncAdjustment();
+        drawControls();
+    },
+);
 
 onMounted(() => {
     const surface = host.value?.querySelector<HTMLElement>(".surface");
@@ -822,7 +828,7 @@ function startAdjustment(
         describedBy: adjustHelpId,
         onChange(box) {
             current.shown = box;
-            anchors.get(key)?.place(boundsOfBox(box), stackOffsetOf(key));
+            anchors.get(key)?.place(boundsOfBox(box), stackOffsetOf(key), true);
         },
         onDone(box) {
             if (current.quiet) return;
@@ -873,6 +879,7 @@ function drawControls(): void {
                 ? boundsOfBox(adjustment.shown)
                 : overlay.bounds,
             index * CONTROLS_STACK_STEP,
+            props.adjusting === overlay.key,
         );
     }
     if (
