@@ -37,6 +37,7 @@ import {
     useDocumentMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentMatch.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
+import { useRegistration } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { filterQuery } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSearch.ts";
 import {
@@ -127,6 +128,7 @@ const focusedAnalysis = computed(() =>
     store.focus?.kind === "analysis" ? store.focus.id : null,
 );
 const analysis = useAnalysis(() => focusedAnalysis.value);
+const registration = useRegistration();
 const narrow = useMediaQuery(NARROW_QUERY);
 const phone = useMediaQuery(PHONE_QUERY);
 const heading = useTemplateRef<HTMLElement>("heading");
@@ -502,6 +504,13 @@ const overlays = computed(() =>
             : null,
         store.overlays,
         pageAnnotations.value,
+        {
+            canvas: currentCanvas.value?.id ?? null,
+            registration:
+                focusedAnalysis.value === null
+                    ? null
+                    : registration.get(focusedAnalysis.value),
+        },
     ),
 );
 const pageCount = computed(() => {

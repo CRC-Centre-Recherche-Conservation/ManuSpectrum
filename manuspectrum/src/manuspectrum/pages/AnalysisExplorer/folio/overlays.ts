@@ -7,12 +7,20 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
+import {
+    boundsOfBox,
+    rotatedImageUrl,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
+
 import type {
     AnalysisPayload,
     ImageRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import type { Quarter } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import type { Registration } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import type { Overlay } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 const OVERLAY_SIZE = 2048;
@@ -30,6 +38,16 @@ export interface FolioOverlay {
     bounds: [LatLng, LatLng];
     opacity: number;
     label: string;
+    /** The analysis the layer belongs to. */
+    analysis: string;
+    /** Quarter turns applied by the image service; 0 for a layer that cannot turn. */
+    quarter: Quarter;
+    /** True when `bounds` is the reader's registered box rather than the zone's. */
+    registered: boolean;
+    /** True when the image service can turn the layer. */
+    canTurn: boolean;
+    /** The bounding box of the analysis's marked zone on this page. */
+    zoneBounds: [LatLng, LatLng];
 }
 
 /** The key of a layer's settings in `store.overlays`. */
@@ -99,15 +117,18 @@ export function layerImageChain(
 }
 
 /**
- * The imaging layers of the open analysis that are switched on, each stretched
- * into the bounding box of the analysis's marked zone on this page
- * (`markedZones`; indicative, not registered). An analysis with only a point
- * here lays nothing.
+ * The imaging layers of the open analysis that are switched on. Each lies in
+ * its registered box, turned by its quarter, when `place.registration` is
+ * for `place.canvas` and holds a box (`UNPLACED` marks an entry that holds
+ * only a capture); otherwise it is stretched into the bounding box of the
+ * analysis's marked zone on this page (`markedZones`; indicative). An analysis
+ * with only a point here lays nothing.
  */
 export function folioOverlays(
     analysis: AnalysisPayload | null,
     overlays: Record<string, Overlay>,
     annotations: readonly Annotation[],
+    place?: { canvas: string | null; registration: Registration | null },
 ): FolioOverlay[] {
     if (!analysis) return [];
     const zone = markedZones(annotations).find(
@@ -115,20 +136,34 @@ export function folioOverlays(
     );
     const bounds = zone ? shapeBounds(zone.shape) : null;
     if (!bounds) return [];
+    const held = place?.registration ?? null;
+    const registered =
+        held !== null &&
+        held.canvas === place?.canvas &&
+        !(held.box.w === UNPLACED.w && held.box.h === UNPLACED.h);
     const result: FolioOverlay[] = [];
     for (const file of analysis.files) {
         for (const layer of file.layers) {
             const key = overlayKey(analysis.id, layer.index);
             const setting = overlays[key];
-            const url = layerImageUrl(layer.image);
+            const canTurn = layer.image.service !== null;
+            const quarter: Quarter = registered && canTurn ? held.quarter : 0;
+            const url =
+                (quarter ? rotatedImageUrl(layer.image, quarter) : null) ??
+                layerImageUrl(layer.image);
             if (setting?.on && url) {
                 result.push({
                     key,
                     url,
                     fallbackUrls: layerImageChain(layer.image).slice(1),
-                    bounds,
+                    bounds: registered ? boundsOfBox(held.box) : bounds,
                     opacity: setting.opacity,
                     label: layer.label,
+                    analysis: analysis.id,
+                    quarter,
+                    registered,
+                    canTurn,
+                    zoneBounds: bounds,
                 });
             }
         }

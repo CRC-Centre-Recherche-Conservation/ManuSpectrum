@@ -801,6 +801,14 @@ describe("FolioMap", () => {
                 ] as [[number, number], [number, number]],
                 opacity,
                 label: key,
+                analysis: "a",
+                quarter: 0 as const,
+                registered: false,
+                canTurn: true,
+                zoneBounds: [
+                    [-1, 0],
+                    [0, 2],
+                ] as [[number, number], [number, number]],
             };
         }
 

@@ -34,6 +34,14 @@ function overlay(
         ],
         opacity,
         label: key,
+        analysis: "a",
+        quarter: 0,
+        registered: false,
+        canTurn: true,
+        zoneBounds: [
+            [0, 0],
+            [-10, 10],
+        ],
     };
 }
 
@@ -186,5 +194,38 @@ describe("laidLayers", () => {
         laid.draw([overlay("a:0")], null);
         expect(images()).toHaveLength(1);
         expect(images()[0]).not.toBe(before);
+    });
+
+    it("sets the new address of a layer drawn again, keeping its image and starting its fallbacks over", () => {
+        const failed = vi.fn();
+        const laid = laidLayers(map, { curtainLabel: "Curtain", failed });
+        const chain = ["https://iiif.example/a:0-fallback.png"];
+        laid.draw([overlay("a:0", 1, chain)], null);
+        const image = images()[0];
+        image.dispatchEvent(new Event("error"));
+        expect(image.src).toBe("https://iiif.example/a:0-fallback.png");
+        const turned = {
+            ...overlay("a:0", 0.5, chain),
+            url: "https://iiif.example/a:0-turned.png",
+            bounds: [
+                [0, 0],
+                [-4, 4],
+            ] as FolioOverlay["bounds"],
+        };
+        const setUrl = vi.spyOn(L.ImageOverlay.prototype, "setUrl");
+        laid.draw([turned], null);
+        expect(setUrl).toHaveBeenCalledTimes(1);
+        expect(setUrl).toHaveBeenCalledWith(
+            "https://iiif.example/a:0-turned.png",
+        );
+        expect(images()).toEqual([image]);
+        expect(image.src).toBe("https://iiif.example/a:0-turned.png");
+        expect(image.style.opacity).toBe("0.5");
+        laid.draw([turned], null);
+        expect(setUrl).toHaveBeenCalledTimes(1);
+        image.dispatchEvent(new Event("error"));
+        expect(image.src).toBe("https://iiif.example/a:0-fallback.png");
+        expect(failed).not.toHaveBeenCalled();
+        setUrl.mockRestore();
     });
 });

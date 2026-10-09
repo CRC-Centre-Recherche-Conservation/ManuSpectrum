@@ -11,12 +11,16 @@ import {
     paneKey,
     removeOverlayPane,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
+import { boundsOfBox } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import {
     analysisPayload,
     annotation,
     imagingEntry,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+
+import type { Registration } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 
 describe("folio overlays", () => {
     it("asks the IIIF image at a bounded size", () => {
@@ -162,8 +166,129 @@ describe("folio overlays", () => {
                 ],
                 opacity: 0.6,
                 label: "Hg",
+                analysis: uuid(101),
+                quarter: 0,
+                registered: false,
+                canTurn: true,
+                zoneBounds: [
+                    [-1, 0],
+                    [0, 2],
+                ],
             },
         ]);
+    });
+
+    describe("registered place", () => {
+        const on = {
+            [overlayKey(uuid(101), 1)]: {
+                element: "Hg",
+                opacity: 0.6,
+                on: true,
+            },
+        };
+        const zone = annotation(1, {
+            dataKind: "chemical-imaging",
+            shape: { type: "rect", x: 0, y: 0, w: 64, h: 32 },
+        });
+        const registration = (
+            overrides: Partial<Registration> = {},
+        ): Registration => ({
+            canvas: "canvas-1",
+            box: { x: 64, y: 32, w: 128, h: 64 },
+            quarter: 1,
+            capture: null,
+            touched: 1,
+            ...overrides,
+        });
+        const lay = (
+            place: { canvas: string | null; registration: Registration | null },
+            analysis = analysisPayload({ files: [imagingEntry()] }),
+        ) => folioOverlays(analysis, on, [zone], place);
+
+        it("lays the layer in its registered box, turned, on its canvas", () => {
+            const [laid] = lay({
+                canvas: "canvas-1",
+                registration: registration(),
+            });
+            expect(laid.bounds).toEqual(
+                boundsOfBox({ x: 64, y: 32, w: 128, h: 64 }),
+            );
+            expect(laid.url).toBe(
+                "https://iiif.example/image/hg/full/!2048,2000/90/default.jpg",
+            );
+            expect(laid.quarter).toBe(1);
+            expect(laid.registered).toBe(true);
+            expect(laid.canTurn).toBe(true);
+            expect(laid.zoneBounds).toEqual([
+                [-1, 0],
+                [0, 2],
+            ]);
+        });
+
+        it("lays the zone box on another canvas", () => {
+            const [laid] = lay({
+                canvas: "canvas-2",
+                registration: registration(),
+            });
+            expect(laid.bounds).toEqual(laid.zoneBounds);
+            expect(laid.quarter).toBe(0);
+            expect(laid.registered).toBe(false);
+            expect(laid.url).toContain("/0/default.jpg");
+        });
+
+        it("lays the zone box without a registration", () => {
+            const [laid] = lay({ canvas: "canvas-1", registration: null });
+            expect(laid.registered).toBe(false);
+            expect(laid.bounds).toEqual(laid.zoneBounds);
+        });
+
+        it("counts an entry that holds only a capture as not registered", () => {
+            const [laid] = lay({
+                canvas: "canvas-1",
+                registration: registration({ box: UNPLACED, quarter: 2 }),
+            });
+            expect(laid.registered).toBe(false);
+            expect(laid.quarter).toBe(0);
+            expect(laid.bounds).toEqual(laid.zoneBounds);
+        });
+
+        it("drops the quarter of a layer that cannot turn", () => {
+            const entry = imagingEntry();
+            const flat = {
+                ...entry,
+                layers: entry.layers.map((layer) => ({
+                    ...layer,
+                    image: {
+                        service: null,
+                        url: "https://x/hg.png",
+                        width: 10,
+                        height: 10,
+                    },
+                })),
+            };
+            const [laid] = lay(
+                { canvas: "canvas-1", registration: registration() },
+                analysisPayload({ files: [flat] }),
+            );
+            expect(laid.canTurn).toBe(false);
+            expect(laid.quarter).toBe(0);
+            expect(laid.url).toBe("https://x/hg.png");
+            expect(laid.registered).toBe(true);
+            expect(laid.bounds).toEqual(
+                boundsOfBox({ x: 64, y: 32, w: 128, h: 64 }),
+            );
+        });
+
+        it("still lists the fallbacks", () => {
+            const [laid] = lay({
+                canvas: "canvas-1",
+                registration: registration(),
+            });
+            expect(laid.fallbackUrls).toEqual([
+                "https://iiif.example/image/hg/full/pct:68/0/default.jpg",
+                "https://iiif.example/image/hg/full/max/0/default.jpg",
+            ]);
+        });
     });
 
     it("lays nothing when the analysis has only a point on this page", () => {
