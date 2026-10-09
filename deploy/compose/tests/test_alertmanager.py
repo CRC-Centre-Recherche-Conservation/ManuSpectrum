@@ -431,10 +431,10 @@ class RoutingTests(RenderBase):
         }
         for name in ("email-now", "email-working-hours"):
             headers = receivers[name]["headers"]
-            self.assertEqual(headers["X-ManuSpectrum-Category"], "alert")
+            self.assertEqual(headers["X-ManuSpectrum-Category"], "Alert")
             self.assertEqual(headers["Subject"], '{{ template "ms.subject" . }}')
         headers = receivers["heartbeat"]["headers"]
-        self.assertEqual(headers["X-ManuSpectrum-Category"], "heartbeat")
+        self.assertEqual(headers["X-ManuSpectrum-Category"], "Heartbeat")
         self.assertEqual(
             headers["Subject"], "[ManuSpectrum][Heartbeat] Alerting chain OK"
         )

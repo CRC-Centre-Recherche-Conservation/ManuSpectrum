@@ -36,3 +36,14 @@ groups:
           summary: "Search indexing fails"
           description: "{{ $value | humanize }} indexing runs ({{ $labels.mode }}) failed in the last 64 hours."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#indexingfailures
+      - alert: ActiveAccountsStale
+        expr: |
+          time() - max(manuspectrum_active_accounts_timestamp_seconds) > 2 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The active accounts count is not refreshed"
+          description: "The active accounts count is {{ $value | humanizeDuration }} old; it is refreshed daily."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#activeaccountsstale

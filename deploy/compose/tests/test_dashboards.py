@@ -200,6 +200,28 @@ class DashboardFileTests(unittest.TestCase):
         for uid in links:
             self.assertIn(uid, self.by_uid())
 
+    def test_the_application_dashboard_shows_active_accounts_as_one_number(self):
+        panels = {
+            p["title"]: p
+            for p in walk_panels(self.by_uid()["ms-application"])
+            if p.get("targets")
+        }
+        for title, kind in (
+            ("Active accounts", "stat"),
+            ("Active accounts, last 30 days", "timeseries"),
+        ):
+            with self.subTest(panel=title):
+                self.assertEqual(panels[title]["type"], kind)
+                self.assertEqual(
+                    [t["expr"] for t in panels[title]["targets"]],
+                    ["max(manuspectrum_active_accounts)"],
+                )
+
+    def test_the_active_accounts_panels_show_what_their_text_promises(self):
+        panels = {p["title"]: p for p in walk_panels(self.by_uid()["ms-application"])}
+        self.assertEqual(panels["Active accounts, last 30 days"]["timeFrom"], "30d")
+        self.assertEqual(panels["Active accounts"]["options"]["graphMode"], "none")
+
     def test_container_panels_use_the_container_label(self):
         for dashboard in self.dashboards.values():
             for panel, expr in exprs(dashboard):

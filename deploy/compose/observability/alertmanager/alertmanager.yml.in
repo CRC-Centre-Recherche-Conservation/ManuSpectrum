@@ -79,7 +79,7 @@ receivers:
         send_resolved: true
         headers:
           Subject: '{{ template "ms.subject" . }}'
-          X-ManuSpectrum-Category: alert
+          X-ManuSpectrum-Category: Alert
         html: ''
         text: '{{ template "ms.body" . }}'
   - name: email-working-hours
@@ -88,7 +88,7 @@ receivers:
         send_resolved: true
         headers:
           Subject: '{{ template "ms.subject" . }}'
-          X-ManuSpectrum-Category: alert
+          X-ManuSpectrum-Category: Alert
         html: ''
         text: '{{ template "ms.body" . }}'
   - name: heartbeat
@@ -97,6 +97,6 @@ receivers:
         send_resolved: false
         headers:
           Subject: '[ManuSpectrum][Heartbeat] Alerting chain OK'
-          X-ManuSpectrum-Category: heartbeat
+          X-ManuSpectrum-Category: Heartbeat
         html: ''
         text: '{{ template "ms.heartbeat" . }}'

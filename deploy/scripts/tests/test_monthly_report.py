@@ -51,6 +51,9 @@ ANSWERS = [
     ("restore_test_last_success", [vector(1793000000)]),
     ("manuspectrum_backup_failed", [vector(1)]),
     ("manuspectrum_restore_test_failed", [vector(0)]),
+    ("manuspectrum_active_accounts_timestamp_seconds", [vector(1793491200 - 7200)]),
+    ("max_over_time(manuspectrum_active_accounts", [vector(14)]),
+    ("manuspectrum_active_accounts", [vector(12)]),
     ("node_boot_time_seconds", [vector(31)]),
     ("manuspectrum_container_restarts", [vector(2, container="web")]),
     ("manuspectrum_container_oom_kills", [vector(1, container="worker")]),
@@ -213,6 +216,49 @@ class MonthlyReport(unittest.TestCase):
         self.assertIn("worker 1", text)
         self.assertNotIn(UNAVAILABLE, text)
 
+    def test_active_accounts_give_the_end_of_month_value_and_the_peak(self):
+        result = run(self.servers)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = self.sent().get_content()
+        self.assertIn("fin du mois : 12", text)
+        self.assertIn("maximum depuis le 3 octobre 2026 : 14", text)
+        self.assertNotIn("non disponible", text)
+        self.assertTrue(
+            any(
+                q.startswith("max(max_over_time(manuspectrum_active_accounts[2678400s]")
+                for q, _ in self.servers.prom.queries
+            )
+        )
+
+    def test_active_accounts_without_data_read_nd(self):
+        servers = Servers()
+        self.addCleanup(servers.close)
+        servers.prom.floor = 2**40
+        result = run(servers)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = body_of(servers.smtp.messages[0]).get_content()
+        self.assertIn("fin du mois : n/d", text)
+        self.assertIn("maximum depuis le 3 octobre 2026 : n/d", text)
+
+    def test_the_account_count_says_when_it_was_measured(self):
+        text, _ = self.growth_lines(NOW)
+        self.assertIn("fin du mois : 12 (mesuré le 31 octobre 2026)", text)
+        self.assertNotIn("périmé", text)
+
+    def test_a_count_older_than_two_days_is_flagged(self):
+        entry = (
+            "manuspectrum_active_accounts_timestamp_seconds",
+            [vector(1793491200 - 5 * 86400)],
+        )
+        ANSWERS.insert(0, entry)
+        self.addCleanup(ANSWERS.remove, entry)
+        text, _ = self.growth_lines(NOW)
+        self.assertIn("fin du mois : 12 (mesuré le 27 octobre 2026, périmé", text)
+
+    def test_a_month_inside_the_retention_says_peak_over_the_month(self):
+        text, _ = self.growth_lines("2027-03-01T08:00:00+00:00")
+        self.assertIn("maximum sur le mois : 14", text)
+
     def test_reboots_are_boot_time_moves_above_a_minute_not_any_change(self):
         result = run(self.servers)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -280,7 +326,7 @@ class MonthlyReport(unittest.TestCase):
         self.assertEqual(
             message["Subject"], "[ManuSpectrum][Report] Rapport mensuel 2026-10"
         )
-        self.assertEqual(message["X-ManuSpectrum-Category"], "report")
+        self.assertEqual(message["X-ManuSpectrum-Category"], "Report")
         self.assertEqual(message["From"], "noreply@manuspectrum.test")
         self.assertIn(
             "from:<noreply@manuspectrum.test>", self.servers.smtp.envelope[0].lower()
@@ -338,7 +384,7 @@ class MonthlyReport(unittest.TestCase):
     def test_dry_run_prints_and_does_not_send(self):
         result = run(self.servers, extra=["--dry-run"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("X-ManuSpectrum-Category: report", result.stdout)
+        self.assertIn("X-ManuSpectrum-Category: Report", result.stdout)
         self.assertEqual(self.servers.smtp.messages, [])
 
     def test_login_reads_the_password_file(self):

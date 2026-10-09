@@ -73,3 +73,27 @@ Fix Elasticsearch, then re-index the affected resources with `make -C deploy man
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## ActiveAccountsStale
+
+Severity: warning. The active accounts count is more than two days old.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+The monthly report flags the active accounts figure as out of date; the dashboard panel stays flat.
+
+### Diagnosis
+
+The `beat` container is running (`ContainerMissing` shows it) and its log lists `record-active-accounts` once a day; the worker log shows `manuspectrum.record_active_accounts` succeeding. `CeleryTaskFailures` fires when the task itself fails.
+
+### Remediation
+
+Restart the application containers (`make -C deploy restart`); the worker also refreshes the count when it starts.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

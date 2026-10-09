@@ -502,6 +502,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "manuspectrum.prune_data_changes",
         "schedule": 24 * 3600,
     },
+    # Accounts with a login in the last 30 days, exported as one aggregated gauge.
+    "record-active-accounts": {
+        "task": "manuspectrum.record_active_accounts",
+        "schedule": 24 * 3600,
+    },
     # Off: arches.app.tasks.message is `def message(arg): return arg`. It
     # notifies nothing and costs one broker round-trip plus an INSERT and an
     # UPDATE in django_celery_results_taskresult every hour to log a constant

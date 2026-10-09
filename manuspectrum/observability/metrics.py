@@ -363,3 +363,13 @@ DATA_CHANGE_PRUNED = gauge(
     "Unix time of the last ms_data_change prune.",
     mode="mostrecent",
 )
+ACTIVE_ACCOUNTS = gauge(
+    "manuspectrum_active_accounts",
+    "Active accounts with a login in the last 30 days, set by the daily count task.",
+    mode="mostrecent",
+)
+ACTIVE_ACCOUNTS_MEASURED = gauge(
+    "manuspectrum_active_accounts_timestamp_seconds",
+    "Unix time of the count behind manuspectrum_active_accounts.",
+    mode="mostrecent",
+)

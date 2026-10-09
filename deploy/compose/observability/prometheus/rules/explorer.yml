@@ -5,7 +5,11 @@ groups:
     rules:
       - alert: ExplorerBundleBuildSlow
         expr: |
-          histogram_quantile(0.95, sum by (le, language) (rate(manuspectrum_explorer_bundle_build_seconds_bucket[1h]))) > 15
+          (
+            sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h]))
+            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="13.0"}[1h]))
+          )
+          / sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) > 0.5
           and
           sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) >= 3
         for: 1h
@@ -14,11 +18,15 @@ groups:
           service: explorer
         annotations:
           summary: "The Explorer corpus rebuild is slow"
-          description: "The 95th percentile of a corpus bundle build is {{ $value | humanizeDuration }} for language {{ $labels.language }}."
+          description: "{{ $value | humanizePercentage }} of the corpus bundle builds of the last hour took more than 13 seconds for language {{ $labels.language }}."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerbundlebuildslow
       - alert: ExplorerBundleBuildVerySlow
         expr: |
-          histogram_quantile(0.95, sum by (le, language) (rate(manuspectrum_explorer_bundle_build_seconds_bucket[1h]))) > 45
+          (
+            sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h]))
+            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="55.0"}[1h]))
+          )
+          / sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) > 0.5
           and
           sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) >= 3
         for: 30m
@@ -27,7 +35,7 @@ groups:
           service: explorer
         annotations:
           summary: "The Explorer corpus rebuild is very slow"
-          description: "The 95th percentile of a corpus bundle build is {{ $value | humanizeDuration }} for language {{ $labels.language }}."
+          description: "{{ $value | humanizePercentage }} of the corpus bundle builds of the last hour took more than 55 seconds for language {{ $labels.language }}."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerbundlebuildveryslow
       - alert: ExplorerRebuildFailing
         expr: |
