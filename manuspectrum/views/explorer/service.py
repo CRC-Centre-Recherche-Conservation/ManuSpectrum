@@ -960,7 +960,12 @@ class CorpusBundle:
     the order the colour facet shows them. ``places`` maps every place the rows
     carry, ancestors included, to ``{"parent": id or None, "unpublished":
     bool}``; ``period_bounds`` holds per event the ``(min start, max end)``
-    years of the dated rows, or None.
+    years of the dated rows, or None. ``events`` are the map's events
+    (``events.build_events``), ``event_places`` the ``MapPlace`` of their
+    places and ancestors, ``event_materials`` the ``MapMaterial`` by uri,
+    ``material_terms`` the folded labels (preferred and alternative) of each
+    material uri, ``histories`` the ``HistoryLine`` tuple of each document,
+    ``certainty`` the ``certainty_scale``.
     """
 
     visible: VisibleSet
@@ -982,6 +987,12 @@ class CorpusBundle:
     colour_items: list
     places: dict
     period_bounds: dict
+    events: tuple = ()
+    event_places: dict = None
+    event_materials: dict = None
+    material_terms: dict = None
+    histories: dict = None
+    certainty: dict = None
 
     @property
     def colour_ranks(self):
@@ -1046,6 +1057,34 @@ def build_bundle(user, language, visible):
     placed = {place for row in rows for place in row["places"]}
     drafts = unpublished_resource_ids(placed)
     produced = [r["periods"]["production"] for r in rows if r["periods"]["production"]]
+    order = {
+        row["id"]: (
+            folded(label_of[row["document"]]["value"]),
+            row["component"] or "",
+            folded(row["name"]["value"]),
+            row["id"],
+        )
+        for row in rows
+    }
+    swatches = {
+        **colour_swatches,
+        **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
+    }
+    from manuspectrum.views.explorer.events import build_events
+
+    event_set = build_events(
+        user,
+        language,
+        visible,
+        chains,
+        links,
+        rows,
+        order,
+        label_of,
+        characterization_values,
+        linked,
+        swatches,
+    )
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -1062,22 +1101,11 @@ def build_bundle(user, language, visible):
             for row in rows
             if row["technique"]
         },
-        swatches={
-            **colour_swatches,
-            **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
-        },
+        swatches=swatches,
         label_of=label_of,
         folded=names_folded,
         documents=sorted(documents, key=lambda d: (names_folded[d], d)),
-        order={
-            row["id"]: (
-                folded(label_of[row["document"]]["value"]),
-                row["component"] or "",
-                folded(row["name"]["value"]),
-                row["id"],
-            )
-            for row in rows
-        },
+        order=order,
         characterization_values=characterization_values,
         material_components=linked,
         colour_items=colour_items,
@@ -1093,6 +1121,12 @@ def build_bundle(user, language, visible):
             ),
             "modification": None,
         },
+        events=event_set.events,
+        event_places=event_set.places,
+        event_materials=event_set.materials,
+        material_terms=event_set.material_terms,
+        histories=event_set.histories,
+        certainty=certainty_scale(language),
     )
 
 
@@ -1320,23 +1354,27 @@ def meets(values, wanted):
     return all(values[key] & selected for key, selected in wanted)
 
 
-def in_period(row, filters):
-    """Whether *row* meets the ``period`` of *filters*: true without one.
+def bounds_meet(bounds, filters):
+    """Whether years ``(start, end)`` meet the ``period`` of *filters*: true without one.
 
-    The row's years for the ``periodEvent`` overlap the period, or lie within
-    it with ``periodMatch=within``; a row without a date for the event is kept
-    only with ``undated``.
+    They overlap the period, or lie within it with ``periodMatch=within``;
+    *bounds* None is kept only with ``undated``.
     """
     if not filters["period"]:
         return True
-    bounds = row["periods"].get(filters["periodEvent"])
     if bounds is None:
         return filters["undated"]
     low, high = filters["period"]
-    start, end, _ = bounds
     if filters["periodMatch"] == "within":
-        return start >= low and end <= high
-    return start <= high and end >= low
+        return bounds[0] >= low and bounds[1] <= high
+    return bounds[0] <= high and bounds[1] >= low
+
+
+def in_period(row, filters):
+    """Whether *row* meets the ``period`` of *filters* for its ``periodEvent`` (``bounds_meet``)."""
+    if not filters["period"]:
+        return True
+    return bounds_meet(row["periods"].get(filters["periodEvent"]), filters)
 
 
 def row_filter(rows, query, universe=None):

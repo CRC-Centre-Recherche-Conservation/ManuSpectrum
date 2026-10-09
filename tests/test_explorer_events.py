@@ -1,0 +1,223 @@
+"""The map's events in the corpus bundle (spec 2026-10-09 §2.1).
+
+Usage:
+    python manage.py test tests.test_explorer_events --settings="tests.test_settings"
+"""
+
+from tests.explorer_events_fixtures import (
+    LEAD_WHITE,
+    LOW,
+    OWN,
+    SMALT,
+    VERMILION,
+    EventsCase,
+)
+from tests.test_explorer_service import AZURITE
+
+
+class EventsTests(EventsCase):
+    def uris(self, event):
+        return {m["id"] for m in event["materials"]}
+
+    def test_productions_carry_their_dates_places_and_the_materials_that_fall_to_them(
+        self,
+    ):
+        bundle = self.bundle()
+        [component] = self.events_of(bundle, "production", self.components["open"])
+        self.assertEqual(
+            component["id"],
+            f"production:{self.components['open'].pk}:{self.places['lyon'].pk}",
+        )
+        self.assertEqual(
+            component["date"], {"start": 1380, "end": 1395, "approximate": True}
+        )
+        self.assertEqual(
+            (component["place"], component["placeSource"]),
+            (str(self.places["lyon"].pk), "place"),
+        )
+        self.assertEqual(self.uris(component), {LEAD_WHITE})
+        self.assertEqual(component["component"]["id"], str(self.components["open"].pk))
+        [document] = self.events_of(bundle, "production", self.documents["open"])
+        self.assertEqual(
+            document["date"], {"start": 1401, "end": 1500, "approximate": True}
+        )
+        self.assertEqual(self.uris(document), {SMALT})
+        self.assertCountEqual(
+            document["analyses"],
+            [
+                str(self.analyses[k].pk)
+                for k in ("open", "on_document", "draft", "bare")
+            ],
+        )
+
+    def test_a_modification_carries_the_material_it_cites_at_an_attributed_parent_place(
+        self,
+    ):
+        [event] = self.events_of(self.bundle(), "modification", self.modification)
+        self.assertEqual(
+            (event["place"], event["placeSource"]),
+            (str(self.places["normandie"].pk), "parent"),
+        )
+        self.assertEqual(
+            event["date"], {"start": 1420, "end": 1430, "approximate": True}
+        )
+        self.assertEqual(self.uris(event), {AZURITE})
+        self.assertCountEqual(
+            event["analyses"],
+            [str(self.analyses["open"].pk), str(self.analyses["on_document"].pk)],
+        )
+        self.assertEqual(event["component"]["id"], str(self.components["open"].pk))
+
+    def test_an_alteration_carries_the_observed_material_it_names_with_its_reliability(
+        self,
+    ):
+        [event] = self.events_of(self.bundle(), "alteration", self.alteration)
+        [material] = event["materials"]
+        self.assertEqual(
+            (material["id"], material["characterization"]),
+            (VERMILION, str(self.materials["vermilion"].pk)),
+        )
+        self.assertIsNotNone(material["reliability"])
+        self.assertEqual(event["analyses"], [str(self.analyses["open"].pk)])
+
+    def test_analysis_and_sampling_events(self):
+        bundle = self.bundle()
+        [analysis] = self.events_of(bundle, "analysis", self.analyses["open"])
+        self.assertEqual(
+            (analysis["place"], analysis["date"]["start"], analysis["materials"]),
+            (str(self.places["lab"].pk), 2024, []),
+        )
+        self.assertEqual(
+            self.events_of(bundle, "analysis", self.analyses["on_document"]), []
+        )
+        [sampling] = self.events_of(bundle, "sampling", self.samples["s1"])
+        self.assertEqual(
+            (sampling["place"], sampling["placeSource"]),
+            (str(self.places["hidden"].pk), None),
+        )
+        self.assertIsNone(bundle.event_places[sampling["place"]]["lngLat"])
+
+    def test_own_geometry_comes_first_and_a_derived_copy_is_ignored(self):
+        bundle = self.bundle()
+        [own] = self.events_of(bundle, "production", self.documents["own"])
+        self.assertEqual(own["placeSource"], "own")
+        self.assertEqual(own["place"], f"own:{OWN[0]:.4f},{OWN[1]:.4f}")
+        place = bundle.event_places[own["place"]]
+        self.assertEqual(
+            (place["parent"], place["lngLat"], place["name"]["value"]),
+            (str(self.places["paris"].pk), list(OWN), "Paris"),
+        )
+        [derived] = self.events_of(bundle, "production", self.documents["derived"])
+        self.assertEqual(
+            (derived["place"], derived["placeSource"]),
+            (str(self.places["lyon"].pk), "place"),
+        )
+        self.assertEqual(
+            derived["date"], {"start": None, "end": None, "approximate": False}
+        )
+
+    def test_places_hold_names_kinds_authorities_ancestors_and_drafts(self):
+        places = self.bundle().event_places
+        normandie = places[str(self.places["normandie"].pk)]
+        self.assertEqual(
+            (normandie["geometryKind"], normandie["parent"]),
+            ("area", str(self.places["france"].pk)),
+        )
+        self.assertGreater(normandie["extentKm"], 50)
+        self.assertTrue(places[str(self.places["france"].pk)]["unpublished"])
+        self.assertEqual(
+            places[str(self.places["paris"].pk)]["authorities"], {"geonames": "2988507"}
+        )
+
+    def test_a_hidden_place_cuts_the_chain(self):
+        self.embargo(self.places["normandie"])
+        [event] = self.events_of(self.bundle(), "modification", self.modification)
+        self.assertEqual(
+            (event["place"], event["placeSource"]), (str(self.places["abbey"].pk), None)
+        )
+
+    def test_a_hidden_place_is_never_a_place(self):
+        self.embargo(self.places["hidden"])
+        [event] = self.events_of(self.bundle(), "sampling", self.samples["s1"])
+        self.assertIsNone(event["place"])
+
+    def test_a_hidden_modification_leaves_its_material_to_the_production(self):
+        self.embargo(self.modification)
+        bundle = self.bundle()
+        self.assertEqual(self.events_of(bundle, "modification", self.modification), [])
+        [component] = self.events_of(bundle, "production", self.components["open"])
+        self.assertEqual(self.uris(component), {LEAD_WHITE, AZURITE})
+
+    def test_a_hidden_document_has_no_event(self):
+        self.embargo(self.documents["open"])
+        self.assertFalse(
+            [
+                e
+                for e in self.bundle().events
+                if e["document"]["id"] == str(self.documents["open"].pk)
+            ]
+        )
+
+    def test_a_document_without_analysis_has_no_event_but_keeps_its_history(self):
+        bundle = self.bundle()
+        self.assertFalse(
+            [
+                e
+                for e in bundle.events
+                if e["document"]["id"] == str(self.documents["unanalysed"].pk)
+            ]
+        )
+        [line] = bundle.histories[str(self.documents["unanalysed"].pk)]
+        self.assertEqual([p["name"]["value"] for p in line["places"]], ["Paris"])
+
+    def test_histories_list_every_event_of_a_document_its_production_first(self):
+        lines = self.bundle().histories[str(self.documents["open"].pk)]
+        self.assertEqual(
+            [(l["type"], l["carrier"]["model"]) for l in lines],
+            [
+                ("production", "document"),
+                ("production", "component"),
+                ("modification", "modification"),
+                ("alteration", "alteration"),
+                ("sampling", "sample"),
+                ("analysis", "analysis"),
+            ],
+        )
+        self.assertEqual(
+            lines[1]["date"],
+            {"start": "1380-01-01", "end": "1395-12-31", "approximate": True},
+        )
+        self.assertEqual(
+            [p["name"]["value"] for p in lines[2]["places"]],
+            ["Abbaye de Saint-Évroult"],
+        )
+
+    def test_materials_info_and_terms(self):
+        bundle = self.bundle()
+        self.assertEqual(bundle.event_materials[VERMILION]["family"], "other")
+        self.assertIn("cinnabar", bundle.material_terms[VERMILION])
+        self.assertEqual(
+            bundle.event_materials[VERMILION]["label"]["value"], "Vermilion"
+        )
+
+    def test_every_event_has_the_public_keys_only(self):
+        from manuspectrum.views.explorer.events import PUBLIC_KEYS
+
+        for event in self.bundle().events:
+            self.assertEqual(tuple(event), PUBLIC_KEYS)
+
+
+class BoundsMeetTests(EventsCase):
+    def test_the_period_rule_on_bounds(self):
+        from django.http import QueryDict
+        from manuspectrum.views.explorer.service import bounds_meet, parse_filters
+
+        overlap, _ = parse_filters(QueryDict("period=1420,1425"))
+        within, _ = parse_filters(QueryDict("period=1400,1500&periodMatch=within"))
+        undated, _ = parse_filters(QueryDict("period=1400,1500&undated=1"))
+        self.assertTrue(bounds_meet((1420, 1430), overlap))
+        self.assertFalse(bounds_meet((1380, 1395), overlap))
+        self.assertTrue(bounds_meet((1401, 1500), within))
+        self.assertFalse(bounds_meet((1380, 1430), within))
+        self.assertFalse(bounds_meet(None, within))
+        self.assertTrue(bounds_meet(None, undated))
