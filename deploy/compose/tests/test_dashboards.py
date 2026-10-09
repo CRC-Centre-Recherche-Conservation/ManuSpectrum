@@ -61,6 +61,9 @@ DASHBOARD_METRICS = {
     "manuspectrum_restore_test_duration_seconds",
     "manuspectrum_restore_test_last_attempt_timestamp_seconds",
     "manuspectrum_container_metrics_errors",
+    "prometheus_tsdb_storage_blocks_bytes",
+    "prometheus_tsdb_wal_storage_size_bytes",
+    "prometheus_tsdb_retention_limit_bytes",
     "pg_database_size_bytes",
     "pg_up",
     "redis_up",
@@ -174,10 +177,10 @@ class DashboardFileTests(unittest.TestCase):
 
     def test_the_series_extractor_sees_a_typo_and_the_retired_names(self):
         self.assertEqual(
-            metric_names_in("sum(manuspectrum_docker_volume_bytes)") - known_metrics(),
-            {"manuspectrum_docker_volume_bytes"},
+            metric_names_in("sum(manuspectrum_docker_volume_byte)") - known_metrics(),
+            {"manuspectrum_docker_volume_byte"},
         )
-        retired = ("docker_volume_bytes", "docker_disk_bytes", 'area="')
+        retired = ('area="',)
         for dashboard in self.dashboards.values():
             text = json.dumps(dashboard)
             for word in retired:
@@ -262,6 +265,37 @@ class StorageDashboardTests(unittest.TestCase):
         self.has(r"time\(\) - manuspectrum_restore_test_last_success_timestamp_seconds")
         self.has(r"manuspectrum_backup_failed")
         self.has(r"manuspectrum_restore_test_failed")
+
+    def test_docker_disk_use_by_kind_and_by_volume(self):
+        self.has(r"manuspectrum_docker_disk_bytes")
+        self.has(r"delta\(manuspectrum_docker_disk_bytes[^\n]*\[30d\]")
+        self.has(r"manuspectrum_docker_volume_bytes")
+        self.has(r"delta\(manuspectrum_docker_volume_bytes[^\n]*\[30d\]")
+        titles = {p["title"]: p for p in walk_panels(self.dashboard)}
+        self.assertEqual(titles["Volumes now"]["type"], "table")
+        self.assertEqual(titles["Volumes now"]["targets"][0]["format"], "table")
+        for title in ("Docker use over 30 days", "Volume size over 30 days"):
+            with self.subTest(title=title):
+                self.assertEqual(titles[title]["type"], "timeseries")
+                self.assertEqual(titles[title]["timeFrom"], "30d")
+
+    def test_the_labels_docker_series_carry_are_the_closed_ones(self):
+        for title, expr in self.exprs:
+            for label in re.findall(r"\{\{(\w+)\}\}", expr):
+                self.assertNotIn(label, {"id", "name", "mountpoint"})
+        legends = {
+            t["legendFormat"]
+            for p in walk_panels(self.dashboard)
+            for t in p.get("targets", [])
+            if "manuspectrum_docker_" in t["expr"]
+        }
+        self.assertEqual(legends - {"{{kind}}", "{{volume}}", ""}, set())
+
+    def test_prometheus_data_size_against_its_cap(self):
+        self.has(r"prometheus_tsdb_storage_blocks_bytes")
+        self.has(r"prometheus_tsdb_wal_storage_size_bytes")
+        self.has(r"prometheus_tsdb_retention_limit_bytes")
+        self.assertIn("Prometheus data vs 8 GB cap", [t for t, _ in self.exprs])
 
     def test_the_measure_itself_is_shown_with_its_freshness(self):
         self.has(r"manuspectrum_disk_usage_last_success_timestamp_seconds")

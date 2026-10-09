@@ -77,8 +77,14 @@ class Prometheus(BaseHTTPRequestHandler):
         from urllib.parse import unquote_plus
 
         expr = unquote_plus(query.group(1)) if query else ""
+        at = re.search(r"[?&]time=([0-9.]+)", self.path)
+        stamp = float(at.group(1)) if at else None
+        self.server.queries.append((expr, stamp))
+        floor = self.server.floor
         if "/query_range" in self.path:
             result = ALERT_SERIES
+        elif floor is not None and stamp is not None and stamp < floor:
+            result = []
         else:
             result = next((r for key, r in ANSWERS if key in expr), [])
         body = json.dumps(
@@ -130,6 +136,7 @@ class Servers:
         self.prom = None
         if prometheus:
             self.prom = HTTPServer(("127.0.0.1", 0), Prometheus)
+            self.prom.queries, self.prom.floor = [], None
             threading.Thread(target=self.prom.serve_forever, daemon=True).start()
         self.smtp = socketserver.ThreadingTCPServer(("127.0.0.1", 0), SMTP)
         self.smtp.messages, self.smtp.envelope = [], []
@@ -205,6 +212,48 @@ class MonthlyReport(unittest.TestCase):
         self.assertIn("web 2", text)
         self.assertIn("worker 1", text)
         self.assertNotIn(UNAVAILABLE, text)
+
+    def growth_lines(self, now, month=None, floor_days=30):
+        """Report as sent at `now` by a Prometheus that keeps `floor_days`."""
+        from datetime import datetime, timedelta
+
+        clock = datetime.fromisoformat(now)
+        self.servers.prom.floor = (clock - timedelta(days=floor_days)).timestamp()
+        extra = ["--now", now] + (["--month", month] if month else [])
+        result = run(self.servers, extra=extra)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return self.sent().get_content(), clock
+
+    def test_growth_of_a_31_day_month_is_read_inside_the_retention(self):
+        text, clock = self.growth_lines("2026-11-01T08:00:00+00:00")
+        self.assertIn("variation de l'espace libre depuis le 3 octobre 2026", text)
+        self.assertIn("(variation depuis le 3 octobre 2026 : ", text)
+        self.assertNotIn("variation sur le mois", text)
+        self.assertNotIn("(variation sur le mois", text)
+        from datetime import timedelta
+
+        since = (clock - timedelta(days=29)).timestamp()
+        at_since = [q for q, t in self.servers.prom.queries if t == since]
+        self.assertEqual(len(at_since), 3)
+        self.assertTrue(since >= (clock - timedelta(days=30)).timestamp())
+
+    def test_growth_of_a_30_day_month_says_since_the_first_readable_day(self):
+        text, _ = self.growth_lines("2026-12-01T08:00:00+00:00")
+        self.assertIn("depuis le 2 novembre 2026", text)
+
+    def test_growth_of_february_covers_the_whole_month(self):
+        text, _ = self.growth_lines("2027-03-01T08:00:00+00:00")
+        self.assertIn("variation de l'espace libre sur le mois", text)
+        self.assertIn("(variation sur le mois : ", text)
+        self.assertNotIn("depuis le", text)
+
+    def test_growth_of_a_leap_february_still_fits(self):
+        text, _ = self.growth_lines("2028-03-01T08:00:00+00:00")
+        self.assertIn("depuis le 1 février 2028", text)
+
+    def test_a_month_past_the_retention_has_no_growth_line_not_a_crash(self):
+        text, _ = self.growth_lines("2026-11-01T08:00:00+00:00", month="2026-08")
+        self.assertNotIn("variation", text)
 
     def test_alert_episodes_are_counted_by_alertname(self):
         run(self.servers)

@@ -21,10 +21,18 @@ cat >"$TMP/bin/docker" <<'STUB'
 printf 'docker %s\n' "$*" >>"$CALLS"
 [ -z "$STUB_DOCKER_HANG" ] || exec sleep 30
 [ -z "$STUB_DOCKER_FAIL" ] || exit 1
+[ -z "$STUB_DF_FAIL" ] || [ "$1" != system ] || exit 1
 case "$1" in
   ps) cat "$STUB_PS" ;;
   inspect) cat "$STUB_INSPECT" ;;
   stats) cat "$STUB_STATS" ;;
+  events) cat "${STUB_EVENTS:-/dev/null}" ;;
+  system)
+    case "$*" in
+      *" -v "*) cat "${STUB_DF_VERBOSE:-/dev/null}" ;;
+      *) cat "${STUB_DF:-/dev/null}" ;;
+    esac
+    ;;
 esac
 STUB
 cat >"$TMP/bin/du" <<'STUB'
@@ -52,11 +60,23 @@ assert() { # assert DESCRIPTION CONDITION-EXIT-CODE
   if [ "$2" -eq 0 ]; then echo "ok $n - $1"; else echo "not ok $n - $1"; failed=1; fi
 }
 
+IDA="$(printf 'a%.0s' $(seq 64))"
+IDB="$(printf 'b%.0s' $(seq 64))"
+IDC="$(printf 'c%.0s' $(seq 64))"
+set_cgroup() { # set_cgroup ID COUNT [systemd|cgroupfs]
+  local dir="$TMP/cgroup/system.slice/docker-$1.scope"
+  [ "${3:-systemd}" = systemd ] || dir="$TMP/cgroup/docker/$1"
+  mkdir -p "$dir"
+  printf 'low 0\nhigh 0\nmax 0\noom 0\noom_kill %s\n' "$2" >"$dir/memory.events"
+}
 set_containers() {
-  printf '%s\n' aaaaaaaaaaaa1111 bbbbbbbbbbbb2222 >"$TMP/ps"
+  rm -rf "$TMP/cgroup" "$OUT/.manuspectrum-container-oom.state"
+  set_cgroup "$IDA" 0
+  set_cgroup "$IDB" 0
+  printf '%s\n' "$IDA" "$IDB" >"$TMP/ps"
   printf '%s\n' \
-    'aaaaaaaaaaaa1111|web|true|healthy|2|false|0001-01-01T00:00:00Z|1073741824' \
-    'bbbbbbbbbbbb2222|redis-cache|true|none|0|false|0001-01-01T00:00:00Z|0' >"$TMP/inspect"
+    "$IDA|web|true|healthy|2|false|0001-01-01T00:00:00Z|1073741824" \
+    "$IDB|redis-cache|true|none|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
   printf '%s\n' 'aaaaaaaaaaaa|512MiB / 1GiB' 'bbbbbbbbbbbb|1.5KiB / 7.7GiB' >"$TMP/stats"
 }
 
@@ -65,7 +85,9 @@ run() { # run MODE [VAR=value ...]; stdout in $TMP/stdout, stderr in $TMP/stderr
   shift
   : >"$TMP/calls"
   env PATH="$TMP/bin:$PATH" CALLS="$TMP/calls" STUB_PS="$TMP/ps" STUB_INSPECT="$TMP/inspect" STUB_STATS="$TMP/stats" \
+    STUB_DF="$TMP/df" STUB_DF_VERBOSE="$TMP/df_v" STUB_EVENTS="$TMP/events" HOST_METRICS_CGROUP_ROOT="$TMP/cgroup" \
     METRICS_TEXTFILE_DIR="$OUT" HOST_METRICS_DOCKER_TIMEOUT=2 HOST_METRICS_DU_TIMEOUT=2 \
+    HOST_METRICS_DF_TIMEOUT=2 HOST_METRICS_DISK_BUDGET=60 \
     DISK_USAGE_AREAS="media=$TMP/data/media restic=$TMP/data/restic dumps=$TMP/data/dumps nginx_logs=$TMP/data/logs" \
     "$@" bash "$SCRIPT" "$mode" >"$TMP/stdout" 2>"$TMP/stderr"
 }
@@ -107,8 +129,8 @@ assert "containers: the file is mode 0644" $?
 
 # unhealthy, stopped
 printf '%s\n' \
-  'aaaaaaaaaaaa1111|web|true|unhealthy|0|false|0001-01-01T00:00:00Z|0' \
-  'bbbbbbbbbbbb2222|worker|false|none|5|false|0001-01-01T00:00:00Z|0' >"$TMP/inspect"
+  "$IDA|web|true|unhealthy|0|false|0001-01-01T00:00:00Z|0" \
+  "$IDB|worker|false|none|5|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
 run containers
 [ "$(sample 'manuspectrum_container_healthy{container="web"}' $F)" = 0 ]
 assert "containers: an unhealthy container is healthy 0" $?
@@ -117,25 +139,102 @@ assert "containers: a stopped container is up 0" $?
 ! grep -q 'memory_working_set_bytes{container="worker"}' "$OUT/$F"
 assert "containers: a stopped container has no working set sample" $?
 
-# OOM counter: counted once per finish time
-echo aaaaaaaaaaaa1111 >"$TMP/ps"
-echo 'aaaaaaaaaaaa1111|web|true|healthy|1|true|2026-10-09T01:00:00Z|1073741824' >"$TMP/inspect"
+# OOM counter: the cgroup v2 memory.events oom_kill of each running container
+oom() { sample "manuspectrum_container_oom_kills{container=\"$1\"}" $F; }
+set_containers
+set_cgroup "$IDA" 3
 run containers
-[ "$(sample 'manuspectrum_container_oom_kills{container="web"}' $F)" = 1 ]
-assert "containers: an OOM-killed container counts one" $?
+[ "$(oom web)" = 3 ] && [ "$(oom redis-cache)" = 0 ]
+assert "oom: a first sight exports the cgroup counter" $?
+[ "$(sample manuspectrum_container_oom_cgroup $F)" = 1 ]
+assert "oom: the source is reported as the cgroup" $?
 run containers
-[ "$(sample 'manuspectrum_container_oom_kills{container="web"}' $F)" = 1 ]
-assert "containers: the same OOM kill is not counted twice" $?
+[ "$(oom web)" = 3 ]
+assert "oom: an unchanged cgroup counter is not counted twice" $?
+set_cgroup "$IDA" 4
+run containers
+[ "$(oom web)" = 4 ]
+assert "oom: a child process killed while PID 1 lives increments the counter" $?
+# the flag Docker sets on a child kill must not be counted on top
+echo "$IDA|web|true|healthy|0|true|2026-10-09T01:00:00Z|0" >"$TMP/inspect"
+echo "$IDA" >"$TMP/ps"
+run containers
+[ "$(oom web)" = 4 ]
+assert "oom: State.OOMKilled is ignored while the cgroup counter is readable" $?
+
+# restart of the same container: the cgroup is new, the counter drops, the total keeps
+set_cgroup "$IDA" 0
+echo "$IDA|web|true|healthy|1|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+: >"$TMP/events"
+run containers
+[ "$(oom web)" = 4 ]
+assert "oom: a restart resets the cgroup counter, not the exported total" $?
+set_cgroup "$IDA" 2
+echo "$IDA|web|true|healthy|1|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+run containers
+[ "$(oom web)" = 6 ]
+assert "oom: kills of the new cgroup add to the total kept across the restart" $?
+
+# PID 1 killed and restarted between two runs: the kill lives only in docker events
+set_cgroup "$IDA" 0
+echo "$IDA|web|true|healthy|2|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+printf '%s\n' oom >"$TMP/events"
+run containers
+[ "$(oom web)" = 7 ] && grep -q 'docker events .*event=oom' "$TMP/calls" \
+  && grep -q 'label=com.docker.compose.service=web' "$TMP/calls"
+assert "oom: a restart adds the oom events docker saw since the previous run" $?
+: >"$TMP/events"
+echo "$IDA|web|true|healthy|3|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+run containers
+[ "$(oom web)" = 7 ]
+assert "oom: a restart without oom events adds nothing" $?
+
+# recreation: another container id, a new cgroup
+rm -rf "$TMP/cgroup"
+set_cgroup "$IDC" 1
+echo "$IDC|web|true|healthy|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+echo "$IDC" >"$TMP/ps"
+: >"$TMP/events"
+run containers
+[ "$(oom web)" = 8 ]
+assert "oom: a recreated container keeps the total and counts its own kills" $?
+
+# cgroupfs driver layout
+set_containers
+rm -rf "$TMP/cgroup"
+set_cgroup "$IDA" 5 cgroupfs
+run containers
+[ "$(oom web)" = 5 ] && [ "$(sample manuspectrum_container_oom_cgroup $F)" = 1 ]
+assert "oom: the cgroupfs layout (docker/<id>) is read too" $?
+
+# no memory.events at all: State.OOMKilled fallback, said so
+rm -rf "$TMP/cgroup" "$OUT/.manuspectrum-container-oom.state"
+echo "$IDA" >"$TMP/ps"
+echo "$IDA|web|true|healthy|1|true|2026-10-09T01:00:00Z|1073741824" >"$TMP/inspect"
+run containers
+[ "$(oom web)" = 1 ] && [ "$(sample manuspectrum_container_oom_cgroup $F)" = 0 ] && grep -q 'memory.events' "$TMP/stderr"
+assert "oom: without memory.events the exit flag counts once and the fallback is reported" $?
+run containers
+[ "$(oom web)" = 1 ]
+assert "oom: the fallback does not count the same exit twice" $?
 sed -i 's/2026-10-09T01:00:00Z/2026-10-09T02:00:00Z/' "$TMP/inspect"
 run containers
-[ "$(sample 'manuspectrum_container_oom_kills{container="web"}' $F)" = 2 ]
-assert "containers: a new OOM kill increments the counter" $?
+[ "$(oom web)" = 2 ]
+assert "oom: the fallback counts a new exit" $?
+
+# a malformed id never reaches a path
+set_containers
+echo "../../x|web|true|healthy|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+echo "../../x" >"$TMP/ps"
+run containers
+[ "$(sample manuspectrum_container_oom_cgroup $F)" = 0 ]
+assert "oom: an id that is not 64 hex digits is not turned into a path" $?
 
 # an odd name is refused
 set_containers
 printf '%s\n' \
-  'aaaaaaaaaaaa1111|web|true|healthy|0|false|0001-01-01T00:00:00Z|0' \
-  'bbbbbbbbbbbb2222|Odd Name;x|true|healthy|0|false|0001-01-01T00:00:00Z|0' >"$TMP/inspect"
+  "$IDA|web|true|healthy|0|false|0001-01-01T00:00:00Z|0" \
+  "$IDB|Odd Name;x|true|healthy|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
 run containers
 assert "containers: an odd service name does not fail the run" $?
 ! grep -q 'Odd' "$OUT/$F"
@@ -146,7 +245,7 @@ assert "containers: a refused service is counted as an error" $?
 # a service missing from docker stats: the rest is written
 set_containers
 echo 'bbbbbbbbbbbb|1KiB / 1GiB' >"$TMP/stats"
-echo 'aaaaaaaaaaaa1111|web|true|healthy|0|false|0001-01-01T00:00:00Z|0' >"$TMP/inspect"
+echo "$IDA|web|true|healthy|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
 run containers
 ! grep -q 'memory_working_set_bytes{container="web"}' "$OUT/$F" && grep -q 'container_up{container="web"} 1' "$OUT/$F"
 assert "containers: a service missing from docker stats is skipped, the rest is written" $?
@@ -167,6 +266,12 @@ rc=$?
 assert "containers: a hung docker is cut by the timeout" $?
 
 # --- disk
+printf '%s\n' 'Images 3.807GB' 'Containers 2.9MB' 'Local Volumes 152.4MB' 'Build Cache 512kB' >"$TMP/df"
+printf '%s\n' \
+  'ms_pg_data 1.405GB' 'ms_es_data 2.5GB' 'ms_prometheus_data 0B' 'ms_cantaloupe_cache 87.65MB' \
+  'manuspectrum_beat 4kB' 'other_data 9GB' 'ms_unsized N/A' 'Bad_Name 1MB' 'ms_bad.name 1MB' \
+  '5e5038ad36bdc6357260df2fa3073a2801ceb848226341359f4235b233e4ed8d 47.97MB' >"$TMP/df_v"
+G=manuspectrum_docker_disk.prom
 D=manuspectrum_disk_usage.prom
 S=manuspectrum_disk_usage_success.prom
 run disk
@@ -190,6 +295,34 @@ assert "disk: only the four named directories are measured" $?
 success_before="$(cat "$OUT/$S")"
 sleep 1
 
+[ "$(sample 'manuspectrum_docker_disk_bytes{kind="images"}' $G)" = 3807000000 ] \
+  && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="containers"}' $G)" = 2900000 ] \
+  && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="volumes"}' $G)" = 152400000 ] \
+  && [ "$(sample 'manuspectrum_docker_disk_bytes{kind="build_cache"}' $G)" = 512000 ]
+assert "docker disk: images, containers, volumes and build cache are exported in bytes" $?
+[ "$(sample 'manuspectrum_docker_volume_bytes{volume="ms_pg_data"}' $G)" = 1405000000 ] \
+  && [ "$(sample 'manuspectrum_docker_volume_bytes{volume="ms_es_data"}' $G)" = 2500000000 ] \
+  && [ "$(sample 'manuspectrum_docker_volume_bytes{volume="ms_prometheus_data"}' $G)" = 0 ] \
+  && [ "$(sample 'manuspectrum_docker_volume_bytes{volume="ms_cantaloupe_cache"}' $G)" = 87650000 ] \
+  && [ "$(sample 'manuspectrum_docker_volume_bytes{volume="manuspectrum_beat"}' $G)" = 4000 ]
+assert "docker disk: named volumes are exported with their size (0B, decimal units, project prefix)" $?
+[ "$(grep -c '^manuspectrum_docker_volume_bytes{' "$OUT/$G")" -eq 5 ]
+assert "docker disk: anonymous, foreign, unsized and oddly named volumes are left out" $?
+grep -q 'system df -v' "$TMP/calls" && grep -q 'system df --format' "$TMP/calls"
+assert "docker disk: docker system df is asked for the totals and for the volumes" $?
+! grep -q "$TMP" "$OUT/$G"
+assert "docker disk: no host path in the output" $?
+
+docker_before="$(cat "$OUT/$G")"
+run disk STUB_DF_FAIL=1
+rc=$?
+[ "$rc" -eq 1 ] && [ "$(cat "$OUT/$G")" = "$docker_before" ] && [ "$(sample 'manuspectrum_disk_usage_failed' $D)" = 1 ] \
+  && [ "$(sample 'manuspectrum_disk_usage_bytes{target="media"}' $D)" = 1000 ]
+assert "docker disk: a docker failure exits 1, keeps the old file, still measures the directories" $?
+run disk
+success_before="$(cat "$OUT/$S")"
+sleep 1
+
 start=$SECONDS
 run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=1
 rc=$?
@@ -203,6 +336,22 @@ assert "disk: the timed-out target has no sample, the others do" $?
 assert "disk: the success file is unchanged after a failure" $?
 grep -q '^manuspectrum_disk_usage_last_run_timestamp_seconds' "$OUT/$D"
 assert "disk: a failed run still records its last run" $?
+
+start=$SECONDS
+run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=300 HOST_METRICS_DISK_BUDGET=6
+rc=$?
+[ "$rc" -eq 1 ] && [ $((SECONDS - start)) -lt 10 ] && ! grep -q 'target="media"' "$OUT/$D"
+assert "disk: the per-target timeout is cut to what is left of the run budget" $?
+start=$SECONDS
+run disk STUB_DU_HANG=1 HOST_METRICS_DU_TIMEOUT=300 HOST_METRICS_DISK_BUDGET=5
+rc=$?
+[ "$rc" -eq 1 ] && [ $((SECONDS - start)) -lt 10 ] && grep -q 'budget is spent' "$TMP/stderr" && ! grep -q 'target="restic"' "$OUT/$D"
+assert "disk: a target left without time is skipped and counted as failed" $?
+run disk HOST_METRICS_DISK_BUDGET=4
+[ $? -eq 2 ]
+assert "disk: a budget that cannot hold the docker calls is refused" $?
+grep -q 'HOST_METRICS_DU_TIMEOUT:-300' "$SCRIPT" && grep -q 'HOST_METRICS_DISK_BUDGET:-840' "$SCRIPT"
+assert "disk: the defaults are 300 s per target and 840 s in all (unit limit 15 min)" $?
 
 run disk STUB_MOUNT_ROOT="$TMP/data/restic"
 rc=$?

@@ -9,12 +9,29 @@
 #   manuspectrum_container_up                        1 running, 0 not
 #   manuspectrum_container_healthy                   0 only when the health check says unhealthy
 #   manuspectrum_container_restarts                  Docker's RestartCount
-#   manuspectrum_container_oom_kills                 counter kept in a state file next to the
-#                                                    output: +1 per OOM-killed exit seen
+#   manuspectrum_container_oom_kills                 counter of kernel OOM kills (see below)
+#   manuspectrum_container_oom_cgroup                1 when oom_kills comes from the cgroup counter,
+#                                                    0 when it falls back to State.OOMKilled
 #   manuspectrum_container_memory_working_set_bytes  docker stats (usage minus inactive file cache)
 #   manuspectrum_container_memory_limit_bytes        HostConfig.Memory, 0 = no limit
 #   manuspectrum_container_metrics_errors            services skipped or without a working set
 #   manuspectrum_container_metrics_last_run_timestamp_seconds
+# OOM kills: the `oom_kill` line of each running container's cgroup v2
+# memory.events (readable without privileges, counts every process of the
+# container, not only PID 1), under HOST_METRICS_CGROUP_ROOT (default
+# /sys/fs/cgroup): system.slice/docker-<id>.scope (systemd driver) or
+# docker/<id> (cgroupfs driver). The cgroup counter restarts at 0 whenever the
+# container is restarted or recreated, so a per-service total is kept in a
+# state file next to the output (.manuspectrum-container-oom.state): the delta
+# of the cgroup counter is added while the container lives on; after a restart
+# (restart count up, other container id or a lower counter) the kills the
+# counter could not report, those that ended the old cgroup, are the `oom`
+# events of `docker events` since the previous run, and the larger of that
+# number and the new counter is added. When no running container exposes
+# memory.events (cgroup v1, another layout) the counter falls back to
+# State.OOMKilled with a changed FinishedAt, which misses most kills (Docker
+# clears the flag on restart and a child kill never changes FinishedAt):
+# manuspectrum_container_oom_cgroup is then 0.
 # A service name outside ^[a-z0-9_-]+$ is skipped. When docker does not answer
 # within HOST_METRICS_DOCKER_TIMEOUT nothing is written (exit 1) and the
 # last-run timestamp ages.
@@ -28,12 +45,29 @@
 #                                                    when every target was measured
 # Only the named directories are measured. A path that is itself a mountpoint
 # is refused (exit 2): `du` of an NFS mount root counts the .snapshot
-# directory. Each `du` runs under nice, ionice and
-# HOST_METRICS_DU_TIMEOUT (default 600 s).
+# directory. Each `du` runs under nice, ionice and the smaller of
+# HOST_METRICS_DU_TIMEOUT (default 300 s) and what is left of the budget.
+# The whole run is bounded: HOST_METRICS_DISK_BUDGET (default 840 s) must stay
+# under the unit's TimeoutStartSec (15 min); two `docker system df` calls of
+# HOST_METRICS_DF_TIMEOUT (default 120 s) are reserved inside it, the `du`
+# runs share the rest, and a target left without time counts as failed.
+# `[ -d ]`, `realpath` and `findmnt` stat the path before any timeout: on a
+# hard-hung NFS mount they block until systemd stops the unit.
+#
+# Docker disk use, same run, own file manuspectrum_docker_disk.prom (left as it
+# was when `docker system df` fails, which also gives failed 1):
+#   manuspectrum_docker_disk_bytes{kind}   kind images|build_cache|containers|volumes
+#                                          (`docker system df`, Size column)
+#   manuspectrum_docker_volume_bytes{volume}  `docker system df -v`, volumes named
+#                                          ms_* or <COMPOSE_PROJECT>_* only
+# Docker prints decimal units with four significant digits (1.405GB, 512kB,
+# 0B): sizes are accurate to about 0.1 %, and a volume it cannot size
+# (N/A) is left out.
 #
 # Environment: METRICS_TEXTFILE_DIR (absolute, existing), DISK_USAGE_AREAS,
 # COMPOSE_PROJECT (default manuspectrum), HOST_METRICS_DOCKER_TIMEOUT
-# (default 20 s), HOST_METRICS_DU_TIMEOUT. Exit: 0 ok, 1 a measurement failed,
+# (default 20 s), HOST_METRICS_DU_TIMEOUT, HOST_METRICS_DISK_BUDGET,
+# HOST_METRICS_DF_TIMEOUT, HOST_METRICS_CGROUP_ROOT. Exit: 0 ok, 1 a measurement failed,
 # 2 wrong invocation or configuration.
 set -euo pipefail
 
@@ -47,7 +81,10 @@ usage_die() { log "FAIL: $*"; exit 2; }
 
 PROJECT="${COMPOSE_PROJECT:-manuspectrum}"
 DOCKER_TIMEOUT="${HOST_METRICS_DOCKER_TIMEOUT:-20}"
-DU_TIMEOUT="${HOST_METRICS_DU_TIMEOUT:-600}"
+DU_TIMEOUT="${HOST_METRICS_DU_TIMEOUT:-300}"
+DISK_BUDGET="${HOST_METRICS_DISK_BUDGET:-840}"
+DF_TIMEOUT="${HOST_METRICS_DF_TIMEOUT:-120}"
+CGROUP_ROOT="${HOST_METRICS_CGROUP_ROOT:-/sys/fs/cgroup}"
 AREA_NAMES=(media restic dumps nginx_logs)
 
 case "${1:-}" in
@@ -57,24 +94,51 @@ case "${1:-}" in
 esac
 out_dir="${METRICS_TEXTFILE_DIR:-}"
 [[ "$out_dir" == /* && -d "$out_dir" ]] || usage_die "METRICS_TEXTFILE_DIR must be an existing absolute directory (got '$out_dir')"
-[[ "$DOCKER_TIMEOUT" =~ ^[0-9]+$ && "$DU_TIMEOUT" =~ ^[0-9]+$ ]] || usage_die "timeouts must be whole seconds"
+[[ "$DOCKER_TIMEOUT" =~ ^[0-9]+$ && "$DU_TIMEOUT" =~ ^[0-9]+$ && "$DISK_BUDGET" =~ ^[0-9]+$ && "$DF_TIMEOUT" =~ ^[0-9]+$ ]] || usage_die "timeouts must be whole seconds"
 
 # Docker's "512MiB", "1.5KiB", "3GB" into whole bytes.
 to_bytes() { # to_bytes TEXT
   awk -v s="$1" 'BEGIN {
     if (match(s, /^[0-9]+(\.[0-9]+)?/) == 0) exit 1
     num = substr(s, 1, RLENGTH); unit = substr(s, RLENGTH + 1)
-    m["B"] = 1; m["kB"] = 1e3; m["KB"] = 1e3; m["MB"] = 1e6; m["GB"] = 1e9; m["TB"] = 1e12
+    m["B"] = 1; m["kB"] = 1e3; m["KB"] = 1e3; m["MB"] = 1e6; m["GB"] = 1e9; m["TB"] = 1e12; m["PB"] = 1e15
     m["KiB"] = 1024; m["MiB"] = 1048576; m["GiB"] = 1073741824; m["TiB"] = 1099511627776
     if (!(unit in m)) exit 1
     printf "%.0f\n", num * m[unit]
   }'
 }
 
+# cgroup_oom_kills ID: the oom_kill counter of a running container, empty when
+# no memory.events file is readable.
+cgroup_oom_kills() {
+  local id="$1" dir value
+  [[ "$id" =~ ^[0-9a-f]{64}$ ]] || return 0
+  for dir in "$CGROUP_ROOT/system.slice/docker-$id.scope" "$CGROUP_ROOT/docker/$id"; do
+    if [ -r "$dir/memory.events" ]; then
+      value="$(awk '$1 == "oom_kill" && $2 ~ /^[0-9]+$/ {print $2; exit}' "$dir/memory.events")"
+      [ -z "$value" ] || { printf '%s\n' "$value"; return 0; }
+    fi
+  done
+}
+
+# oom_events_since SERVICE EPOCH RUN_START: `oom` events of the service's
+# containers in [EPOCH, RUN_START]; empty when docker cannot say.
+oom_events_since() {
+  local lines
+  lines="$(timeout "$DOCKER_TIMEOUT" docker events --since "$2" --until "$3" \
+    --filter type=container --filter event=oom \
+    --filter "label=com.docker.compose.project=$PROJECT" \
+    --filter "label=com.docker.compose.service=$1" --format '{{.Status}}')" || return 0
+  printf '%s\n' "$lines" | grep -c . || true
+}
+
 containers() {
-  local ids inspect stats errors=0 id svc running health restarts oom finished limit short mem now
+  local ids inspect stats errors=0 id svc running health restarts oom finished limit short mem now run_start
   local state="$out_dir/.manuspectrum-container-oom.state"
-  declare -A oom_count oom_finished mem_used
+  local raw delta ev cgroup_ok=0 reset s_total s_raw s_id s_restarts s_finished s_epoch
+  declare -A mem_used raw_of
+  declare -A st_total st_raw st_id st_restarts st_finished st_epoch
+  run_start="$(date +%s)"
   ids="$(timeout "$DOCKER_TIMEOUT" docker ps -a -q --no-trunc \
     --filter "label=com.docker.compose.project=$PROJECT" \
     --filter "label=com.docker.compose.oneoff=False")" || { log "docker ps failed or timed out"; return 1; }
@@ -93,12 +157,22 @@ containers() {
   done <<<"$stats"
 
   if [ -f "$state" ]; then
-    while read -r svc id finished; do
-      [[ "$svc" =~ ^[a-z0-9_-]+$ && "$id" =~ ^[0-9]+$ ]] || continue
-      oom_count["$svc"]="$id"
-      oom_finished["$svc"]="$finished"
+    while read -r svc s_total s_raw s_id s_restarts s_finished s_epoch; do
+      [[ "$svc" =~ ^[a-z0-9_-]+$ && "$s_total" =~ ^[0-9]+$ && "$s_raw" =~ ^[0-9]+$ && "$s_epoch" =~ ^[0-9]+$ ]] || continue
+      st_total["$svc"]="$s_total"
+      st_raw["$svc"]="$s_raw"
+      st_id["$svc"]="$s_id"
+      st_restarts["$svc"]="${s_restarts:-0}"
+      st_finished["$svc"]="$s_finished"
+      st_epoch["$svc"]="$s_epoch"
     done <"$state"
   fi
+
+  while IFS='|' read -r id svc running health restarts oom finished limit; do
+    [[ "$running" == true && "$svc" =~ ^[a-z0-9_-]+$ ]] || continue
+    raw="$(cgroup_oom_kills "$id")"
+    if [ -n "$raw" ]; then raw_of["$svc"]="$raw"; cgroup_ok=1; fi
+  done <<<"$inspect"
 
   metrics_open "$out_dir/manuspectrum_container.prom"
   metric_family manuspectrum_container_up gauge "1 when the container is running"
@@ -120,11 +194,40 @@ containers() {
     if [ "$health" = unhealthy ]; then lines_healthy+="$svc 0"$'\n'; else lines_healthy+="$svc 1"$'\n'; fi
     lines_restarts+="$svc $restarts"$'\n'
     lines_limit+="$svc $limit"$'\n'
-    if [ "$oom" = true ] && [ "${oom_finished[$svc]:-}" != "$finished" ]; then
-      oom_count["$svc"]=$(("${oom_count[$svc]:-0}" + 1))
-      oom_finished["$svc"]="$finished"
+
+    if [ "$cgroup_ok" = 1 ]; then
+      raw="${raw_of[$svc]:-}"
+      if [ -n "$raw" ]; then
+        if [ -z "${st_total[$svc]:-}" ]; then
+          st_total["$svc"]="$raw"
+        else
+          reset=0
+          if [ "${st_id[$svc]}" != "$id" ] || [ "$restarts" -gt "${st_restarts[$svc]}" ] || [ "$raw" -lt "${st_raw[$svc]}" ]; then reset=1; fi
+          if [ "$reset" = 0 ]; then
+            delta=$((raw - st_raw[$svc]))
+          else
+            delta="$raw"
+            ev="$(oom_events_since "$svc" "${st_epoch[$svc]}" "$run_start")"
+            [[ "$ev" =~ ^[0-9]+$ && "$ev" -gt "$delta" ]] && delta="$ev"
+          fi
+          st_total["$svc"]=$((st_total[$svc] + delta))
+        fi
+        st_raw["$svc"]="$raw"
+        st_id["$svc"]="$id"
+        st_restarts["$svc"]="$restarts"
+        st_epoch["$svc"]="$run_start"
+      fi
+    else
+      if [ -z "${st_total[$svc]:-}" ]; then st_total["$svc"]=0; st_raw["$svc"]=0; fi
+      if [ "$oom" = true ] && [ "${st_finished[$svc]:-}" != "$finished" ]; then
+        st_total["$svc"]=$((st_total[$svc] + 1))
+      fi
+      st_finished["$svc"]="$finished"
+      st_id["$svc"]="$id"
+      st_restarts["$svc"]="$restarts"
+      st_epoch["$svc"]="$run_start"
     fi
-    lines_oom+="$svc ${oom_count[$svc]:-0}"$'\n'
+    lines_oom+="$svc ${st_total[$svc]:-0}"$'\n'
   done <<<"$inspect"
 
   emit() { # emit NAME TYPE HELP LINES   (LINES: "service value" per line)
@@ -137,25 +240,72 @@ containers() {
   emit manuspectrum_container_up gauge "" "$lines_up"
   emit manuspectrum_container_healthy gauge "0 when the health check fails" "$lines_healthy"
   emit manuspectrum_container_restarts gauge "Docker restart count" "$lines_restarts"
-  emit manuspectrum_container_oom_kills counter "OOM-killed exits seen" "$lines_oom"
+  emit manuspectrum_container_oom_kills counter "Kernel OOM kills in the container, kept across restarts" "$lines_oom"
   emit manuspectrum_container_memory_working_set_bytes gauge "Working set in bytes" "$lines_mem"
   emit manuspectrum_container_memory_limit_bytes gauge "Memory limit in bytes, 0 for none" "$lines_limit"
+  metric_family manuspectrum_container_oom_cgroup gauge "1 when OOM kills come from the cgroup counter, 0 for the State.OOMKilled fallback"
+  metric_sample manuspectrum_container_oom_cgroup "$cgroup_ok"
   metric_family manuspectrum_container_metrics_errors gauge "Services skipped or without a working set"
   metric_sample manuspectrum_container_metrics_errors "$errors"
   now="$(date +%s)"
   metric_family manuspectrum_container_metrics_last_run_timestamp_seconds gauge "Unix time of the last run"
   metric_sample manuspectrum_container_metrics_last_run_timestamp_seconds "$now"
   metrics_commit
+  [ "$cgroup_ok" = 1 ] || log "no readable memory.events under $CGROUP_ROOT: OOM kills fall back to State.OOMKilled"
 
   : >"$state.tmp"
-  for svc in "${!oom_count[@]}"; do printf '%s %s %s\n' "$svc" "${oom_count[$svc]}" "${oom_finished[$svc]:-none}" >>"$state.tmp"; done
+  for svc in "${!st_total[@]}"; do
+    printf '%s %s %s %s %s %s %s\n' "$svc" "${st_total[$svc]}" "${st_raw[$svc]:-0}" "${st_id[$svc]:-none}" \
+      "${st_restarts[$svc]:-0}" "${st_finished[$svc]:-none}" "${st_epoch[$svc]:-$run_start}" >>"$state.tmp"
+  done
   mv -f "$state.tmp" "$state"
 }
 
+# docker_disk: write manuspectrum_docker_disk.prom from `docker system df`;
+# returns 1 when docker did not answer or a size could not be read (the file
+# is then left as it was, or written without that sample).
+docker_disk() {
+  local summary volumes line type size bytes kind rc=0 name
+  local -a kinds=() kind_bytes=() vol_names=() vol_bytes=()
+  summary="$(timeout "$DF_TIMEOUT" docker system df --format '{{println .Type .Size}}')" || { log "docker system df failed or timed out"; return 1; }
+  volumes="$(timeout "$DF_TIMEOUT" docker system df -v --format '{{range .Volumes}}{{println .Name .Size}}{{end}}')" || { log "docker system df -v failed or timed out"; return 1; }
+  while read -r line; do
+    [ -n "$line" ] || continue
+    type="${line% *}" size="${line##* }"
+    case "$type" in
+      Images) kind=images ;;
+      "Build Cache") kind=build_cache ;;
+      Containers) kind=containers ;;
+      "Local Volumes") kind=volumes ;;
+      *) continue ;;
+    esac
+    if bytes="$(to_bytes "$size")"; then kinds+=("$kind") kind_bytes+=("$bytes"); else rc=1; log "docker system df: unreadable size for $kind"; fi
+  done <<<"$summary"
+  while read -r name size; do
+    [[ "$name" =~ ^(ms|${PROJECT//[^a-z0-9_-]/})_[a-z0-9_-]+$ ]] || continue
+    if bytes="$(to_bytes "$size")"; then vol_names+=("$name") vol_bytes+=("$bytes"); else log "docker system df -v: no size for a volume"; fi
+  done <<<"$volumes"
+
+  local i
+  metrics_open "$out_dir/manuspectrum_docker_disk.prom"
+  metric_family manuspectrum_docker_disk_bytes gauge "Docker disk use by kind, from docker system df"
+  for i in "${!kinds[@]}"; do
+    metric_sample manuspectrum_docker_disk_bytes "${kind_bytes[$i]}" kind "${kinds[$i]}"
+  done
+  metric_family manuspectrum_docker_volume_bytes gauge "Size of a Compose volume, from docker system df -v"
+  for i in "${!vol_names[@]}"; do
+    metric_sample manuspectrum_docker_volume_bytes "${vol_bytes[$i]}" volume "${vol_names[$i]}"
+  done
+  metrics_commit
+  return "$rc"
+}
+
 disk() {
-  local pair name path failed=0 size now
+  local pair name path failed=0 size now start remaining limit
   local -a names=() paths=()
+  start=$SECONDS
   [ -n "${DISK_USAGE_AREAS:-}" ] || usage_die "DISK_USAGE_AREAS is empty"
+  [ "$DISK_BUDGET" -gt $((2 * DF_TIMEOUT)) ] || usage_die "HOST_METRICS_DISK_BUDGET must exceed twice HOST_METRICS_DF_TIMEOUT"
   for pair in $DISK_USAGE_AREAS; do
     name="${pair%%=*}" path="${pair#*=}"
     [[ " ${AREA_NAMES[*]} " == *" $name "* ]] || usage_die "unknown area '$name' (allowed: ${AREA_NAMES[*]})"
@@ -171,13 +321,20 @@ disk() {
   local -a lines=()
   local i
   for i in "${!names[@]}"; do
-    if size="$(nice -n 19 "${ionice_cmd[@]}" timeout "$DU_TIMEOUT" du -sB1 -x -- "${paths[$i]}" | awk '{print $1}')" && [[ "$size" =~ ^[0-9]+$ ]]; then
+    remaining=$((DISK_BUDGET - 2 * DF_TIMEOUT - (SECONDS - start)))
+    limit="$DU_TIMEOUT"
+    [ "$remaining" -ge "$limit" ] || limit="$remaining"
+    if [ "$limit" -le 0 ]; then
+      failed=1
+      log "du of area ${names[$i]} skipped: the run budget is spent"
+    elif size="$(nice -n 19 "${ionice_cmd[@]}" timeout "$limit" du -sB1 -x -- "${paths[$i]}" | awk '{print $1}')" && [[ "$size" =~ ^[0-9]+$ ]]; then
       lines+=("${names[$i]} $size")
     else
       failed=1
       log "du of area ${names[$i]} failed or timed out"
     fi
   done
+  docker_disk || failed=1
 
   now="$(date +%s)"
   metrics_open "$out_dir/manuspectrum_disk_usage.prom"

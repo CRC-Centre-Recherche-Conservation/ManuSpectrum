@@ -11,7 +11,9 @@ http://prometheus:9090). Nothing personal is read: only aggregated metrics, and
 the active-accounts line stays a note until the application exports such a
 metric. A section whose query fails reads "données indisponibles"; the report
 is sent anyway and the exit status is then 1. Prometheus keeps 30 days: a
-figure older than that reads "n/d".
+figure older than that reads "n/d". The growth lines (free space, database)
+compare the end of the month with its start, or with 29 days before the run
+when the month began earlier than that, and then say "depuis le <date>".
 
 Environment: EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS (true = STARTTLS),
 EMAIL_HOST_USER and EMAIL_HOST_PASSWORD_FILE (login only when the user is set),
@@ -44,6 +46,7 @@ UNAVAILABLE = "données indisponibles"
 NO_DATA = "n/d"
 ADDRESS = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 STEP = 300
+RETENTION_DAYS = 29  # Prometheus keeps 30; one day of margin for block deletion
 MONTHS_FR = (
     "janvier février mars avril mai juin juillet août "
     "septembre octobre novembre décembre"
@@ -165,14 +168,28 @@ def availability(prom, start, end):
     return lines
 
 
-def disks(prom, start, end):
+def growth_since(start, now):
+    """First instant a growth figure can be read: the month start, or the
+    oldest instant Prometheus still holds."""
+    return max(start, now - timedelta(days=RETENTION_DAYS))
+
+
+def growth_period(start, since):
+    if since <= start:
+        return "sur le mois"
+    return f"depuis le {date_fr(since.timestamp())}"
+
+
+def disks(prom, start, end, since):
     lines = []
     for mount in ("/", "/data"):
         sel = f'{{mountpoint="{mount}",fstype!~"tmpfs|overlay|squashfs"}}'
         total = prom.scalar(f"max(node_filesystem_size_bytes{sel})", end.timestamp())
         free = prom.scalar(f"max(node_filesystem_avail_bytes{sel})", end.timestamp())
-        before = prom.scalar(
-            f"max(node_filesystem_avail_bytes{sel})", start.timestamp()
+        before = (
+            prom.scalar(f"max(node_filesystem_avail_bytes{sel})", since.timestamp())
+            if since < end
+            else None
         )
         if total is None or free is None:
             lines.append(f"{mount} : {NO_DATA}")
@@ -180,7 +197,7 @@ def disks(prom, start, end):
         growth = (
             ""
             if before is None
-            else f", variation de l'espace libre sur le mois : {size(free - before)}"
+            else f", variation de l'espace libre {growth_period(start, since)} : {size(free - before)}"
         )
         lines.append(
             f"{mount} : {size(total - free)} utilisés sur {size(total)} "
@@ -189,19 +206,23 @@ def disks(prom, start, end):
     return lines
 
 
-def sizes(prom, start, end):
+def sizes(prom, start, end, since):
     at = end.timestamp()
     db = prom.scalar(
         'sum(pg_database_size_bytes{datname!~"template0|template1|postgres"})', at
     )
-    db_before = prom.scalar(
-        'sum(pg_database_size_bytes{datname!~"template0|template1|postgres"})',
-        start.timestamp(),
+    db_before = (
+        prom.scalar(
+            'sum(pg_database_size_bytes{datname!~"template0|template1|postgres"})',
+            since.timestamp(),
+        )
+        if since < end
+        else None
     )
     growth = (
         ""
         if db is None or db_before is None
-        else f" (variation sur le mois : {size(db - db_before)})"
+        else f" (variation {growth_period(start, since)} : {size(db - db_before)})"
     )
     lines = [f"base de données : {size(db)}{growth}"]
     areas = dict(
@@ -321,7 +342,7 @@ def accounts(prom, start, end):
     ]
 
 
-def build_body(prom, label, start, end):
+def build_body(prom, label, start, end, now):
     last_day = end - timedelta(days=1)
     head = [
         f"Rapport mensuel ManuSpectrum, {MONTHS_FR[start.month - 1]} {start.year}",
@@ -330,10 +351,11 @@ def build_body(prom, label, start, end):
         "",
     ]
     blocks = []
+    since = growth_since(start, now)
     for title, build in (
         ("Disponibilité", availability),
-        ("Disques", disks),
-        ("Tailles", sizes),
+        ("Disques", lambda p, a, b: disks(p, a, b, since)),
+        ("Tailles", lambda p, a, b: sizes(p, a, b, since)),
         ("Sauvegardes et tests de restauration", backups),
         ("Redémarrages et manques de mémoire", restarts),
         ("Alertes du mois", alerts),
@@ -408,7 +430,7 @@ def main(argv=None, env=None, out=sys.stdout, err=sys.stderr):
     start, end = month_bounds(label)
 
     prom = Prometheus(env.get("PROMETHEUS_URL", "http://prometheus:9090"))
-    body = build_body(prom, label, start, end)
+    body = build_body(prom, label, start, end, now.astimezone(timezone.utc))
     try:
         message = build_message(env, label, body, now)
         if args.dry_run:
