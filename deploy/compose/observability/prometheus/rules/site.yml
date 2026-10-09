@@ -69,7 +69,7 @@ groups:
         expr: |
           (
             (sum(increase(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"}[30m]) and django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) or vector(0))
-            + (sum(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} unless django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) or vector(0))
+            + (sum((django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} unless django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) and on (job, instance) (up offset 30m == 1)) or vector(0))
           ) >= 3
         labels:
           severity: warning

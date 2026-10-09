@@ -71,7 +71,15 @@ MODEL_FIELDS = (
     "publication_changes",
 )
 WORKFLOW_FIELDS = ("started", "completed", "open", "stale")
-ETL_FIELDS = ("succeeded", "failed", "unfinished", "unloaded", "unindexed", "validated")
+ETL_FIELDS = (
+    "succeeded",
+    "failed",
+    "cancelled",
+    "unfinished",
+    "unloaded",
+    "unindexed",
+    "validated",
+)
 
 
 class Unavailable(Exception):
@@ -627,7 +635,10 @@ def workflows(prom, activity, start, end):
         '{view="transaction_reverse",method="POST",status="200"}'
     )
     increase = f"increase({series}[{window}]) and {series} offset {window}"
-    fresh = f"{series} unless {series} offset {window}"
+    fresh = (
+        f"({series} unless {series} offset {window}) "
+        f"and on (job, instance) (up offset {window} == 1)"
+    )
     cancelled = prom.scalar(
         f"sum(({increase}) or ({fresh}))",
         at,
@@ -651,6 +662,7 @@ def bulk_runs(activity):
         if row["failed"]:
             text += f", {row['failed']} en échec"
         for key, label in (
+            ("cancelled", "annulé(s)"),
             ("unindexed", "chargé(s) mais non indexé(s)"),
             ("unloaded", "défait(s) après chargement"),
             ("validated", "validé(s) sans chargement"),

@@ -274,7 +274,7 @@ this today). `biblissima-create-*` answers 504 when its write budget is spent, s
 also raises `WriteRequestsFailing` next to `WriteBudgetSpent`. Prometheus creates a labelled series at its
 first increment, so the first error of a new `(view, method, status)` series is invisible to a bare
 `increase()`: the alert and the 4xx/5xx and cancellation panels add the series that did not exist one
-window earlier. History is 35 days, capped at 8 GB (`--storage.tsdb.retention.size`): if the cap cuts
+window earlier. The fresh-series term only counts targets that were scraped successfully one window earlier (`up offset 30m == 1`): a scrape gap does not turn every old series into a new one, and a Prometheus started less than 30 minutes ago misses new series until then. A thumbnail request for a file without `thumbnail_data` is answered with the same 302 as a download, so it is counted as one. Bulk runs: `cancelled` (stopped by the user) and `unloaded` are terminal; the Excel exporters insert their row as `validated` and set `indexed` when done, so for an export module `validated` means running or crashed and is reported as unfinished. History is 35 days, capped at 8 GB (`--storage.tsdb.retention.size`): if the cap cuts
 earlier, the consultation and sign-in figures of the monthly report undercount the start of the month
 without a mark, as does the first month after the recording rules are deployed (they have no history
 before their first evaluation).

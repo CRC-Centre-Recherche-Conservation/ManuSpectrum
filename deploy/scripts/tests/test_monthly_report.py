@@ -535,13 +535,15 @@ class MonthlyReport(unittest.TestCase):
         ]
         self.assertIn(" unless ", query)
         self.assertIn(" offset 2678400s", query)
+        self.assertIn("up offset 2678400s == 1", query)
 
     def test_etl_runs_name_every_terminal_state(self):
         etl = {
             "import-single-csv": {
-                "started": 9,
+                "started": 11,
                 "succeeded": 3,
                 "failed": 1,
+                "cancelled": 2,
                 "unindexed": 2,
                 "unloaded": 1,
                 "validated": 1,
@@ -552,8 +554,8 @@ class MonthlyReport(unittest.TestCase):
             command = activity_command(directory, {**ACTIVITY, "etl": etl})
             _, text = self.report(extra=["--activity-command", command])
         self.assertIn(
-            "import-single-csv : 9 lancés, 3 réussi(s), 1 en échec, "
-            "2 chargé(s) mais non indexé(s), 1 défait(s) après chargement, "
+            "import-single-csv : 11 lancés, 3 réussi(s), 1 en échec, "
+            "2 annulé(s), 2 chargé(s) mais non indexé(s), 1 défait(s) après chargement, "
             "1 validé(s) sans chargement, 1 non terminé(s)",
             text,
         )

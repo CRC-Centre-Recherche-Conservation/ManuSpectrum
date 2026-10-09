@@ -202,13 +202,13 @@ class WorkflowAndEtlTests(ActivityCase):
         )
         self.assertEqual(self.figures()["workflows"][name]["stale"], 0)
 
-    def load(self, slug, status, at):
+    def load(self, slug, status, at, etl_type="import"):
         module = ETLModule.objects.filter(
             slug=slug
         ).first() or ETLModule.objects.create(
             name=slug,
             slug=slug,
-            etl_type="import",
+            etl_type=etl_type,
             component="c",
             componentname="c",
             modulename="m.py",
@@ -237,6 +237,7 @@ class WorkflowAndEtlTests(ActivityCase):
                 "started": 3,
                 "succeeded": 1,
                 "failed": 1,
+                "cancelled": 0,
                 "unindexed": 0,
                 "unloaded": 0,
                 "validated": 0,
@@ -256,21 +257,32 @@ class WorkflowAndEtlTests(ActivityCase):
             "failed",
             "running",
             "reversing",
+            "cancelled",
         ):
             self.load("import-single-csv", status, at)
         row = self.figures()["etl"]["import-single-csv"]
         self.assertEqual(
             row,
             {
-                "started": 9,
+                "started": 10,
                 "succeeded": 2,
                 "failed": 1,
+                "cancelled": 1,
                 "unindexed": 1,
                 "unloaded": 1,
                 "validated": 2,
                 "unfinished": 2,
             },
         )
+
+    def test_an_exporter_row_stays_validated_while_it_runs_so_it_is_unfinished(self):
+        at = START + timedelta(days=4)
+        self.load("tile-excel-exporter", "validated", at, etl_type="export")
+        self.load("tile-excel-exporter", "indexed", at, etl_type="export")
+        row = self.figures()["etl"]["tile-excel-exporter"]
+        self.assertEqual(row["validated"], 0)
+        self.assertEqual(row["succeeded"], 1)
+        self.assertEqual(row["unfinished"], 1)
 
 
 class ReadOnlyTests(ActivityCase):

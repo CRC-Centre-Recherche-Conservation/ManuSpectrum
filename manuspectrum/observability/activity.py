@@ -27,9 +27,12 @@ hour a year may be placed an hour off.
   deleted by Arches and leaves no row; an open run is stale once older than
   ``WORKFLOW_STALE_AFTER_DAYS`` (a placeholder until the cleanup delay is decided);
 - ETL: ``load_event`` rows started in the window, by module and outcome: succeeded
-  (``indexed``, ``completed``), failed, unindexed (written, indexing failed), unloaded
-  (reversed after a success), validated (checked, nothing written); the rest
-  (``running``, ``reversing``) is unfinished.
+  (``indexed``, ``completed``), failed, cancelled (stopped by the user), unindexed
+  (written, indexing failed), unloaded (reversed after a success), validated
+  (checked, nothing written); the rest (``running``, ``reversing``) is unfinished.
+  The Excel exporters insert their row as ``validated`` and set ``indexed`` when done,
+  so for a module of type ``export`` a ``validated`` row is a run still going or
+  crashed: it is unfinished, never validated.
 """
 
 import re
@@ -46,6 +49,7 @@ WORKFLOW_STALE_AFTER_DAYS = 30
 ETL_OUTCOMES = (
     "succeeded",
     "failed",
+    "cancelled",
     "unindexed",
     "unloaded",
     "validated",
@@ -133,9 +137,10 @@ SELECT m.slug,
        count(*),
        count(*) FILTER (WHERE l.status = ANY(%(done)s)),
        count(*) FILTER (WHERE l.status = 'failed'),
+       count(*) FILTER (WHERE l.status = 'cancelled'),
        count(*) FILTER (WHERE l.status = 'unindexed'),
        count(*) FILTER (WHERE l.status = 'unloaded'),
-       count(*) FILTER (WHERE l.status = 'validated')
+       count(*) FILTER (WHERE l.status = 'validated' AND m.etl_type <> 'export')
 FROM load_event l
 JOIN etl_modules m ON m.etlmoduleid = l.etl_module_id
 WHERE l.load_start_time >= %(start)s::timestamptz
@@ -218,6 +223,7 @@ def etl_runs(cursor, start, end):
         started,
         succeeded,
         failed,
+        cancelled,
         unindexed,
         unloaded,
         validated,
@@ -226,11 +232,12 @@ def etl_runs(cursor, start, end):
             "started": started,
             "succeeded": succeeded,
             "failed": failed,
+            "cancelled": cancelled,
             "unindexed": unindexed,
             "unloaded": unloaded,
             "validated": validated,
             "unfinished": started
-            - (succeeded + failed + unindexed + unloaded + validated),
+            - (succeeded + failed + cancelled + unindexed + unloaded + validated),
         }
     return runs
 
