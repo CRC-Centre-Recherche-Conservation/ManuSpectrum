@@ -1,4 +1,5 @@
 {
+    "widgetid": "29905551-a4a5-428c-bf82-2eb0ec464bab",
     "name": "biblissima-concept-widget",
     "component": "views/components/widgets/biblissima-concept-widget",
     "defaultconfig": {

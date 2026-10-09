@@ -48,7 +48,7 @@ jobs:
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
           stack='deploy/(docker|compose|certs|logrotate|systemd)/|deploy/(check-stack\.sh|Makefile)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
-          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/rewrite_dev_origin\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/rewrite_dev_origin\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflow)")"
@@ -116,6 +116,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: true
 
       - name: Free runner disk
         run: |
@@ -180,6 +181,7 @@ jobs:
               -e "s#^RESTIC_REPOSITORY_DIR=.*#RESTIC_REPOSITORY_DIR=$RUNNER_TEMP/restic#" \
               -e "s#^METRICS_TEXTFILE_DIR=.*#METRICS_TEXTFILE_DIR=$RUNNER_TEMP/metrics#" \
               -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca/ca.crt#" \
+              -e "s#^PKG_DIR=.*#PKG_DIR=$GITHUB_WORKSPACE/pkg#" \
               deploy/compose/.env.example > "$ENV_FILE"
 
       - name: First installation
