@@ -25,11 +25,13 @@ ALLOWED_LABELS = frozenset(
         "level",
         "memo",
         "mode",
+        "model",
         "outcome",
         "purpose",
         "reason",
         "resource_type",
         "source",
+        "state",
         "surface",
         "task",
         "tier",
@@ -127,6 +129,23 @@ TASK_PREFIXES = ("manuspectrum.", "arches.")
 TASK_OUTCOMES = ("success", "failure", "retry")
 INDEX_MODES = ("transaction", "resource")
 INDEX_OUTCOMES = ("indexed", "not_found", "failed")
+RESOURCE_MODELS = (
+    "alteration",
+    "analysis",
+    "characterization",
+    "component",
+    "document",
+    "group",
+    "instrument",
+    "modification",
+    "person",
+    "place",
+    "project",
+    "sample",
+)
+CHANGE_KINDS = ("created", "modified", "deleted")
+WORKFLOW_KINDS = ("create-project-workflow", "import-biblissima-workflow")
+WORKFLOW_STATES = ("open", "stale")
 READYZ_COMPONENTS = (
     "postgres",
     "elasticsearch",
@@ -371,5 +390,28 @@ ACTIVE_ACCOUNTS = gauge(
 ACTIVE_ACCOUNTS_MEASURED = gauge(
     "manuspectrum_active_accounts_timestamp_seconds",
     "Unix time of the count behind manuspectrum_active_accounts.",
+    mode="mostrecent",
+)
+RESOURCES = gauge(
+    "manuspectrum_resources",
+    "Resource instances per resource model, set by the hourly activity task.",
+    ["model"],
+    mode="mostrecent",
+)
+RESOURCE_CHANGES = gauge(
+    "manuspectrum_resource_changes",
+    "Resources created, modified or deleted per model in the last 24 hours (edit log).",
+    ["model", "kind"],
+    mode="mostrecent",
+)
+WORKFLOWS = gauge(
+    "manuspectrum_workflows",
+    "Workflow runs not completed, per workflow, and those open for too long.",
+    ["kind", "state"],
+    mode="mostrecent",
+)
+ACTIVITY_MEASURED = gauge(
+    "manuspectrum_activity_timestamp_seconds",
+    "Unix time of the last refresh of the activity gauges.",
     mode="mostrecent",
 )
