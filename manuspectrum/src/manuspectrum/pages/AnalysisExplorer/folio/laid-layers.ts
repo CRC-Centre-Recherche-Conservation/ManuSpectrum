@@ -19,6 +19,8 @@ export interface LaidLayers {
     draw(overlays: readonly FolioOverlay[], curtain: string | null): void;
     /** Takes these layers off the map: the next `draw` lays them as new images. */
     forget(keys: Iterable<string>): void;
+    /** The image overlay laid for `key`, or null when none is. */
+    layerOf(key: string): L.ImageOverlay | null;
     /** Takes the curtain off; the layers go with the map. */
     remove(): void;
 }
@@ -144,5 +146,9 @@ export function laidLayers(
         latest.clear();
     }
 
-    return { draw, forget, remove };
+    function layerOf(key: string): L.ImageOverlay | null {
+        return images.get(key) ?? null;
+    }
+
+    return { draw, forget, layerOf, remove };
 }

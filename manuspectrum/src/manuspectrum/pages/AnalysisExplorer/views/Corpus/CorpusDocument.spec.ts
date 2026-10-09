@@ -2,7 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, ref } from "vue";
+import { defineComponent, h, inject, ref } from "vue";
 
 import CorpusDocument from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue";
 
@@ -12,7 +12,10 @@ import {
     useRegistration,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { DEBOUNCE_MS } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
-import { RESULTS_MEMO_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FOLIO_CANVAS_KEY,
+    RESULTS_MEMO_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     snapshotOf,
@@ -1736,6 +1739,74 @@ describe("CorpusDocument", () => {
                 quarter: 0,
                 box: ZONE_BOX,
             });
+            wrapper.unmount();
+        });
+
+        it("registers the box a layer was moved or resized to, keeping its turn", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-turn", LAYER, 1);
+            await flushPromises();
+            const moved = { x: 10, y: 20, w: 400, h: 800 };
+            folio.vm.$emit("layer-place", LAYER, moved);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                canvas: "https://iiif.example/c1",
+                quarter: 1,
+                box: moved,
+            });
+            expect(folio.props("overlays")[0]).toMatchObject({
+                registered: true,
+                quarter: 1,
+            });
+            wrapper.unmount();
+        });
+
+        it("registers a first move from a layer still at its zone", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            const moved = { x: 150, y: 120, w: 800, h: 400 };
+            folio.vm.$emit("layer-place", LAYER, moved);
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toMatchObject({
+                quarter: 0,
+                box: moved,
+            });
+            wrapper.unmount();
+        });
+
+        it("ignores a place for a layer that is no longer laid", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            folio.vm.$emit("layer-place", "unknown:0", {
+                x: 1,
+                y: 1,
+                w: 9,
+                h: 9,
+            });
+            await flushPromises();
+            expect(useRegistration().get(uuid(101))).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("tells the cards which page the folio shows", async () => {
+            const seen: (string | null)[] = [];
+            const Probe: Component = {
+                setup() {
+                    const canvas = inject(FOLIO_CANVAS_KEY, ref("unprovided"));
+                    return () => {
+                        seen.push(canvas.value);
+                        return h("article");
+                    };
+                },
+            };
+            vi.stubGlobal("fetch", stubFetch({}));
+            const { wrapper } = mountScreen(
+                (opened) => {
+                    opened.openDocument(uuid(1));
+                    opened.focusOn({ kind: "analysis", id: uuid(101) });
+                },
+                { stubs: { AnalysisCard: Probe } },
+            );
+            await flushPromises();
+            expect(seen.at(-1)).toBe("https://iiif.example/c1");
             wrapper.unmount();
         });
 

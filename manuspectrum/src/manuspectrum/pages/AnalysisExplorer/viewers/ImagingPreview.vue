@@ -14,6 +14,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     CURTAIN_KEY,
+    FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
@@ -52,6 +53,7 @@ const props = defineProps<{
 }>();
 
 const curtain = inject(CURTAIN_KEY, ref<string | null>(null));
+const folioCanvas = inject(FOLIO_CANVAS_KEY, ref<string | null>(null));
 const zones = inject(FOLIO_ZONES_KEY, ref<ReadonlySet<string>>(new Set()));
 
 const store = useExplorerStore();
@@ -97,7 +99,7 @@ const registered = computed(() => {
     const held = registration.get(props.analysis.id);
     return (
         held !== null &&
-        held.canvas === store.document?.canvas &&
+        held.canvas === folioCanvas.value &&
         !(held.box.w === UNPLACED.w && held.box.h === UNPLACED.h)
     );
 });

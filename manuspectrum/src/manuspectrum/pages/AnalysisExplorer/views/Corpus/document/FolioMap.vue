@@ -16,12 +16,17 @@ import { stackSmallestOnTop } from "utils/leaflet-stack";
 
 import LayerControls from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue";
 
+import { adjustLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
 import { anchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import {
     markedZones,
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import {
+    boundsOfBox,
+    boxOfBounds,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import {
     fitPage,
@@ -44,6 +49,7 @@ import type {
     DocumentComponent,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
@@ -118,6 +124,7 @@ const emit = defineEmits<{
     "layer-curtain": [key: string, on: boolean];
     "layer-capture": [key: string];
     "layer-reset": [key: string];
+    "layer-place": [key: string, box: Box];
 }>();
 defineExpose({ focusTarget, focusCurrent });
 
@@ -151,6 +158,18 @@ const targets = new Map<string, L.Marker>();
 let laid: LaidLayers | null = null;
 const anchors = new Map<string, AnchoredControl>();
 
+/** The layer being adjusted (`adjustLayer`), the box the parent was last given, and the one on screen. */
+interface Adjustment {
+    key: string;
+    layer: L.ImageOverlay;
+    stop: () => void;
+    kept: Box;
+    shown: Box;
+    quiet: boolean;
+}
+let adjustment: Adjustment | null = null;
+const SAME_BOX = 0.01;
+
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
 watch(() => props.canvas?.id, drawPage);
@@ -177,6 +196,7 @@ watch(
     },
 );
 watch(() => [props.overlays, props.curtain], drawOverlays);
+watch(() => props.adjusting, syncAdjustment);
 
 onMounted(() => {
     const surface = host.value?.querySelector<HTMLElement>(".surface");
@@ -209,6 +229,7 @@ useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 onBeforeUnmount(() => {
     page?.remove();
     page = null;
+    stopAdjusting(true);
     laid?.remove();
     laid = null;
     for (const anchor of anchors.values()) anchor.remove();
@@ -644,7 +665,98 @@ function drawOverlays(): void {
         [...failedOverlays.value].filter((key) => wanted.has(key)),
     );
     laid.draw(props.overlays, props.curtain);
+    syncAdjustment();
     drawControls();
+}
+
+function sameBox(a: Box, b: Box): boolean {
+    return (
+        Math.abs(a.x - b.x) < SAME_BOX &&
+        Math.abs(a.y - b.y) < SAME_BOX &&
+        Math.abs(a.w - b.w) < SAME_BOX &&
+        Math.abs(a.h - b.h) < SAME_BOX
+    );
+}
+
+/** Ends the adjustment; `quiet` drops a change not yet kept instead of handing it to the parent. */
+function stopAdjusting(quiet: boolean): void {
+    if (!adjustment) return;
+    const ending = adjustment;
+    adjustment = null;
+    ending.quiet = quiet;
+    ending.stop();
+}
+
+/**
+ * Keeps the adjustment on the layer `adjusting` names: starts it from the
+ * layer's box, ends it when the layer or the name goes, and starts it again
+ * when the parent gave the layer another box (a turn, a reset). A redraw
+ * leaves the box on screen where the reader put it.
+ */
+function syncAdjustment(): void {
+    const key = props.adjusting;
+    const layer = key ? laid?.layerOf(key) ?? null : null;
+    const overlay = props.overlays.find((entry) => entry.key === key);
+    if (!key || !layer || !overlay) {
+        stopAdjusting(false);
+        return;
+    }
+    const given = boxOfBounds(overlay.bounds);
+    if (adjustment?.key === key && adjustment.layer === layer) {
+        if (sameBox(given, adjustment.kept)) {
+            layer.setBounds(L.latLngBounds(boundsOfBox(adjustment.shown)));
+            return;
+        }
+        stopAdjusting(true);
+    } else {
+        stopAdjusting(false);
+    }
+    startAdjustment(key, layer, given, overlay.label);
+}
+
+function startAdjustment(
+    key: string,
+    layer: L.ImageOverlay,
+    given: Box,
+    name: string,
+): void {
+    if (!map) return;
+    const current: Adjustment = {
+        key,
+        layer,
+        kept: given,
+        shown: given,
+        quiet: false,
+        stop: () => undefined,
+    };
+    const control = adjustLayer(map, layer, given, {
+        label: interpolate(
+            $gettext(
+                "Adjusting %{label}: arrows move, plus and minus scale, Escape stops",
+            ),
+            { label: name },
+        ),
+        onChange(box) {
+            current.shown = box;
+            anchors.get(key)?.place(boundsOfBox(box));
+        },
+        onDone(box) {
+            if (current.quiet) return;
+            current.kept = box;
+            emit("layer-place", key, box);
+        },
+        onExit() {
+            adjustment = null;
+            emit("layer-adjust", key, false);
+            host.value
+                ?.querySelector<HTMLElement>(
+                    `.${CONTROLS_HOST_CLASS} [data-action=adjust]`,
+                )
+                ?.focus();
+        },
+    });
+    current.stop = control.stop;
+    adjustment = current;
 }
 
 /**
@@ -1376,6 +1488,34 @@ function wholePage(): void {
 
 .folio :deep(.folio-overlay) {
     image-rendering: pixelated;
+}
+
+.folio :deep(.folio-overlay.is-adjusting) {
+    cursor: move;
+    touch-action: none;
+}
+
+.folio :deep(.adjust-handle) {
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 0.125rem solid var(--blue-text);
+    border-radius: 0.25rem;
+    touch-action: none;
+}
+
+.folio :deep(.adjust-handle[data-corner="nw"]),
+.folio :deep(.adjust-handle[data-corner="se"]) {
+    cursor: nwse-resize;
+}
+
+.folio :deep(.adjust-handle[data-corner="ne"]),
+.folio :deep(.adjust-handle[data-corner="sw"]) {
+    cursor: nesw-resize;
+}
+
+.folio :deep(.folio-overlay.is-adjusting:focus-visible) {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

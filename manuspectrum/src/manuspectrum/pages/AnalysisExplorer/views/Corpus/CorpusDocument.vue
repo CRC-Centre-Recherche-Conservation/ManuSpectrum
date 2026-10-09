@@ -63,6 +63,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     CURTAIN_KEY,
+    FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
     RESULTS_MEMO_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -95,6 +96,7 @@ import type {
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageCount } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-counts.ts";
 import type { TechniqueStyle } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
+import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type { LegendEntry } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioLegend.vue";
 
@@ -635,6 +637,10 @@ const drawerVisible = computed({
 
 provide(CURTAIN_KEY, curtain);
 provide(FOLIO_ZONES_KEY, zones);
+provide(
+    FOLIO_CANVAS_KEY,
+    computed(() => currentCanvas.value?.id ?? null),
+);
 
 useScreenHeading(
     () =>
@@ -788,6 +794,14 @@ function onLayerTurn(key: string, by: 1 | -1): void {
     if (!layer || !canvas) return;
     const turned = turn(boxOfBounds(layer.bounds), layer.quarter, by);
     registration.setPlace(layer.analysis, canvas, turned.box, turned.quarter);
+}
+
+/** Keeps the box the reader gave the layer, with the turn it has. */
+function onLayerPlace(key: string, box: Box): void {
+    const layer = laidLayer(key);
+    const canvas = currentCanvas.value?.id;
+    if (!layer || !canvas) return;
+    registration.setPlace(layer.analysis, canvas, box, layer.quarter);
 }
 
 function onLayerOpacity(key: string, value: number): void {
@@ -1067,6 +1081,7 @@ function goHome(): void {
                             @select="onSelect"
                             @layer-adjust="onLayerAdjust"
                             @layer-turn="onLayerTurn"
+                            @layer-place="onLayerPlace"
                             @layer-opacity="onLayerOpacity"
                             @layer-curtain="onLayerCurtain"
                             @layer-reset="onLayerReset"

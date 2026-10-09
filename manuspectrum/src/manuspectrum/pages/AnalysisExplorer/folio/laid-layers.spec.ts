@@ -182,6 +182,19 @@ describe("laidLayers", () => {
         unclip({ layer: {} } as unknown as L.LeafletEvent);
     });
 
+    it("gives the image overlay of a laid layer, and none once it is gone", () => {
+        const laid = laidLayers(map, {
+            curtainLabel: "Curtain",
+            failed: vi.fn(),
+        });
+        expect(laid.layerOf("a:0")).toBeNull();
+        laid.draw([overlay("a:0")], null);
+        expect(laid.layerOf("a:0")?.getElement()).toBe(images()[0]);
+        expect(laid.layerOf("b:0")).toBeNull();
+        laid.draw([], null);
+        expect(laid.layerOf("a:0")).toBeNull();
+    });
+
     it("forgets layers so the next draw lays them as new images", () => {
         const laid = laidLayers(map, {
             curtainLabel: "Curtain",

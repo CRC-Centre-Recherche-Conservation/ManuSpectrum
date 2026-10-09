@@ -31,6 +31,8 @@ vi.hoisted(() => {
 vi.mock("leaflet-iiif", () => ({}));
 vi.mock("utils/leaflet-stack", () => ({ stackSmallestOnTop: vi.fn() }));
 
+import type { Box } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+
 const LAYERS = { points: true, zones: true, characterizations: true };
 
 function canvasWithImage() {
@@ -989,6 +991,158 @@ describe("FolioMap", () => {
             slider.vm.$emit("update:modelValue", 40);
             expect(wrapper.emitted("layer-opacity")).toEqual([["a:0", 0.4]]);
             wrapper.unmount();
+        });
+
+        describe("while a layer is adjusted", () => {
+            function image(wrapper: { element: Element }, index = 0) {
+                return wrapper.element.querySelectorAll<HTMLImageElement>(
+                    "img.folio-overlay",
+                )[index];
+            }
+
+            function drag(
+                target: Element,
+                from: [number, number],
+                to: [number, number],
+            ): void {
+                for (const [type, [x, y]] of [
+                    ["pointerdown", from],
+                    ["pointermove", to],
+                    ["pointerup", to],
+                ] as const) {
+                    target.dispatchEvent(
+                        new MouseEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: x,
+                            clientY: y,
+                        }),
+                    );
+                }
+            }
+
+            it("makes only the named layer adjustable, with its handles", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                    adjusting: "a:1",
+                });
+                await flushPromises();
+                expect(image(wrapper, 0).classList).not.toContain(
+                    "is-adjusting",
+                );
+                expect(image(wrapper, 1).classList).toContain("is-adjusting");
+                expect(image(wrapper, 1).getAttribute("aria-label")).toBe(
+                    "Adjusting a:1: arrows move, plus and minus scale, Escape stops",
+                );
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(4);
+                wrapper.unmount();
+            });
+
+            it("emits the box of a dragged layer once the pointer is up", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                drag(image(wrapper), [100, 100], [130, 160]);
+                const placed = wrapper.emitted("layer-place") as unknown as [
+                    string,
+                    Box,
+                ][];
+                expect(placed).toHaveLength(1);
+                expect(placed[0]?.[0]).toBe("a:0");
+                expect(placed[0]?.[1]).toMatchObject({ w: 960, h: 640 });
+                expect(placed[0]?.[1].x).not.toBe(0);
+                wrapper.unmount();
+            });
+
+            it("keeps the toolbar on the corner of the layer while it is dragged", async () => {
+                vi.spyOn(L.Map.prototype, "getSize").mockImplementation(() =>
+                    L.point(800, 600),
+                );
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                const host = wrapper.element.querySelector(
+                    ".layer-controls-host",
+                ) as HTMLElement;
+                const before = host.style.top;
+                drag(image(wrapper), [100, 100], [130, 160]);
+                expect(host.style.top).not.toBe(before);
+                wrapper.unmount();
+            });
+
+            it("emits the box and the end of the adjustment on Escape, and hands the focus back to the Adjust button", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                image(wrapper).dispatchEvent(
+                    new KeyboardEvent("keydown", {
+                        key: "Escape",
+                        bubbles: true,
+                    }),
+                );
+                expect(wrapper.emitted("layer-place")).toHaveLength(1);
+                expect(wrapper.emitted("layer-adjust")).toEqual([
+                    ["a:0", false],
+                ]);
+                expect(
+                    document.activeElement?.getAttribute("data-action"),
+                ).toBe("adjust");
+                wrapper.unmount();
+            });
+
+            it("takes the handles off when the adjustment is switched off, persisting nothing", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                await wrapper.setProps({ adjusting: null });
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(0);
+                expect(image(wrapper).classList).not.toContain("is-adjusting");
+                expect(wrapper.emitted("layer-place")).toBeUndefined();
+                wrapper.unmount();
+            });
+
+            it("stops adjusting a layer that leaves the page", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                await wrapper.setProps({ overlays: [] });
+                await flushPromises();
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(0);
+                wrapper.unmount();
+            });
+
+            it("moves the adjustment to another layer when the named one changes", async () => {
+                const wrapper = mountFolio({
+                    overlays: [laidLayer("a:0"), laidLayer("a:1")],
+                    adjusting: "a:0",
+                });
+                await flushPromises();
+                await wrapper.setProps({ adjusting: "a:1" });
+                expect(image(wrapper, 0).classList).not.toContain(
+                    "is-adjusting",
+                );
+                expect(image(wrapper, 1).classList).toContain("is-adjusting");
+                expect(
+                    wrapper.element.querySelectorAll(".adjust-handle"),
+                ).toHaveLength(4);
+                wrapper.unmount();
+            });
         });
     });
 

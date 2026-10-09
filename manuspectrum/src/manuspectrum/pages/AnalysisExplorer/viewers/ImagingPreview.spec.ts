@@ -17,6 +17,7 @@ import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/Imagin
 
 import {
     CURTAIN_KEY,
+    FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
@@ -38,6 +39,7 @@ function mountPreview(
     prepare: (store: ReturnType<typeof useExplorerStore>) => void = () =>
         undefined,
     file = imagingEntry(),
+    folioCanvas: string | null = null,
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -50,6 +52,7 @@ function mountPreview(
             provide: {
                 [CURTAIN_KEY as symbol]: curtain,
                 [FOLIO_ZONES_KEY as symbol]: ref(new Set(zones)),
+                [FOLIO_CANVAS_KEY as symbol]: ref(folioCanvas),
             },
         },
     });
@@ -247,33 +250,53 @@ describe("ImagingPreview", () => {
         expect(curtain.value).toBe(`${uuid(101)}:1`);
     });
 
-    it("says the position is registered in this browser when the analysis has a place on this page", async () => {
-        const { wrapper, store } = mountPreview();
-        store.openDocument("doc", "canvas-1");
+    const PLACE = { x: 10, y: 10, w: 100, h: 100 };
+
+    it("says the position is registered in this browser when the analysis has a place on the page the folio shows", async () => {
+        const { wrapper } = mountPreview(
+            [uuid(101)],
+            () => undefined,
+            imagingEntry(),
+            "canvas-1",
+        );
         await wrapper.find("input.lay").setValue(true);
         expect(wrapper.text()).toContain("Indicative positioning");
-        useRegistration().setPlace(
-            uuid(101),
-            "canvas-1",
-            { x: 10, y: 10, w: 100, h: 100 },
-            0,
-        );
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
         await wrapper.vm.$nextTick();
         expect(wrapper.text()).toContain("Registered in this browser");
         expect(wrapper.text()).not.toContain("Indicative positioning");
     });
 
-    it("keeps the indicative note when the place was taken on another page", async () => {
-        const { wrapper, store } = mountPreview();
-        store.openDocument("doc", "canvas-2");
-        useRegistration().setPlace(
-            uuid(101),
+    it("reads the page the folio shows, not the document's canvas, which can still be unset", async () => {
+        const { wrapper, store } = mountPreview(
+            [uuid(101)],
+            () => undefined,
+            imagingEntry(),
             "canvas-1",
-            { x: 10, y: 10, w: 100, h: 100 },
-            0,
         );
+        expect(store.document?.canvas ?? null).toBeNull();
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).toContain("Registered in this browser");
+    });
+
+    it("keeps the indicative note when the place was taken on another page", async () => {
+        const { wrapper } = mountPreview(
+            [uuid(101)],
+            () => undefined,
+            imagingEntry(),
+            "canvas-2",
+        );
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
         await wrapper.find("input.lay").setValue(true);
         expect(wrapper.text()).toContain("Indicative positioning");
+        expect(wrapper.text()).not.toContain("Registered in this browser");
+    });
+
+    it("keeps the indicative note when no folio provides its page", async () => {
+        const { wrapper } = mountPreview();
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
+        await wrapper.find("input.lay").setValue(true);
         expect(wrapper.text()).not.toContain("Registered in this browser");
     });
 

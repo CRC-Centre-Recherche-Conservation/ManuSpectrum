@@ -111,6 +111,16 @@ describe("LayerControls", () => {
         expect(wrapper.emitted("turn")).toBeUndefined();
     });
 
+    it("draws the reset with a glyph of its own, not the turn-left one", () => {
+        const wrapper = mountBar();
+        const glyph = (name: string) =>
+            buttonNamed(wrapper, name)
+                .findAll("path")
+                .map((path) => path.attributes("d"))
+                .join("|");
+        expect(glyph("Reset the position")).not.toBe(glyph("Turn left"));
+    });
+
     it("disables the reset until the layer is registered", async () => {
         const wrapper = mountBar({ overlay: overlay({ registered: false }) });
         const reset = buttonNamed(wrapper, "Reset the position");

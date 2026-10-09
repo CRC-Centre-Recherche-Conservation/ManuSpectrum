@@ -207,7 +207,7 @@ function tabindexOf(index: number): number {
             @click="emit('capture')"
         />
         <IconButton
-            icon="undo"
+            icon="history"
             data-action="reset"
             :label="$gettext('Reset the position')"
             :disabled="!props.overlay.registered"
