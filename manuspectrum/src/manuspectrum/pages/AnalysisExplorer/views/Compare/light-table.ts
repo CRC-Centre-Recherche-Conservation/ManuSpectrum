@@ -1,6 +1,7 @@
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { Capture } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 
 export type TableLayout = "single" | "curtain" | "grid2" | "grid4" | "stack";
@@ -44,6 +45,37 @@ export interface TableState extends StoredImaging {
 }
 
 export const PANE_COUNT = 4;
+
+/** Canvas ids of the folio captures: this prefix and the analysis id. */
+export const CAPTURE_PREFIX = "capture:";
+
+/** The virtual layer a folio capture makes: an image with no IIIF service, last of its analysis. */
+export function captureLayer(
+    analysisId: string,
+    capture: Capture,
+    label: string,
+): FileLayer {
+    return {
+        index: -1,
+        id: CAPTURE_PREFIX + analysisId,
+        label,
+        image: {
+            service: null,
+            url: capture.url,
+            width: capture.width,
+            height: capture.height,
+        },
+        content: null,
+        elements: [],
+        emissionLine: null,
+        band: null,
+        processing: null,
+        note: null,
+    };
+}
+
+/** Folio captures by analysis id, as `layerById` and `reconcile` read them. */
+export type Captures = Readonly<Record<string, FileLayer>>;
 
 export const NEUTRAL_FILTERS: Readonly<PaneFilters> = Object.freeze({
     brightness: 100,
@@ -101,10 +133,29 @@ function analysesOf(maps: readonly MapLine[]): AnalysisLayers[] {
     return [...found.values()];
 }
 
-function canvasesOf(maps: readonly MapLine[]): Set<string> {
-    return new Set(
-        maps.flatMap((line) => line.file.layers.map((layer) => layer.id)),
-    );
+/** The captures whose analysis is among `maps`. */
+function heldCaptures(
+    maps: readonly MapLine[],
+    captures: Captures,
+): FileLayer[] {
+    const analyses = new Set(maps.map((line) => line.analysis.id));
+    return Object.entries(captures)
+        .filter(
+            ([analysis, layer]) =>
+                analyses.has(analysis) &&
+                layer.id === CAPTURE_PREFIX + analysis,
+        )
+        .map(([, layer]) => layer);
+}
+
+function canvasesOf(
+    maps: readonly MapLine[],
+    captures: Captures = {},
+): Set<string> {
+    return new Set([
+        ...maps.flatMap((line) => line.file.layers.map((layer) => layer.id)),
+        ...heldCaptures(maps, captures).map((layer) => layer.id),
+    ]);
 }
 
 function analysisOf(canvas: string, maps: readonly MapLine[]): string | null {
@@ -115,16 +166,25 @@ function analysisOf(canvas: string, maps: readonly MapLine[]): string | null {
     );
 }
 
-/** The layer a canvas id names and the map line it belongs to, null when the Selection holds none. */
+/**
+ * The layer a canvas id names and the map line it belongs to, null when the
+ * Selection holds none. A capture resolves with the first line of its
+ * analysis while that analysis is among the maps.
+ */
 export function layerById(
     canvas: string,
     maps: readonly MapLine[],
+    captures: Captures = {},
 ): { layer: FileLayer; line: MapLine } | null {
     for (const line of maps) {
         const layer = line.file.layers.find((entry) => entry.id === canvas);
         if (layer) return { layer, line };
     }
-    return null;
+    if (!canvas.startsWith(CAPTURE_PREFIX)) return null;
+    const analysis = canvas.slice(CAPTURE_PREFIX.length);
+    const layer = captures[analysis];
+    const line = maps.find((entry) => entry.analysis.id === analysis);
+    return layer && layer.id === canvas && line ? { layer, line } : null;
 }
 
 function sharesFamily(maps: readonly MapLine[]): boolean {
@@ -196,12 +256,17 @@ function fill(
     return filled;
 }
 
-/** Drops what the Selection no longer holds and fills the panes the layout shows. */
+/**
+ * Drops what the Selection no longer holds (a capture is held while its
+ * analysis is selected and the capture exists) and fills the panes the layout
+ * shows; a capture is never laid by the fill.
+ */
 export function reconcile(
     state: TableState,
     maps: readonly MapLine[],
+    captures: Captures = {},
 ): TableState {
-    const held = canvasesOf(maps);
+    const held = canvasesOf(maps, captures);
     const panes = state.panes.map((pane) =>
         pane !== null && held.has(pane) ? pane : null,
     );

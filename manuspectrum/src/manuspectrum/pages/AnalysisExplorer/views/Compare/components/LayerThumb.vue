@@ -13,7 +13,8 @@ const THUMBNAIL_SIZE = "!120,150";
 
 /**
  * One imaging canvas of the gallery: a small image from its IIIF service
- * (lazy, an http(s) address only), its stored label always, the declared tag
+ * (lazy, an http(s) address only; an image with no service, a folio capture,
+ * is drawn from its own `url`), its stored label always, the declared tag
  * as a badge when it says something else, the panes holding it (A to D) and a
  * gold outline while it is in the stack. A failed image becomes a flat with
  * the label and is not asked again, at no other size. A click emits `pick`;
@@ -24,6 +25,7 @@ const props = defineProps<{
     canvas: string;
     label: string;
     service: string | null;
+    url?: string | null;
     tag: string | null;
     panes: readonly string[];
     inStack: boolean;
@@ -36,11 +38,13 @@ const { $gettext, interpolate } = useGettext();
 
 const failed = ref(false);
 
-const source = computed(() =>
-    props.service && !failed.value
-        ? safeHref(imageUrl(props.service, { size: THUMBNAIL_SIZE }))
-        : null,
-);
+const source = computed(() => {
+    if (failed.value) return null;
+    if (props.service) {
+        return safeHref(imageUrl(props.service, { size: THUMBNAIL_SIZE }));
+    }
+    return props.url ? safeHref(props.url) : null;
+});
 const badge = computed(() =>
     props.tag && !sameText(props.tag, props.label) ? props.tag : null,
 );

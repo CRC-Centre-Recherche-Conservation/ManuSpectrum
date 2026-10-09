@@ -7,14 +7,17 @@ import {
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
+    CAPTURE_PREFIX,
     NEUTRAL_FILTERS,
     canStack,
+    captureLayer,
     defaultState,
     linkedGroups,
     setSyncViews,
     moveInStack,
     pairsOf,
     place,
+    layerById,
     reconcile,
     setLayout,
     setOpacity,
@@ -325,5 +328,85 @@ describe("linkedGroups", () => {
                 maps,
             ),
         ).toEqual([]);
+    });
+});
+
+describe("captures", () => {
+    const capture = {
+        url: "https://iiif.example/folio/full/200,/0/default.jpg",
+        width: 200,
+        height: 300,
+        canvas: "https://iiif.example/canvas/1",
+        at: 1,
+    };
+    const maps = [line(1, [{}, {}]), line(2, [{}])];
+    const id = maps[0].analysis.id;
+    const captures = { [id]: captureLayer(id, capture, "Folio photo") };
+
+    it("builds a layer without service from the capture", () => {
+        const layer = captures[id];
+        expect(layer.id).toBe(CAPTURE_PREFIX + id);
+        expect(layer.index).toBe(-1);
+        expect(layer.image).toEqual({
+            service: null,
+            url: capture.url,
+            width: 200,
+            height: 300,
+        });
+        expect(layer.elements).toEqual([]);
+    });
+
+    it("resolves a capture id with the line of its analysis", () => {
+        const found = layerById(CAPTURE_PREFIX + id, maps, captures);
+        expect(found?.layer.label).toBe("Folio photo");
+        expect(found?.line.analysis.id).toBe(id);
+        expect(layerById(CAPTURE_PREFIX + id, maps)).toBeNull();
+    });
+
+    it("ignores a capture whose analysis is not among the maps", () => {
+        const other = { x: captureLayer("x", capture, "Folio photo") };
+        expect(layerById(CAPTURE_PREFIX + "x", maps, other)).toBeNull();
+    });
+
+    function withPane(canvas: string): TableState {
+        const state = place(defaultState(maps), canvas, 0);
+        return { ...state, layout: "grid2" };
+    }
+
+    it("keeps a pane and a stack layer holding a capture while its analysis is selected", () => {
+        const canvas = CAPTURE_PREFIX + id;
+        const state = toggleInStack(withPane(canvas), canvas, [
+            {
+                ...maps[0],
+                file: {
+                    ...maps[0].file,
+                    layers: [...maps[0].file.layers, captures[id]],
+                },
+            },
+            maps[1],
+        ]);
+        const next = reconcile(state, maps, captures);
+        expect(next.panes[0]).toBe(canvas);
+        expect(next.stack.layers.map((l) => l.canvas)).toEqual([canvas]);
+    });
+
+    it("drops it once the analysis leaves the Selection or the capture is deleted", () => {
+        const canvas = CAPTURE_PREFIX + id;
+        const state = withPane(canvas);
+        expect(reconcile(state, [maps[1]], captures).panes[0]).not.toBe(canvas);
+        expect(reconcile(state, maps, {}).panes[0]).not.toBe(canvas);
+    });
+
+    it("never lays a capture into an empty pane by itself", () => {
+        const next = reconcile(
+            {
+                ...defaultState(maps),
+                layout: "grid4",
+                panes: [null, null, null, null],
+            },
+            maps,
+            captures,
+        );
+        expect(next.panes.includes(CAPTURE_PREFIX + id)).toBe(false);
     });
 });

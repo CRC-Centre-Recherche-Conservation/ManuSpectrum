@@ -16,6 +16,7 @@ import {
 import { startLinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/testing/linked.ts";
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import {
+    captureLayer,
     defaultState,
     setGrouping,
     toggleInStack,
@@ -102,8 +103,9 @@ const TILED = [
 function gallery(
     maps: MapLine[],
     state: TableState = defaultState(maps),
+    captures: Record<string, FileLayer> = {},
 ): VueWrapper {
-    return mount(LayerGallery, { props: { maps, state } });
+    return mount(LayerGallery, { props: { maps, state, captures } });
 }
 
 function titles(view: VueWrapper): string[] {
@@ -458,5 +460,63 @@ describe("LayerGallery header and filters disclosure", () => {
         await view.find(".filter").setValue("");
         await view.findAll(".analysis-tab")[0].trigger("click");
         expect(view.find(".filters-toggle .active-count").exists()).toBe(false);
+    });
+});
+
+describe("LayerGallery with a folio capture", () => {
+    const stored = {
+        url: "https://iiif.example/folio/full/200,/0/default.jpg",
+        width: 200,
+        height: 300,
+        canvas: "https://iiif.example/canvas/1",
+        at: 1,
+    };
+    const capture = captureLayer(
+        PLAIN[0].analysis.id,
+        stored,
+        "Folio photo · capture",
+    );
+    const captures = { [PLAIN[0].analysis.id]: capture };
+
+    it("lists it last in its analysis group with the badge", () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), captures);
+        const first = view.findAll(".group")[0];
+        const thumbs = first.findAll(".layer-thumb");
+        expect(thumbs).toHaveLength(4);
+        expect(thumbs[3].attributes("data-canvas")).toBe(capture.id);
+        expect(thumbs[3].find("img").attributes("src")).toBe(capture.image.url);
+        expect(first.findAll(".capture-badge")).toHaveLength(1);
+        expect(view.findAll(".capture-badge")[0].text()).toBe("this browser");
+    });
+
+    it("emits delete-capture with the analysis id from its delete button", async () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), captures);
+        const button = view.find("button.capture-delete");
+        expect(button.attributes("aria-label")).toBe("Delete the capture");
+        await button.trigger("click");
+        expect(view.emitted("delete-capture")?.[0]).toEqual([
+            PLAIN[0].analysis.id,
+        ]);
+        expect(view.emitted("place")).toBeUndefined();
+    });
+
+    it("ignores a capture whose analysis is not in the maps", () => {
+        const view = gallery(PLAIN, defaultState(PLAIN), {
+            other: captureLayer("other", stored, "x"),
+        });
+        expect(view.find(".capture-badge").exists()).toBe(false);
+    });
+
+    it("puts it under Unclassified when grouped by tag", () => {
+        const maps = TILED;
+        const view = gallery(maps, setGrouping(defaultState(maps), "tag"), {
+            [maps[0].analysis.id]: capture,
+        });
+        const unclassified = view
+            .findAll(".group")
+            .find((g) =>
+                g.find(".group-title").text().startsWith("Unclassified"),
+            );
+        expect(unclassified?.find(".capture-badge").exists()).toBe(true);
     });
 });

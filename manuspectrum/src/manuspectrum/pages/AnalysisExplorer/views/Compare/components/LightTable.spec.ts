@@ -9,6 +9,10 @@ import ImagingPane from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/com
 import LightTable from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue";
 
 import {
+    reloadRegistrations,
+    useRegistration,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
+import {
     ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_ACTIONS_KEY,
@@ -116,6 +120,7 @@ let actionSources: (() => readonly WindowAction[])[] = [];
 beforeEach(() => {
     setActivePinia(createPinia());
     window.localStorage.clear();
+    reloadRegistrations();
     iiif = stubIiifLayer({ size: SIZE });
     L.control.sideBySide = vi.fn(() => {
         const control = {
@@ -1027,5 +1032,44 @@ describe("the focus", () => {
         expect(added).not.toHaveBeenCalled();
         expect(reset).not.toHaveBeenCalled();
         expect(paneLabels(view)).toEqual(labels);
+    });
+});
+
+describe("a folio capture", () => {
+    const CAPTURE = {
+        url: "https://iiif.example/folio/full/200,/0/default.jpg",
+        width: 200,
+        height: 300,
+        canvas: "https://iiif.example/canvas/1",
+        at: 1,
+    };
+
+    it("is a layer of its analysis: laid in a pane from the stored layout, listed in the gallery", async () => {
+        const id = PLAIN_TWO[0].analysis.id;
+        useRegistration().setCapture(id, CAPTURE);
+        writeImaging(stored({ panes: [`capture:${id}`, "c2-1", null, null] }));
+        const view = await mountTable(PLAIN_TWO);
+        expect(tableState(view).panes[0]).toBe(`capture:${id}`);
+        expect(paneLabels(view)[0]).toBe("Folio photo · capture");
+        expect(view.find(".capture-badge").exists()).toBe(true);
+    });
+
+    it("leaves its pane once deleted from the gallery", async () => {
+        const id = PLAIN_TWO[0].analysis.id;
+        useRegistration().setCapture(id, CAPTURE);
+        writeImaging(stored({ panes: [`capture:${id}`, "c2-1", null, null] }));
+        const view = await mountTable(PLAIN_TWO);
+        await click(view, "button.capture-delete");
+        expect(useRegistration().get(id)?.capture ?? null).toBeNull();
+        expect(tableState(view).panes).not.toContain(`capture:${id}`);
+        expect(view.find(".capture-badge").exists()).toBe(false);
+    });
+
+    it("is not laid when its analysis is not in the Selection", async () => {
+        const id = PLAIN_TWO[0].analysis.id;
+        useRegistration().setCapture(id, CAPTURE);
+        writeImaging(stored({ panes: [`capture:${id}`, "c2-1", null, null] }));
+        const view = await mountTable([PLAIN_TWO[1]]);
+        expect(tableState(view).panes).not.toContain(`capture:${id}`);
     });
 });
