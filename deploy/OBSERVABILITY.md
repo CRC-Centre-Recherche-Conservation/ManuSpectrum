@@ -66,7 +66,7 @@ a modification made there is lost at the next start.
 | Dashboard | Answers |
 | --- | --- |
 | Overview | Is it working? Site, readiness, image server, alerts firing, certificate, disks, last good backup |
-| Application | Requests, errors, Explorer latency and corpus builds, Celery tasks, upstream calls, sign-in attempts |
+| Application | Requests, errors, Explorer latency and corpus builds, Celery tasks, upstream calls, sign-in attempts, active accounts |
 | Infrastructure | Containers (state, memory against its limit, restarts, OOM kills), host CPU, memory, swap, clock, PostgreSQL, Redis, scrape targets |
 | Storage and backups | Filesystem use and time until full for `/` and `/data`, size of each data area, database size, backup repository, last backup and restore test |
 
@@ -113,8 +113,10 @@ falls inside the weekday 08:00-19:00 window (Alertmanager drops the resolved
 notification of a muted warning group, so an event of Tuesday noon, resolved on
 Friday 04:00, is usually never closed by a mail). The monthly report counts one
 episode per 64 h of such an event.
-`ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` need at least three
-builds in the hour, so one slow cold build alerts nobody. Disk thresholds:
+`ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` fire when more than
+half of the builds of the last hour (at least three) took longer than 13 s, and
+longer than 55 s, respectively (histogram bucket boundaries): one slow cold build
+among several alerts nobody. Disk thresholds:
 `DiskUsageHigh` warning above 80 %, `DiskAlmostFull` critical above 95 %,
 `DiskFillingUp` warning when the 6 h trend fills a disk within 24 h. There is no
 "no traffic" alert: a quiet site is not a fault.
@@ -213,26 +215,33 @@ own validated name, whatever the sender's domain.
 
 Every message the platform sends carries a subject prefix
 `[ManuSpectrum][<Category>]` and, when the sender controls headers, an
-`X-ManuSpectrum-Category` header. One address receives everything; mail filters
-sort on either.
+`X-ManuSpectrum-Category` header. The header value is the category name exactly as
+it appears in the subject (`Alert`, `Heartbeat`, `Report`). One address receives
+everything; mail filters sort on either.
 
 | Category | Sent by | Subject | Header |
 | --- | --- | --- | --- |
-| Alert | Alertmanager | `[ManuSpectrum][Alert] CRITICAL\|WARNING <alertname> - <summary>`; `RESOLVED …` when it clears | `alert` |
-| Heartbeat | Alertmanager, Monday 08:00 | `[ManuSpectrum][Heartbeat] Alerting chain OK` | `heartbeat` |
-| Report | Monthly report | `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>` | `report` |
+| Alert | Alertmanager | `[ManuSpectrum][Alert] CRITICAL\|WARNING <alertname> - <summary>`; `RESOLVED …` when it clears | `Alert` |
+| Heartbeat | Alertmanager, Monday 08:00 | `[ManuSpectrum][Heartbeat] Alerting chain OK` | `Heartbeat` |
+| Report | Monthly report | `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>` | `Report` |
 | Contact | Public contact form | `[ManuSpectrum][Contact] <reason> — <name>` | none (a `mailto:` link cannot set a header: filter on the subject) |
-| Account | Reserved for PP-4: access requests, embargo and workflow notices | `[ManuSpectrum][Account] …` | `account` |
+| Account | Reserved for PP-4: access requests, embargo and workflow notices | `[ManuSpectrum][Account] …` | `Account` |
 | System | Host mail (`root` alias: unattended upgrades, cron) | Unchanged | none (filter on the sender `root@<host>`) |
 
 ## Monthly report
 
 On the 1st at 08:00 the `manuspectrum-monthly-report` timer sends a report of the
 previous month, in French, to `ALERT_EMAILS`: availability, disks, sizes, backups and
-restore tests, restarts and out-of-memory kills, alerts of the month, active accounts. Growth is given "sur le mois"
+restore tests, restarts and out-of-memory kills, alerts of the month, active accounts (the number at
+the end of the month and its maximum over the month). Growth is given "sur le mois"
 when Prometheus still holds the start of the month, else "depuis le <date>" from its oldest sample (retention is 30
 days). Metrics that could not be read are listed
-under "données indisponibles" and the command exits 1. `make -C deploy report-test
+under "données indisponibles" and the command exits 1.
+**Active accounts** read `manuspectrum_active_accounts`: one number, no label, the
+active accounts (staff and superusers included, the `anonymous` visitor not) whose last
+login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)
+and the worker start refresh it on `worker:9808`; no account is named or stored in
+Prometheus. Without a sample the report prints "n/d". `make -C deploy report-test
 [ARGS="--month YYYY-MM"]` sends one now.
 
 ## Host metrics
@@ -248,7 +257,7 @@ Two timers write Prometheus textfiles that `node-exporter` reads from
 
 Docker sizes (one `docker system df -v` call under `nice` and `ionice`, each kind
 the sum of its entries, about four significant digits; the images figure counts
-the unique size of each image, so it is about 0.3 % under `docker system df`):
+the unique size of each image, shared layers left out, so it is about 0.3 % under `docker system df`; a measure of growth, not an accounting total):
 `manuspectrum_docker_disk_bytes{kind=images|build_cache|containers|volumes}` and
 `manuspectrum_docker_volume_bytes{volume=ms_*}` (the external data volumes).
 `manuspectrum_container_oom_cgroup` is 1 when a container's OOM kills are counted

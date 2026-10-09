@@ -193,7 +193,7 @@ case "$(render_tmpl data.json ms.body)" in
 esac
 
 # The category headers and the heartbeat subject are in the rendered config.
-for want in "X-ManuSpectrum-Category: alert" "X-ManuSpectrum-Category: heartbeat" \
+for want in "X-ManuSpectrum-Category: Alert" "X-ManuSpectrum-Category: Heartbeat" \
   "Subject: '[ManuSpectrum][Heartbeat] Alerting chain OK'"; do
   grep -qF -- "$want" "$TMP/am/alertmanager.yml" || { echo "rendered config lacks: $want" >&2; exit 1; }
 done

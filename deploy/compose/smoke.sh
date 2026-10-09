@@ -378,7 +378,7 @@ for m in json.load(sys.stdin)["messages"]:
   done
   ok "Mailpit holds a message with subject '$prefix$match...'"
   headers="$(mail_get "/api/v1/message/$id/headers")"
-  expect "X-ManuSpectrum-Category" "$kind" \
+  expect "X-ManuSpectrum-Category" "${kind^}" \
     "$(json_field 'next((v[0] for k, v in r.items() if k.lower() == "x-manuspectrum-category"), "none")' <<<"$headers")"
 }
 
