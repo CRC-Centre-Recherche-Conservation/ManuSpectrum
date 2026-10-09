@@ -1,0 +1,102 @@
+"""The map's exports: CSV and GeoJSON of the kept events with their uncertainty fields.
+
+Usage:
+    python manage.py test tests.test_explorer_events_export --settings="tests.test_settings"
+"""
+
+import csv
+import json
+
+from tests.explorer_events_fixtures import EventsCase
+
+from manuspectrum.views.explorer.events_export import HEADER
+
+
+class EventsExportTests(EventsCase):
+    def csv(self, query=""):
+        response = self.client.get(
+            f"/api/explorer/events.csv?lang=en{query}", HTTP_ACCEPT_ENCODING="gzip"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertFalse(response.has_header("Content-Encoding"))
+        self.assertTrue(response["Content-Type"].startswith("text/csv"))
+        lines = b"".join(response.streaming_content).decode().splitlines()
+        return [l for l in lines if l.startswith("#")], list(
+            csv.DictReader(l for l in lines if not l.startswith("#"))
+        )
+
+    def test_one_row_per_event_and_material_with_the_uncertainty_fields_and_a_citation(
+        self,
+    ):
+        comments, rows = self.csv()
+        self.assertEqual(tuple(rows[0]), HEADER)
+        events = self.client.get("/en/api/explorer/events").json()["events"]
+        self.assertEqual(len(rows), sum(max(1, len(e["materials"])) for e in events))
+        modification = next(r for r in rows if r["type"] == "modification")
+        self.assertEqual(
+            (
+                modification["place_source"],
+                modification["approximate"],
+                modification["date_start"],
+                modification["date_end"],
+            ),
+            ("parent", "true", "1420", "1430"),
+        )
+        self.assertTrue(any("[Dataset]" in c for c in comments))
+
+    def test_filters_and_event_types_narrow_the_export_like_the_route(self):
+        _, rows = self.csv("&eventType=alteration")
+        self.assertEqual({r["type"] for r in rows}, {"alteration"})
+
+    def test_without_an_event_type_the_export_keeps_the_material_events_like_the_map(
+        self,
+    ):
+        _, rows = self.csv()
+        self.assertEqual(
+            {r["type"] for r in rows}, {"production", "modification", "alteration"}
+        )
+
+    def test_curator_text_is_neutralised(self):
+        formula = self.new_resource("place", "=HYPERLINK(1)")
+        self.tile(self.alteration, "alteration_took_place_at_place", self.refs(formula))
+        _, rows = self.csv("&eventType=alteration")
+        self.assertIn("'=HYPERLINK(1)", {r["place_name"] for r in rows})
+
+    def test_an_unknown_language_is_a_bad_request(self):
+        self.assertEqual(
+            self.client.get("/api/explorer/events.csv?lang=xx").status_code, 400
+        )
+        self.assertEqual(
+            self.client.get("/api/explorer/events.geojson?lang=xx").status_code, 400
+        )
+
+    def test_the_geojson_holds_one_feature_per_event_and_a_null_geometry_when_unmapped(
+        self,
+    ):
+        response = self.client.get(
+            "/api/explorer/events.geojson?lang=en&eventType=sampling,production"
+        )
+        self.assertEqual(
+            (response.status_code, response["Cache-Control"]),
+            (200, "private, no-store"),
+        )
+        body = json.loads(response.content)
+        self.assertEqual(body["type"], "FeatureCollection")
+        sampling = next(
+            f for f in body["features"] if f["properties"]["type"] == "sampling"
+        )
+        self.assertIsNone(sampling["geometry"])
+        own = next(
+            f
+            for f in body["features"]
+            if (f["properties"]["place"] or {}).get("source") == "own"
+        )
+        self.assertEqual(own["geometry"]["type"], "Point")
+        self.assertIn("citation", body)
+
+    def test_the_exports_never_carry_a_territories_grid(self):
+        self.assertNotIn(
+            b"territor",
+            self.client.get("/api/explorer/events.geojson?lang=en").content.lower(),
+        )

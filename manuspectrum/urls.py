@@ -62,6 +62,10 @@ from manuspectrum.views.explorer.api import (
     ExplorerShareView,
     ExplorerSynthesisView,
 )
+from manuspectrum.views.explorer.events_export import (
+    ExplorerEventsCsvView,
+    ExplorerEventsGeoJsonView,
+)
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
@@ -452,6 +456,20 @@ urlpatterns.append(
 )
 urlpatterns.append(
     path("api/explorer/export", ExplorerExportView.as_view(), name="explorer-export")
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events.csv",
+        ExplorerEventsCsvView.as_view(),
+        name="explorer-events-csv",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events.geojson",
+        ExplorerEventsGeoJsonView.as_view(),
+        name="explorer-events-geojson",
+    )
 )
 
 ### Manuspectrum URL - IIIF Annotations
