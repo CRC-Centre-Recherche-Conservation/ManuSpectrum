@@ -103,13 +103,6 @@ interface Hovered {
 type RailGroup = "materials" | "reliability" | "events";
 
 const EUROPE: Bounds = { west: -10, south: 36, east: 20, north: 56 };
-const EVENT_TYPES: readonly EventType[] = [
-    "production",
-    "modification",
-    "alteration",
-    "analysis",
-    "sampling",
-];
 const MODES: readonly MapMode[] = ["places", "territories", "multiples"];
 const COMPACT_QUERY = "(max-width: 80rem)";
 const NARROW_QUERY = "(max-width: 48rem)";
@@ -577,13 +570,13 @@ function setBorders(event: Event): void {
     });
 }
 
-/** Ticks or unticks a type; none left means all five, and exactly the server's defaults means no filter. */
+/** Ticks or unticks a type; none left means all three, and all three means no filter. */
 function toggleType(type: EventType, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     let next = checked
         ? [...shownTypes.value, type]
         : shownTypes.value.filter((shown) => shown !== type);
-    if (next.length === 0) next = [...EVENT_TYPES];
+    if (next.length === 0) next = [...DEFAULT_EVENT_TYPES];
     const isDefault =
         next.length === DEFAULT_EVENT_TYPES.length &&
         DEFAULT_EVENT_TYPES.every((fallback) => next.includes(fallback));
@@ -881,7 +874,7 @@ function skipToTimeline(): void {
                             class="group-body event-types"
                         >
                             <li
-                                v-for="type in EVENT_TYPES"
+                                v-for="type in DEFAULT_EVENT_TYPES"
                                 :key="type"
                             >
                                 <label

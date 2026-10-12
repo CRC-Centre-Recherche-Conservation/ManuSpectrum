@@ -76,6 +76,6 @@ describe("shownEventTypes", () => {
     });
 
     it("shows the selection when there is one", () => {
-        expect(shownEventTypes(["analysis"])).toEqual(["analysis"]);
+        expect(shownEventTypes(["alteration"])).toEqual(["alteration"]);
     });
 });

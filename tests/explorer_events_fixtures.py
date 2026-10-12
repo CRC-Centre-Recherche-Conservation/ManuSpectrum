@@ -5,9 +5,9 @@ produced in Lyon 1380–1395 (four bounds); f. 2r (« bare ») has no production
 modification of f. 1v (1420–1430, approximate) took place at an abbey without a
 geometry inside Normandie (a polygon) and cites the azurite. The alteration of the
 document (1700–1800) took place in Lyon and names vermilion. Lead white (f. 1v)
-falls to its Component's production, smalt (f. 2r) to the Document's. Analysis
-« open » took place at the C2RMF (2024); Sample S1 (2023) at the hidden place.
-Ms 300 has its own point, Ms 301 a derived copy and no date, Ms 302 no analysis.
+falls to its Component's production, smalt (f. 2r) to the Document's. Ms 300 has
+its own point, Ms 301 a derived copy and no date, Ms 302 no analysis, Ms 303 is
+produced at the hidden place (no geometry).
 """
 
 from arches.app.models.models import TileModel
@@ -139,22 +139,6 @@ class EventsCase(ServiceCase):
             "occured_in_presence_of_material",
             cls.reference_value(VERMILION, "Vermilion"),
         )
-        tile(
-            cls.analyses["open"],
-            "analysis_took_place_at_place",
-            cls.refs(places["lab"]),
-        )
-        cls.tile_values(
-            cls.samples["s1"],
-            "sample",
-            date_start_of_of_sample_taking="2023-02-01",
-            date_end_of_sample_taking="2023-02-02",
-        )
-        tile(
-            cls.samples["s1"],
-            "location_of_sampling_taking_activity",
-            cls.refs(places["hidden"]),
-        )
         cls.documents["own"] = cls.produced(
             "Ms 300", places["paris"], collection(point(OWN)), dated=True
         )
@@ -164,6 +148,15 @@ class EventsCase(ServiceCase):
             collection(point(OWN), {"msDerivedFrom": {"place": "x"}}),
             dated=False,
         )
+        unmapped = cls.documents["unmapped"] = new("document", "Ms 303")
+        cls.tile_values(
+            unmapped,
+            "document",
+            production_at_place=cls.refs(places["hidden"]),
+            date_start_of_production_time="1250-01-01",
+            date_end_of_production_time="1260-12-31",
+        )
+        tile(new("analysis", "X — Ms 303"), "component_observed", cls.refs(unmapped))
         cls.documents["unanalysed"] = new("document", "Ms 302")
         cls.tile_values(
             cls.documents["unanalysed"],

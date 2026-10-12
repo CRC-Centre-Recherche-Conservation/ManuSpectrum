@@ -91,10 +91,6 @@ ROLES = {
     "alt_approx": ("alteration", "type_of_alteration_process_timespan"),
     "alt_place": ("alteration", "alteration_took_place_at_place"),
     "alt_material": ("alteration", "occured_in_presence_of_material"),
-    "an_place": ("analysis", "analysis_took_place_at_place"),
-    "sample_start": ("sample", "date_start_of_of_sample_taking"),
-    "sample_end": ("sample", "date_end_of_sample_taking"),
-    "sample_place": ("sample", "location_of_sampling_taking_activity"),
     "place_geometry": ("place", "literal_location"),
     "place_identifier": ("place", "value_of_identifier"),
 }

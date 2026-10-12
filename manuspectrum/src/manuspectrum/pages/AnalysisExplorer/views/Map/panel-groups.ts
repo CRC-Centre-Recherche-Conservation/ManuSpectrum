@@ -34,8 +34,6 @@ const TYPE_ORDER: readonly EventType[] = [
     "production",
     "modification",
     "alteration",
-    "analysis",
-    "sampling",
 ];
 
 export function subjectEvents(

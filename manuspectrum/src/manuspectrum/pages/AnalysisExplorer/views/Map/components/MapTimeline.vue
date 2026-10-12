@@ -52,14 +52,7 @@ const TYPES: readonly EventType[] = [
     "production",
     "modification",
     "alteration",
-    "analysis",
-    "sampling",
 ];
-const SPAN_TYPES: ReadonlySet<EventType> = new Set([
-    "production",
-    "modification",
-    "alteration",
-]);
 const OTHER = "other";
 const FOLD_UNITS = 0.6;
 const GAP_SHARE = 0.12;
@@ -348,9 +341,6 @@ function laneStyle(event: MapEvent): Record<string, string> | null {
     const span = shape.to - shape.from + 1;
     const start = ((interval[0] - shape.from) / span) * PERCENT;
     const width = ((interval[1] - interval[0] + 1) / span) * PERCENT;
-    if (!SPAN_TYPES.has(event.type)) {
-        return { "inset-inline-start": `${round(start + width / 2)}%` };
-    }
     return {
         "inset-inline-start": `${round(start)}%`,
         "inline-size": `${round(width)}%`,
@@ -624,9 +614,7 @@ function showMore(): void {
                             <span
                                 v-if="laneStyle(event)"
                                 :class="[
-                                    SPAN_TYPES.has(event.type)
-                                        ? 'bar'
-                                        : 'point',
+                                    'bar',
                                     `type-${event.type}`,
                                     { approx: event.date.approximate },
                                 ]"
@@ -776,16 +764,6 @@ function showMore(): void {
 .map-timeline .type-alteration {
     fill: var(--series-3);
     background: var(--series-3);
-}
-
-.map-timeline .type-analysis {
-    fill: var(--series-4);
-    background: var(--series-4);
-}
-
-.map-timeline .type-sampling {
-    fill: var(--series-5);
-    background: var(--series-5);
 }
 
 .map-timeline .other {
@@ -940,15 +918,11 @@ function showMore(): void {
         var(--bg);
 }
 
-.map-timeline .bar,
-.map-timeline .point {
+.map-timeline .bar {
     position: absolute;
     inset-block-start: 50%;
     block-size: 0.5rem;
     transform: translateY(-50%);
-}
-
-.map-timeline .bar {
     min-inline-size: 0.5rem;
     border-radius: 999rem;
 }
@@ -961,14 +935,6 @@ function showMore(): void {
         black calc(100% - 0.5rem),
         transparent
     );
-}
-
-.map-timeline .point {
-    inline-size: 0.5rem;
-    border-radius: 50%;
-    translate: -50% 0;
-    background: var(--ink);
-    box-shadow: 0 0 0 0.0625rem var(--surface);
 }
 
 .map-timeline .pips {

@@ -112,10 +112,6 @@ export function useVocabulary(): {
                 return $gettext("Modification");
             case "alteration":
                 return $gettext("Alteration");
-            case "analysis":
-                return $gettext("Analysis");
-            case "sampling":
-                return $gettext("Sampling");
         }
     }
 

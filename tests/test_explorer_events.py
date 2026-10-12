@@ -85,22 +85,16 @@ class EventsTests(EventsCase):
         self.assertIsNotNone(material["reliability"])
         self.assertEqual(event["analyses"], [str(self.analyses["open"].pk)])
 
-    def test_analysis_and_sampling_events(self):
+    def test_analyses_and_samples_are_not_events(self):
         bundle = self.bundle()
-        [analysis] = self.events_of(bundle, "analysis", self.analyses["open"])
         self.assertEqual(
-            (analysis["place"], analysis["date"]["start"], analysis["materials"]),
-            (str(self.places["lab"].pk), 2024, []),
+            {e["type"] for e in bundle.events},
+            {"production", "modification", "alteration"},
         )
-        self.assertEqual(
-            self.events_of(bundle, "analysis", self.analyses["on_document"]), []
-        )
-        [sampling] = self.events_of(bundle, "sampling", self.samples["s1"])
-        self.assertEqual(
-            (sampling["place"], sampling["placeSource"]),
-            (str(self.places["hidden"].pk), None),
-        )
-        self.assertIsNone(bundle.event_places[sampling["place"]]["lngLat"])
+        for model in ("analysis", "sample"):
+            self.assertFalse(
+                [e for e in bundle.events if e["carrier"]["model"] == model]
+            )
 
     def test_own_geometry_comes_first_and_a_derived_copy_is_ignored(self):
         bundle = self.bundle()
@@ -142,8 +136,11 @@ class EventsTests(EventsCase):
         )
 
     def test_a_hidden_place_is_never_a_place(self):
+        unmapped = self.documents["unmapped"]
+        [event] = self.events_of(self.bundle(), "production", unmapped)
+        self.assertEqual(event["place"], str(self.places["hidden"].pk))
         self.embargo(self.places["hidden"])
-        [event] = self.events_of(self.bundle(), "sampling", self.samples["s1"])
+        [event] = self.events_of(self.bundle(), "production", unmapped)
         self.assertIsNone(event["place"])
 
     def test_a_hidden_modification_leaves_its_material_to_the_production(self):

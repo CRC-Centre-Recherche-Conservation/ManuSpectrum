@@ -166,11 +166,11 @@ afterEach(() => {
 
 describe("MapView", () => {
     it("asks the events of the filters", async () => {
-        useExplorerStore().setFilter("eventType", ["analysis"]);
+        useExplorerStore().setFilter("eventType", ["modification"]);
         await mountView();
         expect(eventCalls()).toHaveLength(1);
         expect(eventCalls()[0]).toContain("/en/manuspectrum:explorer-events?");
-        expect(eventCalls()[0]).toContain("eventType=analysis");
+        expect(eventCalls()[0]).toContain("eventType=modification");
     });
 
     it("writes the mode chosen in the map state and announces it", async () => {
@@ -281,21 +281,16 @@ describe("MapView", () => {
         );
     });
 
-    it("ticks the default event types while none is chosen, and clears the filter on the defaults again", async () => {
+    it("ticks the three event types while none is chosen, and clears the filter when all are ticked again", async () => {
         const view = await mountView();
         const store = useExplorerStore();
         const boxes = view.findAll(".event-types input[type='checkbox']");
         expect(
             boxes.map((box) => (box.element as HTMLInputElement).checked),
-        ).toEqual([true, true, true, false, false]);
-        await boxes[3].setValue(true);
-        expect(store.filters.eventType).toEqual([
-            "alteration",
-            "analysis",
-            "modification",
-            "production",
-        ]);
-        await boxes[3].setValue(false);
+        ).toEqual([true, true, true]);
+        await boxes[2].setValue(false);
+        expect(store.filters.eventType).toEqual(["modification", "production"]);
+        await boxes[2].setValue(true);
         expect(store.filters.eventType).toEqual([]);
     });
 
@@ -467,15 +462,15 @@ describe("MapView", () => {
 
     it("links the exports with the filters and the interface language, not the page's lang attribute", async () => {
         document.documentElement.lang = "fr-CA";
-        useExplorerStore().setFilter("eventType", ["analysis"]);
+        useExplorerStore().setFilter("eventType", ["modification"]);
         const view = await mountView();
         const csv = view.find("a.export[data-format='csv']");
         const geojson = view.find("a.export[data-format='geojson']");
         expect(csv.attributes("href")).toBe(
-            "/en/manuspectrum:explorer-events-csv?eventType=analysis&lang=en",
+            "/en/manuspectrum:explorer-events-csv?eventType=modification&lang=en",
         );
         expect(geojson.attributes("href")).toBe(
-            "/en/manuspectrum:explorer-events-geojson?eventType=analysis&lang=en",
+            "/en/manuspectrum:explorer-events-geojson?eventType=modification&lang=en",
         );
     });
 
@@ -582,7 +577,7 @@ describe("MapView", () => {
         );
         const store = useExplorerStore();
         store.setView("map");
-        store.setFilter("eventType", ["analysis"]);
+        store.setFilter("eventType", ["modification"]);
         const view = await mountView();
         const empty = view.find(".no-events");
         expect(empty.text()).toContain("No event matches these filters.");

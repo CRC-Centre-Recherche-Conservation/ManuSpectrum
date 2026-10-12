@@ -58,8 +58,6 @@ const EVENT_TYPES: readonly EventType[] = [
     "production",
     "modification",
     "alteration",
-    "analysis",
-    "sampling",
 ];
 /** The list an older address named the colour of the studied component by; read as `colour`, never written. */
 const LEGACY_COLOUR_KEY = "partColour";

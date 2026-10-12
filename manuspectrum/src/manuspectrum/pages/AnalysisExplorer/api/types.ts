@@ -31,12 +31,7 @@ export type ImageRef = {
     width: number;
     height: number;
 };
-export type EventType =
-    | "production"
-    | "modification"
-    | "alteration"
-    | "analysis"
-    | "sampling";
+export type EventType = "production" | "modification" | "alteration";
 export type FacetKey =
     | "place"
     | "partType"

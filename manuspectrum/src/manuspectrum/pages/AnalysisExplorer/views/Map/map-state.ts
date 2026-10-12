@@ -27,7 +27,7 @@ export const RADIUS_MIN_KM = 60;
 export const RADIUS_MAX_KM = 400;
 export const RADIUS_DEFAULT_KM = 150;
 
-/** The event types the server keeps when the request names none. */
+/** Every event type: the server keeps them when the request names none, and the Events group lists them. */
 export const DEFAULT_EVENT_TYPES = [
     "production",
     "modification",

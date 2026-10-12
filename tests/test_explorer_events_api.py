@@ -12,10 +12,7 @@ from tests.explorer_events_fixtures import VERMILION, EventsCase
 from manuspectrum.views.explorer import service as explorer_service
 
 URL = "/en/api/explorer/events"
-ALL_TYPES = (
-    "?eventType=production&eventType=modification&eventType=alteration"
-    "&eventType=analysis&eventType=sampling"
-)
+ALL_TYPES = "?eventType=production&eventType=modification&eventType=alteration"
 
 
 class EventsRouteTests(EventsCase):
@@ -52,22 +49,20 @@ class EventsRouteTests(EventsCase):
         self.assertEqual(
             self.types(payload), {"production", "modification", "alteration"}
         )
-        everything = self.get(
-            "?eventType=production&eventType=modification&eventType=alteration"
-            "&eventType=analysis&eventType=sampling"
-        ).json()
-        self.assertEqual(
-            self.types(everything),
-            {"production", "modification", "alteration", "analysis", "sampling"},
-        )
 
-    def test_analysis_and_sampling_events_come_only_when_asked(self):
-        self.assertFalse(self.types(self.get().json()) & {"analysis", "sampling"})
-        asked = self.get("?eventType=analysis&eventType=sampling").json()
-        self.assertEqual(self.types(asked), {"analysis", "sampling"})
+    def test_analysis_and_sampling_are_not_event_types(self):
+        plain = self.get()
+        for query in ("?eventType=analysis", "?eventType=analysis,sampling"):
+            asked = self.get(query)
+            self.assertEqual(
+                (asked.content, asked["ETag"]), (plain.content, plain["ETag"])
+            )
+        self.assertFalse(self.types(plain.json()) & {"analysis", "sampling"})
+        mixed = self.get("?eventType=analysis&eventType=alteration").json()
+        self.assertEqual(self.types(mixed), {"alteration"})
 
     def test_analysis_names_are_those_of_the_returned_events_only(self):
-        for query in ("", "?eventType=analysis", "?eventType=modification"):
+        for query in ("", "?eventType=modification"):
             payload = self.get(query).json()
             self.assertEqual(
                 set(payload["analysisNames"]),

@@ -1,7 +1,7 @@
 """The map's events (spec 2026-10-09 §2.1), computed once per corpus bundle.
 
 An event is one (carrier, place). A carrier is a Document or Component production,
-a Modification, an Alteration, an Analysis or a Sample of the visible set; its
+a Modification or an Alteration of the visible set; its
 dates, places and own geometry are read off its own nodegroups by role. Four-bound
 dates widen the interval to the lowest and highest year present; a single bound
 stands for both. A carrier with neither a bound, a visible linked place nor an own
@@ -18,10 +18,11 @@ that name its material (``occured_in_presence_of_material``); otherwise to the
 production of each linked Component, else of that Component's Document, else of the
 Document it observes.
 
-An occurrence becomes events only with a supporting analysis among the rows: the
-analysis itself, the analyses using a sample, the evidence of the materials a
-modification or an alteration carries (and the analyses an alteration names),
-otherwise every analysis on the carrier's Component, else its Document.
+Only material events exist (PO 12/10): analyses and samplings are not events. An
+occurrence becomes events only with a supporting analysis among the rows: the
+evidence of the materials a modification or an alteration carries (and the
+analyses an alteration names), otherwise every analysis on the carrier's
+Component, else its Document.
 ``histories`` hold the production line of each document, supporting analyses or not.
 
 A Modification or an Alteration of objects in several documents is one event,
@@ -64,8 +65,7 @@ from manuspectrum.views.explorer.swatches import colour_rank
 from manuspectrum.views.explorer.values import fold, reference_items, string_texts
 from manuspectrum.views.summary_service import _date
 
-EVENT_TYPES = ("production", "modification", "alteration", "analysis", "sampling")
-MATERIAL_EVENTS = frozenset({"production", "modification", "alteration"})
+EVENT_TYPES = ("production", "modification", "alteration")
 PUBLIC_KEYS = (
     "id",
     "type",
@@ -104,16 +104,12 @@ DATE_ROLES = {
         "alt_end_end",
         "alt_approx",
     ),
-    "analysis": ("start", "end", None, None, None),
-    "sample": ("sample_start", "sample_end", None, None, None),
 }
 PLACE_ROLES = {
     "document": "doc_place",
     "component": "comp_place",
     "modification": "mod_place",
     "alteration": "alt_place",
-    "analysis": "an_place",
-    "sample": "sample_place",
 }
 GEOMETRY_ROLES = {
     "document": "doc_geometry",
@@ -125,8 +121,6 @@ TYPE_OF = {
     "component": "production",
     "modification": "modification",
     "alteration": "alteration",
-    "analysis": "analysis",
-    "sample": "sampling",
 }
 
 
@@ -160,7 +154,7 @@ class EventSet:
 def parse_event_types(query):
     """The event types ``eventType`` names (repeated or comma-separated), in ``EVENT_TYPES`` order; others ignored.
 
-    Without a known type, the ``MATERIAL_EVENTS``: ``analysis`` and ``sampling`` come only when asked.
+    Without a known type, every ``EVENT_TYPES``.
     """
     asked = {
         v.strip()
@@ -168,7 +162,7 @@ def parse_event_types(query):
         for v in raw.split(",")
         if v.strip()
     }
-    wanted = asked & set(EVENT_TYPES) or MATERIAL_EVENTS
+    wanted = asked & set(EVENT_TYPES) or set(EVENT_TYPES)
     return [t for t in EVENT_TYPES if t in wanted]
 
 
@@ -300,8 +294,6 @@ def build_events(
             ("component", visible.components),
             ("modification", visible.modifications),
             ("alteration", visible.alterations),
-            ("analysis", list(by_id)),
-            ("sample", visible.samples),
         )
     }
     mod_objects = _links("modification", "document_modified", readable)
@@ -310,11 +302,6 @@ def build_events(
     alt_analyses = _links(
         "alteration", "analysis_reference_observed_about_inference_making", readable
     )
-    users_of = defaultdict(set)
-    for analysis, samples in links["samples"].items():
-        if analysis in by_id:
-            for sample in samples:
-                users_of[sample].add(analysis)
 
     occurrences = []
     for d in sorted(visible.documents):
@@ -334,30 +321,6 @@ def build_events(
                 occurrences.append(
                     _occurrence(model, carrier, read[model], *chain, places)
                 )
-    for a in sorted(by_id):
-        occurrences.append(
-            _occurrence(
-                "analysis",
-                a,
-                read["analysis"],
-                by_id[a]["document"],
-                by_id[a]["component"],
-                places,
-            )
-        )
-    for s in sorted(visible.samples):
-        if users_of[s]:
-            first = by_id[min(users_of[s], key=order.__getitem__)]
-            occurrences.append(
-                _occurrence(
-                    "sample",
-                    s,
-                    read["sample"],
-                    first["document"],
-                    first["component"],
-                    places,
-                )
-            )
     occurrences = [o for o in occurrences if o and o.document in label_of]
     by_key = {o.key: o for o in occurrences}
 
@@ -434,10 +397,6 @@ def build_events(
             attached[key].append(c)
 
     def supporting(occ):
-        if occ.type == "analysis":
-            return [occ.carrier]
-        if occ.type == "sampling":
-            return sorted(users_of[occ.carrier], key=order.__getitem__)
         cited = {
             a
             for c in attached[occ.key]
@@ -498,9 +457,7 @@ def build_events(
         return list(dict.fromkeys(found))
 
     extra = {
-        o.carrier
-        for o in occurrences
-        if o.model in ("modification", "alteration", "sample")
+        o.carrier for o in occurrences if o.model in ("modification", "alteration")
     }
     extra |= {
         o.component for o in occurrences if o.component and o.component not in label_of
@@ -521,11 +478,7 @@ def build_events(
         analyses = supporting(occ)
         if not analyses:
             continue
-        materials = (
-            [e for c in attached[occ.key] for e in entries[c]]
-            if occ.type in MATERIAL_EVENTS
-            else []
-        )
+        materials = [e for c in attached[occ.key] for e in entries[c]]
         for place, source in resolve(occ):
             events.append(
                 {
@@ -686,11 +639,11 @@ def build_events(
 def kept_events(bundle, query):
     """``(events, keep, filters)``: the public ``MapEvent`` of the events *query* keeps, in bundle order.
 
-    An event is kept when its type is among ``eventType`` (``MATERIAL_EVENTS``
-    without one), its own dates meet the period (``bounds_meet``; ``periodEvent``
-    does not apply) and one of its supporting analyses is kept by the Corpus rule
-    with the period left out. Under characterization filters a production,
-    modification or alteration is kept when one of its materials meets them.
+    An event is kept when its type is among ``eventType`` (every type without
+    one), its own dates meet the period (``bounds_meet``; ``periodEvent`` does not
+    apply) and one of its supporting analyses is kept by the Corpus rule with the
+    period left out. Under characterization filters an event is kept when one of
+    its materials meets them.
     ``analyses`` and ``materials`` keep the kept ones; ``materials`` are narrowed
     by every characterization facet but ``material``, so the materials found
     beside a ticked one stay listed.
@@ -713,7 +666,7 @@ def kept_events(bundle, query):
         if not analyses:
             continue
         materials = event["materials"]
-        if wanted and event["type"] in MATERIAL_EVENTS:
+        if wanted:
             values = bundle.characterization_values
             if not any(meets(values[m["characterization"]], wanted) for m in materials):
                 continue

@@ -32,7 +32,7 @@ describe("panel groups", () => {
                 id: "b-comp-2",
                 document: doc(2, "Éa"),
                 component: comp(21, "Zeta"),
-                type: "analysis",
+                type: "alteration",
                 analyses: [uuid(102)],
             }),
             mapEvent({

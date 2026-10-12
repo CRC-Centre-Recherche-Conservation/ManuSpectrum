@@ -80,7 +80,7 @@ class EventsExportTests(EventsCase):
         self,
     ):
         response = self.client.get(
-            "/api/explorer/events.geojson?lang=en&eventType=sampling,production"
+            "/api/explorer/events.geojson?lang=en&eventType=production"
         )
         self.assertEqual(
             (response.status_code, response["Cache-Control"]),
@@ -88,10 +88,7 @@ class EventsExportTests(EventsCase):
         )
         body = json.loads(streamed(response))
         self.assertEqual(body["type"], "FeatureCollection")
-        sampling = next(
-            f for f in body["features"] if f["properties"]["type"] == "sampling"
-        )
-        self.assertIsNone(sampling["geometry"])
+        self.assertTrue(any(f["geometry"] is None for f in body["features"]))
         own = next(
             f
             for f in body["features"]
@@ -106,7 +103,7 @@ class EventsExportTests(EventsCase):
 
         with patch("manuspectrum.views.explorer.events_export.ROWS_PER_CHUNK", 2):
             response = self.client.get(
-                "/api/explorer/events.geojson?lang=en&eventType=analysis,sampling,production",
+                "/api/explorer/events.geojson?lang=en&eventType=production",
                 HTTP_ACCEPT_ENCODING="gzip",
             )
             chunks = list(response.streaming_content)

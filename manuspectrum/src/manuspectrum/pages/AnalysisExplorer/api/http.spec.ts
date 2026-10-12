@@ -239,14 +239,14 @@ describe("the map events memo", () => {
                 query: new URLSearchParams([["page", String(page)]]),
             });
         }
-        for (const type of ["analysis", "sampling", "alteration"]) {
+        for (const type of ["production", "modification", "alteration"]) {
             await getJson(EVENTS, eventsQuery(type));
         }
         expect(
             peekJson(SEARCH, { query: new URLSearchParams("page=1") }),
         ).toEqual({ events: [] });
-        expect(peekJson(EVENTS, eventsQuery("analysis"))).toBe(null);
-        expect(peekJson(EVENTS, eventsQuery("sampling"))).toEqual({
+        expect(peekJson(EVENTS, eventsQuery("production"))).toBe(null);
+        expect(peekJson(EVENTS, eventsQuery("modification"))).toEqual({
             events: [],
         });
         fetchMock.mockClear();

@@ -446,12 +446,12 @@ describe("map keys in the address", () => {
         expect(store.mapState.mode).toBe("territories");
     });
 
-    it("keep the legacy current-location type out of the event types", () => {
+    it("keep the legacy current-location, analysis and sampling types out of the event types", () => {
         const snapshot = fromQuery(
             new URLSearchParams(
-                "view=map&eventType=current-location&eventType=analysis",
+                "view=map&eventType=current-location&eventType=analysis&eventType=sampling&eventType=alteration",
             ),
         );
-        expect(snapshot.filters.eventType).toEqual(["analysis"]);
+        expect(snapshot.filters.eventType).toEqual(["alteration"]);
     });
 });

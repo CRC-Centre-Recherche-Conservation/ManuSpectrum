@@ -43,11 +43,11 @@ describe("eventsQuery", () => {
             ...emptyFilters(),
             q: "lead",
             grain: "analyses",
-            eventType: ["sampling", "analysis"],
+            eventType: ["production", "alteration"],
         };
         const query = eventsQuery(filters);
         expect(query.get("q")).toBe("lead");
-        expect(query.getAll("eventType")).toEqual(["analysis", "sampling"]);
+        expect(query.getAll("eventType")).toEqual(["alteration", "production"]);
         for (const key of ["grain", "page", "size"]) {
             expect(query.has(key)).toBe(false);
         }

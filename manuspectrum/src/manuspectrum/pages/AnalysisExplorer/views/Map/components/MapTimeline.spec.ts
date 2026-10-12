@@ -24,7 +24,7 @@ function lapis() {
     };
 }
 
-/** Ms A produced 1301–1325 with lapis, Ms B modified c. 1601–1625, Ms C sampled undated. */
+/** Ms A produced 1301–1325 with lapis, Ms B modified c. 1601–1625, Ms C altered undated. */
 function events(): MapEvent[] {
     return [
         mapEvent({
@@ -40,8 +40,8 @@ function events(): MapEvent[] {
             date: { start: 1601, end: 1625, approximate: true },
         }),
         mapEvent({
-            id: "sampling:c",
-            type: "sampling",
+            id: "alteration:c",
+            type: "alteration",
             document: { id: uuid(3), name: label("Ms C") },
             date: { start: null, end: null, approximate: false },
         }),
@@ -153,14 +153,14 @@ describe("MapTimeline", () => {
         ).toEqual(["Ms A", "Ms B", "Ms C"]);
     });
 
-    it("draws bars and points in the rows, with the followed pips", () => {
+    it("draws bars in the rows, with the followed pips", () => {
         const wrapper = mountTimeline({ tracked: [{ uri: LAPIS, slot: 2 }] });
         const rows = wrapper.findAll(".document-row");
         const bar = rows[0].find(".bar.type-production");
         expect(bar.attributes("style")).toContain("inset-inline-start: 0%");
         expect(bar.find(".focus-slot-dot").text()).toBe("2");
         expect(rows[1].find(".bar.approx").exists()).toBe(true);
-        expect(rows[2].find(".bar, .point").exists()).toBe(false);
+        expect(rows[2].find(".bar").exists()).toBe(false);
     });
 
     it("says so when no event is dated", () => {
