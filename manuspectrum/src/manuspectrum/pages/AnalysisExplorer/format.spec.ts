@@ -7,6 +7,7 @@ import {
     safeHref,
     sameText,
     toRoman,
+    yearAndCentury,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 describe("format", () => {
@@ -36,6 +37,7 @@ const FRENCH: Record<string, string> = {
     "%{century} century": "%{century} siècle",
     "%{from} – %{to} c.": "%{from} – %{to} s.",
     "1st half of the %{century} c.": "1re moitié du %{century} s.",
+    "%{year}, %{century}": "%{year}, %{century}",
     "2nd half of the %{century} c.": "2e moitié du %{century} s.",
     "1st quarter of the %{century} c.": "1er quart du %{century} s.",
     "2nd quarter of the %{century} c.": "2e quart du %{century} s.",
@@ -123,6 +125,27 @@ describe("formatProductionDate", () => {
             expect(produced(lang, start, end, approximate)).toBe(expected);
         },
     );
+});
+
+describe("yearAndCentury", () => {
+    const say = (lang: "en" | "fr", year: number) =>
+        yearAndCentury(
+            year,
+            (msgid: string) => (lang === "fr" ? FRENCH[msgid] ?? msgid : msgid),
+            interpolate,
+            lang,
+        );
+
+    it.each([
+        ["en", 1300, "1300, 13th century"],
+        ["en", 1301, "1301, 14th century"],
+        ["fr", 1464, "1464, XVe siècle"],
+        ["en", 100, "100, 1st century"],
+        ["en", 0, "0"],
+        ["en", -5, "-5"],
+    ] as const)("%s: %s reads « %s »", (lang, year, expected) => {
+        expect(say(lang, year)).toBe(expected);
+    });
 });
 
 describe("safeHref", () => {

@@ -58,23 +58,35 @@ export interface MapSnapshot {
     bounds: Bounds;
 }
 
-/** Where a mini map draws `snapshot` so that it lines up with dots projected in `bounds`. */
+/** The size, in CSS pixels, a snapshot is taken at. */
+export interface SnapshotSize {
+    width: number;
+    height: number;
+}
+
+/**
+ * Where a map of the series drawn `width`×`height` (the mini map's box by
+ * default) lays `snapshot` so that it lines up with dots projected in
+ * `bounds` by `project` in the same box.
+ */
 export function snapshotFrame(
     snapshot: MapSnapshot,
     bounds: Bounds,
+    width: number = MINI_WIDTH,
+    height: number = MINI_HEIGHT,
 ): { x: number; y: number; width: number; height: number } {
     const shown = snapshot.bounds;
     const [left, top] = project(
         [shown.west, shown.north],
         bounds,
-        MINI_WIDTH,
-        MINI_HEIGHT,
+        width,
+        height,
     );
     const [right, bottom] = project(
         [shown.east, shown.south],
         bounds,
-        MINI_WIDTH,
-        MINI_HEIGHT,
+        width,
+        height,
     );
     return { x: left, y: top, width: right - left, height: bottom - top };
 }
@@ -115,9 +127,10 @@ function dotsOf(
 }
 
 /**
- * One mini map per material, the followed ones first in slot order, then
- * most components first; every analysed place is a dot, hollow where the
- * material is not attested.
+ * One mini map per material attested at a mapped place of `events`, the
+ * followed ones first in slot order, then most components first; every
+ * analysed place is a dot, hollow where the material is not attested. A
+ * material named nowhere is titled by its uri.
  */
 export function byMaterial(
     events: readonly MapEvent[],
@@ -142,7 +155,7 @@ export function byMaterial(
         for (const event of events) {
             const material = event.materials.find((m) => m.id === uri);
             if (!material) continue;
-            title ??= material.name;
+            if (!title?.value) title = material.name;
             documents.add(event.document.id);
             if (event.component) carrying.add(event.component.id);
         }
@@ -161,7 +174,7 @@ export function byMaterial(
         const dots = dotsOf(summaries, componentsAt);
         return {
             key: uri,
-            title,
+            title: title?.value ? title : { value: uri, lang: "" },
             uri,
             century: null,
             places: dots.filter((dot) => dot.attested).length,
@@ -170,15 +183,20 @@ export function byMaterial(
             dots,
         };
     });
-    return maps.sort(
-        (a, b) =>
-            slotOf(a) - slotOf(b) ||
-            b.components - a.components ||
-            (a.title?.value ?? "").localeCompare(b.title?.value ?? ""),
-    );
+    return maps
+        .filter((map) => map.places > 0)
+        .sort(
+            (a, b) =>
+                slotOf(a) - slotOf(b) ||
+                b.components - a.components ||
+                (a.title?.value ?? "").localeCompare(b.title?.value ?? ""),
+        );
 }
 
-/** One mini map per century of `range`; an event counts in every century its interval overlaps. */
+/**
+ * One mini map per century of `range` with an attested mapped place; an
+ * event counts in every century its interval overlaps.
+ */
 export function byCentury(
     events: readonly MapEvent[],
     places: Readonly<Record<string, MapPlace>>,
@@ -186,7 +204,7 @@ export function byCentury(
     low: ReadonlySet<string>,
     range: readonly [number, number],
 ): MiniMap[] {
-    return centuriesIn(range).map((century) => {
+    const maps = centuriesIn(range).map((century): MiniMap => {
         const from = century * CENTURY + 1;
         const to = (century + 1) * CENTURY;
         const inside = events.filter((event) => {
@@ -219,4 +237,5 @@ export function byCentury(
             dots,
         };
     });
+    return maps.filter((map) => map.places > 0);
 }

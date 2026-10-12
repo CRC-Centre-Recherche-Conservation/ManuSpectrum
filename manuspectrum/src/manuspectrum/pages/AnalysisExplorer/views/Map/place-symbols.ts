@@ -105,6 +105,11 @@ export function withoutLevels(
     return kept;
 }
 
+/** The events whose date is not approximate (« circa »). */
+export function withoutApproximate(events: readonly MapEvent[]): MapEvent[] {
+    return events.filter((event) => !event.date.approximate);
+}
+
 /** The identified materials (distinct characterizations) of `events` per reliability level. */
 export function levelCounts(events: readonly MapEvent[]): Map<string, number> {
     const seen = new Map<string, Set<string>>();

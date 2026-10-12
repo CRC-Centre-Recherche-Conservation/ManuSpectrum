@@ -12,7 +12,6 @@ describe("aoristic histogram", () => {
         const histogram = aoristic([
             {
                 interval: [1301, 1400],
-                approximate: false,
                 keys: ["production"],
             },
         ]);
@@ -21,7 +20,7 @@ describe("aoristic histogram", () => {
             histogram?.segments.flatMap((s) =>
                 s.kind === "bins" ? s.bins : [],
             ) ?? [];
-        expect(bins.map((b) => [b.from, b.to, b.firm.production])).toEqual([
+        expect(bins.map((b) => [b.from, b.to, b.parts.production])).toEqual([
             [1301, 1325, 0.25],
             [1326, 1350, 0.25],
             [1351, 1375, 0.25],
@@ -29,11 +28,10 @@ describe("aoristic histogram", () => {
         ]);
     });
 
-    it("puts an approximate event in the lighter band and counts it once per key", () => {
+    it("counts an event once per key", () => {
         const histogram = aoristic([
             {
                 interval: [1310, 1310],
-                approximate: true,
                 keys: ["slot:1", "slot:2"],
             },
         ]);
@@ -41,7 +39,7 @@ describe("aoristic histogram", () => {
             histogram?.segments[0].kind === "bins"
                 ? histogram.segments[0].bins
                 : [];
-        expect(bin.approx).toEqual({ "slot:1": 1, "slot:2": 1 });
+        expect(bin.parts).toEqual({ "slot:1": 1, "slot:2": 1 });
         expect(bin.total).toBe(2);
     });
 
@@ -55,10 +53,9 @@ describe("aoristic histogram", () => {
         const histogram = aoristic([
             {
                 interval: [1301, 1310],
-                approximate: false,
                 keys: ["production"],
             },
-            { interval: [2024, 2024], approximate: false, keys: ["analysis"] },
+            { interval: [2024, 2024], keys: ["analysis"] },
         ]);
         expect(histogram?.binYears).toBe(25);
         expect(histogram?.segments.map((s) => s.kind)).toEqual([

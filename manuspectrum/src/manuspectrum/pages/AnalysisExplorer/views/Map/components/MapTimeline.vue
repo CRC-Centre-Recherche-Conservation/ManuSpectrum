@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, useId } from "vue";
+import { computed, ref, useId, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import CollapsibleSection from "@/manuspectrum/pages/AnalysisExplorer/components/CollapsibleSection.vue";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
-import RangeSlider from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RangeSlider.vue";
 
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
     foldText,
     ordinal,
+    yearAndCentury,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import {
     BIN_YEARS,
@@ -31,13 +31,14 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/aoristic.ts";
 import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 
+type Edge = "low" | "high";
+
 type Column =
     | { kind: "bin"; bin: HistogramBin; start: number; width: number }
     | { kind: "fold"; from: number; to: number; start: number; width: number };
 
 interface Part {
     key: string;
-    approx: boolean;
     y: number;
     height: number;
 }
@@ -60,14 +61,28 @@ const PERCENT = 100;
 const CENTURY = 100;
 const MAX_LABELS = 6;
 const ROWS_STEP = 100;
+const EDGES: readonly Edge[] = ["low", "high"];
+const ARROW_STEP = 1;
+const PAGE_STEP = 25;
+const KEY_STEPS: Readonly<Record<string, number>> = {
+    ArrowRight: ARROW_STEP,
+    ArrowUp: ARROW_STEP,
+    ArrowLeft: -ARROW_STEP,
+    ArrowDown: -ARROW_STEP,
+    PageUp: PAGE_STEP,
+    PageDown: -PAGE_STEP,
+};
 
 /**
  * The timeline of the kept events (not brushed: the histogram is the
  * context of the brush). An aoristic histogram stacks, per bin, the parts
- * of each followed material, else of each event type, the approximate
- * share lighter; whole centuries without a dated event fold into one
- * hatched column. Each bin has a button that opens its period; the
- * slider under the axis sets the brush, the bins outside it fade. The
+ * of each followed material, else of each event type; whole centuries without a dated event fold into one
+ * hatched column. Each bin has a button that opens its period. The two
+ * edges of the brush are its sliders (at the domain ends while nothing is
+ * brushed): a captured pointer drags one along the histogram's own axis
+ * and sends the brush once, on release; arrows move it a year, Page keys
+ * 25, Home and End to the bound, an edge never passing the other one. The
+ * bins outside the brush fade. The
  * « Documents » rows list the documents of the brushed events with their
  * events laid on the same span, a followed material as its slot digit.
  */
@@ -90,6 +105,9 @@ const hatchId = useId();
 const rowsOpen = ref(false);
 const rowLimit = ref(ROWS_STEP);
 const hot = ref<number | null>(null);
+const plot = useTemplateRef<HTMLElement>("plot");
+const held = ref<Edge | null>(null);
+const draft = ref<[number, number] | null>(null);
 
 const items = computed<DatedItem[]>(() =>
     props.events.flatMap((event) => {
@@ -105,7 +123,6 @@ const items = computed<DatedItem[]>(() =>
         return [
             {
                 interval,
-                approximate: event.date.approximate,
                 keys: keys.length > 0 ? keys : [OTHER],
             },
         ];
@@ -156,8 +173,21 @@ const bins = computed(() =>
 const folds = computed(() =>
     columns.value.flatMap((column) => (column.kind === "fold" ? [column] : [])),
 );
+const edges = computed<[number, number]>(() => {
+    const shape = histogram.value;
+    if (shape === null) return [0, 0];
+    const brush = props.brush ?? [shape.from, shape.to];
+    return [
+        Math.max(shape.from, Math.min(brush[0], shape.to)),
+        Math.min(shape.to, Math.max(brush[1], shape.from)),
+    ];
+});
+const shown = computed<[number, number] | null>(
+    () => draft.value ?? props.brush,
+);
+const shownEdges = computed<[number, number]>(() => draft.value ?? edges.value);
 const band = computed(() => {
-    const brush = props.brush;
+    const brush = shown.value;
     if (brush === null || histogram.value === null) return null;
     const start = xOf(brush[0]);
     return { start, width: Math.max(0, xOf(brush[1] + 1) - start) };
@@ -178,28 +208,19 @@ const axisLabels = computed(() => {
             ),
         }));
 });
-const sliderValue = computed<[number, number]>(() => {
-    const shape = histogram.value;
-    if (shape === null) return [0, 0];
-    const brush = props.brush ?? [shape.from, shape.to];
-    return [
-        Math.max(shape.from, Math.min(brush[0], shape.to)),
-        Math.min(shape.to, Math.max(brush[1], shape.from)),
-    ];
-});
 const binText = computed(() =>
     histogram.value?.binYears === BIN_YEARS
         ? $gettext(
-              "A date “14th c.” counts a quarter in each of its 25-year bins",
+              "An imprecise date is spread over the bins it covers (“14th c.” = ¼ + ¼ + ¼ + ¼)",
           )
         : $gettext(
-              "A date “14th c.” counts a half in each of its 50-year bins",
+              "An imprecise date is spread over the bins it covers (“14th c.” = ½ + ½)",
           ),
 );
 const stackText = computed(() =>
     props.tracked.length > 0
-        ? $gettext("stacked by followed material")
-        : $gettext("stacked by event type"),
+        ? $gettext("colours = followed materials")
+        : $gettext("colours = event types"),
 );
 const keyEntries = computed(() => {
     const present = new Set(items.value.flatMap((item) => [...item.keys]));
@@ -207,7 +228,6 @@ const keyEntries = computed(() => {
         .filter((key) => present.has(key))
         .map((key) => ({ key, slot: slotOfKey(key), text: keyLabel(key) }));
 });
-const hasApprox = computed(() => items.value.some((item) => item.approximate));
 const rows = computed<DocumentRow[]>(() => {
     const found = new Map<string, DocumentRow>();
     for (const event of props.events) {
@@ -251,13 +271,11 @@ function partsOf(bin: HistogramBin): Part[] {
     const parts: Part[] = [];
     let top = PERCENT;
     for (const key of keyOrder.value) {
-        for (const approx of [false, true]) {
-            const value = (approx ? bin.approx : bin.firm)[key] ?? 0;
-            if (value <= 0) continue;
-            const height = (value / max) * PERCENT;
-            top -= height;
-            parts.push({ key, approx, y: top, height });
-        }
+        const value = bin.parts[key] ?? 0;
+        if (value <= 0) continue;
+        const height = (value / max) * PERCENT;
+        top -= height;
+        parts.push({ key, y: top, height });
     }
     return parts;
 }
@@ -273,15 +291,112 @@ function xOf(year: number): number {
     return PERCENT;
 }
 
-function partClass(part: Part): Record<string, boolean> {
-    return {
-        [part.key.replace(":", "-")]: true,
-        approx: part.approx,
-    };
+/** The year at a share of the plot, the inverse of `xOf` (fractional). */
+function yearOf(share: number): number {
+    const all = columns.value;
+    for (const [index, column] of all.entries()) {
+        if (share > column.start + column.width && index < all.length - 1) {
+            continue;
+        }
+        const from = column.kind === "bin" ? column.bin.from : column.from;
+        const to = column.kind === "bin" ? column.bin.to : column.to;
+        const within =
+            column.width > 0 ? (share - column.start) / column.width : 0;
+        return from + Math.min(1, Math.max(0, within)) * (to - from + 1);
+    }
+    return 0;
+}
+
+function edgeAt(edge: Edge): number {
+    return edge === "low"
+        ? xOf(shownEdges.value[0])
+        : xOf(shownEdges.value[1] + 1);
+}
+
+function withEdge(edge: Edge, year: number): [number, number] {
+    const shape = histogram.value;
+    const [low, high] = edges.value;
+    if (shape === null) return [low, high];
+    return edge === "low"
+        ? [Math.min(Math.max(year, shape.from), high), high]
+        : [low, Math.max(Math.min(year, shape.to), low)];
+}
+
+function edgeYearAt(edge: Edge, clientX: number): number | null {
+    const rect = plot.value?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return null;
+    const share = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const year = Math.round(yearOf(share * PERCENT));
+    return edge === "low" ? year : year - 1;
+}
+
+function boundsOf(edge: Edge): [number, number] {
+    const shape = histogram.value;
+    const [low, high] = shownEdges.value;
+    if (shape === null) return [low, high];
+    return edge === "low" ? [shape.from, high] : [low, shape.to];
+}
+
+function valueOf(edge: Edge): number {
+    return edge === "low" ? shownEdges.value[0] : shownEdges.value[1];
+}
+
+function edgeLabel(edge: Edge): string {
+    return edge === "low" ? $gettext("Earliest year") : $gettext("Latest year");
+}
+
+function edgeText(year: number): string {
+    return yearAndCentury(year, $gettext, interpolate, gettext.current);
+}
+
+function onEdgeKeydown(edge: Edge, event: KeyboardEvent): void {
+    const shape = histogram.value;
+    if (shape === null || held.value !== null) return;
+    const current = valueOf(edge);
+    let target: number;
+    if (event.key === "Home") {
+        target = shape.from;
+    } else if (event.key === "End") {
+        target = shape.to;
+    } else if (event.key in KEY_STEPS) {
+        target = current + KEY_STEPS[event.key];
+    } else {
+        return;
+    }
+    event.preventDefault();
+    emit("brush", withEdge(edge, target));
+}
+
+function onEdgePointerdown(edge: Edge, event: PointerEvent): void {
+    if (event.button > 0) return;
+    event.preventDefault();
+    held.value = edge;
+    draft.value = edges.value;
+    const target = event.currentTarget as HTMLElement | null;
+    target?.setPointerCapture?.(event.pointerId);
+}
+
+function onEdgePointermove(edge: Edge, event: PointerEvent): void {
+    if (held.value !== edge) return;
+    const year = edgeYearAt(edge, event.clientX);
+    if (year !== null) draft.value = withEdge(edge, year);
+}
+
+function onEdgePointerup(edge: Edge, event: PointerEvent): void {
+    if (held.value !== edge) return;
+    const year = edgeYearAt(edge, event.clientX);
+    const next = year === null ? draft.value : withEdge(edge, year);
+    releaseEdge();
+    if (next !== null) emit("brush", next);
+}
+
+function releaseEdge(): void {
+    held.value = null;
+    draft.value = null;
 }
 
 function isOut(bin: HistogramBin): boolean {
-    const brush = props.brush;
+    const brush = shown.value;
     return brush !== null && (bin.to < brush[0] || bin.from > brush[1]);
 }
 
@@ -408,9 +523,10 @@ function showMore(): void {
                 v-if="props.brush"
                 type="button"
                 class="clear"
+                :aria-label="$gettext('Show the whole period')"
                 @click="emit('brush', null)"
             >
-                <span>{{ $gettext("Clear the period") }}</span>
+                <span>{{ $gettext("Whole period") }}</span>
             </button>
         </header>
 
@@ -421,7 +537,10 @@ function showMore(): void {
             <span>{{ $gettext("No dated event among the kept events.") }}</span>
         </p>
         <template v-else>
-            <div class="plot">
+            <div
+                ref="plot"
+                class="plot"
+            >
                 <svg
                     class="bars"
                     role="img"
@@ -455,9 +574,9 @@ function showMore(): void {
                     >
                         <rect
                             v-for="part in column.parts"
-                            :key="`${part.key}:${part.approx}`"
+                            :key="part.key"
                             class="part"
-                            :class="partClass(part)"
+                            :class="part.key.replace(':', '-')"
                             :x="`${round(column.start + column.width * GAP_SHARE)}%`"
                             :width="`${round(column.width * (1 - 2 * GAP_SHARE))}%`"
                             :y="`${round(part.y)}%`"
@@ -526,6 +645,33 @@ function showMore(): void {
                         "
                     ></button>
                 </div>
+                <div
+                    v-for="edge in EDGES"
+                    :key="edge"
+                    class="edge"
+                    :class="{
+                        free: shown === null,
+                        held: held === edge,
+                    }"
+                    role="slider"
+                    tabindex="0"
+                    :aria-label="edgeLabel(edge)"
+                    :aria-valuemin="boundsOf(edge)[0]"
+                    :aria-valuemax="boundsOf(edge)[1]"
+                    :aria-valuenow="valueOf(edge)"
+                    :aria-valuetext="edgeText(valueOf(edge))"
+                    :style="{
+                        'inset-inline-start': `${round(edgeAt(edge))}%`,
+                    }"
+                    @keydown="onEdgeKeydown(edge, $event)"
+                    @pointerdown="onEdgePointerdown(edge, $event)"
+                    @pointermove="onEdgePointermove(edge, $event)"
+                    @pointerup="onEdgePointerup(edge, $event)"
+                    @pointercancel="releaseEdge"
+                    @lostpointercapture="releaseEdge"
+                >
+                    <span class="grip"></span>
+                </div>
             </div>
             <div
                 class="axis"
@@ -540,12 +686,6 @@ function showMore(): void {
                     >{{ axisLabel.text }}</span
                 >
             </div>
-            <RangeSlider
-                :min="histogram.from"
-                :max="histogram.to"
-                :value="sliderValue"
-                @change="emit('brush', $event)"
-            />
             <ul
                 class="key"
                 :aria-label="$gettext('Key')"
@@ -566,13 +706,6 @@ function showMore(): void {
                         aria-hidden="true"
                     ></span>
                     <span>{{ entry.text }}</span>
-                </li>
-                <li v-if="hasApprox">
-                    <span
-                        class="square approx-sample"
-                        aria-hidden="true"
-                    ></span>
-                    <span>{{ $gettext("lighter = approximate date") }}</span>
                 </li>
             </ul>
         </template>
@@ -723,10 +856,6 @@ function showMore(): void {
     fill: var(--ink-dim);
 }
 
-.map-timeline .part.approx {
-    opacity: 0.45;
-}
-
 .map-timeline .base {
     fill: var(--blue-text);
 }
@@ -786,12 +915,10 @@ function showMore(): void {
     writing-mode: vertical-rl;
 }
 
-/* The brush: RangeSlider blue */
+/* The brush: RangeSlider blue, its edges drawn by the handles */
 .map-timeline .band {
     position: absolute;
     inset-block: 0;
-    box-sizing: border-box;
-    border-inline: 0.125rem solid var(--blue-text);
     border-radius: 0.25rem;
     background: color-mix(in srgb, var(--blue-text) 6%, transparent);
     pointer-events: none;
@@ -809,6 +936,57 @@ function showMore(): void {
     border: 0;
     background: transparent;
     cursor: pointer;
+}
+
+.map-timeline .edge {
+    position: absolute;
+    inset-block: 0;
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    transform: translateX(-50%);
+    cursor: ew-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.map-timeline .edge::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 50%;
+    inline-size: 0.125rem;
+    transform: translateX(-50%);
+    background: var(--blue-text);
+    content: "";
+}
+
+.map-timeline .edge.free::before {
+    background: var(--border-hover);
+}
+
+.map-timeline .edge .grip {
+    position: relative;
+    box-sizing: border-box;
+    inline-size: 0.625rem;
+    block-size: 1.5rem;
+    border: 0.125rem solid var(--blue-text);
+    border-radius: 999rem;
+    background: var(--surface);
+    transition: background var(--dur-fast);
+}
+
+.map-timeline .edge:hover .grip,
+.map-timeline .edge.held .grip {
+    background: var(--blue-text);
+}
+
+.map-timeline .edge:focus-visible {
+    outline: none;
+}
+
+.map-timeline .edge:focus-visible .grip {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 .map-timeline .axis {
@@ -847,11 +1025,6 @@ function showMore(): void {
     inline-size: 0.625rem;
     block-size: 0.625rem;
     border-radius: 0.125rem;
-}
-
-.map-timeline .square.approx-sample {
-    background: var(--ink-dim);
-    opacity: 0.45;
 }
 
 .map-timeline .rows {
@@ -974,7 +1147,8 @@ function showMore(): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .map-timeline .column {
+    .map-timeline .column,
+    .map-timeline .edge .grip {
         transition: none;
     }
 }

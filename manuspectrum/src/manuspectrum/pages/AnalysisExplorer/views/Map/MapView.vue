@@ -69,6 +69,7 @@ import {
     placeFeatures,
     summarisePlaces,
     territoryFields,
+    withoutApproximate,
     withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import { territories } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
@@ -88,6 +89,7 @@ import type {
 import type {
     MapSnapshot,
     MiniMap,
+    SnapshotSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { PanelSubject } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/panel-groups.ts";
 
@@ -120,8 +122,8 @@ const CANVAS_SELECTOR = ".maplibregl-canvas";
  * period, document or material opened. The mode, the followed materials,
  * the brushed period and the borders live in the store (`mapState`, in the
  * address), with the legend's open state (folded by default, not in the
- * address); the reliability switch, the hovered place, the isolated
- * territory and the opened subject live here. The stage stays laid out,
+ * address); the reliability and approximate-date switches, the hovered
+ * place, the isolated territory and the opened subject live here. The stage stays laid out,
  * hidden, while the small multiples show, so its snapshot can be taken and
  * the map comes back as it was; a snapshot is asked again only when the
  * bounds change (`boundsKey`), and only the newest answer is kept. A place
@@ -153,7 +155,11 @@ const listHovered = ref<string | null>(null);
 const page = ref(0);
 /** The reliability levels the reader unticked: their materials leave the map. */
 const hiddenLevels = ref(new Set<string>());
+/** Unticked, the events dated « circa » leave the map, the lists, the territories and the timeline. */
+const approximateShown = ref(true);
 const background = ref<MapSnapshot | null>(null);
+/** The snapshot of an enlarged map of the series, at the dialog's size. */
+const largeBackground = ref<MapSnapshot | null>(null);
 const mapFailed = ref(false);
 const mapColours = shallowRef(FALLBACK_COLOURS);
 /** The followed slot whose territory reads alone while its legend row or rail chip is hovered. */
@@ -162,6 +168,7 @@ const radiusDraft = ref(store.mapState.radius);
 const folded = ref(new Set<RailGroup>());
 let opener: HTMLElement | null = null;
 let snapshotTicket = 0;
+let largeTicket = 0;
 
 const response = computed(() => request.data.value);
 useEventLabels(() => response.value);
@@ -184,7 +191,10 @@ const low = computed(() =>
 const places = computed(() => response.value?.places ?? {});
 const events = computed<MapEvent[]>(() => {
     const all = response.value?.events ?? [];
-    return withoutLevels(all, hiddenLevels.value);
+    return withoutLevels(
+        approximateShown.value ? all : withoutApproximate(all),
+        hiddenLevels.value,
+    );
 });
 const brushed = computed(() =>
     events.value.filter((event) => inBrush(event, store.mapState.brush)),
@@ -301,6 +311,23 @@ const bordersLabel = computed(() =>
               true,
           ),
 );
+/** The licence credits under the map; OpenHistoricalMap's only while its borders are drawn. */
+const credits = computed<{ href: string; text: string }[]>(() => [
+    {
+        href: "https://www.openstreetmap.org/copyright",
+        text: contributorsCredit("OpenStreetMap"),
+    },
+    { href: "https://www.openmaptiles.org/", text: "© OpenMapTiles" },
+    { href: "https://openfreemap.org/", text: "OpenFreeMap" },
+    ...(bordersShown.value
+        ? [
+              {
+                  href: "https://www.openhistoricalmap.org/copyright",
+                  text: contributorsCredit("OpenHistoricalMap"),
+              },
+          ]
+        : []),
+]);
 const language = computed(() => gettext.current);
 const exports = computed(() => ({
     csv: exportHref(
@@ -353,7 +380,7 @@ const showLabel = computed(() =>
 const modeLabels = computed<Record<MapMode, string>>(() => ({
     places: $gettext("Places"),
     territories: $gettext("Territories"),
-    multiples: $gettext("Small multiples"),
+    multiples: $gettext("Map series"),
 }));
 const colourOptions = computed<{ id: TerritoryColour; label: string }[]>(() => [
     { id: "each", label: $gettext("Each material") },
@@ -474,9 +501,15 @@ watch(
     },
     { immediate: true, flush: "post" },
 );
+watch(boundsKey, () => {
+    largeTicket += 1;
+    largeBackground.value = null;
+});
 watch(mode, (current, previous) => {
     if (previous === "multiples" && current !== "multiples") {
         snapshotTicket += 1;
+        largeTicket += 1;
+        largeBackground.value = null;
         stage.value?.cancelSnapshots();
         void nextTick(() => stage.value?.resize());
     }
@@ -574,6 +607,11 @@ function toggleType(type: EventType, event: Event): void {
     store.setFilter("eventType", isDefault ? [] : next);
 }
 
+/** « © <name> contributors »: the name of the project stays untranslated. */
+function contributorsCredit(name: string): string {
+    return interpolate($gettext("© %{name} contributors"), { name }, true);
+}
+
 function setLevel(id: string, event: Event): void {
     const next = new Set(hiddenLevels.value);
     if ((event.target as HTMLInputElement).checked) next.delete(id);
@@ -646,6 +684,29 @@ function openMini(mini: MiniMap): void {
             to: (mini.century + 1) * 100,
         });
     }
+}
+
+/** Takes the snapshot of an enlarged map of the series at the dialog's drawing size. */
+async function snapshotLarge(size: SnapshotSize): Promise<void> {
+    if (!stage.value) return;
+    const ticket = ++largeTicket;
+    const shot = await stage.value.snapshot(
+        fitAspect(bounds.value, size.width, size.height),
+        size,
+    );
+    if (ticket === largeTicket && shot) largeBackground.value = shot;
+}
+
+/** The main map in Places with what a map of the series shows: its material alone, or its century as the period. */
+function showSeriesMap(mini: MiniMap): void {
+    if (mini.uri) {
+        store.setFilter("material", [mini.uri]);
+    } else if (mini.century !== null) {
+        store.setMapState({
+            brush: [mini.century * 100 + 1, (mini.century + 1) * 100],
+        });
+    }
+    setMode("places");
 }
 
 /** Opens a place picked in the list, easing the map to it when it is off screen. */
@@ -855,37 +916,53 @@ function skipToTimeline(): void {
                                 <span>{{ $gettext("Events") }}</span>
                             </button>
                         </h3>
-                        <ul
+                        <div
                             v-show="!isFolded('events')"
                             :id="groupBodyId('events')"
-                            class="group-body event-types"
+                            class="group-body"
                         >
-                            <li
-                                v-for="type in DEFAULT_EVENT_TYPES"
-                                :key="type"
-                            >
-                                <label
-                                    class="value"
-                                    :class="{
-                                        checked: shownTypes.includes(type),
-                                    }"
+                            <ul class="event-types">
+                                <li
+                                    v-for="type in DEFAULT_EVENT_TYPES"
+                                    :key="type"
                                 >
-                                    <input
-                                        type="checkbox"
-                                        :checked="shownTypes.includes(type)"
-                                        @change="toggleType(type, $event)"
-                                    />
-                                    <span class="label">{{
-                                        eventTypeLabel(type)
-                                    }}</span>
-                                    <span
-                                        v-if="shownTypes.includes(type)"
-                                        class="count"
-                                        >{{ typeCounts.get(type) ?? 0 }}</span
+                                    <label
+                                        class="value"
+                                        :class="{
+                                            checked: shownTypes.includes(type),
+                                        }"
                                     >
-                                </label>
-                            </li>
-                        </ul>
+                                        <input
+                                            type="checkbox"
+                                            :checked="shownTypes.includes(type)"
+                                            @change="toggleType(type, $event)"
+                                        />
+                                        <span class="label">{{
+                                            eventTypeLabel(type)
+                                        }}</span>
+                                        <span
+                                            v-if="shownTypes.includes(type)"
+                                            class="count"
+                                            >{{
+                                                typeCounts.get(type) ?? 0
+                                            }}</span
+                                        >
+                                    </label>
+                                </li>
+                            </ul>
+                            <label
+                                class="value approximate"
+                                :class="{ checked: approximateShown }"
+                            >
+                                <input
+                                    v-model="approximateShown"
+                                    type="checkbox"
+                                />
+                                <span class="label">{{
+                                    $gettext("Include approximate dates (“c.”)")
+                                }}</span>
+                            </label>
+                        </div>
                     </section>
                     <PlaceList
                         :summaries="summaryList"
@@ -1089,7 +1166,7 @@ function skipToTimeline(): void {
                         >
                             <span>{{
                                 $gettext(
-                                    "Narrow the period with the timeline slider to see its borders.",
+                                    "Narrow the period on the timeline to see its borders.",
                                 )
                             }}</span>
                         </p>
@@ -1390,8 +1467,11 @@ function skipToTimeline(): void {
                             :pages="pages"
                             :axis="store.mapState.multiples"
                             :tracked="tracked"
+                            :large-background="largeBackground"
                             @open="openMini"
                             @page="page = $event"
+                            @enlarge-snapshot="snapshotLarge"
+                            @show="showSeriesMap"
                         />
                         <div
                             v-if="response && response.events.length === 0"
@@ -1419,6 +1499,30 @@ function skipToTimeline(): void {
                             </button>
                         </div>
                     </div>
+                    <p
+                        v-if="!failed && webgl && !mapFailed"
+                        class="credits"
+                    >
+                        <template
+                            v-for="(credit, index) in credits"
+                            :key="credit.href"
+                        >
+                            <span
+                                v-if="index > 0"
+                                aria-hidden="true"
+                                >{{ " · " }}</span
+                            >
+                            <a
+                                rel="noopener"
+                                target="_blank"
+                                :href="credit.href"
+                                ><span>{{ credit.text }}</span
+                                ><span class="visually-hidden">{{
+                                    $gettext("(new tab)")
+                                }}</span></a
+                            >
+                        </template>
+                    </p>
                     <div
                         v-if="mode === 'territories' && narrow && !failed"
                         class="territory-note static"
@@ -1542,13 +1646,6 @@ function skipToTimeline(): void {
                 @brush="brushPeriod"
             />
         </Drawer>
-        <p class="third-party">
-            <span>{{
-                $gettext(
-                    "Background tiles: OpenFreeMap © OpenMapTiles, data from OpenStreetMap; historical borders: OpenHistoricalMap contributors. These services receive your IP address when the map loads.",
-                )
-            }}</span>
-        </p>
     </section>
 </template>
 
@@ -1705,10 +1802,22 @@ function skipToTimeline(): void {
     border-block-start: 0.0625rem solid var(--border);
 }
 
+.map-rail > .group {
+    padding-block-start: 0;
+}
+
+/*
+ * A stuck title covers the rail's top padding (RailPanel .rail-panel,
+ * 1rem) with its own: a sticky box stops at the scroll container's padding
+ * edge, and the rows scrolled past would show through that strip.
+ */
 .map-rail .group-title {
+    --rail-inset: 1rem;
+
     position: sticky;
-    inset-block-start: 0;
-    z-index: 1;
+    inset-block-start: calc(-1 * var(--rail-inset));
+    z-index: 3;
+    padding-block-start: var(--rail-inset);
     background: var(--surface);
 }
 
@@ -1773,12 +1882,17 @@ function skipToTimeline(): void {
     white-space: nowrap;
 }
 
-.map-rail .levels {
+.map-rail .levels,
+.map-rail .event-types {
     display: grid;
     gap: 0.25rem;
     margin: 0;
     padding: 0;
     list-style: none;
+}
+
+.map-rail .value.approximate .label {
+    white-space: normal;
 }
 
 .map-rail .value .count {
@@ -2351,10 +2465,14 @@ function skipToTimeline(): void {
 }
 
 /* AnalysisCard .attribution */
-.map-view .third-party {
-    max-inline-size: 60rem;
+.map-view .credits {
+    margin: 0;
     color: var(--ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
+}
+
+.map-view .credits a {
+    color: inherit;
 }
 
 .map-view button:focus-visible,

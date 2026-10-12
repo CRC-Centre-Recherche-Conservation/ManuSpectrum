@@ -1,50 +1,44 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
+import SeriesMap from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/SeriesMap.vue";
+import SeriesMapDialog from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/SeriesMapDialog.vue";
 
 import {
     ICONS,
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import { ordinal } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
-import { focusHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
-import { project } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import {
     MINI_HEIGHT,
     MINI_WIDTH,
     pageOf,
-    snapshotFrame,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 
 import type { Bounds } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { MultiplesAxis } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import type {
     MapSnapshot,
-    MiniDot,
     MiniMap,
+    SnapshotSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 
-const WIDTH = MINI_WIDTH;
-const HEIGHT = MINI_HEIGHT;
-const DOT_BASE = 4;
-const DOT_STEP = 3;
-const PIP_RADIUS = 5;
-const PIP_GAP = 11;
-
 /**
- * Small multiples of the map: one mini map per identified material (every
- * analysed place drawn, hollow where the material is not attested) or per
- * century (a pip per followed slot attested there). Each mini map is one
- * button that emits `open`. A pale attestation is hollow in its hue, an
- * attributed place (area or parent) dashed. The background is the stage's
- * snapshot when there is one, laid where its bounds fall in `bounds` so
- * that the dots sit on their places, else the land.
- * `maps` may be the whole list or the page already cut: the page `page`
- * (0-based) of twelve is drawn either way. `tracked` gives a material map
- * its slot.
+ * The map series: one mini map per identified material (every analysed
+ * place drawn, hollow where the material is not attested) or per century
+ * (a pip per followed slot attested there), drawn by `SeriesMap` on the
+ * stage's snapshot `background`. Each mini map is one button that emits
+ * `open`; its « Enlarge » shows it in `SeriesMapDialog`, which asks
+ * (`enlarge-snapshot`) for a snapshot at its own size, drawn from
+ * `largeBackground` (the mini maps' one meanwhile); the focus goes back to
+ * that « Enlarge » on close, and the dialog's « Show on the map » emits
+ * `show`. `maps` may be the whole list or the page already cut: the page
+ * `page` (0-based) of twelve is drawn either way, and the dialog steps
+ * through `maps`. `tracked` gives a material map its slot.
  */
 const props = withDefaults(
     defineProps<{
@@ -55,19 +49,28 @@ const props = withDefaults(
         pages: number;
         axis: MultiplesAxis;
         tracked?: TrackedMaterial[];
+        largeBackground?: MapSnapshot | null;
     }>(),
-    { tracked: () => [] },
+    { tracked: () => [], largeBackground: null },
 );
 const emit = defineEmits<{
     open: [map: MiniMap];
     page: [n: number];
+    "enlarge-snapshot": [size: SnapshotSize];
+    show: [map: MiniMap];
 }>();
 
 const gettext = useGettext();
 const { $gettext, $ngettext, interpolate } = gettext;
 
+/** The place in `maps` of the map shown enlarged, if any. */
+const enlarged = ref<number | null>(null);
+let opener: HTMLElement | null = null;
+
 const shown = computed(() => pageOf(props.maps, props.page));
-const viewBox = `0 0 ${WIDTH} ${HEIGHT}`;
+const enlargedMap = computed(() =>
+    enlarged.value === null ? null : props.maps[enlarged.value] ?? null,
+);
 const axisNote = computed(() =>
     props.axis === "century"
         ? $gettext(
@@ -88,9 +91,6 @@ const pageText = computed(() =>
         { n: props.page + 1, total: props.pages },
         true,
     ),
-);
-const backgroundFrame = computed(() =>
-    props.background ? snapshotFrame(props.background, props.bounds) : null,
 );
 const atFirst = computed(() => props.page <= 0);
 const atLast = computed(() => props.page >= props.pages - 1);
@@ -153,42 +153,38 @@ function openName(map: MiniMap): string {
     );
 }
 
-function at(entry: MiniDot): [number, number] {
-    const [x, y] = project(entry.lngLat, props.bounds, WIDTH, HEIGHT);
-    return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+function enlargeName(map: MiniMap): string {
+    if (map.century !== null && !map.title) {
+        return interpolate(
+            $gettext("Enlarge the map of the %{century} century"),
+            { century: ordinal(map.century + 1, gettext.current) },
+            true,
+        );
+    }
+    return interpolate(
+        $gettext("Enlarge the map of %{title}"),
+        { title: titleOf(map) },
+        true,
+    );
 }
 
-function radiusOf(entry: MiniDot): number {
-    return entry.attested ? DOT_BASE + entry.size * DOT_STEP : DOT_BASE;
+function enlarge(map: MiniMap, event: MouseEvent): void {
+    opener =
+        event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    const index = props.maps.findIndex((entry) => entry.key === map.key);
+    enlarged.value = index < 0 ? null : index;
 }
 
-function dotClass(entry: MiniDot): Record<string, boolean> {
-    return {
-        attested: entry.attested,
-        absent: !entry.attested,
-        pale: entry.attested && entry.pale,
-        dashed: entry.dashed,
-    };
+function onDialogClosed(): void {
+    enlarged.value = null;
+    const target = opener;
+    opener = null;
+    if (target?.isConnected) target.focus({ preventScroll: true });
 }
 
-function dotStyle(map: MiniMap): Record<string, string> {
-    const slot = slotOf(map);
-    return slot === null ? {} : { "--h": focusHue(slot) };
-}
-
-/** Pips by century: in a row centred on the place. */
-function pipsOf(entry: MiniDot): { slot: number; x: number; y: number }[] {
-    const [x, y] = at(entry);
-    const first = x - ((entry.slots.length - 1) * PIP_GAP) / 2;
-    return entry.slots.map((slot, index) => ({
-        slot,
-        x: first + index * PIP_GAP,
-        y,
-    }));
-}
-
-function byCenturyPips(map: MiniMap, entry: MiniDot): boolean {
-    return map.century !== null && entry.slots.length > 0;
+function showOnMap(map: MiniMap): void {
+    enlarged.value = null;
+    emit("show", map);
 }
 
 function go(next: number): void {
@@ -223,61 +219,15 @@ function go(next: number): void {
                     :aria-label="openName(map)"
                     @click="emit('open', map)"
                 >
-                    <svg
+                    <SeriesMap
                         class="mini-map"
-                        aria-hidden="true"
-                        focusable="false"
-                        :viewBox="viewBox"
-                    >
-                        <rect
-                            class="land"
-                            :width="WIDTH"
-                            :height="HEIGHT"
-                        />
-                        <image
-                            v-if="props.background && backgroundFrame"
-                            class="snapshot"
-                            preserveAspectRatio="none"
-                            :href="props.background.url"
-                            :x="backgroundFrame.x"
-                            :y="backgroundFrame.y"
-                            :width="backgroundFrame.width"
-                            :height="backgroundFrame.height"
-                        />
-                        <rect
-                            v-else
-                            class="sea-frame"
-                            x="1"
-                            y="1"
-                            :width="WIDTH - 2"
-                            :height="HEIGHT - 2"
-                        />
-                        <g
-                            v-for="entry in map.dots"
-                            :key="entry.id"
-                        >
-                            <g v-if="byCenturyPips(map, entry)">
-                                <circle
-                                    v-for="pip in pipsOf(entry)"
-                                    :key="pip.slot"
-                                    class="pip"
-                                    :cx="pip.x"
-                                    :cy="pip.y"
-                                    :r="PIP_RADIUS"
-                                    :style="{ '--h': focusHue(pip.slot) }"
-                                />
-                            </g>
-                            <circle
-                                v-else
-                                class="dot"
-                                :class="dotClass(entry)"
-                                :cx="at(entry)[0]"
-                                :cy="at(entry)[1]"
-                                :r="radiusOf(entry)"
-                                :style="dotStyle(map)"
-                            />
-                        </g>
-                    </svg>
+                        :map="map"
+                        :bounds="props.bounds"
+                        :background="props.background"
+                        :width="MINI_WIDTH"
+                        :height="MINI_HEIGHT"
+                        :followed-slot="slotOf(map)"
+                    />
                 </button>
                 <figcaption>
                     <span class="name">
@@ -294,13 +244,22 @@ function go(next: number): void {
                         >
                     </span>
                     <span class="counts">{{ countsText(map) }}</span>
+                    <span class="enlarge">
+                        <IconButton
+                            icon="expand"
+                            tip-placement="above"
+                            data-action="enlarge"
+                            :label="enlargeName(map)"
+                            @click="enlarge(map, $event)"
+                        />
+                    </span>
                 </figcaption>
             </figure>
         </div>
         <nav
             v-if="props.pages > 1"
             class="pager"
-            :aria-label="$gettext('Pages of the small multiples')"
+            :aria-label="$gettext('Pages of the map series')"
         >
             <button
                 type="button"
@@ -342,6 +301,19 @@ function go(next: number): void {
                 </svg>
             </button>
         </nav>
+        <SeriesMapDialog
+            :maps="props.maps"
+            :index="enlarged"
+            :bounds="props.bounds"
+            :background="props.largeBackground ?? props.background"
+            :title="enlargedMap ? titleOf(enlargedMap) : ''"
+            :counts="enlargedMap ? countsText(enlargedMap) : ''"
+            :followed-slot="enlargedMap ? slotOf(enlargedMap) : null"
+            @close="onDialogClosed"
+            @navigate="enlarged = $event"
+            @measure="emit('enlarge-snapshot', $event)"
+            @show="showOnMap"
+        />
     </div>
 </template>
 
@@ -405,64 +377,32 @@ function go(next: number): void {
 }
 
 .small-multiples .mini-map {
-    display: block;
-    overflow: hidden;
-    inline-size: 100%;
-    block-size: auto;
     aspect-ratio: 220 / 160;
-}
-
-.small-multiples .snapshot {
-    animation: small-multiples-fade var(--dur-med) var(--ease-out-expo);
-}
-
-.small-multiples .land {
-    fill: var(--map-land);
-}
-
-.small-multiples .sea-frame {
-    fill: none;
-    stroke: var(--map-sea);
-    stroke-width: 2;
-}
-
-.small-multiples .dot.attested {
-    fill: var(--h, var(--ink));
-    stroke: var(--bg);
-    stroke-width: 1;
-}
-
-.small-multiples .dot.pale {
-    fill: var(--surface);
-    stroke: var(--h, var(--ink));
-    stroke-width: 1.5;
-}
-
-.small-multiples .dot.absent {
-    fill: none;
-    stroke: var(--series-context);
-    stroke-width: 1;
-}
-
-/* The main map's dashed ring of an attributed place */
-.small-multiples .dot.dashed {
-    stroke-dasharray: 2 1.5;
-}
-
-.small-multiples .dot.attested.dashed:not(.pale) {
-    stroke: var(--series-context);
-}
-
-.small-multiples .pip {
-    fill: var(--h);
-    stroke: var(--surface);
-    stroke-width: 1;
 }
 
 .small-multiples figcaption {
     display: grid;
-    gap: 0.125rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.125rem 0.25rem;
     min-inline-size: 0;
+}
+
+.small-multiples figcaption .enlarge {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+}
+
+.small-multiples figcaption .enlarge :deep(.icon-button-control) {
+    color: var(--surface);
+}
+
+.small-multiples figcaption .enlarge :deep(.icon-button-control:hover) {
+    background: var(--stage);
+}
+
+.small-multiples figcaption .enlarge :deep(.icon-button-control:focus-visible) {
+    outline-color: var(--surface);
 }
 
 .small-multiples .name {
@@ -542,25 +482,9 @@ function go(next: number): void {
     outline-offset: 0.125rem;
 }
 
-@keyframes small-multiples-fade {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
 @media (max-width: 30rem) {
     .small-multiples .grid {
         grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .small-multiples .snapshot {
-        animation: none;
     }
 }
 

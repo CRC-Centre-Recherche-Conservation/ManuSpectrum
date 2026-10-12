@@ -68,6 +68,42 @@ describe("small multiples", () => {
         expect(dots[uuid(11)].attested).toBe(false);
     });
 
+    it("drops a material without an attested mapped place, and titles an unnamed one by its uri", () => {
+        const unnamed = carrying("bare", 26);
+        unnamed.materials[0].name = { value: "", lang: "" };
+        const events = [
+            carrying("kept", 20),
+            mapEvent({
+                id: "unplaced",
+                place: null,
+                placeSource: null,
+                materials: [material("nowhere")],
+            }),
+            unnamed,
+        ];
+        const maps = byMaterial(
+            events,
+            places,
+            ["kept", "absent", "nowhere", "bare"],
+            none,
+        );
+        expect(maps.map((m) => [m.uri, m.title?.value, m.places])).toEqual([
+            ["bare", "bare", 1],
+            ["kept", "kept", 1],
+        ]);
+    });
+
+    it("drops a century without an attested place", () => {
+        const maps = byCentury(
+            [carrying("m", 20)],
+            places,
+            [],
+            none,
+            [1250, 1420],
+        );
+        expect(maps.map((m) => m.century)).toEqual([13]);
+    });
+
     it("puts the followed materials first, in slot order", () => {
         const events = [
             carrying("few", 20),
@@ -133,6 +169,27 @@ describe("small multiples", () => {
         expect(frame.y + inY).toBeCloseTo(dotY, 6);
     });
 
+    it("frames a snapshot taken at another size the same way, in that size's box", () => {
+        const bounds = { west: -2, south: 43, east: 6, north: 51 };
+        const [width, height] = [900, 520];
+        const shown = fitAspect(bounds, width, height);
+        const frame = snapshotFrame(
+            { url: "data:", bounds: shown },
+            bounds,
+            width,
+            height,
+        );
+        expect(frame.x).toBeCloseTo(0, 6);
+        expect(frame.y).toBeCloseTo(0, 6);
+        expect(frame.width).toBeCloseTo(width, 6);
+        expect(frame.height).toBeCloseTo(height, 6);
+        const paris = [2.35, 48.85] as const;
+        const [dotX, dotY] = project(paris, bounds, width, height);
+        const [inX, inY] = project(paris, shown, frame.width, frame.height);
+        expect(frame.x + inX).toBeCloseTo(dotX, 6);
+        expect(frame.y + inY).toBeCloseTo(dotY, 6);
+    });
+
     it("pages by twelve", () => {
         const items = Array.from({ length: 25 }, (_, i) => i);
         expect(MULTIPLES_PER_PAGE).toBe(12);
@@ -156,7 +213,6 @@ describe("small multiples", () => {
         expect(maps.map((m) => [m.century, m.dots.length])).toEqual([
             [12, 1],
             [13, 1],
-            [14, 0],
         ]);
         expect(maps[1].dots[0].slots).toEqual([2]);
     });

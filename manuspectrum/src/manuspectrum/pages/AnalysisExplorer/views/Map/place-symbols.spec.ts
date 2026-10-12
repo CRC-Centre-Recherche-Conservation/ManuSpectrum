@@ -8,6 +8,7 @@ import {
     lowLevels,
     placeFeatures,
     summarisePlaces,
+    withoutApproximate,
     withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import {
@@ -86,6 +87,17 @@ describe("place symbols", () => {
                 levels: [level("a", 0), level("b", 2), level("c", 3)],
             }),
         ).toEqual(new Set(["b", "c"]));
+    });
+
+    it("leaves out the events dated « circa »", () => {
+        const kept = withoutApproximate([
+            mapEvent({ id: "firm" }),
+            mapEvent({
+                id: "circa",
+                date: { start: 1301, end: 1325, approximate: true },
+            }),
+        ]);
+        expect(kept.map((event) => event.id)).toEqual(["firm"]);
     });
 
     it("drops the materials of the unticked levels, and keeps those of no level", () => {

@@ -2,13 +2,12 @@
 import { computed, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import { formatProductionDate } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import { yearAndCentury } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
 type Thumb = "low" | "high";
 
 const ARROW_STEP = 1;
 const PAGE_STEP = 25;
-const CENTURY_YEARS = 100;
 const SHARE_PERCENT = 100;
 const KEY_STEPS: Readonly<Record<string, number>> = {
     ArrowRight: ARROW_STEP,
@@ -63,25 +62,8 @@ function withThumb(thumb: Thumb, year: number): [number, number] {
     return thumb === "low" ? [next, props.value[1]] : [props.value[0], next];
 }
 
-/** « 1300, 14th century »: the century says where a year falls on the timeline. */
 function valueText(year: number): string {
-    if (year < 1) return String(year);
-    const first = Math.floor((year - 1) / CENTURY_YEARS) * CENTURY_YEARS + 1;
-    const century = formatProductionDate(
-        {
-            start: String(first),
-            end: String(first + CENTURY_YEARS - 1),
-            approximate: false,
-        },
-        $gettext,
-        interpolate,
-        gettext.current,
-    );
-    return interpolate(
-        $gettext("%{year}, %{century}"),
-        { year, century },
-        true,
-    );
+    return yearAndCentury(year, $gettext, interpolate, gettext.current);
 }
 
 function labelOf(thumb: Thumb): string {

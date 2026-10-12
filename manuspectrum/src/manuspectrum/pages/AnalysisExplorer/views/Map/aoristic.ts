@@ -5,17 +5,15 @@ export const WIDE_BIN_YEARS = 50;
 export const WIDE_SPAN_YEARS = 800;
 const CENTURY = 100;
 
-/** An event on the timeline: its interval, whether it is « circa », and the stacks it counts in. */
+/** An event on the timeline: its interval and the stacks it counts in. */
 export interface DatedItem {
     interval: readonly [number, number];
-    approximate: boolean;
     keys: readonly string[];
 }
 export interface HistogramBin {
     from: number;
     to: number;
-    firm: Record<string, number>;
-    approx: Record<string, number>;
+    parts: Record<string, number>;
     total: number;
 }
 export type HistogramSegment =
@@ -90,7 +88,7 @@ function fold(bins: HistogramBin[], size: number): HistogramSegment[] {
 /**
  * The aoristic histogram of `items`: each spreads a weight of 1 over its
  * interval, each bin receiving the share of years it covers, once per stack
- * key; an approximate item weighs in the lighter band (`approx`).
+ * key.
  */
 export function aoristic(items: readonly DatedItem[]): Histogram | null {
     if (items.length === 0) return null;
@@ -108,8 +106,7 @@ export function aoristic(items: readonly DatedItem[]): Histogram | null {
         (_, i) => ({
             from: from + i * size,
             to: from + (i + 1) * size - 1,
-            firm: {},
-            approx: {},
+            parts: {},
             total: 0,
         }),
     );
@@ -123,9 +120,8 @@ export function aoristic(items: readonly DatedItem[]): Histogram | null {
         ) {
             const bin = bins[i];
             const weight = overlap(item.interval, bin.from, bin.to) / duration;
-            const band = item.approximate ? bin.approx : bin.firm;
             for (const key of item.keys) {
-                band[key] = (band[key] ?? 0) + weight;
+                bin.parts[key] = (bin.parts[key] ?? 0) + weight;
                 bin.total += weight;
             }
         }

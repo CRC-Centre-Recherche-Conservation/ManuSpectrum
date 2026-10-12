@@ -1,14 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
 
 import SmallMultiples from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/SmallMultiples.vue";
 
+import {
+    installDialog,
+    pressEscape,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/dialog.ts";
 import { label } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
     fitAspect,
     project,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 
+import type { VueWrapper } from "@vue/test-utils";
 import type { Bounds } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { MultiplesAxis } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import type {
@@ -54,9 +59,11 @@ function mountMultiples(
         pages?: number;
         axis?: MultiplesAxis;
         tracked?: TrackedMaterial[];
+        largeBackground?: MapSnapshot | null;
     } = {},
 ) {
-    return mount(SmallMultiples, {
+    const wrapper = mount(SmallMultiples, {
+        attachTo: document.body,
         props: {
             maps: [materialMap(1)],
             bounds: BOUNDS,
@@ -67,6 +74,33 @@ function mountMultiples(
             ...props,
         },
     });
+    mounted.push(wrapper);
+    return wrapper;
+}
+
+let removeDialog: () => void = () => undefined;
+let mounted: VueWrapper[] = [];
+
+beforeEach(() => {
+    removeDialog = installDialog();
+});
+
+afterEach(() => {
+    for (const wrapper of mounted) wrapper.unmount();
+    mounted = [];
+    removeDialog();
+});
+
+function enlargeButton(
+    wrapper: ReturnType<typeof mountMultiples>,
+    index = 0,
+): HTMLButtonElement {
+    return wrapper.findAll<HTMLButtonElement>("[data-action='enlarge']")[index]
+        .element;
+}
+
+function dialogOf(wrapper: ReturnType<typeof mountMultiples>) {
+    return wrapper.get<HTMLDialogElement>("dialog.series-map-dialog");
 }
 
 describe("SmallMultiples", () => {
@@ -214,13 +248,142 @@ describe("SmallMultiples", () => {
         const captions = wrapper.findAll("figcaption");
         expect(captions).toHaveLength(2);
         for (const caption of captions) {
-            expect(caption.element.children.length).toBe(2);
+            expect(caption.element.children.length).toBe(3);
             expect(caption.element.children[0].classList.contains("name")).toBe(
                 true,
             );
             expect(
                 caption.element.children[1].classList.contains("counts"),
             ).toBe(true);
+            expect(
+                caption.element.children[2].classList.contains("enlarge"),
+            ).toBe(true);
         }
+    });
+
+    it("names each « Enlarge » after its map", () => {
+        const century: MiniMap = {
+            ...materialMap(2),
+            key: "century:13",
+            title: null,
+            uri: null,
+            century: 13,
+        };
+        const wrapper = mountMultiples({ maps: [materialMap(1), century] });
+        const labels = wrapper
+            .findAll("[data-action='enlarge']")
+            .map((button) =>
+                document
+                    .getElementById(button.attributes("aria-labelledby") ?? "")
+                    ?.textContent?.trim(),
+            );
+        expect(labels).toEqual([
+            "Enlarge the map of Material 1",
+            "Enlarge the map of the 14th century",
+        ]);
+    });
+
+    it("enlarges a map in a modal dialog that asks a snapshot at its own size, and gives the focus back on Escape", async () => {
+        const maps = [materialMap(1), materialMap(2)];
+        const wrapper = mountMultiples({ maps, pages: 1 });
+        const dialog = dialogOf(wrapper);
+        expect(dialog.element.open).toBe(false);
+        const trigger = enlargeButton(wrapper, 1);
+        trigger.focus();
+        trigger.click();
+        await flushPromises();
+        const drawing = wrapper.get(".series-map-dialog .drawing").element;
+        expect(dialog.element.open).toBe(true);
+        expect(dialog.attributes("aria-label")).toBe("Material 2");
+        expect(wrapper.emitted("enlarge-snapshot")).toEqual([
+            [{ width: 960, height: 600 }],
+        ]);
+        expect(drawing.querySelector("svg")?.getAttribute("viewBox")).toBe(
+            "0 0 960 600",
+        );
+        expect(document.documentElement.style.overflow).toBe("hidden");
+        expect(document.activeElement?.getAttribute("data-action")).toBe(
+            "close",
+        );
+        pressEscape(dialog.element);
+        await flushPromises();
+        expect(dialog.element.open).toBe(false);
+        expect(document.activeElement).toBe(trigger);
+        expect(document.documentElement.style.overflow).toBe("");
+    });
+
+    it("measures the drawing box of the dialog for the snapshot, and draws the large snapshot once it comes", async () => {
+        const measured = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockImplementation(function (this: HTMLElement) {
+                return (
+                    this.classList.contains("drawing")
+                        ? { width: 1200.4, height: 700 }
+                        : { width: 0, height: 0 }
+                ) as DOMRect;
+            });
+        const wrapper = mountMultiples({
+            background: { url: "data:image/png;base64,small", bounds: BOUNDS },
+        });
+        enlargeButton(wrapper).click();
+        await flushPromises();
+        measured.mockRestore();
+        const drawing = wrapper.get(".series-map-dialog .drawing").element;
+        expect(wrapper.emitted("enlarge-snapshot")).toEqual([
+            [{ width: 1200, height: 700 }],
+        ]);
+        expect(drawing.querySelector("image")?.getAttribute("href")).toBe(
+            "data:image/png;base64,small",
+        );
+        await wrapper.setProps({
+            largeBackground: {
+                url: "data:image/png;base64,large",
+                bounds: BOUNDS,
+            },
+        });
+        expect(drawing.querySelector("image")?.getAttribute("href")).toBe(
+            "data:image/png;base64,large",
+        );
+        expect(drawing.querySelector("circle.dot")?.getAttribute("r")).toBe(
+            "7",
+        );
+    });
+
+    it("steps through the series with the arrows and the buttons", async () => {
+        const maps = [materialMap(1), materialMap(2), materialMap(3)];
+        const wrapper = mountMultiples({ maps });
+        enlargeButton(wrapper).click();
+        await flushPromises();
+        const dialog = dialogOf(wrapper);
+        const title = () => wrapper.get(".series-map-dialog .title").text();
+        expect(title()).toBe("Material 1");
+        expect(
+            dialog.get("[data-action='previous']").attributes("aria-disabled"),
+        ).toBe("true");
+        await dialog.trigger("keydown", { key: "ArrowRight" });
+        expect(title()).toBe("Material 2");
+        await dialog.get("[data-action='next']").trigger("click");
+        expect(title()).toBe("Material 3");
+        expect(wrapper.get(".series-map-dialog .position").text()).toBe(
+            "Map 3 of 3",
+        );
+        await dialog.trigger("keydown", { key: "ArrowRight" });
+        expect(title()).toBe("Material 3");
+        await dialog.trigger("keydown", { key: "ArrowLeft" });
+        expect(title()).toBe("Material 2");
+        expect(wrapper.emitted("enlarge-snapshot")).toHaveLength(1);
+    });
+
+    it("closes with « Show on the map » and emits the map shown", async () => {
+        const maps = [materialMap(1), materialMap(2)];
+        const wrapper = mountMultiples({ maps });
+        enlargeButton(wrapper, 1).click();
+        await flushPromises();
+        const show = wrapper.get(".series-map-dialog .show");
+        expect(show.text()).toBe("Show on the map");
+        await show.trigger("click");
+        await flushPromises();
+        expect(wrapper.emitted("show")).toEqual([[maps[1]]]);
+        expect(dialogOf(wrapper).element.open).toBe(false);
     });
 });

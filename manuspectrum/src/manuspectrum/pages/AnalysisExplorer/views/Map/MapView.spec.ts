@@ -7,6 +7,7 @@ import PrimeVue from "primevue/config";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import MapView from "@/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue";
+import MapTimeline from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import {
@@ -21,18 +22,25 @@ import {
     mapPlace,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
-import { FakeMap } from "@/manuspectrum/pages/AnalysisExplorer/testing/maplibre.ts";
+import { installDialog } from "@/manuspectrum/pages/AnalysisExplorer/testing/dialog.ts";
+import {
+    FakeMap,
+    SNAPSHOT_URL,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/maplibre.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 import {
     BORDERS_LAYER,
+    OHM_LAYERS,
     TERRITORIES_SOURCE,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
+import { toMercator } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 
 import type { Pinia } from "pinia";
 import type { VueWrapper } from "@vue/test-utils";
 import type {
     EventsResponse,
     Label,
+    MapEvent,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 const webgl = vi.hoisted(() => ({ available: true }));
@@ -54,6 +62,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 const LAPIS = "http://material.test/lapis";
+const LARGE_SNAPSHOT = "data:image/png;base64,LARGE";
 const PARIS = uuid(10);
 const ROUEN = uuid(11);
 
@@ -215,7 +224,7 @@ describe("MapView", () => {
         expect(modeButton(view, "Places").attributes("aria-pressed")).toBe(
             "true",
         );
-        await modeButton(view, "Small multiples").trigger("click");
+        await modeButton(view, "Map series").trigger("click");
         expect(store.mapState.mode).toBe("multiples");
         expect(announce).toHaveBeenCalled();
         await flushPromises();
@@ -330,6 +339,34 @@ describe("MapView", () => {
         expect(store.filters.eventType).toEqual([]);
     });
 
+    it("keeps the approximate dates while ticked, and leaves their events off the map and the timeline when unticked", async () => {
+        const base = response();
+        base.events[1].date = { start: 1401, end: 1450, approximate: true };
+        fetchMock.mockImplementation(async () => jsonResponse(base));
+        const view = await mountView();
+        const box = view.get(".value.approximate input[type='checkbox']");
+        expect(view.get(".value.approximate").text()).toBe(
+            "Include approximate dates (“c.”)",
+        );
+        expect((box.element as HTMLInputElement).checked).toBe(true);
+        const rouen = `.place-list [data-place='${ROUEN}']`;
+        expect(view.find(rouen).exists()).toBe(true);
+        const timeline = view.getComponent(MapTimeline);
+        expect(timeline.props("events")).toHaveLength(3);
+        await box.setValue(false);
+        await flushPromises();
+        expect(view.find(rouen).exists()).toBe(false);
+        expect(view.find(`.place-list [data-place='${PARIS}']`).exists()).toBe(
+            true,
+        );
+        expect(
+            timeline.props("events").map((event: MapEvent) => event.id),
+        ).not.toContain("production:d2:p2");
+        expect(
+            view.findAll(".event-types input[type='checkbox']"),
+        ).toHaveLength(3);
+    });
+
     it("lists the four reliability levels, all ticked, and drops a level's materials when unticked", async () => {
         const level = (id: string, name: string, rank: number) => ({
             id,
@@ -407,7 +444,7 @@ describe("MapView", () => {
         const map = FakeMap.last();
         const hint = view.get(".stage-head .borders-hint");
         expect(hint.text()).toBe(
-            "Narrow the period with the timeline slider to see its borders.",
+            "Narrow the period on the timeline to see its borders.",
         );
         expect(hint.element.previousElementSibling?.classList).toContain(
             "unplaced",
@@ -421,11 +458,9 @@ describe("MapView", () => {
         expect(view.find(".borders").text()).toContain(
             "Historical borders (1350)",
         );
-        expect(map.layoutCalls.at(-1)).toEqual([
-            BORDERS_LAYER,
-            "visibility",
-            "visible",
-        ]);
+        expect(map.layoutCalls.slice(-2)).toEqual(
+            OHM_LAYERS.map((id) => [id, "visibility", "visible"]),
+        );
     });
 
     it("folds the legend by default and keeps the reader's choice across modes", async () => {
@@ -435,7 +470,7 @@ describe("MapView", () => {
         expect(toggle().attributes("aria-expanded")).toBe("false");
         await toggle().trigger("click");
         expect(store.mapState.legend).toBe(true);
-        await modeButton(view, "Small multiples").trigger("click");
+        await modeButton(view, "Map series").trigger("click");
         await modeButton(view, "Places").trigger("click");
         await flushPromises();
         expect(toggle().attributes("aria-expanded")).toBe("true");
@@ -544,7 +579,7 @@ describe("MapView", () => {
         const store = useExplorerStore();
         const view = await mountView();
         const map = FakeMap.last();
-        await modeButton(view, "Small multiples").trigger("click");
+        await modeButton(view, "Map series").trigger("click");
         await flushPromises();
         const fits = () =>
             map.fitCalls.filter(([, options]) => options?.padding === 0);
@@ -570,11 +605,92 @@ describe("MapView", () => {
         expect(south).toBeLessThan(north);
     });
 
+    it("enlarges a map of the series on a snapshot taken at the dialog's size, then shows its material alone on the map", async () => {
+        const restore = installDialog();
+        try {
+            const store = useExplorerStore();
+            const view = await mountView();
+            const map = FakeMap.last();
+            await modeButton(view, "Map series").trigger("click");
+            await flushPromises();
+            map.fire("idle");
+            await flushPromises();
+            const fits = () =>
+                map.fitCalls.filter(([, options]) => options?.padding === 0);
+            expect(fits()).toHaveLength(1);
+            view.get<HTMLButtonElement>(
+                ".small-multiples [data-action='enlarge']",
+            ).element.click();
+            await flushPromises();
+            expect(fits()).toHaveLength(2);
+            const [[west, south], [east, north]] = fits()[1][0] as [
+                [number, number],
+                [number, number],
+            ];
+            const [x0, y0] = toMercator([west, south]);
+            const [x1, y1] = toMercator([east, north]);
+            expect((x1 - x0) / (y1 - y0)).toBeCloseTo(960 / 600, 3);
+            const dialog = view.get(".series-map-dialog");
+            expect(dialog.get(".drawing image").attributes("href")).toBe(
+                SNAPSHOT_URL,
+            );
+            map.canvas.toDataURL = () => LARGE_SNAPSHOT;
+            map.fire("idle");
+            await flushPromises();
+            expect(dialog.get(".drawing image").attributes("href")).toBe(
+                LARGE_SNAPSHOT,
+            );
+            await dialog.get(".show").trigger("click");
+            await flushPromises();
+            expect(store.filters.material).toEqual([LAPIS]);
+            expect(store.mapState.mode).toBe("places");
+        } finally {
+            restore();
+        }
+    });
+
+    it("leaves out of the series, and of its pages, a ticked material attested at no mapped place", async () => {
+        const store = useExplorerStore();
+        store.setFilter("material", [
+            LAPIS,
+            ...Array.from(
+                { length: 12 },
+                (_, n) => `http://material.test/none-${n}`,
+            ),
+        ]);
+        store.setMapState({ mode: "multiples" });
+        const view = await mountView();
+        const titles = view
+            .findAll(".small-multiples figure .title")
+            .map((title) => title.text());
+        expect(titles).toEqual(["Lapis lazuli"]);
+        expect(view.find(".small-multiples .pager").exists()).toBe(false);
+    });
+
+    it("shows a century of the series as the period on the map", async () => {
+        const restore = installDialog();
+        try {
+            const store = useExplorerStore();
+            store.setMapState({ mode: "multiples", multiples: "century" });
+            const view = await mountView();
+            view.get<HTMLButtonElement>(
+                ".small-multiples [data-action='enlarge']",
+            ).element.click();
+            await flushPromises();
+            await view.get(".series-map-dialog .show").trigger("click");
+            await flushPromises();
+            expect(store.mapState.brush).toEqual([1301, 1400]);
+            expect(store.mapState.mode).toBe("places");
+        } finally {
+            restore();
+        }
+    });
+
     it("keeps only the answer of the newest snapshot ask", async () => {
         const store = useExplorerStore();
         const view = await mountView();
         const map = FakeMap.last();
-        await modeButton(view, "Small multiples").trigger("click");
+        await modeButton(view, "Map series").trigger("click");
         await flushPromises();
         store.setMapState({ radius: 300 });
         await flushPromises();
@@ -590,7 +706,7 @@ describe("MapView", () => {
         const store = useExplorerStore();
         const view = await mountView();
         const map = FakeMap.last();
-        await modeButton(view, "Small multiples").trigger("click");
+        await modeButton(view, "Map series").trigger("click");
         await flushPromises();
         store.setMapState({ radius: 300 });
         await flushPromises();
@@ -602,11 +718,40 @@ describe("MapView", () => {
         expect(map.fitCalls).toHaveLength(fits);
     });
 
-    it("says which third-party services the map calls", async () => {
+    it("credits the map's sources in one line under the map, OpenHistoricalMap only while its borders show", async () => {
+        const store = useExplorerStore();
         const view = await mountView();
-        expect(view.find(".third-party").text()).toBe(
-            "Background tiles: OpenFreeMap © OpenMapTiles, data from OpenStreetMap; historical borders: OpenHistoricalMap contributors. These services receive your IP address when the map loads.",
+        expect(view.find(".third-party").exists()).toBe(false);
+        const credits = view.get(".stage > .frame + .credits");
+        expect(credits.text()).toBe(
+            "© OpenStreetMap contributors(new tab) · © OpenMapTiles(new tab) · OpenFreeMap(new tab)",
         );
+        expect(
+            credits
+                .findAll("a")
+                .map((link) => [
+                    link.attributes("href"),
+                    link.attributes("rel"),
+                    link.attributes("target"),
+                ]),
+        ).toEqual([
+            ["https://www.openstreetmap.org/copyright", "noopener", "_blank"],
+            ["https://www.openmaptiles.org/", "noopener", "_blank"],
+            ["https://openfreemap.org/", "noopener", "_blank"],
+        ]);
+        store.setMapState({ borders: true });
+        await flushPromises();
+        expect(credits.findAll("a")).toHaveLength(3);
+        store.setMapState({ brush: [1301, 1400] });
+        await flushPromises();
+        const ohm = view.findAll(".credits a")[3];
+        expect(ohm.get("span").text()).toBe(
+            "© OpenHistoricalMap contributors",
+        );
+        expect(ohm.attributes("href")).toBe(
+            "https://www.openhistoricalmap.org/copyright",
+        );
+        expect(FakeMap.last().options.attributionControl).toBe(false);
     });
 
     it("says when no event is kept, with a way out per filter", async () => {
