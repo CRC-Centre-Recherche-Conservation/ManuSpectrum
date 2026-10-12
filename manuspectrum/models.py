@@ -261,3 +261,35 @@ class TermsAcceptance(models.Model):
 
     def __str__(self):
         return f"{self.user_id} {self.version}"
+
+
+class AccountRetention(models.Model):
+    """Ledger of one account's retention: noticed, then anonymised.
+
+    ``user_id`` has no foreign key and nothing personal is stored: the row
+    outlives the anonymisation and says only that it happened, and on which day.
+    ``noticed_for`` is the day of the account's last activity when the notice
+    went; a later activity makes the notice void. ``listed_on`` marks a
+    superuser already reported to the administrators for a human decision.
+    """
+
+    user_id = models.IntegerField(unique=True, verbose_name=_("User"))
+    noticed_on = models.DateField(null=True, blank=True, verbose_name=_("Notice sent"))
+    noticed_for = models.DateField(
+        null=True, blank=True, verbose_name=_("Last activity at the notice")
+    )
+    listed_on = models.DateField(
+        null=True, blank=True, verbose_name=_("Reported to the administrators")
+    )
+    anonymised_on = models.DateField(
+        null=True, blank=True, verbose_name=_("Anonymised on")
+    )
+
+    class Meta:
+        db_table = "ms_account_retention"
+        ordering = ("-pk",)
+        verbose_name = _("account retention")
+        verbose_name_plural = _("account retentions")
+
+    def __str__(self):
+        return f"{self.user_id}"

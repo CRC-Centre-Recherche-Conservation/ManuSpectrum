@@ -181,6 +181,7 @@ ACTIVITY = {
         "never-used": {"started": 0, "completed": 0, "open": 0, "stale": 0},
     },
     "workflow_stale_after_days": 30,
+    "accounts_anonymised": 2,
     "inactive_accounts": {
         "dormant": [["old.curator", "2025-09-04", "2024-04-22"]],
         "never": [["invited.guest", None, "2026-06-30"]],
@@ -512,7 +513,10 @@ class MonthlyReport(unittest.TestCase):
         self.assertIn(
             "invited.guest : dernière connexion jamais, créé le 30 juin 2026", text
         )
-        self.assertIn("la désactivation se décide à la main", text)
+        self.assertIn(
+            "comptes anonymisés dans le mois (24 mois sans connexion) : 2", text
+        )
+        self.assertIn("la désactivation à 12 mois se décide à la main", text)
 
     def test_no_inactive_account_reads_zero(self):
         quiet = {**ACTIVITY, "inactive_accounts": {"dormant": [], "never": []}}

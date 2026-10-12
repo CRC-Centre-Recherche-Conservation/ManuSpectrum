@@ -247,8 +247,12 @@ database, aggregates only (see "Activity" below).
 visitor excluded) with no sign-in for 12 months, and those that never signed in 3 months after their
 creation (an invitation never activated counts there), each with its user name, last sign-in (or
 "jamais") and creation date. They come from `activity_summary` (key `inactive_accounts`) and go to
-`ALERT_EMAILS` only. Nothing is deactivated or deleted by the platform: deactivation is the
-administrators' decision, by hand.
+`ALERT_EMAILS` only. At 12 months nothing is changed: deactivation is the administrators'
+decision, by hand. At 24 months the daily retention pass anonymises the account (never a
+deletion, `ADMIN.md`); the section also gives the number of accounts anonymised in the month
+(`accounts_anonymised`, read from the `ms_account_retention` ledger). The pass is watched by
+`manuspectrum_account_anonymisations_total{outcome}` (`AccountRetentionFailures`) and
+`manuspectrum_account_retention_timestamp_seconds` (`AccountRetentionStale`).
 **Active accounts** read `manuspectrum_active_accounts`: one number, no label, the
 active accounts (staff and superusers included, the `anonymous` visitor not) whose last
 login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)

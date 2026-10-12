@@ -21,7 +21,10 @@ Context per kind (`resources` and `kept` are lists of `{"name", "url"}`,
 - `workflow_notice`: `workflow` (label), `cleanup_on` (date), `days`, `resources`.
 - `workflow_cleaned`: `workflow`, `deleted`, `kept`.
 - `invitation`: `link` (personal, time-limited), `expires_on` (date).
-- `stale_report`: `count`, `months`; administrators only.
+- `anonymisation_notice`: `on` (date), `days`, `review` (True for a superuser,
+  whose account is not anonymised automatically).
+- `anonymisation_summary`: `months`, `anonymised` (count), `noticed` (count),
+  `review` (usernames of superusers due for a decision); administrators only.
 - `password_reset` is sent by `AccountPasswordResetForm`.
 """
 
@@ -53,7 +56,8 @@ KINDS = {
     "workflow_notice": Kind(to_user=True, summary=True),
     "workflow_cleaned": Kind(to_user=True, summary=True),
     "invitation": Kind(to_user=True, summary=False),
-    "stale_report": Kind(to_user=False, summary=True),
+    "anonymisation_notice": Kind(to_user=True, summary=False),
+    "anonymisation_summary": Kind(to_user=False, summary=True),
     "password_reset": Kind(to_user=True, summary=False),
 }
 
@@ -156,18 +160,56 @@ def _invitation(ctx):
     }
 
 
-def _stale_report(ctx):
-    return {
-        "subject": _("Accounts without sign-in"),
-        "paragraphs": [
+def _anonymisation_notice(ctx):
+    if ctx.get("review"):
+        paragraphs = [
             _(
-                "%(count)s accounts have not signed in for %(months)s months "
-                "(or never signed in since their creation). Nothing was changed: "
-                "deactivating an account is a decision of the administrators."
+                "This account has not been used for a long time. On %(date)s the "
+                "administrators decide what happens to it."
             )
-            % {"count": ctx["count"], "months": ctx["months"]}
-        ],
+            % {"date": _day(ctx["on"])},
+            _("Sign in before that date to keep it as it is."),
+        ]
+    else:
+        paragraphs = [
+            _(
+                "You have not signed in to ManuSpectrum for a long time. On "
+                "%(date)s, %(days)s days from now, your account will be "
+                "anonymised: your name, e-mail address and password are erased "
+                "and the account is closed. Nothing you described is deleted."
+            )
+            % {"date": _day(ctx["on"]), "days": ctx["days"]},
+            _("Sign in before that date to keep your account."),
+        ]
+    return {
+        "subject": _("Your account will be anonymised on %(date)s")
+        % {"date": _day(ctx["on"])},
+        "paragraphs": paragraphs,
     }
+
+
+def _anonymisation_summary(ctx):
+    paragraphs = [
+        _(
+            "Accounts without sign-in for %(months)s months: %(anonymised)s "
+            "anonymised, %(noticed)s newly warned."
+        )
+        % {
+            "months": ctx["months"],
+            "anonymised": ctx["anonymised"],
+            "noticed": ctx["noticed"],
+        }
+    ]
+    review = ctx.get("review", [])
+    if review:
+        paragraphs.append(
+            _(
+                "Superuser accounts due for a human decision (never anonymised "
+                "automatically): %(accounts)s."
+            )
+            % {"accounts": ", ".join(review)}
+        )
+    return {"subject": _("Accounts without sign-in"), "paragraphs": paragraphs}
 
 
 CONTENT = {
@@ -176,7 +218,8 @@ CONTENT = {
     "workflow_notice": _workflow_notice,
     "workflow_cleaned": _workflow_cleaned,
     "invitation": _invitation,
-    "stale_report": _stale_report,
+    "anonymisation_notice": _anonymisation_notice,
+    "anonymisation_summary": _anonymisation_summary,
 }
 
 
@@ -261,14 +304,19 @@ def _skip(kind):
     return SKIPPED
 
 
-def send_account_mail(user, kind, context):
+def send_account_mail(user, kind, context, *, allow_inactive=False):
     """Write one notice to *user*; returns `sent`, `failed` or `skipped`.
 
-    An absent, inactive or address-less account is skipped.
+    An absent, inactive or address-less account is skipped; *allow_inactive*
+    keeps a deactivated account that still has an address.
     """
     if kind not in KINDS or not KINDS[kind].to_user or kind not in CONTENT:
         raise ValueError(f"Not an account-mail kind: {kind!r}")
-    if user is None or not user.is_active or not (user.email or "").strip():
+    if (
+        user is None
+        or not (user.is_active or allow_inactive)
+        or not (user.email or "").strip()
+    ):
         return _skip(kind)
     sections = _sections(
         kind, context, user.get_full_name() or user.get_username(), False
@@ -285,7 +333,7 @@ def send_summary_mail(kind, context):
         raise ValueError(f"No administrator summary for: {kind!r}")
     outcomes = []
     for address in getattr(settings, "ACCOUNT_SUMMARY_RECIPIENTS", []):
-        sections = _sections(kind, context, "", kind != "stale_report")
+        sections = _sections(kind, context, "", KINDS[kind].to_user)
         outcomes.append(deliver(kind, build_message(sections, address)))
     return outcomes
 

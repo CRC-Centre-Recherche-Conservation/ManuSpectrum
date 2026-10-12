@@ -175,6 +175,22 @@ def workflow_cleanup_pass_task():
     }
 
 
+@shared_task(name="manuspectrum.account_retention_pass")
+def account_retention_pass_task():
+    """Run the daily inactive-account pass (accounts/retention.py); returns the counts."""
+    from manuspectrum.accounts.retention import run_pass
+
+    report = run_pass()
+    return {
+        "locked": report.locked,
+        "noticed": len(report.noticed),
+        "reset": len(report.reset),
+        "anonymised": len(report.anonymised),
+        "superusers_due": len(report.superusers_due),
+        "failed": len(report.failed),
+    }
+
+
 @shared_task(name="manuspectrum.record_activity")
 def record_activity_task():
     """Refresh the activity gauges (resources, last 24 hours, open workflows)."""

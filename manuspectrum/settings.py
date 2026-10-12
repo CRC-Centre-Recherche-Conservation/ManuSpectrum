@@ -537,6 +537,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "manuspectrum.workflow_cleanup_pass",
         "schedule": crontab(hour=3, minute=30),
     },
+    # Notices and anonymisation of long-inactive accounts at 04:30 Europe/Paris
+    # (accounts/retention.py).
+    "account-retention-pass": {
+        "task": "manuspectrum.account_retention_pass",
+        "schedule": crontab(hour=4, minute=30),
+    },
     # Login records older than LOGIN_RECORDS_RETENTION_DAYS.
     "prune-login-records": {
         "task": "manuspectrum.prune_login_records",
@@ -1051,6 +1057,11 @@ EMBARGO_NOTICE_DAYS = (30, 7)
 # before.
 WORKFLOW_CLEANUP_AFTER_DAYS = 90
 WORKFLOW_NOTICE_DAYS = (21, 7)
+# An account with no sign-in for this many months (or, never signed in, none
+# since its creation) is anonymised, never deleted (accounts/retention.py); its
+# owner is told this many days before. Superusers are listed, never anonymised.
+ACCOUNT_RETENTION_MONTHS = 24
+ACCOUNT_RETENTION_NOTICE_DAYS = 30
 
 try:
     from .package_settings import *

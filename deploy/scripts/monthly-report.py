@@ -121,6 +121,7 @@ class Activity:
                 if not isinstance(data[key], dict):
                     raise TypeError(key)
             int(data["workflow_stale_after_days"])
+            int(data["accounts_anonymised"])
             for rows in data["inactive_accounts"].values():
                 for username, last_login, joined in rows:
                     str(username), str(joined)
@@ -813,9 +814,13 @@ def inactive_accounts(activity):
             lines.append(
                 f"  {username} : dernière connexion {last}, créé le {french_date(joined)}"
             )
+    anonymised = int(activity.get()["accounts_anonymised"])
     lines.append(
-        "(information seule : la désactivation se décide à la main, "
-        "aucun compte n'est supprimé)"
+        f"comptes anonymisés dans le mois (24 mois sans connexion) : {anonymised}"
+    )
+    lines.append(
+        "(la désactivation à 12 mois se décide à la main ; à 24 mois le compte est "
+        "anonymisé automatiquement, jamais supprimé)"
     )
     return lines
 

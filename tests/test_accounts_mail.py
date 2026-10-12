@@ -28,6 +28,15 @@ CONTEXTS = {
         "link": "https://manuspectrum.test/en/activate/abc-token",
         "expires_on": date.today() + timedelta(days=7),
     },
+    "anonymisation_notice": {"on": date(2027, 3, 1), "days": 30},
+}
+SUMMARY_CONTEXTS = {
+    "anonymisation_summary": {
+        "months": 24,
+        "anonymised": 2,
+        "noticed": 1,
+        "review": ["root"],
+    }
 }
 
 
@@ -181,7 +190,10 @@ class AccountMailTests(TestCase):
     @override_settings(ACCOUNT_SUMMARY_RECIPIENTS=[])
     def test_no_summary_recipient_sends_nothing(self):
         self.assertEqual(
-            notices.send_summary_mail("stale_report", {"count": 3, "months": 12}), []
+            notices.send_summary_mail(
+                "anonymisation_summary", SUMMARY_CONTEXTS["anonymisation_summary"]
+            ),
+            [],
         )
         self.assertEqual(mail.outbox, [])
 
@@ -189,7 +201,7 @@ class AccountMailTests(TestCase):
         with self.assertRaises(ValueError):
             notices.send_account_mail(self.user, "newsletter", {})
         with self.assertRaises(ValueError):
-            notices.send_account_mail(self.user, "stale_report", {})
+            notices.send_account_mail(self.user, "anonymisation_summary", {})
         with self.assertRaises(ValueError):
             notices.send_summary_mail("invitation", CONTEXTS["invitation"])
 

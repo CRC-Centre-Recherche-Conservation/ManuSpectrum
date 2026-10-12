@@ -33,6 +33,8 @@ class LegalPageView(TemplateView):
             embargo_notice_days_text=_days_text(settings.EMBARGO_NOTICE_DAYS),
             workflow_cleanup_days=settings.WORKFLOW_CLEANUP_AFTER_DAYS,
             workflow_notice_days_text=_days_text(settings.WORKFLOW_NOTICE_DAYS),
+            account_retention_months=settings.ACCOUNT_RETENTION_MONTHS,
+            account_notice_days=settings.ACCOUNT_RETENTION_NOTICE_DAYS,
             session_cookie_name=settings.SESSION_COOKIE_NAME,
             csrf_cookie_name=settings.CSRF_COOKIE_NAME,
             language_cookie_name=settings.LANGUAGE_COOKIE_NAME,

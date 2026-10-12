@@ -193,3 +193,27 @@ Restart the application containers (`make -C deploy restart`), then run the pass
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## AccountRetentionStale
+
+Severity: warning. The daily inactive-account pass has not completed for more than two days: accounts without sign-in are neither warned nor anonymised.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+No "Your account will be anonymised" mail went out; the administrators received no summary.
+
+### Diagnosis
+
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.account_retention_pass` (scheduled at 04:30 Europe/Paris, entry `account-retention-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails.
+
+### Remediation
+
+Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="anonymise_inactive_accounts"` lists, by user id, what it would do, and `--apply` does it. The pass is idempotent: a notice goes once and an account is anonymised once.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

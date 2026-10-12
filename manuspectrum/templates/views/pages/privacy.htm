@@ -51,7 +51,13 @@
         </tr>
         <tr>
             <th scope="row">{% trans "Accounts" %}</th>
-            <td>{% trans "Kept while the contributor works on the platform. An account is deactivated, never deleted, so that the history of the data keeps its author." %}</td>
+            <td>{% blocktrans trimmed with months=account_retention_months days=account_notice_days %}
+                Kept while the contributor works on the platform. An account without a sign-in for {{ months }} months
+                is anonymised, {{ days }} days after a notice sent to its e-mail address: the name, the e-mail address and
+                the password are erased and the account is closed. An account is never deleted, so that the history of the
+                data keeps its author. In the edit history, the e-mail address is erased and the name stays as credit for
+                the contribution.
+                {% endblocktrans %}</td>
         </tr>
         <tr>
             <th scope="row">{% trans "History of the data" %}</th>
@@ -66,6 +72,14 @@
 
 <h2>{% trans "Recipients" %}</h2>
 <p>{% trans "The administrators and the team of the Centre de recherche sur la conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, and no data is given to advertisers." %}</p>
+
+<h2 id="third-party-services">{% trans "Third-party services" %}</h2>
+<p>{% trans "The Map view of the Explorer makes your browser load resources from two third parties. They therefore receive your IP address, your user agent and the referer of the request. No cookie is set and nothing is stored on your device. No other page and no other Explorer view calls these hosts." %}</p>
+<ul>
+    <li>{% trans "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of the base map, loaded whenever the Map view is opened. Data © OpenMapTiles, © OpenStreetMap contributors." %}</li>
+    <li>{% trans "OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and names of political entities, loaded only when you tick « Historical borders ». Data © OpenHistoricalMap contributors." %}</li>
+</ul>
+<p>{% trans "Purpose: to display the base map and, on request, historical borders. Legal basis: legitimate interest (GDPR, article 6(1)(f))." %}</p>
 
 <h2>{% trans "Transfers outside the European Union" %}</h2>
 <p>{% trans "None. The platform is hosted in France." %}</p>

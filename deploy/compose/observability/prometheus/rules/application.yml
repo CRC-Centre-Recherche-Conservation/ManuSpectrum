@@ -91,3 +91,14 @@ groups:
           summary: "An abandoned workflow could not be cleaned"
           description: "{{ $value | humanize }} cleanups of {{ $labels.kind }} runs failed in the last 64 hours; their drafts stay in place and the next pass retries."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#workflowcleanupfailures
+      - alert: AccountRetentionFailures
+        expr: |
+          sum(increase(manuspectrum_account_anonymisations_total{outcome="failed"}[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "An inactive account could not be anonymised"
+          description: "{{ $value | humanize }} account anonymisations failed in the last 64 hours; the accounts are unchanged and the next daily pass retries."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#accountretentionfailures

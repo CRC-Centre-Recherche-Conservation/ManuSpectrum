@@ -88,3 +88,20 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="WorkflowCleanupFailures", alertstate="firing", kind="import-biblissima-workflow", service="application", severity="warning"}
       value: 1
+
+- name: a failed account anonymisation warns, a successful one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_account_anonymisations_total{instance="worker:9808", outcome="failed"}
+    values: 0x10 1x120
+  - series: manuspectrum_account_anonymisations_total{instance="worker:9808", outcome="anonymised"}
+    values: 0x10 4x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="AccountRetentionFailures", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionFailures", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="AccountRetentionFailures", alertstate="firing", service="application", severity="warning"}
+      value: 1

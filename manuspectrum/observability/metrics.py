@@ -101,7 +101,8 @@ ACCOUNT_MAIL_KINDS = (
     "workflow_notice",
     "workflow_cleaned",
     "invitation",
-    "stale_report",
+    "anonymisation_notice",
+    "anonymisation_summary",
     "password_reset",
 )
 ACCOUNT_MAIL_OUTCOMES = ("sent", "failed", "skipped")
@@ -160,6 +161,7 @@ WORKFLOW_KINDS = ("create-project-workflow", "import-biblissima-workflow")
 WORKFLOW_STATES = ("open", "stale")
 WORKFLOW_CLEANUP_OUTCOMES = ("cleaned", "kept_resources", "failed")
 WORKFLOW_CLEANUP_RESOURCE_OUTCOMES = ("deleted", "kept")
+ACCOUNT_ANONYMISATION_OUTCOMES = ("anonymised", "failed")
 READYZ_COMPONENTS = (
     "postgres",
     "elasticsearch",
@@ -286,6 +288,11 @@ WORKFLOW_CLEANUPS = Counter(
 WORKFLOW_CLEANUP_RESOURCES = Counter(
     "manuspectrum_workflow_cleanup_resources",
     "Resources created by an abandoned workflow run, deleted or kept by the cleanup.",
+    ["outcome"],
+)
+ACCOUNT_ANONYMISATIONS = Counter(
+    "manuspectrum_account_anonymisations",
+    "Inactive accounts anonymised by the retention pass, by outcome.",
     ["outcome"],
 )
 SPECTRUM_PREVIEWS = Counter(
@@ -450,6 +457,11 @@ EMBARGO_PASS_TIMESTAMP = gauge(
 WORKFLOW_CLEANUP_TIMESTAMP = gauge(
     "manuspectrum_workflow_cleanup_timestamp_seconds",
     "Unix time of the last completed abandoned-workflow cleanup pass.",
+    mode="mostrecent",
+)
+ACCOUNT_RETENTION_TIMESTAMP = gauge(
+    "manuspectrum_account_retention_timestamp_seconds",
+    "Unix time of the last completed inactive-account retention pass.",
     mode="mostrecent",
 )
 RESOURCES = gauge(

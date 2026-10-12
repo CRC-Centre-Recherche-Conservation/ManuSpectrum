@@ -81,8 +81,27 @@ The admin lists each acceptance (user, version, date) under "Terms acceptances".
 The monthly report (`OBSERVABILITY.md`) has an "Comptes inactifs" section: the active accounts
 (not `anonymous`) with no sign-in for 12 months, and those that never signed in 3 months after
 they were created (an invitation never activated counts there), with user name, last sign-in
-or "jamais", and creation date. Nothing is done automatically. Deactivation is a decision of
-the project owner, taken by hand in the admin (untick "Active"); an account is never deleted.
+or "jamais", and creation date. At 12 months nothing is done automatically: deactivating an
+account is a decision of the project owner, taken by hand in the admin (untick "Active").
+
+At 24 months without a sign-in (`ACCOUNT_RETENTION_MONTHS`; a never-used account counts from
+its creation) an account is **anonymised** by the daily pass (04:30 Europe/Paris), after one
+notice mailed 30 days before (`ACCOUNT_RETENTION_NOTICE_DAYS`). A sign-in after the notice
+cancels it. Anonymising never deletes: first and last name and e-mail are cleared, the user
+name becomes `former-user-<id>`, the password is unusable, the two-factor secret and phone
+are cleared, the account is deactivated, its sessions and sign-in records are removed, and in
+the edit history the e-mail is erased while the name stays as contribution credit.
+Permissions, groups, accepted terms and Person resources stay. The `ms_account_retention`
+ledger keeps the user id and the dates, no personal data.
+
+Superusers are warned and listed once in the administrators' summary (`ALERT_EMAILS`), and
+are never anonymised by the pass: the decision is human. The monthly report counts the
+accounts anonymised in the month.
+
+- **Dry run.** `make -C deploy manage ARGS="anonymise_inactive_accounts"` lists, by user id,
+  the notices and anonymisations the pass would make and writes and sends nothing; `--apply`
+  runs the pass.
+- Alerts: `AccountRetentionFailures`, `AccountRetentionStale`.
 
 ## Restrictions (embargoes)
 
@@ -127,9 +146,9 @@ CNRS (legal notice, `/<lang>/about/legal`).
 
 | Processing | Data | Purpose | Retention |
 | --- | --- | --- | --- |
-| Accounts | User name, e-mail, name, password hash (Argon2), groups, two-factor secret (encrypted), acceptance of the terms with its version and date | Give access to describe and edit analyses | While the account is active; deactivated by hand, never deleted automatically |
+| Accounts | User name, e-mail, name, password hash (Argon2), groups, two-factor secret (encrypted), acceptance of the terms with its version and date | Give access to describe and edit analyses | Until 24 months without sign-in (`ACCOUNT_RETENTION_MONTHS`), then anonymised after a notice 30 days before; never deleted. Superusers are never anonymised automatically |
 | Login records | Sign-in successes and failures with the user name, address and time (django-axes tables) | Security, lockout | 6 months in the database (`LOGIN_RECORDS_RETENTION_DAYS`), then at most 6 months more in the monthly backups |
-| Edit log | Who changed which resource and when (Arches `edit_log`) | Scientific traceability | With the data |
+| Edit log | Who changed which resource and when (Arches `edit_log`) | Scientific traceability | With the data; the e-mail of a contributor is erased when the account is anonymised, the name stays as credit |
 | Person resources | Names and affiliations of people in the scientific records | Attribution of data | With the data |
 | Mails | Invitations and notices (embargo, workflow) to the people concerned; summaries to `ALERT_EMAILS` | Service notices, no unsubscribe link | Not stored by ManuSpectrum (the relay keeps its own logs) |
 | Backups | The whole database, media and secrets, encrypted (restic) | Recovery | 7 daily, 4 weekly, 6 monthly (`BACKUP.md`) |

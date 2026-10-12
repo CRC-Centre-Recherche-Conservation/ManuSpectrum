@@ -41,7 +41,10 @@ The one exception to "counts only" is ``inactive_accounts``: the monthly report 
 by user name the active accounts (``anonymous`` excluded) that signed in last more than
 ``INACTIVE_AFTER_MONTHS`` ago, and those that never signed in
 ``NEVER_SIGNED_IN_AFTER_MONTHS`` after they were created. The report only informs the
-administrators, who deactivate by hand; nothing is deactivated or deleted here.
+administrators, who deactivate by hand; nothing is deactivated or deleted here. The
+anonymisation of accounts idle for ``ACCOUNT_RETENTION_MONTHS`` is the daily retention
+pass (``accounts/retention.py``); ``accounts_anonymised`` counts, from its ledger, the
+accounts anonymised in the window.
 """
 
 import re
@@ -311,6 +314,16 @@ def inactive_accounts(now):
     }
 
 
+def accounts_anonymised(cursor, start, end):
+    """Number of accounts the retention pass anonymised from *start* (included) to *end* (excluded)."""
+    cursor.execute(
+        "SELECT count(*) FROM ms_account_retention "
+        "WHERE anonymised_on >= %(start)s AND anonymised_on < %(end)s",
+        {"start": start.date(), "end": end.date()},
+    )
+    return cursor.fetchone()[0]
+
+
 def collect(start, end, now=None):
     """Every figure for the window, from one read-only transaction.
 
@@ -322,6 +335,7 @@ def collect(start, end, now=None):
         changes = resource_changes(cursor, start, end)
         workflows = workflow_runs(cursor, start, end, now)
         etl = etl_runs(cursor, start, end)
+        anonymised = accounts_anonymised(cursor, start, end)
         inactive = inactive_accounts(now)
     models = {}
     for model in sorted(set(totals) | set(changes)):
@@ -337,6 +351,7 @@ def collect(start, end, now=None):
         "workflow_stale_after_days": settings.WORKFLOW_CLEANUP_AFTER_DAYS,
         "etl": etl,
         "inactive_accounts": inactive,
+        "accounts_anonymised": anonymised,
     }
 
 

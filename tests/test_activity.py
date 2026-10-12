@@ -351,6 +351,22 @@ class InactiveAccountsTests(ActivityCase):
         self.assertFalse(listed & {"anonymous", "gone", "gone_too"})
 
 
+class AccountsAnonymisedTests(ActivityCase):
+    def test_the_month_counts_the_ledger_rows_anonymised_inside_it(self):
+        from manuspectrum.models import AccountRetention
+
+        inside = START.date() + timedelta(days=3)
+        for user_id, day in (
+            (901, inside),
+            (902, inside),
+            (903, START.date() - timedelta(days=1)),
+            (904, END.date()),
+            (905, None),
+        ):
+            AccountRetention.objects.create(user_id=user_id, anonymised_on=day)
+        self.assertEqual(self.figures()["accounts_anonymised"], 2)
+
+
 class ReadOnlyTests(ActivityCase):
     def test_a_write_inside_the_block_is_refused_and_allowed_after_it(self):
         with self.assertRaises(DatabaseError):
@@ -424,6 +440,7 @@ class MonthTests(ActivityCase):
                 "workflow_stale_after_days",
                 "etl",
                 "inactive_accounts",
+                "accounts_anonymised",
             },
         )
 

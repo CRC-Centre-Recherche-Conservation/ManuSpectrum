@@ -100,7 +100,7 @@ The technical lead. If the cause is the host, the network filesystem or the mail
 
 ## AccountMailFailures
 
-Severity: warning. A notice or invitation mail could not be handed to the mail relay in the last 64 hours: an embargo or workflow notice, an account invitation, a password reset or the inactive-accounts report. The pass that sent it carried on, so the person may not have been warned.
+Severity: warning. A notice or invitation mail could not be handed to the mail relay in the last 64 hours: an embargo or workflow notice, an account invitation, an account anonymisation notice or its summary, or a password reset. The pass that sent it carried on, so the person may not have been warned.
 
 ### Prerequisites
 
@@ -189,6 +189,30 @@ The traceback tells the cause: a database error (the run is cleaned in one trans
 ### Remediation
 
 Fix the cause, then run `make -C deploy manage ARGS="prune_workflow_history --apply --workflow <id>"`. Do not delete the run's history row by hand: the cleanup is what removes the drafts it created.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## AccountRetentionFailures
+
+Severity: warning. The anonymisation of an account without sign-in failed at least once in the last 64 hours. The account is rolled back whole (one transaction per account): nothing is half-erased, and the next daily pass retries it.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+The worker logs hold an error line from `manuspectrum.accounts.retention` ("Account retention failed") with the traceback. The administrators' summary counts fewer accounts than the notices announced.
+
+### Diagnosis
+
+The traceback tells the cause, usually a database error on one of the tables the anonymisation touches (user, profile, sessions, sign-in records, `edit_log`). `make -C deploy manage ARGS="anonymise_inactive_accounts"` lists, by user id, the accounts it would notice or anonymise, without touching anything.
+
+### Remediation
+
+Fix the cause, then run `make -C deploy manage ARGS="anonymise_inactive_accounts --apply"`. Do not rename or empty the account by hand: the pass erases the e-mail in the edit history in the same transaction, and a hand-edited account would leave it behind.
 
 ### Escalation
 

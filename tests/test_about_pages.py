@@ -462,6 +462,13 @@ class LegalPagesTests(TestCase):
             self.assertIn(f"<code>{cookie}</code>", html)
         self.assertIn("no tracker", html.lower())
 
+    def test_privacy_names_the_map_third_parties_under_a_stable_anchor(self):
+        for lang, heading in (("en", "Third-party services"), ("fr", "Services tiers")):
+            html = self.get("about-privacy", lang)
+            self.assertIn(f'<h2 id="third-party-services">{heading}</h2>', html)
+            for host in ("tiles.openfreemap.org", "vtiles.openhistoricalmap.org"):
+                self.assertIn(host, html)
+
     def test_privacy_printed_durations_follow_the_settings(self):
         with override_settings(
             LOGIN_RECORDS_RETENTION_DAYS=61,
@@ -469,8 +476,12 @@ class LegalPagesTests(TestCase):
             EMBARGO_NOTICE_DAYS=(40, 9),
             WORKFLOW_CLEANUP_AFTER_DAYS=45,
             WORKFLOW_NOTICE_DAYS=(14, 3),
+            ACCOUNT_RETENTION_MONTHS=18,
+            ACCOUNT_RETENTION_NOTICE_DAYS=21,
         ):
             html = self.get("about-privacy")
+        self.assertIn("without a sign-in for 18 months", html)
+        self.assertIn("is anonymised, 21 days after a notice", html)
         self.assertIn("2 months (61 days)", html)
         self.assertIn("7 months at most", html)
         self.assertIn("40 and 9 days before", html)
@@ -481,6 +492,8 @@ class LegalPagesTests(TestCase):
         html = self.get("about-privacy")
         self.assertIn(f"({settings.LOGIN_RECORDS_RETENTION_DAYS} days)", html)
         self.assertIn(f"{settings.EMBARGO_MAX_MONTHS} months at most", html)
+        self.assertIn("without a sign-in for 24 months", html)
+        self.assertIn("e-mail address is erased and the name stays as credit", html)
 
     def test_terms_open_with_the_warning_and_follow_the_settings(self):
         with override_settings(EMBARGO_MAX_MONTHS=9, WORKFLOW_CLEANUP_AFTER_DAYS=33):

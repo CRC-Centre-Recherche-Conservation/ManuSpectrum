@@ -31,6 +31,7 @@ from pathlib import Path
 # tests/test_smoke_queries.py derives this set from metrics.py and compares.
 LABELLED_APP_METRICS = frozenset(
     {
+        "manuspectrum_account_anonymisations_total",
         "manuspectrum_account_mails_total",
         "manuspectrum_auth_logins_total",
         "manuspectrum_biblissima_cache_total",
