@@ -79,6 +79,7 @@ function events(): MapEvent[] {
                     name: label(NAMES[index]),
                     reliability: null,
                     characterization: uuid(200 + index),
+                    colours: [],
                     matches: true,
                 },
             ],
@@ -197,6 +198,129 @@ describe("MaterialsControl", () => {
         expect(
             wrapper.findAll(".colour-group .name").map((name) => name.text()),
         ).not.toContain("Green");
+    });
+
+    describe("a material observed in a ticked colour other than its main one", () => {
+        const LEAD_WHITE = URIS[3];
+        const known = {
+            ...materials,
+            [LEAD_WHITE]: material(3, [RED, BLUE]),
+        };
+
+        function observed(): MapEvent[] {
+            const leadWhite = [RED, RED, BLUE].map((colour, n) =>
+                mapEvent({
+                    id: `production:lead${n}`,
+                    document: { id: uuid(600 + n), name: label(`Ms L${n}`) },
+                    component: { id: uuid(650 + n), name: label(`f. L${n}`) },
+                    materials: [
+                        {
+                            id: LEAD_WHITE,
+                            name: label("Lead white"),
+                            reliability: null,
+                            characterization: uuid(700 + n),
+                            colours: [colour],
+                            matches: true,
+                        },
+                    ],
+                }),
+            );
+            return [
+                ...events().filter((event) =>
+                    event.materials.every((m) => m.id !== LEAD_WHITE),
+                ),
+                ...leadWhite,
+            ];
+        }
+
+        function rowsIn(
+            wrapper: ReturnType<typeof mountControl>,
+            colour: string,
+        ) {
+            const group = wrapper
+                .findAll(".colour-group")
+                .find((found) => found.get(".name").text() === colour);
+            if (!group) throw new Error(`no group ${colour}`);
+            return group
+                .findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Lead white");
+        }
+
+        it("sits under the ticked colour with that colour's counts and a hint, and under its main colour", () => {
+            const store = useExplorerStore();
+            store.setFacet("colour", [BLUE]);
+            const wrapper = mountControl(observed(), known);
+            const [underBlue] = rowsIn(wrapper, "Blue");
+            const [underRed] = rowsIn(wrapper, "Red");
+            expect(underBlue.get(".row-counts").text()).toBe("1 doc · 1 Comp.");
+            expect(underBlue.get(".observed").text()).toBe("observed blue");
+            expect(underBlue.find(".others").exists()).toBe(false);
+            expect(underRed.get(".row-counts").text()).toBe("3 docs · 3 Comp.");
+            expect(underRed.find(".observed").exists()).toBe(false);
+        });
+
+        it("counts a material of the ticked colour itself on that colour only, with the hint", () => {
+            const store = useExplorerStore();
+            store.setFacet("colour", [BLUE]);
+            const azurite = (colours: string[], n: number): MapEvent =>
+                mapEvent({
+                    id: `production:azurite${n}`,
+                    document: { id: uuid(800 + n), name: label(`Ms A${n}`) },
+                    component: { id: uuid(850 + n), name: label(`f. A${n}`) },
+                    materials: [
+                        {
+                            id: URIS[1],
+                            name: label("Azurite"),
+                            reliability: null,
+                            characterization: uuid(900 + n),
+                            colours,
+                            matches: true,
+                        },
+                    ],
+                });
+            const shown = [
+                ...observed().filter((event) =>
+                    event.materials.every((m) => m.id !== URIS[1]),
+                ),
+                azurite([BLUE], 0),
+                azurite([], 1),
+            ];
+            const wrapper = mountControl(shown, known);
+            const group = wrapper
+                .findAll(".colour-group")
+                .find((found) => found.get(".name").text() === "Blue");
+            const rows = group
+                ?.findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Azurite");
+            expect(rows).toHaveLength(1);
+            expect(rows?.[0].get(".row-counts").text()).toBe("1 doc · 1 Comp.");
+            expect(rows?.[0].get(".observed").text()).toBe("observed blue");
+        });
+
+        it("ticks both of its rows from either", async () => {
+            const store = useExplorerStore();
+            store.setFacet("colour", [BLUE]);
+            const wrapper = mountControl(observed(), known);
+            await rowsIn(wrapper, "Blue")[0]
+                .get("input[type=checkbox]")
+                .setValue(true);
+            expect(store.filters.material).toEqual([LEAD_WHITE]);
+            for (const colour of ["Blue", "Red"]) {
+                const box = rowsIn(wrapper, colour)[0].get(
+                    "input[type=checkbox]",
+                ).element as HTMLInputElement;
+                expect(box.checked).toBe(true);
+            }
+        });
+
+        it("sits once when no colour is ticked", () => {
+            const wrapper = mountControl(observed(), known);
+            const rows = wrapper
+                .findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Lead white");
+            expect(rows).toHaveLength(1);
+            expect(wrapper.find(".observed").exists()).toBe(false);
+        });
     });
 
     it("gives the group without a recorded colour no checkbox", () => {
@@ -348,6 +472,7 @@ describe("MaterialsControl", () => {
                         name: entry.label,
                         reliability: null,
                         characterization: uuid(500 + n),
+                        colours: [],
                         matches: true,
                     },
                 ],

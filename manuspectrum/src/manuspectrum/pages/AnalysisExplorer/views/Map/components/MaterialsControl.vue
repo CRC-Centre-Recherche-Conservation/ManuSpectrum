@@ -57,7 +57,11 @@ const ROWS_SHOWN = 5;
  * notice until the next Follow.
  * A colour group's head is a checkbox of the Corpus `colour` filter, the
  * colour's uri as the Corpus colour facet stores it; a ticked colour keeps
- * its head when no row falls under it.
+ * its head when no row falls under it. A ticked colour's group lists every
+ * material observed in that colour, with the counts of that colour and
+ * « observed <colour> » after them; a material whose main colour is another
+ * keeps its usual row there too, and both rows are the same `material`
+ * filter.
  * The search asks the material facet (synonyms included) and keeps the rows
  * it answers. Each colour group shows its ticked and followed rows, then
  * others up to five, and « Show more » for the rest; a search shows every
@@ -198,6 +202,20 @@ function countsName(documents: number, components: number): string {
 
 function groupLabel(group: ColourGroup): string {
     return group.label?.value ?? $gettext("No colour recorded");
+}
+
+/** « observed blue »: the colour's label in lower case. */
+function observedName(colour: string): string {
+    const found = props.colours[colour]?.label;
+    return interpolate(
+        $gettext("observed %{colour}"),
+        {
+            colour: (found?.value ?? colour).toLocaleLowerCase(
+                found?.lang || undefined,
+            ),
+        },
+        true,
+    );
 }
 
 function swatchOf(uri: string): string | null {
@@ -581,7 +599,12 @@ function onSearch(text: string | undefined): void {
                                     }}</span
                                 >
                                 <span
-                                    v-if="row.colours.length > 1"
+                                    v-if="row.observedIn !== null"
+                                    class="observed"
+                                    >{{ observedName(row.observedIn) }}</span
+                                >
+                                <span
+                                    v-else-if="row.colours.length > 1"
                                     class="others"
                                     role="img"
                                     :aria-label="othersName(row.colours)"
@@ -1021,6 +1044,11 @@ function onSearch(text: string | undefined): void {
 
 .materials-control .more:hover {
     text-decoration: underline;
+}
+
+.materials-control .observed {
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
 }
 
 .materials-control .others {

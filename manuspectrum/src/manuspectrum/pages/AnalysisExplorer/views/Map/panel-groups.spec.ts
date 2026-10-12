@@ -87,6 +87,7 @@ describe("panel groups", () => {
             name: label("m"),
             reliability: null,
             characterization: uuid(500),
+            colours: [],
             matches: true,
         };
         const events = [
@@ -123,6 +124,7 @@ describe("panel groups", () => {
             name: label("m"),
             reliability: null,
             characterization: uuid(500),
+            colours: [],
             matches: true,
         };
         const tracked = [

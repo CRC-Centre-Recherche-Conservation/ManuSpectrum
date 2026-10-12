@@ -16,12 +16,13 @@ import type {
     MapMaterial,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-function material(id: string): EventMaterial {
+function material(id: string, colours: string[] = []): EventMaterial {
     return {
         id,
         name: label(id),
         reliability: null,
         characterization: uuid(500),
+        colours,
         matches: true,
     };
 }
@@ -52,7 +53,7 @@ function event(
         id,
         document: { id: uuid(document), name: label(`d${document}`) },
         component: component ? { id: uuid(component), name: label("c") } : null,
-        materials: uris.map(material),
+        materials: uris.map((uri) => material(uri)),
     });
 }
 
@@ -131,5 +132,124 @@ describe("colour tree", () => {
         const tree = colourTree(more, materials, colours);
         expect(tree.map((g) => g.colour)).toEqual(["red", "blue", null]);
         expect(tree[0].rows.map((r) => r.uri)).toEqual(["minium", "cinnabar"]);
+    });
+
+    describe("a ticked colour", () => {
+        const leadWhite = known("lead-white", ["red", "blue"]);
+        const known2 = { ...materials, "lead-white": leadWhite };
+        const observed = [
+            mapEvent({
+                id: "7",
+                document: { id: uuid(7), name: label("d7") },
+                component: { id: uuid(27), name: label("c") },
+                materials: [material("lead-white", ["red"])],
+            }),
+            mapEvent({
+                id: "8",
+                document: { id: uuid(8), name: label("d8") },
+                component: { id: uuid(28), name: label("c") },
+                materials: [material("lead-white", ["red"])],
+            }),
+            mapEvent({
+                id: "9",
+                document: { id: uuid(9), name: label("d9") },
+                component: { id: uuid(29), name: label("c") },
+                materials: [material("lead-white", ["blue"])],
+            }),
+            mapEvent({
+                id: "2",
+                document: { id: uuid(2), name: label("d2") },
+                component: { id: uuid(21), name: label("c") },
+                materials: [material("azurite", ["blue"])],
+            }),
+            mapEvent({
+                id: "3",
+                document: { id: uuid(3), name: label("d3") },
+                component: { id: uuid(22), name: label("c") },
+                materials: [material("azurite", ["green"])],
+            }),
+        ];
+
+        it("lists a material observed in it under it too, with that colour's counts", () => {
+            const tree = colourTree(observed, known2, colours, undefined, [
+                "blue",
+            ]);
+            const blue = tree.find((g) => g.colour === "blue");
+            const red = tree.find((g) => g.colour === "red");
+            expect(blue?.rows).toEqual([
+                expect.objectContaining({
+                    uri: "azurite",
+                    observedIn: "blue",
+                    documents: 1,
+                    components: 1,
+                }),
+                expect.objectContaining({
+                    uri: "lead-white",
+                    observedIn: "blue",
+                    documents: 1,
+                    components: 1,
+                }),
+            ]);
+            expect(red?.rows).toEqual([
+                expect.objectContaining({
+                    uri: "lead-white",
+                    observedIn: null,
+                    documents: 3,
+                    components: 3,
+                }),
+            ]);
+            expect(blue).toMatchObject({ documents: 2, components: 2 });
+        });
+
+        it("lists it once when no colour is ticked", () => {
+            const rows = colourTree(observed, known2, colours).flatMap((g) =>
+                g.rows.map((row) => row.uri),
+            );
+            expect(rows.filter((uri) => uri === "lead-white")).toHaveLength(1);
+        });
+
+        it("lists a material whose main colour it is once, with that colour's counts", () => {
+            const tree = colourTree(observed, known2, colours, undefined, [
+                "red",
+            ]);
+            const red = tree.find((g) => g.colour === "red");
+            expect(red?.rows).toEqual([
+                expect.objectContaining({
+                    uri: "lead-white",
+                    observedIn: "red",
+                    documents: 2,
+                    components: 2,
+                }),
+            ]);
+        });
+
+        it("keeps the usual row of a material of its own that no event observes in it", () => {
+            const tree = colourTree(
+                observed.filter((e) => e.id !== "2"),
+                known2,
+                colours,
+                undefined,
+                ["blue"],
+            );
+            const blue = tree.find((g) => g.colour === "blue");
+            expect(blue?.rows[0]).toMatchObject({
+                uri: "azurite",
+                observedIn: null,
+                documents: 1,
+            });
+        });
+
+        it("keeps the search narrowing", () => {
+            const tree = colourTree(
+                observed,
+                known2,
+                colours,
+                new Set(["azurite"]),
+                ["blue"],
+            );
+            expect(tree.flatMap((g) => g.rows.map((row) => row.uri))).toEqual([
+                "azurite",
+            ]);
+        });
     });
 });

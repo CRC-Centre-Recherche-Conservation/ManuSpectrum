@@ -18,6 +18,7 @@ function material(id: string, matches: boolean): EventMaterial {
         name: label(id),
         reliability: null,
         characterization: uuid(500),
+        colours: [],
         matches,
     };
 }

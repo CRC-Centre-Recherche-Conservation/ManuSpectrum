@@ -231,6 +231,8 @@ export interface EventMaterial {
     name: Label;
     reliability: string | null;
     characterization: string;
+    /** The characterization's own colour uris (never its Component's), as `MapMaterial.colours` orders them. */
+    colours: string[];
     /** Meets every active characterization filter; true for all without one. */
     matches: boolean;
 }
@@ -742,6 +744,7 @@ export const SHAPE_KEYS = {
         name: true,
         reliability: true,
         characterization: true,
+        colours: true,
         matches: true,
     } satisfies Record<keyof EventMaterial, true>,
     MapPlace: {

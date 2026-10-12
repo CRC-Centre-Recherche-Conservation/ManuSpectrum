@@ -88,6 +88,7 @@ function response(): EventsResponse {
                         name: label("Lapis lazuli"),
                         reliability: null,
                         characterization: uuid(200),
+                        colours: [],
                         matches: true,
                     },
                 ],
@@ -260,6 +261,7 @@ describe("MapView", () => {
             name: label("Azurite"),
             reliability: null,
             characterization: uuid(201),
+            colours: [],
             matches: false,
         });
         filtered.materials[azurite] = {

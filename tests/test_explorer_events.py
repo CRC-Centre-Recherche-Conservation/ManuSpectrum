@@ -221,6 +221,7 @@ class MaterialColourTests(EventsCase):
         super().setUpTestData()
         ref = cls.reference_value
         cls.tile(cls.materials["vermilion"], "color_aspect", ref(RED, "Red", "Rouge"))
+        cls.observed_in = {str(cls.materials["vermilion"].pk): [RED]}
         for colour, label in ((RED, "Red"), (GREEN, "Green")):
             found = cls.characterized(
                 f"Vermilion, {label}",
@@ -230,6 +231,7 @@ class MaterialColourTests(EventsCase):
                 LOW,
             )
             cls.tile(found, "color_aspect", ref(colour, label, label))
+            cls.observed_in[str(found.pk)] = [colour]
             alteration = cls.new_resource("alteration", f"Fading {label}")
             cls.tile(alteration, "object_altered", cls.refs(cls.documents["open"]))
             cls.tile_values(
@@ -250,6 +252,24 @@ class MaterialColourTests(EventsCase):
 
     def test_a_material_without_colour_has_none(self):
         self.assertEqual(self.bundle().event_materials[LEAD_WHITE]["colours"], [])
+
+    def test_each_event_material_carries_its_own_characterization_colours(self):
+        payload = self.client.get("/en/api/explorer/events").json()
+        found = {
+            m["characterization"]: m["colours"]
+            for e in payload["events"]
+            for m in e["materials"]
+            if m["id"] == VERMILION
+        }
+        self.assertEqual(found, self.observed_in)
+        self.assertTrue(
+            all(
+                m["colours"] == []
+                for e in payload["events"]
+                for m in e["materials"]
+                if m["id"] == LEAD_WHITE
+            )
+        )
 
     def test_the_colour_map_holds_the_colours_the_materials_use_with_label_and_swatch(
         self,

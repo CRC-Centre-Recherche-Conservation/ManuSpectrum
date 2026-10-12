@@ -170,6 +170,21 @@ def parse_event_types(query):
     return [t for t in EVENT_TYPES if t in wanted]
 
 
+def colour_order(counts):
+    """The colour uris of the ``Counter`` *counts*, most counted first, then by ``colour_rank``, then by uri."""
+    return [
+        colour
+        for colour, _ in sorted(
+            counts.items(),
+            key=lambda kv: (
+                -kv[1],
+                colour_rank(kv[0]) if colour_rank(kv[0]) is not None else 999,
+                kv[0],
+            ),
+        )
+    ]
+
+
 def _keys(model):
     return [
         k
@@ -276,8 +291,10 @@ def build_events(
     """The ``EventSet`` of the visible corpus: events in document-name order, their places, materials and the documents' histories.
 
     *characterization_values* are the Corpus filter's values per material (kept
-    for ``kept_events``); a ``MapMaterial``'s colours are counted on *own_values*,
-    its own ``color_aspect`` without the colours of the Components it is linked to.
+    for ``kept_events``). An event material's ``colours`` are its characterization's
+    *own_values* colours, its own ``color_aspect`` without the colours of the
+    Components it is linked to (``colour_order``); a ``MapMaterial``'s colours are
+    counted over its event materials.
     """
     readable = readable_nodegroup_ids(user)
     by_id = {row["id"]: row for row in rows}
@@ -334,12 +351,14 @@ def build_events(
     qualified = qualified_values(material_values, visible.characterizations, language)
     entries, terms = {}, defaultdict(set)
     for c in visible.characterizations:
+        own_colours = colour_order(Counter(own_values.get(c, {}).get("colour", ())))
         entries[c] = [
             {
                 "id": ref["uri"],
                 "name": ref["label"],
                 "reliability": q["id"] if q else None,
                 "characterization": c,
+                "colours": own_colours,
             }
             for refs, _, q in qualified[c]["material"]
             for ref in refs
@@ -574,24 +593,11 @@ def build_events(
     for e in events:
         for m in e["materials"]:
             labels.setdefault(m["id"], m["name"])
-            for colour in own_values.get(m["characterization"], {}).get("colour", ()):
+            for colour in m["colours"]:
                 colours[m["id"]][colour] += 1
 
-    def colours_of(uri):
-        return [
-            colour
-            for colour, _ in sorted(
-                colours[uri].items(),
-                key=lambda kv: (
-                    -kv[1],
-                    colour_rank(kv[0]) if colour_rank(kv[0]) is not None else 999,
-                    kv[0],
-                ),
-            )
-        ]
-
     def swatch_of(uri):
-        for colour in colours_of(uri):
+        for colour in colour_order(colours[uri]):
             if swatches.get(colour):
                 return swatches[colour]
         return None
@@ -600,7 +606,7 @@ def build_events(
         uri: {
             "uri": uri,
             "label": labels[uri],
-            "colours": colours_of(uri),
+            "colours": colour_order(colours[uri]),
             "swatch": swatch_of(uri),
         }
         for uri in sorted(labels)

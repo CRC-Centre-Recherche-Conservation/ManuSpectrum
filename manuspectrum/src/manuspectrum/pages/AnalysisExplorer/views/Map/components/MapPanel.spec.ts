@@ -78,6 +78,7 @@ function azurite(reliability: string | null = SURE) {
         name: label("Azurite"),
         reliability,
         characterization: uuid(300),
+        colours: [],
         matches: true,
     };
 }
@@ -316,6 +317,7 @@ describe("MapPanel", () => {
                                   name: label("Lapis lazuli"),
                                   reliability: null,
                                   characterization: uuid(301),
+                                  colours: [],
                                   matches: true,
                               },
                           ],
@@ -529,6 +531,7 @@ describe("MapPanel", () => {
                         name: label(`Material ${String(n).padStart(2, "0")}`),
                         reliability: SURE,
                         characterization: uuid(700 + n),
+                        colours: [],
                         matches: true,
                     },
                 ],
