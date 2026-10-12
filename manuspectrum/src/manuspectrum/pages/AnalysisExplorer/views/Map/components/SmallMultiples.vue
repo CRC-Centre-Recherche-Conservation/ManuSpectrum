@@ -280,17 +280,19 @@ function go(next: number): void {
                     </svg>
                 </button>
                 <figcaption>
-                    <FocusSlotDot
-                        v-if="slotOf(map) !== null"
-                        class="haloed"
-                        size="small"
-                        :number="slotOf(map) ?? 0"
-                    />
-                    <span
-                        class="title"
-                        :lang="map.title?.lang || undefined"
-                        >{{ titleOf(map) }}</span
-                    >
+                    <span class="name">
+                        <FocusSlotDot
+                            v-if="slotOf(map) !== null"
+                            class="haloed"
+                            size="small"
+                            :number="slotOf(map) ?? 0"
+                        />
+                        <span
+                            class="title"
+                            :lang="map.title?.lang || undefined"
+                            >{{ titleOf(map) }}</span
+                        >
+                    </span>
                     <span class="counts">{{ countsText(map) }}</span>
                 </figcaption>
             </figure>
@@ -379,6 +381,7 @@ function go(next: number): void {
 
 .small-multiples .mini {
     display: grid;
+    align-content: start;
     gap: 0.375rem;
     margin: 0;
     padding: 0.5rem;
@@ -406,6 +409,7 @@ function go(next: number): void {
     overflow: hidden;
     inline-size: 100%;
     block-size: auto;
+    aspect-ratio: 220 / 160;
 }
 
 .small-multiples .snapshot {
@@ -456,10 +460,15 @@ function go(next: number): void {
 }
 
 .small-multiples figcaption {
+    display: grid;
+    gap: 0.125rem;
+    min-inline-size: 0;
+}
+
+.small-multiples .name {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem 0.375rem;
+    gap: 0.375rem;
     min-inline-size: 0;
 }
 
@@ -478,7 +487,6 @@ function go(next: number): void {
 }
 
 .small-multiples .counts {
-    margin-inline-start: auto;
     color: color-mix(in srgb, var(--surface) 75%, transparent);
     font-family: var(--font-mono);
     font-size: 0.6875rem;

@@ -206,4 +206,21 @@ describe("SmallMultiples", () => {
             "No identified material in the kept events.",
         );
     });
+
+    it("gives every caption the same two lines, the name then the counts", () => {
+        const wrapper = mountMultiples({
+            maps: [materialMap(1, [dot("p1")]), materialMap(2, [dot("p2")])],
+        });
+        const captions = wrapper.findAll("figcaption");
+        expect(captions).toHaveLength(2);
+        for (const caption of captions) {
+            expect(caption.element.children.length).toBe(2);
+            expect(caption.element.children[0].classList.contains("name")).toBe(
+                true,
+            );
+            expect(
+                caption.element.children[1].classList.contains("counts"),
+            ).toBe(true);
+        }
+    });
 });
