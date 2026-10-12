@@ -36,6 +36,7 @@ type Bloom = "odd" | "even";
 
 const MODES: readonly FocusMode[] = ["any", "all"];
 const MAX_OTHER_SWATCHES = 3;
+const ROWS_SHOWN = 5;
 
 /**
  * The identified materials of the kept events, grouped by observed colour
@@ -45,13 +46,17 @@ const MAX_OTHER_SWATCHES = 3;
  * materials are chips above the groups, with « any / all » from two on. A
  * fifth Follow changes nothing and leaves a notice until the next Follow.
  * The search asks the material facet (synonyms included) and keeps the rows
- * it answers. State lives in the store; nothing is emitted.
+ * it answers. Each colour group shows its ticked and followed rows, then
+ * others up to five, and « Show more » for the rest; a search shows every
+ * match. State lives in the store; hovering or focusing a followed chip
+ * emits `isolate` with its slot, and null on leave.
  */
 const props = defineProps<{
     events: MapEvent[];
     materials: Record<string, MapMaterial>;
     colours: Record<string, MapColour>;
 }>();
+const emit = defineEmits<{ isolate: [slot: number | null] }>();
 
 const announce = inject(ANNOUNCE_KEY, null);
 
@@ -61,6 +66,8 @@ const { $gettext, interpolate } = useGettext();
 const query = ref("");
 const refused = ref(false);
 const blooms = ref<Record<string, Bloom>>({});
+/** Colour groups unfolded past their first rows, by group key. */
+const unfolded = ref(new Set<string>());
 
 const search = useFacetValues("material", () =>
     query.value.trim()
@@ -103,6 +110,47 @@ const chips = computed(() =>
         };
     }),
 );
+
+function groupKey(group: ColourGroup): string {
+    return group.colour ?? "none";
+}
+
+/** The ticked and followed rows first, in group order, then the others. */
+function orderedRows(group: ColourGroup): ColourGroup["rows"] {
+    const pinned = (uri: string): boolean =>
+        isTicked(uri) || slot(uri) !== null;
+    return [
+        ...group.rows.filter((row) => pinned(row.uri)),
+        ...group.rows.filter((row) => !pinned(row.uri)),
+    ];
+}
+
+function shownRows(group: ColourGroup): ColourGroup["rows"] {
+    const rows = orderedRows(group);
+    if (only.value !== undefined || unfolded.value.has(groupKey(group))) {
+        return rows;
+    }
+    const pinned = rows.filter(
+        (row) => isTicked(row.uri) || slot(row.uri) !== null,
+    ).length;
+    return rows.slice(0, Math.max(ROWS_SHOWN, pinned));
+}
+
+function hiddenRows(group: ColourGroup): number {
+    return group.rows.length - shownRows(group).length;
+}
+
+function unfold(group: ColourGroup): void {
+    unfolded.value = new Set([...unfolded.value, groupKey(group)]);
+}
+
+function moreRowsText(group: ColourGroup): string {
+    return interpolate(
+        $gettext("Show %{n} more"),
+        { n: hiddenRows(group) },
+        true,
+    );
+}
 
 function labelOf(uri: string): Label {
     return (
@@ -268,6 +316,10 @@ function onSearch(text: string | undefined): void {
                 class="chip-row"
                 :class="{ absent: chip.absent }"
                 :style="{ '--h': focusHue(chip.slot) }"
+                @mouseenter="emit('isolate', chip.slot)"
+                @mouseleave="emit('isolate', null)"
+                @focusin="emit('isolate', chip.slot)"
+                @focusout="emit('isolate', null)"
             >
                 <span class="chip">
                     <FocusSlotDot
@@ -359,7 +411,7 @@ function onSearch(text: string | undefined): void {
         >
             <section
                 v-for="group in groups"
-                :key="group.colour ?? 'none'"
+                :key="groupKey(group)"
                 class="colour-group"
             >
                 <h4>
@@ -384,7 +436,7 @@ function onSearch(text: string | undefined): void {
                 </h4>
                 <ul class="rows">
                     <li
-                        v-for="row in group.rows"
+                        v-for="row in shownRows(group)"
                         :key="row.uri"
                         class="row"
                     >
@@ -401,36 +453,47 @@ function onSearch(text: string | undefined): void {
                                 :title="row.label.value"
                                 >{{ row.label.value }}</span
                             >
-                            <span
-                                v-if="row.colours.length > 1"
-                                class="others"
-                                aria-hidden="true"
-                                :title="
-                                    $gettext('observed colour, not an identity')
-                                "
-                            >
+                            <span class="meta">
                                 <span
-                                    v-for="colour in otherColours(row.colours)"
-                                    :key="colour"
-                                    class="swatch tiny"
-                                    :class="{ unknown: !swatchOf(colour) }"
-                                    :style="swatchStyle(swatchOf(colour))"
-                                ></span>
+                                    v-if="row.colours.length > 1"
+                                    class="others"
+                                    aria-hidden="true"
+                                    :title="
+                                        $gettext(
+                                            'observed colour, not an identity',
+                                        )
+                                    "
+                                >
+                                    <span
+                                        v-for="colour in otherColours(
+                                            row.colours,
+                                        )"
+                                        :key="colour"
+                                        class="swatch tiny"
+                                        :class="{ unknown: !swatchOf(colour) }"
+                                        :style="swatchStyle(swatchOf(colour))"
+                                    ></span>
+                                    <span
+                                        v-if="moreColours(row.colours) > 0"
+                                        class="more-colours"
+                                        >{{
+                                            `+${moreColours(row.colours)}`
+                                        }}</span
+                                    >
+                                </span>
                                 <span
-                                    v-if="moreColours(row.colours) > 0"
-                                    class="more-colours"
-                                    >{{ `+${moreColours(row.colours)}` }}</span
+                                    class="row-counts"
+                                    :title="
+                                        countsName(
+                                            row.documents,
+                                            row.components,
+                                        )
+                                    "
+                                    >{{
+                                        `${row.documents} · ${row.components}`
+                                    }}</span
                                 >
                             </span>
-                            <span
-                                class="row-counts"
-                                :title="
-                                    countsName(row.documents, row.components)
-                                "
-                                >{{
-                                    `${row.documents} · ${row.components}`
-                                }}</span
-                            >
                         </label>
                         <button
                             type="button"
@@ -457,6 +520,14 @@ function onSearch(text: string | undefined): void {
                         </button>
                     </li>
                 </ul>
+                <button
+                    v-if="hiddenRows(group) > 0"
+                    type="button"
+                    class="more"
+                    @click="unfold(group)"
+                >
+                    <span>{{ moreRowsText(group) }}</span>
+                </button>
                 <p
                     class="legend"
                     aria-hidden="true"
@@ -719,28 +790,62 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .value {
-    display: flex;
+    display: grid;
     flex: 1 1 auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.5rem;
     align-items: center;
-    gap: 0.5rem;
     min-inline-size: 0;
     min-block-size: var(--explorer-target, 2.75rem);
+    padding-block: 0.25rem;
     font-size: 0.8125rem;
     cursor: pointer;
 }
 
 .materials-control .value input {
-    flex: none;
+    grid-column: 1;
     margin: 0;
     accent-color: var(--blue-text);
 }
 
-.materials-control .label {
-    flex: 1 1 auto;
+.materials-control .value .label {
+    display: -webkit-box;
+    grid-column: 2;
     min-inline-size: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.3;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.materials-control .value .meta {
+    display: flex;
+    grid-column: 2;
+    align-items: center;
+    gap: 0.375rem;
+    min-inline-size: 0;
+}
+
+.materials-control .follow {
+    align-self: center;
+}
+
+/* FacetRail .more */
+.materials-control .more {
+    justify-self: start;
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.materials-control .more:hover {
+    text-decoration: underline;
 }
 
 .materials-control .others {

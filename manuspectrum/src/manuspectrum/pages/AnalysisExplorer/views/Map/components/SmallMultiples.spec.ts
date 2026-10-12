@@ -113,6 +113,9 @@ describe("SmallMultiples", () => {
             ],
         });
         expect(wrapper.find("figcaption .title").text()).toBe("14th century");
+        expect(wrapper.find("figcaption .counts").text()).toBe(
+            "1 place · 4 comp.",
+        );
         expect(wrapper.findAll("circle.pip")).toHaveLength(2);
         expect(wrapper.find("circle.dot").exists()).toBe(false);
     });

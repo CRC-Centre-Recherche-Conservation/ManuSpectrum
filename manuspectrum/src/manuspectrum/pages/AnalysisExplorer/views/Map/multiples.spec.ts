@@ -61,6 +61,28 @@ describe("small multiples", () => {
         expect(dots[uuid(11)].attested).toBe(false);
     });
 
+    it("puts the followed materials first, in slot order", () => {
+        const events = [
+            carrying("few", 20),
+            carrying("many", 21),
+            carrying("many", 22),
+            carrying("mid", 23),
+            carrying("mid", 24),
+            carrying("rare", 25),
+        ];
+        const maps = byMaterial(
+            events,
+            places,
+            ["few", "many", "mid", "rare"],
+            none,
+            [
+                { uri: "rare", slot: 1 },
+                { uri: "few", slot: 3 },
+            ],
+        );
+        expect(maps.map((m) => m.uri)).toEqual(["rare", "few", "many", "mid"]);
+    });
+
     it("pages by twelve", () => {
         const items = Array.from({ length: 25 }, (_, i) => i);
         expect(MULTIPLES_PER_PAGE).toBe(12);

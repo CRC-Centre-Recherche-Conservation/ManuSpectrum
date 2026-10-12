@@ -149,6 +149,15 @@ export function dominantOf(values: readonly number[]): number {
     return values.length > 0 && values[best] >= FLOOR ? best : -1;
 }
 
+/** Whether the runner-up comes close to `values[best]`: the best's share of the top two is under `TIE_SHARE`. */
+export function nearlyTied(values: readonly number[], best: number): boolean {
+    let second = 0;
+    values.forEach((value, index) => {
+        if (index !== best && value > second) second = value;
+    });
+    return values[best] / (values[best] + second) < TIE_SHARE;
+}
+
 function polygon(
     ring: LngLat[],
     properties: TerritoryProps,
@@ -185,8 +194,9 @@ function line(
  * The influence model of the followed materials over a hex grid of `bounds`.
  * `each`: one translucent area per field where its influence reaches `FLOOR`,
  * outlined where the neighbour does not. `dominant`: each cell in the colour of
- * its most attested field, opacity from its share, hatched under `TIE_SHARE`,
- * borders (slot 0) only between two different dominants.
+ * its most attested field, opacity from its share of every field, hatched
+ * when the runner-up nearly ties (`nearlyTied`), borders (slot 0) only
+ * between two different dominants.
  */
 export function territories(
     fields: readonly TrackedField[],
@@ -254,7 +264,7 @@ export function territories(
                 layer: "cell",
                 slot: fields[best].slot,
                 alpha: DOMINANT_ALPHA.base + DOMINANT_ALPHA.span * share,
-                hatched: share < TIE_SHARE,
+                hatched: nearlyTied(influence[i], best),
             }),
         );
         for (let k = 0; k < SIDES; k += 1) {

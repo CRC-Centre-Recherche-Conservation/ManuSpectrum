@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -296,8 +297,12 @@ describe("MapView", () => {
         store.setMapState({ borders: true });
         const view = await mountView();
         const map = FakeMap.last();
-        expect(view.text()).toContain(
-            "Choose a period on the timeline to see its borders",
+        const hint = view.get(".stage-head .borders-hint");
+        expect(hint.text()).toBe(
+            "Narrow the period with the timeline slider to see its borders.",
+        );
+        expect(hint.element.previousElementSibling?.classList).toContain(
+            "unplaced",
         );
         expect(
             map.layers.find((entry) => entry.layer.id === BORDERS_LAYER)?.layer
@@ -313,6 +318,73 @@ describe("MapView", () => {
             "visibility",
             "visible",
         ]);
+    });
+
+    it("folds the legend by default and keeps the reader's choice across modes", async () => {
+        const view = await mountView();
+        const store = useExplorerStore();
+        const toggle = () => view.get(".legend .toggle");
+        expect(toggle().attributes("aria-expanded")).toBe("false");
+        await toggle().trigger("click");
+        expect(store.mapState.legend).toBe(true);
+        await modeButton(view, "Small multiples").trigger("click");
+        await modeButton(view, "Places").trigger("click");
+        await flushPromises();
+        expect(toggle().attributes("aria-expanded")).toBe("true");
+        expect(view.get("div.legend").classes()).toContain("open");
+    });
+
+    it("isolates a followed material's territory while its legend row is hovered", async () => {
+        const store = useExplorerStore();
+        store.setMapState({
+            track: [LAPIS],
+            mode: "territories",
+            legend: true,
+        });
+        const view = await mountView();
+        const map = FakeMap.last();
+        await view.get(".legend .followed li").trigger("mouseenter");
+        expect(map.paintCalls.map(([layer]) => layer)).toEqual([
+            "territory-cells",
+            "territory-hatch",
+            "territory-edges",
+        ]);
+        await view.get(".legend .followed li").trigger("mouseleave");
+        expect(map.paintCalls).toHaveLength(6);
+        expect(map.paintCalls.at(-1)).toEqual([
+            "territory-edges",
+            "line-opacity",
+            1,
+        ]);
+    });
+
+    it("tells to hover the legend from three materials in « each material »", async () => {
+        const store = useExplorerStore();
+        store.setMapState({
+            track: [LAPIS, "http://material.test/b"],
+            mode: "territories",
+        });
+        const view = await mountView();
+        expect(view.find(".territory-note .isolate-hint").exists()).toBe(false);
+        store.setMapState({
+            track: [LAPIS, "http://material.test/b", "http://material.test/c"],
+        });
+        await flushPromises();
+        expect(view.get(".territory-note .isolate-hint").text()).toBe(
+            "Hover a material in the legend to see its zone alone.",
+        );
+        store.setMapState({ colour: "dominant" });
+        await flushPromises();
+        expect(view.find(".territory-note .isolate-hint").exists()).toBe(false);
+    });
+
+    it("brushes the period a period panel shows", async () => {
+        const view = await mountView();
+        const store = useExplorerStore();
+        await view.get(".map-timeline button.bin").trigger("click");
+        await flushPromises();
+        await view.get(".map-panel .brush-period").trigger("click");
+        expect(store.mapState.brush).not.toBeNull();
     });
 
     it("links the exports with the filters and the page language", async () => {
@@ -359,5 +431,23 @@ describe("MapView", () => {
         await flushPromises();
         expect(view.find(".stage .unavailable-state").exists()).toBe(false);
         expect(eventCalls().length).toBeGreaterThan(1);
+    });
+});
+
+describe("MapView styles", () => {
+    it("styles the rail without the view ancestor, so the drawer copy keeps them", () => {
+        const source = readFileSync(`${__dirname}/MapView.vue`, "utf8");
+        expect(source).toContain(".map-rail .disclosure {");
+        expect(source).not.toContain(".map-view .map-rail");
+    });
+
+    it("gives the filters drawer the rail title's display voice", () => {
+        const scss = readFileSync(
+            `${__dirname}/../../../../../../media/css/explorer.scss`,
+            "utf8",
+        );
+        expect(scss).toMatch(
+            /\.p-drawer\.explorer-rail-drawer \.p-drawer-title \{\s*font-family: var\(--font-display\);/,
+        );
     });
 });

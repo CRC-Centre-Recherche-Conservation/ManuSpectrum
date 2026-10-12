@@ -21,10 +21,12 @@ import {
     bordersFilter,
     bordersLayer,
     dashedRingImage,
+    hatchImage,
     pipImage,
     placeLayers,
     stageImages,
     territoryLayers,
+    territoryOpacity,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
@@ -50,13 +52,14 @@ function evaluate(
     value: unknown,
     properties: Record<string, unknown>,
     state: Record<string, unknown> = {},
+    zoom = 6,
 ): unknown {
     const compiled = createExpression(value);
     if (compiled.result !== "success") {
         throw new Error(JSON.stringify(compiled.value));
     }
     return compiled.value.evaluate(
-        { zoom: 6 },
+        { zoom },
         { type: "Point", properties, geometry: [] } as never,
         state,
     );
@@ -140,15 +143,57 @@ describe("placeLayers", () => {
     it("sets each pip on the outer edge of its ring, 4 px out", () => {
         const offset = layer(PLACES, "pip-1-firm").layout?.["icon-offset"];
         const small = ringRadius(1);
-        expect(evaluate(offset, { ring: small })).toEqual(PIP_OFFSETS[0]);
+        expect(evaluate(offset, { ring: small }, {}, 7)).toEqual(
+            PIP_OFFSETS[0],
+        );
         const large = ringRadius(25);
-        const [x, y] = evaluate(offset, { ring: large }) as number[];
+        const [x, y] = evaluate(offset, { ring: large }, {}, 7) as number[];
         expect(x).toBeCloseTo(0);
         expect(y).toBeCloseTo(-(large + 4));
         const third = layer(PLACES, "pip-3-firm").layout?.["icon-offset"];
-        const [x3, y3] = evaluate(third, { ring: large }) as number[];
+        const [x3, y3] = evaluate(third, { ring: large }, {}, 7) as number[];
         expect(Math.hypot(x3, y3)).toBeCloseTo(large + 4, 2);
         expect(Math.atan2(y3, x3) * (180 / Math.PI)).toBeCloseTo(10, 1);
+    });
+
+    it("shrinks the pips at low zoom and keeps them on the ring's edge", () => {
+        const pip = layer(PLACES, "pip-2-firm");
+        const large = ringRadius(9);
+        for (const [zoom, scale] of [
+            [4, 0.75],
+            [7, 1],
+            [9, 1],
+        ]) {
+            const size = evaluate(pip.layout?.["icon-size"], {}, {}, zoom);
+            expect(size).toBeCloseTo(scale);
+            const [x, y] = evaluate(
+                pip.layout?.["icon-offset"],
+                { ring: large },
+                {},
+                zoom,
+            ) as number[];
+            expect(Math.hypot(x, y) * (size as number)).toBeCloseTo(
+                large + 4,
+                2,
+            );
+        }
+    });
+
+    it("gives the labels of the places with most documents the first place", () => {
+        for (const id of ["place-labels", "place-badges"]) {
+            const labels = layer(PLACES, id).layout ?? {};
+            expect(labels["text-allow-overlap"]).toBe(false);
+            expect(labels["text-variable-anchor"]).toEqual([
+                "top",
+                "bottom",
+                "left",
+                "right",
+            ]);
+            const key = labels["symbol-sort-key"];
+            expect(evaluate(key, { documents: 9 })).toBeLessThan(
+                evaluate(key, { documents: 2 }) as number,
+            );
+        }
     });
 
     it("rims the selected point in blue, not in a slot hue", () => {
@@ -211,6 +256,25 @@ describe("territoryLayers", () => {
         );
     });
 
+    it("isolates one slot by paint, fading the others' cells, hatch and edges", () => {
+        const plain = territoryOpacity(null);
+        expect(
+            layer(TERRITORIES, "territory-cells").paint?.["fill-opacity"],
+        ).toEqual(plain.cells);
+        expect(
+            layer(TERRITORIES, "territory-hatch").paint?.["fill-opacity"],
+        ).toBe(0.55);
+        expect(
+            layer(TERRITORIES, "territory-edges").paint?.["line-opacity"],
+        ).toBe(1);
+        const only = territoryOpacity(4);
+        expect(evaluate(only.cells, { slot: 4, alpha: 0.3 })).toBeCloseTo(0.3);
+        expect(evaluate(only.cells, { slot: 1, alpha: 0.3 })).toBeCloseTo(0.06);
+        expect(evaluate(only.edges, { slot: 4 })).toBe(1);
+        expect(evaluate(only.edges, { slot: 0 })).toBeCloseTo(0.2);
+        expect(evaluate(only.hatch, { slot: 2 })).toBeCloseTo(0.11);
+    });
+
     it("leaves the sea layer to the base style", () => {
         expect(
             TERRITORIES.some((candidate) => candidate.id === WATER_LAYER),
@@ -268,6 +332,31 @@ describe("the drawn images", () => {
         expect(image.width).toBe(64);
         expect(image.height).toBe(64);
         expect(image.data.every((value) => value === 0)).toBe(true);
+    });
+
+    it("draws the tie hatch in 1 CSS px paper lines", () => {
+        const drawn: Record<string, unknown> = {};
+        const context = new Proxy(
+            {
+                getImageData: vi.fn(() => ({
+                    data: new Uint8ClampedArray(12 * 12 * 4),
+                })),
+            },
+            {
+                get: (target, key) =>
+                    key in target
+                        ? target[key as keyof typeof target]
+                        : () => undefined,
+                set: (_, key, value) => {
+                    drawn[String(key)] = value;
+                    return true;
+                },
+            },
+        ) as unknown as CanvasRenderingContext2D;
+        const image = hatchImage("#fbfaf6", () => context);
+        expect(image.width).toBe(12);
+        expect(drawn.lineWidth).toBe(2);
+        expect(drawn.strokeStyle).toBe("#fbfaf6");
     });
 
     it("reads back what the context drew", () => {

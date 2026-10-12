@@ -284,6 +284,8 @@ export interface EventsResponse {
     materials: Record<string, MapMaterial>;
     colours: Record<string, MapColour>;
     analysisNames: Record<string, Label>;
+    /** The technique mark of each cited analysis that names a technique. */
+    analysisTechniques: Record<string, TechniqueMark>;
     certaintyScale: CertaintyScale;
 }
 
@@ -717,6 +719,7 @@ export const SHAPE_KEYS = {
         materials: true,
         colours: true,
         analysisNames: true,
+        analysisTechniques: true,
         certaintyScale: true,
     } satisfies Record<keyof EventsResponse, true>,
     MapEvent: {

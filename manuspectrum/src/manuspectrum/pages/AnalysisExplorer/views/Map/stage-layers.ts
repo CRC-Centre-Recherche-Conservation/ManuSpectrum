@@ -48,7 +48,13 @@ const RING_IMAGE_PX = 32;
 const RING_ICON_DIVISOR = RING_IMAGE_PX / 2;
 const PIP_IMAGE_PX = 14;
 const HATCH_IMAGE_PX = 6;
-const HATCH_LINE_PX = 2;
+const HATCH_LINE_PX = 1;
+const HATCH_OPACITY = 0.55;
+/** What an isolated territory leaves of the other slots' opacity. */
+const ISOLATE_FADE = 0.2;
+/** The pips' scale at the zooms of `PIP_SCALE_ZOOMS`: smaller around the fitted view, whole from zoom 7. */
+const PIP_SCALE = [0.75, 1] as const;
+const PIP_SCALE_ZOOMS = [4, 7] as const;
 const RING_FILL_OPACITY = 0.22;
 const LINKED_FADE = 0.35;
 const POINT_RADIUS = 5;
@@ -85,23 +91,48 @@ const isKind = (kind: "point" | "area"): FilterSpecification => [
     kind,
 ];
 
-/**
- * The offset of the pip of `slot` on the outer edge of a ring of radius
- * `["get", "ring"]`: `(ring + 4) · (cos a, sin a)`. The offset is linear in
- * the ring, so an `interpolate` between two literal arrays gives it exactly.
- */
-function pipOffset(slot: number): ExpressionSpecification {
+/** The pip of `slot` at `scale`, as an offset in icon units: `(ring + 4) / scale · (cos a, sin a)`. */
+function ringOffset(slot: number, scale: number): ExpressionSpecification {
     const angle = PIP_ANGLES_DEG[slot - 1];
     return [
         "interpolate",
         ["linear"],
         ["get", "ring"],
         0,
-        ["literal", polar(angle, PIP_GAP_PX)],
+        ["literal", polar(angle, PIP_GAP_PX / scale)],
         RING_LIMIT_PX,
-        ["literal", polar(angle, RING_LIMIT_PX + PIP_GAP_PX)],
+        ["literal", polar(angle, (RING_LIMIT_PX + PIP_GAP_PX) / scale)],
     ];
 }
+
+/**
+ * The offset of the pip of `slot` on the outer edge of a ring of radius
+ * `["get", "ring"]`, `(ring + 4) · (cos a, sin a)` in CSS pixels at every
+ * zoom. MapLibre multiplies `icon-offset` by `icon-size`, so each zoom stop
+ * divides by the pip's scale there (`PIP_SCALE`). The offset is linear in
+ * the ring, so an `interpolate` between two literal arrays gives it exactly.
+ */
+function pipOffset(slot: number): ExpressionSpecification {
+    return [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        PIP_SCALE_ZOOMS[0],
+        ringOffset(slot, PIP_SCALE[0]),
+        PIP_SCALE_ZOOMS[1],
+        ringOffset(slot, PIP_SCALE[1]),
+    ];
+}
+
+const PIP_SIZE: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    PIP_SCALE_ZOOMS[0],
+    PIP_SCALE[0],
+    PIP_SCALE_ZOOMS[1],
+    PIP_SCALE[1],
+];
 
 function pipLayer(slot: number, pale: boolean): SymbolLayerSpecification {
     const level = pale ? 2 : 1;
@@ -111,6 +142,7 @@ function pipLayer(slot: number, pale: boolean): SymbolLayerSpecification {
         source: PLACES_SOURCE,
         layout: {
             "icon-image": pipImage(slot, pale),
+            "icon-size": PIP_SIZE,
             "icon-offset": pipOffset(slot),
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
@@ -147,6 +179,7 @@ function labelLayer(
             "text-radial-offset": 1,
             "text-optional": true,
             "text-allow-overlap": false,
+            "symbol-sort-key": ["-", ["get", "documents"]],
         },
         paint: {
             "text-color": [
@@ -245,8 +278,30 @@ const slotColour = (
     otherwise,
 ];
 
+/**
+ * The opacity paint of the territory layers; with `slot`, the other slots
+ * fade to `ISOLATE_FADE` of theirs, so that slot's zone reads alone.
+ */
+export function territoryOpacity(slot: number | null): {
+    cells: ExpressionSpecification;
+    hatch: ExpressionSpecification | number;
+    edges: ExpressionSpecification | number;
+} {
+    const alpha: ExpressionSpecification = ["get", "alpha"];
+    if (slot === null) {
+        return { cells: alpha, hatch: HATCH_OPACITY, edges: 1 };
+    }
+    const isIt: ExpressionSpecification = ["==", ["get", "slot"], slot];
+    return {
+        cells: ["case", isIt, alpha, ["*", alpha, ISOLATE_FADE]],
+        hatch: ["case", isIt, HATCH_OPACITY, HATCH_OPACITY * ISOLATE_FADE],
+        edges: ["case", isIt, 1, ISOLATE_FADE],
+    };
+}
+
 /** Territory layers, to be added before `WATER_LAYER` so the sea covers the grid. */
 export function territoryLayers(colours: MapColours): LayerSpecification[] {
+    const opacity = territoryOpacity(null);
     return [
         {
             id: "territory-cells",
@@ -255,7 +310,7 @@ export function territoryLayers(colours: MapColours): LayerSpecification[] {
             filter: ["==", ["get", "layer"], "cell"],
             paint: {
                 "fill-color": slotColour(colours, colours.ink),
-                "fill-opacity": ["get", "alpha"],
+                "fill-opacity": opacity.cells,
                 "fill-antialias": false,
             },
         },
@@ -270,7 +325,7 @@ export function territoryLayers(colours: MapColours): LayerSpecification[] {
             ],
             paint: {
                 "fill-pattern": HATCH_IMAGE,
-                "fill-opacity": 0.7,
+                "fill-opacity": opacity.hatch,
                 "fill-antialias": false,
             },
         },
@@ -283,6 +338,7 @@ export function territoryLayers(colours: MapColours): LayerSpecification[] {
             paint: {
                 "line-color": slotColour(colours, colours.surface),
                 "line-width": ["match", ["get", "slot"], 0, 2, 2.2],
+                "line-opacity": opacity.edges,
             },
         },
     ];
@@ -395,7 +451,7 @@ export function dashedRingImage(
     );
 }
 
-/** The tie texture of Dominant: paper lines at 45°, 2 px wide, on a 6 px tile. */
+/** The tie texture of Dominant: paper lines at 45°, 1 px wide, on a 6 px tile. */
 export function hatchImage(
     colour: string,
     make: CanvasFactory = defaultCanvas,

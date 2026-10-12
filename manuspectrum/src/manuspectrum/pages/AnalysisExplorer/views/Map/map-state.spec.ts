@@ -30,7 +30,15 @@ describe("map state in the address", () => {
             track: ["a", null, "b"],
             brush: [1300, 1400],
             borders: true,
+            legend: false,
         });
+    });
+
+    it("keeps the legend out of the address, folded by default", () => {
+        const query = new URLSearchParams();
+        writeMapState({ ...defaultMapState(), legend: true }, query);
+        expect(query.toString()).toBe("");
+        expect(defaultMapState().legend).toBe(false);
     });
 
     it("falls back to the defaults on a reversed brush and a bad radius", () => {

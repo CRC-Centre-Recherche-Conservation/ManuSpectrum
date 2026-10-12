@@ -118,8 +118,9 @@ const CANVAS_SELECTOR = ".maplibregl-canvas";
  * timeline, the filters of the map in a rail, and the panel of the place,
  * period, document or material opened. The mode, the followed materials,
  * the brushed period and the borders live in the store (`mapState`, in the
- * address); the reliability switch, the hovered place and the opened
- * subject live here. The stage stays laid out, hidden, while the small
+ * address), with the legend's open state (folded by default, not in the
+ * address); the reliability switch, the hovered place, the isolated
+ * territory and the opened subject live here. The stage stays laid out, hidden, while the small
  * multiples show, so its snapshot can be taken and the map comes back as
  * it was. The opened subject's opener gets the focus back on close.
  */
@@ -149,7 +150,8 @@ const showLow = ref(true);
 const background = ref<string | null>(null);
 const mapFailed = ref(false);
 const mapColours = shallowRef(FALLBACK_COLOURS);
-const legendOpen = ref(!narrow.value);
+/** The followed slot whose territory reads alone while its legend row or rail chip is hovered. */
+const isolated = ref<number | null>(null);
 const radiusDraft = ref(store.mapState.radius);
 const folded = ref(new Set<RailGroup>());
 let opener: HTMLElement | null = null;
@@ -247,6 +249,7 @@ const minis = computed<MiniMap[]>(() => {
                 ? ticked
                 : Object.keys(response.value?.materials ?? {}),
             low.value,
+            tracked.value,
         );
     }
     const range = store.mapState.brush ?? eventsRange.value;
@@ -395,6 +398,13 @@ const territorySentence = computed(() => {
               "Each followed material radiates from the places that attest it and fades with distance.",
           );
 });
+const legendOpen = computed(() => store.mapState.legend);
+const isolateHint = computed(
+    () =>
+        store.mapState.colour === "each" &&
+        tracked.value.length >= 3 &&
+        !nothingToDraw.value,
+);
 const radiusText = computed(() =>
     interpolate($gettext("%{n} km"), { n: radiusDraft.value }),
 );
@@ -485,6 +495,14 @@ function setMode(next: MapMode): void {
             mode: modeLabels.value[next],
         }),
     );
+}
+
+function toggleLegend(): void {
+    store.setMapState({ legend: !legendOpen.value });
+}
+
+function brushPeriod(range: [number, number]): void {
+    store.setMapState({ brush: range });
 }
 
 function setColour(colour: TerritoryColour): void {
@@ -702,6 +720,7 @@ function skipToTimeline(): void {
                                 :events="events"
                                 :materials="response?.materials ?? {}"
                                 :colours="response?.colours ?? {}"
+                                @isolate="isolated = $event"
                             />
                         </div>
                     </section>
@@ -990,18 +1009,6 @@ function skipToTimeline(): void {
                                 <span>{{ $gettext("GeoJSON") }}</span>
                             </a>
                         </span>
-                        <p
-                            v-if="
-                                store.mapState.borders && bordersYear === null
-                            "
-                            class="borders-hint"
-                        >
-                            <span>{{
-                                $gettext(
-                                    "Choose a period on the timeline to see its borders.",
-                                )
-                            }}</span>
-                        </p>
                         <button
                             v-if="unplaced > 0"
                             type="button"
@@ -1010,6 +1017,18 @@ function skipToTimeline(): void {
                         >
                             <span>{{ unplacedText }}</span>
                         </button>
+                        <p
+                            v-if="
+                                store.mapState.borders && bordersYear === null
+                            "
+                            class="borders-hint"
+                        >
+                            <span>{{
+                                $gettext(
+                                    "Narrow the period with the timeline slider to see its borders.",
+                                )
+                            }}</span>
+                        </p>
                     </div>
                     <UnavailableState
                         v-if="failed"
@@ -1034,11 +1053,15 @@ function skipToTimeline(): void {
                             :borders-year="bordersYear"
                             :fit="bounds"
                             :selected="selectedPlace"
+                            :isolate="mode === 'territories' ? isolated : null"
                             @select="openSubject({ kind: 'place', id: $event })"
                             @hover="onStageHover"
                             @failed="mapFailed = true"
                         >
-                            <div class="legend">
+                            <div
+                                class="legend"
+                                :class="{ open: legendOpen }"
+                            >
                                 <button
                                     type="button"
                                     class="toggle"
@@ -1046,7 +1069,7 @@ function skipToTimeline(): void {
                                     :aria-expanded="
                                         legendOpen ? 'true' : 'false'
                                     "
-                                    @click="legendOpen = !legendOpen"
+                                    @click="toggleLegend"
                                 >
                                     <span>{{ stageTitle }}</span>
                                     <span
@@ -1078,6 +1101,8 @@ function skipToTimeline(): void {
                                         <li
                                             v-for="entry in followed"
                                             :key="entry.slot"
+                                            @mouseenter="isolated = entry.slot"
+                                            @mouseleave="isolated = null"
                                         >
                                             <FocusSlotDot
                                                 :number="entry.slot"
@@ -1183,6 +1208,16 @@ function skipToTimeline(): void {
                                 </p>
                                 <p class="sentence">
                                     <span>{{ territorySentence }}</span>
+                                </p>
+                                <p
+                                    v-if="isolateHint"
+                                    class="sentence isolate-hint"
+                                >
+                                    <span>{{
+                                        $gettext(
+                                            "Hover a material in the legend to see its zone alone.",
+                                        )
+                                    }}</span>
                                 </p>
                                 <p class="radius">
                                     <label for="explorer-map-radius">{{
@@ -1312,6 +1347,16 @@ function skipToTimeline(): void {
                         <p class="sentence">
                             <span>{{ territorySentence }}</span>
                         </p>
+                        <p
+                            v-if="isolateHint"
+                            class="sentence isolate-hint"
+                        >
+                            <span>{{
+                                $gettext(
+                                    "Hover a material in the legend to see its zone alone.",
+                                )
+                            }}</span>
+                        </p>
                         <p class="radius">
                             <label for="explorer-map-radius-narrow">{{
                                 $gettext("Radius")
@@ -1368,11 +1413,13 @@ function skipToTimeline(): void {
                     :events="panelEvents"
                     :places="places"
                     :analysis-names="response.analysisNames"
+                    :analysis-techniques="response.analysisTechniques"
                     :tracked="tracked"
                     :low="low"
                     :materials="response.materials"
                     :certainty="response.certaintyScale"
                     @close="closePanel"
+                    @brush="brushPeriod"
                 />
                 <p
                     v-else
@@ -1401,11 +1448,13 @@ function skipToTimeline(): void {
                 :events="panelEvents"
                 :places="places"
                 :analysis-names="response.analysisNames"
+                :analysis-techniques="response.analysisTechniques"
                 :tracked="tracked"
                 :low="low"
                 :materials="response.materials"
                 :certainty="response.certaintyScale"
                 @close="closePanel"
+                @brush="brushPeriod"
             />
         </Drawer>
         <p class="third-party">
@@ -1554,31 +1603,31 @@ function skipToTimeline(): void {
 }
 
 /* The rail groups: FacetRail .group */
-.map-view .map-rail {
+.map-rail {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
 }
 
-.map-view .map-rail .group {
+.map-rail .group {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
 }
 
-.map-view .map-rail > * + * {
+.map-rail > * + * {
     padding-block-start: 0.75rem;
     border-block-start: 0.0625rem solid var(--border);
 }
 
-.map-view .map-rail .group-title {
+.map-rail .group-title {
     position: sticky;
     inset-block-start: 0;
     z-index: 1;
     background: var(--surface);
 }
 
-.map-view .map-rail .disclosure {
+.map-rail .disclosure {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
@@ -1595,11 +1644,11 @@ function skipToTimeline(): void {
     cursor: pointer;
 }
 
-.map-view .map-rail .disclosure .chevron {
+.map-rail .disclosure .chevron {
     color: var(--ink-muted);
 }
 
-.map-view .map-rail .group-body {
+.map-rail .group-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.25rem;
@@ -1607,7 +1656,7 @@ function skipToTimeline(): void {
 }
 
 /* FacetValues .values.fixed .value */
-.map-view .map-rail .value {
+.map-rail .value {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -1620,18 +1669,18 @@ function skipToTimeline(): void {
     cursor: pointer;
 }
 
-.map-view .map-rail .value.checked {
+.map-rail .value.checked {
     border-color: var(--border-hover);
     background: var(--surface-soft, var(--surface));
     font-weight: 600;
 }
 
-.map-view .map-rail .value input {
+.map-rail .value input {
     flex: none;
     accent-color: var(--blue-text);
 }
 
-.map-view .map-rail .value .label {
+.map-rail .value .label {
     flex: 1 1 auto;
     min-inline-size: 0;
     overflow: hidden;
@@ -1639,11 +1688,11 @@ function skipToTimeline(): void {
     white-space: nowrap;
 }
 
-.map-view .map-rail .value .label.wrap {
+.map-rail .value .label.wrap {
     white-space: normal;
 }
 
-.map-view .map-rail .value .count {
+.map-rail .value .count {
     flex: none;
     color: var(--ink-muted);
     font-family: var(--font-mono);
@@ -1652,8 +1701,8 @@ function skipToTimeline(): void {
     font-variant-numeric: tabular-nums;
 }
 
-.map-view .map-rail .hint,
-.map-view .map-rail .rail-note {
+.map-rail .hint,
+.map-rail .rail-note {
     color: var(--ink-dim);
     font-size: 0.75rem;
 }
@@ -1799,7 +1848,8 @@ function skipToTimeline(): void {
 }
 
 .map-view .borders-hint {
-    flex-basis: 100%;
+    flex-basis: auto;
+    margin-inline-start: auto;
     color: var(--ink-muted);
     font-size: 0.75rem;
     text-align: end;
@@ -1895,6 +1945,12 @@ function skipToTimeline(): void {
     background: color-mix(in srgb, var(--stage) 88%, transparent);
     color: var(--surface);
     font-size: 0.75rem;
+}
+
+.map-view .legend.open {
+    max-block-size: calc(100% - 1.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .map-view .legend .toggle {
@@ -2017,9 +2073,11 @@ function skipToTimeline(): void {
     inset-block-end: 0.75rem;
     inset-inline-start: 0.75rem;
     z-index: 2;
+    inset-inline-end: 3rem;
     display: grid;
     gap: 0.375rem;
-    max-inline-size: min(27.5rem, 100% - 7rem);
+    inline-size: fit-content;
+    max-inline-size: 27.5rem;
     padding: 0.75rem 0.875rem;
     border-radius: 0.625rem;
     background: color-mix(in srgb, var(--stage) 92%, transparent);
@@ -2029,6 +2087,7 @@ function skipToTimeline(): void {
 
 .map-view .territory-note.static {
     position: static;
+    inline-size: auto;
     max-inline-size: none;
 }
 
@@ -2227,16 +2286,20 @@ function skipToTimeline(): void {
 
     .map-view .mode-switch {
         display: flex;
+        box-sizing: border-box;
         inline-size: 100%;
+        min-inline-size: 0;
     }
 
     .map-view .mode-switch > button,
     .map-view .mode-switch > :deep(.help-tip) {
         flex: 1 1 0;
+        min-inline-size: 0;
     }
 
     .map-view .mode-switch button {
         inline-size: 100%;
+        min-inline-size: 0;
         white-space: normal;
     }
 

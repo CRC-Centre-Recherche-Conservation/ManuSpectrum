@@ -107,7 +107,11 @@ function placesOf(map: MiniMap): number {
 
 function countsText(map: MiniMap): string {
     return interpolate(
-        $gettext("%{places} pl. · %{components} comp"),
+        $ngettext(
+            "%{places} place · %{components} comp.",
+            "%{places} places · %{components} comp.",
+            placesOf(map),
+        ),
         { places: placesOf(map), components: map.components },
         true,
     );

@@ -19,6 +19,8 @@ export interface MapState {
     brush: [number, number] | null;
     /** The OpenHistoricalMap borders layer (`layers=borders`). */
     borders: boolean;
+    /** The stage legend is open: the reader's choice, kept across modes, never in the address. */
+    legend: boolean;
 }
 
 export const RADIUS_MIN_KM = 60;
@@ -51,6 +53,7 @@ export function defaultMapState(): MapState {
         track: [],
         brush: null,
         borders: false,
+        legend: false,
     };
 }
 

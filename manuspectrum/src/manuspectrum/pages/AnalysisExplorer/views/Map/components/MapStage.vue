@@ -34,6 +34,7 @@ import {
     placeLayers,
     stageImages,
     territoryLayers,
+    territoryOpacity,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 
 import type { FeatureCollection, Point } from "geojson";
@@ -61,14 +62,18 @@ const OHM_MAX_ZOOM = 14;
 const SNAPSHOT_TIMEOUT_MS = 8000;
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const PIP_FONT_CHECK = "700 18px 'JetBrains Mono'";
+const ATTRIBUTION_EVENTS = ["load", "styledata", "sourcedata", "resize"];
+const SHOWN_ATTRIBUTION = ".maplibregl-ctrl-attrib.maplibregl-compact-show";
 
 /**
  * The MapLibre stage of the map view: paper land on pale water, the places
  * with their rings and followed-material pips, the territories under the
  * sea, the historical borders. Every focus, follow or selection change goes
  * through feature-state; only a change of `places` or `territories`
- * replaces source data. Overlays of the parent (legend, note, tooltip) go
- * in the default slot, inside the frame.
+ * replaces source data; `isolate` (a slot, or null) fades the other slots'
+ * territories by paint. The compact attribution starts folded to its ⓘ.
+ * Overlays of the parent (legend, note, tooltip) go in the default slot,
+ * inside the frame.
  */
 const props = defineProps<{
     places: FeatureCollection<Point, PlaceProperties>;
@@ -79,6 +84,7 @@ const props = defineProps<{
     bordersYear: number | null;
     fit: Bounds | null;
     selected: string | null;
+    isolate?: number | null;
 }>();
 const emit = defineEmits<{
     select: [id: string];
@@ -131,6 +137,12 @@ watch(
     },
 );
 watch(
+    () => props.isolate ?? null,
+    (slot) => {
+        if (ready && map.value) isolateTerritory(map.value, slot);
+    },
+);
+watch(
     () => props.colours,
     (colours) => {
         if (ready && map.value) recolour(map.value, colours);
@@ -163,6 +175,7 @@ onMounted(() => {
                 },
             }),
         );
+        foldAttribution(created);
         created.on("load", () => onLoad(created));
         created.on("error", (event: { sourceId?: string }) => {
             if (event.sourceId === BASE_SOURCE) baseFailed.value = true;
@@ -224,6 +237,29 @@ function applyStates(): void {
             current.removeFeatureState({ source: PLACES_SOURCE, id });
     }
     applied = next;
+}
+
+/**
+ * Removes the open state MapLibre gives the compact attribution when its
+ * text first arrives (on a style, source or resize event, `maplibre-gl`
+ * 4.7.1 `AttributionControl._updateCompact`), once; the reader's own
+ * toggles are left alone.
+ */
+function foldAttribution(current: MapLibreMap): void {
+    const fold = (): void => {
+        const shown = container.value?.querySelector(SHOWN_ATTRIBUTION);
+        if (!shown) return;
+        shown.classList.remove("maplibregl-compact-show");
+        for (const type of ATTRIBUTION_EVENTS) current.off(type, fold);
+    };
+    for (const type of ATTRIBUTION_EVENTS) current.on(type, fold);
+}
+
+function isolateTerritory(current: MapLibreMap, slot: number | null): void {
+    const opacity = territoryOpacity(slot);
+    current.setPaintProperty("territory-cells", "fill-opacity", opacity.cells);
+    current.setPaintProperty("territory-hatch", "fill-opacity", opacity.hatch);
+    current.setPaintProperty("territory-edges", "line-opacity", opacity.edges);
 }
 
 function putImages(current: MapLibreMap, colours: MapColours): void {
@@ -323,6 +359,7 @@ function onLoad(current: MapLibreMap): void {
     drawnColours = props.colours;
     redrawPipsWhenFontsLoad(current);
     applyStates();
+    if (props.isolate) isolateTerritory(current, props.isolate);
     if (props.fit) {
         current.fitBounds(boundsLike(props.fit), {
             padding: FIT_PADDING_PX,

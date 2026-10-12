@@ -73,13 +73,21 @@ function dotsOf(
     }));
 }
 
-/** One mini map per material, most components first; every analysed place is a dot, hollow where the material is not attested. */
+/**
+ * One mini map per material, the followed ones first in slot order, then
+ * most components first; every analysed place is a dot, hollow where the
+ * material is not attested.
+ */
 export function byMaterial(
     events: readonly MapEvent[],
     places: Readonly<Record<string, MapPlace>>,
     uris: readonly string[],
     low: ReadonlySet<string>,
+    tracked: readonly TrackedMaterial[] = [],
 ): MiniMap[] {
+    const slots = new Map(tracked.map(({ uri, slot }) => [uri, slot]));
+    const slotOf = (map: MiniMap): number =>
+        (map.uri === null ? undefined : slots.get(map.uri)) ?? Infinity;
     const maps = uris.map((uri): MiniMap => {
         const summaries = summarisePlaces(
             events,
@@ -118,6 +126,7 @@ export function byMaterial(
     });
     return maps.sort(
         (a, b) =>
+            slotOf(a) - slotOf(b) ||
             b.components - a.components ||
             (a.title?.value ?? "").localeCompare(b.title?.value ?? ""),
     );

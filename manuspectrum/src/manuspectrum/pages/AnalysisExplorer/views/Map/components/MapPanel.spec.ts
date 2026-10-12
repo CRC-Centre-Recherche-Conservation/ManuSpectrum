@@ -116,6 +116,38 @@ const analysisNames = {
     [uuid(104)]: label("A1-FORS"),
 };
 const ALL_KEYS = [101, 102, 103, 104].map((n) => analysisKey(uuid(n)));
+const analysisTechniques = {
+    [uuid(102)]: {
+        code: "XRF",
+        colour: 2,
+        family: "http://technique.test/xrf",
+    },
+    [uuid(103)]: {
+        code: "RAM",
+        colour: 4,
+        family: "http://technique.test/raman",
+    },
+};
+
+/** One document, one Component, `count` analyses in one production. */
+function crowded(count: number): MapEvent[] {
+    return [
+        mapEvent({
+            id: "production:crowded",
+            document: { id: uuid(7), name: label("Ms C") },
+            component: { id: uuid(70), name: label("f. 1") },
+            analyses: Array.from({ length: count }, (_, n) => uuid(1000 + n)),
+        }),
+    ];
+}
+
+async function unfold(wrapper: VueWrapper): Promise<void> {
+    for (const button of wrapper.findAll(".panel-document .disclosure")) {
+        if (button.attributes("aria-expanded") === "false") {
+            await button.trigger("click");
+        }
+    }
+}
 
 const announce = vi.fn();
 let pinia: Pinia;
@@ -134,6 +166,7 @@ function mountPanel(
             events: events(),
             places,
             analysisNames,
+            analysisTechniques,
             tracked: [],
             low: new Set([DOUBT]),
             materials,
@@ -205,8 +238,9 @@ describe("MapPanel", () => {
         expect(wrapper.findAll("a.authority")).toHaveLength(0);
     });
 
-    it("groups by document name, the document itself first, then each Component", () => {
+    it("groups by document name, the document itself first, then each Component", async () => {
         const wrapper = mountPanel();
+        await unfold(wrapper);
         const documents = wrapper.findAll(".panel-document");
         expect(documents.map((d) => d.find("h4 .group-title").text())).toEqual([
             "Ms A",
@@ -296,8 +330,9 @@ describe("MapPanel", () => {
         );
     });
 
-    it("lists the materials here, followed first, pale when low only", () => {
+    it("lists the materials here, followed first, pale when low only", async () => {
         const wrapper = mountPanel({ tracked: [{ uri: AZURITE, slot: 3 }] });
+        await unfold(wrapper);
         const rows = wrapper.findAll(".attested li");
         expect(rows).toHaveLength(1);
         expect(rows[0].find(".label").text()).toBe("Azurite");
@@ -310,8 +345,9 @@ describe("MapPanel", () => {
         );
     });
 
-    it("notes a production material no modification cites", () => {
+    it("notes a production material no modification cites", async () => {
         const wrapper = mountPanel();
+        await unfold(wrapper);
         const notes = wrapper.findAll(".placed-note");
         expect(notes).toHaveLength(2);
         expect(notes[0].text()).toBe(
@@ -322,11 +358,171 @@ describe("MapPanel", () => {
     it("opens the document in Corpus", async () => {
         const store = useExplorerStore();
         const wrapper = mountPanel();
+        await unfold(wrapper);
         const link = wrapper.find(".panel-document a.open-corpus");
         expect(link.attributes("href")).toContain(`doc=${uuid(1)}`);
         await link.trigger("click");
         expect(store.view).toBe("corpus");
         expect(store.document?.id).toBe(uuid(1));
+    });
+
+    it("folds the documents of a subject with several, without mounting their body", async () => {
+        const wrapper = mountPanel();
+        const buttons = wrapper.findAll(".panel-document .disclosure");
+        expect(buttons.map((b) => b.attributes("aria-expanded"))).toEqual([
+            "false",
+            "false",
+        ]);
+        expect(wrapper.find(".component-group").exists()).toBe(false);
+        expect(buttons[0].find(".document-counts").text()).toBe(
+            "2 Components · 3 analyses",
+        );
+        expect(
+            buttons[0].findAll(".summary-tag .code").map((tag) => tag.text()),
+        ).toEqual(["RAM", "XRF"]);
+        await buttons[0].trigger("click");
+        expect(buttons[0].attributes("aria-expanded")).toBe("true");
+        const body = wrapper.get(`#${buttons[0].attributes("aria-controls")}`);
+        expect(body.findAll(".component-group")).toHaveLength(2);
+        expect(buttons[0].find(".summary-tag").exists()).toBe(false);
+    });
+
+    it("opens a lone small document", () => {
+        const wrapper = mountPanel({
+            subject: { kind: "document", id: uuid(2) },
+        });
+        expect(
+            wrapper
+                .get(".panel-document .disclosure")
+                .attributes("aria-expanded"),
+        ).toBe("true");
+        expect(wrapper.find(".component-group").exists()).toBe(true);
+    });
+
+    it("marks each analysis with its technique", async () => {
+        const wrapper = mountPanel();
+        await unfold(wrapper);
+        const rows = wrapper.findAll(".analysis-list li");
+        const tagged = rows.filter((row) =>
+            row.find(".technique-tag").exists(),
+        );
+        expect(tagged.map((row) => row.find(".code").text())).toEqual([
+            "RAM",
+            "XRF",
+        ]);
+        expect(tagged[0].find(".analysis-name").text()).toBe("A1-Raman");
+    });
+
+    it("shows five analyses of a crowded Component, then twenty more per click", async () => {
+        const wrapper = mountPanel({
+            subject: { kind: "document", id: uuid(7) },
+            events: crowded(40),
+        });
+        expect(wrapper.find(".analysis-list").exists()).toBe(false);
+        await unfold(wrapper);
+        expect(wrapper.findAll(".analysis-list li")).toHaveLength(5);
+        expect(wrapper.find(".capacity").text()).toContain(
+            "40 analyses here: open the document in Corpus to filter them by technique.",
+        );
+        expect(wrapper.find(".capacity a.open-corpus").exists()).toBe(true);
+        const more = wrapper.get(".component-group > .more");
+        expect(more.text()).toBe("Show 20 more analyses");
+        await more.trigger("click");
+        expect(wrapper.findAll(".analysis-list li")).toHaveLength(25);
+        expect(wrapper.get(".component-group > .more").text()).toBe(
+            "Show 15 more analyses",
+        );
+        expect(
+            wrapper.findAll("input[type=checkbox]").length,
+        ).toBeLessThanOrEqual(60);
+    });
+
+    it("shows three events per Component, then the others", async () => {
+        const many = Array.from({ length: 5 }, (_, n) =>
+            mapEvent({
+                id: `modification:${n}`,
+                type: "modification",
+                document: { id: uuid(7), name: label("Ms C") },
+                component: { id: uuid(70), name: label("f. 1") },
+                analyses: [],
+            }),
+        );
+        const wrapper = mountPanel({
+            subject: { kind: "document", id: uuid(7) },
+            events: many,
+        });
+        expect(wrapper.findAll(".event")).toHaveLength(3);
+        const more = wrapper.get(".component-group > .more");
+        expect(more.text()).toBe("+ 2 events");
+        await more.trigger("click");
+        expect(wrapper.findAll(".event")).toHaveLength(5);
+    });
+
+    it("shows five documents, then ten more per click", async () => {
+        const many = Array.from({ length: 17 }, (_, n) =>
+            mapEvent({
+                id: `production:${n}`,
+                document: {
+                    id: uuid(600 + n),
+                    name: label(`Ms ${String(n).padStart(2, "0")}`),
+                },
+            }),
+        );
+        const wrapper = mountPanel({ events: many });
+        expect(wrapper.findAll(".panel-document")).toHaveLength(5);
+        const more = () => wrapper.get(".analyses > .more");
+        expect(more().text()).toBe("+ 12 other documents");
+        await more().trigger("click");
+        expect(wrapper.findAll(".panel-document")).toHaveLength(15);
+        await more().trigger("click");
+        expect(wrapper.findAll(".panel-document")).toHaveLength(17);
+        expect(wrapper.find(".analyses > .more").exists()).toBe(false);
+    });
+
+    it("lists eight materials, then the others", async () => {
+        const many = Array.from({ length: 11 }, (_, n) =>
+            mapEvent({
+                id: `production:m${n}`,
+                materials: [
+                    {
+                        id: `http://material.test/${n}`,
+                        name: label(`Material ${String(n).padStart(2, "0")}`),
+                        reliability: SURE,
+                        characterization: uuid(700 + n),
+                    },
+                ],
+            }),
+        );
+        const wrapper = mountPanel({ events: many });
+        expect(wrapper.findAll(".attested li")).toHaveLength(8);
+        const more = wrapper.get(".attested .more");
+        expect(more.text()).toBe("Show 3 more materials");
+        await more.trigger("click");
+        expect(wrapper.findAll(".attested li")).toHaveLength(11);
+        const meta = wrapper.get(".attested li .meta");
+        expect(meta.get(".reliability").text()).toBe("Certain");
+        expect(meta.get(".row-counts").text()).toBe("1 doc. · 0 comp.");
+    });
+
+    it("says « here » when the analyses do not fit in the Selection", async () => {
+        const store = useExplorerStore();
+        store.addManyToBasket(
+            Array.from({ length: 29 }, (_, n) => analysisKey(uuid(500 + n))),
+        );
+        const wrapper = mountPanel();
+        await flushPromises();
+        expect(wrapper.get(".selection-capacity-notice .text").text()).toBe(
+            "4 analyses here to add: tick them one by one or make room.",
+        );
+    });
+
+    it("brushes the map on a period from its head", async () => {
+        const wrapper = mountPanel({
+            subject: { kind: "period", from: 1301, to: 1325 },
+        });
+        await wrapper.get(".brush-period").trigger("click");
+        expect(wrapper.emitted("brush")).toEqual([[[1301, 1325]]]);
+        expect(mountPanel().find(".brush-period").exists()).toBe(false);
     });
 
     it("titles the other subjects and closes", async () => {

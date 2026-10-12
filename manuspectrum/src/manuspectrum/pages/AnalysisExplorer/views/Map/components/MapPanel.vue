@@ -16,6 +16,7 @@ import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconBut
 import SelectAllCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectAllCheckbox.vue";
 import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
 import SelectionCheckbox from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCheckbox.vue";
+import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 
 import {
@@ -25,6 +26,7 @@ import {
 import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { BASKET_LIMIT } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentHref,
@@ -47,6 +49,7 @@ import type {
     MapEvent,
     MapMaterial,
     MapPlace,
+    TechniqueMark,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import type {
@@ -68,6 +71,7 @@ interface Attested {
 }
 
 interface ComponentGroup {
+    /** Unique in the panel: the document id, then the Component id or « own ». */
     key: string;
     title: string;
     lang: string | undefined;
@@ -76,7 +80,22 @@ interface ComponentGroup {
     keys: string[];
 }
 
+interface DocumentView {
+    document: PanelDocument;
+    groups: ComponentGroup[];
+    keys: string[];
+    components: number;
+    dates: string;
+    techniques: TechniqueMark[];
+}
+
 const DOCUMENTS_SHOWN = 5;
+const DOCUMENTS_STEP = 10;
+const ANALYSES_SHOWN = 5;
+const ANALYSES_STEP = 20;
+const EVENTS_SHOWN = 3;
+const MATERIALS_SHOWN = 8;
+const TECHNIQUES_SUMMARY = 3;
 const GEONAMES = /^\d+$/;
 const WIKIDATA = /^Q\d+$/;
 const OWN = "own";
@@ -90,19 +109,28 @@ const OWN = "own";
  * followed first, a sentence for each followed material absent here, and
  * the analyses by document and Component with the Selection's select-all,
  * capacity notice and bulk line. The heading takes the focus when the panel
- * opens or changes subject; Escape and « Close » emit `close`.
+ * opens or changes subject; Escape and « Close » emit `close`; a period's
+ * « Show only this period on the map » emits `brush`.
+ *
+ * Long subjects stay short: the first 8 materials, the first 5 documents
+ * (10 more per click), documents folded unless the subject has one with at
+ * most 10 analyses (a folded body is not mounted), per Component the first
+ * 3 events and the first 5 analyses (20 more per click), and past the
+ * Selection's capacity a note that sends to the document in Corpus. What is
+ * unfolded resets when the subject changes.
  */
 const props = defineProps<{
     subject: PanelSubject;
     events: MapEvent[];
     places: Record<string, MapPlace>;
     analysisNames: Record<string, Label>;
+    analysisTechniques: Record<string, TechniqueMark>;
     tracked: TrackedMaterial[];
     low: Set<string>;
     materials: Record<string, MapMaterial>;
     certainty: CertaintyScale;
 }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; brush: [range: [number, number]] }>();
 
 const store = useExplorerStore();
 const toggle = useSelectionToggle();
@@ -111,8 +139,15 @@ const { $gettext, $ngettext, interpolate } = gettext;
 const { eventTypeLabel, placeSourceLabel } = useVocabulary();
 const noticeId = useId();
 const heading = useTemplateRef<HTMLElement>("heading");
+const bodyId = useId();
 
-const allDocuments = ref(false);
+const documentsShown = ref(DOCUMENTS_SHOWN);
+const allMaterials = ref(false);
+/** Documents the reader folded or unfolded, by id; the others follow `openByDefault`. */
+const toggled = ref(new Map<string, boolean>());
+/** Analyses shown per Component group past the first `ANALYSES_SHOWN`. */
+const analysesShown = ref(new Map<string, number>());
+const eventsOpen = ref(new Set<string>());
 
 const shown = computed(() =>
     subjectEvents(props.events, props.places, props.subject),
@@ -334,13 +369,37 @@ const attested = computed<Attested[]>(() => {
                 a.label.value.localeCompare(b.label.value),
         );
 });
-const documents = computed(() =>
-    allDocuments.value
-        ? content.value.documents
-        : content.value.documents.slice(0, DOCUMENTS_SHOWN),
+const shownAttested = computed(() =>
+    allMaterials.value
+        ? attested.value
+        : attested.value.slice(0, MATERIALS_SHOWN),
+);
+const hiddenMaterials = computed(
+    () => attested.value.length - shownAttested.value.length,
+);
+const moreMaterialsText = computed(() =>
+    interpolate(
+        $ngettext(
+            "Show %{n} more material",
+            "Show %{n} more materials",
+            hiddenMaterials.value,
+        ),
+        { n: hiddenMaterials.value },
+        true,
+    ),
+);
+const documents = computed<DocumentView[]>(() =>
+    content.value.documents
+        .slice(0, documentsShown.value)
+        .map((document) => documentView(document)),
 );
 const hiddenDocuments = computed(
     () => content.value.documents.length - documents.value.length,
+);
+const openByDefault = computed(
+    () =>
+        content.value.documents.length === 1 &&
+        content.value.analyses.length <= ANALYSES_SHOWN * 2,
 );
 const moreDocumentsText = computed(() =>
     interpolate(
@@ -361,7 +420,11 @@ const canCompare = computed(() => store.basket.length > 0);
 watch(
     () => props.subject,
     async () => {
-        allDocuments.value = false;
+        documentsShown.value = DOCUMENTS_SHOWN;
+        allMaterials.value = false;
+        toggled.value = new Map();
+        analysesShown.value = new Map();
+        eventsOpen.value = new Set();
         await nextTick();
         heading.value?.focus();
     },
@@ -422,45 +485,192 @@ function absenceText(uri: string): string {
 }
 
 function analysesOf(events: readonly MapEvent[]): string[] {
-    const ids: string[] = [];
+    const ids = new Set<string>();
     for (const event of events) {
-        for (const id of event.analyses) {
-            if (!ids.includes(id)) ids.push(id);
-        }
+        for (const id of event.analyses) ids.add(id);
     }
-    return ids;
+    return [...ids];
+}
+
+function group(
+    key: string,
+    title: string,
+    lang: string | undefined,
+    events: MapEvent[],
+): ComponentGroup {
+    const analyses = analysesOf(events);
+    return {
+        key,
+        title,
+        lang,
+        events,
+        analyses,
+        keys: analyses.map(analysisKey),
+    };
 }
 
 function groupsOf(document: PanelDocument): ComponentGroup[] {
     const groups: ComponentGroup[] = [];
     if (document.own.length > 0) {
-        groups.push({
-            key: OWN,
-            title: $gettext("Document itself"),
-            lang: undefined,
-            events: document.own,
-            analyses: analysesOf(document.own),
-            keys: analysesOf(document.own).map(analysisKey),
-        });
+        groups.push(
+            group(
+                `${document.id}:${OWN}`,
+                $gettext("Document itself"),
+                undefined,
+                document.own,
+            ),
+        );
     }
     for (const component of document.components) {
-        groups.push({
-            key: component.id,
-            title: component.name.value,
-            lang: component.name.lang || undefined,
-            events: component.events,
-            analyses: analysesOf(component.events),
-            keys: analysesOf(component.events).map(analysisKey),
-        });
+        groups.push(
+            group(
+                `${document.id}:${component.id}`,
+                component.name.value,
+                component.name.lang || undefined,
+                component.events,
+            ),
+        );
     }
     return groups;
 }
 
-function documentKeys(document: PanelDocument): string[] {
-    return analysesOf([
+/** The most used techniques of `ids`, at most `TECHNIQUES_SUMMARY`, by code on a tie. */
+function techniqueSummary(ids: readonly string[]): TechniqueMark[] {
+    const counts = new Map<string, { mark: TechniqueMark; count: number }>();
+    for (const id of ids) {
+        const mark = props.analysisTechniques[id];
+        if (!mark) continue;
+        const entry = counts.get(mark.code);
+        if (entry) entry.count += 1;
+        else counts.set(mark.code, { mark, count: 1 });
+    }
+    return [...counts.values()]
+        .sort(
+            (a, b) =>
+                b.count - a.count || a.mark.code.localeCompare(b.mark.code),
+        )
+        .slice(0, TECHNIQUES_SUMMARY)
+        .map((entry) => entry.mark);
+}
+
+function documentView(document: PanelDocument): DocumentView {
+    const analyses = analysesOf([
         ...document.own,
         ...document.components.flatMap((component) => component.events),
-    ]).map(analysisKey);
+    ]);
+    return {
+        document,
+        groups: groupsOf(document),
+        keys: analyses.map(analysisKey),
+        components: document.components.length,
+        dates: documentDates(document),
+        techniques: techniqueSummary(analyses),
+    };
+}
+
+function isOpen(id: string): boolean {
+    return toggled.value.get(id) ?? openByDefault.value;
+}
+
+function toggleDocument(id: string): void {
+    const next = new Map(toggled.value);
+    next.set(id, !isOpen(id));
+    toggled.value = next;
+}
+
+function documentCounts(view: DocumentView): string {
+    return interpolate(
+        $gettext("%{components} · %{analyses}"),
+        {
+            components: interpolate(
+                $ngettext("%{n} Component", "%{n} Components", view.components),
+                { n: view.components },
+                true,
+            ),
+            analyses: interpolate(
+                $ngettext("%{n} analysis", "%{n} analyses", view.keys.length),
+                { n: view.keys.length },
+                true,
+            ),
+        },
+        true,
+    );
+}
+
+function shownAnalyses(entry: ComponentGroup): string[] {
+    return entry.analyses.slice(
+        0,
+        analysesShown.value.get(entry.key) ?? ANALYSES_SHOWN,
+    );
+}
+
+function hiddenAnalyses(entry: ComponentGroup): number {
+    return entry.analyses.length - shownAnalyses(entry).length;
+}
+
+function showMoreAnalyses(entry: ComponentGroup): void {
+    const next = new Map(analysesShown.value);
+    next.set(entry.key, shownAnalyses(entry).length + ANALYSES_STEP);
+    analysesShown.value = next;
+}
+
+function moreAnalysesText(entry: ComponentGroup): string {
+    const n = Math.min(ANALYSES_STEP, hiddenAnalyses(entry));
+    return interpolate(
+        $ngettext("Show %{n} more analysis", "Show %{n} more analyses", n),
+        { n },
+        true,
+    );
+}
+
+function overCapacity(entry: ComponentGroup): boolean {
+    return entry.analyses.length > BASKET_LIMIT;
+}
+
+function capacityText(entry: ComponentGroup): string {
+    return interpolate(
+        $gettext(
+            "%{n} analyses here: open the document in Corpus to filter them by technique.",
+        ),
+        { n: entry.analyses.length },
+        true,
+    );
+}
+
+function shownEvents(entry: ComponentGroup): MapEvent[] {
+    return eventsOpen.value.has(entry.key)
+        ? entry.events
+        : entry.events.slice(0, EVENTS_SHOWN);
+}
+
+function hiddenEvents(entry: ComponentGroup): number {
+    return entry.events.length - shownEvents(entry).length;
+}
+
+function showAllEvents(entry: ComponentGroup): void {
+    eventsOpen.value = new Set([...eventsOpen.value, entry.key]);
+}
+
+function moreEventsText(entry: ComponentGroup): string {
+    const n = hiddenEvents(entry);
+    return interpolate(
+        $ngettext("+ %{n} event", "+ %{n} events", n),
+        { n },
+        true,
+    );
+}
+
+function showMoreDocuments(): void {
+    documentsShown.value += DOCUMENTS_STEP;
+}
+
+function techniqueOf(id: string): TechniqueMark | null {
+    return props.analysisTechniques[id] ?? null;
+}
+
+function brushPeriod(): void {
+    const subject = props.subject;
+    if (subject.kind === "period") emit("brush", [subject.from, subject.to]);
 }
 
 function documentDates(document: PanelDocument): string {
@@ -562,6 +772,16 @@ function compare(): void {
                 class="meta"
             >
                 <span v-if="kind">{{ kind }}</span>
+                <button
+                    v-if="props.subject.kind === 'period'"
+                    type="button"
+                    class="pill brush-period"
+                    @click="brushPeriod"
+                >
+                    <span>{{
+                        $gettext("Show only this period on the map")
+                    }}</span>
+                </button>
                 <span
                     v-if="parentName"
                     :lang="parentName.lang || undefined"
@@ -601,7 +821,7 @@ function compare(): void {
             <h3 class="kicker">{{ $gettext("Materials attested here") }}</h3>
             <ul>
                 <li
-                    v-for="row in attested"
+                    v-for="row in shownAttested"
                     :key="row.uri"
                     :class="{ pale: row.pale }"
                     :style="
@@ -635,17 +855,34 @@ function compare(): void {
                     <span
                         class="label"
                         :lang="row.label.lang || undefined"
-                        :title="row.label.value"
                         >{{ row.label.value }}</span
                     >
-                    <span
-                        v-if="row.reliability"
-                        class="reliability"
-                        >{{ row.reliability }}</span
-                    >
-                    <span class="row-counts">{{ attestedCounts(row) }}</span>
+                    <span class="meta">
+                        <span
+                            v-if="row.reliability"
+                            class="reliability"
+                            >{{ row.reliability }}</span
+                        >
+                        <span
+                            v-if="row.reliability"
+                            class="joint"
+                            aria-hidden="true"
+                            >{{ "·" }}</span
+                        >
+                        <span class="row-counts">{{
+                            attestedCounts(row)
+                        }}</span>
+                    </span>
                 </li>
             </ul>
+            <button
+                v-if="hiddenMaterials > 0"
+                type="button"
+                class="more"
+                @click="allMaterials = true"
+            >
+                <span>{{ moreMaterialsText }}</span>
+            </button>
         </section>
 
         <p
@@ -669,6 +906,7 @@ function compare(): void {
                 <SelectionCapacityNotice
                     :id="noticeId"
                     :keys="keys"
+                    scope="here"
                 />
                 <BulkStatusLine
                     :status="toggle.lastBulk.value"
@@ -679,175 +917,270 @@ function compare(): void {
             </div>
 
             <section
-                v-for="document in documents"
-                :key="document.id"
+                v-for="(view, index) in documents"
+                :key="view.document.id"
                 class="panel-document"
+                :class="{ open: isOpen(view.document.id) }"
             >
                 <h4>
-                    <span
-                        class="group-title"
-                        :lang="document.name.lang || undefined"
-                        :title="document.name.value"
-                        >{{ document.name.value }}</span
+                    <button
+                        type="button"
+                        class="disclosure"
+                        :aria-expanded="
+                            isOpen(view.document.id) ? 'true' : 'false'
+                        "
+                        :aria-controls="`${bodyId}-${index}`"
+                        @click="toggleDocument(view.document.id)"
                     >
-                    <span class="dates">{{ documentDates(document) }}</span>
+                        <span
+                            class="chevron"
+                            aria-hidden="true"
+                            >{{ isOpen(view.document.id) ? "▾" : "▸" }}</span
+                        >
+                        <span class="disclosure-text">
+                            <span class="title-line">
+                                <span
+                                    class="group-title"
+                                    :lang="view.document.name.lang || undefined"
+                                    :title="view.document.name.value"
+                                    >{{ view.document.name.value }}</span
+                                >
+                                <span
+                                    v-if="view.dates"
+                                    class="dates"
+                                    >{{ view.dates }}</span
+                                >
+                            </span>
+                            <span class="summary">
+                                <span class="document-counts">{{
+                                    documentCounts(view)
+                                }}</span>
+                                <template v-if="!isOpen(view.document.id)">
+                                    <TechniqueTag
+                                        v-for="mark in view.techniques"
+                                        :key="mark.code"
+                                        class="summary-tag"
+                                        :code="mark.code"
+                                        :colour="mark.colour"
+                                    />
+                                </template>
+                            </span>
+                        </span>
+                    </button>
                     <SelectAllCheckbox
                         class="group-select"
-                        :keys="documentKeys(document)"
-                        :name="selectName(document.name.value)"
+                        :keys="view.keys"
+                        :name="selectName(view.document.name.value)"
                         :described-by="noticeId"
                         :hints="hints"
                         :compact="true"
                     />
                 </h4>
-                <a
-                    class="open-corpus"
-                    :href="documentHref(snapshotOf(store), document.id)"
-                    @click.prevent="openDocument(document.id)"
-                >
-                    <span>{{ $gettext("Open in Corpus") }}</span>
-                    <svg
-                        class="arrow"
-                        :viewBox="ICON_VIEW_BOX"
-                        aria-hidden="true"
-                        focusable="false"
-                    >
-                        <path
-                            v-for="shape in ICONS['arrow-right']"
-                            :key="shape"
-                            :d="shape"
-                        />
-                    </svg>
-                </a>
                 <div
-                    v-for="group in groupsOf(document)"
-                    :key="group.key"
-                    class="component-group"
+                    v-if="isOpen(view.document.id)"
+                    :id="`${bodyId}-${index}`"
+                    class="document-body"
                 >
-                    <p class="component-line">
-                        <span
-                            class="component-title"
-                            :lang="group.lang"
-                            >{{ group.title }}</span
+                    <a
+                        class="open-corpus"
+                        :href="
+                            documentHref(snapshotOf(store), view.document.id)
+                        "
+                        @click.prevent="openDocument(view.document.id)"
+                    >
+                        <span>{{ $gettext("Open in Corpus") }}</span>
+                        <svg
+                            class="arrow"
+                            :viewBox="ICON_VIEW_BOX"
+                            aria-hidden="true"
+                            focusable="false"
                         >
-                        <SelectAllCheckbox
-                            class="group-select"
-                            :keys="group.keys"
-                            :name="selectName(group.title)"
-                            :described-by="noticeId"
-                            :hints="hints"
-                            :compact="true"
-                        />
-                    </p>
-                    <ul class="events">
-                        <li
-                            v-for="event in group.events"
-                            :key="event.id"
-                            class="event"
-                        >
-                            <p class="event-line">
-                                <span class="type">{{
-                                    eventTypeLabel(event.type)
-                                }}</span>
-                                <span class="date">{{ dateOf(event) }}</span>
-                                <span
-                                    v-if="
-                                        event.placeSource &&
-                                        event.placeSource !== 'own'
-                                    "
-                                    class="source"
-                                    >{{
-                                        placeSourceLabel(event.placeSource)
-                                    }}</span
-                                >
-                            </p>
-                            <ul
-                                v-if="event.materials.length > 0"
-                                class="event-materials"
+                            <path
+                                v-for="shape in ICONS['arrow-right']"
+                                :key="shape"
+                                :d="shape"
+                            />
+                        </svg>
+                    </a>
+                    <div
+                        v-for="entry in view.groups"
+                        :key="entry.key"
+                        class="component-group"
+                    >
+                        <p class="component-line">
+                            <span
+                                class="component-title"
+                                :lang="entry.lang"
+                                >{{ entry.title }}</span
                             >
-                                <li
-                                    v-for="material in event.materials"
-                                    :key="material.characterization"
-                                    class="material"
-                                    :class="{
-                                        pale: isLow(material, props.low),
-                                    }"
-                                    :style="materialHue(material)"
-                                >
+                            <SelectAllCheckbox
+                                class="group-select"
+                                :keys="entry.keys"
+                                :name="selectName(entry.title)"
+                                :described-by="noticeId"
+                                :hints="hints"
+                                :compact="true"
+                            />
+                        </p>
+                        <ul class="events">
+                            <li
+                                v-for="event in shownEvents(entry)"
+                                :key="event.id"
+                                class="event"
+                            >
+                                <p class="event-line">
+                                    <span class="type">{{
+                                        eventTypeLabel(event.type)
+                                    }}</span>
+                                    <span class="date">{{
+                                        dateOf(event)
+                                    }}</span>
                                     <span
-                                        class="swatch"
+                                        v-if="
+                                            event.placeSource &&
+                                            event.placeSource !== 'own'
+                                        "
+                                        class="source"
+                                        >{{
+                                            placeSourceLabel(event.placeSource)
+                                        }}</span
+                                    >
+                                </p>
+                                <ul
+                                    v-if="event.materials.length > 0"
+                                    class="event-materials"
+                                >
+                                    <li
+                                        v-for="material in event.materials"
+                                        :key="material.characterization"
+                                        class="material"
                                         :class="{
-                                            unknown:
-                                                !props.materials[material.id]
-                                                    ?.swatch,
+                                            pale: isLow(material, props.low),
                                         }"
-                                        aria-hidden="true"
-                                    ></span>
-                                    <template
-                                        v-if="slotOf(material.id) !== null"
+                                        :style="materialHue(material)"
                                     >
                                         <span
-                                            v-if="isLow(material, props.low)"
-                                            class="hollow-dot small"
+                                            class="swatch"
+                                            :class="{
+                                                unknown:
+                                                    !props.materials[
+                                                        material.id
+                                                    ]?.swatch,
+                                            }"
                                             aria-hidden="true"
-                                            >{{ slotOf(material.id) }}</span
+                                        ></span>
+                                        <template
+                                            v-if="slotOf(material.id) !== null"
                                         >
-                                        <FocusSlotDot
-                                            v-else
-                                            size="small"
-                                            :number="slotOf(material.id) ?? 0"
-                                        />
-                                    </template>
-                                    <span
-                                        :lang="material.name.lang || undefined"
-                                        >{{ material.name.value }}</span
-                                    >
-                                    <span
-                                        v-if="reliabilityOf(material)"
-                                        class="reliability"
-                                        >{{ reliabilityOf(material) }}</span
-                                    >
-                                </li>
-                            </ul>
-                            <p
-                                v-if="placedOnProduction(event)"
-                                class="placed-note"
-                            >
-                                <span>{{
-                                    $gettext(
-                                        "placed on the production (no modification cites it)",
-                                    )
-                                }}</span>
-                            </p>
-                        </li>
-                    </ul>
-                    <ul
-                        v-if="group.analyses.length > 0"
-                        class="analysis-list"
-                    >
-                        <li
-                            v-for="id in group.analyses"
-                            :key="id"
+                                            <span
+                                                v-if="
+                                                    isLow(material, props.low)
+                                                "
+                                                class="hollow-dot small"
+                                                aria-hidden="true"
+                                                >{{ slotOf(material.id) }}</span
+                                            >
+                                            <FocusSlotDot
+                                                v-else
+                                                size="small"
+                                                :number="
+                                                    slotOf(material.id) ?? 0
+                                                "
+                                            />
+                                        </template>
+                                        <span
+                                            :lang="
+                                                material.name.lang || undefined
+                                            "
+                                            >{{ material.name.value }}</span
+                                        >
+                                        <span
+                                            v-if="reliabilityOf(material)"
+                                            class="reliability"
+                                            >{{ reliabilityOf(material) }}</span
+                                        >
+                                    </li>
+                                </ul>
+                                <p
+                                    v-if="placedOnProduction(event)"
+                                    class="placed-note"
+                                >
+                                    <span>{{
+                                        $gettext(
+                                            "placed on the production (no modification cites it)",
+                                        )
+                                    }}</span>
+                                </p>
+                            </li>
+                        </ul>
+                        <button
+                            v-if="hiddenEvents(entry) > 0"
+                            type="button"
+                            class="more"
+                            @click="showAllEvents(entry)"
                         >
-                            <SelectionCheckbox
-                                :item-key="analysisKey(id)"
-                                :label="analysisName(id).value"
-                                :hint="hintOf(id)"
-                            />
-                            <span
-                                class="analysis-name"
-                                :lang="analysisName(id).lang || undefined"
-                                >{{ analysisName(id).value }}</span
+                            <span>{{ moreEventsText(entry) }}</span>
+                        </button>
+                        <ul
+                            v-if="entry.analyses.length > 0"
+                            class="analysis-list"
+                        >
+                            <li
+                                v-for="id in shownAnalyses(entry)"
+                                :key="id"
                             >
-                        </li>
-                    </ul>
+                                <SelectionCheckbox
+                                    :item-key="analysisKey(id)"
+                                    :label="analysisName(id).value"
+                                    :hint="hintOf(id)"
+                                />
+                                <TechniqueTag
+                                    v-if="techniqueOf(id)"
+                                    class="analysis-technique"
+                                    :code="techniqueOf(id)?.code ?? ''"
+                                    :colour="techniqueOf(id)?.colour ?? null"
+                                />
+                                <span
+                                    class="analysis-name"
+                                    :lang="analysisName(id).lang || undefined"
+                                    >{{ analysisName(id).value }}</span
+                                >
+                            </li>
+                        </ul>
+                        <p
+                            v-if="overCapacity(entry)"
+                            class="absence capacity"
+                        >
+                            <span>{{ capacityText(entry) }}</span>
+                            <span>{{ " " }}</span>
+                            <a
+                                class="open-corpus inline"
+                                :href="
+                                    documentHref(
+                                        snapshotOf(store),
+                                        view.document.id,
+                                    )
+                                "
+                                @click.prevent="openDocument(view.document.id)"
+                                >{{ $gettext("Open in Corpus") }}</a
+                            >
+                        </p>
+                        <button
+                            v-if="hiddenAnalyses(entry) > 0"
+                            type="button"
+                            class="more"
+                            @click="showMoreAnalyses(entry)"
+                        >
+                            <span>{{ moreAnalysesText(entry) }}</span>
+                        </button>
+                    </div>
                 </div>
             </section>
             <button
                 v-if="hiddenDocuments > 0"
                 type="button"
                 class="more"
-                @click="allDocuments = true"
+                @click="showMoreDocuments"
             >
                 <span>{{ moreDocumentsText }}</span>
             </button>
@@ -994,24 +1327,53 @@ function compare(): void {
 }
 
 .map-panel .attested li {
-    display: flex;
+    display: grid;
+    grid-template-columns: 0.875rem 1.125rem minmax(0, 1fr);
+    grid-template-areas:
+        "sw dot label"
+        ". . meta";
+    column-gap: 0.5rem;
     align-items: center;
-    gap: 0.5rem;
     min-inline-size: 0;
-    min-block-size: 1.75rem;
+    padding-block: 0.25rem;
+}
+
+.map-panel .attested .swatch {
+    grid-area: sw;
+}
+
+.map-panel .attested .hollow-dot,
+.map-panel .attested .spacer,
+.map-panel .attested :deep(.focus-slot-dot) {
+    grid-area: dot;
 }
 
 .map-panel .attested .label {
-    flex: 1 1 auto;
+    grid-area: label;
     min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.map-panel .attested .meta {
+    display: flex;
+    flex-wrap: wrap;
+    grid-area: meta;
+    gap: 0 0.375rem;
+    align-items: baseline;
+}
+
+.map-panel .attested .meta > * {
     white-space: nowrap;
 }
 
 .map-panel .reliability {
     color: var(--ink-muted);
     font-size: 0.75rem;
+}
+
+.map-panel .joint {
+    color: var(--ink-dim);
 }
 
 .map-panel .row-counts {
@@ -1092,7 +1454,7 @@ function compare(): void {
     border-block-start: 0.0625rem solid var(--border);
 }
 
-/* OnThisPage group row */
+/* OnThisPage group row, with the MapView rail .disclosure */
 .map-panel .panel-document h4 {
     display: flex;
     flex-wrap: nowrap;
@@ -1102,6 +1464,40 @@ function compare(): void {
     margin: 0;
     font-size: 0.8125rem;
     font-weight: 600;
+}
+
+.map-panel .disclosure {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    gap: 0.375rem;
+    min-inline-size: 0;
+    min-block-size: var(--explorer-target, 2.75rem);
+    padding: 0.25rem 0;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.map-panel .disclosure .chevron {
+    flex: none;
+    color: var(--ink-muted);
+}
+
+.map-panel .disclosure-text {
+    display: grid;
+    gap: 0.125rem;
+    min-inline-size: 0;
+}
+
+.map-panel .title-line {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    min-inline-size: 0;
 }
 
 .map-panel .group-title {
@@ -1116,6 +1512,30 @@ function compare(): void {
     flex: none;
     color: var(--ink-muted);
     font-weight: 400;
+}
+
+.map-panel .summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.125rem 0.5rem;
+    align-items: center;
+    font-weight: 400;
+}
+
+.map-panel .document-counts {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.map-panel .summary-tag {
+    font-size: 0.6875rem;
+}
+
+.map-panel .document-body {
+    display: grid;
+    gap: 0.25rem;
 }
 
 .map-panel .group-select {
@@ -1138,6 +1558,15 @@ function compare(): void {
 
 .map-panel .open-corpus:hover {
     text-decoration: underline;
+}
+
+.map-panel .open-corpus.inline {
+    display: inline;
+    min-block-size: 0;
+}
+
+.map-panel .capacity {
+    margin-block: 0.25rem;
 }
 
 .map-panel .open-corpus .arrow {
@@ -1224,8 +1653,13 @@ function compare(): void {
 .map-panel .analysis-list li {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.375rem;
     min-inline-size: 0;
+}
+
+.map-panel .analysis-technique {
+    flex: none;
+    font-size: 0.6875rem;
 }
 
 .map-panel .analysis-name {
@@ -1252,14 +1686,35 @@ function compare(): void {
     text-decoration: underline;
 }
 
-/* CorpusDocument .rail-foot */
+/* CorpusDocument .rail-foot, sticky as RailPanel .show */
 .map-panel .foot {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 1;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem 1rem;
-    padding-block-start: 0.75rem;
+    padding-block: 0.75rem;
     border-block-start: 0.0625rem solid var(--border);
+    background: var(--surface);
+}
+
+/* CorpusDocument .rail-foot .clear: secondary pill */
+.map-panel .pill {
+    min-block-size: 1.75rem;
+    padding-inline: 0.75rem;
+    border: 0.0625rem solid var(--border-hover);
+    border-radius: 999rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.map-panel .pill:hover {
+    border-color: var(--ink-muted);
 }
 
 /* UnavailableState ink pill */

@@ -264,6 +264,7 @@ export function eventsResponse(
         materials: {},
         colours: {},
         analysisNames: { [uuid(100)]: label("X01") },
+        analysisTechniques: {},
         certaintyScale: { levels: [] },
         ...overrides,
     };

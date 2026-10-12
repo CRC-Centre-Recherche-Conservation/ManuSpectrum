@@ -5,6 +5,7 @@ import {
     dominantOf,
     hexGrid,
     influenceAt,
+    nearlyTied,
     neighbour,
     territories,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
@@ -99,6 +100,39 @@ describe("territories", () => {
                 .filter((f) => f.properties.layer === "edge")
                 .every((f) => f.properties.slot === 0),
         ).toBe(true);
+    });
+
+    it("calls a tie on the runner-up alone, whatever the other fields weigh", () => {
+        expect(nearlyTied([8, 3, 3, 3], 0)).toBe(false);
+        expect(nearlyTied([5, 4.5, 0.1], 0)).toBe(true);
+        expect(nearlyTied([2, 0], 0)).toBe(false);
+        const cells = territories(
+            [
+                { slot: 1, attestations: [near(2, 46, 8)] },
+                { slot: 2, attestations: [near(2, 46, 3)] },
+                { slot: 3, attestations: [near(2, 46, 3)] },
+                { slot: 4, attestations: [near(2, 46, 3)] },
+            ],
+            150,
+            BOUNDS,
+            "dominant",
+        ).features.filter((f) => f.properties.layer === "cell");
+        expect(cells.length).toBeGreaterThan(0);
+        expect(cells.some((f) => f.properties.hatched)).toBe(false);
+    });
+
+    it("dominant draws a frontier between two dominants", () => {
+        const edges = territories(
+            [
+                { slot: 1, attestations: [near(0.5, 46)] },
+                { slot: 2, attestations: [near(3.5, 46)] },
+            ],
+            150,
+            BOUNDS,
+            "dominant",
+        ).features.filter((f) => f.properties.layer === "edge");
+        expect(edges.length).toBeGreaterThan(0);
+        expect(edges.every((f) => f.properties.slot === 0)).toBe(true);
     });
 
     it("a tracked material without attestations draws no cell, and none tracked draws nothing", () => {

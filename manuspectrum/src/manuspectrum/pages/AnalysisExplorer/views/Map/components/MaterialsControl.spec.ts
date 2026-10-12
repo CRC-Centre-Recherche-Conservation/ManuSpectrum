@@ -77,9 +77,12 @@ function events(): MapEvent[] {
     );
 }
 
-function mountControl(shown: MapEvent[] = events()) {
+function mountControl(
+    shown: MapEvent[] = events(),
+    known: Record<string, MapMaterial> = materials,
+) {
     return mount(MaterialsControl, {
-        props: { events: shown, materials, colours },
+        props: { events: shown, materials: known, colours },
         global: {
             plugins: [pinia, PrimeVue],
             provide: { [ANNOUNCE_KEY as symbol]: announce },
@@ -225,6 +228,76 @@ describe("MaterialsControl", () => {
         await flushPromises();
         expect(wrapper.findAll("li.row")).toHaveLength(0);
         expect(wrapper.find(".no-match").text()).toBe("No match");
+    });
+
+    it("shows five rows per colour, ticked and followed ones above the cut", async () => {
+        const many = Array.from({ length: 8 }, (_, n) => ({
+            uri: `http://material.test/blue${n}`,
+            label: label(`Blue ${n}`),
+            colours: [BLUE],
+            swatch: null,
+        }));
+        const shown = many.map((entry, n) =>
+            mapEvent({
+                id: `production:blue${n}`,
+                document: { id: uuid(300 + n), name: label(`Ms ${n}`) },
+                component: { id: uuid(400 + n), name: label(`f. ${n}`) },
+                materials: [
+                    {
+                        id: entry.uri,
+                        name: entry.label,
+                        reliability: null,
+                        characterization: uuid(500 + n),
+                    },
+                ],
+            }),
+        );
+        const known = Object.fromEntries(many.map((m) => [m.uri, m]));
+        const store = useExplorerStore();
+        store.setFacet("material", [many[7].uri]);
+        store.toggleTrack(many[6].uri);
+        const wrapper = mountControl(shown, known);
+        const labels = () =>
+            wrapper.findAll("li.row .label").map((row) => row.text());
+        expect(labels()).toHaveLength(5);
+        expect(labels().slice(0, 2).sort()).toEqual(["Blue 6", "Blue 7"]);
+        const more = wrapper.get(".colour-group .more");
+        expect(more.text()).toBe("Show 3 more");
+        await more.trigger("click");
+        expect(labels()).toHaveLength(8);
+        expect(wrapper.find(".colour-group .more").exists()).toBe(false);
+        fetchMock.mockResolvedValue(
+            jsonResponse({
+                ...facet("material", 0),
+                values: many.map((m) => facetValue(m.uri, m.label.value)),
+                total: 8,
+            }),
+        );
+        const searched = mountControl(shown, known);
+        await searched.find("input[type=search]").setValue("blue");
+        await flushPromises();
+        expect(searched.findAll("li.row")).toHaveLength(8);
+    });
+
+    it("keeps the counts and the other colours on the label's second line", () => {
+        const row = rowOf(mountControl(), "Lapis lazuli");
+        const meta = row.get(".value .meta");
+        expect(meta.find(".others").exists()).toBe(true);
+        expect(meta.find(".row-counts").text()).toBe("1 · 1");
+        expect(row.get(".value .label").attributes("title")).toBe(
+            "Lapis lazuli",
+        );
+    });
+
+    it("isolates a followed chip's slot while it is hovered or focused", async () => {
+        useExplorerStore().toggleTrack(URIS[1]);
+        const wrapper = mountControl();
+        const chip = wrapper.get(".chip-row");
+        await chip.trigger("mouseenter");
+        await chip.trigger("mouseleave");
+        await chip.get(".unpin").trigger("focusin");
+        await chip.get(".unpin").trigger("focusout");
+        expect(wrapper.emitted("isolate")).toEqual([[1], [null], [1], [null]]);
     });
 
     it("draws the other colours as decorative swatches", () => {

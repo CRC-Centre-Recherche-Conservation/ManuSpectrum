@@ -18,6 +18,7 @@ import {
     PLACES_SOURCE,
     TERRITORIES_SOURCE,
     bordersFilter,
+    territoryOpacity,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 
 import type { FeatureCollection, Point } from "geojson";
@@ -287,6 +288,46 @@ describe("MapStage updates", () => {
             [WATER_LAYER, "fill-color", "#000001"],
         ]);
         expect(map.updatedImages).toContain("pip-firm-1");
+    });
+
+    it("isolates a slot's territory by paint and restores it, never by data", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        await wrapper.setProps({ isolate: 2 });
+        const two = territoryOpacity(2);
+        expect(map.paintCalls).toEqual([
+            ["territory-cells", "fill-opacity", two.cells],
+            ["territory-hatch", "fill-opacity", two.hatch],
+            ["territory-edges", "line-opacity", two.edges],
+        ]);
+        await wrapper.setProps({ isolate: null });
+        const plain = territoryOpacity(null);
+        expect(map.paintCalls.slice(3)).toEqual([
+            ["territory-cells", "fill-opacity", plain.cells],
+            ["territory-hatch", "fill-opacity", plain.hatch],
+            ["territory-edges", "line-opacity", plain.edges],
+        ]);
+        expect(map.getSource(TERRITORIES_SOURCE)?.setDataCalls).toEqual([]);
+    });
+
+    it("folds the attribution MapLibre opens on its own, once", async () => {
+        const wrapper = mountStage();
+        const attribution = document.createElement("details");
+        attribution.className =
+            "maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show";
+        wrapper.get(".canvas").element.appendChild(attribution);
+        await flushPromises();
+        const map = FakeMap.last();
+        expect(attribution.classList.contains("maplibregl-compact-show")).toBe(
+            false,
+        );
+        attribution.classList.add("maplibregl-compact-show");
+        map.fire("resize");
+        expect(attribution.classList.contains("maplibregl-compact-show")).toBe(
+            true,
+        );
+        expect(map.listenerCount("sourcedata")).toBe(0);
     });
 
     it("waits for the load before touching the map", async () => {
