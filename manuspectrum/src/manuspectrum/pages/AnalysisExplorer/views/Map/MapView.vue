@@ -444,10 +444,10 @@ const territorySentence = computed(() => {
     }
     return store.mapState.colour === "dominant"
         ? $gettext(
-              "Each area takes the colour of the followed material that weighs most there; hatched areas are nearly tied.",
+              "Gaussian kernel estimate: each place where a followed material is attested spreads a weight proportional to its attestations, fading with distance. Each cell takes the colour of the most influential material; hatched cells are nearly tied (the leader holds less than 55 % of the top two).",
           )
         : $gettext(
-              "Each followed material radiates from the places that attest it and fades with distance.",
+              "Gaussian kernel estimate: each place where a followed material is attested spreads a weight proportional to its attestations, fading with distance. An area is drawn above an influence threshold; its opacity grows with influence.",
           );
 });
 const legendOpen = computed(() => store.mapState.legend);
@@ -458,6 +458,9 @@ const isolateHint = computed(
         store.mapState.colour === "each" &&
         tracked.value.length >= 3 &&
         !nothingToDraw.value,
+);
+const radiusHelp = $gettext(
+    "Distance at which a place's weight falls to about 37 % (or the place's own extent if larger)",
 );
 const radiusText = computed(() =>
     interpolate($gettext("%{n} km"), { n: radiusDraft.value }),
@@ -1348,7 +1351,7 @@ function skipToTimeline(): void {
                                         >
                                         <span>{{
                                             $gettext(
-                                                "Influence model, not data",
+                                                "Influence zones: a spatial model, not observed data",
                                             )
                                         }}</span>
                                     </button>
@@ -1360,6 +1363,13 @@ function skipToTimeline(): void {
                                 >
                                     <p class="sentence">
                                         <span>{{ territorySentence }}</span>
+                                    </p>
+                                    <p class="sentence caveat">
+                                        <span>{{
+                                            $gettext(
+                                                "Lower-reliability attestations count half. The zones extrapolate between attested places; they do not attest a use outside them.",
+                                            )
+                                        }}</span>
                                     </p>
                                     <p
                                         v-if="isolateHint"
@@ -1373,10 +1383,11 @@ function skipToTimeline(): void {
                                     </p>
                                     <p class="radius">
                                         <label for="explorer-map-radius">{{
-                                            $gettext("Radius")
+                                            $gettext("Kernel radius")
                                         }}</label>
                                         <input
                                             id="explorer-map-radius"
+                                            :title="radiusHelp"
                                             type="range"
                                             :min="RADIUS_MIN"
                                             :max="RADIUS_MAX"
@@ -1521,11 +1532,20 @@ function skipToTimeline(): void {
                     >
                         <p class="title">
                             <span>{{
-                                $gettext("Influence model, not data")
+                                $gettext(
+                                    "Influence zones: a spatial model, not observed data",
+                                )
                             }}</span>
                         </p>
                         <p class="sentence">
                             <span>{{ territorySentence }}</span>
+                        </p>
+                        <p class="sentence caveat">
+                            <span>{{
+                                $gettext(
+                                    "Lower-reliability attestations count half. The zones extrapolate between attested places; they do not attest a use outside them.",
+                                )
+                            }}</span>
                         </p>
                         <p
                             v-if="isolateHint"
@@ -1539,10 +1559,11 @@ function skipToTimeline(): void {
                         </p>
                         <p class="radius">
                             <label for="explorer-map-radius-narrow">{{
-                                $gettext("Radius")
+                                $gettext("Kernel radius")
                             }}</label>
                             <input
                                 id="explorer-map-radius-narrow"
+                                :title="radiusHelp"
                                 type="range"
                                 :min="RADIUS_MIN"
                                 :max="RADIUS_MAX"

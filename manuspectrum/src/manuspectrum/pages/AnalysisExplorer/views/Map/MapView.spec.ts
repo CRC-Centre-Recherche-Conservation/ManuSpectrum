@@ -6,6 +6,8 @@ import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
+import { TIE_SHARE } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+import { LOW_WEIGHT } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import MapView from "@/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue";
 import MapTimeline from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue";
 
@@ -245,6 +247,11 @@ describe("MapView", () => {
         expect(store.mapState.mode).toBe("places");
     });
 
+    it("states the tie share and the low-reliability weight the note prints", () => {
+        expect(TIE_SHARE).toBe(0.55);
+        expect(LOW_WEIGHT).toBe(0.5);
+    });
+
     it("draws territories for a followed material, with the influence note", async () => {
         const store = useExplorerStore();
         store.setMapState({ track: [LAPIS] });
@@ -261,7 +268,17 @@ describe("MapView", () => {
         expect(drawn.features.length).toBeGreaterThan(0);
         const note = view.find(".territory-note");
         expect(note.attributes("role")).toBe("note");
-        expect(note.text()).toContain("Influence model, not data");
+        expect(note.text()).toContain(
+            "Influence zones: a spatial model, not observed data",
+        );
+        expect(note.text()).toContain("Gaussian kernel estimate");
+        expect(note.text()).toContain(
+            "Lower-reliability attestations count half",
+        );
+        expect(note.get("label").text()).toBe("Kernel radius");
+        expect(note.get("input[type='range']").attributes("title")).toContain(
+            "falls to about 37 %",
+        );
         expect(note.find("input[type='range']").attributes("min")).toBe("60");
         expect(note.find("output").text()).toBe("150 km");
         const body = note.get(".note-body");
