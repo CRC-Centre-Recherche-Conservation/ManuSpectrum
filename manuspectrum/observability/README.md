@@ -86,7 +86,7 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
 - Web: `manuspectrum_inflight_requests`, `manuspectrum_log_records`,
   `manuspectrum_readyz_component_up`
 - Memos, IIIF, access: `manuspectrum_memo_lookups`, `manuspectrum_iiif_answers`,
-  `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`,
+  `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`, `manuspectrum_auth_lockouts`,
   `manuspectrum_spectrum_previews`
 - Explorer: `manuspectrum_explorer_bundle_build_seconds`, `manuspectrum_explorer_bundle_bytes`,
   `manuspectrum_explorer_bundle_rows`, `manuspectrum_explorer_bundle_builds`,
@@ -105,7 +105,9 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   the start time standing for the last prune until the daily one records its own),
   `manuspectrum_active_accounts` (one number, no label: active accounts with a login in the
   last 30 days, `anonymous` excluded, refreshed daily by `manuspectrum.record_active_accounts`
-  and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count)
+  and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count),
+  `manuspectrum_login_records_prune_timestamp_seconds` (last prune of the axes login records,
+  daily by `manuspectrum.prune_login_records`)
 - Activity (`observability/activity.py`, refreshed hourly by `manuspectrum.record_activity` and at
   worker start): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last
   24 hours), `manuspectrum_workflows{kind,state}`, `manuspectrum_activity_timestamp_seconds`. `model`

@@ -95,7 +95,19 @@ IIIF_TOKEN_OUTCOMES = (
     "unavailable",
 )
 READ_SURFACES = ("summary", "thumbnail", "iiif_file", "spectrum_preview")
-LOGIN_OUTCOMES = ("success", "failure")
+ACCOUNT_MAIL_KINDS = (
+    "embargo_notice",
+    "embargo_lifted",
+    "workflow_notice",
+    "workflow_cleaned",
+    "invitation",
+    "stale_report",
+    "password_reset",
+)
+ACCOUNT_MAIL_OUTCOMES = ("sent", "failed", "skipped")
+EMBARGO_STATES = ("active", "undated", "due_soon", "overdue")
+EMBARGO_LIFT_OUTCOMES = ("lifted", "incomplete", "skipped_extended", "failed")
+LOGIN_OUTCOMES = ("success", "failure", "mfa_failure")
 BUNDLE_REASONS = ("cold", "data", "permissions", "visibility")
 BIBLISSIMA_ENDPOINTS = ("wikibase", "portal", "iiif")
 UPSTREAM_OUTCOMES = (
@@ -249,6 +261,20 @@ AUTH_LOGINS = Counter(
     "Login attempts by outcome.",
     ["outcome"],
 )
+ACCOUNT_MAILS = Counter(
+    "manuspectrum_account_mails",
+    "Account mails by kind and outcome.",
+    ["kind", "outcome"],
+)
+AUTH_LOCKOUTS = Counter(
+    "manuspectrum_auth_lockouts",
+    "Accounts locked after repeated sign-in failures (the transition, not the refused attempts).",
+)
+EMBARGO_LIFTS = Counter(
+    "manuspectrum_embargo_lifts",
+    "Embargo lifts by outcome.",
+    ["outcome"],
+)
 SPECTRUM_PREVIEWS = Counter(
     "manuspectrum_spectrum_previews",
     "Spectrum previews served, by point tier.",
@@ -390,6 +416,22 @@ ACTIVE_ACCOUNTS = gauge(
 ACTIVE_ACCOUNTS_MEASURED = gauge(
     "manuspectrum_active_accounts_timestamp_seconds",
     "Unix time of the count behind manuspectrum_active_accounts.",
+    mode="mostrecent",
+)
+LOGIN_RECORDS_PRUNED = gauge(
+    "manuspectrum_login_records_prune_timestamp_seconds",
+    "Unix time of the last successful prune of the login records.",
+    mode="mostrecent",
+)
+EMBARGOES = gauge(
+    "manuspectrum_embargoes",
+    "Active embargoes by state, set by the daily embargo pass.",
+    ["state"],
+    mode="mostrecent",
+)
+EMBARGO_PASS_TIMESTAMP = gauge(
+    "manuspectrum_embargo_pass_timestamp_seconds",
+    "Unix time of the last completed embargo pass.",
     mode="mostrecent",
 )
 RESOURCES = gauge(

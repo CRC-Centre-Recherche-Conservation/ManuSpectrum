@@ -86,7 +86,7 @@ a mount root.
 
 ## Alerts
 
-55 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
+60 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
 (site, application, containers, host, storage, backup, tls, celery, datastores,
 explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of

@@ -121,3 +121,51 @@ Restart the application containers (`make -C deploy restart`); the worker also r
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## LoginRecordsPruneStale
+
+Severity: warning. The login records have not been pruned for more than three days.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+The Django admin still lists login records older than six months; the monthly report flags the prune as out of date.
+
+### Diagnosis
+
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.prune_login_records`. The Celery row of the Application dashboard shows its outcomes.
+
+### Remediation
+
+Restart the worker and beat (`make -C deploy restart`). To prune by hand, run `axes_reset_logs --age 183` and `axes_reset_failure_logs --age 183` through `make -C deploy manage`.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## EmbargoPassStale
+
+Severity: warning. The daily embargo pass has not completed for more than two days: restrictions are neither recorded, announced nor lifted.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+No notice or "now public" mail went out; the Embargoes panel of the Activity dashboard stays flat.
+
+### Diagnosis
+
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.embargo_pass` (scheduled at 06:00 Europe/Paris, entry `embargo-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails.
+
+### Remediation
+
+Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="release_expired_embargoes"` lists what it would do, and `--apply` does it. The pass is idempotent: notices go once per stage and a lift happens once.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

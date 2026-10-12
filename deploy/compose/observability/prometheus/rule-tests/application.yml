@@ -1,0 +1,73 @@
+rule_files:
+  - ../rules/application.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: more than five lockouts in an hour warn, a few do not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_auth_lockouts_total{instance="web:8000", job="web"}
+    values: 0x10 7x120
+  - series: manuspectrum_auth_lockouts_total{instance="web2:8000", job="web"}
+    values: 0x10 3x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="LoginLockouts", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="LoginLockouts", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="LoginLockouts", alertstate="firing", instance="web:8000", job="web", service="application", severity="warning"}
+      value: 1
+
+- name: a failed account mail warns, sent mails do not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_account_mails_total{instance="web:8000", job="web", kind="invitation", outcome="failed"}
+    values: 0x10 1x120
+  - series: manuspectrum_account_mails_total{instance="web:8000", job="web", kind="embargo_notice", outcome="sent"}
+    values: 0x10 5x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="AccountMailFailures", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountMailFailures", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="AccountMailFailures", alertstate="firing", kind="invitation", service="application", severity="warning"}
+      value: 1
+
+- name: a failed or incomplete embargo lift warns, a successful one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_embargo_lifts_total{instance="worker:9808", outcome="failed"}
+    values: 0x10 1x120
+  - series: manuspectrum_embargo_lifts_total{instance="worker:9808", outcome="lifted"}
+    values: 0x10 4x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoLiftFailures", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoLiftFailures", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="EmbargoLiftFailures", alertstate="firing", outcome="failed", service="application", severity="warning"}
+      value: 1
+
+- name: restrictions past their end date warn after two hours, none does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_embargoes{instance="worker:9808", state="overdue"}
+    values: 0x10 2x400
+  - series: manuspectrum_embargoes{instance="worker:9808", state="active"}
+    values: 5x410
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoOverdue", alertstate="firing"}
+    eval_time: 60m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoOverdue", alertstate="firing"}
+    eval_time: 4h
+    exp_samples:
+    - labels: ALERTS{alertname="EmbargoOverdue", alertstate="firing", service="application", severity="warning"}
+      value: 1
