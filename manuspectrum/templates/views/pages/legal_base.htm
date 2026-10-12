@@ -1,0 +1,22 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% load render_bundle from webpack_loader %}
+{% block page_title %}{% block legal_title %}{% endblock %} — ManuSpectrum{% endblock %}
+{% block og_title %}{% block legal_og_title %}{% endblock %} — ManuSpectrum{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero">
+    <div class="ms-page-hero__eyebrow">{% trans "Legal" %}</div>
+    <h1 class="ms-page-hero__title">{% block legal_heading %}{% endblock %}</h1>
+    <div class="ms-page-hero__accent"></div>
+    {% block legal_lead %}{% endblock %}
+</section>
+
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
+<article class="ms-legal reveal">
+    {% block legal_body %}{% endblock %}
+</article>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/team' %}{% endblock %}

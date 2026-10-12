@@ -15,17 +15,20 @@ Django; a naive value written from a session in another zone is misplaced. Naive
 values written during the repeated hour of the autumn change are ambiguous, so one
 hour a year may be placed an hour off.
 
-- created: distinct resources with an ``edit_log`` row ``create`` (Arches writes one
-  per ``Resource.save()``, not only the first) or a ``tile create`` noted
-  ``resource creation`` (the Biblissima bulk path writes no ``create`` row);
+- created: distinct resources with a creation row of ``accounts/creation.py`` (``create``,
+  written by Arches once per ``Resource.save()``, or a ``tile create`` noted
+  ``resource creation``, which the Biblissima bulk path writes);
 - modified: distinct resources with another tile-level row, not created in the window;
-- deleted: distinct resources with a ``delete`` row; ``created_deleted`` is the part of
-  the created ones that were deleted in the same window;
+- deleted: distinct resources with a ``delete`` row outside a workflow cleanup;
+  ``created_deleted`` is the part of the created ones that were deleted in the same window;
+- cleaned: distinct resources with a ``delete`` row whose transaction is a cleanup
+  transaction of the ``ms_workflow_cleanup`` ledger (``accounts/workflows.py``);
 - tile saves: tile-level rows that are not part of a creation;
 - totals: ``resource_instances`` per model, whatever path wrote them;
 - workflows: ``workflow_history`` rows, one per run; a run cancelled by its user is
   deleted by Arches and leaves no row; an open run is stale once older than
-  ``WORKFLOW_STALE_AFTER_DAYS`` (a placeholder until the cleanup delay is decided);
+  ``settings.WORKFLOW_CLEANUP_AFTER_DAYS``, the delay after which the abandoned-workflow
+  cleanup acts;
 - ETL: ``load_event`` rows started in the window, by module and outcome: succeeded
   (``indexed``, ``completed``), failed, cancelled (stopped by the user), unindexed
   (written, indexing failed), unloaded (reversed after a success), validated
@@ -33,19 +36,32 @@ hour a year may be placed an hour off.
   The Excel exporters insert their row as ``validated`` and set ``indexed`` when done,
   so for a module of type ``export`` a ``validated`` row is a run still going or
   crashed: it is unfinished, never validated.
+
+The one exception to "counts only" is ``inactive_accounts``: the monthly report lists
+by user name the active accounts (``anonymous`` excluded) that signed in last more than
+``INACTIVE_AFTER_MONTHS`` ago, and those that never signed in
+``NEVER_SIGNED_IN_AFTER_MONTHS`` after they were created. The report only informs the
+administrators, who deactivate by hand; nothing is deactivated or deleted here. The
+anonymisation of accounts idle for ``ACCOUNT_RETENTION_MONTHS`` is the daily retention
+pass (``accounts/retention.py``); ``accounts_anonymised`` counts, from its ledger, the
+accounts anonymised in the window.
 """
 
 import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
+from dateutil.relativedelta import relativedelta
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 
+from manuspectrum.accounts.creation import CREATION_SQL
 from manuspectrum.observability import metrics
 
 SYSTEM_GRAPH_SLUG = "arches_system_settings"
 DELETED_MODEL = "deleted_model"
-WORKFLOW_STALE_AFTER_DAYS = 30
 ETL_OUTCOMES = (
     "succeeded",
     "failed",
@@ -56,6 +72,8 @@ ETL_OUTCOMES = (
     "unfinished",
 )
 ETL_SUCCEEDED_STATUSES = ("indexed", "completed")
+INACTIVE_AFTER_MONTHS = 12
+NEVER_SIGNED_IN_AFTER_MONTHS = 3
 STATEMENT_TIMEOUT = "30s"
 RECENT_HOURS = 24
 MONTH = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
@@ -65,22 +83,34 @@ CHANGE_FIELDS = (
     "created_deleted",
     "modified",
     "deleted",
+    "cleaned",
     "tile_saves",
     "publication_changes",
 )
 
-CHANGES_SQL = """
+CHANGES_SQL = f"""
 WITH log AS (
-    SELECT resourceclassid, resourceinstanceid, edittype, note
+    SELECT resourceclassid, resourceinstanceid, edittype, note, transactionid
     FROM edit_log
     WHERE timestamp >= %(start)s::timestamptz AND timestamp < %(end)s::timestamptz
 ), created AS (
     SELECT DISTINCT resourceclassid, resourceinstanceid FROM log
-    WHERE edittype = 'create'
-       OR (edittype = 'tile create' AND note = 'resource creation')
+    WHERE {CREATION_SQL}
+), cleanups AS (
+    SELECT cleanup_transaction_id FROM ms_workflow_cleanup
+    WHERE cleanup_transaction_id IS NOT NULL
 ), deleted AS (
     SELECT DISTINCT resourceclassid, resourceinstanceid FROM log
     WHERE edittype = 'delete'
+      AND NOT EXISTS (
+          SELECT 1 FROM cleanups c WHERE c.cleanup_transaction_id = log.transactionid
+      )
+), cleaned AS (
+    SELECT DISTINCT resourceclassid, resourceinstanceid FROM log
+    WHERE edittype = 'delete'
+      AND EXISTS (
+          SELECT 1 FROM cleanups c WHERE c.cleanup_transaction_id = log.transactionid
+      )
 ), tile_saves AS (
     SELECT resourceclassid, resourceinstanceid FROM log
     WHERE edittype IN ('tile create', 'tile edit', 'tile delete')
@@ -100,6 +130,8 @@ WITH log AS (
     SELECT resourceclassid, 'modified', count(*) FROM modified GROUP BY 1
     UNION ALL
     SELECT resourceclassid, 'deleted', count(*) FROM deleted GROUP BY 1
+    UNION ALL
+    SELECT resourceclassid, 'cleaned', count(*) FROM cleaned GROUP BY 1
     UNION ALL
     SELECT resourceclassid, 'tile_saves', count(*) FROM tile_saves GROUP BY 1
     UNION ALL
@@ -203,7 +235,7 @@ def workflow_runs(cursor, start, end, now):
         {
             "start": start,
             "end": end,
-            "stale": now - timedelta(days=WORKFLOW_STALE_AFTER_DAYS),
+            "stale": now - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS),
         },
     )
     return {
@@ -242,6 +274,56 @@ def etl_runs(cursor, start, end):
     return runs
 
 
+def inactive_accounts(now):
+    """``{"dormant": [...], "never": [...]}``, each row ``[username, last_login, date_joined]``.
+
+    Dates are ISO dates (UTC), ``last_login`` is ``None`` for ``never``. Read-only.
+    """
+    users = (
+        get_user_model().objects.filter(is_active=True).exclude(username="anonymous")
+    )
+    zone = ZoneInfo(settings.TIME_ZONE)
+
+    def stored(moment):
+        """The value to compare with the user columns (naive local when USE_TZ is off)."""
+        return (
+            moment if settings.USE_TZ else moment.astimezone(zone).replace(tzinfo=None)
+        )
+
+    dormant_before = stored(now - relativedelta(months=INACTIVE_AFTER_MONTHS))
+    never_before = stored(now - relativedelta(months=NEVER_SIGNED_IN_AFTER_MONTHS))
+
+    def day(moment):
+        if moment is None:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=zone)
+        return moment.astimezone(timezone.utc).date().isoformat()
+
+    def rows(queryset):
+        return [
+            [u.username, day(u.last_login), day(u.date_joined)]
+            for u in queryset.order_by("username")
+        ]
+
+    return {
+        "dormant": rows(users.filter(last_login__lt=dormant_before)),
+        "never": rows(
+            users.filter(last_login__isnull=True, date_joined__lt=never_before)
+        ),
+    }
+
+
+def accounts_anonymised(cursor, start, end):
+    """Number of accounts the retention pass anonymised from *start* (included) to *end* (excluded)."""
+    cursor.execute(
+        "SELECT count(*) FROM ms_account_retention "
+        "WHERE anonymised_on >= %(start)s AND anonymised_on < %(end)s",
+        {"start": start.date(), "end": end.date()},
+    )
+    return cursor.fetchone()[0]
+
+
 def collect(start, end, now=None):
     """Every figure for the window, from one read-only transaction.
 
@@ -253,6 +335,8 @@ def collect(start, end, now=None):
         changes = resource_changes(cursor, start, end)
         workflows = workflow_runs(cursor, start, end, now)
         etl = etl_runs(cursor, start, end)
+        anonymised = accounts_anonymised(cursor, start, end)
+        inactive = inactive_accounts(now)
     models = {}
     for model in sorted(set(totals) | set(changes)):
         models[model] = {
@@ -264,8 +348,10 @@ def collect(start, end, now=None):
         "end": end.isoformat(),
         "models": models,
         "workflows": workflows,
-        "workflow_stale_after_days": WORKFLOW_STALE_AFTER_DAYS,
+        "workflow_stale_after_days": settings.WORKFLOW_CLEANUP_AFTER_DAYS,
         "etl": etl,
+        "inactive_accounts": inactive,
+        "accounts_anonymised": anonymised,
     }
 
 

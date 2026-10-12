@@ -156,3 +156,41 @@ describe("no configured address", () => {
         expect(document.getElementById("ms-contact-direct").hidden).toBe(true);
     });
 });
+
+describe("contact reason preselection", () => {
+    const select = () => {
+        document.body.innerHTML = `<select id="s"><option value="project" selected>P</option><option value="access">A</option></select>`;
+        return document.getElementById("s");
+    };
+
+    it("selects the reason named by ?reason=access", async () => {
+        vi.resetModules();
+        const { preselectReason } = await import("./contact");
+        const el = select();
+        preselectReason(el, "?reason=access");
+        expect(el.value).toBe("access");
+    });
+
+    it("keeps the default for an unknown or absent reason", async () => {
+        vi.resetModules();
+        const { preselectReason } = await import("./contact");
+        const el = select();
+        preselectReason(el, "?reason=bogus");
+        expect(el.value).toBe("project");
+        preselectReason(el, "");
+        expect(el.value).toBe("project");
+    });
+
+    it("applies on page boot from the URL", async () => {
+        window.history.pushState({}, "", "/en/about/contact?reason=access");
+        document.body.innerHTML = PAGE("team@manuspectrum.fr").replace(
+            '<option value="project" selected>Submit a project</option>',
+            '<option value="project" selected>Submit a project</option><option value="access">Request</option>',
+        );
+        vi.resetModules();
+        await import("./contact");
+        document.dispatchEvent(new Event("DOMContentLoaded"));
+        expect(document.getElementById("cf-type").value).toBe("access");
+        window.history.pushState({}, "", "/");
+    });
+});

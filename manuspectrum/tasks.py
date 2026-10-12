@@ -130,6 +130,67 @@ def record_active_accounts_task():
     return publish_active_accounts()
 
 
+@shared_task(name="manuspectrum.prune_login_records")
+def prune_login_records_task():
+    """Delete the login records past their retention and stamp the success time."""
+    from manuspectrum.accounts.lockout import prune_login_records
+
+    deleted = prune_login_records()
+    metrics.LOGIN_RECORDS_PRUNED.set(time.time())
+    return deleted
+
+
+@shared_task(name="manuspectrum.embargo_pass")
+def embargo_pass_task():
+    """Run the daily embargo pass (accounts/embargo.py); returns the counts."""
+    from manuspectrum.accounts.embargo import run_pass
+
+    report = run_pass()
+    return {
+        "locked": report.locked,
+        "detected": len(report.detected),
+        "released": len(report.released),
+        "noticed": len(report.noticed),
+        "lifted": len(report.lifted),
+        "incomplete": len(report.incomplete),
+        "skipped_extended": len(report.skipped_extended),
+        "failed": len(report.failed),
+    }
+
+
+@shared_task(name="manuspectrum.workflow_cleanup_pass")
+def workflow_cleanup_pass_task():
+    """Run the daily abandoned-workflow pass (accounts/workflows.py); returns the counts."""
+    from manuspectrum.accounts.workflows import run_pass
+
+    report = run_pass()
+    return {
+        "locked": report.locked,
+        "noticed": len(report.noticed),
+        "cleaned": len(report.cleaned),
+        "kept_resources": len(report.kept_resources),
+        "failed": len(report.failed),
+        "deleted": report.deleted,
+        "kept": report.kept,
+    }
+
+
+@shared_task(name="manuspectrum.account_retention_pass")
+def account_retention_pass_task():
+    """Run the daily inactive-account pass (accounts/retention.py); returns the counts."""
+    from manuspectrum.accounts.retention import run_pass
+
+    report = run_pass()
+    return {
+        "locked": report.locked,
+        "noticed": len(report.noticed),
+        "reset": len(report.reset),
+        "anonymised": len(report.anonymised),
+        "superusers_due": len(report.superusers_due),
+        "failed": len(report.failed),
+    }
+
+
 @shared_task(name="manuspectrum.record_activity")
 def record_activity_task():
     """Refresh the activity gauges (resources, last 24 hours, open workflows)."""

@@ -31,6 +31,8 @@ from pathlib import Path
 # tests/test_smoke_queries.py derives this set from metrics.py and compares.
 LABELLED_APP_METRICS = frozenset(
     {
+        "manuspectrum_account_anonymisations_total",
+        "manuspectrum_account_mails_total",
         "manuspectrum_auth_logins_total",
         "manuspectrum_biblissima_cache_total",
         "manuspectrum_biblissima_created_items_total",
@@ -43,6 +45,7 @@ LABELLED_APP_METRICS = frozenset(
         "manuspectrum_celery_task_seconds_count",
         "manuspectrum_celery_task_seconds_sum",
         "manuspectrum_celery_tasks_total",
+        "manuspectrum_embargo_lifts_total",
         "manuspectrum_explorer_bundle_build_seconds_bucket",
         "manuspectrum_explorer_bundle_build_seconds_count",
         "manuspectrum_explorer_bundle_build_seconds_sum",
@@ -62,12 +65,16 @@ LABELLED_APP_METRICS = frozenset(
         "manuspectrum_spectrum_previews_total",
         "manuspectrum_ssrf_rejections_total",
         "manuspectrum_upstream_budget_spent_total",
+        "manuspectrum_workflow_cleanup_resources_total",
+        "manuspectrum_workflow_cleanups_total",
     }
 )
 
 # Series that can be legitimately absent from a running stack: the labelled
 # application metrics above, the backup and restore-test gauges (they exist
-# only after the first run of those jobs), ALERTS (only while an alert is
+# only after the first run of those jobs), the gauges the daily account
+# passes set (their run timestamps and the embargo counts, from the first
+# pass on), ALERTS (only while an alert is
 # pending or firing) and redis_key_size (Redis deletes the empty `celery`
 # list and the exporter then emits nothing for the key).
 OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
@@ -83,6 +90,11 @@ OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
         "manuspectrum_restore_test_last_attempt_timestamp_seconds",
         "manuspectrum_restore_test_last_success_timestamp_seconds",
         "manuspectrum_restore_test_duration_seconds",
+        "manuspectrum_account_retention_timestamp_seconds",
+        "manuspectrum_embargo_pass_timestamp_seconds",
+        "manuspectrum_embargoes",
+        "manuspectrum_login_records_prune_timestamp_seconds",
+        "manuspectrum_workflow_cleanup_timestamp_seconds",
     }
 )
 

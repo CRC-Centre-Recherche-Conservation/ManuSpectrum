@@ -16,7 +16,7 @@ groups:
           kind: home
       - record: manuspectrum:consultations:total
         expr: |
-          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"about-model|about-explorer|about-team|about-contact"})
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"about-model|about-explorer|about-team|about-contact|about-legal|about-privacy|about-terms"})
         labels:
           kind: about
       - record: manuspectrum:consultations:total

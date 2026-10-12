@@ -135,6 +135,9 @@ const viewModel = function(params) {
 
     // Workflow step interface
     this.complete = params.form?.complete || ko.observable(false);
+    // Arches' convention: the workflow id is the transaction id of every write
+    // of the run, so Quit reverses them and the cleanup knows what the run created.
+    this.workflowId = ko.unwrap(params.form?.workflowId) || null;
     this.saving = ko.observable(false);
     this.loading = ko.observable(true);
 
@@ -1084,6 +1087,7 @@ const viewModel = function(params) {
                 },
                 body: JSON.stringify({
                     resourceType: dep.type,
+                    transactionId: self.workflowId,
                     biblissimaData: {
                         label: dep.key,
                         memberOf: memberOfId,
@@ -1152,7 +1156,7 @@ const viewModel = function(params) {
      *   - `asParent`        flip Component→Document mode for this call.
      *   - `biblissimaData`  override payload body (defaults to `ko.toJS(item)`).
      *   - `conceptMappings` override (defaults to `{type: item.typeConceptId}`).
-     *   - `transactionId`   optional tx id string (defaults to `null`).
+     *   - `transactionId`   optional tx id string (defaults to the workflow id).
      *
      * Returns `{resourceType, transactionId, biblissimaData, dependencies, conceptMappings}`.
      */
@@ -1209,7 +1213,7 @@ const viewModel = function(params) {
 
         return {
             resourceType: asParent ? 'Document' : self.resourceType,
-            transactionId: options.transactionId || null,
+            transactionId: options.transactionId || self.workflowId,
             biblissimaData: options.biblissimaData || ko.toJS(item),
             dependencies: deps,
             conceptMappings: options.conceptMappings || {
@@ -1353,6 +1357,7 @@ const viewModel = function(params) {
                 },
                 body: JSON.stringify({
                     resourceType: self.resourceType,
+                    transactionId: self.workflowId,
                     items: chunk.map((i) => ({
                         clientId: i.clientId,
                         ...self._buildCreatePayload(i),

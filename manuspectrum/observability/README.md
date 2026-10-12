@@ -86,7 +86,7 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
 - Web: `manuspectrum_inflight_requests`, `manuspectrum_log_records`,
   `manuspectrum_readyz_component_up`
 - Memos, IIIF, access: `manuspectrum_memo_lookups`, `manuspectrum_iiif_answers`,
-  `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`,
+  `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`, `manuspectrum_auth_lockouts`,
   `manuspectrum_spectrum_previews`
 - Explorer: `manuspectrum_explorer_bundle_build_seconds`, `manuspectrum_explorer_bundle_bytes`,
   `manuspectrum_explorer_bundle_rows`, `manuspectrum_explorer_bundle_builds`,
@@ -105,11 +105,25 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   the start time standing for the last prune until the daily one records its own),
   `manuspectrum_active_accounts` (one number, no label: active accounts with a login in the
   last 30 days, `anonymous` excluded, refreshed daily by `manuspectrum.record_active_accounts`
-  and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count)
+  and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count),
+  `manuspectrum_login_records_prune_timestamp_seconds` (last prune of the axes login records,
+  daily by `manuspectrum.prune_login_records`),
+  `manuspectrum_workflow_cleanups{kind,outcome}`, `manuspectrum_workflow_cleanup_resources{outcome}`
+  and `manuspectrum_workflow_cleanup_timestamp_seconds` (abandoned-workflow pass, daily at 03:30
+  Europe/Paris by `manuspectrum.workflow_cleanup_pass`; read by `WorkflowCleanupFailures` and
+  `WorkflowCleanupStale`),
+  `manuspectrum_embargo_lifts{outcome}` (daily embargo pass: lifted, incomplete, skipped_extended,
+  failed), `manuspectrum_embargoes{state}` (active, undated, due_soon, overdue, set by the same
+  pass at 06:00 Europe/Paris, `manuspectrum.embargo_pass`) and
+  `manuspectrum_embargo_pass_timestamp_seconds` (read by `EmbargoLiftFailures`, `EmbargoOverdue`
+  and `EmbargoPassStale`)
+- Account mail: `manuspectrum_account_mails{kind,outcome}` (invitation, embargo and workflow
+  notices, summaries and the password-reset mail; outcome sent, failed or skipped), shown in the
+  « Accounts » row of the Activity dashboard and in the monthly report
 - Activity (`observability/activity.py`, refreshed hourly by `manuspectrum.record_activity` and at
   worker start): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last
   24 hours), `manuspectrum_workflows{kind,state}`, `manuspectrum_activity_timestamp_seconds`. `model`
-  comes from `RESOURCE_MODELS`, `kind` from `CHANGE_KINDS` or `WORKFLOW_KINDS`, `state` from
+  comes from `RESOURCE_MODELS`, `kind` from `CHANGE_KINDS` (`cleaned` counts the resources deleted by the workflow cleanup, which `deleted` leaves out) or `WORKFLOW_KINDS`, `state` from
   `WORKFLOW_STATES`; anything else is `other`. The same module feeds `manage.py activity_summary
   --month YYYY-MM` (aggregates as JSON, read-only) for the monthly report.
 

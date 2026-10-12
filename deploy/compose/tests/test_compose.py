@@ -911,6 +911,18 @@ class ComposeStackTests(unittest.TestCase):
         command = self.observability["services"]["alertmanager"]["command"]
         self.assertIn("--cluster.listen-address=", command)
 
+    def test_two_factor_enforcement_reaches_the_app_from_the_env_file_off_by_default(
+        self,
+    ):
+        env = (COMPOSE_DIR / ".env.example").read_text()
+        self.assertRegex(env, r"(?m)^FORCE_TWO_FACTOR_AUTHENTICATION=false$")
+        for name in ("web", "worker", "beat"):
+            with self.subTest(service=name):
+                environment = self.base["services"][name]["environment"]
+                self.assertEqual(
+                    environment["FORCE_TWO_FACTOR_AUTHENTICATION"], "false"
+                )
+
     def test_env_example_sets_one_sender_on_the_host_domain(self):
         env = (COMPOSE_DIR / ".env.example").read_text()
         values = dict(re.findall(r"(?m)^([A-Z_]+)=(.*)$", env))

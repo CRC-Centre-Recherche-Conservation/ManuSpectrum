@@ -6,7 +6,11 @@ from django.views.generic import RedirectView, TemplateView
 
 from arches.app.views.auth import PasswordResetView
 
+from manuspectrum.accounts.notices import AccountPasswordResetForm
+from manuspectrum.accounts.activation import AcceptTermsView, ActivateAccountView
+from manuspectrum.accounts.twofactor import TwoFactorResetView, TwoFactorSetupView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
+from manuspectrum.views.legal_pages import LegalPageView
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.biblissima_proxy import (
     BiblissimaAddAltNameView,
@@ -90,6 +94,7 @@ urlpatterns = [
     path(
         "password_reset/",
         PasswordResetView.as_view(
+            form_class=AccountPasswordResetForm,
             html_email_template_name="registration/password_reset_email_html.html",
         ),
         name="password_reset",
@@ -168,6 +173,40 @@ for _slug, _name, _tpl in [
     urlpatterns.append(
         path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
     )
+
+### Legal pages: same language-prefixed mechanism as the About pages, with the
+### durations read from the settings.
+for _slug, _name, _tpl in [
+    ("about/legal", "about-legal", "views/pages/legal.htm"),
+    ("about/privacy", "about-privacy", "views/pages/privacy.htm"),
+    ("about/terms", "about-terms", "views/pages/terms.htm"),
+]:
+    urlpatterns.append(
+        path(_slug, LegalPageView.as_view(template_name=_tpl), name=_name)
+    )
+
+### Two-factor enrolment of the signed-in user (Arches' own settings page is
+### refused at the edge) and the personal re-enrolment link of a reset;
+### wrapped like every page.
+urlpatterns += [
+    path("account/two-factor", TwoFactorSetupView.as_view(), name="account-two-factor"),
+    path(
+        "account/two-factor/reset/<token>",
+        TwoFactorResetView.as_view(),
+        name="account-two-factor-reset",
+    ),
+]
+
+### Account activation from the invitation link and (re)acceptance of the terms
+### of use; wrapped like every page.
+urlpatterns += [
+    path(
+        "account/activate/<uidb64>/<token>",
+        ActivateAccountView.as_view(),
+        name="account-activate",
+    ),
+    path("account/terms", AcceptTermsView.as_view(), name="account-terms"),
+]
 
 ### Analysis Explorer page: wrapped, so /en/discover and /fr/discover; the
 ### application state lives in the query string, never in the path.

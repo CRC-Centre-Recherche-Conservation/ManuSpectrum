@@ -190,15 +190,23 @@ class WorkflowAndEtlTests(ActivityCase):
         name = "create-project-workflow"
         self.run_row(name, START + timedelta(days=2), True)
         self.run_row(name, START + timedelta(days=3), False)
-        self.run_row(name, START - timedelta(days=60), False)
-        self.run_row(name, START - timedelta(days=60), True)
+        self.run_row(
+            name,
+            START - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS + 30),
+            False,
+        )
+        self.run_row(
+            name,
+            START - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS + 30),
+            True,
+        )
         row = self.figures()["workflows"][name]
-        self.assertEqual(row, {"started": 2, "completed": 1, "open": 2, "stale": 2})
+        self.assertEqual(row, {"started": 2, "completed": 1, "open": 2, "stale": 1})
 
     def test_an_open_run_younger_than_the_delay_is_not_stale(self):
         name = "import-biblissima-workflow"
         self.run_row(
-            name, NOW - timedelta(days=activity.WORKFLOW_STALE_AFTER_DAYS - 1), False
+            name, NOW - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS - 1), False
         )
         self.assertEqual(self.figures()["workflows"][name]["stale"], 0)
 
@@ -285,6 +293,80 @@ class WorkflowAndEtlTests(ActivityCase):
         self.assertEqual(row["unfinished"], 1)
 
 
+class InactiveAccountsTests(ActivityCase):
+    def user(self, name, joined, last=None, active=True):
+        User = get_user_model()
+        user = User.objects.create(
+            username=name, is_active=active, date_joined=local(joined), last_login=None
+        )
+        if last is not None:
+            User.objects.filter(pk=user.pk).update(last_login=local(last))
+        return user
+
+    def found(self):
+        """Only the accounts of the test: the fixtures bring `admin` and `anonymous`."""
+        found = self.figures()["inactive_accounts"]
+        return {
+            kind: [row for row in rows if row[0] not in ("admin", "anonymous")]
+            for kind, rows in found.items()
+        }
+
+    def test_a_sign_in_older_than_twelve_months_is_dormant(self):
+        self.user("old", NOW - timedelta(days=900), last=NOW - timedelta(days=400))
+        self.user("recent", NOW - timedelta(days=900), last=NOW - timedelta(days=300))
+        found = self.found()
+        self.assertEqual([row[0] for row in found["dormant"]], ["old"])
+        self.assertEqual(found["dormant"][0][1:], ["2025-09-04", "2024-04-22"])
+        self.assertEqual(found["never"], [])
+
+    def test_never_signed_in_three_months_after_joining_is_listed_with_no_sign_in(self):
+        self.user("invited", NOW - timedelta(days=120))
+        self.user("fresh", NOW - timedelta(days=40))
+        found = self.found()
+        self.assertEqual([row[0] for row in found["never"]], ["invited"])
+        self.assertIsNone(found["never"][0][1])
+        self.assertEqual(found["dormant"], [])
+
+    def test_anonymous_and_inactive_accounts_are_left_out(self):
+        get_user_model().objects.filter(username="anonymous").update(
+            is_active=True,
+            last_login=None,
+            date_joined=local(NOW - timedelta(days=900)),
+        )
+        self.assertIn(
+            "anonymous",
+            get_user_model()
+            .objects.filter(date_joined__lt=local(NOW))
+            .values_list("username", flat=True),
+        )
+        self.user("gone", NOW - timedelta(days=900), active=False)
+        self.user(
+            "gone_too",
+            NOW - timedelta(days=900),
+            last=NOW - timedelta(days=500),
+            active=False,
+        )
+        found = self.figures()["inactive_accounts"]
+        listed = {row[0] for rows in found.values() for row in rows}
+        self.assertFalse(listed & {"anonymous", "gone", "gone_too"})
+
+
+class AccountsAnonymisedTests(ActivityCase):
+    def test_the_month_counts_the_ledger_rows_anonymised_inside_it(self):
+        from manuspectrum.models import AccountRetention
+
+        inside = START.date() + timedelta(days=3)
+        for user_id, day in (
+            (901, inside),
+            (902, inside),
+            (903, START.date() - timedelta(days=1)),
+            (904, END.date()),
+            (905, None),
+        ):
+            AccountRetention.objects.create(user_id=user_id, anonymised_on=day)
+        self.assertEqual(self.figures()["accounts_anonymised"], 2)
+
+
 class ReadOnlyTests(ActivityCase):
     def test_a_write_inside_the_block_is_refused_and_allowed_after_it(self):
         with self.assertRaises(DatabaseError):
@@ -357,6 +439,8 @@ class MonthTests(ActivityCase):
                 "workflows",
                 "workflow_stale_after_days",
                 "etl",
+                "inactive_accounts",
+                "accounts_anonymised",
             },
         )
 
@@ -410,7 +494,7 @@ class GaugeTests(ActivityCase):
         self.assertGreaterEqual(sample("manuspectrum_resources", model="other"), 1)
 
     def test_workflows_open_and_stale(self):
-        for age in (1, 45):
+        for age in (1, settings.WORKFLOW_CLEANUP_AFTER_DAYS + 5):
             WorkflowHistory.objects.create(
                 workflowid=uuid.uuid4(),
                 workflowname="create-project-workflow",

@@ -33,6 +33,9 @@ class StaticSitemap(Sitemap):
             "about-explorer",
             "about-team",
             "about-contact",
+            "about-legal",
+            "about-privacy",
+            "about-terms",
         ]
 
     def location(self, item):

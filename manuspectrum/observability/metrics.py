@@ -95,7 +95,22 @@ IIIF_TOKEN_OUTCOMES = (
     "unavailable",
 )
 READ_SURFACES = ("summary", "thumbnail", "iiif_file", "spectrum_preview")
-LOGIN_OUTCOMES = ("success", "failure")
+ACCOUNT_MAIL_KINDS = (
+    "embargo_notice",
+    "embargo_lifted",
+    "workflow_notice",
+    "workflow_cleaned",
+    "invitation",
+    "two_factor_reset",
+    "anonymisation_notice",
+    "deactivation_notice",
+    "anonymisation_summary",
+    "password_reset",
+)
+ACCOUNT_MAIL_OUTCOMES = ("sent", "failed", "skipped")
+EMBARGO_STATES = ("active", "undated", "due_soon", "overdue")
+EMBARGO_LIFT_OUTCOMES = ("lifted", "incomplete", "skipped_extended", "failed")
+LOGIN_OUTCOMES = ("success", "failure", "mfa_failure")
 BUNDLE_REASONS = ("cold", "data", "permissions", "visibility")
 BIBLISSIMA_ENDPOINTS = ("wikibase", "portal", "iiif")
 UPSTREAM_OUTCOMES = (
@@ -143,9 +158,12 @@ RESOURCE_MODELS = (
     "project",
     "sample",
 )
-CHANGE_KINDS = ("created", "modified", "deleted")
+CHANGE_KINDS = ("created", "modified", "deleted", "cleaned")
 WORKFLOW_KINDS = ("create-project-workflow", "import-biblissima-workflow")
 WORKFLOW_STATES = ("open", "stale")
+WORKFLOW_CLEANUP_OUTCOMES = ("cleaned", "kept_resources", "failed")
+WORKFLOW_CLEANUP_RESOURCE_OUTCOMES = ("deleted", "kept")
+ACCOUNT_ANONYMISATION_OUTCOMES = ("anonymised", "failed")
 READYZ_COMPONENTS = (
     "postgres",
     "elasticsearch",
@@ -247,6 +265,36 @@ READ_REFUSALS = Counter(
 AUTH_LOGINS = Counter(
     "manuspectrum_auth_logins",
     "Login attempts by outcome.",
+    ["outcome"],
+)
+ACCOUNT_MAILS = Counter(
+    "manuspectrum_account_mails",
+    "Account mails by kind and outcome.",
+    ["kind", "outcome"],
+)
+AUTH_LOCKOUTS = Counter(
+    "manuspectrum_auth_lockouts",
+    "Accounts locked after repeated sign-in failures (the transition, not the refused attempts).",
+)
+EMBARGO_LIFTS = Counter(
+    "manuspectrum_embargo_lifts",
+    "Embargo lifts by outcome.",
+    ["outcome"],
+)
+WORKFLOW_CLEANUPS = Counter(
+    "manuspectrum_workflow_cleanups",
+    "Abandoned workflow runs cleaned, by workflow kind and outcome "
+    "(kept_resources: cleaned, some created resources kept).",
+    ["kind", "outcome"],
+)
+WORKFLOW_CLEANUP_RESOURCES = Counter(
+    "manuspectrum_workflow_cleanup_resources",
+    "Resources created by an abandoned workflow run, deleted or kept by the cleanup.",
+    ["outcome"],
+)
+ACCOUNT_ANONYMISATIONS = Counter(
+    "manuspectrum_account_anonymisations",
+    "Inactive accounts anonymised by the retention pass, by outcome.",
     ["outcome"],
 )
 SPECTRUM_PREVIEWS = Counter(
@@ -390,6 +438,32 @@ ACTIVE_ACCOUNTS = gauge(
 ACTIVE_ACCOUNTS_MEASURED = gauge(
     "manuspectrum_active_accounts_timestamp_seconds",
     "Unix time of the count behind manuspectrum_active_accounts.",
+    mode="mostrecent",
+)
+LOGIN_RECORDS_PRUNED = gauge(
+    "manuspectrum_login_records_prune_timestamp_seconds",
+    "Unix time of the last successful prune of the login records.",
+    mode="mostrecent",
+)
+EMBARGOES = gauge(
+    "manuspectrum_embargoes",
+    "Active embargoes by state, set by the daily embargo pass.",
+    ["state"],
+    mode="mostrecent",
+)
+EMBARGO_PASS_TIMESTAMP = gauge(
+    "manuspectrum_embargo_pass_timestamp_seconds",
+    "Unix time of the last completed embargo pass.",
+    mode="mostrecent",
+)
+WORKFLOW_CLEANUP_TIMESTAMP = gauge(
+    "manuspectrum_workflow_cleanup_timestamp_seconds",
+    "Unix time of the last completed abandoned-workflow cleanup pass.",
+    mode="mostrecent",
+)
+ACCOUNT_RETENTION_TIMESTAMP = gauge(
+    "manuspectrum_account_retention_timestamp_seconds",
+    "Unix time of the last completed inactive-account retention pass.",
     mode="mostrecent",
 )
 RESOURCES = gauge(

@@ -86,7 +86,7 @@ a mount root.
 
 ## Alerts
 
-55 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
+62 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
 (site, application, containers, host, storage, backup, tls, celery, datastores,
 explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of
@@ -226,20 +226,33 @@ everything; mail filters sort on either.
 | Heartbeat | Alertmanager, Monday 08:00 | `[ManuSpectrum][Heartbeat] Alerting chain OK` | `Heartbeat` |
 | Report | Monthly report | `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>` | `Report` |
 | Contact | Public contact form | `[ManuSpectrum][Contact] <reason> — <name>` | none (a `mailto:` link cannot set a header: filter on the subject) |
-| Account | Reserved for PP-4: access requests, embargo and workflow notices | `[ManuSpectrum][Account] …` | `Account` |
+| Account | The application: invitation (`Your ManuSpectrum account`), embargo notices (`Restriction ending on <date>`, `Your data are now public`), workflow notices (`Unfinished workflow to be cleaned on <date>`, `Unfinished workflow cleaned`), the anonymisation notice (`Your account will be anonymised on <date>`), the deactivation notice (`Your account has been deactivated`), the administrator summaries of those notices, and the password-reset mail | `[ManuSpectrum][Account] …` | `Account` |
 | System | Host mail (`root` alias: unattended upgrades, cron) | Unchanged | none (filter on the sender `root@<host>`) |
+
+Arches' own two-factor reset mail (`two-factor-authentication-reset`) is no longer reachable: nginx refuses that route and the unsafe settings route (`two-factor-authentication-settings`), so no uncategorised account mail remains. A lost phone is handled by a superuser in the admin (`deploy/ADMIN.md`).
 
 ## Monthly report
 
 On the 1st at 08:00 the `manuspectrum-monthly-report` timer sends a report of the
 previous month, in French, to `ALERT_EMAILS`: availability, disks, sizes, backups and
 restore tests, restarts and out-of-memory kills, alerts of the month, consultations, contents,
-workflows, bulk imports and exports, sign-ins, and active accounts (the number at
-the end of the month and its maximum over the month). Growth is given "sur le mois"
+workflows, abandoned workflows cleaned, embargoes (lifted, overdue, undated), bulk imports and exports, sign-ins, account
+lockouts, account mails (sent and failed), active accounts (the number at
+the end of the month and its maximum over the month) and inactive accounts. Growth is given "sur le mois"
 when Prometheus still holds the start of the month, else "depuis le <date>" from its oldest sample (retention is 35
 days). A source that could not be read is listed
 under "données indisponibles" and the command exits 1. The report reads Prometheus and the
 database, aggregates only (see "Activity" below).
+**Inactive accounts** are the one section that names people: the active accounts (the `anonymous`
+visitor excluded) with no sign-in for 12 months, and those that never signed in 3 months after their
+creation (an invitation never activated counts there), each with its user name, last sign-in (or
+"jamais") and creation date. They come from `activity_summary` (key `inactive_accounts`) and go to
+`ALERT_EMAILS` only. At 12 months nothing is changed: deactivation is the administrators'
+decision, by hand. At 24 months the daily retention pass anonymises the account (never a
+deletion, `ADMIN.md`); the section also gives the number of accounts anonymised in the month
+(`accounts_anonymised`, read from the `ms_account_retention` ledger). The pass is watched by
+`manuspectrum_account_anonymisations_total{outcome}` (`AccountRetentionFailures`) and
+`manuspectrum_account_retention_timestamp_seconds` (`AccountRetentionStale`).
 **Active accounts** read `manuspectrum_active_accounts`: one number, no label, the
 active accounts (staff and superusers included, the `anonymous` visitor not) whose last
 login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)
@@ -252,7 +265,7 @@ retention. Without a sample the report prints "n/d". `make -C deploy report-test
 
 ## Activity
 
-Counts only: nothing names a person, a resource or a path (GDPR). Three sources.
+Counts only: nothing names a person, a resource or a path (GDPR), except the inactive-accounts list of the monthly report (above). Three sources.
 
 **Consultations** need no application code. The recording rules of `activity.yml` map the
 route names of `django_http_*` (the `view` label) to a closed `kind` vocabulary and record
@@ -291,8 +304,8 @@ converts it with the session zone, so the stored values are true instants. That 
 process zone equals its session zone (Django guarantees it; a hand `psql` session in another zone writing
 naive values would not), and a value written during the repeated hour of the autumn change is ambiguous
 (at most one hour a year is placed an hour off). The window of a month counts the log as it is: rows written outside Arches
-(`load_package`, SQL) have no `edit_log` entry but are in the totals. A workflow open for more than 30
-days is "stale": a provisional delay until the cleanup of abandoned workflows is decided.
+(`load_package`, SQL) have no `edit_log` entry but are in the totals. A workflow open for more than
+`WORKFLOW_CLEANUP_AFTER_DAYS` (90) days is "stale": the delay after which the cleanup of abandoned workflows acts.
 `python manage.py activity_summary --month YYYY-MM` prints the month as one line of JSON; the monthly
 report runs it in its own container.
 

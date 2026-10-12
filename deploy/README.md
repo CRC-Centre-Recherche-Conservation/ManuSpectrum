@@ -18,6 +18,7 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README); the default `SECRETS_DIR` |
 | `BACKUP.md` | Backups: what is kept where, the schedule, the restore test, restore of a file or of the stack, moving day, personal data |
+| `ADMIN.md` | Administration: accounts, invitation and two-factor, unlocking, terms, embargoes, abandoned workflows, draft register of processing |
 | `SECRETS.md` | Secret inventory, the vault item, restore and rotation of each secret, scanning |
 | `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh`, `backup.sh`, `restore-test.sh`, `restore.sh`, `restore-files.sh`, the libraries they share and their tests |
 | `compose/postgres/init/` | Creates `template_postgis` the way Arches does |
@@ -154,6 +155,16 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `.env`: add `COMPOSE_PROFILES`, `ALERT_EMAILS`, `ALERT_EMAIL_FROM` and
   `DEFAULT_FROM_EMAIL` before pulling, then
   `make -C deploy volumes secrets up monitoring-init observability-on`.
+- Accounts (PP-4, `ADMIN.md`): the upgrade applies migrations `0009_embargo_and_workflow_cleanup`,
+  `0010_terms_acceptance` and `0011_account_retention` (`init` and `migrate` run them) and the django-axes tables.
+  Sign-up is closed; accounts are created by an administrator and invited. Compulsory
+  two-factor sign-in is `FORCE_TWO_FACTOR_AUTHENTICATION` in `.env` (default `false`, see
+  `compose/.env.example`). **Outgoing mail must work first**: invitations and notices are
+  sent from the application (`runbooks/application.md`, `AccountMailFailures`). Rollout
+  order: deploy with `false`, the administrators enrol at `/<lang>/account/two-factor`,
+  then set `true` and recreate `web`. A new `SECRET_KEY` makes everyone re-enrol
+  (`SECRETS.md`). The edge rate-limits the account POSTs and refuses Arches' unsafe 2FA
+  and sign-up routes (`ACCEPTANCE.md` 8).
 - `web` and `init` run Django's deployment checks first
   (`check --deploy --tag security --fail-level WARNING`) and refuse to start
   on any warning.

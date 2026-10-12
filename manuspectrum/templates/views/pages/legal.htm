@@ -1,0 +1,61 @@
+{% extends 'views/pages/legal_base.htm' %}
+{% load i18n manuspectrum_settings %}
+{% block legal_title %}{% trans "Legal notice" %}{% endblock %}
+{% block legal_og_title %}{% trans "Legal notice" %}{% endblock %}
+{% block page_description %}{% trans "Publisher, publication director, scientific lead and host of the ManuSpectrum platform." %}{% endblock %}
+{% block og_description %}{% trans "Publisher, publication director, scientific lead and host of the ManuSpectrum platform." %}{% endblock %}
+{% block legal_heading %}{% trans "Legal notice" %}{% endblock %}
+
+{% block legal_body %}
+<h2>{% trans "Publisher" %}</h2>
+<p>Centre national de la recherche scientifique (CNRS), 3 rue Michel-Ange, 75794 Paris cedex 16.</p>
+<p>
+    {% blocktrans trimmed %}
+    The site is published for the UAR 3224 Centre de recherche sur la conservation (CRC), under the supervision of:
+    {% endblocktrans %}
+</p>
+<ul>
+    <li>Centre national de la recherche scientifique (CNRS)</li>
+    <li>Muséum national d'Histoire naturelle (MNHN)</li>
+    <li>Ministère de la Culture</li>
+</ul>
+<p>
+    {% blocktrans trimmed %}
+    The CNRS manages the credits. The server was requested in the name of the CRC by the scientific lead.
+    {% endblocktrans %}
+</p>
+
+<h2>{% trans "Publication director" %}</h2>
+<p>{% trans "The chief executive officer of the CNRS (the function, not a named person)." %}</p>
+
+<h2>{% trans "Scientific lead and editorial lead" %}</h2>
+<p>Anne Michelin, UAR 3224 Centre de recherche sur la conservation (CRC).</p>
+
+<h2>{% trans "Host" %}</h2>
+<p>UAR Huma-Num (UAR 3598), 14 cours des humanités, 93322 Aubervilliers cedex.</p>
+
+<h2>{% trans "Contact" %}</h2>
+{% contact_email as ms_legal_email %}
+{% if ms_legal_email %}
+<p><a href="mailto:{{ ms_legal_email }}">{{ ms_legal_email }}</a></p>
+{% else %}
+<p><a href="{% url 'about-contact' %}">{% trans "Contact page" %}</a></p>
+{% endif %}
+
+<h2>{% trans "Personal data" %}</h2>
+<p>
+    {% blocktrans trimmed %}
+    The controller is the CNRS. The details, the retention periods and how to exercise your rights are in the
+    {% endblocktrans %}
+    <a href="{% url 'about-privacy' %}">{% trans "privacy policy" %}</a>.
+</p>
+
+<h2>{% trans "Software and content" %}</h2>
+<p>
+    {% blocktrans trimmed %}
+    The platform's source code is published under the GNU General Public License v3. Each record states the licence
+    that applies to its data and files; read it before reusing them.
+    {% endblocktrans %}
+    <a href="{% url 'about-terms' %}">{% trans "Terms of use" %}</a>.
+</p>
+{% endblock %}

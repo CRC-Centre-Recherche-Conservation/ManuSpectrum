@@ -1,0 +1,88 @@
+{% extends 'views/pages/legal_base.htm' %}
+{% load i18n %}
+{% block legal_title %}{% trans "Terms of use" %}{% endblock %}
+{% block legal_og_title %}{% trans "Terms of use" %}{% endblock %}
+{% block page_description %}{% trans "What ManuSpectrum is and is not, and the rules for people who contribute to it." %}{% endblock %}
+{% block og_description %}{% trans "What ManuSpectrum is and is not, and the rules for people who contribute to it." %}{% endblock %}
+{% block legal_heading %}{% trans "Terms of use" %}{% endblock %}
+{% block legal_lead %}
+<p class="ms-page-hero__lead">
+    {% trans "Version" %} <span class="ms-legal-version" id="ms-terms-version">{{ terms_version }}</span>
+</p>
+{% endblock %}
+
+{% block legal_body %}
+<div class="ms-legal-warning" role="note">
+    <p><strong>{% trans "Read this first." %}</strong></p>
+    <p>{% trans "ManuSpectrum is not a data repository. It describes analyses, links them together and showcases them, in line with the FAIR principles." %}</p>
+    <p>{% trans "It gives none of the guarantees of a repository (long-term preservation, persistent identifiers, citable deposits). Your raw data belongs in a recognised repository such as Recherche Data Gouv or Nakala, and ManuSpectrum links to it." %}</p>
+    <p>{% blocktrans trimmed count n=embargo_max_months %}
+        A restriction on a record is temporary: {{ n }} month at most, then it is lifted automatically, unless the team records an exception.
+        {% plural %}
+        A restriction on a record is temporary: {{ n }} months at most, then it is lifted automatically, unless the team records an exception.
+        {% endblocktrans %}</p>
+    <p>{% blocktrans trimmed with days=workflow_cleanup_days notices=workflow_notice_days_text %}
+        An unfinished workflow is cleaned after {{ days }} days without activity, once we have written to you twice
+        ({{ notices }} days before the cleanup).
+        {% endblocktrans %}</p>
+</div>
+
+<h2>{% trans "Words we use" %}</h2>
+<dl>
+    <dt>{% trans "Platform" %}</dt>
+    <dd>{% trans "The ManuSpectrum website and everything you can read or enter on it." %}</dd>
+    <dt>{% trans "Contributor" %}</dt>
+    <dd>{% trans "A person with an account, who describes analyses, manuscripts or materials on the platform." %}</dd>
+    <dt>{% trans "Record" %}</dt>
+    <dd>{% trans "A description kept on the platform: a document, an analysis, a material, a characterization, and the files attached to it." %}</dd>
+    <dt>{% trans "Restriction" %}</dt>
+    <dd>{% trans "A record that only some people can see until an end date." %}</dd>
+    <dt>{% trans "Workflow" %}</dt>
+    <dd>{% trans "A guided, multi-step entry (for example an import) that creates records as you go." %}</dd>
+    <dt>{% trans "Team" %}</dt>
+    <dd>{% trans "The people who run the platform at the Centre de recherche sur la conservation." %}</dd>
+</dl>
+
+<h2>{% trans "The rules" %}</h2>
+
+<h3>{% trans "1. Your account is yours" %}</h3>
+<p>{% trans "An account is personal. Do not share your password or your second factor, and do not let someone else work under your name. Tell us if you think someone else has access to it." %}</p>
+
+<h3>{% trans "2. What you describe must be accurate" %}</h3>
+<p>{% trans "You answer for the descriptions you enter. Check them, correct them when you find a mistake, and say so when something is uncertain." %}</p>
+
+<h3>{% trans "3. Images and files: you need the rights" %}</h3>
+<p>{% trans "Upload or link an image or a file only if you hold the rights to it or have permission from the holder. Give the licence and the credit on the record." %}</p>
+
+<h3>{% trans "4. Licences of published data" %}</h3>
+<p>{% trans "Each record states the licence that applies to its data and files, and who produced them. Whoever reuses them follows that licence and cites the depositing laboratory." %}</p>
+
+<h3>{% trans "5. Raw data goes to a repository" %}</h3>
+<p>{% trans "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a recognised repository and link it from your record. We may remove files that the platform cannot hold." %}</p>
+
+<h3>{% trans "6. A restriction does not last forever" %}</h3>
+<p>{% blocktrans trimmed count n=embargo_max_months with notices=embargo_notice_days_text %}
+    You can restrict a record for {{ n }} month at most. We write to you {{ notices }} days before the end date
+    and again the day the record becomes public. The record is lifted automatically the day after the end date.
+    A restriction with no end date is not lifted by itself, and the team keeps a list of them.
+    {% plural %}
+    You can restrict a record for {{ n }} months at most. We write to you {{ notices }} days before the end date
+    and again the day the record becomes public. The record is lifted automatically the day after the end date.
+    A restriction with no end date is not lifted by itself, and the team keeps a list of them.
+    {% endblocktrans %}</p>
+
+<h3>{% trans "7. Unfinished workflows are cleaned" %}</h3>
+<p>{% blocktrans trimmed with days=workflow_cleanup_days notices=workflow_notice_days_text %}
+    A workflow left untouched for {{ days }} days is cleaned. We write to you {{ notices }} days before. We remove
+    only what the workflow itself created, and only while it is still a draft, unchanged elsewhere and not linked
+    to anything. Finished workflows are never touched.
+    {% endblocktrans %}</p>
+
+<h3>{% trans "8. Misuse" %}</h3>
+<p>{% trans "The team may suspend an account that misuses the platform (false descriptions on purpose, files you have no right to, attempts to get around access limits). We tell you why." %}</p>
+
+<h3>{% trans "9. These terms can change" %}</h3>
+<p>{% trans "When the terms change, the version above changes too, and you accept the new version the next time you sign in." %}</p>
+
+<p>{% trans "Questions about these terms or about your data:" %} <a href="{% url 'about-contact' %}">{% trans "contact the team" %}</a>. <a href="{% url 'about-privacy' %}">{% trans "Privacy policy" %}</a> · <a href="{% url 'about-legal' %}">{% trans "Legal notice" %}</a></p>
+{% endblock %}

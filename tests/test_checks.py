@@ -188,3 +188,35 @@ class PublishedGraphLanguageGateTests(SimpleTestCase):
             self.assertEqual(
                 check_published_graph_languages(None, databases=["default"]), []
             )
+
+
+class OAuthPasswordGrantTests(TestCase):
+    databases = {"default"}
+
+    def make(self, grant):
+        from oauth2_provider.models import Application
+
+        return Application.objects.create(
+            name="App",
+            client_type=Application.CLIENT_PUBLIC,
+            authorization_grant_type=grant,
+        )
+
+    def run_check(self):
+        from manuspectrum.checks import check_oauth_password_grant
+
+        return check_oauth_password_grant(None, ["default"])
+
+    def test_a_password_grant_application_is_a_warning(self):
+        self.make("password")
+        self.assertEqual([m.id for m in self.run_check()], ["manuspectrum.W004"])
+
+    def test_other_grants_and_no_application_are_silent(self):
+        self.assertEqual(self.run_check(), [])
+        self.make("authorization-code")
+        self.assertEqual(self.run_check(), [])
+
+    @override_settings(ENABLE_TWO_FACTOR_AUTHENTICATION=False)
+    def test_silent_when_two_factor_is_off(self):
+        self.make("password")
+        self.assertEqual(self.run_check(), [])

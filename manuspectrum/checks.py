@@ -6,6 +6,9 @@ management command that performs system checks (``check``, ``migrate``,
 refuses to migrate a misconfigured production instance.
 """
 
+import os
+from pathlib import Path
+
 from django.conf import settings
 from django.core import checks
 
@@ -163,3 +166,88 @@ def check_contact_email(app_configs, **kwargs):
     if settings.DEBUG:
         return [checks.Warning(msg, id="manuspectrum.W001")]
     return [checks.Error(msg, id="manuspectrum.E001")]
+
+
+@checks.register()
+def check_signup_closed_in_production(app_configs, **kwargs):
+    """E002: the production profile (``settings_docker``) allows self-signup.
+
+    Accounts are created by an administrator. Arches enables signup by default
+    and confirms it by e-mail; with the setting on, a visitor could create an
+    account in the "Crowdsource Editor" group.
+    """
+    if not settings.ENABLE_USER_SIGNUP:
+        return []
+    if not str(settings.SETTINGS_MODULE).endswith("settings_docker"):
+        return []
+    return [
+        checks.Error(
+            "ENABLE_USER_SIGNUP is True in the production profile: visitors "
+            "could create accounts. Accounts are created by an administrator.",
+            id="manuspectrum.E002",
+        )
+    ]
+
+
+@checks.register()
+def check_legal_pages_complete(app_configs, **kwargs):
+    """E003: a legal page would publish an ``[À CONFIRMER]`` marker in production.
+
+    Production is ``DEPLOY_ENVIRONMENT=production`` in the environment. The
+    marker is a placeholder left in the page templates; other environments
+    print it as a reminder.
+    """
+    if os.environ.get("DEPLOY_ENVIRONMENT") != "production":
+        return []
+    pages = Path(settings.APP_ROOT) / "templates" / "views" / "pages"
+    pending = [
+        name
+        for name in ("legal.htm", "privacy.htm", "terms.htm")
+        if "[À CONFIRMER]" in (pages / name).read_text(encoding="utf-8")
+    ]
+    if not pending:
+        return []
+    return [
+        checks.Error(
+            "Pending marker '[À CONFIRMER]' in " + ", ".join(pending) + ": fill "
+            "in the text before publishing in production.",
+            id="manuspectrum.E003",
+        )
+    ]
+
+
+@checks.register(checks.Tags.database)
+def check_oauth_password_grant(app_configs, databases, **kwargs):
+    """W004: an OAuth2 application allows the password grant, which skips two-factor.
+
+    ``o/token/`` with the password grant signs a user in from a password alone
+    (django-axes still counts the attempts), so a second factor is never asked
+    for. Silent on a half-migrated database and when two-factor is off.
+    """
+    if (
+        "default" not in (databases or [])
+        or not settings.ENABLE_TWO_FACTOR_AUTHENTICATION
+    ):
+        return []
+    try:
+        from oauth2_provider.models import Application
+
+        names = list(
+            Application.objects.filter(
+                authorization_grant_type=Application.GRANT_PASSWORD
+            ).values_list("name", flat=True)
+        )
+    except Exception:  # noqa: BLE001 — a half-migrated DB must not block migrate
+        return []
+    if not names:
+        return []
+    return [
+        checks.Warning(
+            "OAuth2 application(s) "
+            + ", ".join(repr(n or "unnamed") for n in names)
+            + " allow the password grant: a user signs in at o/token/ with a "
+            "password alone, without two-factor authentication. Switch the "
+            "grant type or delete the application.",
+            id="manuspectrum.W004",
+        )
+    ]

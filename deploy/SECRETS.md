@@ -26,7 +26,7 @@ is a shell variable set once per session with
 | --- | --- | --- | --- | --- |
 | `pg_password` | PostgreSQL superuser (read by the image only to create the cluster), `web`, `worker`, `beat` | `make secrets` (random, 48 bytes base64) | Only if role passwords are restored from a dump; otherwise it can be regenerated and set in the database | The role is changed inside PostgreSQL first, then the file, then the containers are recreated |
 | `elastic_password` | Elasticsearch `elastic` user, `web`, `worker`, `beat` | `make secrets` | No: the indexes are rebuilt (`es reindex_database`) | Changed through the Elasticsearch security API first, then the file and the containers |
-| `django_secret_key` | `web`, `worker`, `beat` (sessions, password-reset links, IIIF tokens, signup and 2FA links) | `make secrets` (`secrets.token_urlsafe(64)`) | Optional: a new key logs everyone out | Everyone is logged out; password-reset links, IIIF tokens and Arches e-mail links in flight stop working. Arches also encrypts each user's 2FA secret (`UserProfile.encrypted_mfa_hash`, `arches/app/views/auth.py`) with `SECRET_KEY`: if `ENABLE_TWO_FACTOR_AUTHENTICATION` is ever enabled, a new key makes enrolled TOTP unreadable and users re-enrol (off today) |
+| `django_secret_key` | `web`, `worker`, `beat` (sessions, password-reset links, IIIF tokens, invitation links) | `make secrets` (`secrets.token_urlsafe(64)`) | Optional: a new key logs everyone out | Everyone is logged out; password-reset links, IIIF tokens and invitation links in flight stop working. Two-factor authentication is on: Arches stores each user's TOTP secret AES-encrypted with `SECRET_KEY` (`UserProfile.encrypted_mfa_hash`, `arches/app/views/auth.py`), so a new key makes every enrolled secret unreadable and everyone re-enrols after a superuser resets their secret in the admin (`ADMIN.md`): plan the rotation as a re-enrolment of every account, and do it only when the key leaked |
 | `email_password` | `web`, `worker`, `beat` (SMTP relay) | `make secrets` creates it **empty** (relay without authentication) | Yes, when the relay needs a password | Changed at the mail provider, then the file |
 | `admin_password` | `init` and `web` only (`make init`, `make admin-password`) | `make secrets` | No: its hash comes back with the database; the vault is the reference | Written to the file, then applied with `make admin-password` |
 | `restic_password` | the `restic` service only (profile `backup`: backups, restore test, restore) | `make secrets` (random, 48 bytes base64) | **Yes, always: without it no backup can be read; it is the one secret that must be in the vault before any restore** | Not by rewriting the file: the repository holds the old key. Add the new key to the repository first (`restic key add`), then the file, then remove the old key (section 6) |
@@ -144,8 +144,10 @@ make -C deploy down up
 deploy/compose/smoke.sh check
 ```
 
-Everyone is logged out; reset links, IIIF tokens and Arches e-mail links in
-flight become invalid. Update the vault item, copying the value from
+Everyone is logged out; reset links, IIIF tokens and invitation links in
+flight become invalid, and every enrolled two-factor secret becomes unreadable
+(it is encrypted with this key): each user is reset by a superuser in the admin
+and enrols again. Update the vault item, copying the value from
 `"$SECRETS_DIR/django_secret_key"`.
 
 ### `pg_password`

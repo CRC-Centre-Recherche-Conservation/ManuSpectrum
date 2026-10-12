@@ -47,6 +47,22 @@ groups:
           summary: "The active accounts count is not refreshed"
           description: "The active accounts count is {{ $value | humanizeDuration }} old; it is refreshed daily."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#activeaccountsstale
+      - alert: LoginRecordsPruneStale
+        expr: |
+          (
+            time() - max(manuspectrum_login_records_prune_timestamp_seconds) > 3 * 24 * 3600
+            or
+            absent_over_time(manuspectrum_login_records_prune_timestamp_seconds[26h])
+          )
+          and on() (up{job="node"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The login records are not pruned"
+          description: "The login records were last pruned more than three days ago, or the worker reports no prune time; they are kept six months and pruned daily."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#loginrecordsprunestale
       - alert: ActivityStale
         expr: |
           time() - max(manuspectrum_activity_timestamp_seconds) > 3 * 3600
@@ -58,3 +74,51 @@ groups:
           summary: "The activity gauges are not refreshed"
           description: "The activity gauges are {{ $value | humanizeDuration }} old; they are refreshed hourly."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#activitystale
+      - alert: EmbargoPassStale
+        expr: |
+          (
+            time() - max(manuspectrum_embargo_pass_timestamp_seconds) > 2 * 24 * 3600
+            or
+            absent_over_time(manuspectrum_embargo_pass_timestamp_seconds[26h])
+          )
+          and on() (up{job="node"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The embargo pass is not running"
+          description: "The embargo pass last completed more than two days ago, or the worker reports no completion time; it runs daily at 06:00 Europe/Paris, so restrictions are not noticed or lifted."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#embargopassstale
+      - alert: WorkflowCleanupStale
+        expr: |
+          (
+            time() - max(manuspectrum_workflow_cleanup_timestamp_seconds) > 2 * 24 * 3600
+            or
+            absent_over_time(manuspectrum_workflow_cleanup_timestamp_seconds[26h])
+          )
+          and on() (up{job="node"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The abandoned-workflow pass is not running"
+          description: "The abandoned-workflow pass last completed more than two days ago, or the worker reports no completion time; it runs daily at 03:30 Europe/Paris, so idle runs are neither announced nor cleaned."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#workflowcleanupstale
+      - alert: AccountRetentionStale
+        expr: |
+          (
+            time() - max(manuspectrum_account_retention_timestamp_seconds) > 2 * 24 * 3600
+            or
+            absent_over_time(manuspectrum_account_retention_timestamp_seconds[26h])
+          )
+          and on() (up{job="node"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The inactive-account pass is not running"
+          description: "The inactive-account pass last completed more than two days ago, or the worker reports no completion time; it runs daily at 04:30 Europe/Paris, so long-inactive accounts are neither warned nor anonymised."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#accountretentionstale

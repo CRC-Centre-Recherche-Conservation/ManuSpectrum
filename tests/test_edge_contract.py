@@ -50,19 +50,31 @@ PREFIXED = [
     ("snippets/edge-rules.conf", "admin/login/", "admin:login"),
     ("snippets/edge-rules.conf", "password_reset/", "password_reset"),
     ("snippets/edge-rules.conf", "reset/a/b/", "password_reset_confirm"),
+    ("snippets/edge-rules.conf", "account/activate/a/b", "account-activate"),
+    ("snippets/edge-rules.conf", "account/two-factor", "account-two-factor"),
+    (
+        "snippets/edge-rules.conf",
+        "account/two-factor/reset/a",
+        "account-two-factor-reset",
+    ),
+    ("snippets/edge-rules.conf", "account/terms", "account-terms"),
     ("snippets/edge-rules.conf", "o/token/", "oauth2:token"),
     (
         "snippets/edge-rules.conf",
         "two-factor-authentication-login",
         "two-factor-authentication-login",
     ),
-    (
-        "snippets/edge-rules.conf",
-        "two-factor-authentication-reset",
-        "two-factor-authentication-reset",
-    ),
     ("snippets/edge-rules.conf", "api/explorer/share", "explorer-share"),
     ("snippets/media.conf", f"files/{UUID}", "file_access"),
+]
+# Arches routes the edge answers with a bare 404: (path below the language
+# prefix, view name). Signup is closed; the 2FA settings POST trusts a form
+# field, and the reset mails a link to it.
+DENIED = [
+    ("auth/signup", "signup"),
+    ("auth/confirm_signup", "confirm_signup"),
+    ("two-factor-authentication-settings", "two-factor-authentication-settings"),
+    ("two-factor-authentication-reset", "two-factor-authentication-reset"),
 ]
 BARE = [
     ("snippets/edge-rules.conf", "/healthz", "healthz"),
@@ -98,7 +110,7 @@ def token_for(path):
         return None
     if segments[:2] == ["iiif", "v3"]:
         return "/".join(segments[:3])
-    if segments[0] in ("api", "iiif"):
+    if segments[0] in ("api", "iiif", "account"):
         return "/".join(segments[:2])
     return segments[0][:20]
 
@@ -205,6 +217,23 @@ class EdgeContractTests(SimpleTestCase):
                 path = f"/{code}/{rest}"
                 self.assertView(path, view_name)
                 self.assertNamed(relative, path, token_for(rest))
+
+    def test_denied_routes_exist_and_are_refused_in_every_language(self):
+        text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+        for code, _ in settings.LANGUAGES:
+            for rest, view_name in DENIED:
+                path = f"/{code}/{rest}"
+                self.assertView(path, view_name)
+                pattern = first_location(
+                    read_locations("snippets/edge-rules.conf"), path
+                )
+                self.assertIsNotNone(pattern, f"no location matches {path}")
+                body = re.search(
+                    r"location\s+~\s+" + re.escape(pattern) + r"\s*\{([^}]*)\}",
+                    text,
+                )
+                self.assertIsNotNone(body, f"{path}: location block not found")
+                self.assertEqual(body.group(1).strip(), "return 404;", path)
 
     def test_silk_is_named_in_every_language_without_requiring_the_app(self):
         for code, _ in settings.LANGUAGES:

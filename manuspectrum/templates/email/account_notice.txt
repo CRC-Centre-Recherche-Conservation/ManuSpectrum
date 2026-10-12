@@ -1,0 +1,17 @@
+{% autoescape off %}{% for section in sections %}{% if not forloop.first %}
+----------------------------------------
+
+{% endif %}{{ section.greeting }}
+{% for paragraph in section.paragraphs %}
+{{ paragraph }}
+{% endfor %}{% for item in section.items %}
+- {{ item.name }}{% if item.url %} ({{ item.url }}){% endif %}{% endfor %}{% if section.items %}
+{% endif %}{% for paragraph in section.paragraphs_after %}
+{{ paragraph }}
+{% endfor %}{% for item in section.items_after %}
+- {{ item.name }}{% if item.url %} ({{ item.url }}){% endif %}{% endfor %}{% if section.items_after %}
+{% endif %}{% if section.link %}
+{{ section.button }}: {{ section.link }}
+{% endif %}
+{{ section.footnote }}{% if section.contact_email %} {{ section.contact_email }}{% endif %}
+{% endfor %}{% endautoescape %}
