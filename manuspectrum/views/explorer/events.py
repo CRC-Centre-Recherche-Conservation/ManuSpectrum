@@ -679,11 +679,14 @@ def kept_events(bundle, query):
     does not apply) and one of its supporting analyses is kept by the Corpus rule
     with the period left out. Under characterization filters a production,
     modification or alteration is kept when one of its materials meets them.
-    ``analyses`` and ``materials`` keep the kept ones.
+    ``analyses`` and ``materials`` keep the kept ones; ``materials`` are narrowed
+    by every characterization facet but ``material``, so the materials found
+    beside a ticked one stay listed.
     """
     keep, active, filters, *_ = row_filter(bundle.rows, query, universe=bundle.universe)
     kept_rows = {row["id"] for row in bundle.rows if keep(row, "period")}
     wanted = characterization_wanted(active)
+    listed = characterization_wanted(active, skip="material")
     types = set(parse_event_types(query))
     found = []
     for event in bundle.events:
@@ -699,13 +702,12 @@ def kept_events(bundle, query):
             continue
         materials = event["materials"]
         if wanted and event["type"] in MATERIAL_EVENTS:
-            materials = [
-                m
-                for m in materials
-                if meets(bundle.characterization_values[m["characterization"]], wanted)
-            ]
-            if not materials:
+            values = bundle.characterization_values
+            if not any(meets(values[m["characterization"]], wanted) for m in materials):
                 continue
+            materials = [
+                m for m in materials if meets(values[m["characterization"]], listed)
+            ]
         found.append({**event, "analyses": analyses, "materials": materials})
     return found, keep, filters
 

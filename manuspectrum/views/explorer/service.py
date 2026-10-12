@@ -2374,7 +2374,7 @@ def document_payload(document_id, user, language, ticket=None):
     visible Components placed on its pages (``component_zones``) or observed
     by one of its analyses, the placed ones by first page then name, the
     others by name after them. ``document_match`` says what the filters keep. ``history`` holds
-    the document's Production line when it has a bound or a visible place (``history_of``).
+    the document's Production line when it has a bound, a visible place or an own geometry (``history_of``).
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible

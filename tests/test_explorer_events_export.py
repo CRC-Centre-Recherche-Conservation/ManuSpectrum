@@ -106,7 +106,8 @@ class EventsExportTests(EventsCase):
 
         with patch("manuspectrum.views.explorer.events_export.ROWS_PER_CHUNK", 2):
             response = self.client.get(
-                "/api/explorer/events.geojson?lang=en&eventType=analysis,sampling,production"
+                "/api/explorer/events.geojson?lang=en&eventType=analysis,sampling,production",
+                HTTP_ACCEPT_ENCODING="gzip",
             )
             chunks = list(response.streaming_content)
 

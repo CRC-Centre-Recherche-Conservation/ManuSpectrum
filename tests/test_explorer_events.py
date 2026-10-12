@@ -11,9 +11,10 @@ from tests.explorer_events_fixtures import (
     SMALT,
     VERMILION,
     EventsCase,
+    collection,
+    point,
 )
 from tests.explorer_fixtures import ACTIVE, DRAFT
-from tests.explorer_events_fixtures import collection, point
 from tests.test_explorer_service import AZURITE, GREEN, PART_BLUE, RED
 
 OCHRE = "http://vocab/ochre"
@@ -288,11 +289,16 @@ class MaterialOwnColourTests(EventsCase):
         from django.http import QueryDict
         from manuspectrum.views.explorer.events import kept_events
 
-        events, *_ = kept_events(self.bundle(), QueryDict(f"colour={PART_BLUE}"))
-        self.assertIn(
-            str(self.components["open"].pk),
-            {e["carrier"]["id"] for e in events if e["type"] == "production"},
-        )
+        bundle = self.bundle()
+        events, *_ = kept_events(bundle, QueryDict(f"colour={PART_BLUE}"))
+        [event] = [
+            e
+            for e in events
+            if e["type"] == "production"
+            and e["carrier"]["id"] == str(self.components["open"].pk)
+        ]
+        self.assertIn(LEAD_WHITE, {m["id"] for m in event["materials"]})
+        self.assertEqual(bundle.event_materials[LEAD_WHITE]["colours"], [])
 
 
 class CharacterizationFilterTests(EventsCase):
@@ -321,6 +327,14 @@ class CharacterizationFilterTests(EventsCase):
         )
         [event] = self.kept(f"colour={RED}")
         self.assertEqual({m["id"] for m in event["materials"]}, {LEAD_WHITE})
+
+    def test_ticking_a_material_keeps_the_materials_found_beside_it(self):
+        [event] = self.kept(f"material={OCHRE}")
+        self.assertEqual({m["id"] for m in event["materials"]}, {LEAD_WHITE, OCHRE})
+
+    def test_a_colour_still_narrows_the_listed_materials_under_a_ticked_material(self):
+        [event] = self.kept(f"material={OCHRE}&colour={GREEN}")
+        self.assertEqual({m["id"] for m in event["materials"]}, {OCHRE})
 
 
 class OwnPlaceTests(EventsCase):
