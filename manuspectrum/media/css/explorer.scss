@@ -115,11 +115,15 @@ body.ms-page--app::after {
 }
 
 body[data-explorer-screen='results'] .ms-explorer-intro__bar,
+body[data-explorer-screen='map'] .ms-explorer-intro__bar,
+body[data-explorer-screen='compare'] .ms-explorer-intro__bar,
 body[data-explorer-screen='document'] .ms-explorer-intro__bar {
     flex: 1 1 18rem;
 }
 
 body[data-explorer-screen='results'] .ms-explorer-intro,
+body[data-explorer-screen='map'] .ms-explorer-intro,
+body[data-explorer-screen='compare'] .ms-explorer-intro,
 body[data-explorer-screen='document'] .ms-explorer-intro {
     display: flex;
     flex-wrap: wrap;
@@ -129,13 +133,19 @@ body[data-explorer-screen='document'] .ms-explorer-intro {
 }
 
 body[data-explorer-screen='results'] .ms-explorer-intro__title,
+body[data-explorer-screen='map'] .ms-explorer-intro__title,
+body[data-explorer-screen='compare'] .ms-explorer-intro__title,
 body[data-explorer-screen='document'] .ms-explorer-intro__title {
     order: -1;
     font-size: 1.25rem;
 }
 
 body[data-explorer-screen='results'] .ms-explorer-intro__accent,
+body[data-explorer-screen='map'] .ms-explorer-intro__accent,
+body[data-explorer-screen='compare'] .ms-explorer-intro__accent,
 body[data-explorer-screen='results'] .ms-explorer-intro__lead,
+body[data-explorer-screen='map'] .ms-explorer-intro__lead,
+body[data-explorer-screen='compare'] .ms-explorer-intro__lead,
 body[data-explorer-screen='document'] .ms-explorer-intro__accent,
 body[data-explorer-screen='document'] .ms-explorer-intro__lead {
     display: none;

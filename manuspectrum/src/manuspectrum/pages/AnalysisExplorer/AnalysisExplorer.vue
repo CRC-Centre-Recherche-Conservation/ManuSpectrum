@@ -112,7 +112,7 @@ const mapChunk = ref<"idle" | "loading" | "failed">("idle");
 const selectionScope = effectScope();
 let selectionItems: SelectionItems | null = null;
 
-/** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
+/** The screen shown, as CorpusView decides it: the page intro folds to one line everywhere but the Corpus home. */
 const screen = computed(() => {
     if (store.view !== "corpus") return store.view;
     if (store.corpusScreen === "document" && store.document) return "document";

@@ -396,6 +396,23 @@ describe("AnalysisExplorer", () => {
         expect(document.body.dataset.explorerScreen).toBeUndefined();
     });
 
+    it("names the Map & timeline and Compare views as screens for the folded page intro", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia, PrimeVue] },
+        });
+        await flushPromises();
+        expect(document.body.dataset.explorerScreen).toBe("home");
+        useExplorerStore().setView("map");
+        await nextTick();
+        expect(document.body.dataset.explorerScreen).toBe("map");
+        useExplorerStore().setView("compare");
+        await nextTick();
+        expect(document.body.dataset.explorerScreen).toBe("compare");
+        wrapper.unmount();
+        expect(document.body.dataset.explorerScreen).toBeUndefined();
+    });
+
     it("puts the back link and the Selection button in the intro line of the page", async () => {
         const bar = document.createElement("div");
         bar.id = "ms-explorer-intro-bar";
