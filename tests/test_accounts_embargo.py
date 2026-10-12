@@ -9,7 +9,7 @@ from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase, override_settings
 
-from manuspectrum.accounts.models import Embargo, EmbargoEvent, WorkflowCleanup
+from manuspectrum.models import Embargo, EmbargoEvent, WorkflowCleanup
 from manuspectrum.observability import activity
 
 PASSWORD = "Str0ng!Passphrase-for-tests"

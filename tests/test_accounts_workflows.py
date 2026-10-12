@@ -37,7 +37,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from manuspectrum.accounts import workflows
 from manuspectrum.accounts.creation import created_in_transaction
 from manuspectrum.accounts.embargo import LOCAL_TZ
-from manuspectrum.accounts.models import WorkflowCleanup
+from manuspectrum.models import WorkflowCleanup
 from manuspectrum.accounts.workflows import run_pass
 from manuspectrum.observability import activity
 from tests.explorer_fixtures import ACTIVE, DRAFT

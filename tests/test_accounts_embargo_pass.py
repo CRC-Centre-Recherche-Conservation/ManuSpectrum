@@ -34,7 +34,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 
 from manuspectrum.accounts import embargo
 from manuspectrum.accounts.embargo import LOCAL_TZ, run_pass
-from manuspectrum.accounts.models import Embargo, EmbargoEvent
+from manuspectrum.models import Embargo, EmbargoEvent
 from manuspectrum.utils.public_visibility import (
     anonymous_user,
     permission_epoch,

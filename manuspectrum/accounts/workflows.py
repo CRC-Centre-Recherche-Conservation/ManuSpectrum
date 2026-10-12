@@ -48,7 +48,7 @@ from django.utils.translation import gettext_lazy as _
 from manuspectrum.accounts import notices
 from manuspectrum.accounts.creation import created_in_transaction, resource_items
 from manuspectrum.accounts.embargo import LOCAL_TZ, local_today, single_pass
-from manuspectrum.accounts.models import WorkflowCleanup
+from manuspectrum.models import WorkflowCleanup
 from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import (
     ANONYMOUS_USERNAME,

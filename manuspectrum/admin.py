@@ -21,7 +21,7 @@ from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
-from manuspectrum.accounts.models import Embargo, EmbargoEvent, WorkflowCleanup
+from manuspectrum.models import Embargo, EmbargoEvent, WorkflowCleanup
 
 logger = logging.getLogger(__name__)
 

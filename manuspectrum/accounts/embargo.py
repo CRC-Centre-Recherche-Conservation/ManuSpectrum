@@ -50,7 +50,7 @@ from django.utils import timezone
 
 from manuspectrum.accounts import notices
 from manuspectrum.accounts.creation import creators_of, resource_items
-from manuspectrum.accounts.models import Embargo, EmbargoEvent
+from manuspectrum.models import Embargo, EmbargoEvent
 from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import (
     ANONYMOUS_USERNAME,
