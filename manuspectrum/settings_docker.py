@@ -127,9 +127,7 @@ EXTRA_EMAIL_CONTEXT = {
 # Accounts are invited by an administrator; checks.py refuses this profile with signup on.
 ENABLE_USER_SIGNUP = False
 # Compulsory two-factor sign-in, switched on once every account is enrolled.
-FORCE_TWO_FACTOR_AUTHENTICATION = get_optional_env_variable(
-    "FORCE_TWO_FACTOR_AUTHENTICATION", "false"
-).strip().lower() in ("1", "true", "yes", "on")
+FORCE_TWO_FACTOR_AUTHENTICATION = env_bool("FORCE_TWO_FACTOR_AUTHENTICATION", False)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True

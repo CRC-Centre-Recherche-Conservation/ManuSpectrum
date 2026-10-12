@@ -51,6 +51,8 @@ PREFIXED = [
     ("snippets/edge-rules.conf", "password_reset/", "password_reset"),
     ("snippets/edge-rules.conf", "reset/a/b/", "password_reset_confirm"),
     ("snippets/edge-rules.conf", "account/activate/a/b", "account-activate"),
+    ("snippets/edge-rules.conf", "account/two-factor", "account-two-factor"),
+    ("snippets/edge-rules.conf", "account/terms", "account-terms"),
     ("snippets/edge-rules.conf", "o/token/", "oauth2:token"),
     (
         "snippets/edge-rules.conf",
@@ -103,7 +105,7 @@ def token_for(path):
         return None
     if segments[:2] == ["iiif", "v3"]:
         return "/".join(segments[:3])
-    if segments[0] in ("api", "iiif"):
+    if segments[0] in ("api", "iiif", "account"):
         return "/".join(segments[:2])
     return segments[0][:20]
 

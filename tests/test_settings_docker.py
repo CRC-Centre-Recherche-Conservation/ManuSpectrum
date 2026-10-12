@@ -169,6 +169,12 @@ class SettingsDockerTests(SimpleTestCase):
         forced = load(dict(BASE_ENV, FORCE_TWO_FACTOR_AUTHENTICATION="true"))
         self.assertIs(forced["FORCE_TWO_FACTOR_AUTHENTICATION"], True)
 
+    def test_a_mistyped_two_factor_enforcement_refuses_to_start(self):
+        for text in ("ture", "enforce"):
+            with self.subTest(value=text):
+                values = load(dict(BASE_ENV, FORCE_TWO_FACTOR_AUTHENTICATION=text))
+                self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
+
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
         values = load(BASE_ENV)
         self.assertIs(values["METRICS_ENABLED"], True)
