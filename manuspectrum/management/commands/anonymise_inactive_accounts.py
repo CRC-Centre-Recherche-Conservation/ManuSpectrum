@@ -2,11 +2,15 @@
 
 Dry-run by default: it lists, by user id, what the daily pass would do and
 writes and sends nothing. ``--apply`` runs the pass as the beat task does (same
-lock, same mail, same metrics).
+lock, same mail, same metrics). ``--as-of YYYY-MM-DD`` runs it as if it were
+that day in Paris (rehearsals).
 """
+
+from datetime import date, datetime, time
 
 from django.core.management.base import BaseCommand, CommandError
 
+from manuspectrum.accounts.embargo import LOCAL_TZ
 from manuspectrum.accounts.retention import run_pass
 
 
@@ -23,15 +27,27 @@ class Command(BaseCommand):
             help="Run the pass: write, send the notices and anonymise.",
         )
         parser.add_argument(
+            "--as-of",
+            metavar="YYYY-MM-DD",
+            help="Rehearsal: run as if it were noon in Paris on that day.",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="List what the pass would do (the default).",
         )
 
-    def handle(self, *args, apply=False, dry_run=False, **options):
+    def handle(self, *args, apply=False, dry_run=False, as_of=None, **options):
         if apply and dry_run:
             raise CommandError("--apply and --dry-run exclude each other.")
-        report = run_pass(apply=apply)
+        now = None
+        if as_of:
+            try:
+                day = date.fromisoformat(as_of)
+            except ValueError:
+                raise CommandError("--as-of expects a date as YYYY-MM-DD.")
+            now = datetime.combine(day, time(12), tzinfo=LOCAL_TZ)
+        report = run_pass(now, apply=apply)
         if report.locked:
             self.stdout.write("Another retention pass is running: nothing done.")
             return

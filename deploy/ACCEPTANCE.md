@@ -1295,9 +1295,17 @@ Create the test accounts in the admin and delete them afterwards.
 - [ ] Sign out and in again with the code. A POST to `/en/account/two-factor` and `/en/account/terms` repeated 7 times in
   a minute gets `429` from the edge.
 - [ ] Bump `TERMS_VERSION` (rehearsal image only): the next page after sign-in is the acceptance page.
-- [ ] Lost phone: as a superuser, run **Reset two-factor authentication** on the profile; the user enrols again.
-- [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`: an account without a secret is refused,
-  an enrolled one signs in. Put it back to `false` if the rehearsal continues without it.
+- [ ] The activation link redirects at once to a URL without the token (`.../set-password`), and the nginx access log
+  shows `[redacted]` for the activation path in both `uri` and `referer`.
+- [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`. Invite and activate a second test user:
+  after the password the browser lands on `/en/account/two-factor` and any other page sends it back there until a
+  code is confirmed. Check in the browser that the enrolment page works fully (QR code, manual key, confirmation)
+  for that not-yet-enrolled user. An enrolled user signs in with the code.
+- [ ] Lost phone, with forced two-factor still on: as a superuser, run **Reset two-factor authentication (superuser)**
+  on the user's profile. Mailpit holds the re-enrolment mail; the link asks for the password (a wrong one counts as a
+  failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
+- [ ] `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W004` (no OAuth application with the
+  password grant). Put `FORCE_TWO_FACTOR_AUTHENTICATION` back to `false` if the rehearsal continues without it.
 
 ### 8.4 Legal pages
 
@@ -1313,19 +1321,44 @@ Create the test accounts in the admin and delete them afterwards.
   the lift with `release_expired_embargoes --as-of <the day after tomorrow, YYYY-MM-DD> --apply` (an end date cannot be set in
   the past): the resource is public, the creator got the "now public" mail in Mailpit, the history shows the lift,
   `manuspectrum_embargo_lifts_total{outcome="lifted"}` increased.
+- [ ] Only a superuser can clear "Ends on" (no end date): a staff account with the embargo permission is refused,
+  a superuser's change is recorded as `undated` and the row is listed under "End date → No end date".
+- [ ] Data moved between hosts: delete the `ms_embargo` row of a restricted test resource in the admin, run
+  `release_expired_embargoes --apply`: the restriction is recorded again, dated 12 months from today.
 - [ ] `make -C deploy manage ARGS="prune_workflow_history"` (dry run) lists the idle runs and what it would delete and
   keep, and says "Dry run: nothing written or sent". Do not run `--apply` on the loaded snapshot.
 
-### 8.6 Report
+### 8.6 Deactivation and anonymisation
+
+- [ ] In the admin, untick "Active" on a test user with an e-mail: Mailpit holds the deactivation mail (English then
+  French) with the "Contact the team" link (it opens the contact page on "Reactivate my account") and the date the
+  account will be anonymised. Ticking "Active" again sends nothing.
+- [ ] On another test user, set "Last login" 25 months back in the admin (Important dates). `make -C deploy manage
+  ARGS="anonymise_inactive_accounts"` lists it as "would be notice sent"; with `--apply` the notice reaches Mailpit.
+- [ ] `anonymise_inactive_accounts --apply --as-of <today + 31 days, YYYY-MM-DD>`: the user is renamed
+  `former-user-<id>`, has no name, e-mail or two-factor secret, is inactive; the "Edit log" of a record it edited keeps
+  its first and last names and no e-mail; `manuspectrum_account_anonymisations_total{outcome="anonymised"}` increased.
+  A superuser in the same situation is only listed in the administrators' summary.
+
+### 8.7 Report
 
 - [ ] `make -C deploy report-test`: the message has the sections "Comptes inactifs", "Verrouillages de comptes",
   "Restrictions (embargos)", "Assistants abandonnés nettoyés" and "Courriels de compte", and lists the accounts created
   in 8.3 under "jamais connectés" only once they are three months old.
 
-### 8.7 What cannot be tested in rehearsal
+### 8.8 What cannot be tested in rehearsal
 
-Delivery of the invitation by the real relay (SPF, DMARC, quarantine); the real authenticator clock drift; the CNRS DPO
-validation of the register in `ADMIN.md`.
+Delivery of the account mail by the real relay (SPF, DMARC, quarantine); the real authenticator clock drift; real
+24-month and 12-month delays (rehearsed with `--as-of`).
+
+### 8.9 Before production (accounts)
+
+- [ ] Deploy with `FORCE_TWO_FACTOR_AUTHENTICATION=false`; at least two superusers enrol an authenticator; then set it
+  to `true` and recreate `web`, `worker` and `beat`.
+- [ ] `check --database default` raises no `manuspectrum.W004`; no OAuth application allows the password grant.
+- [ ] The legal notice, privacy policy and terms carry no `[À CONFIRMER]` (`manuspectrum.E003` refuses it in
+  production); the legal notice details are confirmed by the scientific lead and the CNRS communication service.
+- [ ] The CNRS data protection officer is informed (privacy policy and the register of processing in `ADMIN.md`).
 
 ---
 

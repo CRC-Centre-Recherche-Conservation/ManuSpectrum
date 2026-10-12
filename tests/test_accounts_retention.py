@@ -364,6 +364,24 @@ class DryRunTests(RetentionCase):
             call_command("anonymise_inactive_accounts", "--apply", stdout=out)
         self.assertTrue(AccountRetention.objects.filter(noticed_on__isnull=False))
 
+    def test_the_command_runs_as_of_a_rehearsal_day(self):
+        user = self.user("old", last_login=months_ago(25))
+        with mock.patch(
+            "manuspectrum.accounts.retention.timezone.now", return_value=NOW
+        ):
+            call_command("anonymise_inactive_accounts", "--apply", stdout=io.StringIO())
+            later = (NOW + timedelta(days=31)).date().isoformat()
+            out = io.StringIO()
+            call_command(
+                "anonymise_inactive_accounts", "--apply", "--as-of", later, stdout=out
+            )
+        self.assertIn("1 anonymised", out.getvalue())
+        self.assertTrue(self.anonymised(User.objects.get(pk=user.pk)))
+
+    def test_the_command_refuses_a_malformed_day(self):
+        with self.assertRaises(CommandError):
+            call_command("anonymise_inactive_accounts", "--as-of", "31/12/2026")
+
     def test_the_command_refuses_both_flags(self):
         with self.assertRaises(CommandError):
             call_command("anonymise_inactive_accounts", "--apply", "--dry-run")
