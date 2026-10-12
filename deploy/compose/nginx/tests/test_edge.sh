@@ -482,6 +482,16 @@ group_acl() {
   equals "/en/api/%72esource/x: 404 from nginx" "404 -" "$(code /en/api/%72esource/x) $(reaches /en/api/%72esource/x)"
   equals "/fr/api/tiles/x (core, plural) reaches Django" web "$(jget name <<<"$(get /fr/api/tiles/x)")"
   equals "/en/api/relatable-resources/g/n reaches Django" web "$(jget name <<<"$(get /en/api/relatable-resources/g/n)")"
+  for lang in en fr; do
+    for path in auth/signup auth/confirm_signup "auth/confirm_signup?link=x" two-factor-authentication-settings two-factor-authentication-reset; do
+      equals "/$lang/$path: 404 from nginx" "404 -" "$(code "/$lang/$path") $(reaches "/$lang/$path")"
+    done
+    equals "POST /$lang/auth/signup: 404 from nginx" "404 -" "$(code "/$lang/auth/signup" -X POST) $(reaches "/$lang/auth/signup" -X POST)"
+    equals "POST /$lang/two-factor-authentication-settings: 404 from nginx" "404 -" \
+      "$(code "/$lang/two-factor-authentication-settings" -X POST) $(reaches "/$lang/two-factor-authentication-settings" -X POST)"
+  done
+  equals "/en/auth/ (sign-in) reaches Django" web "$(jget name <<<"$(get /en/auth/)")"
+  equals "/fr/two-factor-authentication-login reaches Django" web "$(jget name <<<"$(get /fr/two-factor-authentication-login)")"
   equals "/fr/silk/ is 404 from nginx" "404 -" "$(code /fr/silk/) $(reaches /fr/silk/)"
   equals "/en/silk/requests/ is 404 from nginx" "404 -" "$(code /en/silk/requests/) $(reaches /en/silk/requests/)"
   equals "/metrics is 404 from nginx" "404 -" "$(code /metrics) $(reaches /metrics)"

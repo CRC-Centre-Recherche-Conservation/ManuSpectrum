@@ -50,6 +50,9 @@ NAMES = [
     "MIDDLEWARE",
     "DEBUG",
     "SECRET_KEY",
+    "ENABLE_USER_SIGNUP",
+    "ENABLE_TWO_FACTOR_AUTHENTICATION",
+    "FORCE_TWO_FACTOR_AUTHENTICATION",
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
     "SESSION_COOKIE_HTTPONLY",
@@ -155,6 +158,16 @@ class SettingsDockerTests(SimpleTestCase):
             load(dict(BASE_ENV, READYZ_CANTALOUPE="false"))["READYZ_CANTALOUPE"],
             False,
         )
+
+    def test_self_signup_is_closed(self):
+        self.assertIs(load(BASE_ENV)["ENABLE_USER_SIGNUP"], False)
+
+    def test_two_factor_is_enrolled_first_and_enforced_by_the_environment(self):
+        values = load(BASE_ENV)
+        self.assertIs(values["ENABLE_TWO_FACTOR_AUTHENTICATION"], True)
+        self.assertIs(values["FORCE_TWO_FACTOR_AUTHENTICATION"], False)
+        forced = load(dict(BASE_ENV, FORCE_TWO_FACTOR_AUTHENTICATION="true"))
+        self.assertIs(forced["FORCE_TWO_FACTOR_AUTHENTICATION"], True)
 
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
         values = load(BASE_ENV)

@@ -163,3 +163,24 @@ def check_contact_email(app_configs, **kwargs):
     if settings.DEBUG:
         return [checks.Warning(msg, id="manuspectrum.W001")]
     return [checks.Error(msg, id="manuspectrum.E001")]
+
+
+@checks.register()
+def check_signup_closed_in_production(app_configs, **kwargs):
+    """E002: the production profile (``settings_docker``) allows self-signup.
+
+    Accounts are created by an administrator. Arches enables signup by default
+    and confirms it by e-mail; with the setting on, a visitor could create an
+    account in the "Crowdsource Editor" group.
+    """
+    if not settings.ENABLE_USER_SIGNUP:
+        return []
+    if not str(settings.SETTINGS_MODULE).endswith("settings_docker"):
+        return []
+    return [
+        checks.Error(
+            "ENABLE_USER_SIGNUP is True in the production profile: visitors "
+            "could create accounts. Accounts are created by an administrator.",
+            id="manuspectrum.E002",
+        )
+    ]

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 16:34-0500\n"
+"POT-Creation-Date: 2026-10-12 04:05-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -69,6 +69,17 @@ msgstr "Manifest not found"
 #: datatypes/manifest.py:218
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
+
+#: docs_claude/csv_import/plan_snapshot_after_review.md:613
+#: docs_claude/csv_import/review_ux.md:391
+msgid "Why this step"
+msgstr ""
+
+#: docs_claude/csv_import/plan_snapshot_after_review.md:754
+#, fuzzy
+#| msgid "Import from Biblissima"
+msgid "Document not found? Import it from Biblissima"
+msgstr "Import from Biblissima"
 
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
@@ -229,7 +240,7 @@ msgstr[1] ""
 msgid "Without a position on the image"
 msgstr ""
 
-#: iiif/manifest.py:178 views/explorer/export.py:384
+#: iiif/manifest.py:178 views/explorer/export.py:385
 #: views/explorer/series.py:126
 msgid "Contains drafts"
 msgstr ""
@@ -279,7 +290,7 @@ msgstr ""
 msgid "Sign in"
 msgstr "Sign in"
 
-#: iiif/services.py:41 views/iiif/auth.py:64
+#: iiif/services.py:41 views/iiif/auth.py:65
 msgid "Not available"
 msgstr "Not available"
 
@@ -296,25 +307,68 @@ msgstr "Sign out of external viewers"
 msgid "%(file)s, raw file"
 msgstr "%(file)s, raw file"
 
-#: settings.py:153
+#: password_validation.py:18
+msgid "Your password must contain at least one lower case letter"
+msgstr "Your password must contain at least one lower case letter"
+
+#: password_validation.py:23
+msgid "Have at least 1 lower case character"
+msgstr "Have at least 1 lower case character"
+
+#: settings.py:154
 msgid "Term Matches"
 msgstr ""
 
-#: settings.py:159
+#: settings.py:160
 msgid "References"
 msgstr ""
 
-#: settings.py:574
+#: settings.py:601
 msgid "Hi"
 msgstr "Hi"
 
-#: settings.py:611
+#: settings.py:638
 msgid "English"
 msgstr "English"
 
-#: settings.py:612
+#: settings.py:639
 msgid "French"
 msgstr ""
+
+#: templates/accounts/lockout.htm:3
+#, fuzzy
+#| msgid "Sign-in no longer valid"
+msgid "Sign-in locked"
+msgstr "Sign-in no longer valid"
+
+#: templates/accounts/lockout.htm:4
+msgid "Too many failed sign-in attempts."
+msgstr ""
+
+#: templates/accounts/lockout.htm:9
+msgid "Error 429 · Conservation lab"
+msgstr ""
+
+#: templates/accounts/lockout.htm:11
+msgid "Too many failed attempts"
+msgstr ""
+
+#: templates/accounts/lockout.htm:13
+msgid ""
+"This account is locked for a few minutes from this computer after repeated "
+"sign-in failures. Wait a little, then try again. If you have lost your "
+"password, use the reset link on the sign-in page."
+msgstr ""
+
+#: templates/accounts/lockout.htm:16 templates/errors/400.htm:18
+#: templates/errors/403.htm:19 templates/errors/404.htm:63
+msgid "Back to the homepage"
+msgstr ""
+
+#: templates/accounts/lockout.htm:17 templates/errors/400.htm:19
+#: templates/errors/403.htm:20 templates/errors/404.htm:65
+msgid "Contact the team"
+msgstr "Contact the team"
 
 #: templates/custom_email_footer.htm:47
 msgid ""
@@ -347,16 +401,6 @@ msgid ""
 "again from the homepage — and if it keeps happening, clearing your cookies "
 "for this site usually fixes it."
 msgstr ""
-
-#: templates/errors/400.htm:18 templates/errors/403.htm:19
-#: templates/errors/404.htm:63
-msgid "Back to the homepage"
-msgstr ""
-
-#: templates/errors/400.htm:19 templates/errors/403.htm:20
-#: templates/errors/404.htm:65
-msgid "Contact the team"
-msgstr "Contact the team"
 
 #: templates/errors/403.htm:5
 msgid "Access restricted"
@@ -478,7 +522,7 @@ msgid ""
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:507
+#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
 msgid "Licences per file"
 msgstr ""
 
@@ -2717,20 +2761,20 @@ msgid ""
 "            failure is logged without blocking the save."
 msgstr ""
 
-#: templates/views/components/functions/imaging-layers-proposal.htm:19
+#: templates/views/components/functions/imaging-layers-proposal.htm:21
 msgid ""
 "Layers of analyses recorded before this function\n"
 "            existed are filled once by a maintenance script."
 msgstr ""
 
-#: templates/views/components/functions/imaging-layers-proposal.htm:24
+#: templates/views/components/functions/imaging-layers-proposal.htm:25
 msgid ""
 "A resource imported from Arches JSON with its layer\n"
 "            tiles may receive duplicate layers: the manifest tile is saved\n"
 "            before its layers, and the function cannot see them."
 msgstr ""
 
-#: templates/views/components/functions/imaging-layers-proposal.htm:26
+#: templates/views/components/functions/imaging-layers-proposal.htm:33
 #: templates/views/components/functions/xy-technique-config.htm:26
 msgid "Triggered by"
 msgstr ""
@@ -4591,26 +4635,26 @@ msgstr ""
 "The platform's source code is published under the GNU General Public License "
 "v3. Reading and downloading published data needs no account."
 
-#: views/biblissima_proxy.py:545
+#: views/biblissima_proxy.py:624
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 
 # Biblissima search & workflow — added in the progressive-loading refactor
-#: views/biblissima_proxy.py:558
+#: views/biblissima_proxy.py:637
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 
-#: views/biblissima_proxy.py:569
+#: views/biblissima_proxy.py:648
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 
-#: views/biblissima_proxy.py:582
+#: views/biblissima_proxy.py:661
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -4619,29 +4663,29 @@ msgstr ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
 "moment."
 
-#: views/biblissima_proxy.py:594 views/biblissima_proxy.py:603
+#: views/biblissima_proxy.py:673 views/biblissima_proxy.py:682
 msgid "Invalid response from the Biblissima portal."
 msgstr "Invalid response from the Biblissima portal."
 
-#: views/biblissima_proxy.py:611
+#: views/biblissima_proxy.py:690
 msgid "Unknown error while querying Biblissima."
 msgstr "Unknown error while querying Biblissima."
 
-#: views/biblissima_proxy.py:2341
+#: views/biblissima_proxy.py:2442
 #, python-format
 msgid "Time limit of %(seconds)s s for this item exceeded."
 msgstr ""
 
-#: views/biblissima_proxy.py:2389
+#: views/biblissima_proxy.py:2490
 #, python-format
 msgid "Select at most %(max)s descriptors."
 msgstr "Select at most %(max)s descriptors."
 
-#: views/biblissima_proxy.py:2398
+#: views/biblissima_proxy.py:2499
 msgid "The descriptor list is malformed."
 msgstr "The descriptor list is malformed."
 
-#: views/biblissima_proxy.py:2958
+#: views/biblissima_proxy.py:3059
 msgid "The manuscript identifier is malformed."
 msgstr "The manuscript identifier is malformed."
 
@@ -4716,35 +4760,35 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/export.py:377
+#: views/explorer/export.py:378
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: views/explorer/export.py:509
+#: views/explorer/export.py:510
 msgid "Each file carries its own licence, given with the file."
 msgstr ""
 
-#: views/explorer/export.py:513
+#: views/explorer/export.py:514
 msgid "Licence of the files of this package that name it."
 msgstr ""
 
-#: views/explorer/export.py:796
+#: views/explorer/export.py:797
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
 "%(count)d canvases): open it by document."
 msgstr ""
 
-#: views/explorer/export.py:806
+#: views/explorer/export.py:807
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
 "are served by IIIF image servers and are not in the package."
 msgstr ""
 
-#: views/explorer/export.py:813
+#: views/explorer/export.py:814
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
@@ -4808,39 +4852,39 @@ msgstr ""
 msgid "%(label)s · view %(number)s"
 msgstr ""
 
-#: views/iiif/auth.py:51
+#: views/iiif/auth.py:52
 msgid "The request to the token service is malformed."
 msgstr "The request to the token service is malformed."
 
-#: views/iiif/auth.py:53
+#: views/iiif/auth.py:54
 msgid "Not signed in to ManuSpectrum in this browser."
 msgstr "Not signed in to ManuSpectrum in this browser."
 
-#: views/iiif/auth.py:55
+#: views/iiif/auth.py:56
 msgid "The ManuSpectrum sign-in is no longer valid."
 msgstr "The ManuSpectrum sign-in is no longer valid."
 
-#: views/iiif/auth.py:56
+#: views/iiif/auth.py:57
 msgid "This viewer is not allowed to receive a token."
 msgstr "This viewer is not allowed to receive a token."
 
-#: views/iiif/auth.py:57
+#: views/iiif/auth.py:58
 msgid "The token service is unavailable, try again later."
 msgstr "The token service is unavailable, try again later."
 
-#: views/iiif/auth.py:60
+#: views/iiif/auth.py:61
 msgid "Invalid request"
 msgstr "Invalid request"
 
-#: views/iiif/auth.py:61
+#: views/iiif/auth.py:62
 msgid "Not signed in"
 msgstr "Not signed in"
 
-#: views/iiif/auth.py:62
+#: views/iiif/auth.py:63
 msgid "Sign-in no longer valid"
 msgstr "Sign-in no longer valid"
 
-#: views/iiif/auth.py:63
+#: views/iiif/auth.py:64
 msgid "Viewer not allowed"
 msgstr "Viewer not allowed"
 
@@ -4961,10 +5005,100 @@ msgid ""
 "it before saving."
 msgstr ""
 
-#, fuzzy
-#~| msgid "Import from Biblissima"
-#~ msgid "Document not found? Import it from Biblissima"
-#~ msgstr "Import from Biblissima"
+#: admin.py
+msgid "Two-factor authentication"
+msgstr ""
+
+#: admin.py
+msgid "Reset two-factor authentication (superuser)"
+msgstr ""
+
+#: admin.py
+msgid "Only a superuser can reset two-factor authentication."
+msgstr ""
+
+#: accounts/twofactor.py
+msgid "Too many attempts. Wait a minute."
+msgstr ""
+
+#: accounts/twofactor.py
+msgid "The code is not valid. Enter the current code of your authenticator."
+msgstr ""
+
+#: accounts/twofactor.py
+msgid "The code is not valid. Check the code and try again."
+msgstr ""
+
+#: accounts/twofactor.py
+msgid "Two-factor authentication is on."
+msgstr ""
+
+#: accounts/twofactor.py
+msgid "Two-factor authentication is compulsory and cannot be removed."
+msgstr ""
+
+#: accounts/twofactor.py
+msgid "Two-factor authentication is off."
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Status:"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "ON"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "OFF"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Scan the QR code with an authenticator application, then enter the code it shows to finish."
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "QR code to scan with your authenticator application"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Or enter this key by hand:"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Code from your application"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Confirm and turn on"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Current code from your application"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Set up a new authenticator"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Turn on two-factor authentication"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Turn off two-factor authentication"
+msgstr ""
+
+#: templates/accounts/two_factor.htm
+msgid "Two-factor authentication is compulsory. If you lose your device, ask an administrator to reset it."
+msgstr ""
+
+#: admin.py
+#, python-format
+msgid "Two-factor authentication was reset for %(count)d account."
+msgid_plural "Two-factor authentication was reset for %(count)d accounts."
+msgstr[0] ""
+msgstr[1] ""
 
 #~ msgid "Analysis point"
 #~ msgstr "Analysis point"
@@ -5151,3 +5285,288 @@ msgstr ""
 
 #~ msgid "Data Files"
 #~ msgstr "Data Files"
+
+#: accounts/models.py:31
+msgid "Active"
+msgstr ""
+
+#: accounts/models.py:32 accounts/models.py:153
+msgid "Lifted"
+msgstr ""
+
+#: accounts/models.py:33 accounts/models.py:154
+msgid "Released by hand"
+msgstr ""
+
+#: accounts/models.py:40 admin.py:152
+msgid "Resource"
+msgstr ""
+
+#: accounts/models.py:45
+msgid "Ends on"
+msgstr ""
+
+#: accounts/models.py:47
+msgid ""
+"Last day of the restriction. Empty: the restriction has no end and is never "
+"lifted automatically."
+msgstr ""
+
+#: accounts/models.py:52
+msgid "State"
+msgstr ""
+
+#: accounts/models.py:60
+msgid "Restriction set by"
+msgstr ""
+
+#: accounts/models.py:62
+msgid "Recorded on"
+msgstr ""
+
+#: accounts/models.py:64 accounts/models.py:193 admin.py:160
+msgid "Notices sent"
+msgstr ""
+
+#: accounts/models.py:70
+msgid "embargo"
+msgstr ""
+
+#: accounts/models.py:71
+msgid "embargoes"
+msgstr ""
+
+#: accounts/models.py:94
+msgid "The end date must be after today."
+msgstr ""
+
+#: accounts/models.py:99
+#, python-format
+msgid ""
+"The end date is more than %(months)d months after the start of the embargo "
+"(latest allowed: %(latest)s). Only a superuser can set a later date."
+msgstr ""
+
+#: accounts/models.py:147
+msgid "Restriction detected"
+msgstr ""
+
+#: accounts/models.py:148
+msgid "End date set"
+msgstr ""
+
+#: accounts/models.py:149
+msgid "Extended"
+msgstr ""
+
+#: accounts/models.py:150
+msgid "Shortened"
+msgstr ""
+
+#: accounts/models.py:151
+msgid "End date removed"
+msgstr ""
+
+#: accounts/models.py:152
+msgid "Notice sent"
+msgstr ""
+
+#: accounts/models.py:155
+msgid "Lift incomplete"
+msgstr ""
+
+#: accounts/models.py:161
+msgid "Event"
+msgstr ""
+
+#: accounts/models.py:168
+msgid "By"
+msgstr ""
+
+#: accounts/models.py:170
+msgid "When"
+msgstr ""
+
+#: accounts/models.py:171
+msgid "Old end"
+msgstr ""
+
+#: accounts/models.py:172
+msgid "New end"
+msgstr ""
+
+#: accounts/models.py:178
+msgid "embargo event"
+msgstr ""
+
+#: accounts/models.py:179
+msgid "embargo events"
+msgstr ""
+
+#: accounts/models.py:189
+msgid "Workflow run"
+msgstr ""
+
+#: accounts/models.py:190
+msgid "Workflow"
+msgstr ""
+
+#: accounts/models.py:191
+msgid "Last activity"
+msgstr ""
+
+#: accounts/models.py:196
+msgid "Cleaned on"
+msgstr ""
+
+#: accounts/models.py:199
+msgid "Cleanup transaction"
+msgstr ""
+
+#: accounts/models.py:202
+msgid "Resources deleted"
+msgstr ""
+
+#: accounts/models.py:205
+msgid "Resources kept"
+msgstr ""
+
+#: accounts/models.py:212
+msgid "workflow cleanup"
+msgstr ""
+
+#: accounts/models.py:213
+msgid "workflow cleanups"
+msgstr ""
+
+#: admin.py:111
+msgid "end date"
+msgstr ""
+
+#: admin.py:115
+msgid "No end date"
+msgstr ""
+
+#: admin.py:115
+msgid "Has an end date"
+msgstr ""
+
+#: admin.py:178
+#, python-format
+msgid "%(resource)s: only a dated, active embargo can be extended."
+msgstr ""
+
+#: admin.py:200
+#, python-format
+msgid "%(count)d embargo was extended."
+msgid_plural "%(count)d embargoes were extended."
+msgstr[0] ""
+msgstr[1] ""
+
+#: admin.py:207
+msgid "Extend the end date by 3 months"
+msgstr ""
+
+#: admin.py:211
+msgid "Extend the end date by 6 months"
+msgstr ""
+
+#: admin.py:215
+msgid "Extend the end date by 12 months"
+msgstr ""
+
+#: accounts/notices.py
+#, python-format
+msgid "Restriction ending on %(date)s"
+msgstr "Restriction ending on %(date)s"
+
+#: accounts/notices.py
+#, python-format
+msgid "The restriction that keeps the data below private ends on %(date)s, %(days)s days from now. The day after, it is lifted automatically and the data become visible to everyone."
+msgstr "The restriction that keeps the data below private ends on %(date)s, %(days)s days from now. The day after, it is lifted automatically and the data become visible to everyone."
+
+#: accounts/notices.py
+msgid "If it must last longer, ask an administrator to extend it before that date, by replying to the contact address below."
+msgstr "If it must last longer, ask an administrator to extend it before that date, by replying to the contact address below."
+
+#: accounts/notices.py
+msgid "Your data are now public"
+msgstr "Your data are now public"
+
+#: accounts/notices.py
+msgid "The restriction on the data below has ended and was lifted: they are now visible to everyone."
+msgstr "The restriction on the data below has ended and was lifted: they are now visible to everyone."
+
+#: accounts/notices.py
+#, python-format
+msgid "Unfinished workflow to be cleaned on %(date)s"
+msgstr "Unfinished workflow to be cleaned on %(date)s"
+
+#: accounts/notices.py
+#, python-format
+msgid "The workflow « %(workflow)s » has not been used for a long time and is not finished. On %(date)s, %(days)s days from now, it is cleaned: its trace is deleted, and so are the records it created and listed below, if they are still drafts, were not modified elsewhere and are not linked to other records."
+msgstr "The workflow « %(workflow)s » has not been used for a long time and is not finished. On %(date)s, %(days)s days from now, it is cleaned: its trace is deleted, and so are the records it created and listed below, if they are still drafts, were not modified elsewhere and are not linked to other records."
+
+#: accounts/notices.py
+msgid "Open the workflow again before that date to keep it."
+msgstr "Open the workflow again before that date to keep it."
+
+#: accounts/notices.py
+#, python-format
+msgid "The unfinished workflow « %(workflow)s » has been cleaned."
+msgstr "The unfinished workflow « %(workflow)s » has been cleaned."
+
+#: accounts/notices.py
+msgid "Deleted records:"
+msgstr "Deleted records:"
+
+#: accounts/notices.py
+msgid "Unfinished workflow cleaned"
+msgstr "Unfinished workflow cleaned"
+
+#: accounts/notices.py
+msgid "Records kept, because other work depends on them:"
+msgstr "Records kept, because other work depends on them:"
+
+#: accounts/notices.py
+msgid "Your ManuSpectrum account"
+msgstr "Your ManuSpectrum account"
+
+#: accounts/notices.py
+msgid "An account has been created for you on ManuSpectrum. Use the button below to read the terms of use, accept them, choose your password and set up two-factor authentication."
+msgstr "An account has been created for you on ManuSpectrum. Use the button below to read the terms of use, accept them, choose your password and set up two-factor authentication."
+
+#: accounts/notices.py
+#, python-format
+msgid "The link is personal and works until %(date)s."
+msgstr "The link is personal and works until %(date)s."
+
+#: accounts/notices.py
+msgid "Activate my account"
+msgstr "Activate my account"
+
+#: accounts/notices.py
+msgid "Accounts without sign-in"
+msgstr "Accounts without sign-in"
+
+#: accounts/notices.py
+#, python-format
+msgid "%(count)s accounts have not signed in for %(months)s months (or never signed in since their creation). Nothing was changed: deactivating an account is a decision of the administrators."
+msgstr "%(count)s accounts have not signed in for %(months)s months (or never signed in since their creation). Nothing was changed: deactivating an account is a decision of the administrators."
+
+#: accounts/notices.py
+msgid "Copy for the administrators of the notice sent to the people concerned."
+msgstr "Copy for the administrators of the notice sent to the people concerned."
+
+#: accounts/notices.py
+#, python-format
+msgid "Hello %(name)s,"
+msgstr "Hello %(name)s,"
+
+#: accounts/notices.py
+msgid "Hello,"
+msgstr "Hello,"
+
+#: accounts/notices.py
+msgid "This is a service notice about your account or your data, so it has no unsubscribe link. Questions:"
+msgstr "This is a service notice about your account or your data, so it has no unsubscribe link. Questions:"

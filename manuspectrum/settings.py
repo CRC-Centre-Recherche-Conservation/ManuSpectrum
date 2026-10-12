@@ -3,11 +3,14 @@ Django settings for manuspectrum project.
 """
 
 import os
+import string
 import inspect
 
 from manuspectrum.cache_version import cache_code_version
 import semantic_version
 from datetime import datetime, timedelta
+
+from celery.schedules import crontab
 from django.utils.translation import gettext_lazy as _
 
 try:
@@ -222,6 +225,7 @@ INSTALLED_APPS = (
     "corsheaders",
     "oauth2_provider",
     "django_celery_results",
+    "axes",
     # "silk",
     "manuspectrum",  # Ensure the project is listed before any other arches applications
     "pgtrigger",
@@ -256,6 +260,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "arches.app.utils.middleware.SetAnonymousUser",
+    "manuspectrum.accounts.lockout.CurrentRequestMiddleware",
+    "axes.middleware.AxesMiddleware",
+    "manuspectrum.accounts.lockout.TwoFactorLoginMiddleware",
     # "silk.middleware.SilkyMiddleware",
 ]
 
@@ -455,6 +462,11 @@ APP_TITLE = "ManuSpectrum"
 COPYRIGHT_TEXT = "All Rights Reserved."
 COPYRIGHT_YEAR = "2019"
 
+# Accounts are created by an administrator (invitation), never by the visitor.
+# The Arches signup routes stay registered; nginx answers them with a 404 and
+# a Django check refuses a production profile with signup enabled.
+ENABLE_USER_SIGNUP = False
+
 ENABLE_CAPTCHA = False
 # RECAPTCHA_PUBLIC_KEY = ''
 # RECAPTCHA_PRIVATE_KEY = ''
@@ -471,6 +483,10 @@ EMAIL_HOST_USER = "xxxx@xxx.com"
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Administrators' copy of the account notices (accounts.notices); the image
+# reads the host's ALERT_EMAILS.
+ACCOUNT_SUMMARY_RECIPIENTS = []
+
 # Public contact inbox for the About > Contact form (mailto link).
 # Leave empty until a dedicated address exists; overridable in settings_local.py.
 # Falls back to DEFAULT_FROM_EMAIL (set once SMTP is configured) via the
@@ -483,6 +499,7 @@ CONTACT_EMAIL = ""
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = "Europe/Paris"
 CELERY_RESULT_BACKEND = (
     "django-db"  # Use 'django-cache' if you want to use your cache as your backend
 )
@@ -505,6 +522,17 @@ CELERY_BEAT_SCHEDULE = {
     # Accounts with a login in the last 30 days, exported as one aggregated gauge.
     "record-active-accounts": {
         "task": "manuspectrum.record_active_accounts",
+        "schedule": 24 * 3600,
+    },
+    # Records, warns about and lifts restrictions at 06:00 Europe/Paris
+    # (accounts/embargo.py); the crontab runs in CELERY_TIMEZONE.
+    "embargo-pass": {
+        "task": "manuspectrum.embargo_pass",
+        "schedule": crontab(hour=6, minute=0),
+    },
+    # Login records older than LOGIN_RECORDS_RETENTION_DAYS.
+    "prune-login-records": {
+        "task": "manuspectrum.prune_login_records",
         "schedule": 24 * 3600,
     },
     # Resources per model, changes of the last 24 hours and open workflows, as gauges.
@@ -942,6 +970,80 @@ IIIF_AUTH_TOKEN_RATE = "30/m"
 # CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
 # every status) and the auth pages answer none.
 CORS_URLS_REGEX = r"^(?!/iiif/).*$"
+
+####### PASSWORDS #######
+# Argon2 first: PBKDF2 hashes stay valid and are rehashed at the next sign-in.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+]
+
+# At least 12 characters with upper case, lower case, a digit and a symbol;
+# common passwords and passwords close to the account's attributes are refused.
+# The composition rules are Arches' own (their help texts feed its forms) plus
+# the lower-case rule Arches' validator lacks; the symbol list is widened to
+# ASCII punctuation.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "arches.app.utils.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "arches.app.utils.password_validation.SpecialCharacterValidator",
+        "OPTIONS": {"special_characters": tuple(string.punctuation)},
+    },
+    {"NAME": "arches.app.utils.password_validation.HasNumericCharacterValidator"},
+    {"NAME": "arches.app.utils.password_validation.HasUpperAndLowerCaseValidator"},
+    {"NAME": "manuspectrum.password_validation.HasLowerCaseValidator"},
+    {
+        "NAME": "arches.app.utils.password_validation.MinLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
+]
+
+####### TWO-FACTOR AUTHENTICATION #######
+# TOTP authenticator, enrolled on /{lang}/account/two-factor
+# (manuspectrum/accounts/twofactor.py). Enrolment comes first and enforcement
+# after: with FORCE on, Arches refuses a sign-in to any account without a
+# secret, and that account has no session to enrol from. Switch FORCE on only
+# once every account is enrolled (production: FORCE_TWO_FACTOR_AUTHENTICATION=true).
+ENABLE_TWO_FACTOR_AUTHENTICATION = True
+FORCE_TWO_FACTOR_AUTHENTICATION = False
+
+####### SIGN-IN LOCKOUT AND LOGIN RECORDS #######
+# Five failures lock one account for 15 minutes from one client address; the
+# account stays usable from another address. Lockout and records:
+# manuspectrum/accounts/lockout.py.
+AUTHENTICATION_BACKENDS = ("manuspectrum.accounts.lockout.ArchesAxesBackend",) + tuple(
+    AUTHENTICATION_BACKENDS
+)
+AXES_HANDLER = "manuspectrum.accounts.lockout.ArchesAxesHandler"
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+# An attempt made while locked neither extends the lock nor counts as a new failure.
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+AXES_ENABLE_ACCESS_FAILURE_LOG = True
+AXES_CLIENT_IP_CALLABLE = "manuspectrum.utils.client_ip.client_ip"
+AXES_USERNAME_CALLABLE = "manuspectrum.accounts.lockout.lockout_username"
+AXES_LOCKOUT_TEMPLATE = "accounts/lockout.htm"
+# Login records (successes, failures, expired attempts) are kept six months.
+LOGIN_RECORDS_RETENTION_DAYS = 183
+
+####### EMBARGOES AND ABANDONED WORKFLOWS #######
+# A restriction lasts at most this many months from the day it was recorded;
+# only a superuser sets a later end. A restriction with no end is never lifted
+# automatically.
+EMBARGO_MAX_MONTHS = 12
+EMBARGO_NOTICE_DAYS = (30, 7)
+# An open workflow run with no activity for this many days is cleaned (and
+# counted as stale by the activity report); the owners are told this many days
+# before.
+WORKFLOW_CLEANUP_AFTER_DAYS = 90
+WORKFLOW_NOTICE_DAYS = (21, 7)
 
 try:
     from .package_settings import *

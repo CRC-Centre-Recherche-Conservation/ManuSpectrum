@@ -124,6 +124,12 @@ EXTRA_EMAIL_CONTEXT = {
     "site_url": PUBLIC_SERVER_ADDRESS.rstrip("/"),
 }
 
+# Accounts are invited by an administrator; checks.py refuses this profile with signup on.
+ENABLE_USER_SIGNUP = False
+# Compulsory two-factor sign-in, switched on once every account is enrolled.
+FORCE_TWO_FACTOR_AUTHENTICATION = get_optional_env_variable(
+    "FORCE_TWO_FACTOR_AUTHENTICATION", "false"
+).strip().lower() in ("1", "true", "yes", "on")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
@@ -241,6 +247,11 @@ DEFAULT_FROM_EMAIL = get_optional_env_variable("DEFAULT_FROM_EMAIL", "").strip()
 if not DEFAULT_FROM_EMAIL:
     raise ImproperlyConfigured("Set the DEFAULT_FROM_EMAIL environment variable")
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+ACCOUNT_SUMMARY_RECIPIENTS = [
+    address.strip()
+    for address in get_optional_env_variable("ALERT_EMAILS", "").split(",")
+    if address.strip()
+]
 ADMINS = [("", address) for address in get_optional_env_variable("ADMINS", "").split()]
 
 CORS_ALLOW_ALL_ORIGINS = False
