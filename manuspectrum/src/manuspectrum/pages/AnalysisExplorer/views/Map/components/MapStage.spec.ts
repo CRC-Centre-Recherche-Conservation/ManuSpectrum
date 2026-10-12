@@ -577,15 +577,16 @@ describe("MapStage exposed", () => {
         ]);
     });
 
-    it("reports its zoom on load and after each move, and loads the borders from their zoom", async () => {
+    it("loads the borders from their zoom on, overzoomed past the tiles' last zoom", async () => {
         const wrapper = mountStage();
         await flushPromises();
         const map = FakeMap.last();
         map.fire("moveend");
-        expect(wrapper.emitted("zoom")).toEqual([[4], [4]]);
-        expect(map.getSource(OHM_SOURCE)?.spec.minzoom).toBe(BORDERS_MIN_ZOOM);
-        wrapper.vm.zoomTo(BORDERS_MIN_ZOOM);
-        expect(map.easeCalls).toEqual([{ zoom: 7, duration: 420 }]);
+        expect(map.getSource(OHM_SOURCE)?.spec).toMatchObject({
+            minzoom: BORDERS_MIN_ZOOM,
+            maxzoom: 14,
+        });
+        expect(wrapper.emitted("zoom")).toBeUndefined();
     });
 
     it("settles a snapshot asked before the load when the map errors", async () => {

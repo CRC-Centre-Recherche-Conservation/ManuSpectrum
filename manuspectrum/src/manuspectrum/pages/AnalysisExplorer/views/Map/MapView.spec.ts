@@ -523,19 +523,21 @@ describe("MapView", () => {
         ]);
     });
 
-    it("offers to zoom in when the borders of the period load only closer", async () => {
+    it("draws the borders of the period at every zoom, with no prompt to zoom in", async () => {
         const store = useExplorerStore();
         store.setMapState({ borders: true, brush: [1150, 1250] });
         const view = await mountView();
         const map = FakeMap.last();
-        const hint = view.get(".stage-head .borders-hint.zoom-in");
-        expect(hint.text()).toBe("Zoom in to see the borders of 1200");
-        await hint.trigger("click");
-        expect(map.easeCalls.at(-1)).toEqual({ zoom: 7, duration: 420 });
-        map.getZoom = () => 7;
+        map.getZoom = () => 4;
         map.fire("moveend");
         await flushPromises();
-        expect(view.find(".borders-hint.zoom-in").exists()).toBe(false);
+        expect(view.find(".borders-hint").exists()).toBe(false);
+        expect(view.find(".borders").text()).toContain(
+            "Historical borders (1200)",
+        );
+        expect(
+            map.layers.find((entry) => entry.layer.id === BORDERS_LAYER)?.layer,
+        ).toMatchObject({ minzoom: 0, layout: { visibility: "visible" } });
     });
 
     it("asks a new snapshot only when the bounds change", async () => {

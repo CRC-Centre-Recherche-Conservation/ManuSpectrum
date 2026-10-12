@@ -71,7 +71,6 @@ import {
     territoryFields,
     withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
-import { BORDERS_MIN_ZOOM } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 import { territories } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
 import { trackedOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import { webglAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/webgl.ts";
@@ -155,8 +154,6 @@ const page = ref(0);
 /** The reliability levels the reader unticked: their materials leave the map. */
 const hiddenLevels = ref(new Set<string>());
 const background = ref<MapSnapshot | null>(null);
-/** The stage's zoom after its last move; null before the map has loaded. */
-const stageZoom = ref<number | null>(null);
 const mapFailed = ref(false);
 const mapColours = shallowRef(FALLBACK_COLOURS);
 /** The followed slot whose territory reads alone while its legend row or rail chip is hovered. */
@@ -294,14 +291,6 @@ const bordersYear = computed(() => {
 });
 const bordersShown = computed(
     () => store.mapState.borders && bordersYear.value !== null,
-);
-/** The borders are asked and have a year, but the map is zoomed out past the zoom they load from. */
-const bordersTooFar = computed(
-    () =>
-        bordersShown.value &&
-        mode.value !== "multiples" &&
-        stageZoom.value !== null &&
-        stageZoom.value < BORDERS_MIN_ZOOM,
 );
 const bordersLabel = computed(() =>
     bordersYear.value === null
@@ -666,10 +655,6 @@ function pickPlace(id: string): void {
     if (summary) stage.value?.revealPlace(summary.lngLat);
 }
 
-function zoomToBorders(): void {
-    stage.value?.zoomTo(BORDERS_MIN_ZOOM);
-}
-
 function skipToPlaces(): void {
     if (compact.value) {
         rail.value?.focusFilters();
@@ -910,7 +895,6 @@ function skipToTimeline(): void {
                         :places="places"
                         @select="pickPlace"
                         @hover="listHovered = $event"
-                        @unplaced="openSubject({ kind: 'unplaced' })"
                     />
                     <p class="rail-note">
                         <span>{{
@@ -1109,22 +1093,6 @@ function skipToTimeline(): void {
                                 )
                             }}</span>
                         </p>
-                        <button
-                            v-else-if="bordersTooFar"
-                            type="button"
-                            class="borders-hint zoom-in"
-                            @click="zoomToBorders"
-                        >
-                            <span>{{
-                                interpolate(
-                                    $gettext(
-                                        "Zoom in to see the borders of %{year}",
-                                    ),
-                                    { year: bordersYear ?? "" },
-                                    true,
-                                )
-                            }}</span>
-                        </button>
                     </div>
                     <UnavailableState
                         v-if="failed"
@@ -1152,7 +1120,6 @@ function skipToTimeline(): void {
                             :isolate="mode === 'territories' ? isolated : null"
                             @select="openSubject({ kind: 'place', id: $event })"
                             @hover="onStageHover"
-                            @zoom="stageZoom = $event"
                             @failed="mapFailed = true"
                         >
                             <div
@@ -1975,27 +1942,6 @@ function skipToTimeline(): void {
     color: var(--ink-muted);
     font-size: 0.75rem;
     text-align: end;
-}
-
-/* FacetRail .more */
-.map-view .borders-hint.zoom-in {
-    min-block-size: var(--explorer-target);
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--blue-text);
-    font: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-}
-
-.map-view .borders-hint.zoom-in:hover {
-    text-decoration: underline;
-}
-
-.map-view .borders-hint.zoom-in:focus-visible {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
 }
 
 .map-view .unplaced {

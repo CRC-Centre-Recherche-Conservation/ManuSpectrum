@@ -19,11 +19,11 @@ export const TERRITORIES_SOURCE = "ms-territories";
 export const OHM_SOURCE = "ohm";
 export const BORDERS_LAYER = "ohm-borders";
 /**
- * The zoom from which the OpenHistoricalMap borders load: below it each
- * tile carries a continent's worth of lines (a few MB per tile, about 3 to
- * 8 MB per screen at zoom 4 to 6, against about 1 MB at zoom 7).
+ * The zoom from which the OpenHistoricalMap borders load: every zoom. The
+ * layer is opt-in: below zoom 7 a tile carries a continent's worth of lines
+ * (about 3 to 6 MB per screen at zoom 4 to 6, about 1 MB at zoom 7).
  */
-export const BORDERS_MIN_ZOOM = 7;
+export const BORDERS_MIN_ZOOM = 0;
 export const SLOTS = 4;
 export const PIP_ANGLES_DEG = [-90, -40, 10, 60] as const;
 /** The middle of the pips' arc: a place with near neighbours turns its arc so this points away from them (`pipAway`). */

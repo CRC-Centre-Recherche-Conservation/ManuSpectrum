@@ -393,8 +393,8 @@ describe("bordersFilter", () => {
         expect(evaluate(bordersFilter(null), { admin_level: 2 })).toBe(true);
     });
 
-    it("loads the borders from zoom 7 only", () => {
-        expect(BORDERS_MIN_ZOOM).toBe(7);
+    it("loads the borders from the continental view, zoom 4", () => {
+        expect(BORDERS_MIN_ZOOM).toBe(0);
         expect(
             (bordersLayer(null, FALLBACK_COLOURS, true) as { minzoom?: number })
                 .minzoom,

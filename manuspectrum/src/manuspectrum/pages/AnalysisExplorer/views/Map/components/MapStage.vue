@@ -83,7 +83,7 @@ const SHOWN_ATTRIBUTION = ".maplibregl-ctrl-attrib.maplibregl-compact-show";
  * through feature-state; only a change of `places` or `territories`
  * replaces source data; `isolate` (a slot, or null) fades the other slots'
  * territories by paint. The historical borders load from
- * `BORDERS_MIN_ZOOM` only; `zoom` reports the camera's zoom after each move.
+ * `BORDERS_MIN_ZOOM` on, overzoomed past `OHM_MAX_ZOOM`.
  * The compact attribution starts folded to its ⓘ. Overlays of the parent
  * (legend, note, tooltip) go in the default slot, inside the frame.
  */
@@ -101,10 +101,9 @@ const props = defineProps<{
 const emit = defineEmits<{
     select: [id: string];
     hover: [payload: { id: string; x: number; y: number } | null];
-    zoom: [zoom: number];
     failed: [];
 }>();
-defineExpose({ snapshot, cancelSnapshots, resize, revealPlace, zoomTo });
+defineExpose({ snapshot, cancelSnapshots, resize, revealPlace });
 
 const { $gettext } = useGettext();
 const motion = usePreferredReducedMotion();
@@ -379,7 +378,6 @@ function onLoad(current: MapLibreMap): void {
     current.on("click", onClick);
     current.on("mousemove", onMove);
     current.on("mouseout", clearHover);
-    current.on("moveend", () => emit("zoom", current.getZoom()));
     current.on("movestart", (event: { originalEvent?: unknown }) => {
         if (shooting && event.originalEvent) userMoved = true;
     });
@@ -395,7 +393,6 @@ function onLoad(current: MapLibreMap): void {
             duration: 0,
         });
     }
-    emit("zoom", current.getZoom());
     if (queued) void runSnapshots(current);
 }
 
@@ -473,11 +470,6 @@ function revealPlace(lngLat: LngLat): void {
         center: [lngLat[0], lngLat[1]],
         duration: fitDurationMs(),
     });
-}
-
-/** Eases the map to `zoom` around its centre. */
-function zoomTo(zoom: number): void {
-    map.value?.easeTo({ zoom, duration: fitDurationMs() });
 }
 
 /** The ids of the layers a snapshot leaves out: the places and the territories. */
