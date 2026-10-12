@@ -733,6 +733,12 @@ def events_payload(query, user, language, ticket=None):
         "analysisNames": {
             a: bundle.by_id[a]["name"] for e in events for a in e["analyses"]
         },
+        "analysisTechniques": {
+            a: bundle.marks[bundle.by_id[a]["technique"]["uri"]]
+            for e in events
+            for a in e["analyses"]
+            if bundle.by_id[a]["technique"]
+        },
         "colours": {
             colour: bundle.event_colours[colour]
             for m in materials.values()

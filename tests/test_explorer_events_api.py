@@ -74,6 +74,23 @@ class EventsRouteTests(EventsCase):
                 {a for e in payload["events"] for a in e["analyses"]},
             )
 
+    def test_analysis_techniques_are_the_bundle_marks_of_the_returned_analyses(self):
+        bundle = self.bundle()
+        for query in ("", ALL_TYPES, "?eventType=modification"):
+            payload = self.get(query).json()
+            cited = {a for e in payload["events"] for a in e["analyses"]}
+            self.assertEqual(
+                payload["analysisTechniques"],
+                {
+                    a: bundle.marks[bundle.by_id[a]["technique"]["uri"]]
+                    for a in cited
+                    if bundle.by_id[a]["technique"]
+                },
+            )
+            for mark in payload["analysisTechniques"].values():
+                assert_shape(self, mark, "TechniqueMark")
+        self.assertTrue(self.get(ALL_TYPES).json()["analysisTechniques"])
+
     def test_the_default_and_the_explicit_material_types_share_one_etag(self):
         explicit = self.get(
             "?eventType=alteration&eventType=production&eventType=modification"

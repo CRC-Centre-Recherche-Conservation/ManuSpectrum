@@ -103,6 +103,7 @@ SHAPES = {
         "materials": dict,
         "colours": dict,
         "analysisNames": dict,
+        "analysisTechniques": dict,
         "certaintyScale": dict,
     },
     "MapEvent": {
