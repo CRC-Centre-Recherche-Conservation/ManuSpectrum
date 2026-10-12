@@ -27,7 +27,9 @@ corrupted database, a lost VM and a lost disk, not against the loss of the site.
 - **The whole PostgreSQL database**, one `pg_dump -Fc`: the thesauri and
   controlled lists, the graphs and every designer edit, resources and tiles,
   annotations, IIIF manifests, resource relations, accounts and permissions,
-  the summary and map-layer configurations, the login records.
+  the summary and map-layer configurations, the login records (the `axes_*`
+  tables of django-axes: successes, failures and locks, kept six months in the
+  live database by the daily `manuspectrum.prune_login_records` task).
 - **The media directory** (`MEDIA_HOST_DIR`): uploaded files served by
   Cantaloupe and the concept images. Excluded inside it: `previous-*` (the data
   a restore put aside), `.restore-*` (restore staging), `archestemp/` and
@@ -301,7 +303,7 @@ This section is the reference the scripts point to: `restore.sh` refuses without
 
 **What the backups hold.** The whole database, therefore everything personal in it:
 accounts (names, e-mail addresses, password hashes, group memberships), the
-records of who signed in and when, and any personal data in the scientific
+records of who signed in and when (the `axes_*` tables), and any personal data in the scientific
 records. The uploaded files and the secrets are in the repository too. nginx logs
 are not.
 

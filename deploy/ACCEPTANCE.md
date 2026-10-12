@@ -1261,10 +1261,74 @@ sizes of the data directories.
 - [ ] The timers are installed by PP-8 and listed by `systemctl list-timers 'manuspectrum-*'`; the disk-usage
   schedule decided in 7.4 is recorded.
 
+## Step 8 — Accounts (`deploy/ADMIN.md`)
+
+Sign-up closed, lockout, invitation, activation with the terms and two-factor enrolment, legal pages, embargo and
+workflow cleanup. Played on the rehearsal VM with the stack of step 2 and the Mailpit profile of step 7
+(`COMPOSE_PROFILES=observability,mailpit`, `EMAIL_HOST=mailpit`, `EMAIL_PORT=1025`); `<site>` is the rehearsal name.
+Create the test accounts in the admin and delete them afterwards.
+
+### 8.1 Sign-up is closed, the unsafe 2FA routes are refused
+
+- [ ] `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<site>/en/auth/signup` → `404`, and the same on
+  `/fr/auth/confirm_signup`, `/en/two-factor-authentication-settings` and `/en/two-factor-authentication-reset`
+  (bodyless, no `X-Request-ID`).
+  - On failure: the `DENIED` location of `edge-rules.conf` does not match (`tests/test_edge_contract.py`).
+
+### 8.2 Lockout
+
+- [ ] Five wrong passwords for one existing user on `/en/auth/` (a fresh `curl` session each time, CSRF token
+  included), then a right one: the answer is the lockout page, `429`, not a sign-in. The same user signs in from another
+  address, and after 15 minutes from this one.
+  - Expected: `manuspectrum_auth_lockouts_total` increases by one (`smoke.sh` metrics or Prometheus), the admin lists
+    the row in "Access attempts". Keep the five attempts inside one minute or the edge answers `429` first (rate limit
+    of the sign-in routes, 4.3).
+- [ ] `make -C deploy manage ARGS="axes_reset_username <user>"` unlocks at once.
+
+### 8.3 Invitation, activation, terms and two-factor
+
+- [ ] In the admin create a user with an e-mail and no password, run **Send invitation**: Mailpit holds one message
+  with the subject prefix `[ManuSpectrum][Account]` and the header `X-ManuSpectrum-Category: Account`, English then French.
+- [ ] Open the link: the terms of use are shown with a required checkbox; submitting without it is refused; with it, set a
+  password (an 11-character or common one is refused), then enrol an authenticator at `/en/account/two-factor`.
+  The admin lists the acceptance (version, date) under "Terms acceptances".
+- [ ] Sign out and in again with the code. A POST to `/en/account/two-factor` and `/en/account/terms` repeated 7 times in
+  a minute gets `429` from the edge.
+- [ ] Bump `TERMS_VERSION` (rehearsal image only): the next page after sign-in is the acceptance page.
+- [ ] Lost phone: as a superuser, run **Reset two-factor authentication** on the profile; the user enrols again.
+- [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`: an account without a secret is refused,
+  an enrolled one signs in. Put it back to `false` if the rehearsal continues without it.
+
+### 8.4 Legal pages
+
+- [ ] `/en/about/legal`, `/en/about/privacy`, `/en/about/terms` and their `/fr/` twins answer `200` in their language,
+  are linked from the footer ("Legal") and listed in `/sitemap.xml`; the printed durations are those of the settings
+  (6 months, 12 months, 90 days).
+
+### 8.5 Embargo and workflow cleanup
+
+- [ ] Restrict a test resource, open its Embargo in the admin and date it; `make -C deploy manage ARGS="release_expired_embargoes"`
+  lists nothing to lift yet. Move the end date to yesterday in the admin (a rehearsal shortcut) and run
+  `release_expired_embargoes --apply`: the resource is public, the creator got the "now public" mail in Mailpit, the
+  history shows the lift, `manuspectrum_embargo_lifts_total{outcome="lifted"}` increased.
+- [ ] `make -C deploy manage ARGS="prune_workflow_history"` (dry run) lists the idle runs and what it would delete and
+  keep, and says "Dry run: nothing written or sent". Do not run `--apply` on the loaded snapshot.
+
+### 8.6 Report
+
+- [ ] `make -C deploy report-test`: the message has the sections "Comptes inactifs", "Verrouillages de comptes",
+  "Restrictions (embargos)", "Assistants abandonnés nettoyés" and "Courriels de compte", and lists the accounts created
+  in 8.3 under "jamais connectés" only once they are three months old.
+
+### 8.7 What cannot be tested in rehearsal
+
+Delivery of the invitation by the real relay (SPF, DMARC, quarantine); the real authenticator clock drift; the CNRS DPO
+validation of the register in `ADMIN.md`.
+
 ---
 
 ## Next steps
 
 Each PR of the workstream adds its section here, on the same model (command, expected,
-what to do on failure): accounts, Ansible, delivery, then
+what to do on failure): Ansible, delivery, then
 "Before production".

@@ -1,0 +1,139 @@
+# Administration
+
+Day-to-day tasks of the administrators of a running ManuSpectrum. This page covers
+accounts, restrictions (embargoes), abandoned workflows and the draft register of
+processing; PP-9 completes it with the rest of the operating procedures. Commands
+run on the host from the repository checkout, as the service account; "the admin" is
+the Django administration (`/<lang>/admin/`), which only staff and superusers reach.
+
+## Accounts
+
+There is no self-signup (`POST /<lang>/auth/signup` answers 404). An account exists
+because an administrator created it. People ask for one through the contact page
+(reason "Request an account"), which opens a pre-filled mail; nothing is stored.
+
+### Create an account and invite the person
+
+1. In the admin, Users, "Add user": a user name and the **e-mail address**, no password
+   (leave the password fields empty or unusable). Save. Give the groups the person needs.
+2. In the Users list, tick the account, choose the action **Send invitation (account with
+   no password)**. The person receives a mail `[ManuSpectrum][Account] Your ManuSpectrum
+   account` (English, then French) with a personal link, valid for a limited time.
+   An account that is inactive, has no e-mail or already has a password is skipped with a
+   message. A failed send is reported and counted (`AccountMailFailures`): fix the relay
+   (`runbooks/application.md`), then send a new invitation.
+3. The person opens the link, reads and accepts the terms of use (a required checkbox;
+   the acceptance is stored with its date and the version of the terms), chooses a
+   password (12 characters or more, upper and lower case, a digit and a symbol; common
+   or similar passwords are refused), then sets up two-factor authentication with an
+   authenticator application at `/<lang>/account/two-factor`.
+4. An invitation never activated shows in the monthly report (below) after three months.
+
+### Two-factor authentication
+
+- TOTP, with any authenticator application. Enrolment is self-service at
+  `/<lang>/account/two-factor`.
+- Rollout order (`README.md`, "Upgrading"): deploy with `FORCE_TWO_FACTOR_AUTHENTICATION=false`
+  in `.env`, the administrators enrol, then set `true` and recreate `web`. From then on
+  a sign-in without a second factor is refused, so an account that has no secret cannot
+  enrol itself: every account, a newly invited one included, must enrol before the switch,
+  or the switch waits.
+- **Lost phone.** After checking the person's identity by another channel, a superuser
+  opens the admin, User profiles, ticks the profile and chooses **Reset two-factor
+  authentication (superuser)** (it clears `UserProfile.encrypted_mfa_hash`; only superusers
+  can). The person enrols again at `account/two-factor`. If `FORCE_TWO_FACTOR_AUTHENTICATION`
+  is on and the person cannot sign in, switch it off for the time of the enrolment
+  (`.env`, recreate `web`) or enrol from a session of a superuser acting with the person.
+- Arches' own 2FA settings and reset routes are refused at the edge; enrolment and resets go
+  through the project pages above, and no mail comes from Arches' routes.
+- The secrets are encrypted with `SECRET_KEY`: a new key makes everyone re-enrol
+  (`SECRETS.md`).
+
+### Unlock a locked account
+
+Five failed sign-ins lock one account from one address for 15 minutes; the account stays
+usable from another address. A user usually just waits. To unlock at once:
+
+```bash
+make -C deploy manage ARGS="axes_reset_username <username>"
+```
+
+or delete the row in the admin, "Access attempts". `LoginLockouts` warns above five locks in
+an hour (`runbooks/application.md`).
+
+### Terms of use
+
+The terms are `manuspectrum/templates/views/pages/terms.htm` and their French catalogue
+entries. Changing them:
+
+1. Edit the English template and the French entries (`makemessages`, translate, `compilemessages`;
+   `CLAUDE.md`, "Internationalization").
+2. `tests/test_about_pages.TermsDigestTests` fails until `TERMS_DIGEST` in
+   `manuspectrum/accounts/terms.py` is updated.
+3. A change of substance: bump `TERMS_VERSION` too. Every signed-in user is then sent to
+   the acceptance page at the next sign-in. A typo fix: update `TERMS_DIGEST` only, nobody is
+   asked again.
+
+The admin lists each acceptance (user, version, date) under "Terms acceptances".
+
+### Inactive accounts
+
+The monthly report (`OBSERVABILITY.md`) has an "Comptes inactifs" section: the active accounts
+(not `anonymous`) with no sign-in for 12 months, and those that never signed in 3 months after
+they were created (an invitation never activated counts there), with user name, last sign-in
+or "jamais", and creation date. Nothing is done automatically. Deactivation is a decision of
+the project owner, taken by hand in the admin (untick "Active"); an account is never deleted.
+
+## Restrictions (embargoes)
+
+A restriction is an Arches permission; the **Embargo** record in the admin carries its end
+date and its history. Restrictions are temporary by construction: 12 months at most from the
+day the record was created (`EMBARGO_MAX_MONTHS`).
+
+- **Date.** The daily pass (06:00 Europe/Paris) records new restrictions; open Embargoes in the
+  admin and set "Ends on" (the last day of the restriction). It is lifted the day after at 06:00.
+  Notices go to the resource creator and the user who set the restriction at 30 and 7 days
+  before and on the day it becomes public, with a summary to `ALERT_EMAILS`.
+- **No end date.** A restriction without an end date is never lifted automatically. The list
+  filter "Undated" shows them and the monthly report counts them.
+- **Extend.** Administrators only, in the admin: edit "Ends on", or tick embargoes and choose
+  "Extend the end date by 3, 6 or 12 months". Beyond the maximum duration only a superuser can
+  set the date. Each change is recorded: who, when, from and to.
+- **History.** Open the embargo: the inline "events" list every change, and "Notices sent"
+  the notices already mailed.
+- **Rehearsal / by hand.** `make -C deploy manage ARGS="release_expired_embargoes"` lists what
+  the pass would do (dry run); `--apply` runs it as the beat task does.
+- Alerts: `EmbargoLiftFailures`, `EmbargoOverdue`, `EmbargoPassStale` (`runbooks/application.md`,
+  `runbooks/celery.md`).
+
+## Abandoned workflows
+
+An open workflow run with no activity for 90 days (`WORKFLOW_CLEANUP_AFTER_DAYS`) is cleaned
+daily at 03:30 Europe/Paris, after two notices at 21 and 7 days before. Only what the run
+created and nothing else touches (still a draft, unmodified elsewhere, unlinked) is deleted;
+completed workflows are never touched.
+
+- **Ledger.** The admin, "Workflow cleanups": last activity, notices sent, cleaned on,
+  resources deleted and kept. No user is stored in it.
+- **Dry run.** `make -C deploy manage ARGS="prune_workflow_history"` lists the runs that would
+  be noticed and cleaned and the resources it would delete and keep, and writes and sends
+  nothing. `--apply` runs the pass; `--workflow <id>` restricts it to one run.
+- Alerts: `WorkflowCleanupFailures`, `WorkflowCleanupStale`.
+
+## Draft register of processing
+
+A draft for the CNRS data protection officer to complete and validate; the controller is the
+CNRS (legal notice, `/<lang>/about/legal`).
+
+| Processing | Data | Purpose | Retention |
+| --- | --- | --- | --- |
+| Accounts | User name, e-mail, name, password hash (Argon2), groups, two-factor secret (encrypted), acceptance of the terms with its version and date | Give access to describe and edit analyses | While the account is active; deactivated by hand, never deleted automatically |
+| Login records | Sign-in successes and failures with the user name, address and time (django-axes tables) | Security, lockout | 6 months in the database (`LOGIN_RECORDS_RETENTION_DAYS`), then at most 6 months more in the monthly backups |
+| Edit log | Who changed which resource and when (Arches `edit_log`) | Scientific traceability | With the data |
+| Person resources | Names and affiliations of people in the scientific records | Attribution of data | With the data |
+| Mails | Invitations and notices (embargo, workflow) to the people concerned; summaries to `ALERT_EMAILS` | Service notices, no unsubscribe link | Not stored by ManuSpectrum (the relay keeps its own logs) |
+| Backups | The whole database, media and secrets, encrypted (restic) | Recovery | 7 daily, 4 weekly, 6 monthly (`BACKUP.md`) |
+| Server logs | Access log without query string | Operation | 30 days |
+
+Rights are exercised at `CONTACT_EMAIL`. Erasures since a backup are replayed before reopening a
+restored stack (`BACKUP.md`, "Personal data").
