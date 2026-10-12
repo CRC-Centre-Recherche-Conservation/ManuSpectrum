@@ -41,6 +41,10 @@ dependencies = [
     "django-prometheus>=2.5,<2.6",
     "prometheus-client>=0.22,<1",
     "python-json-logger>=4.2,<5",
+    # Accounts hardening (PP-4): sign-in lockout and login records; Argon2
+    # for Django's PasswordHasher.
+    "django-axes>=8.3.1,<9",
+    "argon2-cffi>=25.1,<26",
     # Security floors inside the ranges arches allows (CVE-2026-15830,
     # CVE-2026-73228/73229, CVE-2026-45409). Drop a line once arches or
     # arches_querysets requires at least as much.
