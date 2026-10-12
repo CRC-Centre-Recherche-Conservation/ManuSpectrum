@@ -5,6 +5,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import {
+    LABEL_FONT_ITALIC,
     OHM_TILES,
     WATER_LAYER,
     baseStyle,
@@ -13,12 +14,17 @@ import { FALLBACK_COLOURS } from "@/manuspectrum/pages/AnalysisExplorer/views/Ma
 import { ringRadius } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import {
     BORDERS_MIN_ZOOM,
+    BORDER_NAMES_LAYER,
     HATCH_IMAGE,
     OHM_SOURCE,
     PIP_OFFSETS,
     PLACES_SOURCE,
+    REGIONAL_NAMES_MIN_ZOOM,
     RING_DASHED_IMAGE,
     TERRITORIES_SOURCE,
+    borderNameField,
+    borderNamesFilter,
+    borderNamesLayer,
     bordersFilter,
     bordersLayer,
     dashedRingImage,
@@ -89,6 +95,7 @@ describe("the full stage style", () => {
                 ...TERRITORIES,
                 ...base.layers,
                 bordersLayer(1350, FALLBACK_COLOURS, true),
+                borderNamesLayer(1350, FALLBACK_COLOURS, true, "fr"),
                 ...PLACES,
             ],
         };
@@ -408,6 +415,150 @@ describe("bordersFilter", () => {
         };
         expect(borders.paint?.["line-color"]).toBe(FALLBACK_COLOURS.ring);
         expect(borders.layout?.visibility).toBe("none");
+    });
+});
+
+describe("borderNamesLayer", () => {
+    const NAMES = layer(
+        [borderNamesLayer(1200, FALLBACK_COLOURS, true, "fr")],
+        BORDER_NAMES_LAYER,
+    );
+    const alive = { start_decdate: 1150, end_decdate: 1250 };
+
+    it("reads the polity centroids of the borders' source, hidden with them", () => {
+        expect(NAMES.type).toBe("symbol");
+        expect((NAMES as { source?: string }).source).toBe(OHM_SOURCE);
+        expect((NAMES as { "source-layer"?: string })["source-layer"]).toBe(
+            "land_ohm_centroids",
+        );
+        expect(
+            layer(
+                [borderNamesLayer(null, FALLBACK_COLOURS, false, "en")],
+                BORDER_NAMES_LAYER,
+            ).layout?.visibility,
+        ).toBe("none");
+        expect(NAMES.layout?.visibility).toBe("visible");
+    });
+
+    it("keeps the polities alive in the middle of the year, by the borders' rule", () => {
+        const filter = borderNamesFilter(1200);
+        expect(JSON.stringify(filter)).toContain(
+            JSON.stringify((bordersFilter(1200) as unknown[]).slice(2)).slice(
+                1,
+                -1,
+            ),
+        );
+        expect(evaluate(filter, { admin_level: 2, ...alive }, {}, 4)).toBe(
+            true,
+        );
+        expect(
+            evaluate(filter, { admin_level: 2, start_decdate: 1201 }, {}, 4),
+        ).toBe(false);
+        expect(
+            evaluate(
+                filter,
+                { admin_level: 1, start_decdate: 1000, end_decdate: 1200 },
+                {},
+                4,
+            ),
+        ).toBe(false);
+        expect(
+            evaluate(borderNamesFilter(null), { admin_level: 2 }, {}, 4),
+        ).toBe(true);
+        expect(JSON.stringify(borderNamesFilter(null))).not.toContain(
+            "decdate",
+        );
+    });
+
+    it("names the country level at every zoom, the regional ones only from their zoom", () => {
+        const filter = borderNamesFilter(1200);
+        const below = REGIONAL_NAMES_MIN_ZOOM - 1;
+        expect(REGIONAL_NAMES_MIN_ZOOM).toBe(6);
+        expect(evaluate(filter, { admin_level: 1, ...alive }, {}, 0)).toBe(
+            true,
+        );
+        for (const level of [3, 4]) {
+            expect(
+                evaluate(filter, { admin_level: level, ...alive }, {}, below),
+            ).toBe(false);
+            expect(
+                evaluate(
+                    filter,
+                    { admin_level: level, ...alive },
+                    {},
+                    REGIONAL_NAMES_MIN_ZOOM,
+                ),
+            ).toBe(true);
+        }
+        expect(evaluate(filter, { admin_level: 5, ...alive }, {}, 12)).toBe(
+            false,
+        );
+        expect(NAMES.filter).toEqual(filter);
+    });
+
+    it("writes the name in the interface language, else in English, else as stored", () => {
+        const field = borderNameField("fr-FR");
+        expect(field).toEqual([
+            "coalesce",
+            ["get", "name_fr"],
+            ["get", "name_en"],
+            ["get", "name"],
+        ]);
+        expect(NAMES.layout?.["text-field"]).toEqual(borderNameField("fr"));
+        const latin = { name: "Regnum Hungariae" };
+        expect(
+            evaluate(field, {
+                ...latin,
+                name_fr: "Royaume de Hongrie",
+                name_en: "Kingdom of Hungary",
+            }),
+        ).toBe("Royaume de Hongrie");
+        expect(
+            evaluate(field, { ...latin, name_en: "Kingdom of Hungary" }),
+        ).toBe("Kingdom of Hungary");
+        expect(evaluate(field, latin)).toBe("Regnum Hungariae");
+        expect(borderNameField("en")).toEqual([
+            "coalesce",
+            ["get", "name_en"],
+            ["get", "name"],
+        ]);
+    });
+
+    it("sets the names apart from the places: italic capitals, muted ink, land halo, smaller", () => {
+        expect(NAMES.layout?.["text-font"]).toEqual(LABEL_FONT_ITALIC);
+        expect(NAMES.layout?.["text-transform"]).toBe("uppercase");
+        expect(NAMES.layout?.["text-letter-spacing"]).toBeGreaterThan(0);
+        expect(NAMES.paint?.["text-color"]).toBe(FALLBACK_COLOURS.inkMuted);
+        expect(NAMES.paint?.["text-halo-color"]).toBe(FALLBACK_COLOURS.land);
+        const placeSize = layer(PLACES, "place-labels").layout?.["text-size"];
+        const size = NAMES.layout?.["text-size"];
+        for (const zoom of [4, 6, 8]) {
+            const place = evaluate(placeSize, {}, {}, zoom) as number;
+            const national = evaluate(
+                size,
+                { admin_level: 2 },
+                {},
+                zoom,
+            ) as number;
+            const regional = evaluate(
+                size,
+                { admin_level: 4 },
+                {},
+                zoom,
+            ) as number;
+            expect(national).toBeLessThan(place);
+            expect(regional).toBeLessThan(national);
+        }
+    });
+
+    it("lets the largest polity win, never overlapping another label", () => {
+        const key = NAMES.layout?.["symbol-sort-key"];
+        expect(
+            (evaluate(key, { area: 9e11 }) as number) <
+                (evaluate(key, { area: 3e7 }) as number),
+        ).toBe(true);
+        expect(NAMES.layout?.["text-allow-overlap"]).toBe(false);
+        expect(NAMES.layout?.["text-ignore-placement"]).toBe(false);
     });
 });
 

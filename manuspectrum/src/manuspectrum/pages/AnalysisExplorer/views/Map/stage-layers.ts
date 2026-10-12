@@ -18,6 +18,11 @@ export const PLACES_SOURCE = "ms-places";
 export const TERRITORIES_SOURCE = "ms-territories";
 export const OHM_SOURCE = "ohm";
 export const BORDERS_LAYER = "ohm-borders";
+export const BORDER_NAMES_LAYER = "ohm-border-names";
+/** The layers the « Historical borders » toggle shows and hides, with the year rule. */
+export const OHM_LAYERS = [BORDERS_LAYER, BORDER_NAMES_LAYER] as const;
+/** The zoom from which the names of regional polities (OHM admin levels 3 and 4) show. */
+export const REGIONAL_NAMES_MIN_ZOOM = 6;
 /**
  * The zoom from which the OpenHistoricalMap borders load: every zoom. The
  * layer is opt-in: below zoom 7 a tile carries a continent's worth of lines
@@ -76,6 +81,13 @@ const POINT_HOVER_RADIUS = 6;
 /** A ring radius past which no place grows (sqrt of 1 000 000 documents). */
 const RING_LIMIT_PX = 4096;
 const BORDER_LEVELS = [1, 2];
+const REGIONAL_LEVELS = [3, 4];
+/** Historical names, at the zooms of `PIP_SCALE_ZOOMS`, in CSS pixels: national, then regional; smaller than the place labels. */
+const NATIONAL_NAME_SIZES_PX = [10, 11] as const;
+const REGIONAL_NAME_SIZES_PX = [9, 10] as const;
+const NAME_LETTER_SPACING_EM = 0.08;
+const NAME_MAX_WIDTH_EM = 8;
+const NAME_PADDING_PX = 4;
 const FRONTIER_WIDTH = 2.5;
 const FRONTIER_CASING_WIDTH = 5;
 const FRONTIER_CASING_OPACITY = 0.55;
@@ -472,23 +484,65 @@ export function territoryLayers(colours: MapColours): LayerSpecification[] {
     ];
 }
 
+/** The clauses keeping an OpenHistoricalMap feature alive in the middle of `year` (an open start or end counts as always); none without a year. */
+function aliveIn(year: number | null): ExpressionSpecification[] {
+    if (year === null) return [];
+    const moment = year + MID_YEAR;
+    return [
+        ["<=", ["coalesce", ["get", "start_decdate"], OPEN_START], moment],
+        [">=", ["coalesce", ["get", "end_decdate"], OPEN_END], moment],
+    ];
+}
+
+const levelIn = (levels: number[]): ExpressionSpecification => [
+    "in",
+    ["get", "admin_level"],
+    ["literal", levels],
+];
+
 /**
  * Country-level borders of OpenHistoricalMap alive in the middle of `year`
  * (an open start or end counts as always), or every one without a year.
  */
 export function bordersFilter(year: number | null): FilterSpecification {
-    const level: FilterSpecification = [
-        "in",
-        ["get", "admin_level"],
-        ["literal", BORDER_LEVELS],
-    ];
-    if (year === null) return ["all", level];
-    const moment = year + MID_YEAR;
+    return ["all", levelIn(BORDER_LEVELS), ...aliveIn(year)];
+}
+
+/**
+ * The polities named on the borders: the country-level ones at every zoom,
+ * the regional ones from `REGIONAL_NAMES_MIN_ZOOM`, alive by the rule of
+ * `bordersFilter`. MapLibre evaluates the zoom of a filter at integer zooms.
+ */
+export function borderNamesFilter(year: number | null): FilterSpecification {
     return [
         "all",
-        level,
-        ["<=", ["coalesce", ["get", "start_decdate"], OPEN_START], moment],
-        [">=", ["coalesce", ["get", "end_decdate"], OPEN_END], moment],
+        [
+            "any",
+            levelIn(BORDER_LEVELS),
+            [
+                "all",
+                levelIn(REGIONAL_LEVELS),
+                [">=", ["zoom"], REGIONAL_NAMES_MIN_ZOOM],
+            ],
+        ],
+        ...aliveIn(year),
+    ];
+}
+
+/** The language subtag of `language` (`fr` for `fr-FR`), lower case. */
+function primarySubtag(language: string): string {
+    return language.split(/[-_]/)[0].toLowerCase();
+}
+
+/** The name of a polity in `language`, else in English, else as stored. */
+export function borderNameField(language: string): ExpressionSpecification {
+    const fallbacks = [
+        ...new Set([`name_${primarySubtag(language)}`, "name_en"]),
+    ];
+    return [
+        "coalesce",
+        ...fallbacks.map((key): ExpressionSpecification => ["get", key]),
+        ["get", "name"],
     ];
 }
 
@@ -509,6 +563,66 @@ export function bordersLayer(
             "line-color": colours.ring,
             "line-width": 1,
             "line-dasharray": [3, 2],
+        },
+    };
+}
+
+const nameSize = (at: 0 | 1): ExpressionSpecification => [
+    "match",
+    ["get", "admin_level"],
+    BORDER_LEVELS,
+    NATIONAL_NAME_SIZES_PX[at],
+    REGIONAL_NAME_SIZES_PX[at],
+];
+
+/**
+ * The names of the polities of `bordersLayer`, at their OpenHistoricalMap
+ * centroids: italic letter-spaced capitals in muted ink on a land halo, so
+ * they read as the map's history and not as one of the Explorer's places.
+ * Added under the place layers, which MapLibre places first: a place, its
+ * pips and its label always win. Among the names the largest polity wins
+ * (`symbol-sort-key` by descending `area`); a name that would overlap is
+ * left out.
+ */
+export function borderNamesLayer(
+    year: number | null,
+    colours: MapColours,
+    visible: boolean,
+    language: string,
+): SymbolLayerSpecification {
+    return {
+        id: BORDER_NAMES_LAYER,
+        type: "symbol",
+        source: OHM_SOURCE,
+        "source-layer": "land_ohm_centroids",
+        minzoom: BORDERS_MIN_ZOOM,
+        filter: borderNamesFilter(year),
+        layout: {
+            visibility: visible ? "visible" : "none",
+            "text-field": borderNameField(language),
+            "text-font": LABEL_FONT_ITALIC,
+            "text-size": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                PIP_SCALE_ZOOMS[0],
+                nameSize(0),
+                PIP_SCALE_ZOOMS[1],
+                nameSize(1),
+            ],
+            "text-transform": "uppercase",
+            "text-letter-spacing": NAME_LETTER_SPACING_EM,
+            "text-max-width": NAME_MAX_WIDTH_EM,
+            "text-padding": NAME_PADDING_PX,
+            "text-allow-overlap": false,
+            "text-ignore-placement": false,
+            "symbol-sort-key": ["-", ["to-number", ["get", "area"], 0]],
+        },
+        paint: {
+            "text-color": colours.inkMuted,
+            "text-halo-color": colours.land,
+            "text-halo-width": 1.5,
+            "text-halo-blur": 0.5,
         },
     };
 }

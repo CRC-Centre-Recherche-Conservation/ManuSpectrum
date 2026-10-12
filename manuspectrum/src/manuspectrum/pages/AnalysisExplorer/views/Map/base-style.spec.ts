@@ -2,8 +2,6 @@ import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
 
 import {
-    BASE_ATTRIBUTION,
-    BASE_SOURCE,
     WATER_LAYER,
     baseStyle,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/base-style.ts";
@@ -44,14 +42,5 @@ describe("baseStyle", () => {
         expect(
             STYLE.layers.find((layer) => layer.id === "rivers"),
         ).toMatchObject({ minzoom: 5, "source-layer": "waterway" });
-    });
-
-    it("carries the exact attribution text", () => {
-        expect(BASE_ATTRIBUTION).toBe(
-            "OpenFreeMap © OpenMapTiles Data from OpenStreetMap",
-        );
-        expect(STYLE.sources[BASE_SOURCE]).toMatchObject({
-            attribution: BASE_ATTRIBUTION,
-        });
     });
 });

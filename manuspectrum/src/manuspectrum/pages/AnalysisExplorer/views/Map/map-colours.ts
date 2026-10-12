@@ -9,6 +9,8 @@ export interface MapColours {
     land: string;
     coast: string;
     ink: string;
+    /** The names of the historical polities (`--ink-muted`). */
+    inkMuted: string;
     /** Rings, dashed rings and historical borders (`--series-context`). */
     ring: string;
     surface: string;
@@ -29,6 +31,7 @@ export const COLOUR_TOKENS: Readonly<
     land: "--map-land",
     coast: "--map-coast",
     ink: "--ink",
+    inkMuted: "--ink-muted",
     ring: "--series-context",
     surface: "--surface",
     blue: "--blue-text",
@@ -48,6 +51,7 @@ export const FALLBACK_COLOURS: MapColours = {
     land: "#f4f0e7",
     coast: "#b7c4cf",
     ink: "#1a1a2e",
+    inkMuted: "#4a4a5e",
     ring: "#8a8999",
     surface: "#ffffff",
     blue: "#1d4ed8",

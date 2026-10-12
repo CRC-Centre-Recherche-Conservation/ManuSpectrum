@@ -15,7 +15,6 @@ import { useGettext } from "vue3-gettext";
 
 import {
     BASE_SOURCE,
-    OHM_ATTRIBUTION,
     OHM_TILES,
     OPENFREEMAP_TILES,
     WATER_LAYER,
@@ -24,11 +23,15 @@ import {
 import {
     BORDERS_LAYER,
     BORDERS_MIN_ZOOM,
+    BORDER_NAMES_LAYER,
     CLICKABLE_LAYERS,
     IMAGE_PIXEL_RATIO,
+    OHM_LAYERS,
     OHM_SOURCE,
     PLACES_SOURCE,
     TERRITORIES_SOURCE,
+    borderNamesFilter,
+    borderNamesLayer,
     bordersFilter,
     bordersLayer,
     pipImage,
@@ -53,7 +56,10 @@ import type {
     LngLat,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { MapColours } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-colours.ts";
-import type { MapSnapshot } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
+import type {
+    MapSnapshot,
+    SnapshotSize,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { PlaceProperties } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import type { DrawnImage } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 
@@ -61,6 +67,7 @@ type FeatureState = Record<string, number | boolean>;
 
 interface SnapshotRequest {
     bounds: Bounds;
+    size: SnapshotSize | null;
     resolve: (shot: MapSnapshot | null) => void;
 }
 
@@ -73,19 +80,19 @@ const OHM_MAX_ZOOM = 14;
 const SNAPSHOT_TIMEOUT_MS = 8000;
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const PIP_FONT_CHECK = "700 18px 'JetBrains Mono'";
-const ATTRIBUTION_EVENTS = ["load", "styledata", "sourcedata", "resize"];
-const SHOWN_ATTRIBUTION = ".maplibregl-ctrl-attrib.maplibregl-compact-show";
 
 /**
  * The MapLibre stage of the map view: paper land on pale water, the places
  * with their rings and followed-material pips, the territories under the
- * sea, the historical borders. Every focus, follow or selection change goes
- * through feature-state; only a change of `places` or `territories`
- * replaces source data; `isolate` (a slot, or null) fades the other slots'
- * territories by paint. The historical borders load from
+ * sea, the historical borders and the names of their polities (in the
+ * interface language, shown and filtered by year with the borders). Every
+ * focus, follow or selection change goes through feature-state; only a
+ * change of `places` or `territories` replaces source data; `isolate` (a
+ * slot, or null) fades the other slots' territories by paint. The historical borders load from
  * `BORDERS_MIN_ZOOM` on, overzoomed past `OHM_MAX_ZOOM`.
- * The compact attribution starts folded to its ⓘ. Overlays of the parent
- * (legend, note, tooltip) go in the default slot, inside the frame.
+ * No attribution control: the view prints the credits under the map.
+ * Overlays of the parent (legend, note, tooltip) go in the default slot,
+ * inside the frame.
  */
 const props = defineProps<{
     places: FeatureCollection<Point, PlaceProperties>;
@@ -105,7 +112,8 @@ const emit = defineEmits<{
 }>();
 defineExpose({ snapshot, cancelSnapshots, resize, revealPlace });
 
-const { $gettext } = useGettext();
+const gettext = useGettext();
+const { $gettext } = gettext;
 const motion = usePreferredReducedMotion();
 
 const container = useTemplateRef<HTMLDivElement>("container");
@@ -136,9 +144,10 @@ watch(
 watch(
     () => props.borders,
     (visible) => {
-        if (ready) {
+        if (!ready || shooting) return;
+        for (const id of OHM_LAYERS) {
             map.value?.setLayoutProperty(
-                BORDERS_LAYER,
+                id,
                 "visibility",
                 visible ? "visible" : "none",
             );
@@ -148,7 +157,9 @@ watch(
 watch(
     () => props.bordersYear,
     (year) => {
-        if (ready) map.value?.setFilter(BORDERS_LAYER, bordersFilter(year));
+        if (!ready) return;
+        map.value?.setFilter(BORDERS_LAYER, bordersFilter(year));
+        map.value?.setFilter(BORDER_NAMES_LAYER, borderNamesFilter(year));
     },
 );
 watch(
@@ -174,7 +185,7 @@ onMounted(() => {
                     ...baseStyle(props.colours),
                     transition: { duration: transitionMs(), delay: 0 },
                 },
-                attributionControl: { compact: true },
+                attributionControl: false,
                 center: START_CENTRE,
                 zoom: START_ZOOM,
                 dragRotate: false,
@@ -184,13 +195,9 @@ onMounted(() => {
                     "Map.Title": $gettext(
                         "Map of the places of the kept events",
                     ),
-                    "AttributionControl.ToggleAttribution": $gettext(
-                        "Show or hide the map credits",
-                    ),
                 },
             }),
         );
-        foldAttribution(created);
         created.on("load", () => onLoad(created));
         created.on("error", (event: { sourceId?: string }) => {
             if (event.sourceId === BASE_SOURCE) baseFailed.value = true;
@@ -257,22 +264,6 @@ function applyStates(): void {
     applied = next;
 }
 
-/**
- * Removes the open state MapLibre gives the compact attribution when its
- * text first arrives (on a style, source or resize event, `maplibre-gl`
- * 4.7.1 `AttributionControl._updateCompact`), once; the reader's own
- * toggles are left alone.
- */
-function foldAttribution(current: MapLibreMap): void {
-    const fold = (): void => {
-        const shown = container.value?.querySelector(SHOWN_ATTRIBUTION);
-        if (!shown) return;
-        shown.classList.remove("maplibregl-compact-show");
-        for (const type of ATTRIBUTION_EVENTS) current.off(type, fold);
-    };
-    for (const type of ATTRIBUTION_EVENTS) current.on(type, fold);
-}
-
 function isolateTerritory(current: MapLibreMap, slot: number | null): void {
     const opacity = territoryOpacity(slot);
     current.setPaintProperty("territory-cells", "fill-opacity", opacity.cells);
@@ -298,12 +289,25 @@ function putImage(current: MapLibreMap, name: string, image: DrawnImage): void {
     }
 }
 
+/** The historical borders and, over them, their polities' names. */
+function ohmLayers(colours: MapColours): LayerSpecification[] {
+    return [
+        bordersLayer(props.bordersYear, colours, props.borders),
+        borderNamesLayer(
+            props.bordersYear,
+            colours,
+            props.borders,
+            gettext.current,
+        ),
+    ];
+}
+
 /** Every layer the stage draws, for diffing paint properties when the colours change. */
 function stageLayerSpecs(colours: MapColours): LayerSpecification[] {
     return [
         ...baseStyle(colours).layers,
         ...territoryLayers(colours),
-        bordersLayer(props.bordersYear, colours, props.borders),
+        ...ohmLayers(colours),
         ...placeLayers(colours),
     ];
 }
@@ -364,16 +368,13 @@ function onLoad(current: MapLibreMap): void {
     current.addSource(OHM_SOURCE, {
         type: "vector",
         tiles: [OHM_TILES],
-        attribution: OHM_ATTRIBUTION,
         minzoom: BORDERS_MIN_ZOOM,
         maxzoom: OHM_MAX_ZOOM,
     });
     for (const layer of territoryLayers(props.colours)) {
         current.addLayer(layer, WATER_LAYER);
     }
-    current.addLayer(
-        bordersLayer(props.bordersYear, props.colours, props.borders),
-    );
+    for (const layer of ohmLayers(props.colours)) current.addLayer(layer);
     for (const layer of placeLayers(props.colours)) current.addLayer(layer);
     current.on("click", onClick);
     current.on("mousemove", onMove);
@@ -472,38 +473,51 @@ function revealPlace(lngLat: LngLat): void {
     });
 }
 
-/** The ids of the layers a snapshot leaves out: the places and the territories. */
+/** The ids of the place and territory layers. */
 function ownLayerIds(): string[] {
     return [...territoryLayers(drawnColours), ...placeLayers(drawnColours)].map(
         (layer) => layer.id,
     );
 }
 
+/**
+ * Hides the place, territory and OpenHistoricalMap layers for a snapshot,
+ * or shows them again: the OpenHistoricalMap ones only while the borders
+ * toggle is on, which the borders watch leaves alone during a snapshot.
+ */
 function showOwnLayers(current: MapLibreMap, visible: boolean): void {
-    for (const id of ownLayerIds()) {
-        current.setLayoutProperty(
+    const layers: [string, boolean][] = [
+        ...ownLayerIds().map((id): [string, boolean] => [id, visible]),
+        ...OHM_LAYERS.map((id): [string, boolean] => [
             id,
-            "visibility",
-            visible ? "visible" : "none",
-        );
+            visible && props.borders,
+        ]),
+    ];
+    for (const [id, shown] of layers) {
+        current.setLayoutProperty(id, "visibility", shown ? "visible" : "none");
     }
 }
 
 /**
- * The bare map (paper, water, borders; no place or territory) fitted to
- * `bounds`, as a PNG data URL with the bounds the picture really shows;
- * null when it cannot be read (no map, a tainted or lost canvas, no idle
- * frame in time). One snapshot runs at a time: a request made while one
+ * The bare map (paper and water; no place, territory or historical
+ * border) fitted to `bounds`, as a PNG data URL with the bounds the
+ * picture really shows; null when it cannot be read (no map, a tainted or
+ * lost canvas, no idle frame in time). One snapshot runs at a time: a request made while one
  * runs replaces the one waiting (that one gets null). The camera is saved
  * once, when a run starts, and put back with the place layers when the
  * last request is done, unless the reader moved the map meanwhile.
  * `cancelSnapshots` drops the waiting request. A request before the map has loaded waits for it.
+ * With `size` (CSS pixels), the canvas is laid at that size for the shot,
+ * at the device's pixel ratio, and back at the stage's size after the run.
  */
-function snapshot(bounds: Bounds): Promise<MapSnapshot | null> {
+function snapshot(
+    bounds: Bounds,
+    size: SnapshotSize | null = null,
+): Promise<MapSnapshot | null> {
     if (failed.value) return Promise.resolve(null);
     return new Promise((resolve) => {
         queued?.resolve(null);
-        queued = { bounds, resolve };
+        queued = { bounds, size, resolve };
         const current = map.value;
         if (current && ready && !shooting) void runSnapshots(current);
     });
@@ -534,13 +548,29 @@ async function runSnapshots(current: MapLibreMap): Promise<void> {
     while (queued && map.value === current) {
         const next = queued;
         queued = null;
+        sizeCanvas(current, next.size);
         next.resolve(await shoot(current, next.bounds));
     }
     if (map.value === current) {
+        sizeCanvas(current, null);
         showOwnLayers(current, true);
         if (!userMoved) current.jumpTo(camera);
     }
     shooting = false;
+}
+
+/** Lays the canvas at `size`, or back at the stage's size with null. */
+function sizeCanvas(current: MapLibreMap, size: SnapshotSize | null): void {
+    const element = container.value;
+    if (!element) return;
+    const width = size ? `${Math.round(size.width)}px` : "";
+    const height = size ? `${Math.round(size.height)}px` : "";
+    if (element.style.width === width && element.style.height === height) {
+        return;
+    }
+    element.style.width = width;
+    element.style.height = height;
+    current.resize();
 }
 
 /** Reads the canvas in the frame drawn right after the map settles in `bounds`, so no `preserveDrawingBuffer` is needed. */
@@ -706,22 +736,6 @@ function resize(): void {
 .map-stage :deep(.maplibregl-canvas:focus-visible) {
     outline: 0.1875rem solid var(--blue-text);
     outline-offset: -0.1875rem;
-}
-
-.map-stage :deep(.maplibregl-ctrl-attrib) {
-    border-radius: 0.25rem;
-    background: color-mix(in srgb, var(--surface) 85%, transparent);
-    color: var(--ink-muted);
-    font: 0.6875rem / 1.4 var(--font-body);
-}
-
-.map-stage :deep(.maplibregl-ctrl-attrib a) {
-    color: var(--blue-text);
-}
-
-.map-stage :deep(.maplibregl-ctrl-attrib-button:focus-visible) {
-    outline: 0.125rem solid var(--blue-text);
-    outline-offset: 0.125rem;
 }
 
 /* FolioMap .controls / .control */

@@ -7,9 +7,6 @@ export const OPENFREEMAP_GLYPHS =
     "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
 export const OHM_TILES =
     "https://vtiles.openhistoricalmap.org/maps/ohm/{z}/{x}/{y}.pbf";
-export const BASE_ATTRIBUTION =
-    "OpenFreeMap © OpenMapTiles Data from OpenStreetMap";
-export const OHM_ATTRIBUTION = "OpenHistoricalMap contributors";
 export const BASE_SOURCE = "openmaptiles";
 export const WATER_LAYER = "water";
 export const LABEL_FONT = ["Noto Sans Regular"];
@@ -19,8 +16,6 @@ const RIVERS_MIN_ZOOM = 5;
 /**
  * Paper land on pale water: background, sea, coastline and rivers only. No
  * boundary, road or label layer: the place names are the Explorer's own.
- * The source's `attribution` replaces the one of the TileJSON, so the
- * attribution control shows it once and before the TileJSON arrives.
  */
 export function baseStyle(colours: MapColours): StyleSpecification {
     return {
@@ -30,7 +25,6 @@ export function baseStyle(colours: MapColours): StyleSpecification {
             [BASE_SOURCE]: {
                 type: "vector",
                 url: OPENFREEMAP_TILES,
-                attribution: BASE_ATTRIBUTION,
             },
         },
         layers: [

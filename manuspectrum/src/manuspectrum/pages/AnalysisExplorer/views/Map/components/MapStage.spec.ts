@@ -1,5 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useGettext } from "vue3-gettext";
 
 import MapStage from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapStage.vue";
 
@@ -16,9 +17,13 @@ import { FALLBACK_COLOURS } from "@/manuspectrum/pages/AnalysisExplorer/views/Ma
 import {
     BORDERS_LAYER,
     BORDERS_MIN_ZOOM,
+    BORDER_NAMES_LAYER,
+    OHM_LAYERS,
     OHM_SOURCE,
     PLACES_SOURCE,
     TERRITORIES_SOURCE,
+    borderNameField,
+    borderNamesFilter,
     bordersFilter,
     territoryOpacity,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
@@ -79,6 +84,17 @@ function statesOf(
 }
 
 const BOUNDS = { west: -5, south: 42, east: 8, north: 51 };
+
+/** The visibility `id` was last given, else the one it was added with. */
+function visibilityOf(map: FakeMap, id: string): unknown {
+    const last = map.layoutCalls.findLast(
+        ([layer, name]) => layer === id && name === "visibility",
+    );
+    const layout = map.getLayer(id)?.layout as
+        | { visibility?: string }
+        | undefined;
+    return last ? last[2] : layout?.visibility;
+}
 
 function mountStage(
     overrides: Record<string, unknown> = {},
@@ -163,8 +179,8 @@ describe("MapStage on load", () => {
             { padding: 40, duration: 0 },
         ]);
         expect(map.controls).toEqual([]);
-        expect(map.options.attributionControl).toEqual({ compact: true });
-        expect(map.options.locale).toMatchObject({
+        expect(map.options.attributionControl).toBe(false);
+        expect(map.options.locale).toEqual({
             "Map.Title": "Map of the places of the kept events",
         });
     });
@@ -174,6 +190,32 @@ describe("MapStage on load", () => {
         await flushPromises();
         const borders = FakeMap.last().getLayer(BORDERS_LAYER);
         expect(borders?.layout).toEqual({ visibility: "none" });
+        const names = FakeMap.last().getLayer(BORDER_NAMES_LAYER);
+        expect(names?.layout).toMatchObject({ visibility: "none" });
+    });
+
+    it("names the polities over the borders and under every place layer", async () => {
+        mountStage();
+        await flushPromises();
+        const ids = FakeMap.last().layers.map((entry) => entry.layer.id);
+        const names = ids.indexOf(BORDER_NAMES_LAYER);
+        expect(names).toBe(ids.indexOf(BORDERS_LAYER) + 1);
+        expect(ids.indexOf("place-rings")).toBe(names + 1);
+        expect(ids.slice(names + 1)).toContain("place-labels");
+    });
+
+    it("names the polities in the interface language", async () => {
+        const gettext = useGettext();
+        gettext.current = "fr";
+        try {
+            mountStage();
+            await flushPromises();
+            expect(
+                FakeMap.last().getLayer(BORDER_NAMES_LAYER)?.layout,
+            ).toMatchObject({ "text-field": borderNameField("fr") });
+        } finally {
+            gettext.current = "en";
+        }
     });
 
     it("sends the initial feature-states, the selected place included", async () => {
@@ -278,8 +320,12 @@ describe("MapStage updates", () => {
         await wrapper.setProps({ bordersYear: 1350 });
         expect(map.layoutCalls).toEqual([
             [BORDERS_LAYER, "visibility", "visible"],
+            [BORDER_NAMES_LAYER, "visibility", "visible"],
         ]);
-        expect(map.filterCalls).toEqual([[BORDERS_LAYER, bordersFilter(1350)]]);
+        expect(map.filterCalls).toEqual([
+            [BORDERS_LAYER, bordersFilter(1350)],
+            [BORDER_NAMES_LAYER, borderNamesFilter(1350)],
+        ]);
     });
 
     it("repaints only what a colour change touches", async () => {
@@ -317,25 +363,6 @@ describe("MapStage updates", () => {
         expect(map.getSource(TERRITORIES_SOURCE)?.setDataCalls).toEqual([]);
     });
 
-    it("folds the attribution MapLibre opens on its own, once", async () => {
-        const wrapper = mountStage();
-        const attribution = document.createElement("details");
-        attribution.className =
-            "maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show";
-        wrapper.get(".canvas").element.appendChild(attribution);
-        await flushPromises();
-        const map = FakeMap.last();
-        expect(attribution.classList.contains("maplibregl-compact-show")).toBe(
-            false,
-        );
-        attribution.classList.add("maplibregl-compact-show");
-        map.fire("resize");
-        expect(attribution.classList.contains("maplibregl-compact-show")).toBe(
-            true,
-        );
-        expect(map.listenerCount("sourcedata")).toBe(0);
-    });
-
     it("waits for the load before touching the map", async () => {
         const wrapper = mountStage();
         await wrapper.setProps({ borders: true });
@@ -345,6 +372,21 @@ describe("MapStage updates", () => {
         expect(map.getLayer(BORDERS_LAYER)?.layout).toEqual({
             visibility: "visible",
         });
+        expect(map.getLayer(BORDER_NAMES_LAYER)?.layout).toMatchObject({
+            visibility: "visible",
+        });
+    });
+
+    it("repaints the polity names when the muted ink changes", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        await wrapper.setProps({
+            colours: { ...FALLBACK_COLOURS, inkMuted: "#000002" },
+        });
+        expect(map.paintCalls).toEqual([
+            [BORDER_NAMES_LAYER, "text-color", "#000002"],
+        ]);
     });
 });
 
@@ -495,7 +537,6 @@ describe("MapStage exposed", () => {
                 "pip-1-firm",
             ]),
         );
-        expect(hidden.map(([id]) => id)).not.toContain(BORDERS_LAYER);
         map.fire("idle");
         await expect(shot).resolves.toEqual({
             url: SNAPSHOT_URL,
@@ -508,7 +549,69 @@ describe("MapStage exposed", () => {
             .slice(hidden.length)
             .filter(([, , value]) => value === "visible")
             .map(([id]) => id);
-        expect(shownAgain.sort()).toEqual(hidden.map(([id]) => id).sort());
+        const ohm: readonly string[] = OHM_LAYERS;
+        expect(shownAgain.sort()).toEqual(
+            hidden
+                .map(([id]) => id)
+                .filter((id) => !ohm.includes(id))
+                .sort(),
+        );
+    });
+
+    it.each([
+        [false, "none"],
+        [true, "visible"],
+    ])(
+        "hides the historical borders and their names in a snapshot, then puts back the toggle (borders %s)",
+        async (borders, after) => {
+            const wrapper = mountStage({ borders });
+            await flushPromises();
+            const map = FakeMap.last();
+            const shot = wrapper.vm.snapshot(BOUNDS);
+            const ohm = (): unknown[] =>
+                OHM_LAYERS.map((id) => visibilityOf(map, id));
+            expect(ohm()).toEqual(["none", "none"]);
+            map.fire("idle");
+            await shot;
+            expect(ohm()).toEqual([after, after]);
+        },
+    );
+
+    it("keeps the borders hidden when toggled on during a snapshot, and shows them after it", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        const shot = wrapper.vm.snapshot(BOUNDS);
+        await wrapper.setProps({ borders: true });
+        expect(visibilityOf(map, BORDERS_LAYER)).toBe("none");
+        map.fire("idle");
+        await shot;
+        expect(OHM_LAYERS.map((id) => visibilityOf(map, id))).toEqual([
+            "visible",
+            "visible",
+        ]);
+    });
+
+    it("lays the canvas at the size asked for the shot, then back at the stage's size", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        const canvas = wrapper.get(".canvas").element as HTMLElement;
+        const resizes = map.resizeCount;
+        const shot = wrapper.vm.snapshot(BOUNDS, { width: 900.4, height: 520 });
+        expect([canvas.style.width, canvas.style.height]).toEqual([
+            "900px",
+            "520px",
+        ]);
+        expect(map.resizeCount).toBe(resizes + 1);
+        map.fire("idle");
+        await expect(shot).resolves.toMatchObject({ url: SNAPSHOT_URL });
+        expect([canvas.style.width, canvas.style.height]).toEqual(["", ""]);
+        expect(map.resizeCount).toBe(resizes + 2);
+        const plain = wrapper.vm.snapshot(BOUNDS);
+        map.fire("idle");
+        await plain;
+        expect(map.resizeCount).toBe(resizes + 2);
     });
 
     it("runs one snapshot at a time: a newer request replaces the waiting one, the camera is saved once", async () => {
