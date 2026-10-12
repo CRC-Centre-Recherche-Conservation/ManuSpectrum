@@ -24,3 +24,10 @@ class RendererConfig(models.Model):
         super(RendererConfig, self).__init__(*args, **kwargs)
         if not self.configid:
             self.configid = uuid.uuid4()
+
+
+from manuspectrum.accounts.models import (  # noqa: E402,F401  (registers the models)
+    Embargo,
+    EmbargoEvent,
+    WorkflowCleanup,
+)

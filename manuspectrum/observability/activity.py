@@ -25,7 +25,8 @@ hour a year may be placed an hour off.
 - totals: ``resource_instances`` per model, whatever path wrote them;
 - workflows: ``workflow_history`` rows, one per run; a run cancelled by its user is
   deleted by Arches and leaves no row; an open run is stale once older than
-  ``WORKFLOW_STALE_AFTER_DAYS`` (a placeholder until the cleanup delay is decided);
+  ``settings.WORKFLOW_CLEANUP_AFTER_DAYS``, the delay after which the abandoned-workflow
+  cleanup acts;
 - ETL: ``load_event`` rows started in the window, by module and outcome: succeeded
   (``indexed``, ``completed``), failed, cancelled (stopped by the user), unindexed
   (written, indexing failed), unloaded (reversed after a success), validated
@@ -39,13 +40,13 @@ import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
+from django.conf import settings
 from django.db import connection, transaction
 
 from manuspectrum.observability import metrics
 
 SYSTEM_GRAPH_SLUG = "arches_system_settings"
 DELETED_MODEL = "deleted_model"
-WORKFLOW_STALE_AFTER_DAYS = 30
 ETL_OUTCOMES = (
     "succeeded",
     "failed",
@@ -203,7 +204,7 @@ def workflow_runs(cursor, start, end, now):
         {
             "start": start,
             "end": end,
-            "stale": now - timedelta(days=WORKFLOW_STALE_AFTER_DAYS),
+            "stale": now - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS),
         },
     )
     return {
@@ -264,7 +265,7 @@ def collect(start, end, now=None):
         "end": end.isoformat(),
         "models": models,
         "workflows": workflows,
-        "workflow_stale_after_days": WORKFLOW_STALE_AFTER_DAYS,
+        "workflow_stale_after_days": settings.WORKFLOW_CLEANUP_AFTER_DAYS,
         "etl": etl,
     }
 

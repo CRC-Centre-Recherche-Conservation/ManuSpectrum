@@ -190,15 +190,23 @@ class WorkflowAndEtlTests(ActivityCase):
         name = "create-project-workflow"
         self.run_row(name, START + timedelta(days=2), True)
         self.run_row(name, START + timedelta(days=3), False)
-        self.run_row(name, START - timedelta(days=60), False)
-        self.run_row(name, START - timedelta(days=60), True)
+        self.run_row(
+            name,
+            START - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS + 30),
+            False,
+        )
+        self.run_row(
+            name,
+            START - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS + 30),
+            True,
+        )
         row = self.figures()["workflows"][name]
-        self.assertEqual(row, {"started": 2, "completed": 1, "open": 2, "stale": 2})
+        self.assertEqual(row, {"started": 2, "completed": 1, "open": 2, "stale": 1})
 
     def test_an_open_run_younger_than_the_delay_is_not_stale(self):
         name = "import-biblissima-workflow"
         self.run_row(
-            name, NOW - timedelta(days=activity.WORKFLOW_STALE_AFTER_DAYS - 1), False
+            name, NOW - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS - 1), False
         )
         self.assertEqual(self.figures()["workflows"][name]["stale"], 0)
 
@@ -410,7 +418,7 @@ class GaugeTests(ActivityCase):
         self.assertGreaterEqual(sample("manuspectrum_resources", model="other"), 1)
 
     def test_workflows_open_and_stale(self):
-        for age in (1, 45):
+        for age in (1, settings.WORKFLOW_CLEANUP_AFTER_DAYS + 5):
             WorkflowHistory.objects.create(
                 workflowid=uuid.uuid4(),
                 workflowname="create-project-workflow",

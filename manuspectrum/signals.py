@@ -16,6 +16,8 @@ from guardian.models import GroupObjectPermission, UserObjectPermission
 
 from arches.app.models.models import File, FunctionXGraph, GraphXPublishedGraph
 
+from manuspectrum.accounts.embargo import record_grant
+from manuspectrum.accounts.lockout import current_request
 from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_config
 from manuspectrum.iiif.tokens import revoke
 from manuspectrum.utils.public_visibility import forget_visibility
@@ -35,6 +37,23 @@ def drop_summary_graph_slugs(sender, instance, **kwargs):
 def drop_summary_restriction_counts(sender, **kwargs):
     """Drop the restriction counts and the visibility memos when an object grant changes."""
     transaction.on_commit(forget_visibility)
+
+
+@receiver(post_save, sender=UserObjectPermission)
+@receiver(post_save, sender=GroupObjectPermission)
+def record_restriction_on_grant(sender, instance, created, **kwargs):
+    """Record who restricted a resource, once the grant's transaction commits.
+
+    Only a grant to the visitor or to one of its groups on a resource instance
+    can restrict it. The request user is the one who set it; the daily pass
+    records restrictions written outside a request with no setter.
+    """
+    if not created or instance.content_type.model != "resourceinstance":
+        return
+    grantee = getattr(instance, "user", None) or getattr(instance, "group", None)
+    transaction.on_commit(
+        lambda: record_grant(instance.object_pk, grantee, current_request())
+    )
 
 
 @receiver(m2m_changed, sender=User.groups.through)
