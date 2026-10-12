@@ -102,6 +102,7 @@ ACCOUNT_MAIL_KINDS = (
     "workflow_cleaned",
     "invitation",
     "anonymisation_notice",
+    "deactivation_notice",
     "anonymisation_summary",
     "password_reset",
 )

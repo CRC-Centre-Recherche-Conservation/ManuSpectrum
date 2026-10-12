@@ -83,6 +83,15 @@ The monthly report (`OBSERVABILITY.md`) has an "Comptes inactifs" section: the a
 they were created (an invitation never activated counts there), with user name, last sign-in
 or "jamais", and creation date. At 12 months nothing is done automatically: deactivating an
 account is a decision of the project owner, taken by hand in the admin (untick "Active").
+Deactivating an account (the user's page, or any save that turns "Active" off) mails the
+user at once (`[ManuSpectrum][Account] Your account has been deactivated`, English then
+French, only when the account has an e-mail address): the deactivation date, a link to the
+contact page (`?reason=reactivation`) to ask for a reactivation, and the date the account
+will be anonymised unless it is reactivated and used. That date is the end of the retention
+period below, or 30 days after the deactivation when the account is already inside the notice
+window (the deactivation mail is then its anonymisation notice). A superuser is told the
+administrators decide instead. A bulk change by SQL or `QuerySet.update()` sends nothing;
+the anonymisation itself sends no deactivation mail. Reactivating sends nothing.
 
 At 24 months without a sign-in (`ACCOUNT_RETENTION_MONTHS`; a never-used account counts from
 its creation) an account is **anonymised** by the daily pass (04:30 Europe/Paris), after one

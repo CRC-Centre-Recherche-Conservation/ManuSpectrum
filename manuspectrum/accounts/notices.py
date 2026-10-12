@@ -25,6 +25,10 @@ Context per kind (`resources` and `kept` are lists of `{"name", "url"}`,
   whose account is not anonymised automatically).
 - `anonymisation_summary`: `months`, `anonymised` (count), `noticed` (count),
   `review` (usernames of superusers due for a decision); administrators only.
+- `deactivation_notice`: `deactivated_on` (date), `on` (date the account is
+  anonymised unless reactivated and used), `review` (True for a superuser,
+  whose account is not anonymised automatically). Each language section links
+  to the contact page in that language.
 - `password_reset` is sent by `AccountPasswordResetForm`.
 """
 
@@ -35,6 +39,7 @@ from django.conf import settings
 from django.contrib.auth.forms import PasswordResetForm
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import translation
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -58,6 +63,7 @@ KINDS = {
     "invitation": Kind(to_user=True, summary=False),
     "anonymisation_notice": Kind(to_user=True, summary=False),
     "anonymisation_summary": Kind(to_user=False, summary=True),
+    "deactivation_notice": Kind(to_user=True, summary=False),
     "password_reset": Kind(to_user=True, summary=False),
 }
 
@@ -188,6 +194,47 @@ def _anonymisation_notice(ctx):
     }
 
 
+def contact_url(reason):
+    """Absolute link to the contact page, in the active language, with *reason* preselected."""
+    return (
+        settings.PUBLIC_SERVER_ADDRESS.rstrip("/")
+        + reverse("about-contact")
+        + f"?reason={reason}"
+    )
+
+
+def _deactivation_notice(ctx):
+    paragraphs = [
+        _("Your ManuSpectrum account was deactivated on %(date)s.")
+        % {"date": _day(ctx["deactivated_on"])},
+        _(
+            "If you need it reactivated, contact the team through the contact page "
+            "(button below)."
+        ),
+    ]
+    if ctx.get("review"):
+        paragraphs.append(
+            _("On %(date)s the administrators decide what happens to this account.")
+            % {"date": _day(ctx["on"])}
+        )
+    else:
+        paragraphs.append(
+            _(
+                "Otherwise, on %(date)s your personal data will be erased: the "
+                "account is anonymised (your name, e-mail address and password are "
+                "erased and the account stays closed; nothing you described is "
+                "deleted) unless it is reactivated and used before then."
+            )
+            % {"date": _day(ctx["on"])}
+        )
+    return {
+        "subject": _("Your account has been deactivated"),
+        "paragraphs": paragraphs,
+        "link": contact_url("reactivation"),
+        "button": _("Contact the team"),
+    }
+
+
 def _anonymisation_summary(ctx):
     paragraphs = [
         _(
@@ -219,6 +266,7 @@ CONTENT = {
     "workflow_cleaned": _workflow_cleaned,
     "invitation": _invitation,
     "anonymisation_notice": _anonymisation_notice,
+    "deactivation_notice": _deactivation_notice,
     "anonymisation_summary": _anonymisation_summary,
 }
 

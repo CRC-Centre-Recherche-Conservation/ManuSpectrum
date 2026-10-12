@@ -226,7 +226,7 @@ everything; mail filters sort on either.
 | Heartbeat | Alertmanager, Monday 08:00 | `[ManuSpectrum][Heartbeat] Alerting chain OK` | `Heartbeat` |
 | Report | Monthly report | `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>` | `Report` |
 | Contact | Public contact form | `[ManuSpectrum][Contact] <reason> — <name>` | none (a `mailto:` link cannot set a header: filter on the subject) |
-| Account | The application: invitation (`Your ManuSpectrum account`), embargo notices (`Restriction ending on <date>`, `Your data are now public`), workflow notices (`Unfinished workflow to be cleaned on <date>`, `Unfinished workflow cleaned`), the administrator summaries of those notices, and the password-reset mail | `[ManuSpectrum][Account] …` | `Account` |
+| Account | The application: invitation (`Your ManuSpectrum account`), embargo notices (`Restriction ending on <date>`, `Your data are now public`), workflow notices (`Unfinished workflow to be cleaned on <date>`, `Unfinished workflow cleaned`), the anonymisation notice (`Your account will be anonymised on <date>`), the deactivation notice (`Your account has been deactivated`), the administrator summaries of those notices, and the password-reset mail | `[ManuSpectrum][Account] …` | `Account` |
 | System | Host mail (`root` alias: unattended upgrades, cron) | Unchanged | none (filter on the sender `root@<host>`) |
 
 Arches' own two-factor reset mail (`two-factor-authentication-reset`) is no longer reachable: nginx refuses that route and the unsafe settings route (`two-factor-authentication-settings`), so no uncategorised account mail remains. A lost phone is handled by a superuser in the admin (`deploy/ADMIN.md`).

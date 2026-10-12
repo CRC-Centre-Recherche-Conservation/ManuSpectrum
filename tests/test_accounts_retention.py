@@ -357,3 +357,126 @@ class MetricsAndScheduleTests(RetentionCase):
     def test_the_settings_are_the_po_decision(self):
         self.assertEqual(settings.ACCOUNT_RETENTION_MONTHS, 24)
         self.assertEqual(settings.ACCOUNT_RETENTION_NOTICE_DAYS, 30)
+
+
+@override_settings(
+    ACCOUNT_SUMMARY_RECIPIENTS=SUMMARY,
+    PUBLIC_SERVER_ADDRESS="https://manuspectrum.test/",
+)
+class DeactivationNoticeTests(RetentionCase):
+    def deactivate(self, user):
+        user = User.objects.get(pk=user.pk)
+        user.is_active = False
+        with self.captureOnCommitCallbacks(execute=True):
+            user.save()
+        return user
+
+    def test_deactivation_mails_the_user_once_with_date_and_contact_link(self):
+        user = self.user(last_login=months_ago(2))
+        with mock.patch(
+            "manuspectrum.accounts.retention.timezone.now", return_value=NOW
+        ):
+            self.deactivate(user)
+        (message,) = self.notices()
+        self.assertEqual(message.to, [user.email])
+        self.assertEqual(message.extra_headers["X-ManuSpectrum-Category"], "Account")
+        due = (months_ago(2) + relativedelta(months=24)).strftime("%Y")
+        body = message.body
+        self.assertLess(body.index("deactivated on"), body.index("désactivé le"))
+        self.assertIn(
+            "https://manuspectrum.test/en/about/contact?reason=reactivation", body
+        )
+        self.assertIn(
+            "https://manuspectrum.test/fr/about/contact?reason=reactivation", body
+        )
+        self.assertIn(due, body)
+        self.assertEqual(
+            retention.anonymisation_date(user, NOW.date()),
+            retention.due_on(retention.last_activity_day(user)),
+        )
+
+    def test_inside_the_notice_window_the_date_is_thirty_days_out_and_no_second_notice(
+        self,
+    ):
+        user = self.user(last_login=months_ago(24, 5))
+        with mock.patch(
+            "manuspectrum.accounts.retention.timezone.now", return_value=NOW
+        ):
+            self.deactivate(user)
+        self.assertEqual(len(self.notices()), 1)
+        row = AccountRetention.objects.get(user_id=user.pk)
+        self.assertEqual(row.noticed_on, NOW.date())
+        self.go()
+        self.assertEqual(len(self.notices()), 1)
+        self.assertFalse(self.anonymised(user))
+        self.go(NOW + timedelta(days=30))
+        self.assertTrue(self.anonymised(user))
+
+    def test_saving_an_inactive_user_again_sends_nothing(self):
+        user = self.deactivate(self.user())
+        mail.outbox.clear()
+        user.first_name = "Changed"
+        with self.captureOnCommitCallbacks(execute=True):
+            user.save()
+        self.assertEqual(self.notices(), [])
+
+    def test_a_save_not_touching_is_active_sends_nothing(self):
+        user = self.user()
+        user.is_active = False
+        with self.captureOnCommitCallbacks(execute=True):
+            user.save(update_fields=["last_login"])
+        self.assertEqual(self.notices(), [])
+
+    def test_retention_anonymisation_sends_no_deactivation_mail(self):
+        user = self.user(last_login=months_ago(25))
+        self.go()
+        self.assertEqual(len(self.notices()), 1)
+        mail.outbox.clear()
+        self.go(NOW + timedelta(days=30))
+        self.assertTrue(self.anonymised(user))
+        self.assertEqual(self.notices(), [])
+
+    def test_anonymous_user_gets_nothing(self):
+        user = User.objects.get_or_create(
+            username="anonymous", defaults={"email": "anon@manuspectrum.test"}
+        )[0]
+        User.objects.filter(pk=user.pk).update(email="anon@manuspectrum.test")
+        self.deactivate(user)
+        self.assertEqual(self.notices(), [])
+
+    def test_no_email_means_no_mail(self):
+        user = self.user()
+        User.objects.filter(pk=user.pk).update(email="")
+        self.deactivate(user)
+        self.assertEqual(self.notices(), [])
+
+    def test_reactivation_sends_nothing(self):
+        user = self.deactivate(self.user())
+        mail.outbox.clear()
+        user.is_active = True
+        with self.captureOnCommitCallbacks(execute=True):
+            user.save()
+        self.assertEqual(self.notices(), [])
+
+    def test_a_reactivated_idle_user_is_still_warned_before_anonymisation(self):
+        user = self.user(last_login=months_ago(24, 5))
+        user.is_active = False
+        User.objects.filter(pk=user.pk).update(is_active=False)
+        self.go()
+        self.assertEqual(len(self.notices()), 1)
+        User.objects.filter(pk=user.pk).update(is_active=True)
+        self.assertFalse(self.anonymised(user))
+        self.go(NOW + timedelta(days=29))
+        self.assertFalse(self.anonymised(user))
+        self.go(NOW + timedelta(days=30))
+        self.assertTrue(self.anonymised(user))
+
+    def test_a_reactivated_unwarned_user_is_warned_not_anonymised(self):
+        user = self.user(last_login=months_ago(25))
+        self.deactivate(user)
+        mail.outbox.clear()
+        User.objects.filter(pk=user.pk).update(is_active=True)
+        AccountRetention.objects.filter(user_id=user.pk).delete()
+        self.go()
+        self.assertFalse(self.anonymised(user))
+        self.assertEqual(len(self.notices()), 1)

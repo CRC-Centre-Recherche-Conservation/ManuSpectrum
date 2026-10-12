@@ -29,6 +29,10 @@ CONTEXTS = {
         "expires_on": date.today() + timedelta(days=7),
     },
     "anonymisation_notice": {"on": date(2027, 3, 1), "days": 30},
+    "deactivation_notice": {
+        "deactivated_on": date(2026, 10, 12),
+        "on": date(2027, 3, 1),
+    },
 }
 SUMMARY_CONTEXTS = {
     "anonymisation_summary": {

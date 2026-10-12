@@ -17,6 +17,7 @@ export function composeSubject(data) {
     const subjectMap = {
         project: t("msContactSubjProject", "Project submission"),
         access: t("msContactSubjAccess", "Access request"),
+        reactivation: t("msContactSubjReactivation", "Account reactivation"),
         question: t("msContactSubjQuestion", "Question"),
         other: t("msContactSubjOther", "Message"),
     };
@@ -144,7 +145,8 @@ function wireCounter(message) {
     update();
 }
 
-// `?reason=access` opens the form on "Request an account"; an unknown value
+// `?reason=access` opens the form on "Request an account" (`reactivation`:
+// "Reactivate my account", linked from the deactivation mail); an unknown value
 // leaves the default.
 export function preselectReason(select, search = window.location.search) {
     const reason = new URLSearchParams(search).get("reason");

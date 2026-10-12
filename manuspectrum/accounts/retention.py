@@ -92,6 +92,28 @@ def anonymise_on(activity_day, noticed_on):
     )
 
 
+def anonymisation_date(user, today=None):
+    """The day *user*'s account is anonymised if it stays unused, recording the notice when due.
+
+    Before the notice period the date is the end of the retention period and the
+    daily pass sends its own notice later. Once the account is inside it, the
+    notice is recorded in the ledger now (the caller mails it), so the pass
+    does not warn a second time and the date returned is the one it applies.
+    """
+    today = today or local_today(timezone.now())
+    activity = last_activity_day(user)
+    if today < notice_on(activity):
+        return due_on(activity)
+    row = AccountRetention.objects.filter(user_id=user.pk).first()
+    if row and row.noticed_on and row.noticed_for == activity:
+        return anonymise_on(activity, row.noticed_on)
+    if row and row.noticed_on:
+        _clear_notice(row)
+    _claim_notice(user, activity, today)
+    row = AccountRetention.objects.get(user_id=user.pk)
+    return anonymise_on(activity, row.noticed_on)
+
+
 def candidates():
     """Users the pass looks at: real, not anonymised yet, with their ledger row."""
     done = set(
@@ -237,6 +259,7 @@ def anonymise(user_id, today=None):
         user.username = new_username
         user.set_unusable_password()
         user.is_active = False
+        user.skip_deactivation_notice = True
         user.save()
         UserProfile.objects.filter(user=user).update(encrypted_mfa_hash=None, phone="")
         _end_sessions(user.pk)
@@ -285,3 +308,24 @@ def _mail_summary(report, review):
             "review": review,
         },
     )
+
+
+def send_deactivation_notice(user):
+    """Tell *user* their account was deactivated and when it will be anonymised.
+
+    Never raises: a failure is logged and the deactivation stands.
+    """
+    try:
+        today = local_today(timezone.now())
+        notices.send_account_mail(
+            user,
+            "deactivation_notice",
+            {
+                "deactivated_on": today,
+                "on": anonymisation_date(user, today),
+                "review": user.is_superuser,
+            },
+            allow_inactive=True,
+        )
+    except Exception:
+        logger.exception("Deactivation notice failed")
