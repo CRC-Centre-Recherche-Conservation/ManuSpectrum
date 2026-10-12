@@ -1,0 +1,16 @@
+{% extends 'views/pages/terms.htm' %}
+{% load i18n %}
+{% block legal_body %}
+<div class="ms-legal-warning" role="note">
+    <p><strong>{% trans "The terms of use have changed." %}</strong></p>
+    <p>{% trans "Read them below and accept the new version to keep using your account." %}</p>
+</div>
+{% if error %}<div class="ms-legal-warning" role="alert"><p>{{ error }}</p></div>{% endif %}
+<form method="post" class="ms-account-form">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% include "accounts/_terms_form_fields.htm" %}
+    <button type="submit">{% trans "Accept and continue" %}</button>
+</form>
+{{ block.super }}
+{% endblock %}

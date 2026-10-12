@@ -1,0 +1,5 @@
+{% load i18n %}
+<label class="ms-form-check" for="accept_terms">
+    <input type="checkbox" id="accept_terms" name="accept_terms" required>
+    {% trans "I have read and accept the terms of use" %} ({% trans "version" %} {{ terms_version }})
+</label>

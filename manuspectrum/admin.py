@@ -9,6 +9,10 @@ reset here).
 and extend it here; every change is recorded as an `EmbargoEvent` (who, when,
 old end, new end). Access is Django's own model permission (`change_embargo`);
 no group is created for it. `WorkflowCleanup` is a read-only ledger.
+
+The User admin gains the action « Send invitation » (account activation,
+`accounts/activation.py`); `TermsAcceptance` is a read-only ledger of the
+terms each user accepted.
 """
 
 import logging
@@ -17,11 +21,13 @@ from arches.app.models.models import UserProfile
 from dateutil.relativedelta import relativedelta
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.auth import get_user_model
 from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
-from manuspectrum.models import Embargo, EmbargoEvent, WorkflowCleanup
+from manuspectrum.accounts import activation, notices
+from manuspectrum.models import Embargo, EmbargoEvent, TermsAcceptance, WorkflowCleanup
 
 logger = logging.getLogger(__name__)
 
@@ -244,3 +250,84 @@ class WorkflowCleanupAdmin(admin.ModelAdmin):
 
 admin.site.register(Embargo, EmbargoAdmin)
 admin.site.register(WorkflowCleanup, WorkflowCleanupAdmin)
+
+
+def _user_admin_class():
+    User = get_user_model()
+    registered = admin.site._registry.get(User)
+    if registered is not None:
+        admin.site.unregister(User)
+        return type(registered)
+    from django.contrib.auth.admin import UserAdmin
+
+    return UserAdmin
+
+
+_BaseUserAdmin = _user_admin_class()
+
+
+class InvitingUserAdmin(_BaseUserAdmin):
+    actions = [*(_BaseUserAdmin.actions or []), "send_invitation"]
+
+    @admin.action(
+        description=_("Send invitation (account with no password)"),
+        permissions=["change"],
+    )
+    def send_invitation(self, request, queryset):
+        sent = 0
+        for user in queryset:
+            if not activation.can_be_invited(user):
+                self.message_user(
+                    request,
+                    _(
+                        "%(user)s was skipped: the account must be active, have an "
+                        "e-mail address and no usable password."
+                    )
+                    % {"user": user.get_username()},
+                    messages.ERROR,
+                )
+                continue
+            if activation.send_invitation(user) == notices.SENT:
+                sent += 1
+                logger.info(
+                    "Invitation sent for user %s by user %s", user.pk, request.user.pk
+                )
+            else:
+                self.message_user(
+                    request,
+                    _("The invitation to %(user)s could not be sent.")
+                    % {"user": user.get_username()},
+                    messages.ERROR,
+                )
+        if sent:
+            self.message_user(
+                request,
+                ngettext(
+                    "%(count)d invitation was sent.",
+                    "%(count)d invitations were sent.",
+                    sent,
+                )
+                % {"count": sent},
+            )
+
+
+admin.site.register(get_user_model(), InvitingUserAdmin)
+
+
+class TermsAcceptanceAdmin(admin.ModelAdmin):
+    list_display = ("user", "version", "accepted_at")
+    list_filter = ("version",)
+    search_fields = ("user__username",)
+    readonly_fields = ("user", "version", "accepted_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+admin.site.register(TermsAcceptance, TermsAcceptanceAdmin)

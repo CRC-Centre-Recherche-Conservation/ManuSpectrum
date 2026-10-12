@@ -7,6 +7,7 @@ from django.views.generic import RedirectView, TemplateView
 from arches.app.views.auth import PasswordResetView
 
 from manuspectrum.accounts.notices import AccountPasswordResetForm
+from manuspectrum.accounts.activation import AcceptTermsView, ActivateAccountView
 from manuspectrum.accounts.twofactor import TwoFactorSetupView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.legal_pages import LegalPageView
@@ -189,6 +190,17 @@ for _slug, _name, _tpl in [
 urlpatterns.append(
     path("account/two-factor", TwoFactorSetupView.as_view(), name="account-two-factor")
 )
+
+### Account activation from the invitation link and (re)acceptance of the terms
+### of use; wrapped like every page.
+urlpatterns += [
+    path(
+        "account/activate/<uidb64>/<token>",
+        ActivateAccountView.as_view(),
+        name="account-activate",
+    ),
+    path("account/terms", AcceptTermsView.as_view(), name="account-terms"),
+]
 
 ### Analysis Explorer page: wrapped, so /en/discover and /fr/discover; the
 ### application state lives in the query string, never in the path.

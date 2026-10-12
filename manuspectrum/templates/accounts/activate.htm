@@ -1,0 +1,27 @@
+{% extends 'views/pages/terms.htm' %}
+{% load i18n %}
+{% block legal_title %}{% trans "Activate my account" %}{% endblock %}
+{% block legal_og_title %}{% trans "Activate my account" %}{% endblock %}
+{% block legal_heading %}{% trans "Activate my account" %}{% endblock %}
+{% block page_description %}{% trans "Read and accept the terms of use, then choose your password." %}{% endblock %}
+{% block og_description %}{% trans "Read and accept the terms of use, then choose your password." %}{% endblock %}
+
+{% block legal_body %}
+<p>{% trans "To activate your account, read the terms of use below, accept them and choose a password. You will then set up two-factor authentication." %}</p>
+{{ block.super }}
+<h2>{% trans "Accept and choose your password" %}</h2>
+{% if error %}<div class="ms-legal-warning" role="alert"><p>{{ error }}</p></div>{% endif %}
+<form method="post" class="ms-account-form">
+    {% csrf_token %}
+    {% include "accounts/_terms_form_fields.htm" %}
+    {% for field in form %}
+    <p>
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label><br>
+        {{ field }}
+        {% if field.help_text %}<span class="ms-form-help">{{ field.help_text|safe }}</span>{% endif %}
+        {% for message in field.errors %}<span class="ms-form-error" role="alert">{{ message }}</span>{% endfor %}
+    </p>
+    {% endfor %}
+    <button type="submit">{% trans "Activate my account" %}</button>
+</form>
+{% endblock %}

@@ -233,3 +233,31 @@ class WorkflowCleanup(models.Model):
 
     def __str__(self):
         return f"{self.workflowname} {self.workflowid}"
+
+
+class TermsAcceptance(models.Model):
+    """One user's acceptance of one version of the terms of use.
+
+    ``version`` is ``accounts.terms.TERMS_VERSION`` at the time of acceptance.
+    Rows are written by the activation page and the re-acceptance page, and
+    only read in the admin.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="terms_acceptances",
+    )
+    version = models.CharField(max_length=32)
+    accepted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "version"], name="termsacceptance_user_version_uniq"
+            )
+        ]
+        ordering = ["-accepted_at"]
+
+    def __str__(self):
+        return f"{self.user_id} {self.version}"

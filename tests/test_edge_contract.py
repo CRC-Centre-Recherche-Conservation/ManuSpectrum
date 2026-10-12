@@ -50,6 +50,7 @@ PREFIXED = [
     ("snippets/edge-rules.conf", "admin/login/", "admin:login"),
     ("snippets/edge-rules.conf", "password_reset/", "password_reset"),
     ("snippets/edge-rules.conf", "reset/a/b/", "password_reset_confirm"),
+    ("snippets/edge-rules.conf", "account/activate/a/b", "account-activate"),
     ("snippets/edge-rules.conf", "o/token/", "oauth2:token"),
     (
         "snippets/edge-rules.conf",
