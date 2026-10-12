@@ -36,13 +36,22 @@ hour a year may be placed an hour off.
   The Excel exporters insert their row as ``validated`` and set ``indexed`` when done,
   so for a module of type ``export`` a ``validated`` row is a run still going or
   crashed: it is unfinished, never validated.
+
+The one exception to "counts only" is ``inactive_accounts``: the monthly report lists
+by user name the active accounts (``anonymous`` excluded) that signed in last more than
+``INACTIVE_AFTER_MONTHS`` ago, and those that never signed in
+``NEVER_SIGNED_IN_AFTER_MONTHS`` after they were created. The report only informs the
+administrators, who deactivate by hand; nothing is deactivated or deleted here.
 """
 
 import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 
 from manuspectrum.accounts.creation import CREATION_SQL
@@ -60,6 +69,8 @@ ETL_OUTCOMES = (
     "unfinished",
 )
 ETL_SUCCEEDED_STATUSES = ("indexed", "completed")
+INACTIVE_AFTER_MONTHS = 12
+NEVER_SIGNED_IN_AFTER_MONTHS = 3
 STATEMENT_TIMEOUT = "30s"
 RECENT_HOURS = 24
 MONTH = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
@@ -260,6 +271,46 @@ def etl_runs(cursor, start, end):
     return runs
 
 
+def inactive_accounts(now):
+    """``{"dormant": [...], "never": [...]}``, each row ``[username, last_login, date_joined]``.
+
+    Dates are ISO dates (UTC), ``last_login`` is ``None`` for ``never``. Read-only.
+    """
+    users = (
+        get_user_model().objects.filter(is_active=True).exclude(username="anonymous")
+    )
+    zone = ZoneInfo(settings.TIME_ZONE)
+
+    def stored(moment):
+        """The value to compare with the user columns (naive local when USE_TZ is off)."""
+        return (
+            moment if settings.USE_TZ else moment.astimezone(zone).replace(tzinfo=None)
+        )
+
+    dormant_before = stored(now - relativedelta(months=INACTIVE_AFTER_MONTHS))
+    never_before = stored(now - relativedelta(months=NEVER_SIGNED_IN_AFTER_MONTHS))
+
+    def day(moment):
+        if moment is None:
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=zone)
+        return moment.astimezone(timezone.utc).date().isoformat()
+
+    def rows(queryset):
+        return [
+            [u.username, day(u.last_login), day(u.date_joined)]
+            for u in queryset.order_by("username")
+        ]
+
+    return {
+        "dormant": rows(users.filter(last_login__lt=dormant_before)),
+        "never": rows(
+            users.filter(last_login__isnull=True, date_joined__lt=never_before)
+        ),
+    }
+
+
 def collect(start, end, now=None):
     """Every figure for the window, from one read-only transaction.
 
@@ -271,6 +322,7 @@ def collect(start, end, now=None):
         changes = resource_changes(cursor, start, end)
         workflows = workflow_runs(cursor, start, end, now)
         etl = etl_runs(cursor, start, end)
+        inactive = inactive_accounts(now)
     models = {}
     for model in sorted(set(totals) | set(changes)):
         models[model] = {
@@ -284,6 +336,7 @@ def collect(start, end, now=None):
         "workflows": workflows,
         "workflow_stale_after_days": settings.WORKFLOW_CLEANUP_AFTER_DAYS,
         "etl": etl,
+        "inactive_accounts": inactive,
     }
 
 

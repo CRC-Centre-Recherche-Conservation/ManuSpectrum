@@ -293,6 +293,64 @@ class WorkflowAndEtlTests(ActivityCase):
         self.assertEqual(row["unfinished"], 1)
 
 
+class InactiveAccountsTests(ActivityCase):
+    def user(self, name, joined, last=None, active=True):
+        User = get_user_model()
+        user = User.objects.create(
+            username=name, is_active=active, date_joined=local(joined), last_login=None
+        )
+        if last is not None:
+            User.objects.filter(pk=user.pk).update(last_login=local(last))
+        return user
+
+    def found(self):
+        """Only the accounts of the test: the fixtures bring `admin` and `anonymous`."""
+        found = self.figures()["inactive_accounts"]
+        return {
+            kind: [row for row in rows if row[0] not in ("admin", "anonymous")]
+            for kind, rows in found.items()
+        }
+
+    def test_a_sign_in_older_than_twelve_months_is_dormant(self):
+        self.user("old", NOW - timedelta(days=900), last=NOW - timedelta(days=400))
+        self.user("recent", NOW - timedelta(days=900), last=NOW - timedelta(days=300))
+        found = self.found()
+        self.assertEqual([row[0] for row in found["dormant"]], ["old"])
+        self.assertEqual(found["dormant"][0][1:], ["2025-09-04", "2024-04-22"])
+        self.assertEqual(found["never"], [])
+
+    def test_never_signed_in_three_months_after_joining_is_listed_with_no_sign_in(self):
+        self.user("invited", NOW - timedelta(days=120))
+        self.user("fresh", NOW - timedelta(days=40))
+        found = self.found()
+        self.assertEqual([row[0] for row in found["never"]], ["invited"])
+        self.assertIsNone(found["never"][0][1])
+        self.assertEqual(found["dormant"], [])
+
+    def test_anonymous_and_inactive_accounts_are_left_out(self):
+        get_user_model().objects.filter(username="anonymous").update(
+            is_active=True,
+            last_login=None,
+            date_joined=local(NOW - timedelta(days=900)),
+        )
+        self.assertIn(
+            "anonymous",
+            get_user_model()
+            .objects.filter(date_joined__lt=local(NOW))
+            .values_list("username", flat=True),
+        )
+        self.user("gone", NOW - timedelta(days=900), active=False)
+        self.user(
+            "gone_too",
+            NOW - timedelta(days=900),
+            last=NOW - timedelta(days=500),
+            active=False,
+        )
+        found = self.figures()["inactive_accounts"]
+        listed = {row[0] for rows in found.values() for row in rows}
+        self.assertFalse(listed & {"anonymous", "gone", "gone_too"})
+
+
 class ReadOnlyTests(ActivityCase):
     def test_a_write_inside_the_block_is_refused_and_allowed_after_it(self):
         with self.assertRaises(DatabaseError):
@@ -365,6 +423,7 @@ class MonthTests(ActivityCase):
                 "workflows",
                 "workflow_stale_after_days",
                 "etl",
+                "inactive_accounts",
             },
         )
 

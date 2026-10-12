@@ -12,7 +12,9 @@ from the database through `--activity-command`, a management command run in the
 same container that prints the month's aggregates as one line of JSON
 (`manage.py activity_summary --month YYYY-MM`). Nothing personal is read: only
 counts (the active-accounts section reads one number,
-`manuspectrum_active_accounts`). A section whose source fails reads "données
+`manuspectrum_active_accounts`), with one exception: the inactive-accounts section
+names the active accounts with no sign-in for 12 months, or none 3 months after
+their creation, so that the administrators can decide by hand. A section whose source fails reads "données
 indisponibles"; the report is sent anyway and the exit status is then 1.
 Prometheus keeps 35 days: a figure older than that reads "n/d". The growth
 lines (free space, database) compare the end of the month with its start, or
@@ -67,6 +69,7 @@ MODEL_FIELDS = (
     "created_deleted",
     "modified",
     "deleted",
+    "cleaned",
     "tile_saves",
     "publication_changes",
 )
@@ -118,6 +121,11 @@ class Activity:
                 if not isinstance(data[key], dict):
                     raise TypeError(key)
             int(data["workflow_stale_after_days"])
+            for rows in data["inactive_accounts"].values():
+                for username, last_login, joined in rows:
+                    str(username), str(joined)
+                    if last_login is not None:
+                        str(last_login)
             for row in data["models"].values():
                 for key in ("total", *MODEL_FIELDS):
                     int(row[key])
@@ -128,7 +136,7 @@ class Activity:
                 for key in ETL_FIELDS:
                     int(row.get(key, 0))
                 int(row["started"])
-        except (KeyError, TypeError, AttributeError) as exc:
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
             raise ValueError(f"activity answer reshaped: {exc!r}") from exc
         return data
 
@@ -575,7 +583,7 @@ def contents(activity):
     for slug, row in sorted(models.items()):
         saves += row["tile_saves"]
         changes += row["publication_changes"]
-        if not (row["created"] or row["modified"] or row["deleted"]):
+        if not (row["created"] or row["modified"] or row["deleted"] or row["cleaned"]):
             continue
         created = plural(row["created"], "créée")
         if row["created_deleted"]:
@@ -585,8 +593,13 @@ def contents(activity):
         lines.append(
             f"{model_name(slug)} : {created}, "
             f"{plural(row['modified'], 'modifiée')}, "
-            f"{plural(row['deleted'], 'supprimée')} ; "
-            f"{number(row['total'])} au total"
+            f"{plural(row['deleted'], 'supprimée')}"
+            + (
+                f", {plural(row['cleaned'], 'nettoyée')} (assistant abandonné)"
+                if row["cleaned"]
+                else ""
+            )
+            + f" ; {number(row['total'])} au total"
         )
     if not lines:
         return ["aucune activité"]
@@ -649,9 +662,162 @@ def workflows(prom, activity, start, end):
         days = data["workflow_stale_after_days"]
         lines.append(
             f"inachevés à la date du rapport : {open_total}, dont {stale_total} "
-            f"commencés il y a plus de {days} jours (délai provisoire)"
+            f"commencés il y a plus de {days} jours (délai du nettoyage)"
         )
     return lines or ["aucune activité"]
+
+
+WORKFLOW_CLEANUP_OUTCOMES = (
+    ("cleaned", "nettoyé(s)"),
+    ("kept_resources", "nettoyé(s) avec des ressources conservées"),
+    ("failed", "en échec"),
+)
+
+
+def workflow_cleanups(prom, start, end):
+    window = f"{int((end - start).total_seconds())}s"
+    rows = by_label(
+        prom.query(
+            "sum by (outcome) "
+            f"(increase(manuspectrum_workflow_cleanups_total[{window}]))",
+            end.timestamp(),
+        ),
+        "outcome",
+    )
+    kept = by_label(
+        prom.query(
+            "sum by (outcome) "
+            f"(increase(manuspectrum_workflow_cleanup_resources_total[{window}]))",
+            end.timestamp(),
+        ),
+        "outcome",
+    )
+    parts = [
+        f"{count(rows[key])} {label}"
+        for key, label in WORKFLOW_CLEANUP_OUTCOMES
+        if round(rows.get(key, 0)) > 0
+    ]
+    if not parts:
+        return ["aucun assistant abandonné n'a été nettoyé"]
+    lines = ["assistants abandonnés : " + ", ".join(parts)]
+    deleted, conserved = round(kept.get("deleted", 0)), round(kept.get("kept", 0))
+    if deleted or conserved:
+        lines.append(
+            f"ressources créées par ces assistants : {deleted} supprimée(s), "
+            f"{conserved} conservée(s)"
+        )
+    return lines
+
+
+EMBARGO_LIFT_OUTCOMES = (
+    ("lifted", "levé(s)"),
+    ("incomplete", "levé(s) en partie"),
+    ("skipped_extended", "reporté(s) (prolongés)"),
+    ("failed", "en échec"),
+)
+
+
+def embargoes(prom, start, end):
+    at = end.timestamp()
+    window = f"{int((end - start).total_seconds())}s"
+    lifts = by_label(
+        prom.query(
+            f"sum by (outcome) (increase(manuspectrum_embargo_lifts_total[{window}]))",
+            at,
+        ),
+        "outcome",
+    )
+    states = by_label(
+        prom.query("sum by (state) (manuspectrum_embargoes)", at), "state"
+    )
+    lines = []
+    parts = [
+        f"{count(lifts[key])} {label}"
+        for key, label in EMBARGO_LIFT_OUTCOMES
+        if round(lifts.get(key, 0)) > 0
+    ]
+    lines.append("restrictions : " + (", ".join(parts) if parts else "aucune levée"))
+    if not states:
+        lines.append(f"état à la fin du mois : {NO_DATA}")
+        return lines
+    lines.append(
+        "état à la fin du mois : "
+        f"{count(states.get('active', 0))} active(s), "
+        f"{count(states.get('due_soon', 0))} proche(s) de leur fin, "
+        f"{count(states.get('overdue', 0))} échue(s) non levée(s), "
+        f"{count(states.get('undated', 0))} sans date de fin"
+    )
+    lines.append(
+        "(une restriction sans date de fin n'est jamais levée automatiquement ; "
+        "une restriction échue demande une vérification : "
+        "deploy/runbooks/application.md)"
+    )
+    return lines
+
+
+def lockouts(prom, start, end):
+    window = f"{int((end - start).total_seconds())}s"
+    total = prom.scalar(
+        f"sum(increase(manuspectrum_auth_lockouts_total[{window}]))", end.timestamp()
+    )
+    if total is None:
+        return [NO_DATA]
+    return [f"comptes verrouillés après des échecs de connexion : {count(total)}"]
+
+
+def account_mails(prom, start, end):
+    window = f"{int((end - start).total_seconds())}s"
+    rows = prom.query(
+        "sum by (kind, outcome) "
+        f"(increase(manuspectrum_account_mails_total[{window}]))",
+        end.timestamp(),
+    )
+    sent = sum(v for labels, v in rows if labels.get("outcome") == "sent")
+    failed = {
+        labels.get("kind", "?"): v
+        for labels, v in rows
+        if labels.get("outcome") == "failed" and round(v) > 0
+    }
+    if not rows:
+        return [NO_DATA]
+    lines = [f"courriels de compte envoyés : {count(sent)}"]
+    if failed:
+        detail = ", ".join(f"{kind} {count(v)}" for kind, v in sorted(failed.items()))
+        lines.append(
+            f"courriels de compte en échec : {count(sum(failed.values()))} ({detail})"
+        )
+    else:
+        lines.append("courriels de compte en échec : aucun")
+    return lines
+
+
+def french_date(iso):
+    year, month, day = (int(part) for part in iso.split("-"))
+    return f"{day} {MONTHS_FR[month - 1]} {year}"
+
+
+def inactive_accounts(activity):
+    data = activity.get()["inactive_accounts"]
+    lines = []
+    for key, title in (
+        ("dormant", "sans connexion depuis 12 mois ou plus"),
+        (
+            "never",
+            "jamais connectés, créés il y a plus de 3 mois (invitation non activée comprise)",
+        ),
+    ):
+        rows = data[key]
+        lines.append(f"{title} : {len(rows)}")
+        for username, last_login, joined in rows:
+            last = french_date(last_login) if last_login else "jamais"
+            lines.append(
+                f"  {username} : dernière connexion {last}, créé le {french_date(joined)}"
+            )
+    lines.append(
+        "(information seule : la désactivation se décide à la main, "
+        "aucun compte n'est supprimé)"
+    )
+    return lines
 
 
 def bulk_runs(activity):
@@ -711,9 +877,14 @@ def build_body(prom, activity, label, start, end, now):
         ("Consultations", consultations),
         ("Contenus", lambda p, a, b: contents(activity)),
         ("Assistants", lambda p, a, b: workflows(p, activity, a, b)),
+        ("Assistants abandonnés nettoyés", workflow_cleanups),
+        ("Restrictions (embargos)", embargoes),
         ("Imports et exports en masse", lambda p, a, b: bulk_runs(activity)),
         ("Connexions", logins),
+        ("Verrouillages de comptes", lockouts),
+        ("Courriels de compte", account_mails),
         ("Comptes actifs", lambda p, a, b: accounts(p, a, b, since)),
+        ("Comptes inactifs", lambda p, a, b: inactive_accounts(activity)),
     ):
         blocks += section(prom, title, lambda b=build: b(prom, start, end))
     if prom.failed:

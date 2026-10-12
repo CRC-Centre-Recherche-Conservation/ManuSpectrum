@@ -249,6 +249,12 @@ class DashboardFileTests(unittest.TestCase):
             "manuspectrum_resource_changes",
             "manuspectrum_workflows",
             "manuspectrum_activity_timestamp_seconds",
+            "manuspectrum_auth_lockouts_total",
+            "manuspectrum_embargoes",
+            "manuspectrum_embargo_lifts_total",
+            "manuspectrum_workflow_cleanups_total",
+            "manuspectrum_workflow_cleanup_resources_total",
+            "manuspectrum_account_mails_total",
             'view="transaction_reverse"',
         ):
             with self.subTest(series=series):

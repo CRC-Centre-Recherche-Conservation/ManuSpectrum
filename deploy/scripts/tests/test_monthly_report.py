@@ -84,6 +84,36 @@ ANSWERS = [
         "manuspectrum_auth_logins_total",
         [vector(85, outcome="success"), vector(7, outcome="failure")],
     ),
+    ("manuspectrum_auth_lockouts_total", [vector(3)]),
+    (
+        "manuspectrum_embargo_lifts_total",
+        [vector(4, outcome="lifted"), vector(1, outcome="failed")],
+    ),
+    (
+        "sum by (state) (manuspectrum_embargoes)",
+        [
+            vector(9, state="active"),
+            vector(2, state="due_soon"),
+            vector(1, state="overdue"),
+            vector(5, state="undated"),
+        ],
+    ),
+    (
+        "manuspectrum_workflow_cleanups_total",
+        [vector(6, outcome="cleaned"), vector(1, outcome="kept_resources")],
+    ),
+    (
+        "manuspectrum_workflow_cleanup_resources_total",
+        [vector(11, outcome="deleted"), vector(2, outcome="kept")],
+    ),
+    (
+        "manuspectrum_account_mails_total",
+        [
+            vector(20, kind="invitation", outcome="sent"),
+            vector(2, kind="invitation", outcome="failed"),
+            vector(3, kind="embargo_notice", outcome="sent"),
+        ],
+    ),
     ("node_boot_time_seconds", [vector(31)]),
     ("manuspectrum_container_restarts", [vector(2, container="web")]),
     ("manuspectrum_container_oom_kills", [vector(1, container="worker")]),
@@ -100,6 +130,7 @@ ACTIVITY = {
             "created_deleted": 2,
             "modified": 30,
             "deleted": 3,
+            "cleaned": 2,
             "tile_saves": 400,
             "publication_changes": 4,
         },
@@ -109,6 +140,7 @@ ACTIVITY = {
             "created_deleted": 0,
             "modified": 1,
             "deleted": 0,
+            "cleaned": 0,
             "tile_saves": 20,
             "publication_changes": 1,
         },
@@ -118,6 +150,7 @@ ACTIVITY = {
             "created_deleted": 0,
             "modified": 0,
             "deleted": 0,
+            "cleaned": 0,
             "tile_saves": 0,
             "publication_changes": 0,
         },
@@ -127,6 +160,7 @@ ACTIVITY = {
             "created_deleted": 0,
             "modified": 0,
             "deleted": 4,
+            "cleaned": 0,
             "tile_saves": 0,
             "publication_changes": 0,
         },
@@ -147,6 +181,10 @@ ACTIVITY = {
         "never-used": {"started": 0, "completed": 0, "open": 0, "stale": 0},
     },
     "workflow_stale_after_days": 30,
+    "inactive_accounts": {
+        "dormant": [["old.curator", "2025-09-04", "2024-04-22"]],
+        "never": [["invited.guest", None, "2026-06-30"]],
+    },
     "etl": {
         "import-single-csv": {
             "started": 4,
@@ -339,6 +377,11 @@ class MonthlyReport(unittest.TestCase):
             "Assistants",
             "Imports et exports en masse",
             "Connexions",
+            "Comptes inactifs",
+            "Verrouillages de comptes",
+            "Restrictions (embargos)",
+            "Assistants abandonnés nettoyés",
+            "Courriels de compte",
         ):
             self.assertIn(heading, text)
         self.assertIn("octobre 2026", text)
@@ -426,7 +469,8 @@ class MonthlyReport(unittest.TestCase):
     def test_contents_list_models_with_activity_and_leave_out_the_others(self):
         _, text = self.report()
         self.assertIn(
-            "analysis : 12 créées (dont 2 supprimées dans le mois), 30 modifiées, 3 supprimées ; 10 082 au total",
+            "analysis : 12 créées (dont 2 supprimées dans le mois), 30 modifiées, "
+            "3 supprimées, 2 nettoyées (assistant abandonné) ; 10 082 au total",
             text,
         )
         self.assertIn("document : 1 créée, 1 modifiée, 0 supprimée ; 55 au total", text)
@@ -447,7 +491,7 @@ class MonthlyReport(unittest.TestCase):
         )
         self.assertIn("annulés par l'utilisateur : 2", text)
         self.assertIn(
-            "inachevés à la date du rapport : 17, dont 12 commencés il y a plus de 30 jours (délai provisoire)",
+            "inachevés à la date du rapport : 17, dont 12 commencés il y a plus de 30 jours (délai du nettoyage)",
             text,
         )
 
@@ -457,12 +501,67 @@ class MonthlyReport(unittest.TestCase):
         self.assertIn("tile-excel-exporter : 2 lancés, 2 réussi(s)", text)
         self.assertIn("connexions réussies : 85, échouées : 7", text)
 
+    def test_inactive_accounts_are_listed_by_name_with_their_dates(self):
+        _, text = self.report()
+        self.assertIn("sans connexion depuis 12 mois ou plus : 1", text)
+        self.assertIn(
+            "old.curator : dernière connexion 4 septembre 2025, créé le 22 avril 2024",
+            text,
+        )
+        self.assertIn("(invitation non activée comprise) : 1", text)
+        self.assertIn(
+            "invited.guest : dernière connexion jamais, créé le 30 juin 2026", text
+        )
+        self.assertIn("la désactivation se décide à la main", text)
+
+    def test_no_inactive_account_reads_zero(self):
+        quiet = {**ACTIVITY, "inactive_accounts": {"dormant": [], "never": []}}
+        with tempfile.TemporaryDirectory() as directory:
+            command = activity_command(directory, quiet)
+            _, text = self.report(extra=["--activity-command", command])
+        self.assertIn("sans connexion depuis 12 mois ou plus : 0", text)
+        self.assertNotIn("dernière connexion", text)
+
+    def test_a_missing_inactive_accounts_key_marks_the_sections_unavailable(self):
+        without = {k: v for k, v in ACTIVITY.items() if k != "inactive_accounts"}
+        with tempfile.TemporaryDirectory() as directory:
+            command = activity_command(directory, without)
+            result, text = self.report(extra=["--activity-command", command])
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("journal d'activité n'a pas pu être lu", text)
+
+    def test_lockouts_embargoes_cleanups_and_account_mails(self):
+        _, text = self.report()
+        self.assertIn("comptes verrouillés après des échecs de connexion : 3", text)
+        self.assertIn("restrictions : 4 levé(s), 1 en échec", text)
+        self.assertIn(
+            "état à la fin du mois : 9 active(s), 2 proche(s) de leur fin, "
+            "1 échue(s) non levée(s), 5 sans date de fin",
+            text,
+        )
+        self.assertIn(
+            "assistants abandonnés : 6 nettoyé(s), 1 nettoyé(s) avec des ressources conservées",
+            text,
+        )
+        self.assertIn(
+            "ressources créées par ces assistants : 11 supprimée(s), 2 conservée(s)",
+            text,
+        )
+        self.assertIn("courriels de compte envoyés : 23", text)
+        self.assertIn("courriels de compte en échec : 2 (invitation 2)", text)
+
+    def test_a_quiet_month_for_accounts_says_so(self):
+        self.servers.prom.floor = 2**40
+        _, text = self.report()
+        self.assertIn("aucune levée", text)
+        self.assertIn("aucun assistant abandonné n'a été nettoyé", text)
+
     def test_a_failing_activity_command_marks_its_sections_and_exits_one(self):
         with tempfile.TemporaryDirectory() as directory:
             command = activity_command(directory, {"fail": True})
             result, text = self.report(extra=["--activity-command", command])
         self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertEqual(text.count(UNAVAILABLE), 3)
+        self.assertEqual(text.count(UNAVAILABLE), 4)
         self.assertIn("pages publiques : accueil 1 234", text)
         self.assertIn("journal d'activité n'a pas pu être lu", text)
 
@@ -473,7 +572,7 @@ class MonthlyReport(unittest.TestCase):
             )
             result, text = self.report(extra=["--activity-command", command])
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(text.count(UNAVAILABLE), 3)
+        self.assertEqual(text.count(UNAVAILABLE), 4)
         self.assertNotIn("10 082", text)
 
     def test_without_an_activity_command_the_database_sections_are_unavailable(self):
@@ -493,7 +592,7 @@ class MonthlyReport(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(
-            body_of(self.servers.smtp.messages[0]).get_content().count(UNAVAILABLE), 3
+            body_of(self.servers.smtp.messages[0]).get_content().count(UNAVAILABLE), 4
         )
 
     def test_log_lines_after_the_answer_are_ignored(self):
@@ -515,7 +614,7 @@ class MonthlyReport(unittest.TestCase):
                 command = activity_command(directory, data)
                 result, text = self.report(extra=["--activity-command", command])
                 self.assertEqual(result.returncode, 1, result.stderr)
-                self.assertEqual(text.count(UNAVAILABLE), 3)
+                self.assertEqual(text.count(UNAVAILABLE), 4)
                 self.assertIn("journal d'activité n'a pas pu être lu", text)
 
     def test_consultation_counts_are_rounded_not_truncated(self):

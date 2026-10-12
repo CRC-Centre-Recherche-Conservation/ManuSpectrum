@@ -111,7 +111,15 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   `manuspectrum_workflow_cleanups{kind,outcome}`, `manuspectrum_workflow_cleanup_resources{outcome}`
   and `manuspectrum_workflow_cleanup_timestamp_seconds` (abandoned-workflow pass, daily at 03:30
   Europe/Paris by `manuspectrum.workflow_cleanup_pass`; read by `WorkflowCleanupFailures` and
-  `WorkflowCleanupStale`)
+  `WorkflowCleanupStale`),
+  `manuspectrum_embargo_lifts{outcome}` (daily embargo pass: lifted, incomplete, skipped_extended,
+  failed), `manuspectrum_embargoes{state}` (active, undated, due_soon, overdue, set by the same
+  pass at 06:00 Europe/Paris, `manuspectrum.embargo_pass`) and
+  `manuspectrum_embargo_pass_timestamp_seconds` (read by `EmbargoLiftFailures`, `EmbargoOverdue`
+  and `EmbargoPassStale`)
+- Account mail: `manuspectrum_account_mails{kind,outcome}` (invitation, embargo and workflow
+  notices, summaries and the password-reset mail; outcome sent, failed or skipped), shown in the
+  « Accounts » row of the Activity dashboard and in the monthly report
 - Activity (`observability/activity.py`, refreshed hourly by `manuspectrum.record_activity` and at
   worker start): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last
   24 hours), `manuspectrum_workflows{kind,state}`, `manuspectrum_activity_timestamp_seconds`. `model`
