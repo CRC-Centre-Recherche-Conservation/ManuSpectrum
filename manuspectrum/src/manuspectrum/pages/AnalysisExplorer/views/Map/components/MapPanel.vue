@@ -94,6 +94,8 @@ const DOCUMENTS_STEP = 10;
 const ANALYSES_SHOWN = 5;
 const ANALYSES_STEP = 20;
 const EVENTS_SHOWN = 3;
+const COMPONENTS_SHOWN = 4;
+const COMPONENTS_STEP = 10;
 const MATERIALS_SHOWN = 8;
 const TECHNIQUES_SUMMARY = 3;
 const GEONAMES = /^\d+$/;
@@ -114,7 +116,8 @@ const OWN = "own";
  *
  * Long subjects stay short: the first 8 materials, the first 5 documents
  * (10 more per click), documents folded unless the subject has one with at
- * most 10 analyses (a folded body is not mounted), per Component the first
+ * most 10 analyses (a folded body is not mounted), per document the first
+ * 4 Components (10 more per click), per Component the first
  * 3 events and the first 5 analyses (20 more per click), and past the
  * Selection's capacity a note that sends to the document in Corpus. What is
  * unfolded resets when the subject changes.
@@ -148,6 +151,8 @@ const toggled = ref(new Map<string, boolean>());
 /** Analyses shown per Component group past the first `ANALYSES_SHOWN`. */
 const analysesShown = ref(new Map<string, number>());
 const eventsOpen = ref(new Set<string>());
+/** Component groups shown per document past the first `COMPONENTS_SHOWN`. */
+const groupsShown = ref(new Map<string, number>());
 
 const shown = computed(() =>
     subjectEvents(props.events, props.places, props.subject),
@@ -425,6 +430,7 @@ watch(
         toggled.value = new Map();
         analysesShown.value = new Map();
         eventsOpen.value = new Set();
+        groupsShown.value = new Map();
         await nextTick();
         heading.value?.focus();
     },
@@ -593,6 +599,32 @@ function documentCounts(view: DocumentView): string {
                 true,
             ),
         },
+        true,
+    );
+}
+
+function shownGroups(view: DocumentView): ComponentGroup[] {
+    return view.groups.slice(
+        0,
+        groupsShown.value.get(view.document.id) ?? COMPONENTS_SHOWN,
+    );
+}
+
+function hiddenGroups(view: DocumentView): number {
+    return view.groups.length - shownGroups(view).length;
+}
+
+function showMoreGroups(view: DocumentView): void {
+    const next = new Map(groupsShown.value);
+    next.set(view.document.id, shownGroups(view).length + COMPONENTS_STEP);
+    groupsShown.value = next;
+}
+
+function moreGroupsText(view: DocumentView): string {
+    const n = Math.min(COMPONENTS_STEP, hiddenGroups(view));
+    return interpolate(
+        $ngettext("Show %{n} more Component", "Show %{n} more Components", n),
+        { n },
         true,
     );
 }
@@ -858,20 +890,22 @@ function compare(): void {
                         >{{ row.label.value }}</span
                     >
                     <span class="meta">
-                        <span
-                            v-if="row.reliability"
-                            class="reliability"
-                            >{{ row.reliability }}</span
-                        >
-                        <span
-                            v-if="row.reliability"
-                            class="joint"
-                            aria-hidden="true"
-                            >{{ "·" }}</span
-                        >
-                        <span class="row-counts">{{
-                            attestedCounts(row)
-                        }}</span>
+                        <span class="facts">
+                            <span
+                                v-if="row.reliability"
+                                class="reliability"
+                                >{{ row.reliability }}</span
+                            >
+                            <span
+                                v-if="row.reliability"
+                                class="joint"
+                                aria-hidden="true"
+                                >{{ " · " }}</span
+                            >
+                            <span class="row-counts">{{
+                                attestedCounts(row)
+                            }}</span>
+                        </span>
                     </span>
                 </li>
             </ul>
@@ -1003,7 +1037,7 @@ function compare(): void {
                         </svg>
                     </a>
                     <div
-                        v-for="entry in view.groups"
+                        v-for="entry in shownGroups(view)"
                         :key="entry.key"
                         class="component-group"
                     >
@@ -1174,6 +1208,14 @@ function compare(): void {
                             <span>{{ moreAnalysesText(entry) }}</span>
                         </button>
                     </div>
+                    <button
+                        v-if="hiddenGroups(view) > 0"
+                        type="button"
+                        class="more more-components"
+                        @click="showMoreGroups(view)"
+                    >
+                        <span>{{ moreGroupsText(view) }}</span>
+                    </button>
                 </div>
             </section>
             <button
@@ -1363,7 +1405,7 @@ function compare(): void {
     align-items: baseline;
 }
 
-.map-panel .attested .meta > * {
+.map-panel .attested .facts {
     white-space: nowrap;
 }
 

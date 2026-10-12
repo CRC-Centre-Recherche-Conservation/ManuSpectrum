@@ -11,18 +11,24 @@ import {
 import { ordinal } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { focusHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import { project } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
-import { pageOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
+import {
+    MINI_HEIGHT,
+    MINI_WIDTH,
+    pageOf,
+    snapshotFrame,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 
 import type { Bounds } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { MultiplesAxis } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import type {
+    MapSnapshot,
     MiniDot,
     MiniMap,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 
-const WIDTH = 220;
-const HEIGHT = 160;
+const WIDTH = MINI_WIDTH;
+const HEIGHT = MINI_HEIGHT;
 const DOT_BASE = 4;
 const DOT_STEP = 3;
 const PIP_RADIUS = 5;
@@ -32,8 +38,10 @@ const PIP_GAP = 11;
  * Small multiples of the map: one mini map per identified material (every
  * analysed place drawn, hollow where the material is not attested) or per
  * century (a pip per followed slot attested there). Each mini map is one
- * button that emits `open`. A pale attestation is hollow in its hue. The
- * background is the stage's snapshot when there is one, else the land.
+ * button that emits `open`. A pale attestation is hollow in its hue, an
+ * attributed place (area or parent) dashed. The background is the stage's
+ * snapshot when there is one, laid where its bounds fall in `bounds` so
+ * that the dots sit on their places, else the land.
  * `maps` may be the whole list or the page already cut: the page `page`
  * (0-based) of twelve is drawn either way. `tracked` gives a material map
  * its slot.
@@ -42,7 +50,7 @@ const props = withDefaults(
     defineProps<{
         maps: MiniMap[];
         bounds: Bounds;
-        background: string | null;
+        background: MapSnapshot | null;
         page: number;
         pages: number;
         axis: MultiplesAxis;
@@ -81,6 +89,9 @@ const pageText = computed(() =>
         true,
     ),
 );
+const backgroundFrame = computed(() =>
+    props.background ? snapshotFrame(props.background, props.bounds) : null,
+);
 const atFirst = computed(() => props.page <= 0);
 const atLast = computed(() => props.page >= props.pages - 1);
 
@@ -101,32 +112,37 @@ function titleOf(map: MiniMap): string {
     return "";
 }
 
-function placesOf(map: MiniMap): number {
-    return map.dots.filter((entry) => entry.attested).length;
+function placesText(map: MiniMap): string {
+    return interpolate(
+        $ngettext("%{n} place", "%{n} places", map.places),
+        { n: map.places },
+        true,
+    );
+}
+
+function documentsText(map: MiniMap): string {
+    return interpolate(
+        $ngettext("%{n} document", "%{n} documents", map.documents),
+        { n: map.documents },
+        true,
+    );
 }
 
 function countsText(map: MiniMap): string {
     return interpolate(
-        $ngettext(
-            "%{places} place · %{components} comp.",
-            "%{places} places · %{components} comp.",
-            placesOf(map),
-        ),
-        { places: placesOf(map), components: map.components },
+        $gettext("%{places} · %{documents}"),
+        { places: placesText(map), documents: documentsText(map) },
         true,
     );
 }
 
 function openName(map: MiniMap): string {
     return interpolate(
-        $gettext("Open %{title}: %{places}, %{components}"),
+        $gettext("Open %{title}: %{places}, %{documents}, %{components}"),
         {
             title: titleOf(map),
-            places: interpolate(
-                $ngettext("%{n} place", "%{n} places", placesOf(map)),
-                { n: placesOf(map) },
-                true,
-            ),
+            places: placesText(map),
+            documents: documentsText(map),
             components: interpolate(
                 $ngettext("%{n} Component", "%{n} Components", map.components),
                 { n: map.components },
@@ -151,6 +167,7 @@ function dotClass(entry: MiniDot): Record<string, boolean> {
         attested: entry.attested,
         absent: !entry.attested,
         pale: entry.attested && entry.pale,
+        dashed: entry.dashed,
     };
 }
 
@@ -213,11 +230,14 @@ function go(next: number): void {
                         :viewBox="viewBox"
                     >
                         <image
-                            v-if="props.background"
+                            v-if="props.background && backgroundFrame"
                             class="snapshot"
-                            :href="props.background"
-                            :width="WIDTH"
-                            :height="HEIGHT"
+                            preserveAspectRatio="none"
+                            :href="props.background.url"
+                            :x="backgroundFrame.x"
+                            :y="backgroundFrame.y"
+                            :width="backgroundFrame.width"
+                            :height="backgroundFrame.height"
                         />
                         <g v-else>
                             <rect
@@ -384,6 +404,7 @@ function go(next: number): void {
 
 .small-multiples .mini-map {
     display: block;
+    overflow: hidden;
     inline-size: 100%;
     block-size: auto;
 }
@@ -418,6 +439,15 @@ function go(next: number): void {
     fill: none;
     stroke: var(--series-context);
     stroke-width: 1;
+}
+
+/* The main map's dashed ring of an attributed place */
+.small-multiples .dot.dashed {
+    stroke-dasharray: 2 1.5;
+}
+
+.small-multiples .dot.attested.dashed:not(.pale) {
+    stroke: var(--series-context);
 }
 
 .small-multiples .pip {

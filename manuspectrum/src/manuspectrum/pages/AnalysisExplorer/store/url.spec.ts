@@ -438,6 +438,14 @@ describe("map keys in the address", () => {
         expect(store.mapState.radius).toBe(90);
     });
 
+    it("keep the reader's legend open state across back and forward", () => {
+        const store = useExplorerStore();
+        store.setMapState({ legend: true });
+        applySnapshot(store, fromQuery(new URLSearchParams(MAP)));
+        expect(store.mapState.legend).toBe(true);
+        expect(store.mapState.mode).toBe("territories");
+    });
+
     it("keep the legacy current-location type out of the event types", () => {
         const snapshot = fromQuery(
             new URLSearchParams(

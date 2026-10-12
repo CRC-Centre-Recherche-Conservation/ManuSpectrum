@@ -292,6 +292,48 @@ describe("MapView", () => {
         expect(store.filters.eventType).toEqual([]);
     });
 
+    it("lists the four reliability levels, all ticked, and drops a level's materials when unticked", async () => {
+        const level = (id: string, name: string, rank: number) => ({
+            id,
+            uri: id,
+            label: label(name),
+            rank,
+        });
+        const scale = {
+            levels: [
+                level("doubt", "Uncertain", 3),
+                level("sure", "Certain", 0),
+                level("likely", "Likely", 1),
+                level("caution", "Use with caution", 2),
+            ],
+        };
+        const base = response();
+        base.events[0].materials[0].reliability = "sure";
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({ ...base, certaintyScale: scale }),
+        );
+        const store = useExplorerStore();
+        store.setMapState({ track: [LAPIS], legend: true });
+        const view = await mountView();
+        const rows = view.findAll(".levels .value");
+        expect(rows.map((row) => row.find(".label").text())).toEqual([
+            "Certain",
+            "Likely",
+            "Use with caution",
+            "Uncertain",
+        ]);
+        expect(
+            rows.map(
+                (row) => (row.get("input").element as HTMLInputElement).checked,
+            ),
+        ).toEqual([true, true, true, true]);
+        expect(rows[0].find(".count").text()).toBe("1");
+        expect(view.get(".legend .followed .count").text()).toBe("1");
+        await rows[0].get("input").setValue(false);
+        await flushPromises();
+        expect(view.get(".legend .followed .count").text()).toBe("0");
+    });
+
     it("hides the historical borders without a period, and draws those of the period's middle year", async () => {
         const store = useExplorerStore();
         store.setMapState({ borders: true });
@@ -347,10 +389,11 @@ describe("MapView", () => {
         expect(map.paintCalls.map(([layer]) => layer)).toEqual([
             "territory-cells",
             "territory-hatch",
+            "territory-casing",
             "territory-edges",
         ]);
         await view.get(".legend .followed li").trigger("mouseleave");
-        expect(map.paintCalls).toHaveLength(6);
+        expect(map.paintCalls).toHaveLength(8);
         expect(map.paintCalls.at(-1)).toEqual([
             "territory-edges",
             "line-opacity",
@@ -387,18 +430,76 @@ describe("MapView", () => {
         expect(store.mapState.brush).not.toBeNull();
     });
 
-    it("links the exports with the filters and the page language", async () => {
-        document.documentElement.lang = "fr";
+    it("links the exports with the filters and the interface language, not the page's lang attribute", async () => {
+        document.documentElement.lang = "fr-CA";
         useExplorerStore().setFilter("eventType", ["analysis"]);
         const view = await mountView();
         const csv = view.find("a.export[data-format='csv']");
         const geojson = view.find("a.export[data-format='geojson']");
         expect(csv.attributes("href")).toBe(
-            "/en/manuspectrum:explorer-events-csv?eventType=analysis&lang=fr",
+            "/en/manuspectrum:explorer-events-csv?eventType=analysis&lang=en",
         );
         expect(geojson.attributes("href")).toBe(
-            "/en/manuspectrum:explorer-events-geojson?eventType=analysis&lang=fr",
+            "/en/manuspectrum:explorer-events-geojson?eventType=analysis&lang=en",
         );
+    });
+
+    it("eases the map to a place picked in the list when it is off screen", async () => {
+        const view = await mountView();
+        const map = FakeMap.last();
+        map.shown = [
+            [1, 49],
+            [2, 50],
+        ];
+        await view.find(`.place-list [data-place='${PARIS}']`).trigger("click");
+        expect(map.easeCalls).toEqual([
+            { center: [2.35, 48.85], duration: 420 },
+        ]);
+    });
+
+    it("offers to zoom in when the borders of the period load only closer", async () => {
+        const store = useExplorerStore();
+        store.setMapState({ borders: true, brush: [1150, 1250] });
+        const view = await mountView();
+        const map = FakeMap.last();
+        const hint = view.get(".stage-head .borders-hint.zoom-in");
+        expect(hint.text()).toBe("Zoom in to see the borders of 1200");
+        await hint.trigger("click");
+        expect(map.easeCalls.at(-1)).toEqual({ zoom: 7, duration: 420 });
+        map.getZoom = () => 7;
+        map.fire("moveend");
+        await flushPromises();
+        expect(view.find(".borders-hint.zoom-in").exists()).toBe(false);
+    });
+
+    it("asks a new snapshot only when the bounds change", async () => {
+        const store = useExplorerStore();
+        const view = await mountView();
+        const map = FakeMap.last();
+        await modeButton(view, "Small multiples").trigger("click");
+        await flushPromises();
+        const fits = () =>
+            map.fitCalls.filter(([, options]) => options?.padding === 0);
+        expect(fits()).toHaveLength(1);
+        map.fire("idle");
+        await flushPromises();
+        store.setMapState({ track: [LAPIS] });
+        await flushPromises();
+        expect(fits()).toHaveLength(1);
+        store.setMapState({ radius: 300 });
+        await flushPromises();
+        map.fire("idle");
+        await flushPromises();
+        expect(fits()).toHaveLength(2);
+        const image = view.get(".small-multiples image");
+        expect(image.attributes("href")).toBe("data:image/png;base64,AAAA");
+        const [[west, south], [east, north]] = fits()[1][0] as [
+            [number, number],
+            [number, number],
+        ];
+        expect(map.jumpCalls).toHaveLength(2);
+        expect(west).toBeLessThan(east);
+        expect(south).toBeLessThan(north);
     });
 
     it("says which third-party services the map calls", async () => {

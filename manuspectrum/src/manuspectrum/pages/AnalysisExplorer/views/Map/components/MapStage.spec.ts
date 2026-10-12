@@ -15,6 +15,8 @@ import {
 import { FALLBACK_COLOURS } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-colours.ts";
 import {
     BORDERS_LAYER,
+    BORDERS_MIN_ZOOM,
+    OHM_SOURCE,
     PLACES_SOURCE,
     TERRITORIES_SOURCE,
     bordersFilter,
@@ -45,6 +47,7 @@ function place(id: string, lng: number): PlaceProperties & { lng: number } {
         name: id,
         documents: 1,
         components: 0,
+        pipAway: null,
         lng,
     };
 }
@@ -121,6 +124,7 @@ describe("MapStage on load", () => {
         expect(territories.map((entry) => entry.layer.id)).toEqual([
             "territory-cells",
             "territory-hatch",
+            "territory-casing",
             "territory-edges",
         ]);
         expect(territories.every((entry) => entry.before === WATER_LAYER)).toBe(
@@ -299,13 +303,15 @@ describe("MapStage updates", () => {
         expect(map.paintCalls).toEqual([
             ["territory-cells", "fill-opacity", two.cells],
             ["territory-hatch", "fill-opacity", two.hatch],
+            ["territory-casing", "line-opacity", two.casing],
             ["territory-edges", "line-opacity", two.edges],
         ]);
         await wrapper.setProps({ isolate: null });
         const plain = territoryOpacity(null);
-        expect(map.paintCalls.slice(3)).toEqual([
+        expect(map.paintCalls.slice(4)).toEqual([
             ["territory-cells", "fill-opacity", plain.cells],
             ["territory-hatch", "fill-opacity", plain.hatch],
+            ["territory-casing", "line-opacity", plain.casing],
             ["territory-edges", "line-opacity", plain.edges],
         ]);
         expect(map.getSource(TERRITORIES_SOURCE)?.setDataCalls).toEqual([]);
@@ -378,6 +384,31 @@ describe("MapStage pointer", () => {
         ]);
     });
 
+    it("keeps the pointer's hover when the parent's state of that place changes", async () => {
+        const wrapper = mountStage({
+            states: statesOf({ paris: { hover: false }, rouen: {} }),
+        });
+        await flushPromises();
+        const map = FakeMap.last();
+        map.rendered = [{ properties: { id: "paris" } }];
+        map.fire("mousemove", { point: { x: 30, y: 40 } });
+        await wrapper.setProps({
+            states: statesOf({ paris: { hover: false, t1: 1 }, rouen: {} }),
+        });
+        expect(map.featureStates.at(-1)).toEqual([
+            { source: PLACES_SOURCE, id: "paris" },
+            {
+                t1: 1,
+                t2: 0,
+                t3: 0,
+                t4: 0,
+                dim: false,
+                hover: true,
+                selected: false,
+            },
+        ]);
+    });
+
     it("zooms and fits the whole map from its own controls", async () => {
         const wrapper = mountStage();
         await flushPromises();
@@ -432,10 +463,14 @@ describe("MapStage failures", () => {
 });
 
 describe("MapStage exposed", () => {
-    it("snapshots the map in the bounds and puts the camera back", async () => {
+    it("snapshots the bare map in the bounds, with the bounds it shows, and puts the camera back", async () => {
         const wrapper = mountStage();
         await flushPromises();
         const map = FakeMap.last();
+        map.shown = [
+            [-1, 40],
+            [11, 50],
+        ];
         const shot = wrapper.vm.snapshot({
             west: 0,
             south: 40,
@@ -449,16 +484,117 @@ describe("MapStage exposed", () => {
             ],
             { padding: 0, duration: 0 },
         ]);
+        const hidden = map.layoutCalls.filter(
+            ([, , value]) => value === "none",
+        );
+        expect(hidden.map(([id]) => id)).toEqual(
+            expect.arrayContaining([
+                "territory-cells",
+                "place-rings",
+                "place-labels",
+                "pip-1-firm",
+            ]),
+        );
+        expect(hidden.map(([id]) => id)).not.toContain(BORDERS_LAYER);
         map.fire("idle");
-        await expect(shot).resolves.toBe(SNAPSHOT_URL);
+        await expect(shot).resolves.toEqual({
+            url: SNAPSHOT_URL,
+            bounds: { west: -1, south: 40, east: 11, north: 50 },
+        });
+        expect(map.jumpCalls).toEqual([
+            { center: { lng: 2.5, lat: 47 }, zoom: 4, bearing: 0, pitch: 0 },
+        ]);
+        const shownAgain = map.layoutCalls
+            .slice(hidden.length)
+            .filter(([, , value]) => value === "visible")
+            .map(([id]) => id);
+        expect(shownAgain.sort()).toEqual(hidden.map(([id]) => id).sort());
+    });
+
+    it("runs one snapshot at a time: a newer request replaces the waiting one, the camera is saved once", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        const first = wrapper.vm.snapshot({
+            west: 0,
+            south: 40,
+            east: 10,
+            north: 50,
+        });
+        const dropped = wrapper.vm.snapshot({
+            west: 1,
+            south: 41,
+            east: 9,
+            north: 49,
+        });
+        const last = wrapper.vm.snapshot({
+            west: 2,
+            south: 42,
+            east: 8,
+            north: 48,
+        });
+        await expect(dropped).resolves.toBeNull();
+        expect(map.fitCalls).toHaveLength(2);
+        map.fire("idle");
+        await expect(first).resolves.toMatchObject({ url: SNAPSHOT_URL });
+        expect(map.jumpCalls).toEqual([]);
+        expect(map.fitCalls.at(-1)?.[0]).toEqual([
+            [2, 42],
+            [8, 48],
+        ]);
+        map.fire("idle");
+        await expect(last).resolves.toMatchObject({
+            bounds: { west: 2, south: 42, east: 8, north: 48 },
+        });
         expect(map.jumpCalls).toEqual([
             { center: { lng: 2.5, lat: 47 }, zoom: 4, bearing: 0, pitch: 0 },
         ]);
     });
 
-    it("snapshots nothing before the map has loaded", async () => {
+    it("takes a snapshot asked before the load once the map has loaded", async () => {
         const wrapper = mountStage();
+        const shot = wrapper.vm.snapshot(BOUNDS);
+        await flushPromises();
+        const map = FakeMap.last();
+        expect(map.fitCalls.at(-1)?.[1]).toEqual({ padding: 0, duration: 0 });
+        map.fire("idle");
+        await expect(shot).resolves.toMatchObject({ url: SNAPSHOT_URL });
+    });
+
+    it("eases to a place picked off screen, and stays put for one in view", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        map.shown = [
+            [-5, 42],
+            [8, 51],
+        ];
+        wrapper.vm.revealPlace([2.35, 48.85]);
+        expect(map.easeCalls).toEqual([]);
+        wrapper.vm.revealPlace([-4.02, 39.86]);
+        expect(map.easeCalls).toEqual([
+            { center: [-4.02, 39.86], duration: 420 },
+        ]);
+    });
+
+    it("reports its zoom on load and after each move, and loads the borders from their zoom", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        map.fire("moveend");
+        expect(wrapper.emitted("zoom")).toEqual([[4], [4]]);
+        expect(map.getSource(OHM_SOURCE)?.spec.minzoom).toBe(BORDERS_MIN_ZOOM);
+        wrapper.vm.zoomTo(BORDERS_MIN_ZOOM);
+        expect(map.easeCalls).toEqual([{ zoom: 7, duration: 420 }]);
+    });
+
+    it("snapshots nothing when the map could not start", async () => {
+        FakeMap.failing = true;
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        const wrapper = mountStage();
+        await flushPromises();
         await expect(wrapper.vm.snapshot(BOUNDS)).resolves.toBeNull();
+        error.mockRestore();
     });
 
     it("resizes the map on request", async () => {

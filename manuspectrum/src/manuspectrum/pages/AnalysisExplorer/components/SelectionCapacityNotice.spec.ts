@@ -2,6 +2,7 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
+import { useGettext } from "vue3-gettext";
 
 import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
 
@@ -110,6 +111,18 @@ describe("SelectionCapacityNotice", () => {
         expect(mountNotice(keys(4), "here").get(".text").text()).toBe(
             "4 analyses here to add: tick them one by one or make room.",
         );
+    });
+
+    it("counts the analyses « here » with a plural-aware message", () => {
+        hold(27);
+        const plural = vi.spyOn(useGettext(), "$ngettext");
+        mountNotice(keys(4), "here");
+        expect(plural).toHaveBeenCalledWith(
+            "%{n} analysis here to add: tick it or make room.",
+            "%{n} analyses here to add: tick them one by one or make room.",
+            4,
+        );
+        plural.mockRestore();
     });
 
     it("uses the singular for one place left", () => {

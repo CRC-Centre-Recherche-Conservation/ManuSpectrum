@@ -19,7 +19,7 @@ export type EventsExportRoute =
 /**
  * The Corpus filters (as the search sends them, without grain, page and size)
  * plus the sorted event types. No type chosen sends none: the server then
- * keeps its default set (`DEFAULT_EVENT_TYPES`), one URL and one ETag.
+ * keeps its default set (`MATERIAL_EVENTS` in `views/explorer/events.py`), one URL and one ETag.
  */
 export function eventsQuery(filters: Filters): URLSearchParams {
     const query = filterQuery(filters);

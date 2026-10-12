@@ -4,9 +4,11 @@ import {
     attestationWeight,
     featureStates,
     inBrush,
+    levelCounts,
     lowLevels,
+    placeFeatures,
     summarisePlaces,
-    withoutLow,
+    withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import {
     label,
@@ -33,6 +35,29 @@ const places = {
 };
 
 describe("place symbols", () => {
+    it("turns the pips of two near places away from each other, and leaves a lone place alone", () => {
+        const near = {
+            avranches: mapPlace({ id: "avranches", lngLat: [-1.36, 48.68] }),
+            caen: mapPlace({ id: "caen", lngLat: [-0.37, 49.18] }),
+            toledo: mapPlace({ id: "toledo", lngLat: [-4.02, 39.86] }),
+        };
+        const events = Object.keys(near).map((id) =>
+            mapEvent({ id, place: id }),
+        );
+        const features = placeFeatures(
+            summarisePlaces(events, near, [], new Set()),
+        );
+        const away = Object.fromEntries(
+            features.features.map((feature) => [
+                feature.properties.id,
+                feature.properties.pipAway,
+            ]),
+        );
+        expect(away.avranches).toBe(135);
+        expect(away.caen).toBe(315);
+        expect(away.toledo).toBeNull();
+    });
+
     it("keeps an overlapping event under a brush and drops a disjoint one", () => {
         const event = mapEvent({
             date: { start: 1301, end: 1400, approximate: false },
@@ -63,16 +88,36 @@ describe("place symbols", () => {
         ).toEqual(new Set(["b", "c"]));
     });
 
-    it("drops the low materials", () => {
-        const [event] = withoutLow(
+    it("drops the materials of the unticked levels, and keeps those of no level", () => {
+        const [event] = withoutLevels(
             [
                 mapEvent({
-                    materials: [material("m", "low"), material("n", null)],
+                    materials: [
+                        material("m", "low"),
+                        material("n", null),
+                        material("o", "sure"),
+                    ],
                 }),
             ],
             LOW,
         );
-        expect(event.materials.map((m) => m.id)).toEqual(["n"]);
+        expect(event.materials.map((m) => m.id)).toEqual(["n", "o"]);
+    });
+
+    it("counts the identified materials of each level", () => {
+        const counts = levelCounts([
+            mapEvent({
+                materials: [material("m", "low"), material("n", null)],
+            }),
+            mapEvent({
+                id: "other",
+                materials: [
+                    material("m", "low"),
+                    { ...material("o", "low"), characterization: uuid(501) },
+                ],
+            }),
+        ]);
+        expect([...counts]).toEqual([["low", 2]]);
     });
 
     it("counts distinct documents and components and skips unplaced events", () => {

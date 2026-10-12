@@ -4,6 +4,7 @@ import { useGettext } from "vue3-gettext";
 
 import InputText from "primevue/inputtext";
 
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 
 import { useFacetValues } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetValues.ts";
@@ -40,11 +41,13 @@ const ROWS_SHOWN = 5;
 
 /**
  * The identified materials of the kept events, grouped by observed colour
- * (`colourTree`), with two controls per row: the checkbox filters the map
- * and the Corpus (`filters.material`), « Follow » gives the material a slot
- * of the map (`mapState.track`, four at most, exact uri). The followed
- * materials are chips above the groups, with « any / all » from two on. A
- * fifth Follow changes nothing and leaves a notice until the next Follow.
+ * (`colourTree`), with two controls per row under the column heads « Show »
+ * and « Follow »: the checkbox filters the map and the Corpus
+ * (`filters.material`), « Follow » gives the material a slot of the map
+ * (`mapState.track`, four at most, exact uri), which its HelpTip explains.
+ * The followed materials are chips above the groups, with « any / all »
+ * from two on. A fifth Follow changes nothing, is announced, and leaves a
+ * notice until the next Follow.
  * The search asks the material facet (synonyms included) and keeps the rows
  * it answers. Each colour group shows its ticked and followed rows, then
  * others up to five, and « Show more » for the rest; a search shows every
@@ -62,6 +65,15 @@ const announce = inject(ANNOUNCE_KEY, null);
 
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
+
+const followHelp = computed(() =>
+    $gettext(
+        "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Show only shows or hides its events.",
+    ),
+);
+const refusedText = computed(() =>
+    $gettext("Four materials are followed already: stop following one first."),
+);
 
 const query = ref("");
 const refused = ref(false);
@@ -258,7 +270,10 @@ function onFollow(uri: string): void {
     const material = labelOf(uri);
     const result = store.toggleTrack(uri);
     refused.value = result === "refused";
-    if (result === "refused") return;
+    if (result === "refused") {
+        announce?.(refusedText.value);
+        return;
+    }
     if (result === "pinned") {
         const taken = slot(uri) ?? 0;
         blooms.value = {
@@ -292,9 +307,13 @@ function onSearch(text: string | undefined): void {
     <div class="materials-control">
         <p class="explainer">
             <span>
-                <strong>{{ $gettext("Tick") }}</strong>
+                <strong>{{ $gettext("Show") }}</strong>
                 <span>{{ " " }}</span>
-                <span>{{ $gettext("filters the map and the Corpus.") }}</span>
+                <span>{{
+                    $gettext(
+                        "keeps only the events of the ticked materials, on the map and in the Corpus.",
+                    )
+                }}</span>
             </span>
             <span>
                 <strong>{{ $gettext("Follow") }}</strong>
@@ -386,11 +405,7 @@ function onSearch(text: string | undefined): void {
             class="refused"
             role="status"
         >
-            <span>{{
-                $gettext(
-                    "Four materials are followed already: stop following one first.",
-                )
-            }}</span>
+            <span>{{ refusedText }}</span>
         </p>
 
         <InputText
@@ -403,6 +418,15 @@ function onSearch(text: string | undefined): void {
             :aria-label="$gettext('Search a material (synonyms included)')"
             @update:model-value="onSearch"
         />
+
+        <p
+            v-if="groups.length > 0"
+            class="columns"
+            aria-hidden="true"
+        >
+            <span>{{ $gettext("Show") }}</span>
+            <span>{{ $gettext("Follow") }}</span>
+        </p>
 
         <div
             class="groups"
@@ -495,29 +519,40 @@ function onSearch(text: string | undefined): void {
                                 >
                             </span>
                         </label>
-                        <button
-                            type="button"
-                            class="follow ms-focus"
-                            :class="{
-                                followed: slot(row.uri) !== null,
-                                full: nextSlot === null,
-                            }"
-                            :style="followStyle(row.uri)"
-                            :data-bloom="blooms[row.uri]"
-                            :aria-pressed="
-                                slot(row.uri) !== null ? 'true' : 'false'
-                            "
-                            :aria-label="followName(row.uri, row.label)"
-                            @click="onFollow(row.uri)"
+                        <HelpTip
+                            class="follow-tip"
+                            align="end"
+                            :text="followHelp"
                         >
-                            <span
-                                v-if="slot(row.uri) !== null"
-                                class="disc"
-                                aria-hidden="true"
-                                >{{ slot(row.uri) }}</span
-                            >
-                            <span v-else>{{ $gettext("Follow") }}</span>
-                        </button>
+                            <template #default="{ describedby }">
+                                <button
+                                    type="button"
+                                    class="follow ms-focus"
+                                    :class="{
+                                        followed: slot(row.uri) !== null,
+                                        full: nextSlot === null,
+                                    }"
+                                    :style="followStyle(row.uri)"
+                                    :data-bloom="blooms[row.uri]"
+                                    :aria-pressed="
+                                        slot(row.uri) !== null
+                                            ? 'true'
+                                            : 'false'
+                                    "
+                                    :aria-label="followName(row.uri, row.label)"
+                                    :aria-describedby="describedby"
+                                    @click="onFollow(row.uri)"
+                                >
+                                    <span
+                                        v-if="slot(row.uri) !== null"
+                                        class="disc"
+                                        aria-hidden="true"
+                                        >{{ slot(row.uri) }}</span
+                                    >
+                                    <span v-else>{{ $gettext("Follow") }}</span>
+                                </button>
+                            </template>
+                        </HelpTip>
                     </li>
                 </ul>
                 <button
@@ -700,6 +735,17 @@ function onSearch(text: string | undefined): void {
     font-size: 0.75rem;
 }
 
+.materials-control .columns {
+    display: flex;
+    justify-content: space-between;
+    padding-inline: 0.125rem;
+    color: var(--ink-dim);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
 .materials-control .groups {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -827,6 +873,7 @@ function onSearch(text: string | undefined): void {
     min-inline-size: 0;
 }
 
+.materials-control .follow-tip,
 .materials-control .follow {
     align-self: center;
 }

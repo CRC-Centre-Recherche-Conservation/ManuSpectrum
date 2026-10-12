@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     boundsOf,
+    fitAspect,
     fromMercator,
     haversineKm,
     padBounds,
@@ -51,5 +52,28 @@ describe("geography helpers", () => {
         expect(y).toBeCloseTo(800 - y1, 6);
         expect(x1).toBeCloseTo(400, 6);
         expect(y).toBeGreaterThan(y1);
+    });
+
+    it("widens bounds to a box's aspect, so the box shows them exactly", () => {
+        const bounds = { west: -2, south: 43, east: 6, north: 51 };
+        const wide = fitAspect(bounds, 220, 160);
+        const [x0, y0] = toMercator([wide.west, wide.south]);
+        const [x1, y1] = toMercator([wide.east, wide.north]);
+        expect((x1 - x0) / (y1 - y0)).toBeCloseTo(220 / 160, 6);
+        expect(wide.south).toBeCloseTo(bounds.south, 6);
+        expect(wide.north).toBeCloseTo(bounds.north, 6);
+        expect(wide.west).toBeLessThan(bounds.west);
+        for (const point of [
+            [0, 45],
+            [5, 50],
+        ] as const) {
+            const [x, y] = project(point, bounds, 220, 160);
+            const [xw, yw] = project(point, wide, 220, 160);
+            expect(xw).toBeCloseTo(x, 6);
+            expect(yw).toBeCloseTo(y, 6);
+        }
+        const [left, top] = project([wide.west, wide.north], wide, 220, 160);
+        expect(left).toBeCloseTo(0, 6);
+        expect(top).toBeCloseTo(0, 6);
     });
 });

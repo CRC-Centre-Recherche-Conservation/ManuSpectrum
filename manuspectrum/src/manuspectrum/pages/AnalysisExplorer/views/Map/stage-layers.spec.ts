@@ -12,6 +12,7 @@ import {
 import { FALLBACK_COLOURS } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-colours.ts";
 import { ringRadius } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import {
+    BORDERS_MIN_ZOOM,
     HATCH_IMAGE,
     OHM_SOURCE,
     PIP_OFFSETS,
@@ -22,6 +23,7 @@ import {
     bordersLayer,
     dashedRingImage,
     hatchImage,
+    pipAngle,
     pipImage,
     placeLayers,
     stageImages,
@@ -95,15 +97,74 @@ describe("the full stage style", () => {
 });
 
 describe("placeLayers", () => {
-    it("stacks rings, points, pips, then labels", () => {
+    it("stacks rings, points, labels, pips, then the label blockers", () => {
         const ids = PLACES.map((candidate) => candidate.id);
-        expect(ids.slice(0, 3)).toEqual([
+        expect(ids.slice(0, 5)).toEqual([
             "place-rings",
             "place-rings-dashed",
             "place-points",
+            "place-labels",
+            "place-badges",
         ]);
-        expect(ids.slice(-2)).toEqual(["place-labels", "place-badges"]);
+        expect(ids.slice(5, -1).every((id) => id.startsWith("pip-"))).toBe(
+            true,
+        );
         expect(ids.filter((id) => id.startsWith("pip-"))).toHaveLength(8);
+        expect(ids.at(-1)).toBe("place-blockers");
+    });
+
+    it("blocks labels over a place's ring and pips with an invisible symbol", () => {
+        const blockers = layer(PLACES, "place-blockers");
+        expect(blockers.type).toBe("symbol");
+        expect(blockers.layout?.["icon-allow-overlap"]).toBe(true);
+        expect(blockers.layout?.["icon-ignore-placement"]).toBe(false);
+        expect(blockers.paint?.["icon-opacity"]).toBe(0);
+        const size = blockers.layout?.["icon-size"];
+        const ring = ringRadius(4);
+        expect((evaluate(size, { ring }, {}, 7) as number) * 16).toBeCloseTo(
+            ring + 4 + 7,
+        );
+        expect((evaluate(size, { ring }, {}, 4) as number) * 16).toBeCloseTo(
+            ring + 4 + 7 * 0.75,
+        );
+        for (let slot = 1; slot <= 4; slot++) {
+            for (const kind of ["firm", "pale"]) {
+                const pip = layer(PLACES, `pip-${slot}-${kind}`).layout ?? {};
+                expect(pip["icon-allow-overlap"]).toBe(true);
+            }
+        }
+    });
+
+    it("sets each label just outside its place's pips", () => {
+        for (const id of ["place-labels", "place-badges"]) {
+            const labels = layer(PLACES, id).layout ?? {};
+            const ring = ringRadius(9);
+            const offset = labels["text-radial-offset"];
+            expect(
+                (evaluate(offset, { ring }, {}, 7) as number) * 12.125,
+            ).toBeCloseTo(ring + 4 + 7 + 2);
+            expect(labels["text-offset"]).toBeUndefined();
+        }
+    });
+
+    it("turns two near places' pips to opposite sides, so they never interleave", () => {
+        const offset = (slot: number, away: number | null): number[] =>
+            evaluate(
+                layer(PLACES, `pip-${slot}-firm`).layout?.["icon-offset"],
+                { ring: 10, pipAway: away },
+                {},
+                7,
+            ) as number[];
+        for (let slot = 1; slot <= 4; slot++) {
+            const [westX] = offset(slot, 180);
+            const [eastX] = offset(slot, 0);
+            expect(westX).toBeLessThan(0);
+            expect(eastX).toBeGreaterThan(0);
+            const [x, y] = offset(slot, 90);
+            const angle = (pipAngle(slot, 90) * Math.PI) / 180;
+            expect(x).toBeCloseTo(Math.cos(angle) * 14, 2);
+            expect(y).toBeCloseTo(Math.sin(angle) * 14, 2);
+        }
     });
 
     it("reads the slot states in paint opacity only, never in layout", () => {
@@ -228,6 +289,7 @@ describe("territoryLayers", () => {
         expect(TERRITORIES.map((candidate) => candidate.id)).toEqual([
             "territory-cells",
             "territory-hatch",
+            "territory-casing",
             "territory-edges",
         ]);
         const hatch = layer(TERRITORIES, "territory-hatch");
@@ -254,6 +316,20 @@ describe("territoryLayers", () => {
         expect(evaluate(edges, { slot: 0 })).toEqual(
             evaluate(FALLBACK_COLOURS.surface, {}),
         );
+    });
+
+    it("lays the dominance frontier as a surface line on an ink casing", () => {
+        const casing = layer(TERRITORIES, "territory-casing");
+        expect(evaluate(casing.filter, { layer: "edge", slot: 0 })).toBe(true);
+        expect(evaluate(casing.filter, { layer: "edge", slot: 2 })).toBe(false);
+        expect(casing.paint?.["line-color"]).toBe(FALLBACK_COLOURS.ink);
+        const edges = layer(TERRITORIES, "territory-edges").paint ?? {};
+        const frontier = evaluate(edges["line-width"], { slot: 0 }) as number;
+        expect(casing.paint?.["line-width"] as number).toBeGreaterThan(
+            frontier + 2,
+        );
+        expect(territoryOpacity(null).casing).toBeGreaterThan(0.5);
+        expect(territoryOpacity(2).casing).toBeLessThan(0.2);
     });
 
     it("isolates one slot by paint, fading the others' cells, hatch and edges", () => {
@@ -314,6 +390,14 @@ describe("bordersFilter", () => {
         expect(text).not.toContain("decdate");
         expect(text).toContain("admin_level");
         expect(evaluate(bordersFilter(null), { admin_level: 2 })).toBe(true);
+    });
+
+    it("loads the borders from zoom 7 only", () => {
+        expect(BORDERS_MIN_ZOOM).toBe(7);
+        expect(
+            (bordersLayer(null, FALLBACK_COLOURS, true) as { minzoom?: number })
+                .minzoom,
+        ).toBe(BORDERS_MIN_ZOOM);
     });
 
     it("draws the borders in the ring grey, dashed, hidden on request", () => {

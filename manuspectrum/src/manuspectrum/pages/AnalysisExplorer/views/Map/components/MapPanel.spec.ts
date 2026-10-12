@@ -437,6 +437,43 @@ describe("MapPanel", () => {
         ).toBeLessThanOrEqual(60);
     });
 
+    it("shows four Components of a large document, then ten more per click", async () => {
+        const many = Array.from({ length: 60 }, (_, n) =>
+            mapEvent({
+                id: `production:c${n}`,
+                document: { id: uuid(8), name: label("Ms G") },
+                component: {
+                    id: uuid(800 + n),
+                    name: label(`f. ${String(n).padStart(2, "0")}`),
+                },
+                analyses: Array.from({ length: 5 }, (_, k) =>
+                    uuid(2000 + n * 5 + k),
+                ),
+            }),
+        );
+        const wrapper = mountPanel({
+            subject: { kind: "document", id: uuid(8) },
+            events: many,
+        });
+        await unfold(wrapper);
+        expect(wrapper.findAll(".component-group")).toHaveLength(4);
+        expect(
+            wrapper.findAll("input[type=checkbox]").length,
+        ).toBeLessThanOrEqual(30);
+        const more = () => wrapper.get(".more-components");
+        expect(more().text()).toBe("Show 10 more Components");
+        await more().trigger("click");
+        expect(wrapper.findAll(".component-group")).toHaveLength(14);
+    });
+
+    it("keeps a material's reliability and its counts on one line", async () => {
+        const wrapper = mountPanel();
+        const facts = wrapper.get(".attested li .meta .facts");
+        expect(facts.find(".reliability").exists()).toBe(true);
+        expect(facts.find(".row-counts").exists()).toBe(true);
+        expect(facts.text()).toMatch(/^Certain · \d+ doc\. · \d+ comp\.$/);
+    });
+
     it("shows three events per Component, then the others", async () => {
         const many = Array.from({ length: 5 }, (_, n) =>
             mapEvent({

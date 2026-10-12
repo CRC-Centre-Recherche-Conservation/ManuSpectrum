@@ -60,8 +60,10 @@ const text = computed(() => {
     }
     return interpolate(
         props.scope === "here"
-            ? $gettext(
+            ? $ngettext(
+                  "%{n} analysis here to add: tick it or make room.",
                   "%{n} analyses here to add: tick them one by one or make room.",
+                  refused.needed,
               )
             : $gettext(
                   "This page has %{n} analyses to add: tick them one by one or make room.",

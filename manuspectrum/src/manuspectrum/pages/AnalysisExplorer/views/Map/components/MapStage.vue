@@ -23,6 +23,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/base-style.ts";
 import {
     BORDERS_LAYER,
+    BORDERS_MIN_ZOOM,
     CLICKABLE_LAYERS,
     IMAGE_PIXEL_RATIO,
     OHM_SOURCE,
@@ -40,18 +41,28 @@ import {
 import type { FeatureCollection, Point } from "geojson";
 import type {
     GeoJSONSource,
+    JumpToOptions,
     LayerSpecification,
     LngLatBoundsLike,
     Map as MapLibreMap,
     MapMouseEvent,
     VectorTileSource,
 } from "maplibre-gl";
-import type { Bounds } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+import type {
+    Bounds,
+    LngLat,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { MapColours } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-colours.ts";
+import type { MapSnapshot } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { PlaceProperties } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import type { DrawnImage } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 
 type FeatureState = Record<string, number | boolean>;
+
+interface SnapshotRequest {
+    bounds: Bounds;
+    resolve: (shot: MapSnapshot | null) => void;
+}
 
 const START_CENTRE: [number, number] = [2.5, 47];
 const START_ZOOM = 4;
@@ -71,9 +82,10 @@ const SHOWN_ATTRIBUTION = ".maplibregl-ctrl-attrib.maplibregl-compact-show";
  * sea, the historical borders. Every focus, follow or selection change goes
  * through feature-state; only a change of `places` or `territories`
  * replaces source data; `isolate` (a slot, or null) fades the other slots'
- * territories by paint. The compact attribution starts folded to its ⓘ.
- * Overlays of the parent (legend, note, tooltip) go in the default slot,
- * inside the frame.
+ * territories by paint. The historical borders load from
+ * `BORDERS_MIN_ZOOM` only; `zoom` reports the camera's zoom after each move.
+ * The compact attribution starts folded to its ⓘ. Overlays of the parent
+ * (legend, note, tooltip) go in the default slot, inside the frame.
  */
 const props = defineProps<{
     places: FeatureCollection<Point, PlaceProperties>;
@@ -89,9 +101,10 @@ const props = defineProps<{
 const emit = defineEmits<{
     select: [id: string];
     hover: [payload: { id: string; x: number; y: number } | null];
+    zoom: [zoom: number];
     failed: [];
 }>();
-defineExpose({ snapshot, resize });
+defineExpose({ snapshot, resize, revealPlace, zoomTo });
 
 const { $gettext } = useGettext();
 const motion = usePreferredReducedMotion();
@@ -104,6 +117,8 @@ let ready = false;
 let applied = new Map<string, string>();
 let hovered: string | null = null;
 let drawnColours: MapColours = props.colours;
+let shooting = false;
+let queued: SnapshotRequest | null = null;
 
 watch(
     () => props.places,
@@ -190,6 +205,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     ready = false;
+    queued?.resolve(null);
+    queued = null;
     map.value?.remove();
     map.value = null;
 });
@@ -213,8 +230,10 @@ function boundsLike(bounds: Bounds): LngLatBoundsLike {
     ];
 }
 
-function stateKey(id: string, state: FeatureState): string {
-    return JSON.stringify({ ...state, selected: id === props.selected });
+/** The state sent for place `id`: the parent's, hovered also under the stage's own pointer, and selected. */
+function sentState(id: string, state: FeatureState): FeatureState {
+    const merged = id === hovered ? { ...state, hover: true } : state;
+    return { ...merged, selected: id === props.selected };
 }
 
 /** Sends the feature-state of the places whose state changed since the last call. */
@@ -223,13 +242,11 @@ function applyStates(): void {
     if (!current || !ready) return;
     const next = new Map<string, string>();
     for (const [id, state] of props.states) {
-        const key = stateKey(id, state);
+        const sent = sentState(id, state);
+        const key = JSON.stringify(sent);
         next.set(id, key);
         if (applied.get(id) !== key) {
-            current.setFeatureState(
-                { source: PLACES_SOURCE, id },
-                { ...state, selected: id === props.selected },
-            );
+            current.setFeatureState({ source: PLACES_SOURCE, id }, sent);
         }
     }
     for (const id of applied.keys()) {
@@ -259,6 +276,11 @@ function isolateTerritory(current: MapLibreMap, slot: number | null): void {
     const opacity = territoryOpacity(slot);
     current.setPaintProperty("territory-cells", "fill-opacity", opacity.cells);
     current.setPaintProperty("territory-hatch", "fill-opacity", opacity.hatch);
+    current.setPaintProperty(
+        "territory-casing",
+        "line-opacity",
+        opacity.casing,
+    );
     current.setPaintProperty("territory-edges", "line-opacity", opacity.edges);
 }
 
@@ -342,6 +364,7 @@ function onLoad(current: MapLibreMap): void {
         type: "vector",
         tiles: [OHM_TILES],
         attribution: OHM_ATTRIBUTION,
+        minzoom: BORDERS_MIN_ZOOM,
         maxzoom: OHM_MAX_ZOOM,
     });
     for (const layer of territoryLayers(props.colours)) {
@@ -354,6 +377,7 @@ function onLoad(current: MapLibreMap): void {
     current.on("click", onClick);
     current.on("mousemove", onMove);
     current.on("mouseout", clearHover);
+    current.on("moveend", () => emit("zoom", current.getZoom()));
     ready = true;
     if (drawnColours !== props.colours) recolour(current, props.colours);
     drawnColours = props.colours;
@@ -366,6 +390,8 @@ function onLoad(current: MapLibreMap): void {
             duration: 0,
         });
     }
+    emit("zoom", current.getZoom());
+    if (queued) void runSnapshots(current);
 }
 
 function placeAt(event: MapMouseEvent): string | null {
@@ -433,35 +459,107 @@ function retryBase(): void {
     );
 }
 
-/**
- * The map in `bounds` as a PNG data URL, for the small multiples; null when
- * it cannot be read (no map yet, a tainted or lost canvas, no idle frame in
- * time). The canvas is read in the frame drawn right after the map settles,
- * so no `preserveDrawingBuffer` is needed; the camera is put back after.
- */
-function snapshot(bounds: Bounds): Promise<string | null> {
+/** Brings `lngLat` into view, easing the map there when it is off screen. */
+function revealPlace(lngLat: LngLat): void {
     const current = map.value;
-    if (!current || !ready) return Promise.resolve(null);
-    const camera = {
+    if (!current || !ready) return;
+    if (current.getBounds().contains([lngLat[0], lngLat[1]])) return;
+    current.easeTo({
+        center: [lngLat[0], lngLat[1]],
+        duration: fitDurationMs(),
+    });
+}
+
+/** Eases the map to `zoom` around its centre. */
+function zoomTo(zoom: number): void {
+    map.value?.easeTo({ zoom, duration: fitDurationMs() });
+}
+
+/** The ids of the layers a snapshot leaves out: the places and the territories. */
+function ownLayerIds(): string[] {
+    return [...territoryLayers(drawnColours), ...placeLayers(drawnColours)].map(
+        (layer) => layer.id,
+    );
+}
+
+function showOwnLayers(current: MapLibreMap, visible: boolean): void {
+    for (const id of ownLayerIds()) {
+        current.setLayoutProperty(
+            id,
+            "visibility",
+            visible ? "visible" : "none",
+        );
+    }
+}
+
+/**
+ * The bare map (paper, water, borders; no place or territory) fitted to
+ * `bounds`, as a PNG data URL with the bounds the picture really shows;
+ * null when it cannot be read (no map, a tainted or lost canvas, no idle
+ * frame in time). One snapshot runs at a time: a request made while one
+ * runs replaces the one waiting (that one gets null). The camera is saved
+ * once, when a run starts, and put back with the place layers when the
+ * last request is done. A request before the map has loaded waits for it.
+ */
+function snapshot(bounds: Bounds): Promise<MapSnapshot | null> {
+    if (failed.value) return Promise.resolve(null);
+    return new Promise((resolve) => {
+        queued?.resolve(null);
+        queued = { bounds, resolve };
+        const current = map.value;
+        if (current && ready && !shooting) void runSnapshots(current);
+    });
+}
+
+async function runSnapshots(current: MapLibreMap): Promise<void> {
+    if (shooting) return;
+    shooting = true;
+    const camera: JumpToOptions = {
         center: current.getCenter(),
         zoom: current.getZoom(),
         bearing: current.getBearing(),
         pitch: current.getPitch(),
     };
+    showOwnLayers(current, false);
+    while (queued && map.value === current) {
+        const next = queued;
+        queued = null;
+        next.resolve(await shoot(current, next.bounds));
+    }
+    if (map.value === current) {
+        showOwnLayers(current, true);
+        current.jumpTo(camera);
+    }
+    shooting = false;
+}
+
+/** Reads the canvas in the frame drawn right after the map settles in `bounds`, so no `preserveDrawingBuffer` is needed. */
+function shoot(
+    current: MapLibreMap,
+    bounds: Bounds,
+): Promise<MapSnapshot | null> {
     return new Promise((resolve) => {
         let settled = false;
-        const finish = (value: string | null): void => {
+        const finish = (value: MapSnapshot | null): void => {
             if (settled) return;
             settled = true;
             clearTimeout(timer);
-            if (map.value === current) current.jumpTo(camera);
             resolve(value);
         };
         const timer = setTimeout(() => finish(null), SNAPSHOT_TIMEOUT_MS);
         current.once("idle", () => {
             current.once("render", () => {
                 try {
-                    finish(current.getCanvas().toDataURL("image/png"));
+                    const shown = current.getBounds();
+                    finish({
+                        url: current.getCanvas().toDataURL("image/png"),
+                        bounds: {
+                            west: shown.getWest(),
+                            south: shown.getSouth(),
+                            east: shown.getEast(),
+                            north: shown.getNorth(),
+                        },
+                    });
                 } catch (error: unknown) {
                     console.error("The map snapshot could not be read", error);
                     finish(null);

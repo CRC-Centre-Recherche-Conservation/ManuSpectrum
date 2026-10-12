@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
+import PrimeVue from "primevue/config";
 
 import PlaceList from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/PlaceList.vue";
 
-import { label } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import {
+    label,
+    mapPlace,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
 import type { PlaceSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 
@@ -46,6 +50,7 @@ function mountList(
 ) {
     return mount(PlaceList, {
         props: { summaries: SUMMARIES, unplaced: 0, selected: null, ...props },
+        global: { plugins: [PrimeVue] },
     });
 }
 
@@ -106,5 +111,49 @@ describe("PlaceList", () => {
         expect(wrapper.find(".collapsible-section .summary").exists()).toBe(
             false,
         );
+    });
+
+    describe("with many places", () => {
+        const many = Array.from({ length: 12 }, (_, n) =>
+            summary(`m${n}`, `Place ${String(n).padStart(2, "0")}`, 1, 1),
+        );
+        const places = {
+            m3: mapPlace({ id: "m3", name: label("Place 03"), parent: "nor" }),
+            nor: mapPlace({
+                id: "nor",
+                name: label("Normandie"),
+                parent: "m3",
+            }),
+        };
+
+        it("shows eight rows, the selected one too, then more on demand", async () => {
+            const wrapper = mountList({ summaries: many, selected: "m10" });
+            const names = () =>
+                wrapper.findAll("button.place .name").map((row) => row.text());
+            expect(names()).toHaveLength(9);
+            expect(names()).toContain("Place 10");
+            const more = wrapper.get("button.show-more");
+            expect(more.text()).toBe("Show 3 more");
+            await more.trigger("click");
+            expect(names()).toHaveLength(12);
+            expect(wrapper.find("button.show-more").exists()).toBe(false);
+        });
+
+        it("searches the folded names of the places and of their parents, every match shown", async () => {
+            const wrapper = mountList({ summaries: many, places });
+            const search = wrapper.get("input[type=search]");
+            await search.setValue("NORMANDÍE");
+            expect(
+                wrapper.findAll("button.place .name").map((row) => row.text()),
+            ).toEqual(["Place 03"]);
+            await search.setValue("place");
+            expect(wrapper.findAll("button.place")).toHaveLength(12);
+            await search.setValue("lyon");
+            expect(wrapper.find(".no-match").text()).toBe("No match");
+        });
+
+        it("offers no search for a short list", () => {
+            expect(mountList().find("input[type=search]").exists()).toBe(false);
+        });
     });
 });

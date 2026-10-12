@@ -37,6 +37,9 @@ const MEMO_ENTRIES = 20;
 const FULL_SERIES_ENTRIES = 6;
 /** The most full series the tab keeps, whatever Compare draws (a full series can weigh a few MB once read). */
 const FULL_SERIES_MAX_ENTRIES = 30;
+/** Map events payloads (a few MB each once read) kept apart, so the map never evicts the Corpus payloads. */
+const EVENTS_ENTRIES = 2;
+const EVENTS_ROUTE: ExplorerRoute = "manuspectrum:explorer-events";
 const MEMO_TTL_MS = 5 * 60 * 1000;
 /** Prefetches nobody waits for yet that run at once; a new one drops the oldest. */
 export const PREFETCHES_IN_FLIGHT = 4;
@@ -82,6 +85,13 @@ interface Memo {
 const payloads: Memo = { entries: new Map(), limit: MEMO_ENTRIES };
 /** The full series of this tab. */
 const fullSeries: Memo = { entries: new Map(), limit: FULL_SERIES_ENTRIES };
+/** The map events payloads of this tab. */
+const eventPayloads: Memo = { entries: new Map(), limit: EVENTS_ENTRIES };
+
+/** The memo that holds the answers of `route`. */
+function memoOf(route: ExplorerRoute): Memo {
+    return route === EVENTS_ROUTE ? eventPayloads : payloads;
+}
 
 /** The URL of a localized explorer route. */
 export function explorerUrl(
@@ -173,17 +183,17 @@ function evict(memo: Memo): void {
 }
 
 /** Aborts `entry` unless a caller waits for it or its answer arrived. */
-function abandon(url: string, entry: MemoEntry): void {
+function abandon(memo: Memo, url: string, entry: MemoEntry): void {
     entry.pinned = false;
     if (entry.waiting === 0 && entry.arrivedAt === null) {
-        forget(payloads, url, entry);
+        forget(memo, url, entry);
         entry.controller.abort();
     }
 }
 
 /** Aborts the oldest prefetches nobody waits for beyond `PREFETCHES_IN_FLIGHT`. */
-function capPrefetches(): void {
-    const idle = [...payloads.entries].filter(
+function capPrefetches(memo: Memo): void {
+    const idle = [...memo.entries].filter(
         ([, entry]) =>
             entry.pinned && entry.arrivedAt === null && entry.waiting === 0,
     );
@@ -191,7 +201,7 @@ function capPrefetches(): void {
         0,
         Math.max(0, idle.length - PREFETCHES_IN_FLIGHT),
     )) {
-        abandon(url, entry);
+        abandon(memo, url, entry);
     }
 }
 
@@ -241,6 +251,8 @@ function wait<T>(
  *
  * The memo holds the last `MEMO_ENTRIES` answers for `MEMO_TTL_MS` from
  * their arrival, in memory only; a request still running is never evicted.
+ * The map events route has a memo of its own, of `EVENTS_ENTRIES`, with
+ * the same rules.
  * Callers of one URL share one request: a caller that aborts leaves it, and
  * it is aborted when nobody waits any more. A failed
  * request (404 included) is forgotten; `reload` replaces the entry. An aborted
@@ -251,9 +263,10 @@ export function getJson<T>(
     { signal, reload = false, ...request }: GetJsonOptions = {},
 ): Promise<T> {
     const url = explorerUrl(route, request);
-    if (reload) payloads.entries.delete(url);
-    const entry = lookup(payloads, url) ?? start(payloads, url, false);
-    return wait<T>(payloads, url, entry, signal);
+    const memo = memoOf(route);
+    if (reload) memo.entries.delete(url);
+    const entry = lookup(memo, url) ?? start(memo, url, false);
+    return wait<T>(memo, url, entry, signal);
 }
 
 /** The payload of this route if the tab holds its answer, else null; no request. */
@@ -261,7 +274,7 @@ export function peekJson<T>(
     route: ExplorerRoute,
     request: JsonRequestOptions = {},
 ): T | null {
-    const entry = lookup(payloads, explorerUrl(route, request));
+    const entry = lookup(memoOf(route), explorerUrl(route, request));
     return entry?.arrivedAt != null ? (entry.value as T) : null;
 }
 
@@ -276,18 +289,20 @@ export function prefetchJson(
     { signal, ...request }: PrefetchOptions = {},
 ): void {
     const url = explorerUrl(route, request);
-    if (signal?.aborted || lookup(payloads, url)) return;
-    const entry = start(payloads, url, true);
-    capPrefetches();
-    signal?.addEventListener("abort", () => abandon(url, entry), {
+    const memo = memoOf(route);
+    if (signal?.aborted || lookup(memo, url)) return;
+    const entry = start(memo, url, true);
+    capPrefetches(memo);
+    signal?.addEventListener("abort", () => abandon(memo, url, entry), {
         once: true,
     });
 }
 
-/** Empties the tab's memo, full series included, and gives the full series their default room. */
+/** Empties the tab's memo, full series and map events included, and gives the full series their default room. */
 export function forgetPayloads(): void {
     payloads.entries.clear();
     fullSeries.entries.clear();
+    eventPayloads.entries.clear();
     fullSeries.limit = FULL_SERIES_ENTRIES;
 }
 

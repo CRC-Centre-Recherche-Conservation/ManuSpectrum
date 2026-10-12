@@ -258,7 +258,11 @@ export function historyMode(
     return "replace";
 }
 
-/** Applies a URL snapshot; entering the document screen records the screen left as its origin. */
+/**
+ * Applies a URL snapshot; entering the document screen records the screen
+ * left as its origin. The map legend's open state is not in the address:
+ * the reader's current one is kept.
+ */
 export function applySnapshot(
     store: ExplorerStore,
     snapshot: UrlSnapshot,
@@ -277,7 +281,7 @@ export function applySnapshot(
         state.folioView = snapshot.folioView;
         state.showOutside = snapshot.outside;
         state.filters = snapshot.filters;
-        state.mapState = snapshot.map;
+        state.mapState = { ...snapshot.map, legend: state.mapState.legend };
     });
 }
 

@@ -9,10 +9,18 @@ import type {
     MapEvent,
     MapPlace,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
-import type { LngLat } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+import { project } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+
+import type {
+    Bounds,
+    LngLat,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 
 export const MULTIPLES_PER_PAGE = 12;
+/** The drawing box of a mini map, in SVG units. */
+export const MINI_WIDTH = 220;
+export const MINI_HEIGHT = 160;
 const CENTURY = 100;
 
 export interface MiniDot {
@@ -26,6 +34,8 @@ export interface MiniDot {
     pale: boolean;
     /** Followed slots present there (centuries). */
     slots: number[];
+    /** An attributed place (an area, or placed through its parent), drawn dashed. */
+    dashed: boolean;
 }
 
 export interface MiniMap {
@@ -35,8 +45,38 @@ export interface MiniMap {
     uri: string | null;
     /** Century index, 0-based (`floor((year - 1) / 100)`; 1301–1400 is 13) or null. */
     century: number | null;
+    /** Places where the material, or an event of the century, is attested. */
+    places: number;
+    documents: number;
     components: number;
     dots: MiniDot[];
+}
+
+/** The stage's picture behind the mini maps, and the bounds the picture shows. */
+export interface MapSnapshot {
+    url: string;
+    bounds: Bounds;
+}
+
+/** Where a mini map draws `snapshot` so that it lines up with dots projected in `bounds`. */
+export function snapshotFrame(
+    snapshot: MapSnapshot,
+    bounds: Bounds,
+): { x: number; y: number; width: number; height: number } {
+    const shown = snapshot.bounds;
+    const [left, top] = project(
+        [shown.west, shown.north],
+        bounds,
+        MINI_WIDTH,
+        MINI_HEIGHT,
+    );
+    const [right, bottom] = project(
+        [shown.east, shown.south],
+        bounds,
+        MINI_WIDTH,
+        MINI_HEIGHT,
+    );
+    return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
 /** Century indexes touched by `range`, e.g. [1250, 1420] gives [12, 13, 14]. */
@@ -70,6 +110,7 @@ function dotsOf(
             summary.tracked.size > 0 &&
             [...summary.tracked.values()].every((v) => v === "pale"),
         slots: [...summary.tracked.keys()].sort((a, b) => a - b),
+        dashed: summary.dashed,
     }));
 }
 
@@ -96,11 +137,13 @@ export function byMaterial(
             low,
         );
         const carrying = new Set<string>();
+        const documents = new Set<string>();
         let title: Label | null = null;
         for (const event of events) {
             const material = event.materials.find((m) => m.id === uri);
             if (!material) continue;
             title ??= material.name;
+            documents.add(event.document.id);
             if (event.component) carrying.add(event.component.id);
         }
         const componentsAt = (summary: PlaceSummary): number => {
@@ -115,13 +158,16 @@ export function byMaterial(
             }
             return ids.size;
         };
+        const dots = dotsOf(summaries, componentsAt);
         return {
             key: uri,
             title,
             uri,
             century: null,
+            places: dots.filter((dot) => dot.attested).length,
+            documents: documents.size,
             components: carrying.size,
-            dots: dotsOf(summaries, componentsAt),
+            dots,
         };
     });
     return maps.sort(
@@ -151,21 +197,26 @@ export function byCentury(
         });
         const summaries = summarisePlaces(inside, places, tracked, low);
         const components = new Set<string>();
+        const documents = new Set<string>();
         for (const event of inside) {
+            documents.add(event.document.id);
             if (event.component) components.add(event.component.id);
         }
+        const dots = dotsOf(summaries, (summary) => summary.documents.size).map(
+            (dot) => ({
+                ...dot,
+                attested: tracked.length === 0 || dot.attested,
+            }),
+        );
         return {
             key: `century:${century}`,
             title: null,
             uri: null,
             century,
+            places: dots.filter((dot) => dot.attested).length,
+            documents: documents.size,
             components: components.size,
-            dots: dotsOf(summaries, (summary) => summary.documents.size).map(
-                (dot) => ({
-                    ...dot,
-                    attested: tracked.length === 0 || dot.attested,
-                }),
-            ),
+            dots,
         };
     });
 }

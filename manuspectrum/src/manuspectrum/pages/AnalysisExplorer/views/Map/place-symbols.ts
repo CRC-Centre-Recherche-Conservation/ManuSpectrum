@@ -9,6 +9,11 @@ import type {
     MapPlace,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { FocusMode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
+import {
+    haversineKm,
+    toMercator,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+
 import type { LngLat } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import type { TrackedField } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
 import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
@@ -18,6 +23,10 @@ export const LOW_RANK = 2;
 export const LOW_WEIGHT = 0.5;
 export const RING_BASE_PX = 6;
 export const RING_STEP_PX = 4;
+/** Places closer than this turn their pips away from each other. */
+export const PIP_NEIGHBOUR_KM = 200;
+/** The directions a place's pips can turn to, in screen degrees (0 = east, 90 = south). */
+export const PIP_AWAY_STEP_DEG = 45;
 
 export type Attestation = "firm" | "pale";
 
@@ -44,6 +53,8 @@ export interface PlaceProperties {
     name: string;
     documents: number;
     components: number;
+    /** The screen direction its pips gather towards, away from its near neighbours (a multiple of `PIP_AWAY_STEP_DEG`); null without one. */
+    pipAway: number | null;
 }
 
 export function lowLevels(scale: CertaintyScale): Set<string> {
@@ -73,14 +84,35 @@ export function inBrush(
     );
 }
 
-export function withoutLow(
+/** `events` without the materials whose reliability is one of `hidden`; a material of no recorded reliability stays. */
+export function withoutLevels(
     events: readonly MapEvent[],
-    low: ReadonlySet<string>,
+    hidden: ReadonlySet<string>,
 ): MapEvent[] {
+    if (hidden.size === 0) return [...events];
     return events.map((event) => ({
         ...event,
-        materials: event.materials.filter((m) => !isLow(m, low)),
+        materials: event.materials.filter(
+            (m) => m.reliability === null || !hidden.has(m.reliability),
+        ),
     }));
+}
+
+/** The identified materials (distinct characterizations) of `events` per reliability level. */
+export function levelCounts(events: readonly MapEvent[]): Map<string, number> {
+    const seen = new Map<string, Set<string>>();
+    for (const event of events) {
+        for (const material of event.materials) {
+            if (material.reliability === null) continue;
+            let ids = seen.get(material.reliability);
+            if (!ids) {
+                ids = new Set();
+                seen.set(material.reliability, ids);
+            }
+            ids.add(material.characterization);
+        }
+    }
+    return new Map([...seen].map(([level, ids]) => [level, ids.size]));
 }
 
 export function ringRadius(documents: number): number {
@@ -147,9 +179,46 @@ export function summarisePlaces(
     return found;
 }
 
+/**
+ * For each place with neighbours closer than `PIP_NEIGHBOUR_KM`, the screen
+ * direction pointing away from them (each pulls by its nearness), rounded
+ * to `PIP_AWAY_STEP_DEG`. The rule reads only coordinates, so it holds at
+ * every zoom: two near places gather their pips on opposite sides.
+ */
+export function pipDirections(
+    summaries: ReadonlyMap<string, PlaceSummary>,
+): Map<string, number> {
+    const all = [...summaries.values()];
+    const found = new Map<string, number>();
+    for (const place of all) {
+        const [x, y] = toMercator(place.lngLat);
+        let pushX = 0;
+        let pushY = 0;
+        for (const other of all) {
+            if (other === place) continue;
+            const km = haversineKm(place.lngLat, other.lngLat);
+            if (km >= PIP_NEIGHBOUR_KM) continue;
+            const [ox, oy] = toMercator(other.lngLat);
+            const dx = ox - x;
+            const dy = y - oy;
+            const length = Math.hypot(dx, dy);
+            if (length === 0) continue;
+            const pull = 1 - km / PIP_NEIGHBOUR_KM;
+            pushX -= (dx / length) * pull;
+            pushY -= (dy / length) * pull;
+        }
+        if (pushX === 0 && pushY === 0) continue;
+        const angle = (Math.atan2(pushY, pushX) * 180) / Math.PI;
+        const step = Math.round(angle / PIP_AWAY_STEP_DEG) * PIP_AWAY_STEP_DEG;
+        found.set(place.id, ((step % 360) + 360) % 360);
+    }
+    return found;
+}
+
 export function placeFeatures(
     summaries: ReadonlyMap<string, PlaceSummary>,
 ): FeatureCollection<Point, PlaceProperties> {
+    const away = pipDirections(summaries);
     const features: Feature<Point, PlaceProperties>[] = [
         ...summaries.values(),
     ].map((s) => ({
@@ -164,6 +233,7 @@ export function placeFeatures(
             name: s.name.value,
             documents: s.documents.size,
             components: s.components.size,
+            pipAway: away.get(s.id) ?? null,
         },
     }));
     return { type: "FeatureCollection", features };

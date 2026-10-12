@@ -2,19 +2,30 @@
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import InputText from "primevue/inputtext";
+
 import CollapsibleSection from "@/manuspectrum/pages/AnalysisExplorer/components/CollapsibleSection.vue";
 
 import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
+import type { MapPlace } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { PlaceSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
+
+const ROWS_SHOWN = 8;
+const ROWS_STEP = 20;
+/** Parents read for the search, at most this deep (a cycle stops sooner). */
+const PARENT_DEPTH = 8;
 
 /**
  * The text equivalent of the map: one button per mapped place, by folded
  * name, named « Paris — 9 documents, 14 Components »; an attributed place
  * (an area, or reached through its parent) is in italics. The selected one
- * is `aria-current`. Under the list, the events without a mapped place
- * open their own panel. Folds into « Places (n) » with its counts; `open`
- * sets the fold, the reader may change it.
+ * is `aria-current`. The first 8 rows show, the selected one always,
+ * then « Show n more » adds 20; past 8 places a search field matches the
+ * folded name of a place and of its parents (`places`), and shows every
+ * match. Under the list, the events without a mapped place open their own
+ * panel. Folds into « Places (n) » with its counts; `open` sets the fold,
+ * the reader may change it.
  */
 const props = withDefaults(
     defineProps<{
@@ -22,8 +33,9 @@ const props = withDefaults(
         unplaced: number;
         selected: string | null;
         open?: boolean;
+        places?: Record<string, MapPlace>;
     }>(),
-    { open: true },
+    { open: true, places: () => ({}) },
 );
 const emit = defineEmits<{
     select: [id: string];
@@ -34,12 +46,38 @@ const emit = defineEmits<{
 const { $gettext, $ngettext, interpolate } = useGettext();
 
 const unfolded = ref(props.open);
+const query = ref("");
+const limit = ref(ROWS_SHOWN);
 
 const sorted = computed(() =>
     [...props.summaries].sort((a, b) =>
         foldText(a.name.value).localeCompare(foldText(b.name.value)),
     ),
 );
+const needle = computed(() => foldText(query.value.trim()));
+const matching = computed(() =>
+    needle.value
+        ? sorted.value.filter((summary) =>
+              searchText(summary).includes(needle.value),
+          )
+        : sorted.value,
+);
+const shown = computed(() => {
+    if (needle.value) return matching.value;
+    return sorted.value.filter(
+        (summary, index) =>
+            index < limit.value || summary.id === props.selected,
+    );
+});
+const hidden = computed(() => matching.value.length - shown.value.length);
+const moreText = computed(() =>
+    interpolate(
+        $gettext("Show %{n} more"),
+        { n: Math.min(ROWS_STEP, hidden.value) },
+        true,
+    ),
+);
+const searchable = computed(() => props.summaries.length > ROWS_SHOWN);
 const title = computed(() =>
     interpolate($gettext("Places (%{n})"), { n: props.summaries.length }, true),
 );
@@ -73,6 +111,29 @@ watch(
     },
 );
 
+/** The folded names of the place and of its parents, for the search. */
+function searchText(summary: PlaceSummary): string {
+    const names = [summary.name.value];
+    const seen = new Set([summary.id]);
+    let parent = props.places[summary.id]?.parent ?? null;
+    while (parent && !seen.has(parent) && seen.size <= PARENT_DEPTH) {
+        seen.add(parent);
+        const found = props.places[parent];
+        if (!found) break;
+        names.push(found.name.value);
+        parent = found.parent;
+    }
+    return foldText(names.join(" "));
+}
+
+function onSearch(text: string | undefined): void {
+    query.value = text ?? "";
+}
+
+function showMore(): void {
+    limit.value += ROWS_STEP;
+}
+
 function nameOf(summary: PlaceSummary): string {
     const documents = summary.documents.size;
     const components = summary.components.size;
@@ -104,9 +165,20 @@ function nameOf(summary: PlaceSummary): string {
         :summary="summaryText"
         @toggle="unfolded = $event"
     >
+        <InputText
+            v-if="searchable"
+            class="search"
+            type="search"
+            size="small"
+            autocomplete="off"
+            :model-value="query"
+            :placeholder="$gettext('Search a place')"
+            :aria-label="$gettext('Search a place')"
+            @update:model-value="onSearch"
+        />
         <ul class="places">
             <li
-                v-for="summary in sorted"
+                v-for="summary in shown"
                 :key="summary.id"
             >
                 <button
@@ -146,6 +218,20 @@ function nameOf(summary: PlaceSummary): string {
                 </button>
             </li>
         </ul>
+        <p
+            v-if="needle && matching.length === 0"
+            class="no-match"
+        >
+            <span>{{ $gettext("No match") }}</span>
+        </p>
+        <button
+            v-if="hidden > 0"
+            type="button"
+            class="more show-more"
+            @click="showMore"
+        >
+            <span>{{ moreText }}</span>
+        </button>
         <button
             v-if="props.unplaced > 0"
             type="button"
@@ -158,6 +244,18 @@ function nameOf(summary: PlaceSummary): string {
 </template>
 
 <style scoped>
+.place-list .search {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    font-size: 0.75rem;
+}
+
+.place-list .no-match {
+    color: var(--ink-dim);
+    font-size: 0.75rem;
+}
+
 .place-list .places {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

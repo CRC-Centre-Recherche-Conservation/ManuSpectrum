@@ -1,7 +1,8 @@
 /**
  * A stand-in for `maplibre-gl` in jsdom, which has no WebGL. Each `Map`
  * records what the component asks of it, fires `load` on a microtask, and
- * answers `queryRenderedFeatures` with `rendered`. Mock the module with
+ * answers `queryRenderedFeatures` with `rendered` and `getBounds` with
+ * `shown` (by default the bounds last fitted). Mock the module with
  * `vi.mock("maplibre-gl", async () => (await import("…/testing/maplibre.ts")).maplibreModule())`.
  */
 
@@ -14,6 +15,16 @@ interface Listener {
     layer: string | null;
     handler: Handler;
     once: boolean;
+}
+
+type Corners = [[number, number], [number, number]];
+
+export interface FakeBounds {
+    getWest(): number;
+    getSouth(): number;
+    getEast(): number;
+    getNorth(): number;
+    contains(point: [number, number]): boolean;
 }
 
 export interface RecordedLayer {
@@ -57,6 +68,9 @@ export class FakeMap {
     filterCalls: [string, unknown][] = [];
     fitCalls: [unknown, Record<string, unknown> | undefined][] = [];
     jumpCalls: Record<string, unknown>[] = [];
+    easeCalls: Record<string, unknown>[] = [];
+    /** What `getBounds` answers; null follows the last `fitBounds`. */
+    shown: Corners | null = null;
     zoomCalls: [string, Record<string, unknown> | undefined][] = [];
     controls: unknown[] = [];
     images = new Map<string, unknown>();
@@ -136,6 +150,27 @@ export class FakeMap {
     jumpTo(options: Record<string, unknown>): this {
         this.jumpCalls.push(options);
         return this;
+    }
+
+    easeTo(options: Record<string, unknown>): this {
+        this.easeCalls.push(options);
+        return this;
+    }
+
+    getBounds(): FakeBounds {
+        const [[west, south], [east, north]] = this.shown ??
+            (this.fitCalls.at(-1)?.[0] as Corners | undefined) ?? [
+                [-180, -85],
+                [180, 85],
+            ];
+        return {
+            getWest: () => west,
+            getSouth: () => south,
+            getEast: () => east,
+            getNorth: () => north,
+            contains: ([lng, lat]) =>
+                lng >= west && lng <= east && lat >= south && lat <= north,
+        };
     }
 
     zoomIn(options?: Record<string, unknown>): this {

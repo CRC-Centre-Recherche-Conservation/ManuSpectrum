@@ -159,6 +159,9 @@ describe("MaterialsControl", () => {
         expect(wrapper.find("[role=status].refused").text()).toBe(
             "Four materials are followed already: stop following one first.",
         );
+        expect(announce).toHaveBeenLastCalledWith(
+            "Four materials are followed already: stop following one first.",
+        );
 
         await wrapper.find(".chip-row .unpin").trigger("click");
         expect(store.mapState.track).toEqual([null, ...URIS.slice(1, 4)]);
@@ -166,6 +169,20 @@ describe("MaterialsControl", () => {
         expect(store.mapState.track).toEqual([URIS[4], ...URIS.slice(1, 4)]);
         expect(wrapper.find("[role=status].refused").exists()).toBe(false);
         expect(announce).toHaveBeenCalledWith("Following Minium (colour 1).");
+    });
+
+    it("heads the two controls « Show » and « Follow », and explains Follow on each button", () => {
+        const wrapper = mountControl();
+        expect(
+            wrapper.findAll(".columns span").map((entry) => entry.text()),
+        ).toEqual(["Show", "Follow"]);
+        const follow = rowOf(wrapper, "Vermilion").get("button.follow");
+        const help = wrapper.get(
+            `[id="${follow.attributes("aria-describedby")}"]`,
+        );
+        expect(help.text()).toBe(
+            "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Show only shows or hides its events.",
+        );
     });
 
     it("shows a followed chip per slot, and the any / all toggle from two", async () => {

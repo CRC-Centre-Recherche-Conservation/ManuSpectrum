@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    MINI_HEIGHT,
+    MINI_WIDTH,
     MULTIPLES_PER_PAGE,
     byCentury,
     byMaterial,
     centuriesIn,
     pageOf,
+    snapshotFrame,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
+import {
+    fitAspect,
+    project,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import {
     label,
     mapEvent,
@@ -81,6 +88,49 @@ describe("small multiples", () => {
             ],
         );
         expect(maps.map((m) => m.uri)).toEqual(["rare", "few", "many", "mid"]);
+    });
+
+    it("counts the places and documents that attest a material, and marks attributed places dashed", () => {
+        const regional = {
+            ...places,
+            [uuid(12)]: mapPlace({
+                id: uuid(12),
+                name: label("Normandy"),
+                lngLat: [0, 49],
+                geometryKind: "area",
+            }),
+        };
+        const events = [
+            carrying("m", 20),
+            carrying("m", 21, uuid(12)),
+            mapEvent({
+                id: "other-document",
+                document: { id: uuid(2), name: label("Ms 60") },
+                place: uuid(12),
+                materials: [material("m")],
+            }),
+            mapEvent({ id: "plain", place: uuid(11) }),
+        ];
+        const [map] = byMaterial(events, regional, ["m"], none);
+        expect([map.places, map.documents, map.components]).toEqual([2, 2, 2]);
+        const dots = Object.fromEntries(map.dots.map((d) => [d.id, d]));
+        expect(dots[uuid(12)].dashed).toBe(true);
+        expect(dots[uuid(10)].dashed).toBe(false);
+    });
+
+    it("frames the snapshot so that a place falls on the same spot as its dot", () => {
+        const bounds = { west: -2, south: 43, east: 6, north: 51 };
+        const shown = fitAspect(
+            { west: -4, south: 43, east: 8, north: 51 },
+            MINI_WIDTH,
+            MINI_HEIGHT,
+        );
+        const frame = snapshotFrame({ url: "data:", bounds: shown }, bounds);
+        const paris = [2.35, 48.85] as const;
+        const [dotX, dotY] = project(paris, bounds, MINI_WIDTH, MINI_HEIGHT);
+        const [inX, inY] = project(paris, shown, frame.width, frame.height);
+        expect(frame.x + inX).toBeCloseTo(dotX, 6);
+        expect(frame.y + inY).toBeCloseTo(dotY, 6);
     });
 
     it("pages by twelve", () => {

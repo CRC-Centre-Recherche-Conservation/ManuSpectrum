@@ -82,3 +82,26 @@ export function project(
     const top = (height - (y1 - y0) * scale) / 2;
     return [left + (x - x0) * scale, top + (y1 - y) * scale];
 }
+
+/**
+ * `bounds` widened in Web Mercator, around its centre, to the aspect of a
+ * `width`×`height` box: what `project` shows of the map in that box.
+ */
+export function fitAspect(
+    bounds: Bounds,
+    width: number,
+    height: number,
+): Bounds {
+    const [x0, y0] = toMercator([bounds.west, bounds.south]);
+    const [x1, y1] = toMercator([bounds.east, bounds.north]);
+    const spanX = Math.max(1, x1 - x0);
+    const spanY = Math.max(1, y1 - y0);
+    const scale = Math.min(width / spanX, height / spanY);
+    const halfX = width / scale / 2;
+    const halfY = height / scale / 2;
+    const midX = (x0 + x1) / 2;
+    const midY = (y0 + y1) / 2;
+    const [west, south] = fromMercator([midX - halfX, midY - halfY]);
+    const [east, north] = fromMercator([midX + halfX, midY + halfY]);
+    return { west, south, east, north };
+}

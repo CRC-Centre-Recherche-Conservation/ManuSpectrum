@@ -42,6 +42,7 @@ import { intervalOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/aori
 import { materialCounts } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/colour-groups.ts";
 import {
     boundsOf,
+    fitAspect,
     padBounds,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import {
@@ -53,6 +54,8 @@ import {
     shownEventTypes,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import {
+    MINI_HEIGHT,
+    MINI_WIDTH,
     MULTIPLES_PER_PAGE,
     byCentury,
     byMaterial,
@@ -60,12 +63,14 @@ import {
 import {
     featureStates,
     inBrush,
+    levelCounts,
     lowLevels,
     placeFeatures,
     summarisePlaces,
     territoryFields,
-    withoutLow,
+    withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
+import { BORDERS_MIN_ZOOM } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
 import { territories } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
 import { trackedOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import { webglAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/webgl.ts";
@@ -80,7 +85,10 @@ import type {
     MultiplesAxis,
     TerritoryColour,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
-import type { MiniMap } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
+import type {
+    MapSnapshot,
+    MiniMap,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { PanelSubject } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/panel-groups.ts";
 
 interface Hovered {
@@ -120,14 +128,18 @@ const CANVAS_SELECTOR = ".maplibregl-canvas";
  * the brushed period and the borders live in the store (`mapState`, in the
  * address), with the legend's open state (folded by default, not in the
  * address); the reliability switch, the hovered place, the isolated
- * territory and the opened subject live here. The stage stays laid out, hidden, while the small
- * multiples show, so its snapshot can be taken and the map comes back as
- * it was. The opened subject's opener gets the focus back on close.
+ * territory and the opened subject live here. The stage stays laid out,
+ * hidden, while the small multiples show, so its snapshot can be taken and
+ * the map comes back as it was; a snapshot is asked again only when the
+ * bounds change (`boundsKey`), and only the newest answer is kept. A place
+ * picked in the list is eased into view. The opened subject's opener gets
+ * the focus back on close.
  */
 const announce = inject(ANNOUNCE_KEY, null);
 
 const store = useExplorerStore();
-const { $gettext, $ngettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, $ngettext, interpolate } = gettext;
 const { eventTypeLabel, viewTitle } = useVocabulary();
 const { activeFilters } = useActiveFilters();
 const request = useEvents(() => store.filters);
@@ -146,8 +158,11 @@ const subject = ref<PanelSubject | null>(null);
 const hovered = ref<Hovered | null>(null);
 const listHovered = ref<string | null>(null);
 const page = ref(0);
-const showLow = ref(true);
-const background = ref<string | null>(null);
+/** The reliability levels the reader unticked: their materials leave the map. */
+const hiddenLevels = ref(new Set<string>());
+const background = ref<MapSnapshot | null>(null);
+/** The stage's zoom after its last move; null before the map has loaded. */
+const stageZoom = ref<number | null>(null);
 const mapFailed = ref(false);
 const mapColours = shallowRef(FALLBACK_COLOURS);
 /** The followed slot whose territory reads alone while its legend row or rail chip is hovered. */
@@ -155,6 +170,7 @@ const isolated = ref<number | null>(null);
 const radiusDraft = ref(store.mapState.radius);
 const folded = ref(new Set<RailGroup>());
 let opener: HTMLElement | null = null;
+let snapshotTicket = 0;
 
 const response = computed(() => request.data.value);
 const status = computed(() => request.status.value);
@@ -176,7 +192,7 @@ const low = computed(() =>
 const places = computed(() => response.value?.places ?? {});
 const events = computed<MapEvent[]>(() => {
     const all = response.value?.events ?? [];
-    return showLow.value ? all : withoutLow(all, low.value);
+    return withoutLevels(all, hiddenLevels.value);
 });
 const brushed = computed(() =>
     events.value.filter((event) => inBrush(event, store.mapState.brush)),
@@ -204,6 +220,17 @@ const bounds = computed(() =>
         boundsOf(summaryList.value.map((summary) => summary.lngLat)) ?? EUROPE,
         store.mapState.radius,
     ),
+);
+/** The bounds rounded to a hundredth of a degree: equal bounds ask no new snapshot. */
+const boundsKey = computed(() =>
+    [
+        bounds.value.west,
+        bounds.value.south,
+        bounds.value.east,
+        bounds.value.north,
+    ]
+        .map((value) => value.toFixed(2))
+        .join(","),
 );
 const territoryReason = computed(() =>
     tracked.value.length === 0
@@ -273,6 +300,14 @@ const bordersYear = computed(() => {
 const bordersShown = computed(
     () => store.mapState.borders && bordersYear.value !== null,
 );
+/** The borders are asked and have a year, but the map is zoomed out past the zoom they load from. */
+const bordersTooFar = computed(
+    () =>
+        bordersShown.value &&
+        mode.value !== "multiples" &&
+        stageZoom.value !== null &&
+        stageZoom.value < BORDERS_MIN_ZOOM,
+);
 const bordersLabel = computed(() =>
     bordersYear.value === null
         ? $gettext("Historical borders")
@@ -282,7 +317,7 @@ const bordersLabel = computed(() =>
               true,
           ),
 );
-const language = computed(() => document.documentElement.lang || "en");
+const language = computed(() => gettext.current);
 const exports = computed(() => ({
     csv: exportHref(
         "manuspectrum:explorer-events-csv",
@@ -311,6 +346,12 @@ const unplacedText = computed(() =>
         { n: unplaced.value },
     ),
 );
+const levels = computed(() =>
+    [...(response.value?.certaintyScale.levels ?? [])].sort(
+        (a, b) => a.rank - b.rank,
+    ),
+);
+const levelCount = computed(() => levelCounts(response.value?.events ?? []));
 const shownTypes = computed(() => shownEventTypes(store.filters.eventType));
 const typeCounts = computed(() => {
     const counts = new Map<EventType, number>();
@@ -436,12 +477,16 @@ const tooltip = computed(() => {
 });
 
 watch(
-    () => [mode.value, bounds.value] as const,
+    () => [mode.value, boundsKey.value, stage.value] as const,
     async ([current]) => {
-        if (current !== "multiples") return;
-        background.value = (await stage.value?.snapshot(bounds.value)) ?? null;
+        if (current !== "multiples" || !stage.value) return;
+        const ticket = ++snapshotTicket;
+        const shot = await stage.value.snapshot(
+            fitAspect(bounds.value, MINI_WIDTH, MINI_HEIGHT),
+        );
+        if (ticket === snapshotTicket) background.value = shot;
     },
-    { immediate: true },
+    { immediate: true, flush: "post" },
 );
 watch(mode, (current, previous) => {
     if (previous === "multiples" && current !== "multiples") {
@@ -541,8 +586,11 @@ function toggleType(type: EventType, event: Event): void {
     store.setFilter("eventType", isDefault ? [] : next);
 }
 
-function setShowLow(event: Event): void {
-    showLow.value = (event.target as HTMLInputElement).checked;
+function setLevel(id: string, event: Event): void {
+    const next = new Set(hiddenLevels.value);
+    if ((event.target as HTMLInputElement).checked) next.delete(id);
+    else next.add(id);
+    hiddenLevels.value = next;
 }
 
 function isFolded(group: RailGroup): boolean {
@@ -610,6 +658,17 @@ function openMini(mini: MiniMap): void {
             to: (mini.century + 1) * 100,
         });
     }
+}
+
+/** Opens a place picked in the list, easing the map to it when it is off screen. */
+function pickPlace(id: string): void {
+    openSubject({ kind: "place", id });
+    const summary = summaries.value.get(id);
+    if (summary) stage.value?.revealPlace(summary.lngLat);
+}
+
+function zoomToBorders(): void {
+    stage.value?.zoomTo(BORDERS_MIN_ZOOM);
 }
 
 function skipToPlaces(): void {
@@ -750,24 +809,45 @@ function skipToTimeline(): void {
                             :id="groupBodyId('reliability')"
                             class="group-body"
                         >
-                            <label
-                                class="value"
-                                :class="{ checked: showLow }"
-                            >
-                                <input
-                                    type="checkbox"
-                                    :checked="showLow"
-                                    @change="setShowLow"
-                                />
-                                <span class="label wrap">{{
-                                    $gettext(
-                                        "Include “use with caution” and “uncertain”",
-                                    )
-                                }}</span>
-                            </label>
+                            <ul class="levels">
+                                <li
+                                    v-for="level in levels"
+                                    :key="level.id"
+                                >
+                                    <label
+                                        class="value"
+                                        :class="{
+                                            checked: !hiddenLevels.has(
+                                                level.id,
+                                            ),
+                                        }"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="
+                                                !hiddenLevels.has(level.id)
+                                            "
+                                            @change="setLevel(level.id, $event)"
+                                        />
+                                        <span
+                                            class="label"
+                                            :lang="
+                                                level.label.lang || undefined
+                                            "
+                                            :title="level.label.value"
+                                            >{{ level.label.value }}</span
+                                        >
+                                        <span class="count">{{
+                                            levelCount.get(level.id) ?? 0
+                                        }}</span>
+                                    </label>
+                                </li>
+                            </ul>
                             <p class="hint">
                                 <span>{{
-                                    $gettext("shown hollow on the map")
+                                    $gettext(
+                                        "“Use with caution” and “uncertain” are shown hollow on the map.",
+                                    )
                                 }}</span>
                             </p>
                         </div>
@@ -828,7 +908,8 @@ function skipToTimeline(): void {
                         :unplaced="unplaced"
                         :selected="selectedPlace"
                         :open="!compact"
-                        @select="openSubject({ kind: 'place', id: $event })"
+                        :places="places"
+                        @select="pickPlace"
                         @hover="listHovered = $event"
                         @unplaced="openSubject({ kind: 'unplaced' })"
                     />
@@ -1029,6 +1110,22 @@ function skipToTimeline(): void {
                                 )
                             }}</span>
                         </p>
+                        <button
+                            v-else-if="bordersTooFar"
+                            type="button"
+                            class="borders-hint zoom-in"
+                            @click="zoomToBorders"
+                        >
+                            <span>{{
+                                interpolate(
+                                    $gettext(
+                                        "Zoom in to see the borders of %{year}",
+                                    ),
+                                    { year: bordersYear ?? "" },
+                                    true,
+                                )
+                            }}</span>
+                        </button>
                     </div>
                     <UnavailableState
                         v-if="failed"
@@ -1056,6 +1153,7 @@ function skipToTimeline(): void {
                             :isolate="mode === 'territories' ? isolated : null"
                             @select="openSubject({ kind: 'place', id: $event })"
                             @hover="onStageHover"
+                            @zoom="stageZoom = $event"
                             @failed="mapFailed = true"
                         >
                             <div
@@ -1688,8 +1786,12 @@ function skipToTimeline(): void {
     white-space: nowrap;
 }
 
-.map-rail .value .label.wrap {
-    white-space: normal;
+.map-rail .levels {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
 .map-rail .value .count {
@@ -1856,6 +1958,26 @@ function skipToTimeline(): void {
 }
 
 /* FacetRail .more */
+.map-view .borders-hint.zoom-in {
+    min-block-size: var(--explorer-target);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--blue-text);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.map-view .borders-hint.zoom-in:hover {
+    text-decoration: underline;
+}
+
+.map-view .borders-hint.zoom-in:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
 .map-view .unplaced {
     min-block-size: var(--explorer-target);
     padding: 0;
