@@ -9,6 +9,7 @@ from arches.app.views.auth import PasswordResetView
 from manuspectrum.accounts.notices import AccountPasswordResetForm
 from manuspectrum.accounts.twofactor import TwoFactorSetupView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
+from manuspectrum.views.legal_pages import LegalPageView
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.biblissima_proxy import (
     BiblissimaAddAltNameView,
@@ -170,6 +171,17 @@ for _slug, _name, _tpl in [
 ]:
     urlpatterns.append(
         path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
+    )
+
+### Legal pages: same language-prefixed mechanism as the About pages, with the
+### durations read from the settings.
+for _slug, _name, _tpl in [
+    ("about/legal", "about-legal", "views/pages/legal.htm"),
+    ("about/privacy", "about-privacy", "views/pages/privacy.htm"),
+    ("about/terms", "about-terms", "views/pages/terms.htm"),
+]:
+    urlpatterns.append(
+        path(_slug, LegalPageView.as_view(template_name=_tpl), name=_name)
     )
 
 ### Two-factor enrolment of the signed-in user (Arches' own settings page is

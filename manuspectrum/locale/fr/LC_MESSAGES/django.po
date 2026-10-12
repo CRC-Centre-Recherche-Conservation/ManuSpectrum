@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 04:05-0500\n"
+"POT-Creation-Date: 2026-10-12 08:24-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -15,6 +15,256 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: accounts/notices.py:69
+#, python-format
+msgid "Restriction ending on %(date)s"
+msgstr "Fin de restriction le %(date)s"
+
+#: accounts/notices.py:72
+#, python-format
+msgid ""
+"The restriction that keeps the data below private ends on %(date)s, %(days)s"
+" days from now. The day after, it is lifted automatically and the data "
+"become visible to everyone."
+msgstr ""
+"La restriction qui garde les données ci-dessous privées se termine le "
+"%(date)s, dans %(days)s jours. Le lendemain, elle est levée automatiquement "
+"et les données deviennent visibles de tous."
+
+#: accounts/notices.py:78
+msgid ""
+"If it must last longer, ask an administrator to extend it before that date, "
+"by replying to the contact address below."
+msgstr ""
+"Si elle doit durer plus longtemps, demandez à un administrateur de la "
+"prolonger avant cette date, en écrivant à l'adresse de contact ci-dessous."
+
+#: accounts/notices.py:88
+msgid "Your data are now public"
+msgstr "Vos données sont maintenant publiques"
+
+#: accounts/notices.py:91
+msgid ""
+"The restriction on the data below has ended and was lifted: they are now "
+"visible to everyone."
+msgstr ""
+"La restriction sur les données ci-dessous est terminée et a été levée : "
+"elles sont maintenant visibles de tous."
+
+#: accounts/notices.py:101
+#, python-format
+msgid "Unfinished workflow to be cleaned on %(date)s"
+msgstr "Workflow inachevé nettoyé le %(date)s"
+
+#: accounts/notices.py:105
+#, python-format
+msgid ""
+"The workflow « %(workflow)s » has not been used for a long time and is not "
+"finished. On %(date)s, %(days)s days from now, it is cleaned: its trace is "
+"deleted, and so are the records it created and listed below, if they are "
+"still drafts, were not modified elsewhere and are not linked to other "
+"records."
+msgstr ""
+"Le workflow « %(workflow)s » n'a pas été utilisé depuis longtemps et n'est "
+"pas terminé. Le %(date)s, dans %(days)s jours, il est nettoyé : sa trace est"
+" supprimée, ainsi que les fiches qu'il a créées et listées ci-dessous, si "
+"elles sont encore en brouillon, n'ont pas été modifiées ailleurs et ne sont "
+"liées à aucune autre fiche."
+
+#: accounts/notices.py:116
+msgid "Open the workflow again before that date to keep it."
+msgstr "Rouvrez le workflow avant cette date pour le conserver."
+
+#: accounts/notices.py:124
+#, python-format
+msgid "The unfinished workflow « %(workflow)s » has been cleaned."
+msgstr "Le workflow inachevé « %(workflow)s » a été nettoyé."
+
+#: accounts/notices.py:128
+msgid "Deleted records:"
+msgstr "Fiches supprimées :"
+
+#: accounts/notices.py:130
+msgid "Unfinished workflow cleaned"
+msgstr "Workflow inachevé nettoyé"
+
+#: accounts/notices.py:134
+msgid "Records kept, because other work depends on them:"
+msgstr "Fiches conservées, car d'autres travaux en dépendent :"
+
+#: accounts/notices.py:144
+msgid "Your ManuSpectrum account"
+msgstr "Votre compte ManuSpectrum"
+
+#: accounts/notices.py:147
+msgid ""
+"An account has been created for you on ManuSpectrum. Use the button below to"
+" read the terms of use, accept them, choose your password and set up two-"
+"factor authentication."
+msgstr ""
+"Un compte a été créé pour vous sur ManuSpectrum. Utilisez le bouton ci-"
+"dessous pour lire les conditions d'utilisation, les accepter, choisir votre "
+"mot de passe et configurer l'authentification à deux facteurs."
+
+#: accounts/notices.py:151
+#, python-format
+msgid "The link is personal and works until %(date)s."
+msgstr "Ce lien est personnel et valable jusqu'au %(date)s."
+
+#: accounts/notices.py:155
+msgid "Activate my account"
+msgstr "Activer mon compte"
+
+#: accounts/notices.py:161
+msgid "Accounts without sign-in"
+msgstr "Comptes sans connexion"
+
+#: accounts/notices.py:164
+#, python-format
+msgid ""
+"%(count)s accounts have not signed in for %(months)s months (or never signed"
+" in since their creation). Nothing was changed: deactivating an account is a"
+" decision of the administrators."
+msgstr ""
+"%(count)s comptes ne se sont pas connectés depuis %(months)s mois (ou jamais"
+" depuis leur création). Rien n'a été modifié : désactiver un compte est une "
+"décision des administrateurs."
+
+#: accounts/notices.py:194
+msgid ""
+"Copy for the administrators of the notice sent to the people concerned."
+msgstr ""
+"Copie pour les administrateurs de l'avis envoyé aux personnes concernées."
+
+#: accounts/notices.py:203
+#, python-format
+msgid "Hello %(name)s,"
+msgstr "Bonjour %(name)s,"
+
+#: accounts/notices.py:203
+msgid "Hello,"
+msgstr "Bonjour,"
+
+#: accounts/notices.py:214
+msgid ""
+"This is a service notice about your account or your data, so it has no "
+"unsubscribe link. Questions:"
+msgstr ""
+"Ceci est un avis de service concernant votre compte ou vos données : il n'a "
+"donc pas de lien de désabonnement. Questions :"
+
+#: accounts/twofactor.py:96
+msgid "Too many attempts. Wait a minute."
+msgstr "Trop de tentatives. Patientez une minute."
+
+#: accounts/twofactor.py:112
+msgid "The code is not valid. Enter the current code of your authenticator."
+msgstr ""
+"Le code n'est pas valide. Saisissez le code actuel de votre application "
+"d'authentification."
+
+#: accounts/twofactor.py:135
+msgid "The code is not valid. Check the code and try again."
+msgstr "Le code n'est pas valide. Vérifiez le code et réessayez."
+
+#: accounts/twofactor.py:142
+msgid "Two-factor authentication is on."
+msgstr "L'authentification à deux facteurs est activée."
+
+#: accounts/twofactor.py:149
+msgid "Two-factor authentication is compulsory and cannot be removed."
+msgstr ""
+"L'authentification à deux facteurs est obligatoire et ne peut pas être "
+"retirée."
+
+#: accounts/twofactor.py:157
+msgid "Two-factor authentication is off."
+msgstr "L'authentification à deux facteurs est désactivée."
+
+#: accounts/workflows.py:63
+msgid "Create a project"
+msgstr "Créer un projet"
+
+#: accounts/workflows.py:64
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:10
+msgid "Import from Biblissima"
+msgstr "Importer depuis Biblissima"
+
+#: admin.py:35 templates/accounts/two_factor.htm:12
+msgid "Two-factor authentication"
+msgstr "Authentification à deux facteurs"
+
+#: admin.py:39
+msgid "Reset two-factor authentication (superuser)"
+msgstr "Réinitialiser l'authentification à deux facteurs (superutilisateur)"
+
+#: admin.py:44
+msgid "Only a superuser can reset two-factor authentication."
+msgstr ""
+"Seul un superutilisateur peut réinitialiser l'authentification à deux "
+"facteurs."
+
+#: admin.py:57
+#, python-format
+msgid "Two-factor authentication was reset for %(count)d account."
+msgid_plural "Two-factor authentication was reset for %(count)d accounts."
+msgstr[0] ""
+"L'authentification à deux facteurs a été réinitialisée pour %(count)d "
+"compte."
+msgstr[1] ""
+"L'authentification à deux facteurs a été réinitialisée pour %(count)d "
+"comptes."
+
+#: admin.py:111
+msgid "end date"
+msgstr "date de fin"
+
+#: admin.py:115
+msgid "No end date"
+msgstr "Sans date de fin"
+
+#: admin.py:115
+msgid "Has an end date"
+msgstr "Avec date de fin"
+
+#: admin.py:152 models.py:62
+msgid "Resource"
+msgstr "Ressource"
+
+#: admin.py:156 templates/javascript.htm:119
+#: templates/views/components/ms-summary-popup.htm:40
+#: templates/views/pages/graph-explorer.htm:113
+msgid "Model"
+msgstr "Modèle"
+
+#: admin.py:160 models.py:86 models.py:213
+msgid "Notices sent"
+msgstr "Avis envoyés"
+
+#: admin.py:178
+#, python-format
+msgid "%(resource)s: only a dated, active embargo can be extended."
+msgstr "%(resource)s : seul un embargo actif et daté peut être prolongé."
+
+#: admin.py:200
+#, python-format
+msgid "%(count)d embargo was extended."
+msgid_plural "%(count)d embargoes were extended."
+msgstr[0] "%(count)d embargo a été prolongé."
+msgstr[1] "%(count)d embargos ont été prolongés."
+
+#: admin.py:207
+msgid "Extend the end date by 3 months"
+msgstr "Prolonger la date de fin de 3 mois"
+
+#: admin.py:211
+msgid "Extend the end date by 6 months"
+msgstr "Prolonger la date de fin de 6 mois"
+
+#: admin.py:215
+msgid "Extend the end date by 12 months"
+msgstr "Prolonger la date de fin de 12 mois"
 
 #: constants/licenses.py:28
 msgid "CC BY-SA 4.0"
@@ -71,13 +321,12 @@ msgstr "Format d'URL invalide"
 #: docs_claude/csv_import/plan_snapshot_after_review.md:613
 #: docs_claude/csv_import/review_ux.md:391
 msgid "Why this step"
-msgstr ""
+msgstr "Pourquoi cette étape"
 
 #: docs_claude/csv_import/plan_snapshot_after_review.md:754
-#, fuzzy
 #| msgid "Import from Biblissima"
 msgid "Document not found? Import it from Biblissima"
-msgstr "Importer depuis Biblissima"
+msgstr "Document introuvable ? Importez-le depuis Biblissima"
 
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
@@ -181,7 +430,8 @@ msgstr "Statut"
 msgid "Draft"
 msgstr "Brouillon"
 
-#: iiif/bodies.py:46 iiif/sources.py:276 templates/explorer/export_readme.md:33
+#: iiif/bodies.py:46 iiif/sources.py:276
+#: templates/explorer/export_readme.md:33
 #: templates/views/components/ms-file-workbench.htm:44
 #: templates/views/components/ms-file-workbench.htm:47
 msgid "Attribution"
@@ -280,7 +530,8 @@ msgstr ""
 "votre compte ManuSpectrum pour lire celles auxquelles il donne accès."
 
 #: iiif/services.py:38
-msgid "Sign in with your ManuSpectrum account to read what it gives access to."
+msgid ""
+"Sign in with your ManuSpectrum account to read what it gives access to."
 msgstr ""
 "Connectez-vous avec votre compte ManuSpectrum pour lire les données "
 "auxquelles il donne accès."
@@ -306,6 +557,156 @@ msgstr "Se déconnecter des visionneuses externes"
 msgid "%(file)s, raw file"
 msgstr "%(file)s, fichier brut"
 
+#: models.py:53
+msgid "Active"
+msgstr "Actif"
+
+#: models.py:54 models.py:174
+msgid "Lifted"
+msgstr "Levé"
+
+#: models.py:55 models.py:175
+msgid "Released by hand"
+msgstr "Libéré manuellement"
+
+#: models.py:67
+msgid "Ends on"
+msgstr "Se termine le"
+
+#: models.py:69
+msgid ""
+"Last day of the restriction. Empty: the restriction has no end and is never "
+"lifted automatically."
+msgstr ""
+"Dernier jour de la restriction. Vide : la restriction n'a pas de fin et "
+"n'est jamais levée automatiquement."
+
+#: models.py:74
+msgid "State"
+msgstr "État"
+
+#: models.py:82
+msgid "Restriction set by"
+msgstr "Restriction posée par"
+
+#: models.py:84
+msgid "Recorded on"
+msgstr "Enregistrée le"
+
+#: models.py:91
+msgid "embargo"
+msgstr "embargo"
+
+#: models.py:92
+msgid "embargoes"
+msgstr "embargos"
+
+#: models.py:115
+msgid "The end date must be after today."
+msgstr "La date de fin doit être postérieure à aujourd'hui."
+
+#: models.py:120
+#, python-format
+msgid ""
+"The end date is more than %(months)d months after the start of the embargo "
+"(latest allowed: %(latest)s). Only a superuser can set a later date."
+msgstr ""
+"La date de fin dépasse %(months)d mois après le début de l'embargo (dernière"
+" date permise : %(latest)s). Seul un superutilisateur peut fixer une date "
+"plus tardive."
+
+#: models.py:168
+msgid "Restriction detected"
+msgstr "Restriction détectée"
+
+#: models.py:169
+msgid "End date set"
+msgstr "Date de fin fixée"
+
+#: models.py:170
+msgid "Extended"
+msgstr "Prolongé"
+
+#: models.py:171
+msgid "Shortened"
+msgstr "Raccourci"
+
+#: models.py:172
+msgid "End date removed"
+msgstr "Date de fin supprimée"
+
+#: models.py:173
+msgid "Notice sent"
+msgstr "Avis envoyé"
+
+#: models.py:176
+msgid "Lift incomplete"
+msgstr "Levée incomplète"
+
+#: models.py:182
+msgid "Event"
+msgstr "Événement"
+
+#: models.py:189
+msgid "By"
+msgstr "Par"
+
+#: models.py:191
+msgid "When"
+msgstr "Quand"
+
+#: models.py:192
+msgid "Old end"
+msgstr "Ancienne fin"
+
+#: models.py:193
+msgid "New end"
+msgstr "Nouvelle fin"
+
+#: models.py:198
+msgid "embargo event"
+msgstr "événement d'embargo"
+
+#: models.py:199
+msgid "embargo events"
+msgstr "événements d'embargo"
+
+#: models.py:209
+msgid "Workflow run"
+msgstr "Exécution de l'assistant"
+
+#: models.py:210 templates/views/pages/terms.htm:40
+msgid "Workflow"
+msgstr "Assistant"
+
+#: models.py:211
+msgid "Last activity"
+msgstr "Dernière activité"
+
+#: models.py:216
+msgid "Cleaned on"
+msgstr "Nettoyée le"
+
+#: models.py:219
+msgid "Cleanup transaction"
+msgstr "Transaction de nettoyage"
+
+#: models.py:222
+msgid "Resources deleted"
+msgstr "Ressources supprimées"
+
+#: models.py:225
+msgid "Resources kept"
+msgstr "Ressources conservées"
+
+#: models.py:231
+msgid "workflow cleanup"
+msgstr "nettoyage d'assistant"
+
+#: models.py:232
+msgid "workflow cleanups"
+msgstr "nettoyages d'assistant"
+
 #: password_validation.py:18
 msgid "Your password must contain at least one lower case letter"
 msgstr "Votre mot de passe doit contenir au moins une lettre minuscule"
@@ -314,23 +715,23 @@ msgstr "Votre mot de passe doit contenir au moins une lettre minuscule"
 msgid "Have at least 1 lower case character"
 msgstr "Avoir au moins 1 lettre minuscule"
 
-#: settings.py:154
+#: settings.py:156
 msgid "Term Matches"
 msgstr "Correspondances de termes"
 
-#: settings.py:160
+#: settings.py:162
 msgid "References"
 msgstr "Références"
 
-#: settings.py:601
+#: settings.py:621
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:638
+#: settings.py:658
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:639
+#: settings.py:659
 msgid "French"
 msgstr "Français"
 
@@ -355,10 +756,15 @@ msgid ""
 "This account is locked for a few minutes from this computer after repeated "
 "sign-in failures. Wait a little, then try again. If you have lost your "
 "password, use the reset link on the sign-in page."
-msgstr "Ce compte est verrouillé pour quelques minutes depuis cet ordinateur après plusieurs échecs de connexion. Patientez un peu, puis réessayez. Si vous avez perdu votre mot de passe, utilisez le lien de réinitialisation de la page de connexion."
+msgstr ""
+"Ce compte est verrouillé pour quelques minutes depuis cet ordinateur après "
+"plusieurs échecs de connexion. Patientez un peu, puis réessayez. Si vous "
+"avez perdu votre mot de passe, utilisez le lien de réinitialisation de la "
+"page de connexion."
 
-#: templates/accounts/lockout.htm:16 templates/errors/400.htm:18
-#: templates/errors/403.htm:19 templates/errors/404.htm:63
+#: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:66
+#: templates/errors/400.htm:18 templates/errors/403.htm:19
+#: templates/errors/404.htm:63
 msgid "Back to the homepage"
 msgstr "Retour à l'accueil"
 
@@ -366,6 +772,72 @@ msgstr "Retour à l'accueil"
 #: templates/errors/403.htm:20 templates/errors/404.htm:65
 msgid "Contact the team"
 msgstr "Contacter l'équipe"
+
+#: templates/accounts/two_factor.htm:16
+msgid "Status:"
+msgstr "État :"
+
+#: templates/accounts/two_factor.htm:18
+msgid "ON"
+msgstr "ACTIVÉE"
+
+#: templates/accounts/two_factor.htm:20
+msgid "OFF"
+msgstr "DÉSACTIVÉE"
+
+#: templates/accounts/two_factor.htm:28
+msgid ""
+"Scan the QR code with an authenticator application, then enter the code it "
+"shows to finish."
+msgstr ""
+"Scannez le QR code avec une application d'authentification, puis saisissez "
+"le code affiché pour terminer."
+
+#: templates/accounts/two_factor.htm:29
+msgid "QR code to scan with your authenticator application"
+msgstr "QR code à scanner avec votre application d'authentification"
+
+#: templates/accounts/two_factor.htm:31
+msgid "Or enter this key by hand:"
+msgstr "Ou saisissez cette clé à la main :"
+
+#: templates/accounts/two_factor.htm:37
+msgid "Code from your application"
+msgstr "Code de votre application"
+
+#: templates/accounts/two_factor.htm:39
+msgid "Confirm and turn on"
+msgstr "Confirmer et activer"
+
+#: templates/accounts/two_factor.htm:44
+#: templates/views/components/plugins/importer-configuration.htm:278
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
+msgid "Cancel"
+msgstr "Annuler"
+
+#: templates/accounts/two_factor.htm:50
+msgid "Current code from your application"
+msgstr "Code actuel de votre application"
+
+#: templates/accounts/two_factor.htm:54
+msgid "Set up a new authenticator"
+msgstr "Configurer une nouvelle application d'authentification"
+
+#: templates/accounts/two_factor.htm:54
+msgid "Turn on two-factor authentication"
+msgstr "Activer l'authentification à deux facteurs"
+
+#: templates/accounts/two_factor.htm:57
+msgid "Turn off two-factor authentication"
+msgstr "Désactiver l'authentification à deux facteurs"
+
+#: templates/accounts/two_factor.htm:61
+msgid ""
+"Two-factor authentication is compulsory. If you lose your device, ask an "
+"administrator to reset it."
+msgstr ""
+"L'authentification à deux facteurs est obligatoire. Si vous perdez votre "
+"appareil, demandez à un administrateur de la réinitialiser."
 
 #: templates/custom_email_footer.htm:47
 msgid ""
@@ -465,8 +937,8 @@ msgid ""
 "reflect or fluoresce anywhere on this server. It may have moved — or never "
 "existed."
 msgstr ""
-"Nous avons balayé tout le spectre : la page demandée n'absorbe, ne réfléchit "
-"et ne fluoresce nulle part sur ce serveur. Elle a peut-être été déplacée — "
+"Nous avons balayé tout le spectre : la page demandée n'absorbe, ne réfléchit"
+" et ne fluoresce nulle part sur ce serveur. Elle a peut-être été déplacée — "
 "ou n'a jamais existé."
 
 #: templates/errors/404.htm:64
@@ -492,8 +964,8 @@ msgstr "les fichiers de données, bruts et lisibles, inchangés."
 
 #: templates/explorer/export_readme.md:11
 msgid ""
-"one row per analysis: technique, object, zone, operators, dates, instrument, "
-"projects, measurement conditions, licences, dataset, permalink."
+"one row per analysis: technique, object, zone, operators, dates, instrument,"
+" projects, measurement conditions, licences, dataset, permalink."
 msgstr ""
 "une ligne par analyse : technique, objet, zone, opérateurs, dates, "
 "instrument, projets, conditions de mesure, licences, jeu de données, "
@@ -612,8 +1084,8 @@ msgid ""
 "Presentation 3 context last:"
 msgstr ""
 "Uniquement sur une ressource de contenu de type <code>Dataset</code>, en "
-"général le corps d'une annotation. Aucune autre ressource NE DOIT la porter. "
-"Un document qui l'utilise place ce contexte en premier dans son "
+"général le corps d'une annotation. Aucune autre ressource NE DOIT la porter."
+" Un document qui l'utilise place ce contexte en premier dans son "
 "<code>@context</code> et le contexte Presentation 3 en dernier :"
 
 #: templates/iiif/xy_reading_1.htm:16
@@ -629,8 +1101,8 @@ msgid ""
 "The Presentation 2.1 routes carry the same object, with this context before "
 "the Presentation 2 context."
 msgstr ""
-"Les routes Presentation 2.1 portent le même objet, avec ce contexte avant le "
-"contexte Presentation 2."
+"Les routes Presentation 2.1 portent le même objet, avec ce contexte avant le"
+" contexte Presentation 2."
 
 #: templates/iiif/xy_reading_1.htm:20
 msgid "Advisory"
@@ -639,13 +1111,14 @@ msgstr "À titre indicatif"
 #: templates/iiif/xy_reading_1.htm:21
 msgid ""
 "Clients MAY use <code>xyReading</code> to draw the curve; they SHOULD fall "
-"back to their own reading of the file when they do not, and MUST ignore keys "
-"they do not know. Every key published is one the ManuSpectrum reader applies."
+"back to their own reading of the file when they do not, and MUST ignore keys"
+" they do not know. Every key published is one the ManuSpectrum reader "
+"applies."
 msgstr ""
 "Les clients PEUVENT utiliser <code>xyReading</code> pour tracer la courbe ; "
 "sinon, ils DEVRAIENT revenir à leur propre lecture du fichier, et DOIVENT "
-"ignorer les clés qu'ils ne connaissent pas. Chaque clé publiée est appliquée "
-"par le lecteur de ManuSpectrum."
+"ignorer les clés qu'ils ne connaissent pas. Chaque clé publiée est appliquée"
+" par le lecteur de ManuSpectrum."
 
 #: templates/iiif/xy_reading_1.htm:23
 msgid "Keys"
@@ -661,14 +1134,14 @@ msgid ""
 "<code>headerRowCount</code>, <code>encoding</code>. Given for the files "
 "ManuSpectrum writes."
 msgstr ""
-"Dialecte CSV du fichier (termes de CSV on the Web) : <code>delimiter</code>, "
-"<code>headerRowCount</code>, <code>encoding</code>. Donné pour les fichiers "
-"qu'écrit ManuSpectrum."
+"Dialecte CSV du fichier (termes de CSV on the Web) : <code>delimiter</code>,"
+" <code>headerRowCount</code>, <code>encoding</code>. Donné pour les fichiers"
+" qu'écrit ManuSpectrum."
 
 #: templates/iiif/xy_reading_1.htm:30
 msgid ""
-"The columns read, in order: <code>index</code> (from 0) and <code>role</"
-"code>."
+"The columns read, in order: <code>index</code> (from 0) and "
+"<code>role</code>."
 msgstr ""
 "Les colonnes lues, dans l'ordre : <code>index</code> (à partir de 0) et "
 "<code>role</code>."
@@ -681,9 +1154,10 @@ msgstr "Index d'une colonne, à partir de 0."
 msgid ""
 "What a column holds: <code id=\"x\">x</code> (the x axis), <code "
 "id=\"yLeft\">yLeft</code> and <code id=\"yRight\">yRight</code> (a "
-"measurement on the left or right axis), <code id=\"reference\">reference</"
-"code> (the white reference), <code id=\"dark\">dark</code> (the dark "
-"current), <code id=\"ignore\">ignore</code>."
+"measurement on the left or right axis), <code "
+"id=\"reference\">reference</code> (the white reference), <code "
+"id=\"dark\">dark</code> (the dark current), <code "
+"id=\"ignore\">ignore</code>."
 msgstr ""
 "Ce que porte une colonne : <code id=\"x\">x</code> (l'axe des x), <code "
 "id=\"yLeft\">yLeft</code> et <code id=\"yRight\">yRight</code> (une mesure "
@@ -693,9 +1167,9 @@ msgstr ""
 
 #: templates/iiif/xy_reading_1.htm:36
 msgid ""
-"The x axis: <code>label</code> (a IIIF language map) and <code>reversed</"
-"code> (true when the axis is drawn from right to left; the rows keep the "
-"file's order)."
+"The x axis: <code>label</code> (a IIIF language map) and "
+"<code>reversed</code> (true when the axis is drawn from right to left; the "
+"rows keep the file's order)."
 msgstr ""
 "L'axe des x : <code>label</code> (une table de langues IIIF) et "
 "<code>reversed</code> (vrai quand l'axe est tracé de droite à gauche ; les "
@@ -724,17 +1198,17 @@ msgstr ""
 #: templates/iiif/xy_reading_1.htm:44
 msgid ""
 "The corrections applied, in order. Version 1 knows <code>reference-"
-"normalize</code>: <code id=\"expression\">expression</code> <code>(y - "
-"dark) / (reference - dark)</code>, <code id=\"darkDefault\">darkDefault</"
-"code> the dark value without a dark column (0), <code "
-"id=\"epsilon\">epsilon</code> the smallest denominator divided by, and <code "
-"id=\"onInvalid\">onInvalid</code> <code>drop-point</code>: a row with a "
-"missing value, a non-finite value or a denominator below epsilon is left out "
-"of the curve. An empty list says the file already holds the curve."
+"normalize</code>: <code id=\"expression\">expression</code> <code>(y - dark)"
+" / (reference - dark)</code>, <code id=\"darkDefault\">darkDefault</code> "
+"the dark value without a dark column (0), <code "
+"id=\"epsilon\">epsilon</code> the smallest denominator divided by, and <code"
+" id=\"onInvalid\">onInvalid</code> <code>drop-point</code>: a row with a "
+"missing value, a non-finite value or a denominator below epsilon is left out"
+" of the curve. An empty list says the file already holds the curve."
 msgstr ""
 "Les corrections appliquées, dans l'ordre. La version 1 connaît "
-"<code>reference-normalize</code> : <code id=\"expression\">expression</code> "
-"<code>(y - dark) / (reference - dark)</code>, <code "
+"<code>reference-normalize</code> : <code id=\"expression\">expression</code>"
+" <code>(y - dark) / (reference - dark)</code>, <code "
 "id=\"darkDefault\">darkDefault</code> la valeur d'obscurité sans colonne "
 "d'obscurité (0), <code id=\"epsilon\">epsilon</code> le plus petit "
 "dénominateur par lequel diviser, et <code id=\"onInvalid\">onInvalid</code> "
@@ -744,21 +1218,21 @@ msgstr ""
 
 #: templates/iiif/xy_reading_1.htm:46
 msgid ""
-"The raw file the Dataset was derived from (PROV <code>wasDerivedFrom</"
-"code>): <code>id</code>, <code>type</code>, <code>format</code>, "
-"<code>label</code> and, for a raw text file, its own <code>xyReading</code> "
-"(columns and corrections)."
+"The raw file the Dataset was derived from (PROV "
+"<code>wasDerivedFrom</code>): <code>id</code>, <code>type</code>, "
+"<code>format</code>, <code>label</code> and, for a raw text file, its own "
+"<code>xyReading</code> (columns and corrections)."
 msgstr ""
-"Le fichier brut dont le Dataset est dérivé (PROV <code>wasDerivedFrom</"
-"code>) : <code>id</code>, <code>type</code>, <code>format</code>, "
-"<code>label</code> et, pour un fichier brut texte, son propre "
-"<code>xyReading</code> (colonnes et corrections)."
+"Le fichier brut dont le Dataset est dérivé (PROV "
+"<code>wasDerivedFrom</code>) : <code>id</code>, <code>type</code>, "
+"<code>format</code>, <code>label</code> et, pour un fichier brut texte, son "
+"propre <code>xyReading</code> (colonnes et corrections)."
 
 #: templates/iiif/xy_reading_1.htm:49
 msgid ""
-"The Dataset is never decimated, whatever its size. mirador-xyviewer does not "
-"plot a Dataset larger than 5 MB; such a file still plots in the ManuSpectrum "
-"Explorer."
+"The Dataset is never decimated, whatever its size. mirador-xyviewer does not"
+" plot a Dataset larger than 5 MB; such a file still plots in the "
+"ManuSpectrum Explorer."
 msgstr ""
 "Le Dataset n'est jamais décimé, quelle que soit sa taille. mirador-xyviewer "
 "ne trace pas un Dataset de plus de 5 Mo ; un tel fichier se trace toujours "
@@ -784,23 +1258,23 @@ msgstr ""
 #: templates/iiif/xy_reading_1.htm:54
 #, python-format
 msgid ""
-"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new "
-"window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 <code>active</"
-"code> profile). The reader signs in to ManuSpectrum there; the window then "
-"says so and can be closed."
+"Login: the viewer opens <a href=\"%(login_url)s\">%(login_url)s</a> in a new"
+" window (IIIF Auth 1.0 <code>login</code> profile, Auth 2.0 "
+"<code>active</code> profile). The reader signs in to ManuSpectrum there; the"
+" window then says so and can be closed."
 msgstr ""
-"Connexion : la visionneuse ouvre <a href=\"%(login_url)s\">%(login_url)s</a> "
-"dans une nouvelle fenêtre (profil <code>login</code> d'IIIF Auth 1.0, profil "
-"<code>active</code> d'Auth 2.0). Le lecteur s'y connecte à ManuSpectrum ; la "
-"fenêtre le confirme et peut être fermée."
+"Connexion : la visionneuse ouvre <a href=\"%(login_url)s\">%(login_url)s</a>"
+" dans une nouvelle fenêtre (profil <code>login</code> d'IIIF Auth 1.0, "
+"profil <code>active</code> d'Auth 2.0). Le lecteur s'y connecte à "
+"ManuSpectrum ; la fenêtre le confirme et peut être fermée."
 
 #: templates/iiif/xy_reading_1.htm:55
 #, python-format
 msgid ""
 "Token: the viewer loads <code>%(token1_url)s</code> (Auth 1.0) or "
 "<code>%(token2_url)s</code> (Auth 2.0) in a hidden frame with its "
-"<code>messageId</code> and <code>origin</code>, and receives an access token "
-"valid %(token_minutes)s minutes for that origin only. It sends it as "
+"<code>messageId</code> and <code>origin</code>, and receives an access token"
+" valid %(token_minutes)s minutes for that origin only. It sends it as "
 "<code>Authorization: Bearer &lt;token&gt;</code> to the <code>/iiif/</code> "
 "read routes; the Auth 2.0 probe service of a spectrum says whether that "
 "token opens it."
@@ -834,11 +1308,11 @@ msgid ""
 "<code>invalidOrigin</code>. A Bearer token that is not a IIIF token of this "
 "site is refused."
 msgstr ""
-"Le jeton ne sert qu'à lire : il ouvre les routes <code>/iiif/</code> et rien "
-"d'autre, et ce n'est pas un identifiant d'API. Les jetons ne sont remis qu'à "
-"ce site et aux visionneuses auxquelles ses administrateurs font confiance ; "
-"toute autre origine reçoit <code>invalidOrigin</code>. Un jeton Bearer qui "
-"n'est pas un jeton IIIF de ce site est refusé."
+"Le jeton ne sert qu'à lire : il ouvre les routes <code>/iiif/</code> et rien"
+" d'autre, et ce n'est pas un identifiant d'API. Les jetons ne sont remis "
+"qu'à ce site et aux visionneuses auxquelles ses administrateurs font "
+"confiance ; toute autre origine reçoit <code>invalidOrigin</code>. Un jeton "
+"Bearer qui n'est pas un jeton IIIF de ce site est refusé."
 
 #: templates/iiif/xy_reading_1.htm:59
 msgid "Known limits"
@@ -849,8 +1323,9 @@ msgid ""
 "HTTPS is required: the access cookie is <code>Secure; SameSite=None</code>, "
 "and a browser does not keep it on a plain HTTP site."
 msgstr ""
-"HTTPS est obligatoire : le cookie d'accès est <code>Secure; SameSite=None</"
-"code>, et un navigateur ne le conserve pas sur un site en HTTP simple."
+"HTTPS est obligatoire : le cookie d'accès est <code>Secure; "
+"SameSite=None</code>, et un navigateur ne le conserve pas sur un site en "
+"HTTP simple."
 
 #: templates/iiif/xy_reading_1.htm:62
 msgid ""
@@ -892,8 +1367,8 @@ msgstr "Versions"
 
 #: templates/iiif/xy_reading_1.htm:68
 msgid ""
-"The major version is in the path of the context (<code>/1</code>). Version 1 "
-"only gains optional keys; a change of meaning would be version 2, at a new "
+"The major version is in the path of the context (<code>/1</code>). Version 1"
+" only gains optional keys; a change of meaning would be version 2, at a new "
 "path."
 msgstr ""
 "La version majeure figure dans le chemin du contexte (<code>/1</code>). La "
@@ -921,7 +1396,7 @@ msgstr ""
 "Base de données interopérable pour l'analyse physico-chimique des matériaux "
 "du patrimoine culturel écrit. Un projet du cluster Biblissima+."
 
-#: templates/includes/ms_footer.htm:16
+#: templates/includes/ms_footer.htm:16 templates/views/pages/terms.htm:32
 msgid "Platform"
 msgstr "Plateforme"
 
@@ -936,12 +1411,17 @@ msgstr "Rechercher"
 msgid "My Profile"
 msgstr "Mon profil"
 
-#: templates/includes/ms_footer.htm:27 templates/includes/ms_header.htm:23
+#: templates/includes/ms_footer.htm:24
+#| msgid "Request an account / access"
+msgid "Request access"
+msgstr "Demander un accès"
+
+#: templates/includes/ms_footer.htm:28 templates/includes/ms_header.htm:23
 #: templates/includes/ms_header.htm:98
 msgid "About"
 msgstr "À propos"
 
-#: templates/includes/ms_footer.htm:29 templates/includes/ms_header.htm:33
+#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:33
 #: templates/includes/ms_header.htm:101
 #: templates/views/pages/conceptual-model.htm:4
 #: templates/views/pages/conceptual-model.htm:6
@@ -950,7 +1430,7 @@ msgstr "À propos"
 msgid "Conceptual Model"
 msgstr "Modèle conceptuel"
 
-#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:37
+#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:37
 #: templates/includes/ms_header.htm:102
 #: templates/views/pages/graph-explorer.htm:4
 #: templates/views/pages/graph-explorer.htm:6
@@ -959,51 +1439,73 @@ msgstr "Modèle conceptuel"
 msgid "Graph Explorer"
 msgstr "Explorateur de graphe"
 
-#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:41
+#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:41
 #: templates/includes/ms_header.htm:103 templates/views/pages/team.htm:4
 #: templates/views/pages/team.htm:6 templates/views/pages/team.htm:15
 #: templates/views/pages/team.htm:36
 msgid "About & Team"
 msgstr "À propos & équipe"
 
-#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:45
+#: templates/includes/ms_footer.htm:33 templates/includes/ms_header.htm:45
 #: templates/includes/ms_header.htm:104 templates/views/pages/contact.htm:4
 #: templates/views/pages/contact.htm:6 templates/views/pages/contact.htm:15
-#: templates/views/pages/contact.htm:27
+#: templates/views/pages/contact.htm:27 templates/views/pages/legal.htm:37
 msgid "Contact"
 msgstr "Contact"
 
-#: templates/includes/ms_footer.htm:36
+#: templates/includes/ms_footer.htm:37 templates/views/pages/legal_base.htm:9
+msgid "Legal"
+msgstr "Légal"
+
+#: templates/includes/ms_footer.htm:39 templates/views/pages/legal.htm:3
+#: templates/views/pages/legal.htm:4 templates/views/pages/legal.htm:7
+#: templates/views/pages/privacy.htm:110 templates/views/pages/terms.htm:87
+msgid "Legal notice"
+msgstr "Mentions légales"
+
+#: templates/includes/ms_footer.htm:40 templates/views/pages/privacy.htm:3
+#: templates/views/pages/privacy.htm:4 templates/views/pages/privacy.htm:7
+#: templates/views/pages/terms.htm:87
+msgid "Privacy policy"
+msgstr "Politique de confidentialité"
+
+#: templates/includes/ms_footer.htm:41 templates/views/pages/legal.htm:59
+#: templates/views/pages/privacy.htm:110 templates/views/pages/terms.htm:3
+#: templates/views/pages/terms.htm:4 templates/views/pages/terms.htm:7
+msgid "Terms of use"
+msgstr "Conditions d'utilisation"
+
+#: templates/includes/ms_footer.htm:45
 msgid "Resources"
 msgstr "Ressources"
 
-#: templates/includes/ms_footer.htm:44
+#: templates/includes/ms_footer.htm:53
 msgid "Standards"
 msgstr "Standards"
 
-#: templates/includes/ms_footer.htm:55
+#: templates/includes/ms_footer.htm:64
 msgid ""
-"This work has benefited from state aid managed by the Agence Nationale de la "
-"Recherche under the Investissements d'avenir programme, reference ANR-21-"
-"ESRE-0005 (Biblissima+)."
+"This work has benefited from state aid managed by the Agence Nationale de la"
+" Recherche under the Investissements d'avenir programme, reference "
+"ANR-21-ESRE-0005 (Biblissima+)."
 msgstr ""
 "Ce travail a bénéficié d'une aide de l'État gérée par l'Agence Nationale de "
 "la Recherche au titre du programme d'Investissements d'avenir portant la "
 "référence ANR-21-ESRE-0005 (Biblissima+)."
 
-#: templates/includes/ms_footer.htm:59
+#: templates/includes/ms_footer.htm:68
 msgid "All rights reserved"
 msgstr "Tous droits réservés"
 
-#: templates/includes/ms_footer.htm:62 templates/views/pages/contact.htm:147
+#: templates/includes/ms_footer.htm:71 templates/views/pages/contact.htm:159
 msgid "Source code"
 msgstr "Code source"
 
-#: templates/includes/ms_footer.htm:66
+#: templates/includes/ms_footer.htm:75
 msgid "GPL-3.0 License"
 msgstr "Licence GPL-3.0"
 
-#: templates/includes/ms_footer.htm:69
+#: templates/includes/ms_footer.htm:78
 msgid ""
 "Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
 "rel=\"noopener\">Arches</a>"
@@ -1098,12 +1600,12 @@ msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
 #: templates/index.htm:15
 msgid ""
 "Open heritage science database of physicochemical analyses — XRF, Raman, "
-"FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks, "
-"supports."
+"FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks,"
+" supports."
 msgstr ""
 "Base de données ouverte de sciences du patrimoine : analyses physico-"
-"chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et "
-"inscriptions : pigments, encres, supports."
+"chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et inscriptions"
+" : pigments, encres, supports."
 
 #: templates/index.htm:206
 msgid "Enlarge the spectral plot"
@@ -1170,15 +1672,15 @@ msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
 "programme. This cluster aims to ensure the long-term archiving and reuse of "
-"physicochemical analysis data for manuscripts, inscriptions, seals and other "
-"heritage objects, in partnership with Huma-Num."
+"physicochemical analysis data for manuscripts, inscriptions, seals and other"
+" heritage objects, in partnership with Huma-Num."
 msgstr ""
 "ManuSpectrum a été développé dans le cadre du Cluster 2 — « Prise en compte "
-"et interrogeabilité des données d'analyse des matériaux » — du programme ANR "
-"Biblissima+. Ce cluster vise à garantir l'archivage pérenne et la "
+"et interrogeabilité des données d'analyse des matériaux » — du programme ANR"
+" Biblissima+. Ce cluster vise à garantir l'archivage pérenne et la "
 "réutilisation des données d'analyses physico-chimiques des manuscrits, "
-"inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec Huma-"
-"Num."
+"inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec "
+"Huma-Num."
 
 #: templates/index.htm:272
 msgid ""
@@ -1189,17 +1691,17 @@ msgid ""
 "from different disciplines."
 msgstr ""
 "Par une structuration et une normalisation des données respectant des "
-"modèles communs, le projet fournit des outils fiables, simples d'utilisation "
-"et accessibles à des non-spécialistes. Construit sur Arches, une plateforme "
-"open source de gestion de données patrimoniales, ManuSpectrum facilite "
+"modèles communs, le projet fournit des outils fiables, simples d'utilisation"
+" et accessibles à des non-spécialistes. Construit sur Arches, une plateforme"
+" open source de gestion de données patrimoniales, ManuSpectrum facilite "
 "l'accès aux données et la collaboration entre chercheurs de différentes "
 "disciplines."
 
 #: templates/index.htm:275
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
-"object, its context, the analyses, and their interpretations, using thesauri "
-"and authority databases to contextualize information on heterogeneous "
+"object, its context, the analyses, and their interpretations, using thesauri"
+" and authority databases to contextualize information on heterogeneous "
 "documents."
 msgstr ""
 "Le modèle se concentre sur l'identification du composant comme axe pivot "
@@ -1207,15 +1709,15 @@ msgstr ""
 "utilisant des thésaurus et des bases d'autorité pour contextualiser les "
 "informations sur des documents hétérogènes."
 
-#: templates/index.htm:283 templates/views/pages/contact.htm:146
+#: templates/index.htm:283 templates/views/pages/contact.htm:158
 #: templates/views/pages/team.htm:173
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
 #: templates/index.htm:285
 msgid ""
-"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
-"written cultures. Within Cluster 2, the objective is to archive, share and "
+"ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
+" written cultures. Within Cluster 2, the objective is to archive, share and "
 "enable searching of materials analysis data from the community, ensuring "
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
@@ -1323,11 +1825,11 @@ msgstr ""
 
 #: templates/index.htm:366
 msgid ""
-"A manuscript under ultraviolet light during hyperspectral imaging, revealing "
-"inks and retouches invisible to the naked eye"
+"A manuscript under ultraviolet light during hyperspectral imaging, revealing"
+" inks and retouches invisible to the naked eye"
 msgstr ""
-"Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale, "
-"révélant encres et retouches invisibles à l'œil nu"
+"Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale,"
+" révélant encres et retouches invisibles à l'œil nu"
 
 #: templates/index.htm:368
 msgid "UV hyperspectral imaging"
@@ -1404,8 +1906,8 @@ msgid ""
 msgstr ""
 "Les données d'analyse sont exposées sous forme d'annotations IIIF, les "
 "rendant accessibles depuis tout visualiseur compatible. Le plugin mirador-"
-"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser "
-"les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
+"xyviewer, développé pour Mirador 4, permet à tout site externe de visualiser"
+" les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
 "directement superposées aux images haute résolution des documents."
 
 #: templates/index.htm:439
@@ -1436,12 +1938,12 @@ msgstr "Caractérisation matérielle"
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
-"binders, parchment and paper supports — with different levels of reliability "
-"and characterization."
+"binders, parchment and paper supports — with different levels of reliability"
+" and characterization."
 msgstr ""
 "Explorez les couches, matériaux et éléments chimiques identifiés sur les "
-"manuscrits, les imprimés et le reste du patrimoine écrit — pigments, encres, "
-"liants, supports de parchemin et de papier — avec différents niveaux de "
+"manuscrits, les imprimés et le reste du patrimoine écrit — pigments, encres,"
+" liants, supports de parchemin et de papier — avec différents niveaux de "
 "fiabilité et de caractérisation."
 
 #: templates/index.htm:454
@@ -1735,8 +2237,8 @@ msgid ""
 "This importer is in use - it should be replaced in all files where it is "
 "used before deleting."
 msgstr ""
-"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous "
-"les fichiers où il est utilisé avant de le supprimer."
+"Cet importateur est en cours d'utilisation — il doit être remplacé dans tous"
+" les fichiers où il est utilisé avant de le supprimer."
 
 #: templates/javascript.htm:34
 msgid "An error occurred while creating the manifest."
@@ -1806,7 +2308,8 @@ msgstr "La recherche Biblissima a échoué. Veuillez réessayer dans un instant.
 
 #: templates/javascript.htm:48
 msgid ""
-"Network error while querying Biblissima. Check your connection and try again."
+"Network error while querying Biblissima. Check your connection and try "
+"again."
 msgstr ""
 "Erreur réseau lors de la requête Biblissima. Vérifiez votre connexion et "
 "réessayez."
@@ -1838,8 +2341,8 @@ msgstr "Limite du panier atteinte"
 
 #: templates/javascript.htm:55
 msgid ""
-"Too many results on this page for the remaining cart slots — reduce the page "
-"size or unselect some"
+"Too many results on this page for the remaining cart slots — reduce the page"
+" size or unselect some"
 msgstr ""
 "Trop de résultats sur cette page pour les places restantes du panier — "
 "réduisez la taille de page ou désélectionnez des éléments"
@@ -1901,7 +2404,8 @@ msgstr "Interrogation de Biblissima..."
 #: templates/javascript.htm:69
 msgid "No results. Try French keywords or check the Biblissima portal."
 msgstr ""
-"Aucun résultat. Essayez un terme français ou consultez le portail Biblissima."
+"Aucun résultat. Essayez un terme français ou consultez le portail "
+"Biblissima."
 
 #: templates/javascript.htm:70
 msgid "Biblissima is temporarily unavailable - you can use manual entry."
@@ -1935,15 +2439,15 @@ msgstr "Soumission de projet"
 msgid "Access request"
 msgstr "Demande d'accès"
 
-#: templates/javascript.htm:80 templates/views/pages/contact.htm:92
+#: templates/javascript.htm:80 templates/views/pages/contact.htm:104
 msgid "Question"
 msgstr "Question"
 
-#: templates/javascript.htm:81 templates/views/pages/contact.htm:103
+#: templates/javascript.htm:81 templates/views/pages/contact.htm:115
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:82
+#: templates/javascript.htm:82 templates/views/pages/privacy.htm:83
 msgid "Name"
 msgstr "Nom"
 
@@ -1951,7 +2455,7 @@ msgstr "Nom"
 msgid "Email"
 msgstr "E-mail"
 
-#: templates/javascript.htm:84 templates/views/pages/contact.htm:88
+#: templates/javascript.htm:84 templates/views/pages/contact.htm:100
 msgid "Reason"
 msgstr "Motif"
 
@@ -2046,8 +2550,8 @@ msgstr "Type de données (trié par nombre de champs, décroissant)"
 #: templates/javascript.htm:107
 #, python-brace-format
 msgid ""
-"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
-"sources, columns are targets."
+"Adjacency matrix: {models} models, {relations} typed relationships. Rows are"
+" sources, columns are targets."
 msgstr ""
 "Matrice d'adjacence : {models} modèles, {relations} relations typées. Les "
 "lignes sont les sources, les colonnes les cibles."
@@ -2094,8 +2598,8 @@ msgid ""
 "property."
 msgstr ""
 "{model} et ses {n} modèles directement connectés, reliés par {r} relations "
-"typées. Chaque courbe représente une relation, annotée de sa propriété CIDOC-"
-"CRM."
+"typées. Chaque courbe représente une relation, annotée de sa propriété "
+"CIDOC-CRM."
 
 #: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
@@ -2110,12 +2614,6 @@ msgstr "Taille du cercle = enregistrements publiés"
 #: templates/javascript.htm:118
 msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
-
-#: templates/javascript.htm:119
-#: templates/views/components/ms-summary-popup.htm:40
-#: templates/views/pages/graph-explorer.htm:113
-msgid "Model"
-msgstr "Modèle"
 
 #: templates/javascript.htm:120
 msgid "Family"
@@ -2139,8 +2637,8 @@ msgid ""
 "Every model with its outgoing and incoming typed relationships. {n} models, "
 "{r} relationships."
 msgstr ""
-"Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles, "
-"{r} relations."
+"Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles,"
+" {r} relations."
 
 #: templates/javascript.htm:125
 msgid "Filter fields…"
@@ -2192,7 +2690,8 @@ msgstr ""
 
 #: templates/javascript.htm:134
 #, python-brace-format
-msgid "of fields draw on a published thesaurus, not free text — {n} of {total}"
+msgid ""
+"of fields draw on a published thesaurus, not free text — {n} of {total}"
 msgstr ""
 "des champs s’appuient sur un thésaurus publié plutôt que sur du texte libre "
 "— {n} sur {total}"
@@ -2394,8 +2893,8 @@ msgid ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
 msgstr ""
-"Le serveur a refusé la modification. Vos changements sont toujours à l'écran "
-"— copiez ce dont vous avez besoin avant de fermer le panneau."
+"Le serveur a refusé la modification. Vos changements sont toujours à l'écran"
+" — copiez ce dont vous avez besoin avant de fermer le panneau."
 
 #: templates/javascript.htm:184
 msgid "Viz"
@@ -2494,7 +2993,8 @@ msgstr "Transformations"
 
 #: templates/javascript.htm:205
 msgid ""
-"Applied to the plotted spectrum, in order. The file itself is never modified."
+"Applied to the plotted spectrum, in order. The file itself is never "
+"modified."
 msgstr ""
 "Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
 "modifié."
@@ -2593,8 +3093,8 @@ msgid ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
 "written cultural heritage."
 msgstr ""
-"ManuSpectrum — base de données interopérable pour l'analyse physico-chimique "
-"du patrimoine culturel écrit."
+"ManuSpectrum — base de données interopérable pour l'analyse physico-chimique"
+" du patrimoine culturel écrit."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -2823,14 +3323,12 @@ msgstr "Proposition automatique des couches d'imagerie"
 #: templates/views/components/functions/imaging-layers-proposal.htm:7
 msgid ""
 "When a chemical imaging manifest is saved, each of its\n"
-"            canvases without a layer description receives one, proposed from "
-"the\n"
-"            canvas label: an element symbol, a spectral band, a video frame "
-"or a\n"
+"            canvases without a layer description receives one, proposed from the\n"
+"            canvas label: an element symbol, a spectral band, a video frame or a\n"
 "            deconvolved element map."
 msgstr ""
-"Lorsqu'un manifeste d'imagerie chimique est enregistré, chacun de ses canvas "
-"sans description de couche en reçoit une, proposée à partir du libellé du "
+"Lorsqu'un manifeste d'imagerie chimique est enregistré, chacun de ses canvas"
+" sans description de couche en reçoit une, proposée à partir du libellé du "
 "canvas : un symbole d'élément, une bande spectrale, une image de vidéo ou "
 "une carte d'élément déconvoluée."
 
@@ -2841,8 +3339,7 @@ msgstr "Une couche existante n'est jamais modifiée."
 #: templates/views/components/functions/imaging-layers-proposal.htm:14
 msgid ""
 "Canvases whose label is not recognised are left\n"
-"            without a layer. Layers are proposed only when a manifest is "
-"first\n"
+"            without a layer. Layers are proposed only when a manifest is first\n"
 "            saved or its URL changes, so a layer deleted afterwards stays\n"
 "            deleted. Nothing is proposed for an edit awaiting review, and a\n"
 "            failure is logged without blocking the save."
@@ -2850,16 +3347,16 @@ msgstr ""
 "Les canvas dont le libellé n'est pas reconnu restent sans couche. Des "
 "couches ne sont proposées que lorsqu'un manifeste est enregistré pour la "
 "première fois ou que son URL change : une couche supprimée ensuite reste "
-"supprimée. Rien n'est proposé pour une modification en attente de relecture, "
-"et un échec est consigné dans le journal sans bloquer l'enregistrement."
+"supprimée. Rien n'est proposé pour une modification en attente de relecture,"
+" et un échec est consigné dans le journal sans bloquer l'enregistrement."
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:21
 msgid ""
 "Layers of analyses recorded before this function\n"
 "            existed are filled once by a maintenance script."
 msgstr ""
-"Les couches des analyses enregistrées avant cette fonction sont remplies une "
-"fois par un script de maintenance."
+"Les couches des analyses enregistrées avant cette fonction sont remplies une"
+" fois par un script de maintenance."
 
 #: templates/views/components/functions/imaging-layers-proposal.htm:25
 msgid ""
@@ -2892,16 +3389,13 @@ msgstr "Configuration automatique du visualiseur XY"
 msgid ""
 "When an analysis records its technique, measurement\n"
 "            files uploaded to it receive a matching viewer configuration —\n"
-"            axis labels, units and axis direction. FTIR spectra, for "
-"instance,\n"
+"            axis labels, units and axis direction. FTIR spectra, for instance,\n"
 "            are plotted on the conventional reversed wavenumber axis."
 msgstr ""
 "Lorsqu'une analyse renseigne sa technique, les fichiers de\n"
 "            mesure qui y sont déposés reçoivent une configuration de\n"
-"            visualisation correspondante — libellés d'axes, unités et sens "
-"de\n"
-"            l'axe. Les spectres IRTF, par exemple, sont tracés sur l'axe "
-"des\n"
+"            visualisation correspondante — libellés d'axes, unités et sens de\n"
+"            l'axe. Les spectres IRTF, par exemple, sont tracés sur l'axe des\n"
 "            nombres d'onde inversé, comme le veut la convention."
 
 #: templates/views/components/functions/xy-technique-config.htm:13
@@ -2911,8 +3405,7 @@ msgstr "Une configuration choisie à la main n'est jamais modifiée."
 #: templates/views/components/functions/xy-technique-config.htm:14
 msgid ""
 "The mapping only fills files that have no\n"
-"            configuration yet. If an analysis records several techniques "
-"that\n"
+"            configuration yet. If an analysis records several techniques that\n"
 "            disagree, nothing is applied."
 msgstr ""
 "Le mappage ne remplit que les fichiers dépourvus de\n"
@@ -2941,8 +3434,8 @@ msgstr "URL de la licence"
 
 #: templates/views/components/ms-file-license.htm:26
 msgid ""
-"Enter a name and an http(s) link to the licence text; until then the default "
-"licence is shown."
+"Enter a name and an http(s) link to the licence text; until then the default"
+" licence is shown."
 msgstr ""
 "Saisissez un nom et un lien http(s) vers le texte de la licence ; d’ici là, "
 "la licence par défaut est affichée."
@@ -3106,7 +3599,7 @@ msgid "Pipe"
 msgstr "Barre verticale"
 
 #: templates/views/components/plugins/importer-configuration.htm:107
-#: templates/views/pages/contact.htm:93
+#: templates/views/pages/contact.htm:105
 msgid "Other"
 msgstr "Autre"
 
@@ -3242,11 +3735,6 @@ msgid ""
 msgstr ""
 "Marquez une colonne comme « Référence blanche » dans l'affectation des "
 "colonnes pour activer cette option."
-
-#: templates/views/components/plugins/importer-configuration.htm:278
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
-msgid "Cancel"
-msgstr "Annuler"
 
 #: templates/views/components/plugins/importer-configuration.htm:279
 msgid "Save"
@@ -3517,10 +4005,6 @@ msgstr "Documents étudiés"
 msgid "Type of Project"
 msgstr "Type de projet"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:10
-msgid "Import from Biblissima"
-msgstr "Importer depuis Biblissima"
-
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:11
 msgid "Configure the import before searching the Biblissima portal."
 msgstr "Configurez l'import avant de rechercher sur le portail Biblissima."
@@ -3699,11 +4183,11 @@ msgstr ""
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:519
 msgid ""
-"No match found. Create a new parent Document from Biblissima data — required "
-"before its components can be imported."
+"No match found. Create a new parent Document from Biblissima data — required"
+" before its components can be imported."
 msgstr ""
-"Aucune correspondance trouvée. Créez un nouveau Document parent à partir des "
-"données Biblissima — indispensable avant d'importer ses composants."
+"Aucune correspondance trouvée. Créez un nouveau Document parent à partir des"
+" données Biblissima — indispensable avant d'importer ses composants."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:531
 msgid "Create parent"
@@ -3727,8 +4211,8 @@ msgstr "Ressources liées"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:578
 msgid ""
-"The following places, institutions, and persons were found in the Biblissima "
-"data. Link them to existing resources or create new ones."
+"The following places, institutions, and persons were found in the Biblissima"
+" data. Link them to existing resources or create new ones."
 msgstr ""
 "Les lieux, institutions et personnes suivants ont été trouvés dans les "
 "données Biblissima. Liez-les à des ressources existantes ou créez-en de "
@@ -3831,8 +4315,8 @@ msgstr "Ajouter tous les visibles"
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:185
 msgid "Biblissima can be slow for large searches. You can keep this tab open."
 msgstr ""
-"Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet "
-"onglet ouvert."
+"Biblissima peut être lent sur les recherches larges. Vous pouvez laisser cet"
+" onglet ouvert."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:190
 msgid "Elapsed"
@@ -3840,13 +4324,15 @@ msgstr "Écoulé"
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:233
 msgid ""
-"Search by shelfmark, title, or institution to find manuscripts on Biblissima."
+"Search by shelfmark, title, or institution to find manuscripts on "
+"Biblissima."
 msgstr ""
 "Recherchez par cote, titre ou institution pour trouver des manuscrits sur "
 "Biblissima."
 
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:236
-msgid "Select iconographic descriptors and click Search to find illuminations."
+msgid ""
+"Select iconographic descriptors and click Search to find illuminations."
 msgstr ""
 "Sélectionnez des descripteurs iconographiques et cliquez Rechercher pour "
 "trouver des enluminures."
@@ -3903,8 +4389,8 @@ msgstr "Les ressources sont enregistrées en Brouillon."
 msgid ""
 "Open each one to verify the data, fill in anything that couldn't be fetched "
 "from Biblissima, then click <strong>Make Active</strong> on the resource "
-"page to publish it. Drafts stay editable; only Active resources are surfaced "
-"across the rest of the application."
+"page to publish it. Drafts stay editable; only Active resources are surfaced"
+" across the rest of the application."
 msgstr ""
 "Ouvrez chacune pour vérifier les données, complétez ce qui n'a pas pu être "
 "récupéré depuis Biblissima, puis cliquez sur <strong>Make Active</strong> "
@@ -4005,12 +4491,12 @@ msgstr "L'explorateur a besoin de JavaScript."
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
 msgid ""
-"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description "
-"of written heritage, its analyses and the knowledge inferred from them."
+"The ManuSpectrum data model: an event-centric CIDOC-CRM / CRMsci description"
+" of written heritage, its analyses and the knowledge inferred from them."
 msgstr ""
-"Le modèle de données ManuSpectrum : une description événementielle, en CIDOC-"
-"CRM / CRMsci, du patrimoine écrit, de ses analyses et des connaissances qui "
-"en sont inférées."
+"Le modèle de données ManuSpectrum : une description événementielle, en "
+"CIDOC-CRM / CRMsci, du patrimoine écrit, de ses analyses et des "
+"connaissances qui en sont inférées."
 
 #: templates/views/pages/conceptual-model.htm:24
 msgid "A model for describing written heritage scientifically"
@@ -4019,10 +4505,10 @@ msgstr "Décrire scientifiquement le patrimoine écrit"
 #: templates/views/pages/conceptual-model.htm:31
 msgid ""
 "Most heritage databases record what an object <em>is</em>. ManuSpectrum "
-"records what <em>happened to it</em> — and who said so. Every measurement is "
-"an event with a date, an instrument and an operator. Every interpretation is "
-"stored separately from the observation that supports it. That separation is "
-"what lets you re-read someone else's conclusion — and disagree with it."
+"records what <em>happened to it</em> — and who said so. Every measurement is"
+" an event with a date, an instrument and an operator. Every interpretation "
+"is stored separately from the observation that supports it. That separation "
+"is what lets you re-read someone else's conclusion — and disagree with it."
 msgstr ""
 "La plupart des bases de données patrimoniales consignent ce qu'un objet "
 "<em>est</em>. ManuSpectrum consigne ce qui <em>lui est arrivé</em> — et qui "
@@ -4093,7 +4579,8 @@ msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:84
 msgid ""
-"Its extension for scientific observation: measurements, samples, instruments."
+"Its extension for scientific observation: measurements, samples, "
+"instruments."
 msgstr ""
 "Son extension pour l'observation scientifique : mesures, prélèvements, "
 "instruments."
@@ -4115,8 +4602,8 @@ msgstr ""
 
 #: templates/views/pages/conceptual-model.htm:88
 msgid ""
-"The kind of value a field stores: text, a thesaurus concept, a date, a file, "
-"a link to another record…"
+"The kind of value a field stores: text, a thesaurus concept, a date, a file,"
+" a link to another record…"
 msgstr ""
 "Le type de valeur qu'un champ stocke : du texte, un concept de thésaurus, "
 "une date, un fichier, un lien vers un autre enregistrement…"
@@ -4141,8 +4628,8 @@ msgstr "Douze modèles, quatre familles"
 msgid ""
 "Nothing is described twice. An actor, a place or an instrument is recorded "
 "once and referenced everywhere it appears — so the person who ran an XRF "
-"scan in 2024 is the same record as the volume's eighteenth-century owner, if "
-"they happen to be the same person."
+"scan in 2024 is the same record as the volume's eighteenth-century owner, if"
+" they happen to be the same person."
 msgstr ""
 "Rien n'est décrit deux fois. Un acteur, un lieu ou un instrument est "
 "enregistré une seule fois et référencé partout où il apparaît — ainsi, la "
@@ -4366,8 +4853,8 @@ msgstr ""
 
 #: templates/views/pages/contact.htm:64
 msgid ""
-"This form needs JavaScript, and no public contact address is available yet — "
-"please check back soon."
+"This form needs JavaScript, and no public contact address is available yet —"
+" please check back soon."
 msgstr ""
 "Ce formulaire nécessite JavaScript, et aucune adresse de contact publique "
 "n'est encore disponible — revenez bientôt."
@@ -4377,48 +4864,79 @@ msgid "Required field"
 msgstr "Champ obligatoire"
 
 #: templates/views/pages/contact.htm:74
+#| msgid "Request an account / access"
+msgid "Requesting an account? Please include"
+msgstr "Vous demandez un compte ? Merci d'indiquer"
+
+#: templates/views/pages/contact.htm:76
+#| msgid "Your name"
+msgid "your name"
+msgstr "votre nom"
+
+#: templates/views/pages/contact.htm:77
+msgid "your institutional e-mail address"
+msgstr "votre adresse e-mail institutionnelle"
+
+#: templates/views/pages/contact.htm:78
+#| msgid "Host laboratory"
+msgid "your institution or laboratory"
+msgstr "votre établissement ou laboratoire"
+
+#: templates/views/pages/contact.htm:79
+msgid "your position"
+msgstr "votre fonction"
+
+#: templates/views/pages/contact.htm:80
+msgid "the project or the data you want to describe"
+msgstr "le projet ou les données que vous souhaitez décrire"
+
+#: templates/views/pages/contact.htm:81
+msgid "optionally, your contact at the CRC"
+msgstr "facultatif : votre contact au CRC"
+
+#: templates/views/pages/contact.htm:86
 msgid "Your name"
 msgstr "Votre nom"
 
-#: templates/views/pages/contact.htm:81
+#: templates/views/pages/contact.htm:93
 msgid "Your email"
 msgstr "Votre e-mail"
 
-#: templates/views/pages/contact.htm:90
+#: templates/views/pages/contact.htm:102
 msgid "Submit a project"
 msgstr "Soumettre un projet"
 
-#: templates/views/pages/contact.htm:91
+#: templates/views/pages/contact.htm:103
 msgid "Request an account / access"
 msgstr "Demander un compte / un accès"
 
-#: templates/views/pages/contact.htm:113
+#: templates/views/pages/contact.htm:125
 msgid "Open my email app"
 msgstr "Ouvrir mon application e-mail"
 
-#: templates/views/pages/contact.htm:116
+#: templates/views/pages/contact.htm:128
 msgid "A contact address is not configured yet. Please check back soon."
 msgstr ""
 "Aucune adresse de contact n'est configurée pour le moment. Merci de revenir "
 "bientôt."
 
-#: templates/views/pages/contact.htm:127
+#: templates/views/pages/contact.htm:139
 msgid "Or write to us directly:"
 msgstr "Ou écrivez-nous directement :"
 
-#: templates/views/pages/contact.htm:131
+#: templates/views/pages/contact.htm:143
 msgid "Copy address"
 msgstr "Copier l'adresse"
 
-#: templates/views/pages/contact.htm:142
+#: templates/views/pages/contact.htm:154
 msgid "Elsewhere"
 msgstr "Ailleurs"
 
-#: templates/views/pages/contact.htm:144
+#: templates/views/pages/contact.htm:156
 msgid "Who we are, how to cite, funding and licence"
 msgstr "Qui nous sommes, comment citer, financement et licence"
 
-#: templates/views/pages/contact.htm:145
+#: templates/views/pages/contact.htm:157
 msgid "The conceptual model"
 msgstr "Le modèle conceptuel"
 
@@ -4439,13 +4957,13 @@ msgstr "Le modèle comme un graphe vivant"
 #: templates/views/pages/graph-explorer.htm:35
 #, python-format
 msgid ""
-"Every field in ManuSpectrum and every link between models: 452 fields across "
-"12 models, 41%% of them bound to a published thesaurus rather than free "
+"Every field in ManuSpectrum and every link between models: 452 fields across"
+" 12 models, 41%% of them bound to a published thesaurus rather than free "
 "text. Click any model to read its schema."
 msgstr ""
 "Chaque champ de ManuSpectrum et chaque lien entre modèles : 452 champs "
-"répartis sur 12 modèles, dont 41%% adossés à un thésaurus publié plutôt qu'à "
-"du texte libre. Cliquez sur un modèle pour consulter son schéma."
+"répartis sur 12 modèles, dont 41%% adossés à un thésaurus publié plutôt qu'à"
+" du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
 #: templates/views/pages/graph-explorer.htm:53
 msgid "Explorer"
@@ -4465,10 +4983,10 @@ msgid ""
 "means the row's model points to the column's model — for instance "
 "<em>Analysis → Document</em>, “this analysis was run on that manuscript”."
 msgstr ""
-"<strong>Relations</strong> affiche les douze modèles en grille : une cellule "
-"remplie signifie que le modèle de la ligne pointe vers celui de la colonne — "
-"par exemple <em>Analyse → Document</em>, « cette analyse a été réalisée sur "
-"ce manuscrit »."
+"<strong>Relations</strong> affiche les douze modèles en grille : une cellule"
+" remplie signifie que le modèle de la ligne pointe vers celui de la colonne "
+"— par exemple <em>Analyse → Document</em>, « cette analyse a été réalisée "
+"sur ce manuscrit »."
 
 #: templates/views/pages/graph-explorer.htm:65
 msgid ""
@@ -4599,8 +5117,8 @@ msgstr "Vue plan"
 msgid ""
 "Technical grouping nodes: they organise fields but hold no data themselves."
 msgstr ""
-"Nœuds techniques de regroupement : ils organisent les champs mais ne portent "
-"aucune donnée."
+"Nœuds techniques de regroupement : ils organisent les champs mais ne portent"
+" aucune donnée."
 
 #: templates/views/pages/graph-explorer.htm:126
 msgid "Structural nodes"
@@ -4652,6 +5170,390 @@ msgstr "Contenu du tableau"
 msgid "Model details"
 msgstr "Détails du modèle"
 
+#: templates/views/pages/legal.htm:5 templates/views/pages/legal.htm:6
+msgid ""
+"Publisher, publication director, scientific lead and host of the "
+"ManuSpectrum platform."
+msgstr ""
+"Éditeur, directeur de la publication, responsable scientifique et hébergeur "
+"de la plateforme ManuSpectrum."
+
+#: templates/views/pages/legal.htm:10
+msgid "Publisher"
+msgstr "Éditeur"
+
+#: templates/views/pages/legal.htm:13
+msgid ""
+"The site is published for the UAR 3224 Centre de recherche sur la "
+"conservation (CRC), under the supervision of:"
+msgstr ""
+"Le site est publié pour l'UAR 3224 Centre de recherche sur la conservation "
+"(CRC), placée sous la tutelle de :"
+
+#: templates/views/pages/legal.htm:23
+msgid ""
+"The CNRS manages the credits. The server was requested in the name of the "
+"CRC by the scientific lead."
+msgstr ""
+"Le CNRS gère les crédits. Le serveur a été demandé au nom du CRC par la "
+"responsable scientifique."
+
+#: templates/views/pages/legal.htm:28
+msgid "Publication director"
+msgstr "Directeur de la publication"
+
+#: templates/views/pages/legal.htm:29
+msgid ""
+"The chief executive officer of the CNRS (the function, not a named person)."
+msgstr ""
+"Le président-directeur général du CNRS (la fonction, non une personne "
+"nommée)."
+
+#: templates/views/pages/legal.htm:31
+msgid "Scientific lead and editorial lead"
+msgstr "Responsable scientifique et de la rédaction"
+
+#: templates/views/pages/legal.htm:34
+msgid "Host"
+msgstr "Hébergeur"
+
+#: templates/views/pages/legal.htm:42
+#| msgid "Contact"
+msgid "Contact page"
+msgstr "Page de contact"
+
+#: templates/views/pages/legal.htm:45
+msgid "Personal data"
+msgstr "Données personnelles"
+
+#: templates/views/pages/legal.htm:47
+msgid ""
+"The controller is the CNRS. The details, the retention periods and how to "
+"exercise your rights are in the"
+msgstr ""
+"Le responsable de traitement est le CNRS. Le détail, les durées de "
+"conservation et la manière d'exercer vos droits figurent dans la"
+
+#: templates/views/pages/legal.htm:50
+msgid "privacy policy"
+msgstr "politique de confidentialité"
+
+#: templates/views/pages/legal.htm:53
+#| msgid "Shared context"
+msgid "Software and content"
+msgstr "Logiciel et contenus"
+
+#: templates/views/pages/legal.htm:55
+#| msgid ""
+#| "The platform's source code is published under the GNU General Public License"
+#| " v3. Reading and downloading published data needs no account."
+msgid ""
+"The platform's source code is published under the GNU General Public License"
+" v3. Each record states the licence that applies to its data and files; read"
+" it before reusing them."
+msgstr ""
+"Le code source de la plateforme est publié sous licence GNU General Public "
+"License v3. Chaque fiche indique la licence qui s'applique à ses données et "
+"à ses fichiers : lisez-la avant de les réutiliser."
+
+#: templates/views/pages/privacy.htm:5 templates/views/pages/privacy.htm:6
+msgid ""
+"What personal data ManuSpectrum keeps, why, for how long, and how to "
+"exercise your rights."
+msgstr ""
+"Les données personnelles que ManuSpectrum conserve, pourquoi, combien de "
+"temps, et comment exercer vos droits."
+
+#: templates/views/pages/privacy.htm:9
+msgid ""
+"Reading ManuSpectrum needs no account and sets no tracker. This page covers "
+"the people who have an account."
+msgstr ""
+"Lire ManuSpectrum ne demande aucun compte et ne dépose aucun traceur. Cette "
+"page concerne les personnes qui ont un compte."
+
+#: templates/views/pages/privacy.htm:14
+msgid "Data controller"
+msgstr "Responsable de traitement"
+
+#: templates/views/pages/privacy.htm:15
+msgid "for the UAR 3224 Centre de recherche sur la conservation (CRC)."
+msgstr "pour l'UAR 3224 Centre de recherche sur la conservation (CRC)."
+
+#: templates/views/pages/privacy.htm:17
+msgid "Data protection officer"
+msgstr "Délégué à la protection des données"
+
+#: templates/views/pages/privacy.htm:18
+msgid "Data protection officer of the CNRS"
+msgstr "Délégué à la protection des données du CNRS"
+
+#: templates/views/pages/privacy.htm:20
+msgid "Purposes"
+msgstr "Finalités"
+
+#: templates/views/pages/privacy.htm:22
+msgid "Managing accounts: letting contributors sign in and describe analyses."
+msgstr ""
+"Gérer les comptes : permettre aux contributeurs de se connecter et de "
+"décrire des analyses."
+
+#: templates/views/pages/privacy.htm:23
+msgid ""
+"Securing the platform: limiting sign-in attempts and investigating abuse."
+msgstr ""
+"Sécuriser la plateforme : limiter les tentatives de connexion et examiner "
+"les abus."
+
+#: templates/views/pages/privacy.htm:24
+msgid ""
+"Keeping the history of the data: who entered or changed a record, and when."
+msgstr ""
+"Garder l'historique des données : qui a saisi ou modifié une fiche, et "
+"quand."
+
+#: templates/views/pages/privacy.htm:25
+msgid ""
+"Service notices: mails about restrictions that end and workflows that will "
+"be cleaned."
+msgstr ""
+"Avis de service : courriels sur les restrictions qui se terminent et les "
+"workflows qui seront nettoyés."
+
+#: templates/views/pages/privacy.htm:26
+msgid "Answering the messages you send us."
+msgstr "Répondre aux messages que vous nous envoyez."
+
+#: templates/views/pages/privacy.htm:29
+msgid "Legal bases"
+msgstr "Bases légales"
+
+#: templates/views/pages/privacy.htm:30
+msgid ""
+"The processing is necessary for a task carried out in the public interest by"
+" the CNRS: running a research platform (GDPR, article 6(1)(e)). Sending us a"
+" message by e-mail rests on your request."
+msgstr ""
+"Le traitement est nécessaire à une mission d'intérêt public du CNRS : faire "
+"fonctionner une plateforme de recherche (RGPD, article 6, paragraphe 1, "
+"point e). L'envoi d'un message par courriel repose sur votre demande."
+
+#: templates/views/pages/privacy.htm:32
+msgid "Data we keep"
+msgstr "Données conservées"
+
+#: templates/views/pages/privacy.htm:34
+msgid ""
+"Account: name, user name, institutional e-mail address, groups, password "
+"(stored only as a hash) and the secret of your second factor."
+msgstr ""
+"Compte : nom, identifiant, adresse e-mail institutionnelle, groupes, mot de "
+"passe (conservé uniquement sous forme d'empreinte) et secret de votre second"
+" facteur."
+
+#: templates/views/pages/privacy.htm:35
+msgid ""
+"Sign-in records: date, user name, IP address, browser identification and the"
+" outcome (success or failure)."
+msgstr ""
+"Journaux de connexion : date, identifiant, adresse IP, identification du "
+"navigateur et résultat (succès ou échec)."
+
+#: templates/views/pages/privacy.htm:36
+msgid ""
+"History of the data: the account that created or changed each record, and "
+"the date."
+msgstr ""
+"Historique des données : le compte qui a créé ou modifié chaque fiche, et la"
+" date."
+
+#: templates/views/pages/privacy.htm:37
+msgid ""
+"Records can name researchers (authors, contacts) as part of the scientific "
+"description."
+msgstr ""
+"Les fiches peuvent nommer des chercheurs (auteurs, contacts) dans la "
+"description scientifique."
+
+#: templates/views/pages/privacy.htm:38
+msgid ""
+"The contact form opens your own mail application: nothing you type is stored"
+" by the platform before you send it."
+msgstr ""
+"Le formulaire de contact ouvre votre propre messagerie : la plateforme ne "
+"conserve rien de ce que vous saisissez avant l'envoi."
+
+#: templates/views/pages/privacy.htm:41
+msgid "Retention periods"
+msgstr "Durées de conservation"
+
+#: templates/views/pages/privacy.htm:45
+#| msgid "Sign-in locked"
+msgid "Sign-in records"
+msgstr "Journaux de connexion"
+
+#: templates/views/pages/privacy.htm:46
+#, python-format
+msgid "%(n)s month (%(days)s days), then deleted."
+msgid_plural "%(n)s months (%(days)s days), then deleted."
+msgstr[0] "%(n)s mois (%(days)s jours), puis supprimés."
+msgstr[1] "%(n)s mois (%(days)s jours), puis supprimés."
+
+#: templates/views/pages/privacy.htm:53
+#| msgid "Counts"
+msgid "Accounts"
+msgstr "Comptes"
+
+#: templates/views/pages/privacy.htm:54
+msgid ""
+"Kept while the contributor works on the platform. An account is deactivated,"
+" never deleted, so that the history of the data keeps its author."
+msgstr ""
+"Conservé tant que le contributeur travaille sur la plateforme. Un compte est"
+" désactivé, jamais supprimé, afin que l'historique des données garde son "
+"auteur."
+
+#: templates/views/pages/privacy.htm:57
+#| msgid "Discover the data"
+msgid "History of the data"
+msgstr "Historique des données"
+
+#: templates/views/pages/privacy.htm:58
+msgid "Kept as long as the record exists."
+msgstr "Conservé tant que la fiche existe."
+
+#: templates/views/pages/privacy.htm:61
+msgid "Backups"
+msgstr "Sauvegardes"
+
+#: templates/views/pages/privacy.htm:62
+msgid "Nightly backups are kept for up to six months."
+msgstr "Les sauvegardes quotidiennes sont conservées jusqu'à six mois."
+
+#: templates/views/pages/privacy.htm:67
+msgid "Recipients"
+msgstr "Destinataires"
+
+#: templates/views/pages/privacy.htm:68
+msgid ""
+"The administrators and the team of the Centre de recherche sur la "
+"conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
+"and no data is given to advertisers."
+msgstr ""
+"Les administrateurs et l'équipe du Centre de recherche sur la conservation, "
+"et l'hébergeur de la plateforme, l'UAR Huma-Num. Rien n'est vendu et aucune "
+"donnée n'est transmise à des annonceurs."
+
+#: templates/views/pages/privacy.htm:70
+msgid "Transfers outside the European Union"
+msgstr "Transferts hors de l'Union européenne"
+
+#: templates/views/pages/privacy.htm:71
+msgid "None. The platform is hosted in France."
+msgstr "Aucun. La plateforme est hébergée en France."
+
+#: templates/views/pages/privacy.htm:73
+msgid "Your rights"
+msgstr "Vos droits"
+
+#: templates/views/pages/privacy.htm:74
+msgid ""
+"You can ask for access to your data, its correction, its erasure where the "
+"law allows it, a restriction of the processing, and you can object to it. "
+"You can also lodge a complaint with the CNIL."
+msgstr ""
+"Vous pouvez demander l'accès à vos données, leur rectification, leur "
+"effacement lorsque la loi le permet, la limitation du traitement, et vous y "
+"opposer. Vous pouvez aussi déposer une réclamation auprès de la CNIL."
+
+#: templates/views/pages/privacy.htm:76
+msgid "To exercise your rights, write to:"
+msgstr "Pour exercer vos droits, écrivez à :"
+
+#: templates/views/pages/privacy.htm:77
+msgid "the contact page"
+msgstr "la page de contact"
+
+#: templates/views/pages/privacy.htm:78
+msgid "or to the data protection officer above."
+msgstr "ou au délégué à la protection des données ci-dessus."
+
+#: templates/views/pages/privacy.htm:80
+msgid "Cookies and browser storage"
+msgstr "Cookies et stockage du navigateur"
+
+#: templates/views/pages/privacy.htm:83
+msgid "Purpose"
+msgstr "Finalité"
+
+#: templates/views/pages/privacy.htm:86
+#| msgid "Not signed in"
+msgid "Keeps you signed in."
+msgstr "Vous garde connecté."
+
+#: templates/views/pages/privacy.htm:87
+msgid "Protects forms against forged requests."
+msgstr "Protège les formulaires contre les requêtes falsifiées."
+
+#: templates/views/pages/privacy.htm:88
+msgid "Remembers the language you chose."
+msgstr "Mémorise la langue que vous avez choisie."
+
+#: templates/views/pages/privacy.htm:91
+msgid ""
+"There is no tracker, no analytics service and no advertising cookie. The "
+"Analysis Explorer keeps your selection and layout in your browser's local "
+"storage; they are never sent to the server."
+msgstr ""
+"Il n'y a ni traceur, ni service d'analyse d'audience, ni cookie "
+"publicitaire. L'Explorateur d'analyses garde votre sélection et votre "
+"disposition dans le stockage local de votre navigateur ; elles ne sont "
+"jamais envoyées au serveur."
+
+#: templates/views/pages/privacy.htm:93
+#| msgid "Restricted data"
+msgid "Restricted records"
+msgstr "Fiches sous restriction"
+
+#: templates/views/pages/privacy.htm:94
+#, python-format
+msgid ""
+"A restriction on a record is temporary by construction: %(n)s month at most."
+" It is lifted automatically the day after its end date. The person who "
+"recorded it and the creator of the record are told %(notices)s days before, "
+"and again when the record becomes public."
+msgid_plural ""
+"A restriction on a record is temporary by construction: %(n)s months at "
+"most. It is lifted automatically the day after its end date. The person who "
+"recorded it and the creator of the record are told %(notices)s days before, "
+"and again when the record becomes public."
+msgstr[0] ""
+"Une restriction sur une fiche est temporaire par construction : %(n)s mois "
+"au plus. Elle est levée automatiquement le lendemain de sa date de fin. La "
+"personne qui l'a posée et le créateur de la fiche sont prévenus %(notices)s "
+"jours avant, puis de nouveau quand la fiche devient publique."
+msgstr[1] ""
+"Une restriction sur une fiche est temporaire par construction : %(n)s mois "
+"au plus. Elle est levée automatiquement le lendemain de sa date de fin. La "
+"personne qui l'a posée et le créateur de la fiche sont prévenus %(notices)s "
+"jours avant, puis de nouveau quand la fiche devient publique."
+
+#: templates/views/pages/privacy.htm:104
+#| msgid "Incomplete Workflows"
+msgid "Abandoned workflows"
+msgstr "Workflows abandonnés"
+
+#: templates/views/pages/privacy.htm:105
+#, python-format
+msgid ""
+"A workflow with no activity for %(days)s days is cleaned. Its creators are "
+"told %(notices)s days before. Only what the workflow itself created is "
+"removed, and only while it is still a draft."
+msgstr ""
+"Un workflow sans activité depuis %(days)s jours est nettoyé. Ses créateurs "
+"sont prévenus %(notices)s jours avant. Seul ce que le workflow a lui-même "
+"créé est retiré, et seulement tant que c'est un brouillon."
+
 #: templates/views/pages/team.htm:5 templates/views/pages/team.htm:7
 msgid ""
 "About the ManuSpectrum project and the team behind it, within Biblissima+ "
@@ -4678,8 +5580,8 @@ msgstr "Le projet & les personnes"
 
 #: templates/views/pages/team.htm:49
 msgid ""
-"ManuSpectrum archives, standardises and makes searchable the physicochemical "
-"analysis of written cultural heritage — manuscripts, printed books, "
+"ManuSpectrum archives, standardises and makes searchable the physicochemical"
+" analysis of written cultural heritage — manuscripts, printed books, "
 "inscriptions and more — so that reliable, interoperable FAIR data can be "
 "reused by the heritage science community, far beyond those who ran the "
 "measurements."
@@ -4687,8 +5589,8 @@ msgstr ""
 "ManuSpectrum archive, normalise et rend interrogeables les analyses physico-"
 "chimiques du patrimoine culturel écrit — manuscrits, imprimés, inscriptions "
 "et plus encore — afin que des données fiables, interopérables et FAIR "
-"puissent être réutilisées par la communauté des sciences du patrimoine, bien "
-"au-delà de ceux qui ont réalisé les mesures."
+"puissent être réutilisées par la communauté des sciences du patrimoine, bien"
+" au-delà de ceux qui ont réalisé les mesures."
 
 #: templates/views/pages/team.htm:57
 msgid ""
@@ -4707,9 +5609,9 @@ msgid ""
 "ontologies (CIDOC-CRM, CRMsci) and reference thesauri to keep heterogeneous "
 "documents comparable and interoperable with the Biblissima portal."
 msgstr ""
-"Construit sur Arches, il place le composant matériel en position pivot entre "
-"l'objet, son contexte, les analyses et leurs interprétations, en s'appuyant "
-"sur des ontologies communes (CIDOC-CRM, CRMsci) et des thésaurus de "
+"Construit sur Arches, il place le composant matériel en position pivot entre"
+" l'objet, son contexte, les analyses et leurs interprétations, en s'appuyant"
+" sur des ontologies communes (CIDOC-CRM, CRMsci) et des thésaurus de "
 "référence pour garder des documents hétérogènes comparables et "
 "interopérables avec le portail Biblissima."
 
@@ -4747,8 +5649,8 @@ msgstr "Les personnes derrière ManuSpectrum"
 
 #: templates/views/pages/team.htm:120
 msgid ""
-"Physico-chemist at the Centre de Recherche sur la Conservation, specialising "
-"in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
+"Physico-chemist at the Centre de Recherche sur la Conservation, specialising"
+" in non-invasive analysis (spectroscopy, hyper/multispectral imaging) of "
 "written cultural heritage. Referent for Biblissima+ Cluster 2."
 msgstr ""
 "Physico-chimiste au Centre de Recherche sur la Conservation, spécialisée "
@@ -4775,8 +5677,8 @@ msgid ""
 "Web developer of ManuSpectrum, building the Arches / Django platform, its "
 "IIIF services and interoperability with the Biblissima ecosystem."
 msgstr ""
-"Développeur web de ManuSpectrum, en charge de la plateforme Arches / Django, "
-"de ses services IIIF et de l'interopérabilité avec l'écosystème Biblissima."
+"Développeur web de ManuSpectrum, en charge de la plateforme Arches / Django,"
+" de ses services IIIF et de l'interopérabilité avec l'écosystème Biblissima."
 
 #: templates/views/pages/team.htm:160
 msgid "Reuse"
@@ -4817,40 +5719,324 @@ msgid ""
 "Cluster 2."
 msgstr ""
 "ManuSpectrum est financé par l'Agence Nationale de la Recherche dans le "
-"cadre du programme Biblissima+ « Équipement structurant pour la recherche », "
-"au sein du Cluster 2."
+"cadre du programme Biblissima+ « Équipement structurant pour la recherche »,"
+" au sein du Cluster 2."
 
 #: templates/views/pages/team.htm:177
 msgid ""
-"The platform's source code is published under the GNU General Public License "
-"v3. Reading and downloading published data needs no account."
+"The platform's source code is published under the GNU General Public License"
+" v3. Reading and downloading published data needs no account."
 msgstr ""
 "Le code source de la plateforme est publié sous licence GNU General Public "
 "License v3. La consultation et le téléchargement des données publiées ne "
 "nécessitent aucun compte."
 
-#: views/biblissima_proxy.py:624
+#: templates/views/pages/terms.htm:5 templates/views/pages/terms.htm:6
+msgid ""
+"What ManuSpectrum is and is not, and the rules for people who contribute to "
+"it."
+msgstr ""
+"Ce qu'est ManuSpectrum, ce qu'il n'est pas, et les règles pour celles et "
+"ceux qui y contribuent."
+
+#: templates/views/pages/terms.htm:10
+#| msgid "Versions"
+msgid "Version"
+msgstr "Version"
+
+#: templates/views/pages/terms.htm:16
+#| msgid "this file."
+msgid "Read this first."
+msgstr "À lire d'abord."
+
+#: templates/views/pages/terms.htm:17
+msgid ""
+"ManuSpectrum is not a data repository. It describes analyses, links them "
+"together and showcases them, in line with the FAIR principles."
+msgstr ""
+"ManuSpectrum n'est pas un entrepôt de données. Il décrit les analyses, les "
+"relie entre elles et les met en valeur, dans l'esprit des principes FAIR."
+
+#: templates/views/pages/terms.htm:18
+msgid ""
+"It gives none of the guarantees of a repository (long-term preservation, "
+"persistent identifiers, citable deposits). Your raw data belongs in a "
+"recognised repository such as Recherche Data Gouv or Nakala, and "
+"ManuSpectrum links to it."
+msgstr ""
+"Il n'offre aucune des garanties d'un entrepôt (conservation à long terme, "
+"identifiants pérennes, dépôts citables). Vos données brutes doivent être "
+"déposées dans un entrepôt reconnu, comme Recherche Data Gouv ou Nakala, et "
+"ManuSpectrum y renvoie."
+
+#: templates/views/pages/terms.htm:19
+#, python-format
+msgid ""
+"A restriction on a record is temporary: %(n)s month at most, then it is "
+"lifted automatically."
+msgid_plural ""
+"A restriction on a record is temporary: %(n)s months at most, then it is "
+"lifted automatically."
+msgstr[0] ""
+"Une restriction sur une fiche est temporaire : %(n)s mois au plus, puis elle"
+" est levée automatiquement."
+msgstr[1] ""
+"Une restriction sur une fiche est temporaire : %(n)s mois au plus, puis elle"
+" est levée automatiquement."
+
+#: templates/views/pages/terms.htm:24
+#, python-format
+msgid ""
+"An unfinished workflow is cleaned after %(days)s days without activity, once"
+" we have written to you twice (%(notices)s days before the cleanup)."
+msgstr ""
+"Un workflow inachevé est nettoyé après %(days)s jours sans activité, une "
+"fois que nous vous avons écrit deux fois (%(notices)s jours avant le "
+"nettoyage)."
+
+#: templates/views/pages/terms.htm:30
+msgid "Words we use"
+msgstr "Les mots que nous employons"
+
+#: templates/views/pages/terms.htm:33
+msgid "The ManuSpectrum website and everything you can read or enter on it."
+msgstr "Le site ManuSpectrum et tout ce que l'on peut y lire ou y saisir."
+
+#: templates/views/pages/terms.htm:34
+#| msgid "Attribution"
+msgid "Contributor"
+msgstr "Contributeur"
+
+#: templates/views/pages/terms.htm:35
+msgid ""
+"A person with an account, who describes analyses, manuscripts or materials "
+"on the platform."
+msgstr ""
+"Une personne disposant d'un compte, qui décrit des analyses, des manuscrits "
+"ou des matériaux sur la plateforme."
+
+#: templates/views/pages/terms.htm:36
+#| msgid "records"
+msgid "Record"
+msgstr "Fiche"
+
+#: templates/views/pages/terms.htm:37
+msgid ""
+"A description kept on the platform: a document, an analysis, a material, a "
+"characterization, and the files attached to it."
+msgstr ""
+"Une description conservée sur la plateforme : un document, une analyse, un "
+"matériau, une caractérisation, et les fichiers qui s'y rattachent."
+
+#: templates/views/pages/terms.htm:38
+#| msgid "Restriction set by"
+msgid "Restriction"
+msgstr "Restriction"
+
+#: templates/views/pages/terms.htm:39
+msgid "A record that only some people can see until an end date."
+msgstr ""
+"Une fiche que seules certaines personnes peuvent voir jusqu'à une date de "
+"fin."
+
+#: templates/views/pages/terms.htm:41
+msgid ""
+"A guided, multi-step entry (for example an import) that creates records as "
+"you go."
+msgstr ""
+"Une saisie guidée en plusieurs étapes (par exemple un import) qui crée des "
+"fiches au fil de l'eau."
+
+#: templates/views/pages/terms.htm:42
+msgid "Team"
+msgstr "Équipe"
+
+#: templates/views/pages/terms.htm:43
+msgid ""
+"The people who run the platform at the Centre de recherche sur la "
+"conservation."
+msgstr ""
+"Les personnes qui font fonctionner la plateforme au Centre de recherche sur "
+"la conservation."
+
+#: templates/views/pages/terms.htm:46
+#| msgid "The Project"
+msgid "The rules"
+msgstr "Les règles"
+
+#: templates/views/pages/terms.htm:48
+msgid "1. Your account is yours"
+msgstr "1. Votre compte est personnel"
+
+#: templates/views/pages/terms.htm:49
+msgid ""
+"An account is personal. Do not share your password or your second factor, "
+"and do not let someone else work under your name. Tell us if you think "
+"someone else has access to it."
+msgstr ""
+"Un compte est personnel. Ne partagez ni votre mot de passe ni votre second "
+"facteur, et ne laissez personne travailler sous votre nom. Prévenez-nous si "
+"vous pensez qu'une autre personne y a accès."
+
+#: templates/views/pages/terms.htm:51
+msgid "2. What you describe must be accurate"
+msgstr "2. Ce que vous décrivez doit être exact"
+
+#: templates/views/pages/terms.htm:52
+msgid ""
+"You answer for the descriptions you enter. Check them, correct them when you"
+" find a mistake, and say so when something is uncertain."
+msgstr ""
+"Vous répondez des descriptions que vous saisissez. Vérifiez-les, corrigez-"
+"les quand vous trouvez une erreur, et signalez ce qui est incertain."
+
+#: templates/views/pages/terms.htm:54
+msgid "3. Images and files: you need the rights"
+msgstr "3. Images et fichiers : il faut en avoir les droits"
+
+#: templates/views/pages/terms.htm:55
+msgid ""
+"Upload or link an image or a file only if you hold the rights to it or have "
+"permission from the holder. Give the licence and the credit on the record."
+msgstr ""
+"Ne déposez ou ne liez une image ou un fichier que si vous en détenez les "
+"droits ou si le détenteur vous y autorise. Indiquez la licence et le crédit "
+"sur la fiche."
+
+#: templates/views/pages/terms.htm:57
+msgid "4. Licences of published data"
+msgstr "4. Licences des données publiées"
+
+#: templates/views/pages/terms.htm:58
+msgid ""
+"Each record states the licence that applies to its data and files, and who "
+"produced them. Whoever reuses them follows that licence and cites the "
+"depositing laboratory."
+msgstr ""
+"Chaque fiche indique la licence qui s'applique à ses données et à ses "
+"fichiers, et qui les a produits. Qui les réutilise suit cette licence et "
+"cite le laboratoire déposant."
+
+#: templates/views/pages/terms.htm:60
+msgid "5. Raw data goes to a repository"
+msgstr "5. Les données brutes vont dans un entrepôt"
+
+#: templates/views/pages/terms.htm:61
+msgid ""
+"Do not rely on ManuSpectrum to keep your raw data. Deposit it in a "
+"recognised repository and link it from your record. We may remove files that"
+" the platform cannot hold."
+msgstr ""
+"Ne comptez pas sur ManuSpectrum pour garder vos données brutes. Déposez-les "
+"dans un entrepôt reconnu et liez-les depuis votre fiche. Nous pouvons "
+"retirer les fichiers que la plateforme ne peut pas conserver."
+
+#: templates/views/pages/terms.htm:63
+msgid "6. A restriction does not last forever"
+msgstr "6. Une restriction ne dure pas toujours"
+
+#: templates/views/pages/terms.htm:64
+#, python-format
+msgid ""
+"You can restrict a record for %(n)s month at most. We write to you "
+"%(notices)s days before the end date and again the day the record becomes "
+"public. The record is lifted automatically the day after the end date. A "
+"restriction with no end date is not lifted by itself, and the team keeps a "
+"list of them."
+msgid_plural ""
+"You can restrict a record for %(n)s months at most. We write to you "
+"%(notices)s days before the end date and again the day the record becomes "
+"public. The record is lifted automatically the day after the end date. A "
+"restriction with no end date is not lifted by itself, and the team keeps a "
+"list of them."
+msgstr[0] ""
+"Vous pouvez restreindre une fiche pour %(n)s mois au plus. Nous vous "
+"écrivons %(notices)s jours avant la date de fin, puis le jour où la fiche "
+"devient publique. La levée est automatique le lendemain de la date de fin. "
+"Une restriction sans date de fin n'est pas levée toute seule, et l'équipe en"
+" tient la liste."
+msgstr[1] ""
+"Vous pouvez restreindre une fiche pour %(n)s mois au plus. Nous vous "
+"écrivons %(notices)s jours avant la date de fin, puis le jour où la fiche "
+"devient publique. La levée est automatique le lendemain de la date de fin. "
+"Une restriction sans date de fin n'est pas levée toute seule, et l'équipe en"
+" tient la liste."
+
+#: templates/views/pages/terms.htm:74
+#| msgid "Unfinished workflow cleaned"
+msgid "7. Unfinished workflows are cleaned"
+msgstr "7. Les workflows inachevés sont nettoyés"
+
+#: templates/views/pages/terms.htm:75
+#, python-format
+msgid ""
+"A workflow left untouched for %(days)s days is cleaned. We write to you "
+"%(notices)s days before. We remove only what the workflow itself created, "
+"and only while it is still a draft, unchanged elsewhere and not linked to "
+"anything. Finished workflows are never touched."
+msgstr ""
+"Un workflow laissé sans activité pendant %(days)s jours est nettoyé. Nous "
+"vous écrivons %(notices)s jours avant. Nous ne retirons que ce que le "
+"workflow a lui-même créé, et seulement tant que c'est un brouillon, inchangé"
+" ailleurs et lié à rien. Les workflows terminés ne sont jamais touchés."
+
+#: templates/views/pages/terms.htm:81
+msgid "8. Misuse"
+msgstr "8. Mauvais usage"
+
+#: templates/views/pages/terms.htm:82
+msgid ""
+"The team may suspend an account that misuses the platform (false "
+"descriptions on purpose, files you have no right to, attempts to get around "
+"access limits). We tell you why."
+msgstr ""
+"L'équipe peut suspendre un compte qui détourne la plateforme (descriptions "
+"volontairement fausses, fichiers sans droits, tentatives de contourner les "
+"limites d'accès). Nous vous disons pourquoi."
+
+#: templates/views/pages/terms.htm:84
+msgid "9. These terms can change"
+msgstr "9. Ces conditions peuvent changer"
+
+#: templates/views/pages/terms.htm:85
+msgid ""
+"When the terms change, the version above changes too, and you accept the new"
+" version the next time you sign in."
+msgstr ""
+"Quand les conditions changent, la version ci-dessus change aussi, et vous "
+"acceptez la nouvelle version à votre prochaine connexion."
+
+#: templates/views/pages/terms.htm:87
+msgid "Questions about these terms or about your data:"
+msgstr "Questions sur ces conditions ou sur vos données :"
+
+#: templates/views/pages/terms.htm:87
+#| msgid "Contact the team"
+msgid "contact the team"
+msgstr "contactez l'équipe"
+
+#: views/biblissima_proxy.py:628
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Trop de requêtes Biblissima sont en cours. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:637
+#: views/biblissima_proxy.py:641
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:648
+#: views/biblissima_proxy.py:652
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: views/biblissima_proxy.py:661
+#: views/biblissima_proxy.py:665
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -4859,29 +6045,29 @@ msgstr ""
 "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer "
 "dans un instant."
 
-#: views/biblissima_proxy.py:673 views/biblissima_proxy.py:682
+#: views/biblissima_proxy.py:677 views/biblissima_proxy.py:686
 msgid "Invalid response from the Biblissima portal."
 msgstr "Réponse invalide du portail Biblissima."
 
-#: views/biblissima_proxy.py:690
+#: views/biblissima_proxy.py:694
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
 
-#: views/biblissima_proxy.py:2442
+#: views/biblissima_proxy.py:2446
 #, python-format
 msgid "Time limit of %(seconds)s s for this item exceeded."
 msgstr "Délai de %(seconds)s s dépassé pour cet élément."
 
-#: views/biblissima_proxy.py:2490
+#: views/biblissima_proxy.py:2494
 #, python-format
 msgid "Select at most %(max)s descriptors."
 msgstr "Sélectionnez au plus %(max)s descripteurs."
 
-#: views/biblissima_proxy.py:2499
+#: views/biblissima_proxy.py:2503
 msgid "The descriptor list is malformed."
 msgstr "La liste de descripteurs est mal formée."
 
-#: views/biblissima_proxy.py:3059
+#: views/biblissima_proxy.py:3063
 msgid "The manuscript identifier is malformed."
 msgstr "L'identifiant du manuscrit est mal formé."
 
@@ -4940,7 +6126,8 @@ msgstr ""
 
 #: views/explorer/citations.py:439
 #, python-format
-msgid "The data are available in %(site)s (%(permalink)s) and in %(datasets)s."
+msgid ""
+"The data are available in %(site)s (%(permalink)s) and in %(datasets)s."
 msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
 "%(datasets)s."
@@ -4948,8 +6135,8 @@ msgstr ""
 #: views/explorer/citations.py:443
 #, python-format
 msgid ""
-"The data are available in %(site)s (%(permalink)s), under the licences given "
-"for each file."
+"The data are available in %(site)s (%(permalink)s), under the licences given"
+" for each file."
 msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s), sous les "
 "licences indiquées pour chaque fichier."
@@ -4987,17 +6174,17 @@ msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
 "%(count)d canvases): open it by document."
 msgstr ""
-"Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus "
-"de %(count)d canvases) : ouvrez-le par document."
+"Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus"
+" de %(count)d canvases) : ouvrez-le par document."
 
 #: views/explorer/export.py:807
 msgid ""
-"Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images "
-"are served by IIIF image servers and are not in the package."
+"Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images"
+" are served by IIIF image servers and are not in the package."
 msgstr ""
-"L'imagerie chimique est fournie sous forme de manifestes IIIF (imaging-<n>."
-"json) ; ses images sont servies par des serveurs d'images IIIF et ne sont "
-"pas dans le paquet."
+"L'imagerie chimique est fournie sous forme de manifestes IIIF "
+"(imaging-<n>.json) ; ses images sont servies par des serveurs d'images IIIF "
+"et ne sont pas dans le paquet."
 
 #: views/explorer/export.py:814
 #, python-format
@@ -5005,8 +6192,8 @@ msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
 "fetched."
 msgstr ""
-"Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être "
-"récupéré."
+"Non inclus : le manifeste d'imagerie %(url)s de %(analysis)s n'a pas pu être"
+" récupéré."
 
 #: views/explorer/series.py:94
 #, python-format
@@ -5103,6 +6290,11 @@ msgstr "Connexion expirée"
 msgid "Viewer not allowed"
 msgstr "Visionneuse non autorisée"
 
+#: views/legal_pages.py:15
+#| msgid "End"
+msgid "and"
+msgstr "et"
+
 #: views/model_graph_service.py:103
 msgid "String"
 msgstr "Texte"
@@ -5186,16 +6378,16 @@ msgstr "<h1>La configuration de rendu n'existe pas</h1>"
 #: views/renderer_config.py:149
 msgid "The configuration must be a JSON object with a renderer and a name."
 msgstr ""
-"La configuration doit être un objet JSON comportant un moteur de rendu et un "
-"nom."
+"La configuration doit être un objet JSON comportant un moteur de rendu et un"
+" nom."
 
 #: views/renderer_config.py:174
 msgid ""
 "This configuration is part of the shared baseline and can only be edited by "
 "an administrator. Duplicate it to make your own."
 msgstr ""
-"Cette configuration fait partie du socle commun et ne peut être modifiée que "
-"par un administrateur. Dupliquez-la pour créer la vôtre."
+"Cette configuration fait partie du socle commun et ne peut être modifiée que"
+" par un administrateur. Dupliquez-la pour créer la vôtre."
 
 #: views/renderer_config.py:190 views/renderer_config.py:248
 msgid "This configuration no longer exists."
@@ -5228,124 +6420,29 @@ msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
 
-#: admin.py
-msgid "Two-factor authentication"
-msgstr "Authentification à deux facteurs"
-
-#: admin.py
-msgid "Reset two-factor authentication (superuser)"
-msgstr "Réinitialiser l'authentification à deux facteurs (superutilisateur)"
-
-#: admin.py
-msgid "Only a superuser can reset two-factor authentication."
-msgstr "Seul un superutilisateur peut réinitialiser l'authentification à deux facteurs."
-
-#: accounts/twofactor.py
-msgid "Too many attempts. Wait a minute."
-msgstr "Trop de tentatives. Patientez une minute."
-
-#: accounts/twofactor.py
-msgid "The code is not valid. Enter the current code of your authenticator."
-msgstr "Le code n'est pas valide. Saisissez le code actuel de votre application d'authentification."
-
-#: accounts/twofactor.py
-msgid "The code is not valid. Check the code and try again."
-msgstr "Le code n'est pas valide. Vérifiez le code et réessayez."
-
-#: accounts/twofactor.py
-msgid "Two-factor authentication is on."
-msgstr "L'authentification à deux facteurs est activée."
-
-#: accounts/twofactor.py
-msgid "Two-factor authentication is compulsory and cannot be removed."
-msgstr "L'authentification à deux facteurs est obligatoire et ne peut pas être retirée."
-
-#: accounts/twofactor.py
-msgid "Two-factor authentication is off."
-msgstr "L'authentification à deux facteurs est désactivée."
-
-#: templates/accounts/two_factor.htm
-msgid "Status:"
-msgstr "État :"
-
-#: templates/accounts/two_factor.htm
-msgid "ON"
-msgstr "ACTIVÉE"
-
-#: templates/accounts/two_factor.htm
-msgid "OFF"
-msgstr "DÉSACTIVÉE"
-
-#: templates/accounts/two_factor.htm
-msgid "Scan the QR code with an authenticator application, then enter the code it shows to finish."
-msgstr "Scannez le QR code avec une application d'authentification, puis saisissez le code affiché pour terminer."
-
-#: templates/accounts/two_factor.htm
-msgid "QR code to scan with your authenticator application"
-msgstr "QR code à scanner avec votre application d'authentification"
-
-#: templates/accounts/two_factor.htm
-msgid "Or enter this key by hand:"
-msgstr "Ou saisissez cette clé à la main :"
-
-#: templates/accounts/two_factor.htm
-msgid "Code from your application"
-msgstr "Code de votre application"
-
-#: templates/accounts/two_factor.htm
-msgid "Confirm and turn on"
-msgstr "Confirmer et activer"
-
-#: templates/accounts/two_factor.htm
-msgid "Current code from your application"
-msgstr "Code actuel de votre application"
-
-#: templates/accounts/two_factor.htm
-msgid "Set up a new authenticator"
-msgstr "Configurer une nouvelle application d'authentification"
-
-#: templates/accounts/two_factor.htm
-msgid "Turn on two-factor authentication"
-msgstr "Activer l'authentification à deux facteurs"
-
-#: templates/accounts/two_factor.htm
-msgid "Turn off two-factor authentication"
-msgstr "Désactiver l'authentification à deux facteurs"
-
-#: templates/accounts/two_factor.htm
-msgid "Two-factor authentication is compulsory. If you lose your device, ask an administrator to reset it."
-msgstr "L'authentification à deux facteurs est obligatoire. Si vous perdez votre appareil, demandez à un administrateur de la réinitialiser."
-
-#: admin.py
-#, python-format
-msgid "Two-factor authentication was reset for %(count)d account."
-msgid_plural "Two-factor authentication was reset for %(count)d accounts."
-msgstr[0] "L'authentification à deux facteurs a été réinitialisée pour %(count)d compte."
-msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(count)d comptes."
-
 #~ msgid "Analysis point"
 #~ msgstr "Point d'analyse"
 
 #~ msgid ""
 #~ "What an axis measures, for instance <code>wavelength</code>, "
 #~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
-#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</"
-#~ "code>, <code>count</code>. Absent when unknown."
+#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</code>, "
+#~ "<code>count</code>. Absent when unknown."
 #~ msgstr ""
 #~ "Ce que mesure un axe, par exemple <code>wavelength</code>, "
 #~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
-#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</"
-#~ "code>, <code>count</code>. Absente quand elle est inconnue."
+#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</code>, "
+#~ "<code>count</code>. Absente quand elle est inconnue."
 
 #, python-brace-format
 #~ msgid ""
-#~ "The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, <code>keV</"
-#~ "code>, <code>deg</code>, <code>1</code> (a ratio or an index), "
+#~ "The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, "
+#~ "<code>keV</code>, <code>deg</code>, <code>1</code> (a ratio or an index), "
 #~ "<code>{counts}</code>, <code>[arb'U]</code> (arbitrary units)."
 #~ msgstr ""
-#~ "Le code UCUM de l'unité : <code>nm</code>, <code>cm-1</code>, <code>keV</"
-#~ "code>, <code>deg</code>, <code>1</code> (un rapport ou un indice), "
-#~ "<code>{counts}</code>, <code>[arb'U]</code> (unités arbitraires)."
+#~ "Le code UCUM de l'unité : <code>nm</code>, <code>cm-1</code>, "
+#~ "<code>keV</code>, <code>deg</code>, <code>1</code> (un rapport ou un "
+#~ "indice), <code>{counts}</code>, <code>[arb'U]</code> (unités arbitraires)."
 
 #~ msgid "Wavenumber (cm⁻¹)"
 #~ msgstr "Nombre d'onde (cm⁻¹)"
@@ -5378,30 +6475,26 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 #~ "<code>channel</code>."
 #~ msgstr ""
 #~ "ELIO <code>.mca</code> : l'axe d'énergie en keV vient des lignes de "
-#~ "calibration de l'en-tête (une droite des moindres carrés par deux points "
-#~ "ou plus) ; sans elles, x est l'indice du canal et sa grandeur "
+#~ "calibration de l'en-tête (une droite des moindres carrés par deux points ou "
+#~ "plus) ; sans elles, x est l'indice du canal et sa grandeur "
 #~ "(<code>quantity</code>) est <code>channel</code>."
 
 #~ msgid ""
-#~ "ASD <code>.asd</code>: a raw spectrum saved with its white reference "
-#~ "reads as the reflectance target / reference, relative to that reference: "
-#~ "no panel calibration factor and no splice correction at the detector "
-#~ "joins (about 1000 and 1800 nm), as ViewSpec Pro reads it by default."
+#~ "ASD <code>.asd</code>: a raw spectrum saved with its white reference reads "
+#~ "as the reflectance target / reference, relative to that reference: no panel "
+#~ "calibration factor and no splice correction at the detector joins (about "
+#~ "1000 and 1800 nm), as ViewSpec Pro reads it by default."
 #~ msgstr ""
-#~ "ASD <code>.asd</code> : un spectre brut enregistré avec sa référence "
-#~ "blanche se lit comme la réflectance cible / référence, relative à cette "
-#~ "référence : sans facteur de calibration du panneau ni correction des "
-#~ "raccords entre détecteurs (vers 1000 et 1800 nm), comme ViewSpec Pro la "
-#~ "lit par défaut."
+#~ "ASD <code>.asd</code> : un spectre brut enregistré avec sa référence blanche"
+#~ " se lit comme la réflectance cible / référence, relative à cette référence :"
+#~ " sans facteur de calibration du panneau ni correction des raccords entre "
+#~ "détecteurs (vers 1000 et 1800 nm), comme ViewSpec Pro la lit par défaut."
 
 #~ msgid "Energy (keV)"
 #~ msgstr "Énergie (keV)"
 
 #~ msgid "Channel"
 #~ msgstr "Canal"
-
-#~ msgid "Counts"
-#~ msgstr "Coups"
 
 #~ msgid "Wavelength (nm)"
 #~ msgstr "Longueur d'onde (nm)"
@@ -5424,8 +6517,8 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 #~ "(such as images) will be automatically displayed if possible."
 #~ msgstr ""
 #~ "Spécifiez comment traiter les fichiers de données pour la visualisation. "
-#~ "Tout fichier supplémentaire (comme les images) sera automatiquement "
-#~ "affiché si possible."
+#~ "Tout fichier supplémentaire (comme les images) sera automatiquement affiché "
+#~ "si possible."
 
 #~ msgid "Data Files"
 #~ msgstr "Fichiers de données"
@@ -5467,20 +6560,20 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 
 #~ msgid "These look like percentages, not the 0-1 ratio the axis names."
 #~ msgstr ""
-#~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé "
-#~ "par l'axe."
+#~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé par "
+#~ "l'axe."
 
 #~ msgid "These values are too large to be an absorbance."
 #~ msgstr "Ces valeurs sont trop grandes pour une absorbance."
 
 #~ msgid ""
-#~ "These values look like percentages, but the axis names a ratio between 0 "
-#~ "and 1. Divide by 100 before upload, or the pseudo-absorbance and Kubelka-"
-#~ "Munk views will be wrong."
+#~ "These values look like percentages, but the axis names a ratio between 0 and"
+#~ " 1. Divide by 100 before upload, or the pseudo-absorbance and Kubelka-Munk "
+#~ "views will be wrong."
 #~ msgstr ""
 #~ "Ces valeurs ressemblent à des pourcentages, alors que l'axe annonce un "
-#~ "rapport entre 0 et 1. Divisez par 100 avant le téléversement, sinon les "
-#~ "vues pseudo-absorbance et Kubelka-Munk seront fausses."
+#~ "rapport entre 0 et 1. Divisez par 100 avant le téléversement, sinon les vues"
+#~ " pseudo-absorbance et Kubelka-Munk seront fausses."
 
 #~ msgid ""
 #~ "These values are too large to be an absorbance. The file probably holds "
@@ -5488,24 +6581,21 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 #~ "inverted."
 #~ msgstr ""
 #~ "Ces valeurs sont trop grandes pour une absorbance. Le fichier contient "
-#~ "probablement de la transmittance ou des comptages bruts, auquel cas "
-#~ "toutes les bandes de ce graphique sont inversées."
+#~ "probablement de la transmittance ou des comptages bruts, auquel cas toutes "
+#~ "les bandes de ce graphique sont inversées."
 
 #~ msgid ""
-#~ "The X axis will be evenly spaced between start and end values, based on "
-#~ "the number of data rows."
+#~ "The X axis will be evenly spaced between start and end values, based on the "
+#~ "number of data rows."
 #~ msgstr ""
-#~ "L'axe X sera uniformément réparti entre les valeurs de début et de fin, "
-#~ "en fonction du nombre de lignes de données."
+#~ "L'axe X sera uniformément réparti entre les valeurs de début et de fin, en "
+#~ "fonction du nombre de lignes de données."
 
 #~ msgid "Start"
 #~ msgstr "Début"
 
 #~ msgid "e.g. -3500"
 #~ msgstr "ex. -3500"
-
-#~ msgid "End"
-#~ msgstr "Fin"
 
 #~ msgid "e.g. 500"
 #~ msgstr "ex. 500"
@@ -5545,9 +6635,9 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 
 #~ msgid ""
 #~ "Points outside this range are not plotted. A configuration is shared by "
-#~ "every file of its technique, and instruments do not all cover the same "
-#~ "range — a crop set here hides real signal from acquisitions that go "
-#~ "further. The range is stated under each chart."
+#~ "every file of its technique, and instruments do not all cover the same range"
+#~ " — a crop set here hides real signal from acquisitions that go further. The "
+#~ "range is stated under each chart."
 #~ msgstr ""
 #~ "Les points hors de cette gamme ne sont pas tracés. Une configuration est "
 #~ "partagée par tous les fichiers de sa technique, et les instruments ne "
@@ -5565,8 +6655,8 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 #~ msgstr "Colonnes Y multiples"
 
 #~ msgid ""
-#~ "If your file has multiple Y columns, they are displayed as separate "
-#~ "series. Use “mean” to average them into a single series instead."
+#~ "If your file has multiple Y columns, they are displayed as separate series. "
+#~ "Use “mean” to average them into a single series instead."
 #~ msgstr ""
 #~ "Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des "
 #~ "séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
@@ -5594,304 +6684,10 @@ msgstr[1] "L'authentification à deux facteurs a été réinitialisée pour %(co
 #~ "jamais appliquée automatiquement par un preset de technique."
 
 #~ msgid ""
-#~ "Reference normalisation needs a column tagged “White reference” under "
-#~ "Column Assignment. Until then this step does nothing and the raw series "
-#~ "are plotted."
+#~ "Reference normalisation needs a column tagged “White reference” under Column"
+#~ " Assignment. Until then this step does nothing and the raw series are "
+#~ "plotted."
 #~ msgstr ""
-#~ "La normalisation par référence exige une colonne marquée « Référence "
-#~ "blanche » dans l'affectation des colonnes. Sans cela, cette étape ne fait "
-#~ "rien et les séries brutes sont tracées."
-
-#: accounts/models.py:31
-msgid "Active"
-msgstr "Actif"
-
-#: accounts/models.py:32 accounts/models.py:153
-msgid "Lifted"
-msgstr "Levé"
-
-#: accounts/models.py:33 accounts/models.py:154
-msgid "Released by hand"
-msgstr "Libéré manuellement"
-
-#: accounts/models.py:40 admin.py:152
-msgid "Resource"
-msgstr "Ressource"
-
-#: accounts/models.py:45
-msgid "Ends on"
-msgstr "Se termine le"
-
-#: accounts/models.py:47
-msgid ""
-"Last day of the restriction. Empty: the restriction has no end and is never "
-"lifted automatically."
-msgstr ""
-"Dernier jour de la restriction. Vide : la restriction n'a pas de fin et "
-"n'est jamais levée automatiquement."
-
-#: accounts/models.py:52
-msgid "State"
-msgstr "État"
-
-#: accounts/models.py:60
-msgid "Restriction set by"
-msgstr "Restriction posée par"
-
-#: accounts/models.py:62
-msgid "Recorded on"
-msgstr "Enregistrée le"
-
-#: accounts/models.py:64 accounts/models.py:193 admin.py:160
-msgid "Notices sent"
-msgstr "Avis envoyés"
-
-#: accounts/models.py:70
-msgid "embargo"
-msgstr "embargo"
-
-#: accounts/models.py:71
-msgid "embargoes"
-msgstr "embargos"
-
-#: accounts/models.py:94
-msgid "The end date must be after today."
-msgstr "La date de fin doit être postérieure à aujourd'hui."
-
-#: accounts/models.py:99
-#, python-format
-msgid ""
-"The end date is more than %(months)d months after the start of the embargo "
-"(latest allowed: %(latest)s). Only a superuser can set a later date."
-msgstr ""
-"La date de fin dépasse %(months)d mois après le début de l'embargo (dernière"
-" date permise : %(latest)s). Seul un superutilisateur peut fixer une date "
-"plus tardive."
-
-#: accounts/models.py:147
-msgid "Restriction detected"
-msgstr "Restriction détectée"
-
-#: accounts/models.py:148
-msgid "End date set"
-msgstr "Date de fin fixée"
-
-#: accounts/models.py:149
-msgid "Extended"
-msgstr "Prolongé"
-
-#: accounts/models.py:150
-msgid "Shortened"
-msgstr "Raccourci"
-
-#: accounts/models.py:151
-msgid "End date removed"
-msgstr "Date de fin supprimée"
-
-#: accounts/models.py:152
-msgid "Notice sent"
-msgstr "Avis envoyé"
-
-#: accounts/models.py:155
-msgid "Lift incomplete"
-msgstr "Levée incomplète"
-
-#: accounts/models.py:161
-msgid "Event"
-msgstr "Événement"
-
-#: accounts/models.py:168
-msgid "By"
-msgstr "Par"
-
-#: accounts/models.py:170
-msgid "When"
-msgstr "Quand"
-
-#: accounts/models.py:171
-msgid "Old end"
-msgstr "Ancienne fin"
-
-#: accounts/models.py:172
-msgid "New end"
-msgstr "Nouvelle fin"
-
-#: accounts/models.py:178
-msgid "embargo event"
-msgstr "événement d'embargo"
-
-#: accounts/models.py:179
-msgid "embargo events"
-msgstr "événements d'embargo"
-
-#: accounts/models.py:189
-msgid "Workflow run"
-msgstr "Exécution de l'assistant"
-
-#: accounts/models.py:190
-msgid "Workflow"
-msgstr "Assistant"
-
-#: accounts/models.py:191
-msgid "Last activity"
-msgstr "Dernière activité"
-
-#: accounts/models.py:196
-msgid "Cleaned on"
-msgstr "Nettoyée le"
-
-#: accounts/models.py:199
-msgid "Cleanup transaction"
-msgstr "Transaction de nettoyage"
-
-#: accounts/models.py:202
-msgid "Resources deleted"
-msgstr "Ressources supprimées"
-
-#: accounts/models.py:205
-msgid "Resources kept"
-msgstr "Ressources conservées"
-
-#: accounts/models.py:212
-msgid "workflow cleanup"
-msgstr "nettoyage d'assistant"
-
-#: accounts/models.py:213
-msgid "workflow cleanups"
-msgstr "nettoyages d'assistant"
-
-#: admin.py:111
-msgid "end date"
-msgstr "date de fin"
-
-#: admin.py:115
-msgid "No end date"
-msgstr "Sans date de fin"
-
-#: admin.py:115
-msgid "Has an end date"
-msgstr "Avec date de fin"
-
-#: admin.py:178
-#, python-format
-msgid "%(resource)s: only a dated, active embargo can be extended."
-msgstr "%(resource)s : seul un embargo actif et daté peut être prolongé."
-
-#: admin.py:200
-#, python-format
-msgid "%(count)d embargo was extended."
-msgid_plural "%(count)d embargoes were extended."
-msgstr[0] "%(count)d embargo a été prolongé."
-msgstr[1] "%(count)d embargos ont été prolongés."
-
-#: admin.py:207
-msgid "Extend the end date by 3 months"
-msgstr "Prolonger la date de fin de 3 mois"
-
-#: admin.py:211
-msgid "Extend the end date by 6 months"
-msgstr "Prolonger la date de fin de 6 mois"
-
-#: admin.py:215
-msgid "Extend the end date by 12 months"
-msgstr "Prolonger la date de fin de 12 mois"
-
-#: accounts/notices.py
-#, python-format
-msgid "Restriction ending on %(date)s"
-msgstr "Fin de restriction le %(date)s"
-
-#: accounts/notices.py
-#, python-format
-msgid "The restriction that keeps the data below private ends on %(date)s, %(days)s days from now. The day after, it is lifted automatically and the data become visible to everyone."
-msgstr "La restriction qui garde les données ci-dessous privées se termine le %(date)s, dans %(days)s jours. Le lendemain, elle est levée automatiquement et les données deviennent visibles de tous."
-
-#: accounts/notices.py
-msgid "If it must last longer, ask an administrator to extend it before that date, by replying to the contact address below."
-msgstr "Si elle doit durer plus longtemps, demandez à un administrateur de la prolonger avant cette date, en écrivant à l'adresse de contact ci-dessous."
-
-#: accounts/notices.py
-msgid "Your data are now public"
-msgstr "Vos données sont maintenant publiques"
-
-#: accounts/notices.py
-msgid "The restriction on the data below has ended and was lifted: they are now visible to everyone."
-msgstr "La restriction sur les données ci-dessous est terminée et a été levée : elles sont maintenant visibles de tous."
-
-#: accounts/notices.py
-#, python-format
-msgid "Unfinished workflow to be cleaned on %(date)s"
-msgstr "Workflow inachevé nettoyé le %(date)s"
-
-#: accounts/notices.py
-#, python-format
-msgid "The workflow « %(workflow)s » has not been used for a long time and is not finished. On %(date)s, %(days)s days from now, it is cleaned: its trace is deleted, and so are the records it created and listed below, if they are still drafts, were not modified elsewhere and are not linked to other records."
-msgstr "Le workflow « %(workflow)s » n'a pas été utilisé depuis longtemps et n'est pas terminé. Le %(date)s, dans %(days)s jours, il est nettoyé : sa trace est supprimée, ainsi que les fiches qu'il a créées et listées ci-dessous, si elles sont encore en brouillon, n'ont pas été modifiées ailleurs et ne sont liées à aucune autre fiche."
-
-#: accounts/notices.py
-msgid "Open the workflow again before that date to keep it."
-msgstr "Rouvrez le workflow avant cette date pour le conserver."
-
-#: accounts/notices.py
-#, python-format
-msgid "The unfinished workflow « %(workflow)s » has been cleaned."
-msgstr "Le workflow inachevé « %(workflow)s » a été nettoyé."
-
-#: accounts/notices.py
-msgid "Deleted records:"
-msgstr "Fiches supprimées :"
-
-#: accounts/workflows.py
-msgid "Create a project"
-msgstr "Créer un projet"
-
-#: accounts/notices.py
-msgid "Unfinished workflow cleaned"
-msgstr "Workflow inachevé nettoyé"
-
-#: accounts/notices.py
-msgid "Records kept, because other work depends on them:"
-msgstr "Fiches conservées, car d'autres travaux en dépendent :"
-
-#: accounts/notices.py
-msgid "Your ManuSpectrum account"
-msgstr "Votre compte ManuSpectrum"
-
-#: accounts/notices.py
-msgid "An account has been created for you on ManuSpectrum. Use the button below to read the terms of use, accept them, choose your password and set up two-factor authentication."
-msgstr "Un compte a été créé pour vous sur ManuSpectrum. Utilisez le bouton ci-dessous pour lire les conditions d'utilisation, les accepter, choisir votre mot de passe et configurer l'authentification à deux facteurs."
-
-#: accounts/notices.py
-#, python-format
-msgid "The link is personal and works until %(date)s."
-msgstr "Ce lien est personnel et valable jusqu'au %(date)s."
-
-#: accounts/notices.py
-msgid "Activate my account"
-msgstr "Activer mon compte"
-
-#: accounts/notices.py
-msgid "Accounts without sign-in"
-msgstr "Comptes sans connexion"
-
-#: accounts/notices.py
-#, python-format
-msgid "%(count)s accounts have not signed in for %(months)s months (or never signed in since their creation). Nothing was changed: deactivating an account is a decision of the administrators."
-msgstr "%(count)s comptes ne se sont pas connectés depuis %(months)s mois (ou jamais depuis leur création). Rien n'a été modifié : désactiver un compte est une décision des administrateurs."
-
-#: accounts/notices.py
-msgid "Copy for the administrators of the notice sent to the people concerned."
-msgstr "Copie pour les administrateurs de l'avis envoyé aux personnes concernées."
-
-#: accounts/notices.py
-#, python-format
-msgid "Hello %(name)s,"
-msgstr "Bonjour %(name)s,"
-
-#: accounts/notices.py
-msgid "Hello,"
-msgstr "Bonjour,"
-
-#: accounts/notices.py
-msgid "This is a service notice about your account or your data, so it has no unsubscribe link. Questions:"
-msgstr "Ceci est un avis de service concernant votre compte ou vos données : il n'a donc pas de lien de désabonnement. Questions :"
+#~ "La normalisation par référence exige une colonne marquée « Référence blanche"
+#~ " » dans l'affectation des colonnes. Sans cela, cette étape ne fait rien et "
+#~ "les séries brutes sont tracées."

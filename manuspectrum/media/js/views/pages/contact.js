@@ -144,6 +144,15 @@ function wireCounter(message) {
     update();
 }
 
+// `?reason=access` opens the form on "Request an account"; an unknown value
+// leaves the default.
+export function preselectReason(select, search = window.location.search) {
+    const reason = new URLSearchParams(search).get("reason");
+    if (!reason) return;
+    const known = Array.from(select.options).some((o) => o.value === reason);
+    if (known) select.value = reason;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     initMsNav();
     revealOnScroll();
@@ -167,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
         message: form.elements.namedItem("message"),
     };
 
+    preselectReason(fields.type);
     wireCounter(fields.message);
     wireCopyButtons();
 

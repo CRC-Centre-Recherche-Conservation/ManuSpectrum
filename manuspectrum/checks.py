@@ -6,6 +6,9 @@ management command that performs system checks (``check``, ``migrate``,
 refuses to migrate a misconfigured production instance.
 """
 
+import os
+from pathlib import Path
+
 from django.conf import settings
 from django.core import checks
 
@@ -182,5 +185,32 @@ def check_signup_closed_in_production(app_configs, **kwargs):
             "ENABLE_USER_SIGNUP is True in the production profile: visitors "
             "could create accounts. Accounts are created by an administrator.",
             id="manuspectrum.E002",
+        )
+    ]
+
+
+@checks.register()
+def check_legal_pages_complete(app_configs, **kwargs):
+    """E003: a legal page would publish an ``[À CONFIRMER]`` marker in production.
+
+    Production is ``DEPLOY_ENVIRONMENT=production`` in the environment. The
+    marker is a placeholder left in the page templates; other environments
+    print it as a reminder.
+    """
+    if os.environ.get("DEPLOY_ENVIRONMENT") != "production":
+        return []
+    pages = Path(settings.APP_ROOT) / "templates" / "views" / "pages"
+    pending = [
+        name
+        for name in ("legal.htm", "privacy.htm", "terms.htm")
+        if "[À CONFIRMER]" in (pages / name).read_text(encoding="utf-8")
+    ]
+    if not pending:
+        return []
+    return [
+        checks.Error(
+            "Pending marker '[À CONFIRMER]' in " + ", ".join(pending) + ": fill "
+            "in the text before publishing in production.",
+            id="manuspectrum.E003",
         )
     ]
