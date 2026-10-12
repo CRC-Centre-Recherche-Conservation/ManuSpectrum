@@ -52,6 +52,7 @@ ARCHES_VIEWS = {
 }
 IGNORED = {
     "password_reset": "account page, not a consultation",
+    "account-two-factor": "account page, not a consultation",
     "thumbnail": "image plumbing of the cards",
     "plugins": "back-office pages and workflow steps, one route for every plugin",
     "mvt": "map tiles",

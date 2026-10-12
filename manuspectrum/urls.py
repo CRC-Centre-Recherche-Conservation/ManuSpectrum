@@ -6,6 +6,8 @@ from django.views.generic import RedirectView, TemplateView
 
 from arches.app.views.auth import PasswordResetView
 
+from manuspectrum.accounts.notices import AccountPasswordResetForm
+from manuspectrum.accounts.twofactor import TwoFactorSetupView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.biblissima_proxy import (
@@ -90,6 +92,7 @@ urlpatterns = [
     path(
         "password_reset/",
         PasswordResetView.as_view(
+            form_class=AccountPasswordResetForm,
             html_email_template_name="registration/password_reset_email_html.html",
         ),
         name="password_reset",
@@ -168,6 +171,12 @@ for _slug, _name, _tpl in [
     urlpatterns.append(
         path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
     )
+
+### Two-factor enrolment of the signed-in user (Arches' own settings page is
+### refused at the edge); wrapped like every page.
+urlpatterns.append(
+    path("account/two-factor", TwoFactorSetupView.as_view(), name="account-two-factor")
+)
 
 ### Analysis Explorer page: wrapped, so /en/discover and /fr/discover; the
 ### application state lives in the query string, never in the path.

@@ -1,0 +1,71 @@
+{% extends "base.htm" %}
+{% load i18n %}
+
+{% block loading_mask %}
+{% endblock loading_mask %}
+
+{% block body %}
+<div id="container" class="cls-container arches-login">
+    <div class="cls-content arches-signin">
+        <div class="cls-content-sm panel login-panel">
+            <div class="panel-body two-factor-panel">
+                <h3 class="login-panel-header arches-signin">{% trans "Two-factor authentication" %}</h3>
+                <hr>
+
+                <h4>
+                    {% trans "Status:" %}
+                    {% if enrolled %}
+                        <span class="text-success">{% trans "ON" %}</span>
+                    {% else %}
+                        <span class="text-danger">{% trans "OFF" %}</span>
+                    {% endif %}
+                </h4>
+
+                {% if done %}<div class="alert alert-success" role="status">{{ done }}</div>{% endif %}
+                {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
+                {% if pending_secret %}
+                    <p>{% blocktrans %}Scan the QR code with an authenticator application, then enter the code it shows to finish.{% endblocktrans %}</p>
+                    <img class="img-responsive center-block" src="{{ qr_data_uri }}" alt="{% trans 'QR code to scan with your authenticator application' %}" width="240" height="240">
+                    <p class="text-muted text-center">
+                        {% trans "Or enter this key by hand:" %}
+                        <code>{{ pending_secret }}</code>
+                    </p>
+                    <form method="post" class="form-group">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="confirm">
+                        <label for="code">{% trans "Code from your application" %}</label>
+                        <input id="code" name="code" class="form-control input-lg" type="text" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" required autofocus>
+                        <button type="submit" class="btn btn-success btn-block">{% trans "Confirm and turn on" %}</button>
+                    </form>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="cancel">
+                        <button type="submit" class="btn btn-link">{% trans "Cancel" %}</button>
+                    </form>
+                {% else %}
+                    <form method="post" class="form-group">
+                        {% csrf_token %}
+                        {% if enrolled %}
+                            <label for="code">{% trans "Current code from your application" %}</label>
+                            <input id="code" name="code" class="form-control input-lg" type="text" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" required>
+                        {% endif %}
+                        <button type="submit" name="action" value="start" class="btn btn-success btn-block">
+                            {% if enrolled %}{% trans "Set up a new authenticator" %}{% else %}{% trans "Turn on two-factor authentication" %}{% endif %}
+                        </button>
+                        {% if enrolled and not forced %}
+                            <button type="submit" name="action" value="remove" class="btn btn-danger btn-block">{% trans "Turn off two-factor authentication" %}</button>
+                        {% endif %}
+                    </form>
+                    {% if enrolled and forced %}
+                        <p class="text-muted">{% trans "Two-factor authentication is compulsory. If you lose your device, ask an administrator to reset it." %}</p>
+                    {% endif %}
+                {% endif %}
+
+                <hr>
+                <a href="{% url 'root' %}" class="btn btn-link">{% trans "Back to the homepage" %}</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock body %}
