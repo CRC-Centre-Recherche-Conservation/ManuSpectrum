@@ -16,7 +16,7 @@ import re
 import textwrap
 import uuid
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import nh3
 import orjson
@@ -652,9 +652,10 @@ def material_components(visible, chains, objects_of):
 
 
 def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
-    """``(rows, values, parents, linked)``: the ``corpus_rows``, per visible
+    """``(rows, values, own_values, parents, linked)``: the ``corpus_rows``, per visible
     identified material ``{key: set of uris}`` of the characterization facets
-    for ``match_payload``,
+    for ``match_payload`` and, as *own_values*, the same keys without the
+    colours of its linked components (the material's own ``color_aspect``),
     the ``place_closure`` parents of the places the rows carry and the
     ``material_components``.
 
@@ -935,7 +936,7 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "periods": production_of(document, component)[1],
             }
         )
-    return rows, match_sets, place_parents, linked
+    return rows, match_sets, value_sets, place_parents, linked
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -965,7 +966,7 @@ class CorpusBundle:
     places and ancestors, ``event_materials`` the ``MapMaterial`` by uri, ``event_colours`` the
     ``MapColour`` of every colour they use,
     ``material_terms`` the folded labels (preferred and alternative) of each
-    material uri, ``histories`` the ``HistoryLine`` tuple of each document,
+    material uri, ``histories`` the ``HistoryLine`` tuple (the Production) of each document,
     ``certainty`` the ``certainty_scale``.
     """
 
@@ -989,12 +990,12 @@ class CorpusBundle:
     places: dict
     period_bounds: dict
     events: tuple = ()
-    event_places: dict = None
-    event_materials: dict = None
-    event_colours: dict = None
-    material_terms: dict = None
-    histories: dict = None
-    certainty: dict = None
+    event_places: dict = field(default_factory=dict)
+    event_materials: dict = field(default_factory=dict)
+    event_colours: dict = field(default_factory=dict)
+    material_terms: dict = field(default_factory=dict)
+    histories: dict = field(default_factory=dict)
+    certainty: dict = field(default_factory=dict)
 
     @property
     def colour_ranks(self):
@@ -1027,7 +1028,7 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows, characterization_values, place_parents, linked = _corpus_rows(
+    rows, characterization_values, own_values, place_parents, linked = _corpus_rows(
         user, language, visible, chains, links["projects"], links["objects"]
     )
     colour_items, colour_labels, colour_swatches = colour_list(language)
@@ -1084,6 +1085,7 @@ def build_bundle(user, language, visible):
         order,
         label_of,
         characterization_values,
+        own_values,
         linked,
         swatches,
     )
@@ -2356,7 +2358,7 @@ def component_zones(document_id, bundle, dims, position, readable):
 
 
 def history_of(bundle, document_id):
-    """The ``HistoryLine`` list of a document: every event of its own carriers (``CorpusBundle.histories``), its Production first, then by start year."""
+    """The ``HistoryLine`` list of a document: its Production line (``CorpusBundle.histories``)."""
     return [dict(line) for line in bundle.histories.get(document_id, ())]
 
 
@@ -2372,7 +2374,7 @@ def document_payload(document_id, user, language, ticket=None):
     visible Components placed on its pages (``component_zones``) or observed
     by one of its analyses, the placed ones by first page then name, the
     others by name after them. ``document_match`` says what the filters keep. ``history`` holds
-    the events of the document's own carriers (``history_of``).
+    the document's Production line when it has a bound or a visible place (``history_of``).
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible

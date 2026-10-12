@@ -12,7 +12,11 @@ from tests.explorer_events_fixtures import (
     VERMILION,
     EventsCase,
 )
-from tests.test_explorer_service import AZURITE, GREEN, RED
+from tests.explorer_fixtures import ACTIVE, DRAFT
+from tests.explorer_events_fixtures import collection, point
+from tests.test_explorer_service import AZURITE, GREEN, PART_BLUE, RED
+
+OCHRE = "http://vocab/ochre"
 
 
 class EventsTests(EventsCase):
@@ -170,26 +174,14 @@ class EventsTests(EventsCase):
         [line] = bundle.histories[str(self.documents["unanalysed"].pk)]
         self.assertEqual([p["name"]["value"] for p in line["places"]], ["Paris"])
 
-    def test_histories_list_every_event_of_a_document_its_production_first(self):
-        lines = self.bundle().histories[str(self.documents["open"].pk)]
+    def test_a_history_holds_the_production_of_its_document_only(self):
+        [line] = self.bundle().histories[str(self.documents["open"].pk)]
         self.assertEqual(
-            [(l["type"], l["carrier"]["model"]) for l in lines],
-            [
-                ("production", "document"),
-                ("production", "component"),
-                ("modification", "modification"),
-                ("alteration", "alteration"),
-                ("sampling", "sample"),
-                ("analysis", "analysis"),
-            ],
+            (line["type"], line["carrier"]["model"]), ("production", "document")
         )
         self.assertEqual(
-            lines[1]["date"],
-            {"start": "1380-01-01", "end": "1395-12-31", "approximate": True},
-        )
-        self.assertEqual(
-            [p["name"]["value"] for p in lines[2]["places"]],
-            ["Abbaye de Saint-Évroult"],
+            line["date"],
+            {"start": "1401-01", "end": "1500-12", "approximate": True},
         )
 
     def test_materials_info_and_terms(self):
@@ -270,3 +262,103 @@ class MaterialColourTests(EventsCase):
         self.assertEqual(bundle.event_colours[RED]["label"]["value"], "Red")
         self.assertEqual(bundle.event_colours[RED]["uri"], RED)
         self.assertIn("swatch", bundle.event_colours[RED])
+
+
+class MaterialOwnColourTests(EventsCase):
+    """Lead white is uncoloured and observed on a Component whose colour is blue."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tile(
+            cls.components["open"],
+            "color_features",
+            cls.reference_value(PART_BLUE, "Blue", "Bleu"),
+        )
+
+    def test_a_material_never_takes_the_colours_of_the_component_it_is_observed_on(
+        self,
+    ):
+        bundle = self.bundle()
+        self.assertEqual(bundle.event_materials[LEAD_WHITE]["colours"], [])
+        self.assertIsNone(bundle.event_materials[LEAD_WHITE]["swatch"])
+        self.assertNotIn(PART_BLUE, bundle.event_colours)
+
+    def test_the_corpus_filter_still_matches_the_component_colour(self):
+        from django.http import QueryDict
+        from manuspectrum.views.explorer.events import kept_events
+
+        events, *_ = kept_events(self.bundle(), QueryDict(f"colour={PART_BLUE}"))
+        self.assertIn(
+            str(self.components["open"].pk),
+            {e["carrier"]["id"] for e in events if e["type"] == "production"},
+        )
+
+
+class CharacterizationFilterTests(EventsCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ref = cls.reference_value
+        cls.tile(cls.materials["lead"], "color_aspect", ref(RED, "Red", "Rouge"))
+        cls.ochre = cls.characterized(
+            "Ochre", cls.components["open"], cls.analyses["open"], OCHRE, LOW
+        )
+        cls.tile(cls.ochre, "color_aspect", ref(GREEN, "Green", "Vert"))
+
+    def kept(self, query):
+        from django.http import QueryDict
+        from manuspectrum.views.explorer.events import kept_events
+
+        events, *_ = kept_events(self.bundle(), QueryDict(query))
+        return [
+            e for e in events if e["carrier"]["id"] == str(self.components["open"].pk)
+        ]
+
+    def test_a_kept_material_event_lists_only_the_materials_that_meet_the_filter(self):
+        self.assertEqual(
+            {m["id"] for m in self.kept("")[0]["materials"]}, {LEAD_WHITE, OCHRE}
+        )
+        [event] = self.kept(f"colour={RED}")
+        self.assertEqual({m["id"] for m in event["materials"]}, {LEAD_WHITE})
+
+
+class OwnPlaceTests(EventsCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.alone = (3.1, 47.1)
+        cls.shared = (3.2, 47.2)
+        cls.carriers = {
+            "drafts": [
+                cls.carrier("Draft A", cls.alone),
+                cls.carrier("Draft B", cls.alone),
+            ],
+            "mixed": [
+                cls.carrier("Draft C", cls.shared),
+                cls.carrier("Active D", cls.shared, ACTIVE),
+            ],
+        }
+
+    @classmethod
+    def carrier(cls, name, lng_lat, state=DRAFT):
+        document = cls.new_resource("document", name, state=state)
+        cls.tile_values(
+            document,
+            "document",
+            date_start_of_production_time="1250-01-01",
+            date_end_of_production_time="1260-12-31",
+            literal_location_of_production=collection(point(lng_lat)),
+        )
+        analysis = cls.new_resource("analysis", f"X — {name}")
+        cls.tile(analysis, "component_observed", cls.refs(document))
+        return document
+
+    def place(self, lng_lat):
+        return self.bundle().event_places[f"own:{lng_lat[0]:.4f},{lng_lat[1]:.4f}"]
+
+    def test_an_own_place_is_unpublished_only_when_every_carrier_merged_into_it_is(
+        self,
+    ):
+        self.assertTrue(self.place(self.alone)["unpublished"])
+        self.assertFalse(self.place(self.shared)["unpublished"])

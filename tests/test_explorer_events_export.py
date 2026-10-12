@@ -13,6 +13,10 @@ from tests.test_explorer_service import RED
 from manuspectrum.views.explorer.events_export import HEADER
 
 
+def streamed(response):
+    return b"".join(response.streaming_content)
+
+
 class EventsExportTests(EventsCase):
     def csv(self, query=""):
         response = self.client.get(
@@ -82,7 +86,7 @@ class EventsExportTests(EventsCase):
             (response.status_code, response["Cache-Control"]),
             (200, "private, no-store"),
         )
-        body = json.loads(response.content)
+        body = json.loads(streamed(response))
         self.assertEqual(body["type"], "FeatureCollection")
         sampling = next(
             f for f in body["features"] if f["properties"]["type"] == "sampling"
@@ -96,10 +100,29 @@ class EventsExportTests(EventsCase):
         self.assertEqual(own["geometry"]["type"], "Point")
         self.assertIn("citation", body)
 
+    def test_the_geojson_streams_one_compact_collection_in_chunks(self):
+        import orjson
+        from unittest.mock import patch
+
+        with patch("manuspectrum.views.explorer.events_export.ROWS_PER_CHUNK", 2):
+            response = self.client.get(
+                "/api/explorer/events.geojson?lang=en&eventType=analysis,sampling,production"
+            )
+            chunks = list(response.streaming_content)
+
+        self.assertTrue(response.streaming)
+        self.assertFalse(response.has_header("Content-Encoding"))
+        self.assertGreater(len(chunks), 3)
+        body = b"".join(chunks)
+        self.assertEqual(body, orjson.dumps(json.loads(body)))
+        collection = json.loads(body)
+        self.assertEqual(list(collection)[-1], "features")
+        self.assertGreater(len(collection["features"]), 4)
+
     def test_the_exports_never_carry_a_territories_grid(self):
         self.assertNotIn(
             b"territor",
-            self.client.get("/api/explorer/events.geojson?lang=en").content.lower(),
+            streamed(self.client.get("/api/explorer/events.geojson?lang=en")).lower(),
         )
 
 
@@ -120,9 +143,11 @@ class EventsExportColourTests(EventsCase):
         [row] = [r for r in rows if r["material"] == VERMILION]
         self.assertEqual(row["material_colours"], "Red")
         body = json.loads(
-            self.client.get(
-                "/api/explorer/events.geojson?lang=en&eventType=alteration"
-            ).content
+            streamed(
+                self.client.get(
+                    "/api/explorer/events.geojson?lang=en&eventType=alteration"
+                )
+            )
         )
         [material] = [
             m

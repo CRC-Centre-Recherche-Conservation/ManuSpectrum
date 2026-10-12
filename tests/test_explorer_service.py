@@ -1674,7 +1674,7 @@ class PeriodTests(ServiceCase):
 
         self.assertEqual(
             [line["type"] for line in payload["history"]],
-            ["production", "analysis", "production"],
+            ["production"],
         )
         self.assertEqual(
             payload["history"][0],

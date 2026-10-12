@@ -22,7 +22,14 @@ An occurrence becomes events only with a supporting analysis among the rows: the
 analysis itself, the analyses using a sample, the evidence of the materials a
 modification or an alteration carries (and the analyses an alteration names),
 otherwise every analysis on the carrier's Component, else its Document.
-``histories`` hold every occurrence of each document, supporting analyses or not.
+``histories`` hold the production line of each document, supporting analyses or not.
+
+A Modification or an Alteration of objects in several documents is one event,
+under the lowest document id; the other documents get neither the event nor a
+history line. ``MapPlace.parent`` is the visible parent place with the lowest id,
+whereas the place facet (``place_closure``) follows every visible parent. Own
+geometries that round to the same four decimals are one place, named after the
+first carrier and unpublished only when every carrier merged into it is.
 """
 
 from collections import Counter, defaultdict
@@ -259,10 +266,16 @@ def build_events(
     order,
     label_of,
     characterization_values,
+    own_values,
     material_components,
     swatches,
 ):
-    """The ``EventSet`` of the visible corpus: events in document-name order, their places, materials and the documents' histories."""
+    """The ``EventSet`` of the visible corpus: events in document-name order, their places, materials and the documents' histories.
+
+    *characterization_values* are the Corpus filter's values per material (kept
+    for ``kept_events``); a ``MapMaterial``'s colours are counted on *own_values*,
+    its own ``color_aspect`` without the colours of the Components it is linked to.
+    """
     readable = readable_nodegroup_ids(user)
     by_id = {row["id"]: row for row in rows}
     rows_of = defaultdict(set)
@@ -457,6 +470,7 @@ def build_events(
         return None
 
     own_places = {}
+    own_carriers = defaultdict(set)
 
     def resolve(occ):
         if occ.own is not None:
@@ -464,6 +478,7 @@ def build_events(
             own_places.setdefault(
                 pid, (occ.own, occ.linked[0] if occ.linked else None, occ.carrier)
             )
+            own_carriers[pid].add(occ.carrier)
             return [(pid, "own")]
         if not occ.linked:
             return [(None, None)]
@@ -582,7 +597,7 @@ def build_events(
             "geometryKind": g.kind,
             "extentKm": g.extent_km,
             "parent": linked,
-            "unpublished": False,
+            "unpublished": own_carriers[pid] <= visible.unpublished,
             "authorities": {},
         }
 
@@ -590,9 +605,7 @@ def build_events(
     for e in events:
         for m in e["materials"]:
             labels.setdefault(m["id"], m["name"])
-            for colour in characterization_values.get(m["characterization"], {}).get(
-                "colour", ()
-            ):
+            for colour in own_values.get(m["characterization"], {}).get("colour", ()):
                 colours[m["id"]][colour] += 1
 
     def colours_of(uri):
@@ -624,54 +637,49 @@ def build_events(
         for uri in sorted(labels)
     }
 
-    histories = defaultdict(list)
+    histories = {}
     for occ in occurrences:
+        if occ.model != "document":
+            continue
         start, end = occ.stored
-        line = {
-            "type": occ.type,
-            "carrier": {
-                "id": occ.carrier,
-                "model": occ.model,
-                "name": name_of(occ.carrier),
+        histories[occ.document] = (
+            {
+                "type": occ.type,
+                "carrier": {
+                    "id": occ.carrier,
+                    "model": occ.model,
+                    "name": name_of(occ.carrier),
+                },
+                "places": [
+                    {"id": p, "name": place_names[p]}
+                    for p in occ.linked
+                    if p in place_names
+                ],
+                "date": {
+                    "start": _date(start) if start else None,
+                    "end": _date(end) if end else None,
+                    "approximate": occ.approximate,
+                },
             },
-            "places": [
-                {"id": p, "name": place_names[p]}
-                for p in occ.linked
-                if p in place_names
-            ],
-            "date": {
-                "start": _date(start) if start else None,
-                "end": _date(end) if end else None,
-                "approximate": occ.approximate,
-            },
-        }
-        rank = (
-            0 if occ.model == "document" else 1,
-            occ.years[0] if occ.years else NO_YEAR,
-            EVENT_TYPES.index(occ.type),
-            occ.carrier,
         )
-        histories[occ.document].append((rank, line))
     return EventSet(
         events=tuple(events),
         places=places_out,
         materials=materials_out,
         material_terms={uri: frozenset(found) for uri, found in terms.items()},
-        histories={
-            d: tuple(line for _, line in sorted(lines, key=lambda item: item[0]))
-            for d, lines in histories.items()
-        },
+        histories=histories,
     )
 
 
 def kept_events(bundle, query):
     """``(events, keep, filters)``: the public ``MapEvent`` of the events *query* keeps, in bundle order.
 
-    An event is kept when its type is among ``eventType`` (all without one), its own
-    dates meet the period (``bounds_meet``; ``periodEvent`` does not apply), one of
-    its supporting analyses is kept by the Corpus rule with the period left out, and,
-    for a production, modification or alteration under characterization filters,
-    one of its materials meets them. ``analyses`` keeps the kept ones.
+    An event is kept when its type is among ``eventType`` (``MATERIAL_EVENTS``
+    without one), its own dates meet the period (``bounds_meet``; ``periodEvent``
+    does not apply) and one of its supporting analyses is kept by the Corpus rule
+    with the period left out. Under characterization filters a production,
+    modification or alteration is kept when one of its materials meets them.
+    ``analyses`` and ``materials`` keep the kept ones.
     """
     keep, active, filters, *_ = row_filter(bundle.rows, query, universe=bundle.universe)
     kept_rows = {row["id"] for row in bundle.rows if keep(row, "period")}
@@ -679,7 +687,7 @@ def kept_events(bundle, query):
     types = set(parse_event_types(query))
     found = []
     for event in bundle.events:
-        if types and event["type"] not in types:
+        if event["type"] not in types:
             continue
         date = event["date"]
         if not bounds_meet(
@@ -689,16 +697,16 @@ def kept_events(bundle, query):
         analyses = [a for a in event["analyses"] if a in kept_rows]
         if not analyses:
             continue
-        if (
-            wanted
-            and event["type"] in MATERIAL_EVENTS
-            and not any(
-                meets(bundle.characterization_values[m["characterization"]], wanted)
-                for m in event["materials"]
-            )
-        ):
-            continue
-        found.append({**event, "analyses": analyses})
+        materials = event["materials"]
+        if wanted and event["type"] in MATERIAL_EVENTS:
+            materials = [
+                m
+                for m in materials
+                if meets(bundle.characterization_values[m["characterization"]], wanted)
+            ]
+            if not materials:
+                continue
+        found.append({**event, "analyses": analyses, "materials": materials})
     return found, keep, filters
 
 

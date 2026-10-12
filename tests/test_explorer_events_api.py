@@ -187,7 +187,7 @@ class EventsRouteTests(EventsCase):
 
 
 class HistoryAndFindTests(EventsCase):
-    def test_the_document_payload_history_comes_from_the_events(self):
+    def test_the_document_payload_history_is_its_production_line(self):
         from manuspectrum.views.explorer.service import document_payload
 
         history = document_payload(self.documents["open"].pk, self.anonymous, "en")[
@@ -195,8 +195,10 @@ class HistoryAndFindTests(EventsCase):
         ]
         for line in history:
             assert_shape(self, line, "HistoryLine")
-        self.assertEqual(history[0]["carrier"]["model"], "document")
-        self.assertIn("modification", {line["type"] for line in history})
+        self.assertEqual(
+            [(l["type"], l["carrier"]["model"]) for l in history],
+            [("production", "document")],
+        )
 
     def test_the_material_search_finds_an_alternative_label(self):
         values = self.client.get(

@@ -3,7 +3,7 @@
 Below the language boundary; the language is ``lang`` (``export_language``).
 Same filters and event types as the events route (``kept_events``), the
 visitor's view (D59), one row per (event, material) in the CSV, one feature per
-event in the GeoJSON (no geometry when the place is unmapped). The territories
+event in the GeoJSON, both streamed (no geometry when the place is unmapped). The territories
 grid is a client model and is never exported. Answers are ``private, no-store``
 and never gzipped.
 """
@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 import orjson
 from django.conf import settings
-from django.http import HttpResponse, HttpResponseBadRequest, StreamingHttpResponse
+from django.http import HttpResponseBadRequest, StreamingHttpResponse
 from django.urls import reverse
 from django.utils import translation
 from django.utils.http import content_disposition_header
@@ -192,63 +192,76 @@ def csv_lines(language, bundle, events, query_text):
         yield "".join(chunk)
 
 
-def geojson_body(language, bundle, events, query_text):
-    """The GeoJSON body: one Feature per event, its place as a Point (None when unmapped), a ``citation`` member."""
+def _feature(event, places, materials, levels):
+    place = places.get(event["place"]) if event["place"] else None
+    return {
+        "type": "Feature",
+        "id": event["id"],
+        "geometry": (
+            {"type": "Point", "coordinates": place["lngLat"]}
+            if place and place["lngLat"]
+            else None
+        ),
+        "properties": {
+            "type": event["type"],
+            "carrier": event["carrier"],
+            "document": event["document"],
+            "component": event["component"],
+            "place": (
+                {
+                    "id": place["id"],
+                    "name": place["name"],
+                    "geometryKind": place["geometryKind"],
+                    "extentKm": place["extentKm"],
+                    "source": event["placeSource"],
+                }
+                if place
+                else None
+            ),
+            "date": event["date"],
+            "materials": [
+                {
+                    **m,
+                    "colours": materials.get(m["id"], {}).get("colours", []),
+                    "reliabilityLabel": levels.get(m["reliability"]),
+                }
+                for m in event["materials"]
+            ],
+            "analyses": event["analyses"],
+        },
+    }
+
+
+def geojson_chunks(language, bundle, events, query_text):
+    """The GeoJSON body in chunks: one Feature per event, its place as a Point (None when unmapped), a ``citation`` member.
+
+    The chunks join into one compact ``FeatureCollection`` whose ``features``
+    member comes last; ``ROWS_PER_CHUNK`` features are serialised at a time.
+    """
     places, materials, levels = (
         bundle.event_places,
         bundle.event_materials,
         _levels(bundle),
     )
-    features = []
-    for event in events:
-        place = places.get(event["place"]) if event["place"] else None
-        features.append(
-            {
-                "type": "Feature",
-                "id": event["id"],
-                "geometry": (
-                    {"type": "Point", "coordinates": place["lngLat"]}
-                    if place and place["lngLat"]
-                    else None
-                ),
-                "properties": {
-                    "type": event["type"],
-                    "carrier": event["carrier"],
-                    "document": event["document"],
-                    "component": event["component"],
-                    "place": (
-                        {
-                            "id": place["id"],
-                            "name": place["name"],
-                            "geometryKind": place["geometryKind"],
-                            "extentKm": place["extentKm"],
-                            "source": event["placeSource"],
-                        }
-                        if place
-                        else None
-                    ),
-                    "date": event["date"],
-                    "materials": [
-                        {
-                            **m,
-                            "colours": materials.get(m["id"], {}).get("colours", []),
-                            "reliabilityLabel": levels.get(m["reliability"]),
-                        }
-                        for m in event["materials"]
-                    ],
-                    "analyses": event["analyses"],
-                },
-            }
-        )
-    return orjson.dumps(
+    head = orjson.dumps(
         {
             "type": "FeatureCollection",
             "generated": datetime.date.today().isoformat(),
             "filters": query_text,
             "citation": _citation(bundle, events, language, query_text),
-            "features": features,
         }
     )
+    yield head[:-1] + b',"features":['
+    chunk = []
+    first = True
+    for event in events:
+        chunk.append(orjson.dumps(_feature(event, places, materials, levels)))
+        if len(chunk) >= ROWS_PER_CHUNK:
+            yield (b"" if first else b",") + b",".join(chunk)
+            first, chunk = False, []
+    if chunk:
+        yield (b"" if first else b",") + b",".join(chunk)
+    yield b"]}"
 
 
 class ExplorerEventsCsvView(View):
@@ -280,8 +293,8 @@ class ExplorerEventsGeoJsonView(View):
         except ScopeError:
             return HttpResponseBadRequest()
         query_text = _query_text(request.GET)
-        response = HttpResponse(
-            geojson_body(language, bundle, events, query_text),
+        response = StreamingHttpResponse(
+            geojson_chunks(language, bundle, events, query_text),
             content_type="application/geo+json",
         )
         response["Content-Disposition"] = content_disposition_header(
