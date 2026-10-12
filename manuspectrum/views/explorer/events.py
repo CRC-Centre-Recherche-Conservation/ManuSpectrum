@@ -29,7 +29,10 @@ under the lowest document id; the other documents get neither the event nor a
 history line. ``MapPlace.parent`` is the visible parent place with the lowest id,
 whereas the place facet (``place_closure``) follows every visible parent. Own
 geometries that round to the same four decimals are one place, named after the
-first carrier and unpublished only when every carrier merged into it is.
+first carrier and unpublished only when every carrier merged into it is. An own
+place is named after its linked place only when its point lies within that
+place's extent (``extentKm``, ``OWN_NEAR_KM`` for a point place); farther away it
+takes its first carrier's name, and ``parent`` stays the linked place either way.
 """
 
 from collections import Counter, defaultdict
@@ -40,6 +43,7 @@ from manuspectrum.views.explorer.places import (
     authorities_of,
     derived_only,
     geometry_summary,
+    haversine_km,
 )
 from manuspectrum.views.explorer.service import (
     PLACE_DEPTH,
@@ -75,6 +79,7 @@ PUBLIC_KEYS = (
     "analyses",
 )
 OWN_PREFIX = "own:"
+OWN_NEAR_KM = 25
 NO_YEAR = 10**6
 DATE_ROLES = {
     "document": ("doc_start", "doc_end", None, None, "doc_approx"),
@@ -590,9 +595,16 @@ def build_events(
             "authorities": authorities_of(texts),
         }
     for pid, (g, linked, carrier) in sorted(own_places.items()):
+        linked_geometry = geometry.get(linked)
+        near = (
+            linked in place_names
+            and linked_geometry is not None
+            and haversine_km(g.lng_lat, linked_geometry.lng_lat)
+            <= (linked_geometry.extent_km or OWN_NEAR_KM)
+        )
         places_out[pid] = {
             "id": pid,
-            "name": place_names[linked] if linked in place_names else name_of(carrier),
+            "name": place_names[linked] if near else name_of(carrier),
             "lngLat": list(g.lng_lat),
             "geometryKind": g.kind,
             "extentKm": g.extent_km,

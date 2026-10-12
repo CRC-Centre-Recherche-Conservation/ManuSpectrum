@@ -376,3 +376,26 @@ class OwnPlaceTests(EventsCase):
     ):
         self.assertTrue(self.place(self.alone)["unpublished"])
         self.assertFalse(self.place(self.shared)["unpublished"])
+
+
+class OwnPlaceNameTests(EventsCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.near = (2.36, 48.87)
+        cls.far = (-1.51, 48.64)
+        for name, lng_lat in (("Ms Near", cls.near), ("Ms Far", cls.far)):
+            cls.produced(name, cls.places["paris"], collection(point(lng_lat)), True)
+
+    def place(self, lng_lat):
+        return self.bundle().event_places[f"own:{lng_lat[0]:.4f},{lng_lat[1]:.4f}"]
+
+    def test_an_own_point_within_the_linked_place_takes_its_name(self):
+        place = self.place(self.near)
+        self.assertEqual(place["name"]["value"], "Paris")
+        self.assertEqual(place["parent"], str(self.places["paris"].pk))
+
+    def test_an_own_point_far_from_the_linked_place_takes_the_carrier_name(self):
+        place = self.place(self.far)
+        self.assertEqual(place["name"]["value"], "Ms Far")
+        self.assertEqual(place["parent"], str(self.places["paris"].pk))
