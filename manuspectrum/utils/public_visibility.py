@@ -309,6 +309,14 @@ _VISIBLE_KINDS = (
     "modifications",
     "alterations",
 )
+FILE_KINDS = (
+    "documents",
+    "components",
+    "analyses",
+    "projects",
+    "samples",
+    "characterizations",
+)
 
 
 @dataclass(frozen=True)
@@ -332,6 +340,14 @@ class VisibleSet:
     def __contains__(self, resource_id):
         """Whether the id *resource_id* (a string) is visible, without building ``ids``."""
         return any(resource_id in getattr(self, kind) for kind in _VISIBLE_KINDS)
+
+    def holds_files(self, resource_id):
+        """Whether the id *resource_id* is a visible resource whose files the IIIF data and preview routes may serve.
+
+        Those are the kinds in ``FILE_KINDS``: Places, Modifications and
+        Alterations are visible to the Explorer and serve no file.
+        """
+        return any(resource_id in getattr(self, kind) for kind in FILE_KINDS)
 
     @cached_property
     def ids(self):
