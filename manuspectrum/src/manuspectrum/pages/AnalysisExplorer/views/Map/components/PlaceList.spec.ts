@@ -55,7 +55,7 @@ function mountList(
 }
 
 describe("PlaceList", () => {
-    it("lists the places by folded name, each named by its counts", () => {
+    it("lists the places by folded name, each named by its counts and showing them short", () => {
         const wrapper = mountList();
         const rows = wrapper.findAll("li button.place");
         expect(rows.map((row) => row.find(".name").text())).toEqual([
@@ -69,7 +69,11 @@ describe("PlaceList", () => {
         expect(rows[1].attributes("aria-label")).toBe(
             "Évreux — 1 document, 1 Component",
         );
-        expect(rows[2].find(".counts").text()).toBe("9 · 14");
+        expect(rows[2].find(".counts").text()).toBe("9 docs · 14 Comp.");
+        expect(rows[2].find(".counts").attributes("title")).toBe(
+            "9 documents, 14 Components",
+        );
+        expect(rows[1].find(".counts").text()).toBe("1 doc · 1 Comp.");
         expect(rows[0].classes()).toContain("attributed");
         expect(rows[1].find(".unpublished").exists()).toBe(true);
     });
@@ -90,13 +94,10 @@ describe("PlaceList", () => {
         expect(wrapper.emitted("hover")).toEqual([["p1"], [null]]);
     });
 
-    it("offers the events without a mapped place only when there are some", async () => {
-        expect(mountList().find("button.more").exists()).toBe(false);
+    it("leaves the events without a mapped place to the map's own link", () => {
         const wrapper = mountList({ unplaced: 3 });
-        const more = wrapper.find("button.more");
-        expect(more.text()).toBe("3 events without a mapped place");
-        await more.trigger("click");
-        expect(wrapper.emitted("unplaced")).toEqual([[]]);
+        expect(wrapper.find("button.more").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("without a mapped place");
     });
 
     it("folds into a summary of its counts", async () => {

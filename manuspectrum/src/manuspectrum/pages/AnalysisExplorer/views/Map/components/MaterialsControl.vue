@@ -20,6 +20,10 @@ import {
     materialCounts,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/colour-groups.ts";
 import {
+    countsName as wordCounts,
+    countsText as shortCounts,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/count-labels.ts";
+import {
     slotOf,
     trackedOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
@@ -41,8 +45,11 @@ const ROWS_SHOWN = 5;
 
 /**
  * The identified materials of the kept events, grouped by observed colour
- * (`colourTree`), with two controls per row under the column heads « Show »
- * and « Follow »: the checkbox filters the map and the Corpus
+ * (`colourTree`: each material under its most often observed colour, which a
+ * hint under the column heads « Show » and « Follow » says). A row carries
+ * its counts with their units, as the group head, then its other observed
+ * colours, named in full on hover and for assistive technology. Two controls
+ * per row: the checkbox filters the map and the Corpus
  * (`filters.material`), « Follow » gives the material a slot of the map
  * (`mapState.track`, four at most, exact uri), which its HelpTip explains.
  * The followed materials are chips above the groups, with « any / all »
@@ -64,7 +71,8 @@ const emit = defineEmits<{ isolate: [slot: number | null] }>();
 const announce = inject(ANNOUNCE_KEY, null);
 
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, $ngettext, interpolate } = gettext;
 
 const followHelp = computed(() =>
     $gettext(
@@ -172,19 +180,11 @@ function labelOf(uri: string): Label {
 }
 
 function countsText(documents: number, components: number): string {
-    return interpolate(
-        $gettext("%{documents} doc · %{components} comp"),
-        { documents, components },
-        true,
-    );
+    return shortCounts(gettext, documents, components);
 }
 
 function countsName(documents: number, components: number): string {
-    return interpolate(
-        $gettext("%{documents} documents, %{components} Components"),
-        { documents, components },
-        true,
-    );
+    return wordCounts(gettext, documents, components);
 }
 
 function groupLabel(group: ColourGroup): string {
@@ -205,6 +205,32 @@ function otherColours(colours: readonly string[]): string[] {
 
 function moreColours(colours: readonly string[]): number {
     return Math.max(0, colours.length - 1 - MAX_OTHER_SWATCHES);
+}
+
+/** « Also observed in: … », every colour but the group's, by its label. */
+function othersName(colours: readonly string[]): string {
+    const names = colours
+        .slice(1)
+        .map((uri) => props.colours[uri]?.label.value)
+        .filter((name): name is string => Boolean(name));
+    return interpolate(
+        $gettext("Also observed in: %{colours}"),
+        {
+            colours: new Intl.ListFormat(gettext.current, {
+                type: "conjunction",
+            }).format(names),
+        },
+        true,
+    );
+}
+
+function moreColoursName(colours: readonly string[]): string {
+    const n = moreColours(colours);
+    return interpolate(
+        $ngettext("and %{n} more colour", "and %{n} more colours", n),
+        { n },
+        true,
+    );
 }
 
 function isTicked(uri: string): boolean {
@@ -427,6 +453,16 @@ function onSearch(text: string | undefined): void {
             <span>{{ $gettext("Show") }}</span>
             <span>{{ $gettext("Follow") }}</span>
         </p>
+        <p
+            v-if="groups.length > 0"
+            class="grouping-hint"
+        >
+            <span>{{
+                $gettext(
+                    "Grouped by the colour most often observed on each material.",
+                )
+            }}</span>
+        </p>
 
         <div
             class="groups"
@@ -445,18 +481,22 @@ function onSearch(text: string | undefined): void {
                         aria-hidden="true"
                         :style="swatchStyle(group.swatch)"
                     ></span>
-                    <span
-                        class="name"
-                        :lang="group.label?.lang || undefined"
-                        >{{ groupLabel(group) }}</span
-                    >
-                    <span
-                        class="counts"
-                        :title="countsName(group.documents, group.components)"
-                        >{{
-                            countsText(group.documents, group.components)
-                        }}</span
-                    >
+                    <span class="head-text">
+                        <span
+                            class="name"
+                            :lang="group.label?.lang || undefined"
+                            >{{ groupLabel(group) }}</span
+                        >
+                        <span
+                            class="counts"
+                            :title="
+                                countsName(group.documents, group.components)
+                            "
+                            >{{
+                                countsText(group.documents, group.components)
+                            }}</span
+                        >
+                    </span>
                 </h4>
                 <ul class="rows">
                     <li
@@ -479,14 +519,26 @@ function onSearch(text: string | undefined): void {
                             >
                             <span class="meta">
                                 <span
-                                    v-if="row.colours.length > 1"
-                                    class="others"
-                                    aria-hidden="true"
+                                    class="row-counts"
                                     :title="
-                                        $gettext(
-                                            'observed colour, not an identity',
+                                        countsName(
+                                            row.documents,
+                                            row.components,
                                         )
                                     "
+                                    >{{
+                                        countsText(
+                                            row.documents,
+                                            row.components,
+                                        )
+                                    }}</span
+                                >
+                                <span
+                                    v-if="row.colours.length > 1"
+                                    class="others"
+                                    role="img"
+                                    :aria-label="othersName(row.colours)"
+                                    :title="othersName(row.colours)"
                                 >
                                     <span
                                         v-for="colour in otherColours(
@@ -500,23 +552,12 @@ function onSearch(text: string | undefined): void {
                                     <span
                                         v-if="moreColours(row.colours) > 0"
                                         class="more-colours"
+                                        :title="moreColoursName(row.colours)"
                                         >{{
                                             `+${moreColours(row.colours)}`
                                         }}</span
                                     >
                                 </span>
-                                <span
-                                    class="row-counts"
-                                    :title="
-                                        countsName(
-                                            row.documents,
-                                            row.components,
-                                        )
-                                    "
-                                    >{{
-                                        `${row.documents} · ${row.components}`
-                                    }}</span
-                                >
                             </span>
                         </label>
                         <HelpTip
@@ -563,14 +604,6 @@ function onSearch(text: string | undefined): void {
                 >
                     <span>{{ moreRowsText(group) }}</span>
                 </button>
-                <p
-                    class="legend"
-                    aria-hidden="true"
-                >
-                    <span>{{
-                        $gettext("counts: documents · Components")
-                    }}</span>
-                </p>
             </section>
             <p
                 v-if="noMatch"
@@ -763,25 +796,36 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .colour-group h4 {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.375rem;
+    align-items: baseline;
     min-inline-size: 0;
     margin: 0;
     font-weight: 400;
 }
 
-.materials-control .colour-group .name {
-    flex: 1 1 auto;
+.materials-control .colour-group h4 .swatch {
+    align-self: center;
+}
+
+/* The colour name is never cut; the counts follow it or wrap under it. */
+.materials-control .colour-group .head-text {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 0.5rem;
     min-inline-size: 0;
-    overflow: hidden;
+}
+
+.materials-control .colour-group .name {
+    min-inline-size: 0;
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     letter-spacing: 0.12em;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
     text-transform: uppercase;
-    white-space: nowrap;
 }
 
 .materials-control .counts,
@@ -791,6 +835,7 @@ function onSearch(text: string | undefined): void {
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 /* MaterialsTable .swatch */
@@ -828,27 +873,36 @@ function onSearch(text: string | undefined): void {
     list-style: none;
 }
 
+/*
+ * tick | name | Follow
+ *      | counts, other colours (under the name and Follow)
+ * The label takes the row's tracks (subgrid) so the whole of it ticks.
+ */
 .materials-control .row {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 0.5rem;
+    row-gap: 0.125rem;
     align-items: center;
-    gap: 0.25rem;
     min-inline-size: 0;
+    padding-block: 0.375rem;
 }
 
 .materials-control .value {
     display: grid;
-    flex: 1 1 auto;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 0.5rem;
+    grid-template-rows: subgrid;
+    grid-template-columns: subgrid;
+    grid-row: 1 / -1;
+    grid-column: 1 / -1;
     align-items: center;
     min-inline-size: 0;
-    min-block-size: var(--explorer-target, 2.75rem);
-    padding-block: 0.25rem;
     font-size: 0.8125rem;
     cursor: pointer;
 }
 
 .materials-control .value input {
+    grid-row: 1;
     grid-column: 1;
     margin: 0;
     accent-color: var(--blue-text);
@@ -856,6 +910,7 @@ function onSearch(text: string | undefined): void {
 
 .materials-control .value .label {
     display: -webkit-box;
+    grid-row: 1;
     grid-column: 2;
     min-inline-size: 0;
     overflow: hidden;
@@ -865,17 +920,23 @@ function onSearch(text: string | undefined): void {
     -webkit-line-clamp: 2;
 }
 
+/* Counts first and unbroken; the other colours follow them or wrap below. */
 .materials-control .value .meta {
     display: flex;
-    grid-column: 2;
+    flex-wrap: wrap;
+    grid-row: 2;
+    grid-column: 2 / -1;
     align-items: center;
-    gap: 0.375rem;
+    gap: 0.125rem 0.375rem;
     min-inline-size: 0;
 }
 
-.materials-control .follow-tip,
-.materials-control .follow {
+/* The 2.75rem target overhangs the row by 0.5rem on each side. */
+.materials-control .follow-tip {
+    grid-row: 1;
+    grid-column: 3;
     align-self: center;
+    margin-block: -0.5rem;
 }
 
 /* FacetRail .more */
@@ -955,11 +1016,12 @@ function onSearch(text: string | undefined): void {
     font-variant-numeric: tabular-nums;
 }
 
-.materials-control .legend {
+/* MapView .map-rail .hint */
+.materials-control .grouping-hint {
+    margin-block-start: -0.5rem;
+    padding-inline: 0.125rem;
     color: var(--ink-dim);
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
-    text-align: end;
+    font-size: 0.75rem;
 }
 
 .materials-control .no-match {

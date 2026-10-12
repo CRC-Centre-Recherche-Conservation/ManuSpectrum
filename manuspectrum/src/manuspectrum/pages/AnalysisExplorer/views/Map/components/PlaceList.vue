@@ -7,6 +7,10 @@ import InputText from "primevue/inputtext";
 import CollapsibleSection from "@/manuspectrum/pages/AnalysisExplorer/components/CollapsibleSection.vue";
 
 import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
+import {
+    countsName,
+    countsText,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/count-labels.ts";
 
 import type { MapPlace } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { PlaceSummary } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
@@ -18,14 +22,15 @@ const PARENT_DEPTH = 8;
 
 /**
  * The text equivalent of the map: one button per mapped place, by folded
- * name, named « Paris — 9 documents, 14 Components »; an attributed place
+ * name, named « Paris — 9 documents, 14 Components » and showing
+ * « 9 docs · 14 Comp. » beside the name, or under it when the row is too
+ * narrow for both; an attributed place
  * (an area, or reached through its parent) is in italics. The selected one
  * is `aria-current`. The first 8 rows show, the selected one always,
  * then « Show n more » adds 20; past 8 places a search field matches the
  * folded name of a place and of its parents (`places`), and shows every
- * match. Under the list, the events without a mapped place open their own
- * panel. Folds into « Places (n) » with its counts; `open` sets the fold,
- * the reader may change it.
+ * match. Folds into « Places (n) » with its counts, `unplaced` the events
+ * without a mapped place; `open` sets the fold, the reader may change it.
  */
 const props = withDefaults(
     defineProps<{
@@ -40,10 +45,10 @@ const props = withDefaults(
 const emit = defineEmits<{
     select: [id: string];
     hover: [id: string | null];
-    unplaced: [];
 }>();
 
-const { $gettext, $ngettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, $ngettext, interpolate } = gettext;
 
 const unfolded = ref(props.open);
 const query = ref("");
@@ -94,17 +99,6 @@ const summaryText = computed(() =>
         true,
     ),
 );
-const unplacedText = computed(() =>
-    interpolate(
-        $ngettext(
-            "%{n} event without a mapped place",
-            "%{n} events without a mapped place",
-            props.unplaced,
-        ),
-        { n: props.unplaced },
-        true,
-    ),
-);
 
 watch(
     () => props.open,
@@ -136,24 +130,18 @@ function showMore(): void {
     limit.value += ROWS_STEP;
 }
 
+function countsOf(summary: PlaceSummary): string {
+    return countsText(gettext, summary.documents.size, summary.components.size);
+}
+
+function countsTitle(summary: PlaceSummary): string {
+    return countsName(gettext, summary.documents.size, summary.components.size);
+}
+
 function nameOf(summary: PlaceSummary): string {
-    const documents = summary.documents.size;
-    const components = summary.components.size;
     return interpolate(
-        $gettext("%{place} — %{documents}, %{components}"),
-        {
-            place: summary.name.value,
-            documents: interpolate(
-                $ngettext("%{n} document", "%{n} documents", documents),
-                { n: documents },
-                true,
-            ),
-            components: interpolate(
-                $ngettext("%{n} Component", "%{n} Components", components),
-                { n: components },
-                true,
-            ),
-        },
+        $gettext("%{place} — %{counts}"),
+        { place: summary.name.value, counts: countsTitle(summary) },
         true,
     );
 }
@@ -213,9 +201,8 @@ function nameOf(summary: PlaceSummary): string {
                     <span
                         class="counts"
                         aria-hidden="true"
-                        >{{
-                            `${summary.documents.size} · ${summary.components.size}`
-                        }}</span
+                        :title="countsTitle(summary)"
+                        >{{ countsOf(summary) }}</span
                     >
                 </button>
             </li>
@@ -233,14 +220,6 @@ function nameOf(summary: PlaceSummary): string {
             @click="showMore"
         >
             <span>{{ moreText }}</span>
-        </button>
-        <button
-            v-if="props.unplaced > 0"
-            type="button"
-            class="more"
-            @click="emit('unplaced')"
-        >
-            <span>{{ unplacedText }}</span>
         </button>
     </CollapsibleSection>
 </template>
@@ -267,13 +246,16 @@ function nameOf(summary: PlaceSummary): string {
 }
 
 /* OnThisPage row button */
+/* Name and counts on one line when both fit, else the counts wrap under the name. */
 .place-list .place {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0 0.5rem;
     inline-size: 100%;
     min-inline-size: 0;
     min-block-size: var(--explorer-target, 2.75rem);
+    padding-block: 0.25rem;
     padding-inline: 0.5rem;
     border: none;
     border-inline-start: 0.1875rem solid transparent;
@@ -321,6 +303,7 @@ function nameOf(summary: PlaceSummary): string {
 
 .place-list .counts {
     flex: none;
+    white-space: nowrap;
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.6875rem;

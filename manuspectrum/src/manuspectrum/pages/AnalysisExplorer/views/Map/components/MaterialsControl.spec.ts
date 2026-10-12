@@ -30,6 +30,10 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 
 const BLUE = "http://colour.test/blue";
 const RED = "http://colour.test/red";
+const GREEN = "http://colour.test/green";
+const YELLOW = "http://colour.test/yellow";
+const PURPLE = "http://colour.test/purple";
+const OCHRE = "http://colour.test/ochre";
 const NAMES = ["Lapis lazuli", "Azurite", "Vermilion", "Lead white", "Minium"];
 const URIS = NAMES.map((_, index) => `http://material.test/m${index + 1}`);
 
@@ -57,6 +61,10 @@ const materials: Record<string, MapMaterial> = {
 const colours: Record<string, MapColour> = {
     [BLUE]: { uri: BLUE, label: label("Blue"), swatch: "#2244aa" },
     [RED]: { uri: RED, label: label("Red"), swatch: "#aa2222" },
+    [GREEN]: { uri: GREEN, label: label("Green"), swatch: "#22aa44" },
+    [YELLOW]: { uri: YELLOW, label: label("Yellow"), swatch: "#ddcc22" },
+    [PURPLE]: { uri: PURPLE, label: label("Purple"), swatch: "#7722aa" },
+    [OCHRE]: { uri: OCHRE, label: label("Ochre"), swatch: "#cc8833" },
 };
 
 function events(): MapEvent[] {
@@ -121,8 +129,18 @@ describe("MaterialsControl", () => {
             "No colour recorded",
         ]);
         expect(wrapper.find(".colour-group .counts").text()).toBe(
-            "2 doc · 2 comp",
+            "2 docs · 2 Comp.",
         );
+    });
+
+    it("heads a group with its whole colour name, the counts after it in the same wrapping line", () => {
+        const head = mountControl().get(".colour-group h4");
+        const text = head.get(".head-text");
+        expect(
+            [...text.element.children].map((child) => child.className),
+        ).toEqual(["name", "counts"]);
+        expect(text.get(".name").attributes("title")).toBeUndefined();
+        expect(head.element.firstElementChild?.classList).toContain("swatch");
     });
 
     it("ticks a material into the material filter and unticks it", async () => {
@@ -301,7 +319,17 @@ describe("MaterialsControl", () => {
         const row = rowOf(mountControl(), "Lapis lazuli");
         const meta = row.get(".value .meta");
         expect(meta.find(".others").exists()).toBe(true);
-        expect(meta.find(".row-counts").text()).toBe("1 · 1");
+        const counts = meta.get(".row-counts");
+        expect(counts.text()).toBe("1 doc · 1 Comp.");
+        expect(counts.attributes("title")).toBe("1 document, 1 Component");
+        expect(meta.element.firstElementChild).toBe(counts.element);
+        expect(meta.element.previousElementSibling).toBe(
+            row.get(".value .label").element,
+        );
+        expect(
+            [...row.element.children].map((child) => child.classList[0]),
+        ).toEqual(["value", "help-tip"]);
+        expect(row.element.lastElementChild?.classList).toContain("follow-tip");
         expect(row.get(".value .label").attributes("title")).toBe(
             "Lapis lazuli",
         );
@@ -318,13 +346,32 @@ describe("MaterialsControl", () => {
         expect(wrapper.emitted("isolate")).toEqual([[1], [null], [1], [null]]);
     });
 
-    it("draws the other colours as decorative swatches", () => {
-        const wrapper = mountControl();
-        const swatches = rowOf(wrapper, "Lapis lazuli").find(".others");
-        expect(swatches.attributes("aria-hidden")).toBe("true");
-        expect(swatches.attributes("title")).toBe(
-            "observed colour, not an identity",
+    it("names the other observed colours of a row, and how many are not drawn", () => {
+        const known = {
+            ...materials,
+            [URIS[0]]: material(0, [BLUE, RED, GREEN, YELLOW, PURPLE, OCHRE]),
+        };
+        const others = rowOf(mountControl(events(), known), "Lapis lazuli").get(
+            ".others",
         );
-        expect(swatches.findAll(".swatch")).toHaveLength(1);
+        const name = "Also observed in: Red, Green, Yellow, Purple, and Ochre";
+        expect(others.attributes("role")).toBe("img");
+        expect(others.attributes("aria-label")).toBe(name);
+        expect(others.attributes("title")).toBe(name);
+        expect(others.findAll(".swatch")).toHaveLength(3);
+        const more = others.get(".more-colours");
+        expect(more.text()).toBe("+2");
+        expect(more.attributes("title")).toBe("and 2 more colours");
+    });
+
+    it("says how the materials are grouped, with no separate counts legend", () => {
+        const wrapper = mountControl();
+        expect(wrapper.get(".grouping-hint").text()).toBe(
+            "Grouped by the colour most often observed on each material.",
+        );
+        expect(wrapper.get(".columns").element.nextElementSibling).toBe(
+            wrapper.get(".grouping-hint").element,
+        );
+        expect(wrapper.find(".legend").exists()).toBe(false);
     });
 });
