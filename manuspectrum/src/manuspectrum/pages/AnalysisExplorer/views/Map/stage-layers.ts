@@ -244,6 +244,7 @@ function labelLayer(
             "text-size": ["interpolate", ["linear"], ["zoom"], 4, 11, 8, 12.5],
             "text-variable-anchor": ["top", "bottom", "left", "right"],
             "text-radial-offset": clearRadius(LABEL_SIZES_PX, LABEL_GAP_PX),
+            "text-padding": 0,
             "text-optional": true,
             "text-allow-overlap": false,
             "symbol-sort-key": ["-", ["get", "documents"]],

@@ -104,6 +104,21 @@ describe("place symbols", () => {
         expect(event.materials.map((m) => m.id)).toEqual(["n", "o"]);
     });
 
+    it("drops a material event whose materials are all hidden, and keeps one that never had any", () => {
+        const events = withoutLevels(
+            [
+                mapEvent({ id: "a", materials: [material("m", "low")] }),
+                mapEvent({ id: "b", materials: [] }),
+                mapEvent({
+                    id: "c",
+                    materials: [material("m", "low"), material("o", "sure")],
+                }),
+            ],
+            LOW,
+        );
+        expect(events.map((event) => event.id)).toEqual(["b", "c"]);
+    });
+
     it("counts the identified materials of each level", () => {
         const counts = levelCounts([
             mapEvent({

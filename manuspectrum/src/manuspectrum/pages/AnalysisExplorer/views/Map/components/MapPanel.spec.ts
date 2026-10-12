@@ -437,7 +437,7 @@ describe("MapPanel", () => {
         ).toBeLessThanOrEqual(60);
     });
 
-    it("shows four Components of a large document, then ten more per click", async () => {
+    it("shows four Components of a large document, then all the others on one click", async () => {
         const many = Array.from({ length: 60 }, (_, n) =>
             mapEvent({
                 id: `production:c${n}`,
@@ -461,9 +461,10 @@ describe("MapPanel", () => {
             wrapper.findAll("input[type=checkbox]").length,
         ).toBeLessThanOrEqual(30);
         const more = () => wrapper.get(".more-components");
-        expect(more().text()).toBe("Show 10 more Components");
+        expect(more().text()).toBe("Show 56 more Components");
         await more().trigger("click");
-        expect(wrapper.findAll(".component-group")).toHaveLength(14);
+        expect(wrapper.findAll(".component-group")).toHaveLength(60);
+        expect(wrapper.find(".more-components").exists()).toBe(false);
     });
 
     it("keeps a material's reliability and its counts on one line", async () => {
@@ -495,7 +496,7 @@ describe("MapPanel", () => {
         expect(wrapper.findAll(".event")).toHaveLength(5);
     });
 
-    it("shows five documents, then ten more per click", async () => {
+    it("shows five documents, then all the others on one click", async () => {
         const many = Array.from({ length: 17 }, (_, n) =>
             mapEvent({
                 id: `production:${n}`,

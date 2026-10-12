@@ -588,6 +588,46 @@ describe("MapStage exposed", () => {
         expect(map.easeCalls).toEqual([{ zoom: 7, duration: 420 }]);
     });
 
+    it("settles a snapshot asked before the load when the map errors", async () => {
+        const wrapper = mountStage();
+        const shot = wrapper.vm.snapshot(BOUNDS);
+        FakeMap.last().fire("error", { error: new Error("style") });
+        await expect(shot).resolves.toBeNull();
+    });
+
+    it("settles the waiting snapshot when cancelled, and when unmounted", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        const running = wrapper.vm.snapshot(BOUNDS);
+        const waiting = wrapper.vm.snapshot(BOUNDS);
+        wrapper.vm.cancelSnapshots();
+        await expect(waiting).resolves.toBeNull();
+        map.fire("idle");
+        await expect(running).resolves.toMatchObject({ url: SNAPSHOT_URL });
+        const pending = wrapper.vm.snapshot(BOUNDS);
+        const queuedOne = wrapper.vm.snapshot(BOUNDS);
+        wrapper.unmount();
+        await expect(queuedOne).resolves.toBeNull();
+        pending.catch(() => {});
+    });
+
+    it("does not put the camera back over a pan the reader made during a snapshot", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        const shot = wrapper.vm.snapshot(BOUNDS);
+        map.fire("movestart", { originalEvent: {} });
+        map.fire("idle");
+        await expect(shot).resolves.toMatchObject({ url: SNAPSHOT_URL });
+        expect(map.jumpCalls).toEqual([]);
+        const next = wrapper.vm.snapshot(BOUNDS);
+        map.fire("movestart", {});
+        map.fire("idle");
+        await next;
+        expect(map.jumpCalls).toHaveLength(1);
+    });
+
     it("snapshots nothing when the map could not start", async () => {
         FakeMap.failing = true;
         const error = vi.spyOn(console, "error").mockImplementation(() => {});

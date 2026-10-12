@@ -403,7 +403,7 @@ function onSearch(text: string | undefined): void {
         <p
             v-if="refused"
             class="refused"
-            role="status"
+            :role="announce ? undefined : 'status'"
         >
             <span>{{ refusedText }}</span>
         </p>

@@ -39,7 +39,8 @@ const FULL_SERIES_ENTRIES = 6;
 const FULL_SERIES_MAX_ENTRIES = 30;
 /** Map events payloads (a few MB each once read) kept apart, so the map never evicts the Corpus payloads. */
 const EVENTS_ENTRIES = 2;
-const EVENTS_ROUTE: ExplorerRoute = "manuspectrum:explorer-events";
+/** The route whose payloads the events memo keeps. */
+export const EVENTS_ROUTE: ExplorerRoute = "manuspectrum:explorer-events";
 const MEMO_TTL_MS = 5 * 60 * 1000;
 /** Prefetches nobody waits for yet that run at once; a new one drops the oldest. */
 export const PREFETCHES_IN_FLIGHT = 4;

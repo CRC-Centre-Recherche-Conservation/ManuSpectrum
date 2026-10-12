@@ -152,6 +152,16 @@ describe("PlaceList", () => {
             expect(wrapper.find(".no-match").text()).toBe("No match");
         });
 
+        it("ignores the search once its field is hidden", async () => {
+            const wrapper = mountList({ summaries: many });
+            await wrapper.get("input[type=search]").setValue("place 03");
+            expect(wrapper.findAll("button.place")).toHaveLength(1);
+            await wrapper.setProps({ summaries: many.slice(0, 5) });
+            expect(wrapper.find("input[type=search]").exists()).toBe(false);
+            expect(wrapper.findAll("button.place")).toHaveLength(5);
+            expect(wrapper.find(".no-match").exists()).toBe(false);
+        });
+
         it("offers no search for a short list", () => {
             expect(mountList().find("input[type=search]").exists()).toBe(false);
         });

@@ -229,6 +229,11 @@ function go(next: number): void {
                         focusable="false"
                         :viewBox="viewBox"
                     >
+                        <rect
+                            class="land"
+                            :width="WIDTH"
+                            :height="HEIGHT"
+                        />
                         <image
                             v-if="props.background && backgroundFrame"
                             class="snapshot"
@@ -239,20 +244,14 @@ function go(next: number): void {
                             :width="backgroundFrame.width"
                             :height="backgroundFrame.height"
                         />
-                        <g v-else>
-                            <rect
-                                class="land"
-                                :width="WIDTH"
-                                :height="HEIGHT"
-                            />
-                            <rect
-                                class="sea-frame"
-                                x="1"
-                                y="1"
-                                :width="WIDTH - 2"
-                                :height="HEIGHT - 2"
-                            />
-                        </g>
+                        <rect
+                            v-else
+                            class="sea-frame"
+                            x="1"
+                            y="1"
+                            :width="WIDTH - 2"
+                            :height="HEIGHT - 2"
+                        />
                         <g
                             v-for="entry in map.dots"
                             :key="entry.id"

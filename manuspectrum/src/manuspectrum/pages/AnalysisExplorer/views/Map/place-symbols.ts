@@ -84,18 +84,25 @@ export function inBrush(
     );
 }
 
-/** `events` without the materials whose reliability is one of `hidden`; a material of no recorded reliability stays. */
+/**
+ * `events` without the materials whose reliability is one of `hidden`; a
+ * material of no recorded reliability stays. An event whose materials were
+ * all hidden leaves too; an event that never had a material stays.
+ */
 export function withoutLevels(
     events: readonly MapEvent[],
     hidden: ReadonlySet<string>,
 ): MapEvent[] {
     if (hidden.size === 0) return [...events];
-    return events.map((event) => ({
-        ...event,
-        materials: event.materials.filter(
+    const kept: MapEvent[] = [];
+    for (const event of events) {
+        const materials = event.materials.filter(
             (m) => m.reliability === null || !hidden.has(m.reliability),
-        ),
-    }));
+        );
+        if (materials.length === 0 && event.materials.length > 0) continue;
+        kept.push({ ...event, materials });
+    }
+    return kept;
 }
 
 /** The identified materials (distinct characterizations) of `events` per reliability level. */

@@ -1,6 +1,7 @@
 import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
 
 import {
+    EVENTS_ROUTE,
     getJson,
     peekJson,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
@@ -11,7 +12,6 @@ import type { EventsResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/t
 import type { RequestHandle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { Filters } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-export const EVENTS_ROUTE = "manuspectrum:explorer-events";
 export type EventsExportRoute =
     | "manuspectrum:explorer-events-csv"
     | "manuspectrum:explorer-events-geojson";

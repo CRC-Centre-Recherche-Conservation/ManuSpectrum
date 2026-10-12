@@ -162,6 +162,7 @@ describe("SmallMultiples", () => {
         expect(shot.find("image").attributes("href")).toBe(
             "data:image/png;base64,x",
         );
+        expect(shot.find("rect.land").exists()).toBe(true);
     });
 
     it("lays the snapshot so that each dot sits on its place in the picture", () => {

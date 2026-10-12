@@ -95,7 +95,6 @@ const ANALYSES_SHOWN = 5;
 const ANALYSES_STEP = 20;
 const EVENTS_SHOWN = 3;
 const COMPONENTS_SHOWN = 4;
-const COMPONENTS_STEP = 10;
 const MATERIALS_SHOWN = 8;
 const TECHNIQUES_SUMMARY = 3;
 const GEONAMES = /^\d+$/;
@@ -117,7 +116,7 @@ const OWN = "own";
  * Long subjects stay short: the first 8 materials, the first 5 documents
  * (10 more per click), documents folded unless the subject has one with at
  * most 10 analyses (a folded body is not mounted), per document the first
- * 4 Components (10 more per click), per Component the first
+ * 4 Components (the others on one click), per Component the first
  * 3 events and the first 5 analyses (20 more per click), and past the
  * Selection's capacity a note that sends to the document in Corpus. What is
  * unfolded resets when the subject changes.
@@ -616,12 +615,12 @@ function hiddenGroups(view: DocumentView): number {
 
 function showMoreGroups(view: DocumentView): void {
     const next = new Map(groupsShown.value);
-    next.set(view.document.id, shownGroups(view).length + COMPONENTS_STEP);
+    next.set(view.document.id, view.groups.length);
     groupsShown.value = next;
 }
 
 function moreGroupsText(view: DocumentView): string {
-    const n = Math.min(COMPONENTS_STEP, hiddenGroups(view));
+    const n = hiddenGroups(view);
     return interpolate(
         $ngettext("Show %{n} more Component", "Show %{n} more Components", n),
         { n },

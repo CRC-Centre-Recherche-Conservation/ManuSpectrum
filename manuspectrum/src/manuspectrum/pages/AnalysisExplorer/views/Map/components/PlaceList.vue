@@ -54,7 +54,10 @@ const sorted = computed(() =>
         foldText(a.name.value).localeCompare(foldText(b.name.value)),
     ),
 );
-const needle = computed(() => foldText(query.value.trim()));
+const searchable = computed(() => props.summaries.length > ROWS_SHOWN);
+const needle = computed(() =>
+    searchable.value ? foldText(query.value.trim()) : "",
+);
 const matching = computed(() =>
     needle.value
         ? sorted.value.filter((summary) =>
@@ -77,7 +80,6 @@ const moreText = computed(() =>
         true,
     ),
 );
-const searchable = computed(() => props.summaries.length > ROWS_SHOWN);
 const title = computed(() =>
     interpolate($gettext("Places (%{n})"), { n: props.summaries.length }, true),
 );

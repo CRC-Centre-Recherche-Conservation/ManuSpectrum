@@ -219,6 +219,13 @@ describe("MapView", () => {
         expect(note.text()).toContain("Influence model, not data");
         expect(note.find("input[type='range']").attributes("min")).toBe("60");
         expect(note.find("output").text()).toBe("150 km");
+        const body = note.get(".note-body");
+        const toggle = note.get(".note-toggle");
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect((body.element as HTMLElement).style.display).toBe("none");
+        await toggle.trigger("click");
+        expect(toggle.attributes("aria-expanded")).toBe("true");
+        expect((body.element as HTMLElement).style.display).not.toBe("none");
     });
 
     it("shows the place list and the timeline without WebGL, and builds no map", async () => {
@@ -332,6 +339,34 @@ describe("MapView", () => {
         await rows[0].get("input").setValue(false);
         await flushPromises();
         expect(view.get(".legend .followed .count").text()).toBe("0");
+    });
+
+    it("takes the places of a material event off the map when every level is unticked, followed or not", async () => {
+        const level = (id: string, rank: number) => ({
+            id,
+            uri: id,
+            label: label(id),
+            rank,
+        });
+        const base = response();
+        base.events[0].materials[0].reliability = "sure";
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({
+                ...base,
+                certaintyScale: {
+                    levels: [level("sure", 0), level("doubt", 3)],
+                },
+            }),
+        );
+        const view = await mountView();
+        const place = `.place-list [data-place='${PARIS}']`;
+        expect(view.find(place).exists()).toBe(true);
+        await view.findAll(".levels .value")[0].get("input").setValue(false);
+        await flushPromises();
+        expect(view.find(place).exists()).toBe(false);
+        expect(view.find(`.place-list [data-place='${ROUEN}']`).exists()).toBe(
+            true,
+        );
     });
 
     it("hides the historical borders without a period, and draws those of the period's middle year", async () => {
@@ -500,6 +535,38 @@ describe("MapView", () => {
         expect(map.jumpCalls).toHaveLength(2);
         expect(west).toBeLessThan(east);
         expect(south).toBeLessThan(north);
+    });
+
+    it("keeps only the answer of the newest snapshot ask", async () => {
+        const store = useExplorerStore();
+        const view = await mountView();
+        const map = FakeMap.last();
+        await modeButton(view, "Small multiples").trigger("click");
+        await flushPromises();
+        store.setMapState({ radius: 300 });
+        await flushPromises();
+        map.fire("idle");
+        await flushPromises();
+        expect(view.find(".small-multiples image").exists()).toBe(false);
+        map.fire("idle");
+        await flushPromises();
+        expect(view.find(".small-multiples image").exists()).toBe(true);
+    });
+
+    it("drops the waiting snapshot when the reader leaves the small multiples", async () => {
+        const store = useExplorerStore();
+        const view = await mountView();
+        const map = FakeMap.last();
+        await modeButton(view, "Small multiples").trigger("click");
+        await flushPromises();
+        store.setMapState({ radius: 300 });
+        await flushPromises();
+        await modeButton(view, "Places").trigger("click");
+        await flushPromises();
+        const fits = map.fitCalls.length;
+        map.fire("idle");
+        await flushPromises();
+        expect(map.fitCalls).toHaveLength(fits);
     });
 
     it("says which third-party services the map calls", async () => {

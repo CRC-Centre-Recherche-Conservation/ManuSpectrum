@@ -104,7 +104,7 @@ const emit = defineEmits<{
     zoom: [zoom: number];
     failed: [];
 }>();
-defineExpose({ snapshot, resize, revealPlace, zoomTo });
+defineExpose({ snapshot, cancelSnapshots, resize, revealPlace, zoomTo });
 
 const { $gettext } = useGettext();
 const motion = usePreferredReducedMotion();
@@ -119,6 +119,7 @@ let hovered: string | null = null;
 let drawnColours: MapColours = props.colours;
 let shooting = false;
 let queued: SnapshotRequest | null = null;
+let userMoved = false;
 
 watch(
     () => props.places,
@@ -194,19 +195,20 @@ onMounted(() => {
         created.on("load", () => onLoad(created));
         created.on("error", (event: { sourceId?: string }) => {
             if (event.sourceId === BASE_SOURCE) baseFailed.value = true;
+            if (!ready && !event.sourceId) dropQueued();
         });
         map.value = created;
     } catch (error: unknown) {
         console.error("The map could not start", error);
         failed.value = true;
+        dropQueued();
         emit("failed");
     }
 });
 
 onBeforeUnmount(() => {
     ready = false;
-    queued?.resolve(null);
-    queued = null;
+    dropQueued();
     map.value?.remove();
     map.value = null;
 });
@@ -378,6 +380,9 @@ function onLoad(current: MapLibreMap): void {
     current.on("mousemove", onMove);
     current.on("mouseout", clearHover);
     current.on("moveend", () => emit("zoom", current.getZoom()));
+    current.on("movestart", (event: { originalEvent?: unknown }) => {
+        if (shooting && event.originalEvent) userMoved = true;
+    });
     ready = true;
     if (drawnColours !== props.colours) recolour(current, props.colours);
     drawnColours = props.colours;
@@ -499,7 +504,8 @@ function showOwnLayers(current: MapLibreMap, visible: boolean): void {
  * frame in time). One snapshot runs at a time: a request made while one
  * runs replaces the one waiting (that one gets null). The camera is saved
  * once, when a run starts, and put back with the place layers when the
- * last request is done. A request before the map has loaded waits for it.
+ * last request is done, unless the reader moved the map meanwhile.
+ * `cancelSnapshots` drops the waiting request. A request before the map has loaded waits for it.
  */
 function snapshot(bounds: Bounds): Promise<MapSnapshot | null> {
     if (failed.value) return Promise.resolve(null);
@@ -511,9 +517,21 @@ function snapshot(bounds: Bounds): Promise<MapSnapshot | null> {
     });
 }
 
+/** Settles the waiting snapshot request with null. */
+function dropQueued(): void {
+    queued?.resolve(null);
+    queued = null;
+}
+
+/** Drops the waiting request; the run in flight ends after its current shot. */
+function cancelSnapshots(): void {
+    dropQueued();
+}
+
 async function runSnapshots(current: MapLibreMap): Promise<void> {
     if (shooting) return;
     shooting = true;
+    userMoved = false;
     const camera: JumpToOptions = {
         center: current.getCenter(),
         zoom: current.getZoom(),
@@ -528,7 +546,7 @@ async function runSnapshots(current: MapLibreMap): Promise<void> {
     }
     if (map.value === current) {
         showOwnLayers(current, true);
-        current.jumpTo(camera);
+        if (!userMoved) current.jumpTo(camera);
     }
     shooting = false;
 }

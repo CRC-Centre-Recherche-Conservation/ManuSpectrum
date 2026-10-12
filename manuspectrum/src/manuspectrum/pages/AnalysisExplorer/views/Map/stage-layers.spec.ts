@@ -144,6 +144,7 @@ describe("placeLayers", () => {
                 (evaluate(offset, { ring }, {}, 7) as number) * 12.125,
             ).toBeCloseTo(ring + 4 + 7 + 2);
             expect(labels["text-offset"]).toBeUndefined();
+            expect(labels["text-padding"]).toBe(0);
         }
     });
 

@@ -440,6 +440,8 @@ const territorySentence = computed(() => {
           );
 });
 const legendOpen = computed(() => store.mapState.legend);
+/** The influence note folds to its title; the reader's choice lasts for the view. */
+const noteOpen = ref(false);
 const isolateHint = computed(
     () =>
         store.mapState.colour === "each" &&
@@ -490,6 +492,8 @@ watch(
 );
 watch(mode, (current, previous) => {
     if (previous === "multiples" && current !== "multiples") {
+        snapshotTicket += 1;
+        stage.value?.cancelSnapshots();
         void nextTick(() => stage.value?.resize());
     }
 });
@@ -846,7 +850,7 @@ function skipToTimeline(): void {
                             <p class="hint">
                                 <span>{{
                                     $gettext(
-                                        "“Use with caution” and “uncertain” are shown hollow on the map.",
+                                        "Lower reliability levels are drawn hollow on the map.",
                                     )
                                 }}</span>
                             </p>
@@ -1259,9 +1263,7 @@ function skipToTimeline(): void {
                                                 >1</span
                                             >
                                             <span>{{
-                                                $gettext(
-                                                    "use with caution or uncertain",
-                                                )
+                                                $gettext("lower reliability")
                                             }}</span>
                                         </li>
                                         <template v-if="mode === 'territories'">
@@ -1300,41 +1302,64 @@ function skipToTimeline(): void {
                                 role="note"
                             >
                                 <p class="title">
-                                    <span>{{
-                                        $gettext("Influence model, not data")
-                                    }}</span>
+                                    <button
+                                        type="button"
+                                        class="note-toggle"
+                                        aria-controls="explorer-map-note-body"
+                                        :aria-expanded="
+                                            noteOpen ? 'true' : 'false'
+                                        "
+                                        @click="noteOpen = !noteOpen"
+                                    >
+                                        <span
+                                            class="chevron"
+                                            aria-hidden="true"
+                                            >{{ noteOpen ? "▾" : "▸" }}</span
+                                        >
+                                        <span>{{
+                                            $gettext(
+                                                "Influence model, not data",
+                                            )
+                                        }}</span>
+                                    </button>
                                 </p>
-                                <p class="sentence">
-                                    <span>{{ territorySentence }}</span>
-                                </p>
-                                <p
-                                    v-if="isolateHint"
-                                    class="sentence isolate-hint"
+                                <div
+                                    v-show="noteOpen"
+                                    id="explorer-map-note-body"
+                                    class="note-body"
                                 >
-                                    <span>{{
-                                        $gettext(
-                                            "Hover a material in the legend to see its zone alone.",
-                                        )
-                                    }}</span>
-                                </p>
-                                <p class="radius">
-                                    <label for="explorer-map-radius">{{
-                                        $gettext("Radius")
-                                    }}</label>
-                                    <input
-                                        id="explorer-map-radius"
-                                        type="range"
-                                        :min="RADIUS_MIN"
-                                        :max="RADIUS_MAX"
-                                        :step="RADIUS_STEP"
-                                        :value="radiusDraft"
-                                        @input="onRadiusInput"
-                                        @change="commitRadius"
-                                    />
-                                    <output for="explorer-map-radius">{{
-                                        radiusText
-                                    }}</output>
-                                </p>
+                                    <p class="sentence">
+                                        <span>{{ territorySentence }}</span>
+                                    </p>
+                                    <p
+                                        v-if="isolateHint"
+                                        class="sentence isolate-hint"
+                                    >
+                                        <span>{{
+                                            $gettext(
+                                                "Hover a material in the legend to see its zone alone.",
+                                            )
+                                        }}</span>
+                                    </p>
+                                    <p class="radius">
+                                        <label for="explorer-map-radius">{{
+                                            $gettext("Radius")
+                                        }}</label>
+                                        <input
+                                            id="explorer-map-radius"
+                                            type="range"
+                                            :min="RADIUS_MIN"
+                                            :max="RADIUS_MAX"
+                                            :step="RADIUS_STEP"
+                                            :value="radiusDraft"
+                                            @input="onRadiusInput"
+                                            @change="commitRadius"
+                                        />
+                                        <output for="explorer-map-radius">{{
+                                            radiusText
+                                        }}</output>
+                                    </p>
+                                </div>
                             </div>
                             <div
                                 v-if="tooltip && mode !== 'multiples'"
@@ -2200,7 +2225,7 @@ function skipToTimeline(): void {
     gap: 0.375rem;
     inline-size: fit-content;
     max-inline-size: 27.5rem;
-    padding: 0.75rem 0.875rem;
+    padding: 0.375rem 0.75rem;
     border-radius: 0.625rem;
     background: color-mix(in srgb, var(--stage) 92%, transparent);
     color: var(--surface);
@@ -2208,6 +2233,7 @@ function skipToTimeline(): void {
 }
 
 .map-view .territory-note.static {
+    padding: 0.75rem 0.875rem;
     position: static;
     inline-size: auto;
     max-inline-size: none;
@@ -2215,6 +2241,30 @@ function skipToTimeline(): void {
 
 .map-view .territory-note .title {
     font-weight: 600;
+}
+
+.map-view .territory-note .note-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: 1.5rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.map-view .territory-note .note-toggle:focus-visible {
+    outline: 0.125rem solid var(--surface);
+    outline-offset: 0.125rem;
+}
+
+.map-view .territory-note .note-body {
+    display: grid;
+    gap: 0.375rem;
 }
 
 .map-view .territory-note .sentence {

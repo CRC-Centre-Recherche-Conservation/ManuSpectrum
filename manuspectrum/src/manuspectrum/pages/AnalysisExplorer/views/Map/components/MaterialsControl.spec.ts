@@ -152,13 +152,14 @@ describe("MaterialsControl", () => {
         );
         expect(followed.text()).toBe("3");
         expect(followed.attributes("data-bloom")).toBe("odd");
-        expect(wrapper.find("[role=status].refused").exists()).toBe(false);
+        expect(wrapper.find(".refused").exists()).toBe(false);
 
         await rowOf(wrapper, "Minium").find("button.follow").trigger("click");
         expect(store.mapState.track).toEqual(URIS.slice(0, 4));
-        expect(wrapper.find("[role=status].refused").text()).toBe(
+        expect(wrapper.find(".refused").text()).toBe(
             "Four materials are followed already: stop following one first.",
         );
+        expect(wrapper.find(".refused").attributes("role")).toBeUndefined();
         expect(announce).toHaveBeenLastCalledWith(
             "Four materials are followed already: stop following one first.",
         );
@@ -167,7 +168,7 @@ describe("MaterialsControl", () => {
         expect(store.mapState.track).toEqual([null, ...URIS.slice(1, 4)]);
         await rowOf(wrapper, "Minium").find("button.follow").trigger("click");
         expect(store.mapState.track).toEqual([URIS[4], ...URIS.slice(1, 4)]);
-        expect(wrapper.find("[role=status].refused").exists()).toBe(false);
+        expect(wrapper.find(".refused").exists()).toBe(false);
         expect(announce).toHaveBeenCalledWith("Following Minium (colour 1).");
     });
 
