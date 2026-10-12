@@ -1,13 +1,18 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import { defineComponent, h, ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 
+import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import MapView from "@/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue";
 
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
-import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    ANNOUNCE_KEY,
+    FACET_LABELS_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     eventsResponse,
@@ -25,7 +30,10 @@ import {
 
 import type { Pinia } from "pinia";
 import type { VueWrapper } from "@vue/test-utils";
-import type { EventsResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    EventsResponse,
+    Label,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 const webgl = vi.hoisted(() => ({ available: true }));
 
@@ -48,6 +56,10 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 const LAPIS = "http://material.test/lapis";
 const PARIS = uuid(10);
 const ROUEN = uuid(11);
+
+const Shell = defineComponent({
+    setup: () => () => h("div", [h(ActiveFiltersBar), h(MapView)]),
+});
 
 const fetchMock = vi.fn();
 const announce = vi.fn();
@@ -165,6 +177,30 @@ afterEach(() => {
 });
 
 describe("MapView", () => {
+    it("names the chip of a ticked material, from the events payload", async () => {
+        const labels = ref(new Map<string, Label>());
+        useExplorerStore().setFacet("material", [LAPIS]);
+        wrapper = mount(Shell, {
+            attachTo: document.body,
+            global: {
+                plugins: [pinia, PrimeVue],
+                provide: {
+                    [ANNOUNCE_KEY as symbol]: announce,
+                    [FACET_LABELS_KEY as symbol]: labels,
+                },
+            },
+        });
+        await flushPromises();
+        await flushPromises();
+        expect(labels.value.get(`material:${LAPIS}`)?.value).toBe(
+            "Lapis lazuli",
+        );
+        expect(labels.value.get(`place:${ROUEN}`)?.value).toBe("Rouen");
+        const bar = wrapper.get(".active-filters").text();
+        expect(bar).toContain("Lapis lazuli");
+        expect(bar).not.toContain(LAPIS);
+    });
+
     it("asks the events of the filters", async () => {
         useExplorerStore().setFilter("eventType", ["modification"]);
         await mountView();

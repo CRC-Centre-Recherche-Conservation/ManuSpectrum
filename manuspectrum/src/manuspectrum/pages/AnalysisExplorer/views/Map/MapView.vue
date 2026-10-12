@@ -34,6 +34,7 @@ import {
     exportHref,
     useEvents,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useEvents.ts";
+import { useEventLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
 import { useScreenHeading } from "@/manuspectrum/pages/AnalysisExplorer/composables/useScreenHeading.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -166,6 +167,7 @@ let opener: HTMLElement | null = null;
 let snapshotTicket = 0;
 
 const response = computed(() => request.data.value);
+useEventLabels(() => response.value);
 const status = computed(() => request.status.value);
 const firstLoad = computed(
     () =>
