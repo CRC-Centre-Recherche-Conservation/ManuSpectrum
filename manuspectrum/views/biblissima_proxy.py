@@ -100,6 +100,10 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
+from manuspectrum.accounts.workflows import (
+    WorkflowTransactionError,
+    workflow_transaction,
+)
 from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import (
     BudgetSpent,
@@ -3548,7 +3552,7 @@ class BiblissimaCreateResourceView(View):
 
         {
             "resourceType": "Document" | "Component" | "Place" | "Group" | "Person",
-            "transactionId": <uuid | null>,
+            "transactionId": <workflow uuid | null>,
             "biblissimaData": { ... ko.toJS(item) ... },
             "dependencies": {
                 "parentDocument":   <uuid>,      // Component only, required
@@ -3562,6 +3566,12 @@ class BiblissimaCreateResourceView(View):
         }
 
     Dispatch:
+
+    ``transactionId`` is the workflow id, the transaction id of every edit-log
+    row of the request, dependencies included (Arches' convention, so a Quit of
+    the workflow reverses what it created). It must be a UUID (400) and not
+    another user's (403, ``workflow_transaction``); absent, the request gets a
+    fresh one.
 
     - ``Place | Group | Person`` → ``_create_dependency_resource`` (lightweight
       name + optional ``memberOf`` / ``location``). Called recursively by
@@ -3603,7 +3613,12 @@ class BiblissimaCreateResourceView(View):
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
 
         resource_type = body.get("resourceType", "Document")
-        transaction_id = body.get("transactionId")
+        try:
+            transaction_id = workflow_transaction(
+                body.get("transactionId"), request.user
+            )
+        except WorkflowTransactionError as exc:
+            return JsonResponse({"error": str(exc)}, status=exc.status)
         bbma_data = body.get("biblissimaData", {})
         dependencies = body.get("dependencies", {})
         concept_mappings = body.get("conceptMappings", {})
@@ -3617,7 +3632,7 @@ class BiblissimaCreateResourceView(View):
         # Dependency types (Place/Group/Person): lightweight creation with just a name
         if resource_type in ("Place", "Group", "Person"):
             return self._create_dependency_resource(
-                graph_id, resource_type, bbma_data, request.user
+                graph_id, resource_type, bbma_data, request.user, transaction_id
             )
 
         try:
@@ -3650,8 +3665,12 @@ class BiblissimaCreateResourceView(View):
             }
         )
 
-    def _create_dependency_resource(self, graph_id, resource_type, bbma_data, user):
+    def _create_dependency_resource(
+        self, graph_id, resource_type, bbma_data, user, transaction_id=None
+    ):
         """Create a Place/Group/Person resource with its name and relationships.
+
+        Its edit-log rows carry *transaction_id* (the workflow id), else a fresh one.
 
         A Place given ``biblissimaQid`` also receives its GeoNames identifier
         and point when Wikibase has them (``_stage_place_geo``, best-effort).
@@ -3725,7 +3744,7 @@ class BiblissimaCreateResourceView(View):
                 )
                 resource.set_serialized_graph(serialized_graph)
                 self._flush_tile_buffer(
-                    resource, user=user, default_transaction_id=None
+                    resource, user=user, default_transaction_id=transaction_id
                 )
 
             # Route through the defer seam (post-commit; honors
@@ -4350,6 +4369,26 @@ class BiblissimaCreateResourceView(View):
         ]
         EditLog.objects.bulk_create(edits)
 
+    def _write_creation_edit(self, resource, user, tx_id):
+        """Write the ``create`` edit-log row of a resource created by bulk insert.
+
+        Arches' transaction reversal (a workflow's Quit) deletes a resource by
+        its ``create`` row; the bulk path writes only ``tile create`` rows, so
+        without this one the reversal would leave the emptied resource.
+        """
+        from arches.app.models.models import EditLog
+        from django.utils import timezone
+
+        EditLog.objects.create(
+            transactionid=tx_id or uuid.uuid4(),
+            resourcedisplayname=resource.displayname(),
+            resourceclassid=str(resource.graph_id),
+            resourceinstanceid=str(resource.pk),
+            edittype="create",
+            timestamp=timezone.now(),
+            **self._editlog_user_fields(user),
+        )
+
     def _batch_save_descriptors(self, resources):
         """Refresh descriptors for a batch, hoisting the per-graph Node fetch
         (3N->1 per graph) and the FunctionXGraph load (N->1 per graph) while
@@ -4425,6 +4464,7 @@ class BiblissimaCreateResourceView(View):
         # so it sees the rows just inserted.
         resource.save_descriptors()
         self._write_editlog(tiles, resource, user, default_transaction_id)
+        self._write_creation_edit(resource, user, default_transaction_id)
 
     def _defer_indexing(self, resource_ids=None, tx_id=None):
         """Schedule ES indexing to run after the current DB transaction commits.
@@ -5448,6 +5488,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         POST /api/biblissima/create-all
         {
             "resourceType": "Document" | "Component",
+            "transactionId": <workflow uuid | null>,
             "items": [
                 {"clientId", "biblissimaData", "dependencies", "conceptMappings"},
                 ...
@@ -5458,6 +5499,11 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                {"clientId", "status": "failed",  "error"},
                ...
         ]}
+
+    ``transactionId`` (one per POST; an item's own is ignored) is the id every
+    edit-log row of the batch carries: the workflow id. It must be a UUID
+    (400) and not another user's (403, ``workflow_transaction``); absent, the
+    batch gets a fresh one.
 
     Integration task (Phase 3.4). Inherits ALL write-path primitives from
     :class:`BiblissimaCreateResourceView`: ``_stage_tiles`` for Pass 1 (it runs
@@ -5544,7 +5590,11 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         # ---- Setup once (shared by the whole batch) ----------------------
         # Read-only pre-pass. A malformed payload (e.g. a non-dict item) must not
         # surface as a raw 500 with a traceback, so guard it into a clean 400.
-        batch_tx = uuid.uuid4()
+        try:
+            workflow_tx = workflow_transaction(body.get("transactionId"), request.user)
+        except WorkflowTransactionError as exc:
+            return JsonResponse({"error": str(exc)}, status=exc.status)
+        batch_tx = workflow_tx or uuid.uuid4()
         try:
             valid_dep_ids = self._precollect_valid_dep_ids(items)
             factory = DataTypeFactory()
@@ -5682,6 +5732,9 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                             request.user,
                             batch_tx,
                         )
+                        self._write_creation_edit(
+                            resources_by_id[str(rid)], request.user, batch_tx
+                        )
 
                     by_project = {}
                     for _cid, rid, _tiles, project_id in survivors:
@@ -5714,7 +5767,13 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         # With BIBLISSIMA_ASYNC_INDEXING=False (default), this is a
         # behaviour-identical replacement for the previous inline
         # index_resources_by_transaction call, but strictly post-commit.
-        if survivors:
+        if survivors and workflow_tx:
+            # A workflow's id spans every chunk: index this chunk's resources
+            # and projects, not everything the run wrote so far.
+            index_ids = [str(rid) for _cid, rid, _tiles, _proj in survivors]
+            index_ids += sorted({str(p) for *_head, p in survivors if p})
+            self._defer_indexing(resource_ids=index_ids)
+        elif survivors:
             self._defer_indexing(tx_id=batch_tx)
 
         _count_created_items(resource_type, results, out_of_budget)

@@ -112,6 +112,7 @@ class WriteTransactionHarness(TestCase):
                 side_effect=write_editlog,
             )
         )
+        self._start(patch.object(BiblissimaCreateResourceView, "_write_creation_edit"))
         self._start(patch.object(BiblissimaCreateResourceView, "_defer_indexing"))
         self._start(patch.object(BiblissimaCreateResourceView, "_link_to_project"))
 
