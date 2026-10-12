@@ -169,3 +169,27 @@ Restart the application containers (`make -C deploy restart`), then run the pass
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## WorkflowCleanupStale
+
+Severity: warning. The daily abandoned-workflow pass has not completed for more than two days: idle workflow runs are neither announced to their creators nor cleaned.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+No "Unfinished workflow" mail went out; the Workflows panel of the Activity dashboard shows stale runs that do not shrink.
+
+### Diagnosis
+
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.workflow_cleanup_pass` (scheduled at 03:30 Europe/Paris, entry `workflow-cleanup-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails.
+
+### Remediation
+
+Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="prune_workflow_history"` lists what it would do, and `--apply` does it. The pass is idempotent: each notice stage goes once and a run is cleaned once.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

@@ -155,9 +155,11 @@ RESOURCE_MODELS = (
     "project",
     "sample",
 )
-CHANGE_KINDS = ("created", "modified", "deleted")
+CHANGE_KINDS = ("created", "modified", "deleted", "cleaned")
 WORKFLOW_KINDS = ("create-project-workflow", "import-biblissima-workflow")
 WORKFLOW_STATES = ("open", "stale")
+WORKFLOW_CLEANUP_OUTCOMES = ("cleaned", "kept_resources", "failed")
+WORKFLOW_CLEANUP_RESOURCE_OUTCOMES = ("deleted", "kept")
 READYZ_COMPONENTS = (
     "postgres",
     "elasticsearch",
@@ -273,6 +275,17 @@ AUTH_LOCKOUTS = Counter(
 EMBARGO_LIFTS = Counter(
     "manuspectrum_embargo_lifts",
     "Embargo lifts by outcome.",
+    ["outcome"],
+)
+WORKFLOW_CLEANUPS = Counter(
+    "manuspectrum_workflow_cleanups",
+    "Abandoned workflow runs cleaned, by workflow kind and outcome "
+    "(kept_resources: cleaned, some created resources kept).",
+    ["kind", "outcome"],
+)
+WORKFLOW_CLEANUP_RESOURCES = Counter(
+    "manuspectrum_workflow_cleanup_resources",
+    "Resources created by an abandoned workflow run, deleted or kept by the cleanup.",
     ["outcome"],
 )
 SPECTRUM_PREVIEWS = Counter(
@@ -432,6 +445,11 @@ EMBARGOES = gauge(
 EMBARGO_PASS_TIMESTAMP = gauge(
     "manuspectrum_embargo_pass_timestamp_seconds",
     "Unix time of the last completed embargo pass.",
+    mode="mostrecent",
+)
+WORKFLOW_CLEANUP_TIMESTAMP = gauge(
+    "manuspectrum_workflow_cleanup_timestamp_seconds",
+    "Unix time of the last completed abandoned-workflow cleanup pass.",
     mode="mostrecent",
 )
 RESOURCES = gauge(

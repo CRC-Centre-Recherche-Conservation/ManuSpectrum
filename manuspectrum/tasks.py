@@ -158,6 +158,23 @@ def embargo_pass_task():
     }
 
 
+@shared_task(name="manuspectrum.workflow_cleanup_pass")
+def workflow_cleanup_pass_task():
+    """Run the daily abandoned-workflow pass (accounts/workflows.py); returns the counts."""
+    from manuspectrum.accounts.workflows import run_pass
+
+    report = run_pass()
+    return {
+        "locked": report.locked,
+        "noticed": len(report.noticed),
+        "cleaned": len(report.cleaned),
+        "kept_resources": len(report.kept_resources),
+        "failed": len(report.failed),
+        "deleted": report.deleted,
+        "kept": report.kept,
+    }
+
+
 @shared_task(name="manuspectrum.record_activity")
 def record_activity_task():
     """Refresh the activity gauges (resources, last 24 hours, open workflows)."""

@@ -169,3 +169,27 @@ If the restriction must last longer, extend the end date in the admin (it restar
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## WorkflowCleanupFailures
+
+Severity: warning. The cleanup of an abandoned workflow run failed at least once in the last 64 hours. The run keeps its drafts and its history row and the next daily pass retries it; its creators were warned but nothing was deleted.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout. Django admin access.
+
+### Symptom
+
+The alert names the workflow `kind`. The worker logs hold an error line from `manuspectrum.accounts.workflows` ("Workflow cleanup failed") with the traceback.
+
+### Diagnosis
+
+The traceback tells the cause: a database error (the run is cleaned in one transaction, so nothing is half-deleted), or an error from the permission or search layer raised by Arches' `Resource.delete`. A failed run is rolled back; its resources are indexed again afterwards. In the Django admin "Workflow cleanups", the run has no "Cleaned on" date. `make -C deploy manage ARGS="prune_workflow_history"` lists, for runs due, what would be deleted and kept without touching anything.
+
+### Remediation
+
+Fix the cause, then run `make -C deploy manage ARGS="prune_workflow_history --apply --workflow <id>"`. Do not delete the run's history row by hand: the cleanup is what removes the drafts it created.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

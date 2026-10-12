@@ -5520,6 +5520,10 @@ msgstr "The unfinished workflow « %(workflow)s » has been cleaned."
 msgid "Deleted records:"
 msgstr "Deleted records:"
 
+#: accounts/workflows.py
+msgid "Create a project"
+msgstr "Create a project"
+
 #: accounts/notices.py
 msgid "Unfinished workflow cleaned"
 msgstr "Unfinished workflow cleaned"

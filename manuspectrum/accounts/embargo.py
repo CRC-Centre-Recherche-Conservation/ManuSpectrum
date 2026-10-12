@@ -39,18 +39,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from arches.app.models.models import EditLog, ResourceInstance
+from arches.app.models.models import ResourceInstance
 from arches.app.models.resource import Resource
 from arches.app.utils import permission_backend as apb
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache, caches
 from django.db import transaction
-from django.db.models import Q
-from django.urls import reverse
-from django.utils import timezone, translation
+from django.utils import timezone
 
 from manuspectrum.accounts import notices
+from manuspectrum.accounts.creation import creators_of, resource_items
 from manuspectrum.accounts.models import Embargo, EmbargoEvent
 from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import (
@@ -116,17 +115,17 @@ def is_due(embargo, now):
 
 
 @contextlib.contextmanager
-def single_pass():
-    """Yield True when this caller holds the pass lock, False when another pass runs."""
+def single_pass(key=LOCK_KEY):
+    """Yield True when this caller holds the lock *key*, False when another pass runs."""
     token = uuid.uuid4().hex
-    if not cache.add(LOCK_KEY, token, LOCK_TTL):
+    if not cache.add(key, token, LOCK_TTL):
         yield False
         return
     try:
         yield True
     finally:
-        if cache.get(LOCK_KEY) == token:
-            cache.delete(LOCK_KEY)
+        if cache.get(key) == token:
+            cache.delete(key)
 
 
 def run_pass(now=None, *, apply=True, send_mail=True):
@@ -447,26 +446,6 @@ def publish_gauges(now):
     return counts
 
 
-def creators_of(resource_ids):
-    """``{resource id: user id}`` of the first creation row in the edit log."""
-    ids = [str(pk) for pk in resource_ids]
-    rows = (
-        EditLog.objects.filter(resourceinstanceid__in=ids)
-        .filter(
-            Q(edittype="create") | Q(edittype="tile create", note="resource creation")
-        )
-        .order_by("timestamp")
-        .values_list("resourceinstanceid", "userid")
-    )
-    found = {}
-    for resource_id, user_id in rows:
-        if resource_id in found:
-            continue
-        with contextlib.suppress(TypeError, ValueError):
-            found[resource_id] = int(user_id)
-    return found
-
-
 def project_analyses(project_id):
     """Ids of the Analyses of a Project (their ``analysis_by_project`` link), bounded."""
     from manuspectrum.utils.role_links import node_links, role_node
@@ -509,13 +488,4 @@ def _group_by_recipient(rows):
 
 
 def _items(rows):
-    from manuspectrum.admin import resource_label
-
-    base = settings.PUBLIC_SERVER_ADDRESS.rstrip("/")
-    items = []
-    with translation.override(settings.LANGUAGE_CODE):
-        for row in rows:
-            resource = row.resourceinstance
-            path = reverse("resource_report", kwargs={"resourceid": resource.pk})
-            items.append({"name": resource_label(resource), "url": base + path})
-    return items
+    return resource_items(row.resourceinstance for row in rows)

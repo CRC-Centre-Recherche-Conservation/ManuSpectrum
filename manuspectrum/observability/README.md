@@ -107,11 +107,15 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   last 30 days, `anonymous` excluded, refreshed daily by `manuspectrum.record_active_accounts`
   and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count),
   `manuspectrum_login_records_prune_timestamp_seconds` (last prune of the axes login records,
-  daily by `manuspectrum.prune_login_records`)
+  daily by `manuspectrum.prune_login_records`),
+  `manuspectrum_workflow_cleanups{kind,outcome}`, `manuspectrum_workflow_cleanup_resources{outcome}`
+  and `manuspectrum_workflow_cleanup_timestamp_seconds` (abandoned-workflow pass, daily at 03:30
+  Europe/Paris by `manuspectrum.workflow_cleanup_pass`; read by `WorkflowCleanupFailures` and
+  `WorkflowCleanupStale`)
 - Activity (`observability/activity.py`, refreshed hourly by `manuspectrum.record_activity` and at
   worker start): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last
   24 hours), `manuspectrum_workflows{kind,state}`, `manuspectrum_activity_timestamp_seconds`. `model`
-  comes from `RESOURCE_MODELS`, `kind` from `CHANGE_KINDS` or `WORKFLOW_KINDS`, `state` from
+  comes from `RESOURCE_MODELS`, `kind` from `CHANGE_KINDS` (`cleaned` counts the resources deleted by the workflow cleanup, which `deleted` leaves out) or `WORKFLOW_KINDS`, `state` from
   `WORKFLOW_STATES`; anything else is `other`. The same module feeds `manage.py activity_summary
   --month YYYY-MM` (aggregates as JSON, read-only) for the monthly report.
 

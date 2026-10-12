@@ -80,3 +80,14 @@ groups:
           summary: "Embargoed data are hidden past their end date"
           description: "{{ $value | humanize }} restrictions are past their end date and still in force."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#embargooverdue
+      - alert: WorkflowCleanupFailures
+        expr: |
+          sum by (kind) (increase(manuspectrum_workflow_cleanups_total{outcome="failed"}[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "An abandoned workflow could not be cleaned"
+          description: "{{ $value | humanize }} cleanups of {{ $labels.kind }} runs failed in the last 64 hours; their drafts stay in place and the next pass retries."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#workflowcleanupfailures

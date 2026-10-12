@@ -530,6 +530,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "manuspectrum.embargo_pass",
         "schedule": crontab(hour=6, minute=0),
     },
+    # Notices and cleanup of abandoned workflow runs at 03:30 Europe/Paris
+    # (accounts/workflows.py).
+    "workflow-cleanup-pass": {
+        "task": "manuspectrum.workflow_cleanup_pass",
+        "schedule": crontab(hour=3, minute=30),
+    },
     # Login records older than LOGIN_RECORDS_RETENTION_DAYS.
     "prune-login-records": {
         "task": "manuspectrum.prune_login_records",

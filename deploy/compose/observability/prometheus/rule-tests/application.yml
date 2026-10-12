@@ -71,3 +71,20 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="EmbargoOverdue", alertstate="firing", service="application", severity="warning"}
       value: 1
+
+- name: a failed workflow cleanup warns, a successful one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_workflow_cleanups_total{instance="worker:9808", kind="import-biblissima-workflow", outcome="failed"}
+    values: 0x10 1x120
+  - series: manuspectrum_workflow_cleanups_total{instance="worker:9808", kind="import-biblissima-workflow", outcome="cleaned"}
+    values: 0x10 4x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WorkflowCleanupFailures", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupFailures", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="WorkflowCleanupFailures", alertstate="firing", kind="import-biblissima-workflow", service="application", severity="warning"}
+      value: 1

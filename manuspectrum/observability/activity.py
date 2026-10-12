@@ -15,12 +15,14 @@ Django; a naive value written from a session in another zone is misplaced. Naive
 values written during the repeated hour of the autumn change are ambiguous, so one
 hour a year may be placed an hour off.
 
-- created: distinct resources with an ``edit_log`` row ``create`` (Arches writes one
-  per ``Resource.save()``, not only the first) or a ``tile create`` noted
-  ``resource creation`` (the Biblissima bulk path writes no ``create`` row);
+- created: distinct resources with a creation row of ``accounts/creation.py`` (``create``,
+  written by Arches once per ``Resource.save()``, or a ``tile create`` noted
+  ``resource creation``, which the Biblissima bulk path writes);
 - modified: distinct resources with another tile-level row, not created in the window;
-- deleted: distinct resources with a ``delete`` row; ``created_deleted`` is the part of
-  the created ones that were deleted in the same window;
+- deleted: distinct resources with a ``delete`` row outside a workflow cleanup;
+  ``created_deleted`` is the part of the created ones that were deleted in the same window;
+- cleaned: distinct resources with a ``delete`` row whose transaction is a cleanup
+  transaction of the ``ms_workflow_cleanup`` ledger (``accounts/workflows.py``);
 - tile saves: tile-level rows that are not part of a creation;
 - totals: ``resource_instances`` per model, whatever path wrote them;
 - workflows: ``workflow_history`` rows, one per run; a run cancelled by its user is
@@ -43,6 +45,7 @@ from datetime import datetime, timedelta, timezone
 from django.conf import settings
 from django.db import connection, transaction
 
+from manuspectrum.accounts.creation import CREATION_SQL
 from manuspectrum.observability import metrics
 
 SYSTEM_GRAPH_SLUG = "arches_system_settings"
@@ -66,22 +69,34 @@ CHANGE_FIELDS = (
     "created_deleted",
     "modified",
     "deleted",
+    "cleaned",
     "tile_saves",
     "publication_changes",
 )
 
-CHANGES_SQL = """
+CHANGES_SQL = f"""
 WITH log AS (
-    SELECT resourceclassid, resourceinstanceid, edittype, note
+    SELECT resourceclassid, resourceinstanceid, edittype, note, transactionid
     FROM edit_log
     WHERE timestamp >= %(start)s::timestamptz AND timestamp < %(end)s::timestamptz
 ), created AS (
     SELECT DISTINCT resourceclassid, resourceinstanceid FROM log
-    WHERE edittype = 'create'
-       OR (edittype = 'tile create' AND note = 'resource creation')
+    WHERE {CREATION_SQL}
+), cleanups AS (
+    SELECT cleanup_transaction_id FROM ms_workflow_cleanup
+    WHERE cleanup_transaction_id IS NOT NULL
 ), deleted AS (
     SELECT DISTINCT resourceclassid, resourceinstanceid FROM log
     WHERE edittype = 'delete'
+      AND NOT EXISTS (
+          SELECT 1 FROM cleanups c WHERE c.cleanup_transaction_id = log.transactionid
+      )
+), cleaned AS (
+    SELECT DISTINCT resourceclassid, resourceinstanceid FROM log
+    WHERE edittype = 'delete'
+      AND EXISTS (
+          SELECT 1 FROM cleanups c WHERE c.cleanup_transaction_id = log.transactionid
+      )
 ), tile_saves AS (
     SELECT resourceclassid, resourceinstanceid FROM log
     WHERE edittype IN ('tile create', 'tile edit', 'tile delete')
@@ -101,6 +116,8 @@ WITH log AS (
     SELECT resourceclassid, 'modified', count(*) FROM modified GROUP BY 1
     UNION ALL
     SELECT resourceclassid, 'deleted', count(*) FROM deleted GROUP BY 1
+    UNION ALL
+    SELECT resourceclassid, 'cleaned', count(*) FROM cleaned GROUP BY 1
     UNION ALL
     SELECT resourceclassid, 'tile_saves', count(*) FROM tile_saves GROUP BY 1
     UNION ALL

@@ -64,6 +64,8 @@ LABELLED_APP_METRICS = frozenset(
         "manuspectrum_spectrum_previews_total",
         "manuspectrum_ssrf_rejections_total",
         "manuspectrum_upstream_budget_spent_total",
+        "manuspectrum_workflow_cleanup_resources_total",
+        "manuspectrum_workflow_cleanups_total",
     }
 )
 

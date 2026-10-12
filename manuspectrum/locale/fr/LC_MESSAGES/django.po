@@ -5841,6 +5841,10 @@ msgstr "Le workflow inachevé « %(workflow)s » a été nettoyé."
 msgid "Deleted records:"
 msgstr "Fiches supprimées :"
 
+#: accounts/workflows.py
+msgid "Create a project"
+msgstr "Créer un projet"
+
 #: accounts/notices.py
 msgid "Unfinished workflow cleaned"
 msgstr "Workflow inachevé nettoyé"

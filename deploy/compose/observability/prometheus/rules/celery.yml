@@ -80,3 +80,14 @@ groups:
           summary: "The embargo pass is not running"
           description: "The embargo pass last completed {{ $value | humanizeDuration }} ago; it runs daily at 06:00 Europe/Paris, so restrictions are not noticed or lifted."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#embargopassstale
+      - alert: WorkflowCleanupStale
+        expr: |
+          time() - max(manuspectrum_workflow_cleanup_timestamp_seconds) > 2 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The abandoned-workflow pass is not running"
+          description: "The abandoned-workflow pass last completed {{ $value | humanizeDuration }} ago; it runs daily at 03:30 Europe/Paris, so idle runs are neither announced nor cleaned."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#workflowcleanupstale
