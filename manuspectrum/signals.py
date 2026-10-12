@@ -8,6 +8,7 @@ the session at once.
 
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.signals import user_logged_out
+from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_save
@@ -49,7 +50,11 @@ def record_restriction_on_grant(sender, instance, created, **kwargs):
     can restrict it. The request user is the one who set it; the daily pass
     records restrictions written outside a request with no setter.
     """
-    if not created or instance.content_type.model != "resourceinstance":
+    if not created or not instance.content_type_id:
+        return
+    if ContentType.objects.get_for_id(instance.content_type_id).model != (
+        "resourceinstance"
+    ):
         return
     grantee = getattr(instance, "user", None) or getattr(instance, "group", None)
     transaction.on_commit(
