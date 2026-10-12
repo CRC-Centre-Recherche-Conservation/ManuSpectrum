@@ -25,6 +25,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.http import HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
@@ -220,9 +221,22 @@ class EmbargoAdmin(admin.ModelAdmin):
             try:
                 obj.change_end(new_end, request.user)
             except forms.ValidationError as error:
+                request._embargo_change_refused = True
                 self.message_user(request, error.messages[0], messages.ERROR)
         else:
             super().save_model(request, obj, form, change)
+
+    def log_change(self, request, obj, message):
+        """Skip the admin log entry of a save the model refused."""
+        if getattr(request, "_embargo_change_refused", False):
+            return None
+        return super().log_change(request, obj, message)
+
+    def response_change(self, request, obj):
+        """Return to the change page with only the error when the model refused the save."""
+        if getattr(request, "_embargo_change_refused", False):
+            return HttpResponseRedirect(request.get_full_path())
+        return super().response_change(request, obj)
 
     def extend(self, request, queryset, months):
         done = 0

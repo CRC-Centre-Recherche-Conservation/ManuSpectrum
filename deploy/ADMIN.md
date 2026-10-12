@@ -39,8 +39,9 @@ because an administrator created it. People ask for one through the contact page
   signed-in account that has no secret on `account/two-factor` (page navigations are
   redirected there, every other request is refused with 403), so a newly invited person
   enrols right after activating and nobody uses the site without a second factor. An
-  account that existed before the switch and never enrolled cannot sign in: reset it with
-  the action below, which mails it the enrolment link.
+  account that existed before the switch and never enrolled cannot sign in: select it and run **Send the two-factor
+  enrolment link (superuser)** (below), which mails it the enrolment link (**Reset** skips
+  accounts that hold no secret).
 - **Lost phone.** After checking the person's identity by another channel, a superuser
   opens the admin, User profiles, ticks the profile and chooses **Reset two-factor
   authentication (superuser)** (only superusers can). The action clears the secret and mails
@@ -155,7 +156,9 @@ unless an administrator records an exception (below).
   the pass would do (dry run); `--apply` runs it as the beat task does.
 - Alerts: `EmbargoLiftFailures`, `EmbargoOverdue`, `EmbargoPassStale` (`runbooks/application.md`,
   `runbooks/celery.md`). `release_expired_embargoes --as-of YYYY-MM-DD` runs the pass as if it
-  were 06:00 Paris that day (rehearsal: an end date cannot be set in the past).
+  were 06:00 Paris that day (rehearsal: an end date cannot be set in the past). `--as-of` with
+  `--apply` (here and in `anonymise_inactive_accounts`) is refused when `DEPLOY_ENVIRONMENT` is
+  `production`; the dry run stays allowed.
 
 ## Abandoned workflows
 

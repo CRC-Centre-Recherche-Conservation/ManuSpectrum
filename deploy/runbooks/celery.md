@@ -142,6 +142,8 @@ The Django admin still lists login records older than six months; the monthly re
 
 Restart the worker and beat (`make -C deploy restart`). To prune by hand, run `axes_reset_logs --age 183` and `axes_reset_failure_logs --age 183` through `make -C deploy manage`.
 
+This alert also fires once after a first deployment, or after the monitoring data was reset, until the pass has run and published its completion time (it looks back 26 hours). Clear it by running the prune command of this section by hand, or wait for the next scheduled run.
+
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
@@ -165,6 +167,8 @@ No notice or "now public" mail went out; the Embargoes panel of the Activity das
 ### Remediation
 
 Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="release_expired_embargoes"` lists what it would do, and `--apply` does it. The pass is idempotent: notices go once per stage and a lift happens once.
+
+This alert also fires once after a first deployment, or after the monitoring data was reset, until the pass has run and published its completion time (it looks back 26 hours). Clear it by running `release_expired_embargoes --apply` by hand, or wait for the next scheduled run.
 
 ### Escalation
 
@@ -190,6 +194,8 @@ No "Unfinished workflow" mail went out; the Workflows panel of the Activity dash
 
 Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="prune_workflow_history"` lists what it would do, and `--apply` does it. The pass is idempotent: each notice stage goes once and a run is cleaned once.
 
+This alert also fires once after a first deployment, or after the monitoring data was reset, until the pass has run and published its completion time (it looks back 26 hours). Clear it by running `prune_workflow_history --apply` by hand, or wait for the next scheduled run.
+
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
@@ -213,6 +219,8 @@ No "Your account will be anonymised" mail went out; the administrators received 
 ### Remediation
 
 Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="anonymise_inactive_accounts"` lists, by user id, what it would do, and `--apply` does it. The pass is idempotent: a notice goes once and an account is anonymised once.
+
+This alert also fires once after a first deployment, or after the monitoring data was reset, until the pass has run and published its completion time (it looks back 26 hours). Clear it by running `anonymise_inactive_accounts --apply` by hand, or wait for the next scheduled run.
 
 ### Escalation
 

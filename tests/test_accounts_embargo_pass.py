@@ -13,6 +13,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from unittest import mock
 
 from dateutil.relativedelta import relativedelta
@@ -269,6 +270,24 @@ class ReconcileTests(PassCase):
             ),
         )
         self.assertEqual(row.notices_sent, [])
+
+
+class DatingTests(PassCase):
+    def test_a_row_dated_by_the_pass_ends_exactly_the_maximum_after_its_local_day(self):
+        from manuspectrum.accounts.embargo import record_restriction
+
+        chicago = ZoneInfo("America/Chicago")
+        detected = datetime(2026, 3, 2, 23, 30, tzinfo=chicago)
+        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 3))
+        with mock.patch(
+            "django.utils.timezone.now", return_value=detected.replace(tzinfo=None)
+        ):
+            self.assertTrue(record_restriction(self.resource_x.pk, now=detected))
+        row = Embargo.objects.get(resourceinstance=self.resource_x)
+        expected = date(2026, 3, 3) + relativedelta(months=settings.EMBARGO_MAX_MONTHS)
+        self.assertEqual(row.ends_on, expected)
+        self.assertEqual(row.start, date(2026, 3, 3))
+        self.assertEqual(row.latest_allowed_end(), expected)
 
 
 class NoticeTests(PassCase):
@@ -582,6 +601,23 @@ class CommandTests(PassCase):
         self.assertEqual(Embargo.objects.get().state, Embargo.LIFTED)
         with self.assertRaises(CommandError):
             call_command("release_expired_embargoes", "--as-of", "yesterday")
+
+    def test_as_of_with_apply_is_refused_in_production(self):
+        self.restrict(self.resource_x, date.today() + timedelta(days=2))
+        later = (date.today() + timedelta(days=3)).isoformat()
+        with mock.patch.dict("os.environ", {"DEPLOY_ENVIRONMENT": "production"}):
+            with self.assertRaises(CommandError):
+                call_command(
+                    "release_expired_embargoes",
+                    "--apply",
+                    "--as-of",
+                    later,
+                    stdout=io.StringIO(),
+                )
+            out = io.StringIO()
+            call_command("release_expired_embargoes", "--as-of", later, stdout=out)
+        self.assertIn("Dry run", out.getvalue())
+        self.assertEqual(Embargo.objects.get().state, Embargo.ACTIVE)
 
 
 class ScheduleTests(TestCase):

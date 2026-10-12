@@ -378,6 +378,23 @@ class DryRunTests(RetentionCase):
         self.assertIn("1 anonymised", out.getvalue())
         self.assertTrue(self.anonymised(User.objects.get(pk=user.pk)))
 
+    def test_as_of_with_apply_is_refused_in_production(self):
+        user = self.user("old", last_login=months_ago(25))
+        later = (NOW + timedelta(days=31)).date().isoformat()
+        with mock.patch.dict("os.environ", {"DEPLOY_ENVIRONMENT": "production"}):
+            with self.assertRaises(CommandError):
+                call_command(
+                    "anonymise_inactive_accounts",
+                    "--apply",
+                    "--as-of",
+                    later,
+                    stdout=io.StringIO(),
+                )
+            out = io.StringIO()
+            call_command("anonymise_inactive_accounts", "--as-of", later, stdout=out)
+        self.assertIn("Dry run", out.getvalue())
+        self.assertFalse(self.anonymised(User.objects.get(pk=user.pk)))
+
     def test_the_command_refuses_a_malformed_day(self):
         with self.assertRaises(CommandError):
             call_command("anonymise_inactive_accounts", "--as-of", "31/12/2026")

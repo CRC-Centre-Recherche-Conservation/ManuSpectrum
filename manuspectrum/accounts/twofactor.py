@@ -206,13 +206,21 @@ class TwoFactorSetupView(View):
 
 
 def _reset_state(user, stored_secret):
+    last_login = user.last_login.isoformat() if user.last_login else ""
     return salted_hmac(
-        RESET_SALT, f"{user.pk}|{user.password}|{stored_secret or ''}"
+        RESET_SALT,
+        f"{user.pk}|{user.password}|{stored_secret or ''}|{last_login}",
     ).hexdigest()
 
 
 def reset_token(user):
-    """A signed enrolment token for *user*, valid while the password and the empty secret stay."""
+    """A signed enrolment token for *user*.
+
+    Valid while the password, the empty secret and the last sign-in stay as
+    they were: a link mailed before the account signed in again (a completed
+    re-enrolment signs it in) is dead even if the secret is cleared again.
+    """
+    user = get_user_model().objects.get(pk=user.pk)
     profile = UserProfile.objects.filter(user=user).first()
     return signing.dumps(
         {

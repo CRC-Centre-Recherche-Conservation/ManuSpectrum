@@ -10,6 +10,7 @@ from axes.models import AccessAttempt
 from django.contrib.auth.models import User
 from django.core import mail, signing
 from django.core.cache import cache
+from django.utils import timezone
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -120,6 +121,15 @@ class ResetTokenTests(TestCase):
         self.alice.save()
         self.assertIsNone(twofactor.user_for_reset(token))
 
+    def test_the_token_dies_with_a_later_sign_in_even_if_the_secret_is_cleared_again(
+        self,
+    ):
+        token = twofactor.reset_token(self.alice)
+        User.objects.filter(pk=self.alice.pk).update(last_login=timezone.now())
+        self.assertIsNone(twofactor.user_for_reset(token))
+        newer = twofactor.reset_token(User.objects.get(pk=self.alice.pk))
+        self.assertEqual(twofactor.user_for_reset(newer), self.alice)
+
     def test_the_token_dies_with_the_deactivation(self):
         token = twofactor.reset_token(self.alice)
         User.objects.filter(pk=self.alice.pk).update(is_active=False)
@@ -166,6 +176,15 @@ class ResetPageTests(TestCase):
         self.assertNotContains(page, self.path.rsplit("/", 1)[1])
         self.assertContains(page, 'name="password"')
 
+    def test_a_user_with_stale_terms_is_not_sent_to_the_terms_with_the_token(self):
+        self.client.force_login(self.alice)
+        self.alice.refresh_from_db()
+        response = self.client.get(token_path(self.alice), **HTML)
+        self.assertRedirects(response, self.page, fetch_redirect_response=False)
+        page = self.client.get(self.page, **HTML)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn("terms", page.get("Location", ""))
+
     def test_the_placeholder_without_a_session_token_is_refused(self):
         response = self.client.get(self.page)
         self.assertEqual(response.status_code, 410)
@@ -189,15 +208,25 @@ class ResetPageTests(TestCase):
         self.assertEqual(AccessAttempt.objects.filter(username="alice").count(), 1)
         self.assertIsNone(stored(self.alice))
 
-    def test_the_account_is_locked_after_the_limit(self):
+    def test_an_older_link_stays_dead_after_an_enrolment_and_a_second_reset(self):
+        self.open()
+        post(self.client, self.page, action="password", password=PASSWORD)
+        secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
+        post(self.client, self.page, action="confirm", code=pyotp.TOTP(secret).now())
+        UserProfile.objects.filter(user=self.alice).update(encrypted_mfa_hash=None)
+        self.assertEqual(Client().get(self.path).status_code, 410)
+
+    @override_settings(RATELIMIT_ENABLE=False)
+    def test_the_account_is_locked_by_axes_after_the_failure_limit(self):
         self.open()
         statuses = [
             post(self.client, self.page, action="password", password=WRONG).status_code
-            for _ in range(6)
+            for _ in range(5)
         ]
-        self.assertIn(429, statuses)
+        self.assertEqual(statuses, [400] * 4 + [429])
         response = post(self.client, self.page, action="password", password=PASSWORD)
         self.assertEqual(response.status_code, 429)
+        self.assertNotIn("ms_reset_pending_mfa_secret", self.client.session)
         self.assertIsNone(stored(self.alice))
 
     def test_the_password_then_a_valid_code_enrols_and_signs_in(self):

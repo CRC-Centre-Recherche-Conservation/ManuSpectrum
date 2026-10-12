@@ -1319,7 +1319,7 @@ Create the test accounts in the admin and delete them afterwards.
   gives it an Embargo dated 12 months out, with the events `detected` and `dated` in the admin. Shorten its "Ends on"
   to tomorrow in the admin; `make -C deploy manage ARGS="release_expired_embargoes"` lists nothing to lift yet. Rehearse
   the lift with `release_expired_embargoes --as-of <the day after tomorrow, YYYY-MM-DD> --apply` (an end date cannot be set in
-  the past): the resource is public, the creator got the "now public" mail in Mailpit, the history shows the lift,
+  the past; rehearsal only: `--as-of` with `--apply` is refused when `DEPLOY_ENVIRONMENT=production`): the resource is public, the creator got the "now public" mail in Mailpit, the history shows the lift,
   `manuspectrum_embargo_lifts_total{outcome="lifted"}` increased.
 - [ ] Only a superuser can clear "Ends on" (no end date): a staff account with the embargo permission is refused,
   a superuser's change is recorded as `undated` and the row is listed under "End date → No end date".
@@ -1335,7 +1335,7 @@ Create the test accounts in the admin and delete them afterwards.
   account will be anonymised. Ticking "Active" again sends nothing.
 - [ ] On another test user, set "Last login" 25 months back in the admin (Important dates). `make -C deploy manage
   ARGS="anonymise_inactive_accounts"` lists it as "would be notice sent"; with `--apply` the notice reaches Mailpit.
-- [ ] `anonymise_inactive_accounts --apply --as-of <today + 31 days, YYYY-MM-DD>`: the user is renamed
+- [ ] `anonymise_inactive_accounts --apply --as-of <today + 31 days, YYYY-MM-DD>` (rehearsal environments only: refused when `DEPLOY_ENVIRONMENT=production`): the user is renamed
   `former-user-<id>`, has no name, e-mail or two-factor secret, is inactive; the "Edit log" of a record it edited keeps
   its first and last names and no e-mail; `manuspectrum_account_anonymisations_total{outcome="anonymised"}` increased.
   A superuser in the same situation is only listed in the administrators' summary.

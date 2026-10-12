@@ -271,3 +271,17 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="ActivityStale", alertstate="firing", service="celery", severity="warning"}
       value: 1
+- name: EmbargoPassStale warns an hour after a first deployment when no completion time was ever published and the host is up
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 2h
+    exp_samples:
+    - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1

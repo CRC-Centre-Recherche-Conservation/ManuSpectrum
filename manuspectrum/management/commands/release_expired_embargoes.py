@@ -3,9 +3,11 @@
 Dry-run by default: it lists what the daily pass would do and writes and sends
 nothing. ``--apply`` runs the pass as the beat task does (same lock, same mail,
 same metrics). ``--as-of YYYY-MM-DD`` runs it as if it were 06:00 in Paris on
-that day, to rehearse a lift (an end date cannot be set in the past).
+that day, to rehearse a lift (an end date cannot be set in the
+past). With ``--apply`` it is refused when ``DEPLOY_ENVIRONMENT`` is ``production``.
 """
 
+import os
 from datetime import date, datetime, time
 
 from django.core.management.base import BaseCommand, CommandError
@@ -42,6 +44,11 @@ class Command(BaseCommand):
             return
         now = None
         if as_of:
+            if apply and os.environ.get("DEPLOY_ENVIRONMENT") == "production":
+                raise CommandError(
+                    "--as-of with --apply is a rehearsal and is refused when "
+                    "DEPLOY_ENVIRONMENT is production."
+                )
             try:
                 day = date.fromisoformat(as_of)
             except ValueError:

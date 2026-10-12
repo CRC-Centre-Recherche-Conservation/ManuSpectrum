@@ -17,9 +17,9 @@
     <p>{% trans "ManuSpectrum is not a data repository. It describes analyses, links them together and showcases them, in line with the FAIR principles." %}</p>
     <p>{% trans "It gives none of the guarantees of a repository (long-term preservation, persistent identifiers, citable deposits). Your raw data belongs in a recognised repository such as Recherche Data Gouv or Nakala, and ManuSpectrum links to it." %}</p>
     <p>{% blocktrans trimmed count n=embargo_max_months %}
-        A restriction on a record is temporary: {{ n }} month at most, then it is lifted automatically.
+        A restriction on a record is temporary: {{ n }} month at most, then it is lifted automatically, unless the team records an exception.
         {% plural %}
-        A restriction on a record is temporary: {{ n }} months at most, then it is lifted automatically.
+        A restriction on a record is temporary: {{ n }} months at most, then it is lifted automatically, unless the team records an exception.
         {% endblocktrans %}</p>
     <p>{% blocktrans trimmed with days=workflow_cleanup_days notices=workflow_notice_days_text %}
         An unfinished workflow is cleaned after {{ days }} days without activity, once we have written to you twice

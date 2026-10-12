@@ -98,8 +98,14 @@ class Embargo(models.Model):
 
     @property
     def start(self):
-        """The day the embargo began: the day its record was created."""
-        return self.created.date() if self.created else date.today()
+        """The day the embargo began: its record's creation day in Paris.
+
+        The same local day as the detection date the pass adds the maximum
+        duration to, whatever the server's time zone.
+        """
+        from manuspectrum.accounts.embargo import aware, local_today
+
+        return local_today(aware(self.created)) if self.created else date.today()
 
     def latest_allowed_end(self):
         return self.start + relativedelta(months=settings.EMBARGO_MAX_MONTHS)

@@ -2,9 +2,11 @@
 
 import uuid
 from datetime import date, datetime, timedelta
+from unittest import mock
 
 from arches.app.models.models import GraphModel, ResourceInstance
 from django.contrib import admin
+from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ValidationError
 from django.db import connection
@@ -220,6 +222,35 @@ class AdminTests(EmbargoTestCase):
         embargo.refresh_from_db()
         self.assertEqual(embargo.ends_on, date.today() + timedelta(days=10))
         self.assertEqual(embargo.events.count(), 0)
+
+    def test_a_save_refused_by_the_model_shows_only_the_error_and_writes_no_log(self):
+        embargo = self.make(ends_on=date.today() + timedelta(days=10))
+        client = self.client_for(self.admin_user)
+        new_end = date.today() + timedelta(days=60)
+        with mock.patch.object(
+            Embargo,
+            "change_end",
+            side_effect=ValidationError(
+                "Only an active embargo can change its end date."
+            ),
+        ):
+            response = client.post(
+                change_url(embargo),
+                {
+                    "ends_on": new_end.isoformat(),
+                    "events-TOTAL_FORMS": 0,
+                    "events-INITIAL_FORMS": 0,
+                },
+                follow=True,
+            )
+        texts = [(m.level, str(m)) for m in response.context["messages"]]
+        self.assertEqual(
+            texts,
+            [(40, "Only an active embargo can change its end date.")],
+        )
+        self.assertFalse(LogEntry.objects.filter(object_id=str(embargo.pk)).exists())
+        embargo.refresh_from_db()
+        self.assertEqual(embargo.ends_on, date.today() + timedelta(days=10))
 
     def test_a_date_beyond_the_maximum_is_refused_to_an_administrator(self):
         embargo = self.make()

@@ -267,8 +267,8 @@ class TermsAcceptanceMiddleware:
     whose `Accept` header asks for HTML and that is not an XHR. Never touched:
     anonymous visitors, other methods, `/api/` and `/iiif/` paths, static and
     media files, the monitoring endpoints, and the routes in `EXEMPT_ROUTES`
-    (sign-in, sign-out, password reset, the activation, acceptance and
-    two-factor pages). The answer is read from the session, then the database,
+    (sign-in, sign-out, password reset, the activation, acceptance, two-factor
+    and two-factor re-enrolment pages). The answer is read from the session, then the database,
     for the request that needs it only.
     """
 
@@ -277,6 +277,7 @@ class TermsAcceptanceMiddleware:
             "account-terms",
             "account-activate",
             "account-two-factor",
+            "account-two-factor-reset",
             "auth",
             "two-factor-authentication-login",
             "password_reset",
