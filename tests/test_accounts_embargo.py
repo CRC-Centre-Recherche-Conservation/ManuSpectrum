@@ -7,7 +7,9 @@ from arches.app.models.models import GraphModel, ResourceInstance
 from django.contrib import admin
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import Client, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from manuspectrum.models import Embargo, EmbargoEvent, WorkflowCleanup
 from manuspectrum.observability import activity
@@ -130,8 +132,61 @@ class ChangeEndTests(EmbargoTestCase):
         self.assertIsNone(embargo.change_end(date(2027, 1, 1), self.admin_user))
         self.assertEqual(embargo.events.count(), 0)
 
+    def test_a_lifted_embargo_refuses_a_new_end_even_from_a_stale_instance(self):
+        embargo = self.make(ends_on=date.today() + timedelta(days=10))
+        Embargo.objects.filter(pk=embargo.pk).update(state=Embargo.LIFTED)
+        with self.assertRaises(ValidationError):
+            embargo.change_end(date.today() + timedelta(days=60), self.admin_user)
+        self.assertEqual(embargo.events.count(), 0)
+        embargo.refresh_from_db()
+        self.assertEqual(embargo.ends_on, date.today() + timedelta(days=10))
+
+    def test_the_change_runs_under_a_row_lock(self):
+        embargo = self.make(ends_on=date.today() + timedelta(days=10))
+        with CaptureQueriesContext(connection) as queries:
+            embargo.change_end(date.today() + timedelta(days=20), self.admin_user)
+        self.assertTrue(any("FOR UPDATE" in q["sql"] for q in queries))
+
 
 class AdminTests(EmbargoTestCase):
+    def test_only_a_superuser_can_remove_an_end_date(self):
+        end = date.today() + timedelta(days=10)
+        embargo = self.make(ends_on=end)
+        post = lambda user: self.client_for(user).post(
+            change_url(embargo),
+            {"ends_on": "", "events-TOTAL_FORMS": 0, "events-INITIAL_FORMS": 0},
+        )
+        response = post(self.admin_user)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ends_on", response.context["adminform"].form.errors)
+        embargo.refresh_from_db()
+        self.assertEqual(embargo.ends_on, end)
+        self.assertEqual(post(self.root).status_code, 302)
+        embargo.refresh_from_db()
+        self.assertIsNone(embargo.ends_on)
+        self.assertEqual(embargo.events.get().kind, EmbargoEvent.UNDATED)
+
+    def test_a_lifted_or_released_embargo_cannot_get_a_new_end(self):
+        for state in (Embargo.LIFTED, Embargo.RELEASED):
+            embargo = self.make(ends_on=date.today() + timedelta(days=10))
+            Embargo.objects.filter(pk=embargo.pk).update(state=state)
+            response = self.save_end(
+                self.admin_user, embargo, date.today() + timedelta(days=60)
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("ends_on", response.context["adminform"].form.errors)
+            embargo.refresh_from_db()
+            self.assertEqual(embargo.ends_on, date.today() + timedelta(days=10))
+            self.assertEqual(embargo.events.count(), 0)
+
+    def test_the_extend_action_leaves_a_lifted_embargo_alone(self):
+        embargo = self.make(ends_on=date.today() + timedelta(days=30))
+        Embargo.objects.filter(pk=embargo.pk).update(state=Embargo.LIFTED)
+        self.client_for(self.admin_user).post(
+            LIST_URL, {"action": "extend_3", "_selected_action": [embargo.pk]}
+        )
+        self.assertEqual(embargo.events.count(), 0)
+
     def test_the_change_list_loads_for_a_permitted_user(self):
         self.make(ends_on=date(2027, 1, 1))
         response = self.client_for(self.admin_user).get(LIST_URL)

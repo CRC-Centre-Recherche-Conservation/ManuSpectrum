@@ -2,12 +2,15 @@
 
 Dry-run by default: it lists what the daily pass would do and writes and sends
 nothing. ``--apply`` runs the pass as the beat task does (same lock, same mail,
-same metrics).
+same metrics). ``--as-of YYYY-MM-DD`` runs it as if it were 06:00 in Paris on
+that day, to rehearse a lift (an end date cannot be set in the past).
 """
 
-from django.core.management.base import BaseCommand
+from datetime import date, datetime, time
 
-from manuspectrum.accounts.embargo import run_pass
+from django.core.management.base import BaseCommand, CommandError
+
+from manuspectrum.accounts.embargo import LIFT_HOUR, LOCAL_TZ, run_pass
 
 
 class Command(BaseCommand):
@@ -23,16 +26,28 @@ class Command(BaseCommand):
             help="Run the pass: write, send the notices and lift.",
         )
         parser.add_argument(
+            "--as-of",
+            metavar="YYYY-MM-DD",
+            help="Rehearsal: run as if it were 06:00 in Paris on that day.",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="List what the pass would do (the default).",
         )
 
-    def handle(self, *args, apply=False, dry_run=False, **options):
+    def handle(self, *args, apply=False, dry_run=False, as_of=None, **options):
         if apply and dry_run:
             self.stderr.write("--apply and --dry-run exclude each other.")
             return
-        report = run_pass(apply=apply)
+        now = None
+        if as_of:
+            try:
+                day = date.fromisoformat(as_of)
+            except ValueError:
+                raise CommandError("--as-of expects a date as YYYY-MM-DD.")
+            now = datetime.combine(day, time(LIFT_HOUR), tzinfo=LOCAL_TZ)
+        report = run_pass(now, apply=apply)
         if report.locked:
             self.stdout.write("Another embargo pass is running: nothing done.")
             return

@@ -378,3 +378,31 @@ class ReversalTests(UserCase):
         self.assertEqual(row.userid, str(self.owner.pk))
         self.assertEqual(row.resourceinstanceid, str(created.pk))
         self.assertEqual(row.resourcedisplayname, "New Codex")
+
+
+class FlushWithoutWorkflowTests(TestCase):
+    def test_tile_rows_and_the_creation_row_share_one_fresh_transaction(self):
+        owner = User.objects.create_user("flusher", "f@manuspectrum.test", "x")
+        resource_id, graph_id = uuid.uuid4(), uuid.uuid4()
+        resource = mock.Mock(pk=resource_id, graph_id=graph_id)
+        resource.displayname.return_value = "Place"
+        resource.get_serialized_graph.return_value = {}
+        tile = SimpleNamespace(
+            resourceinstance_id=resource_id,
+            nodegroup_id=uuid.uuid4(),
+            tileid=uuid.uuid4(),
+            data={},
+        )
+        view = BiblissimaCreateResourceView()
+        view._tile_buffer = [tile]
+        with (
+            mock.patch("manuspectrum.views.biblissima_proxy.TileModel"),
+            mock.patch.object(BiblissimaCreateResourceView, "_run_hook"),
+            mock.patch.object(
+                BiblissimaCreateResourceView, "_nodes_by_id", return_value={}
+            ),
+        ):
+            view._flush_tile_buffer(resource, user=owner, default_transaction_id=None)
+        rows = EditLog.objects.filter(resourceinstanceid=str(resource_id))
+        self.assertEqual({r.edittype for r in rows}, {"tile create", "create"})
+        self.assertEqual(len({r.transactionid for r in rows}), 1)

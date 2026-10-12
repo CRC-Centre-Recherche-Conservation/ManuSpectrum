@@ -4,8 +4,12 @@ An administrator creates an account with no password and sends the invitation
 (`send_invitation`). The mail carries a link built like Django's password
 reset: `urlsafe_base64_encode(pk)` and a `default_token_generator` token, valid
 for `PASSWORD_RESET_TIMEOUT` and dead once the password is set. The link opens
-`ActivateAccountView`, which shows the terms, asks for their acceptance and a
-password, signs the user in and sends them to the two-factor enrolment page.
+`ActivateAccountView`: a valid token is moved into the session and the browser
+is redirected to the same route with the placeholder `set-password`, so the
+token is in no page URL, `Referer` or access-log line (Django's
+`PasswordResetConfirmView` does the same). That page shows the terms, asks for
+their acceptance and a password, signs the user in and sends them to the
+two-factor enrolment page.
 
 `TermsAcceptance` holds one row per user and version of the terms
 (`accounts.terms.TERMS_VERSION`). `TermsAcceptanceMiddleware` sends a signed-in
@@ -50,6 +54,8 @@ logger = logging.getLogger(__name__)
 
 LOGIN_BACKEND = "django.contrib.auth.backends.ModelBackend"
 SESSION_KEY = "ms_terms_accepted_version"
+TOKEN_PLACEHOLDER = "set-password"
+SESSION_TOKEN_KEY = "_ms_activation_token"
 
 
 def can_be_invited(user):
@@ -163,7 +169,18 @@ class ActivateAccountView(_TermsPage):
     template_name = "accounts/activate.htm"
 
     def dispatch(self, request, *args, **kwargs):
-        self.account = user_for_link(kwargs["uidb64"], kwargs["token"])
+        response = self._dispatch(request, *args, **kwargs)
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+    def _dispatch(self, request, *args, **kwargs):
+        uidb64, token = kwargs["uidb64"], kwargs["token"]
+        if token == TOKEN_PLACEHOLDER:
+            token = request.session.get(SESSION_TOKEN_KEY, "")
+        elif user_for_link(uidb64, token) is not None:
+            request.session[SESSION_TOKEN_KEY] = token
+            return redirect("account-activate", uidb64=uidb64, token=TOKEN_PLACEHOLDER)
+        self.account = user_for_link(uidb64, token) if token else None
         if self.account is None:
             self.template_name = "accounts/activation_invalid.htm"
             return self.render_to_response(self.get_context_data(), status=410)
@@ -203,6 +220,7 @@ class ActivateAccountView(_TermsPage):
         # `authenticate()` sets.
         user.backend = LOGIN_BACKEND
         login(request, user)
+        request.session.pop(SESSION_TOKEN_KEY, None)
         request.session[SESSION_KEY] = TERMS_VERSION
         logger.info("Account activated for user %s", user.pk)
         return redirect("account-two-factor")

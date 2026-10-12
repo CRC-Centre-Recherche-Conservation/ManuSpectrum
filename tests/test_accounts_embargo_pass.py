@@ -15,6 +15,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from unittest import mock
 
+from dateutil.relativedelta import relativedelta
+from django.conf import settings
+
 from arches.app.models.models import (
     EditLog,
     GraphModel,
@@ -28,7 +31,7 @@ from arches.app.utils.permission_backend import assign_perm
 from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.cache import cache, caches
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import connection
 from django.test import TestCase, TransactionTestCase, override_settings
 
@@ -143,8 +146,12 @@ class Fixtures:
             timestamp=datetime(2026, 1, 1, tzinfo=LOCAL_TZ),
         )
 
-    def restrict(self, resource, ends_on=None, by=None):
-        """Restrict *resource* from the visitor and record it, as a request of *by* would."""
+    def restrict(self, resource, ends_on=None, by=None, undated=False):
+        """Restrict *resource* from the visitor and record it, as a request of *by* would.
+
+        The row is dated by the detection rule unless *ends_on* sets another end
+        or *undated* clears it.
+        """
         with mock.patch(
             "manuspectrum.signals.current_request",
             return_value=mock.Mock(user=by) if by else None,
@@ -152,7 +159,7 @@ class Fixtures:
             with self.captureOnCommitCallbacks(execute=True):
                 assign_perm(NO_ACCESS, self.anonymous, resource)
         row = Embargo.objects.get(resourceinstance=resource)
-        if ends_on:
+        if ends_on or undated:
             row.change_end(ends_on, by=None)
             row.events.all().delete()
         return row
@@ -183,8 +190,18 @@ class ReconcileTests(PassCase):
         self.restrict(self.resource_x, by=self.setter)
         row = Embargo.objects.get(resourceinstance=self.resource_x)
         self.assertEqual(row.set_by, self.setter)
-        self.assertIsNone(row.ends_on)
-        self.assertEqual(row.events.get().kind, EmbargoEvent.DETECTED)
+        self.assertEqual(
+            row.ends_on,
+            date.today() + relativedelta(months=settings.EMBARGO_MAX_MONTHS),
+        )
+        detected, dated = row.events.order_by("pk")
+        self.assertEqual(
+            (detected.kind, detected.by), (EmbargoEvent.DETECTED, self.setter)
+        )
+        self.assertEqual(
+            (dated.kind, dated.by, dated.from_date, dated.to_date),
+            (EmbargoEvent.DATED, None, None, row.ends_on),
+        )
 
     def test_the_pass_records_a_restriction_written_without_a_request(self):
         assign_perm(NO_ACCESS, self.anonymous, self.resource_x)
@@ -193,6 +210,35 @@ class ReconcileTests(PassCase):
         row = Embargo.objects.get(resourceinstance=self.resource_x)
         self.assertEqual(report.detected, [str(self.resource_x.pk)])
         self.assertIsNone(row.set_by)
+        self.assertEqual(row.ends_on, date(2027, 10, 13))
+        self.assertEqual(
+            [e.kind for e in row.events.order_by("pk")],
+            [EmbargoEvent.DETECTED, EmbargoEvent.DATED],
+        )
+
+    def test_a_restriction_found_without_a_row_is_dated_from_its_detection_day(self):
+        assign_perm(NO_ACCESS, self.anonymous, self.resource_x)
+        Embargo.objects.all().delete()
+        self.go(at(date(2027, 1, 31)))
+        self.assertEqual(Embargo.objects.get().ends_on, date(2028, 1, 31))
+
+    def test_a_row_that_exists_keeps_its_dates_when_the_pass_runs(self):
+        row = self.restrict(self.resource_x, ENDS + timedelta(days=100))
+        self.go(at(ENDS))
+        row.refresh_from_db()
+        self.assertEqual(row.ends_on, ENDS + timedelta(days=100))
+        self.assertEqual(row.events.count(), 0)
+
+    def test_a_row_already_past_its_end_is_lifted_with_the_notice(self):
+        self.log(self.resource_x, self.creator, "create")
+        row = self.restrict(self.resource_x, ENDS)
+        Embargo.objects.filter(pk=row.pk).update(notices_sent=["30", "7"])
+        report, _ = self.go(at(ENDS + timedelta(days=400)))
+        row.refresh_from_db()
+        self.assertEqual(report.lifted, [str(self.resource_x.pk)])
+        self.assertEqual(row.state, Embargo.LIFTED)
+        self.assertTrue(self.readable(self.resource_x))
+        self.assertIn(self.creator.email, self.recipients())
 
     def test_a_grant_to_someone_else_records_nothing(self):
         with self.captureOnCommitCallbacks(execute=True):
@@ -215,7 +261,13 @@ class ReconcileTests(PassCase):
         assign_perm(NO_ACCESS, self.anonymous, self.resource_x)
         self.go(LIFT_TIME - timedelta(days=29))
         row.refresh_from_db()
-        self.assertEqual((row.state, row.ends_on), (Embargo.ACTIVE, None))
+        self.assertEqual(
+            (row.state, row.ends_on),
+            (
+                Embargo.ACTIVE,
+                (LIFT_TIME - timedelta(days=29)).date() + relativedelta(months=12),
+            ),
+        )
         self.assertEqual(row.notices_sent, [])
 
 
@@ -360,7 +412,7 @@ class LiftTests(PassCase):
         self.assertEqual(Embargo.objects.get().events.filter(kind="lifted").count(), 1)
 
     def test_an_undated_restriction_is_never_lifted_and_is_counted(self):
-        self.restrict(self.resource_x)
+        self.restrict(self.resource_x, undated=True)
         report, _ = self.go(LIFT_TIME + timedelta(days=4000))
         self.assertFalse(self.readable(self.resource_x))
         self.assertEqual((report.lifted, report.undated), ([], 1))
@@ -462,6 +514,22 @@ class LiftTests(PassCase):
             sample("manuspectrum_embargo_pass_timestamp_seconds"), before
         )
 
+    def test_the_beat_task_lifts_on_the_naive_clock_of_a_deployment_without_tz(self):
+        from manuspectrum.tasks import embargo_pass_task
+
+        later = self.resource(creator=self.creator, name="Later")
+        self.restrict(self.resource_x, ENDS)
+        self.restrict(later, ENDS + timedelta(days=30))
+        naive_now = datetime(2026, 10, 13, 7, 0)
+        with mock.patch("django.utils.timezone.now", return_value=naive_now):
+            with mock.patch("arches.app.models.resource.Resource.index"):
+                with self.captureOnCommitCallbacks(execute=True):
+                    result = embargo_pass_task()
+        self.assertEqual((result["lifted"], result["failed"]), (1, 0))
+        self.assertTrue(self.readable(self.resource_x))
+        self.assertFalse(self.readable(later))
+        self.assertEqual(sample("manuspectrum_embargoes", state="active"), 1)
+
     def test_the_gauges_count_each_state(self):
         soon = self.resource(creator=self.creator, name="Soon")
         later = self.resource(creator=self.creator, name="Later")
@@ -471,7 +539,7 @@ class LiftTests(PassCase):
         self.restrict(soon, today + timedelta(days=3))
         self.restrict(later, today + timedelta(days=200))
         self.restrict(gone, today - timedelta(days=1))
-        self.restrict(none)
+        self.restrict(none, undated=True)
         self.restrict(self.resource_x, today - timedelta(days=1))
         with mock.patch.object(embargo, "lift_due"):
             self.go(at(today))
@@ -495,6 +563,25 @@ class CommandTests(PassCase):
         self.assertIn("Dry run", out.getvalue())
         self.assertIn(str(self.resource_x.pk), out.getvalue())
         self.assertEqual(Embargo.objects.get().state, Embargo.ACTIVE)
+
+    def test_as_of_runs_the_pass_at_6_in_paris_on_that_day(self):
+        self.restrict(self.resource_x, date.today() + timedelta(days=2))
+        out = io.StringIO()
+        call_command("release_expired_embargoes", stdout=out)
+        self.assertNotIn("would be due", out.getvalue())
+        tomorrow = (date.today() + timedelta(days=3)).isoformat()
+        with mock.patch("arches.app.models.resource.Resource.index"):
+            with self.captureOnCommitCallbacks(execute=True):
+                call_command(
+                    "release_expired_embargoes",
+                    "--apply",
+                    "--as-of",
+                    tomorrow,
+                    stdout=out,
+                )
+        self.assertEqual(Embargo.objects.get().state, Embargo.LIFTED)
+        with self.assertRaises(CommandError):
+            call_command("release_expired_embargoes", "--as-of", "yesterday")
 
 
 class ScheduleTests(TestCase):

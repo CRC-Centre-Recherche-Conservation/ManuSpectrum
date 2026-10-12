@@ -214,3 +214,40 @@ def check_legal_pages_complete(app_configs, **kwargs):
             id="manuspectrum.E003",
         )
     ]
+
+
+@checks.register(checks.Tags.database)
+def check_oauth_password_grant(app_configs, databases, **kwargs):
+    """W004: an OAuth2 application allows the password grant, which skips two-factor.
+
+    ``o/token/`` with the password grant signs a user in from a password alone
+    (django-axes still counts the attempts), so a second factor is never asked
+    for. Silent on a half-migrated database and when two-factor is off.
+    """
+    if (
+        "default" not in (databases or [])
+        or not settings.ENABLE_TWO_FACTOR_AUTHENTICATION
+    ):
+        return []
+    try:
+        from oauth2_provider.models import Application
+
+        names = list(
+            Application.objects.filter(
+                authorization_grant_type=Application.GRANT_PASSWORD
+            ).values_list("name", flat=True)
+        )
+    except Exception:  # noqa: BLE001 — a half-migrated DB must not block migrate
+        return []
+    if not names:
+        return []
+    return [
+        checks.Warning(
+            "OAuth2 application(s) "
+            + ", ".join(repr(n or "unnamed") for n in names)
+            + " allow the password grant: a user signs in at o/token/ with a "
+            "password alone, without two-factor authentication. Switch the "
+            "grant type or delete the application.",
+            id="manuspectrum.W004",
+        )
+    ]

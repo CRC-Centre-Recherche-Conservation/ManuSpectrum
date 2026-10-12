@@ -6,7 +6,7 @@ date; they never decide who reads a resource. One pass, run daily at 06:00
 Europe/Paris, does in order:
 
 1. ``reconcile``: a resource hidden from the visitor with no active row gets
-   one (undated, never lifted); an active row whose resource is readable again
+   one, dated at the detection day plus ``EMBARGO_MAX_MONTHS``; an active row whose resource is readable again
    becomes ``released``.
 2. ``send_notices``: at ``EMBARGO_NOTICE_DAYS`` days before the end date, once
    per stage (``Embargo.notices_sent``), to the people concerned and, as a
@@ -42,6 +42,7 @@ from zoneinfo import ZoneInfo
 from arches.app.models.models import ResourceInstance
 from arches.app.models.resource import Resource
 from arches.app.utils import permission_backend as apb
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache, caches
@@ -99,6 +100,12 @@ class PassReport:
     undated: int = 0
 
 
+def aware(moment=None):
+    """*moment* (default: now) as an aware datetime; ``USE_TZ=False`` yields naive ones."""
+    moment = moment or timezone.now()
+    return timezone.make_aware(moment) if timezone.is_naive(moment) else moment
+
+
 def local_today(now):
     return now.astimezone(LOCAL_TZ).date()
 
@@ -133,7 +140,7 @@ def run_pass(now=None, *, apply=True, send_mail=True):
 
     ``apply=False`` writes nothing, takes no lock and sends nothing.
     """
-    now = now or timezone.now()
+    now = aware(now)
     report = PassReport()
     if not apply:
         _run(now, report, apply=False, send_mail=False)
@@ -185,13 +192,16 @@ def reconcile(now, report=None, *, apply=True):
 
 
 def record_restriction(resource_id, *, by=None, now=None):
-    """Give a hidden resource its active ``Embargo`` row, undated; True when a row changed.
+    """Give a hidden resource its active ``Embargo`` row, dated; True when a row changed.
 
-    *by* is the user whose request wrote the restriction. A row that was
-    lifted or released and is hidden again starts over. Called by the pass and,
-    with *by*, once the transaction of a grant commits.
+    The end is the detection day plus ``EMBARGO_MAX_MONTHS``, recorded as a
+    ``detected`` event (by *by*, the user whose request wrote the restriction)
+    then a ``dated`` event by nobody (the pass). A row that was lifted or
+    released and is hidden again starts over. Called by the pass and, with *by*,
+    once the transaction of a grant commits.
     """
-    now = now or timezone.now()
+    now = aware(now)
+    ends_on = local_today(now) + relativedelta(months=settings.EMBARGO_MAX_MONTHS)
     with transaction.atomic():
         row = (
             Embargo.objects.select_for_update()
@@ -201,17 +211,22 @@ def record_restriction(resource_id, *, by=None, now=None):
         if row is None:
             if not ResourceInstance.objects.filter(pk=resource_id).exists():
                 return False
-            row = Embargo.objects.create(resourceinstance_id=resource_id, set_by=by)
+            row = Embargo.objects.create(
+                resourceinstance_id=resource_id, set_by=by, ends_on=ends_on
+            )
         elif row.state == Embargo.ACTIVE:
             return False
         else:
             row.state = Embargo.ACTIVE
-            row.ends_on = None
+            row.ends_on = ends_on
             row.notices_sent = []
             row.set_by = by
-            row.created = now
+            row.created = now if settings.USE_TZ else timezone.make_naive(now)
             row.save()
         EmbargoEvent.objects.create(embargo=row, kind=EmbargoEvent.DETECTED, by=by)
+        EmbargoEvent.objects.create(
+            embargo=row, kind=EmbargoEvent.DATED, to_date=ends_on
+        )
     return True
 
 

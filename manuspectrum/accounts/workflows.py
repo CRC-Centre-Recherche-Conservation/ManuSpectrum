@@ -47,7 +47,7 @@ from django.utils.translation import gettext_lazy as _
 
 from manuspectrum.accounts import notices
 from manuspectrum.accounts.creation import created_in_transaction, resource_items
-from manuspectrum.accounts.embargo import LOCAL_TZ, local_today, single_pass
+from manuspectrum.accounts.embargo import LOCAL_TZ, aware, local_today, single_pass
 from manuspectrum.models import WorkflowCleanup
 from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import (
@@ -136,7 +136,7 @@ def workflow_transaction(raw, user):
 
 
 def _aware(value):
-    return value.astimezone() if value.tzinfo is None else value
+    return aware(value)
 
 
 def _stage_entry(stage, day):
@@ -308,7 +308,7 @@ def run_pass(now=None, *, apply=True, send_mail=True, only=None):
     ``apply=False`` writes nothing, takes no lock and sends nothing; *only* is
     a list of workflow ids that restricts the pass to those runs.
     """
-    now = now or timezone.now()
+    now = aware(now)
     report = PassReport()
     if not apply:
         _run(now, report, apply=False, send_mail=False, only=only)

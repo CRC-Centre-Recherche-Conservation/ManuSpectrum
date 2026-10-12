@@ -52,6 +52,11 @@ PREFIXED = [
     ("snippets/edge-rules.conf", "reset/a/b/", "password_reset_confirm"),
     ("snippets/edge-rules.conf", "account/activate/a/b", "account-activate"),
     ("snippets/edge-rules.conf", "account/two-factor", "account-two-factor"),
+    (
+        "snippets/edge-rules.conf",
+        "account/two-factor/reset/a",
+        "account-two-factor-reset",
+    ),
     ("snippets/edge-rules.conf", "account/terms", "account-terms"),
     ("snippets/edge-rules.conf", "o/token/", "oauth2:token"),
     (

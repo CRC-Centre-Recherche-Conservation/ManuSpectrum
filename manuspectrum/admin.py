@@ -3,7 +3,9 @@
 `UserProfile` is registered by Arches with the default `ModelAdmin`; it is
 registered again here, without the stored secret, to give superusers the
 two-factor reset (a user who lost the device is identified by other means, then
-reset here).
+reset here). The reset clears the secret and mails the user a personal
+enrolment link (`accounts/twofactor.py`); « Send the two-factor enrolment link »
+sends it again to the selected accounts that hold no secret.
 
 `Embargo` carries the end date of a restricted resource. Administrators date
 and extend it here; every change is recorded as an `EmbargoEvent` (who, when,
@@ -22,11 +24,12 @@ from dateutil.relativedelta import relativedelta
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
-from django.utils.translation import get_language
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
-from manuspectrum.accounts import activation, notices
+from manuspectrum.accounts import activation, notices, twofactor
+from manuspectrum.accounts.creation import resource_label
 from manuspectrum.models import Embargo, EmbargoEvent, TermsAcceptance, WorkflowCleanup
 
 logger = logging.getLogger(__name__)
@@ -36,50 +39,85 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "two_factor")
     search_fields = ("user__username",)
     exclude = ("encrypted_mfa_hash",)
-    actions = ["reset_two_factor"]
+    actions = ["reset_two_factor", "send_enrolment_link"]
 
     @admin.display(boolean=True, description=_("Two-factor authentication"))
     def two_factor(self, profile):
         return bool(profile.encrypted_mfa_hash)
 
-    @admin.action(description=_("Reset two-factor authentication (superuser)"))
-    def reset_two_factor(self, request, queryset):
-        if not request.user.is_superuser:
+    def _superuser_only(self, request):
+        if request.user.is_superuser:
+            return True
+        self.message_user(
+            request,
+            _("Only a superuser can reset two-factor authentication."),
+            messages.ERROR,
+        )
+        return False
+
+    def _mail_links(self, request, users):
+        outcomes = [twofactor.send_reset_link(user) for user in users]
+        sent = outcomes.count(notices.SENT)
+        if sent:
             self.message_user(
                 request,
-                _("Only a superuser can reset two-factor authentication."),
-                messages.ERROR,
+                ngettext(
+                    "The enrolment link was mailed to %(count)d account.",
+                    "The enrolment link was mailed to %(count)d accounts.",
+                    sent,
+                )
+                % {"count": sent},
             )
+        if len(outcomes) - sent:
+            self.message_user(
+                request,
+                ngettext(
+                    "%(count)d account got no mail (inactive, no address or mail failure).",
+                    "%(count)d accounts got no mail (inactive, no address or mail failure).",
+                    len(outcomes) - sent,
+                )
+                % {"count": len(outcomes) - sent},
+                messages.WARNING,
+            )
+
+    @admin.action(description=_("Reset two-factor authentication (superuser)"))
+    def reset_two_factor(self, request, queryset):
+        if not self._superuser_only(request):
             return
-        count = queryset.exclude(encrypted_mfa_hash__isnull=True).update(
-            encrypted_mfa_hash=None
+        profiles = list(
+            queryset.exclude(encrypted_mfa_hash__isnull=True)
+            .exclude(encrypted_mfa_hash="")
+            .select_related("user")
         )
+        queryset.filter(pk__in=[p.pk for p in profiles]).update(encrypted_mfa_hash=None)
         logger.info(
-            "Two-factor reset by user %s for %s account(s)", request.user.pk, count
+            "Two-factor reset by user %s for %s account(s)",
+            request.user.pk,
+            len(profiles),
         )
         self.message_user(
             request,
             ngettext(
                 "Two-factor authentication was reset for %(count)d account.",
                 "Two-factor authentication was reset for %(count)d accounts.",
-                count,
+                len(profiles),
             )
-            % {"count": count},
+            % {"count": len(profiles)},
         )
+        self._mail_links(request, [p.user for p in profiles])
+
+    @admin.action(description=_("Send the two-factor enrolment link (superuser)"))
+    def send_enrolment_link(self, request, queryset):
+        if not self._superuser_only(request):
+            return
+        profiles = queryset.filter(
+            Q(encrypted_mfa_hash__isnull=True) | Q(encrypted_mfa_hash="")
+        ).select_related("user")
+        self._mail_links(request, [p.user for p in profiles])
 
 
 admin.site.unregister(UserProfile)
 admin.site.register(UserProfile, UserProfileAdmin)
-
-
-def resource_label(resourceinstance):
-    """The resource's display name in the active language, else any language."""
-    descriptors = resourceinstance.descriptors or {}
-    for language in (get_language(), *descriptors):
-        name = (descriptors.get(language) or {}).get("name")
-        if name:
-            return name
-    return str(resourceinstance.pk)
 
 
 class EmbargoForm(forms.ModelForm):
@@ -96,6 +134,14 @@ class EmbargoForm(forms.ModelForm):
     def clean_ends_on(self):
         ends_on = self.cleaned_data["ends_on"]
         if ends_on != self.instance.ends_on:
+            if ends_on is None and not (self.user and self.user.is_superuser):
+                raise forms.ValidationError(
+                    _("Only a superuser can remove the end date of a restriction.")
+                )
+            if self.instance.state != Embargo.ACTIVE:
+                raise forms.ValidationError(
+                    _("Only an active embargo can change its end date.")
+                )
             self.instance.validate_end(
                 ends_on, superuser=bool(self.user and self.user.is_superuser)
             )
@@ -171,7 +217,10 @@ class EmbargoAdmin(admin.ModelAdmin):
         new_end = obj.ends_on
         if change and "ends_on" in form.changed_data:
             obj.ends_on = form.initial.get("ends_on")
-            obj.change_end(new_end, request.user)
+            try:
+                obj.change_end(new_end, request.user)
+            except forms.ValidationError as error:
+                self.message_user(request, error.messages[0], messages.ERROR)
         else:
             super().save_model(request, obj, form, change)
 
@@ -197,7 +246,16 @@ class EmbargoAdmin(admin.ModelAdmin):
                     messages.ERROR,
                 )
                 continue
-            embargo.change_end(target, request.user)
+            try:
+                embargo.change_end(target, request.user)
+            except forms.ValidationError as error:
+                self.message_user(
+                    request,
+                    "%s: %s"
+                    % (resource_label(embargo.resourceinstance), error.messages[0]),
+                    messages.ERROR,
+                )
+                continue
             done += 1
         if done:
             self.message_user(

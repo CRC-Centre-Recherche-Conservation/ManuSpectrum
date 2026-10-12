@@ -28,6 +28,10 @@ CONTEXTS = {
         "link": "https://manuspectrum.test/en/activate/abc-token",
         "expires_on": date.today() + timedelta(days=7),
     },
+    "two_factor_reset": {
+        "link": "https://manuspectrum.test/en/account/two-factor/reset/tok",
+        "expires_on": date.today() + timedelta(days=1),
+    },
     "anonymisation_notice": {"on": date(2027, 3, 1), "days": 30},
     "deactivation_notice": {
         "deactivated_on": date(2026, 10, 12),

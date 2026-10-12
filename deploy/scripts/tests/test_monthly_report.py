@@ -559,6 +559,8 @@ class MonthlyReport(unittest.TestCase):
         _, text = self.report()
         self.assertIn("aucune levée", text)
         self.assertIn("aucun assistant abandonné n'a été nettoyé", text)
+        self.assertIn("courriels de compte envoyés : 0", text)
+        self.assertIn("courriels de compte en échec : aucun", text)
 
     def test_a_failing_activity_command_marks_its_sections_and_exits_one(self):
         with tempfile.TemporaryDirectory() as directory:

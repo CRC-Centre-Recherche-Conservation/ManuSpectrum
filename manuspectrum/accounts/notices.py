@@ -21,8 +21,11 @@ Context per kind (`resources` and `kept` are lists of `{"name", "url"}`,
 - `workflow_notice`: `workflow` (label), `cleanup_on` (date), `days`, `resources`.
 - `workflow_cleaned`: `workflow`, `deleted`, `kept`.
 - `invitation`: `link` (personal, time-limited), `expires_on` (date).
+- `two_factor_reset`: `link` (personal, time-limited), `expires_on` (date).
 - `anonymisation_notice`: `on` (date), `days`, `review` (True for a superuser,
-  whose account is not anonymised automatically).
+  whose account is not anonymised automatically), `active` (False for a
+  deactivated account, which is told to ask for reactivation instead of
+  signing in; default True).
 - `anonymisation_summary`: `months`, `anonymised` (count), `noticed` (count),
   `review` (usernames of superusers due for a decision); administrators only.
 - `deactivation_notice`: `deactivated_on` (date), `on` (date the account is
@@ -43,6 +46,7 @@ from django.urls import reverse
 from django.utils import translation
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_noop, ngettext
 
 from manuspectrum.observability import metrics
 
@@ -61,6 +65,7 @@ KINDS = {
     "workflow_notice": Kind(to_user=True, summary=True),
     "workflow_cleaned": Kind(to_user=True, summary=True),
     "invitation": Kind(to_user=True, summary=False),
+    "two_factor_reset": Kind(to_user=True, summary=False),
     "anonymisation_notice": Kind(to_user=True, summary=False),
     "anonymisation_summary": Kind(to_user=False, summary=True),
     "deactivation_notice": Kind(to_user=True, summary=False),
@@ -74,16 +79,20 @@ def _day(value):
     return date_format(value, "DATE_FORMAT")
 
 
+def _when(days):
+    return ngettext("in %(days)d day", "in %(days)d days", days) % {"days": days}
+
+
 def _embargo_notice(ctx):
     return {
         "subject": _("Restriction ending on %(date)s") % {"date": _day(ctx["ends_on"])},
         "paragraphs": [
             _(
-                "The restriction that keeps the data below private ends on %(date)s, "
-                "%(days)s days from now. The day after, it is lifted automatically "
+                "The restriction that keeps the data below private ends on %(date)s "
+                "(%(when)s). The day after, it is lifted automatically "
                 "and the data become visible to everyone."
             )
-            % {"date": _day(ctx["ends_on"]), "days": ctx["days"]},
+            % {"date": _day(ctx["ends_on"]), "when": _when(ctx["days"])},
             _(
                 "If it must last longer, ask an administrator to extend it before "
                 "that date, by replying to the contact address below."
@@ -108,12 +117,12 @@ def _embargo_lifted(ctx):
 
 def _workflow_notice(ctx):
     return {
-        "subject": _("Unfinished workflow to be cleaned on %(date)s")
+        "subject": _("Unfinished workflow: cleaning scheduled on %(date)s")
         % {"date": _day(ctx["cleanup_on"])},
         "paragraphs": [
             _(
                 "The workflow « %(workflow)s » has not been used for a long time "
-                "and is not finished. On %(date)s, %(days)s days from now, it is "
+                "and is not finished. On %(date)s (%(when)s), it is "
                 "cleaned: its trace is deleted, and so are the records it created "
                 "and listed below, if they are still drafts, were not modified "
                 "elsewhere and are not linked to other records."
@@ -121,9 +130,12 @@ def _workflow_notice(ctx):
             % {
                 "workflow": ctx["workflow"],
                 "date": _day(ctx["cleanup_on"]),
-                "days": ctx["days"],
+                "when": _when(ctx["days"]),
             },
-            _("Open the workflow again before that date to keep it."),
+            _(
+                "To keep it, continue the workflow and save a step before that "
+                "date: opening it is not enough."
+            ),
         ],
         "items": ctx.get("resources", []),
     }
@@ -166,6 +178,30 @@ def _invitation(ctx):
     }
 
 
+def _two_factor_reset(ctx):
+    return {
+        "subject": _("Set up two-factor authentication again"),
+        "paragraphs": [
+            _(
+                "Your two-factor authentication was reset by an administrator. "
+                "Use the button below, type your password and scan the new QR "
+                "code with your authenticator application. You will then be "
+                "signed in."
+            ),
+            _("The link is personal, works once and until %(date)s.")
+            % {"date": _day(ctx["expires_on"])},
+        ],
+        "link": ctx["link"],
+        "button": _("Set up two-factor authentication"),
+    }
+
+
+REACTIVATE_FIRST = gettext_noop(
+    "The account is deactivated. To keep it, ask for its reactivation "
+    "through the contact page (button below) before that date."
+)
+
+
 def _anonymisation_notice(ctx):
     if ctx.get("review"):
         paragraphs = [
@@ -174,24 +210,34 @@ def _anonymisation_notice(ctx):
                 "administrators decide what happens to it."
             )
             % {"date": _day(ctx["on"])},
-            _("Sign in before that date to keep it as it is."),
         ]
+        if ctx.get("active", True):
+            paragraphs.append(_("Sign in before that date to keep it as it is."))
+        else:
+            paragraphs.append(_(REACTIVATE_FIRST))
     else:
         paragraphs = [
             _(
                 "You have not signed in to ManuSpectrum for a long time. On "
-                "%(date)s, %(days)s days from now, your account will be "
-                "anonymised: your name, e-mail address and password are erased "
-                "and the account is closed. Nothing you described is deleted."
+                "%(date)s (%(when)s), your account will be anonymised: your "
+                "name, e-mail address and password are erased and the account "
+                "is closed. Nothing you described is deleted."
             )
-            % {"date": _day(ctx["on"]), "days": ctx["days"]},
-            _("Sign in before that date to keep your account."),
+            % {"date": _day(ctx["on"]), "when": _when(ctx["days"])},
         ]
-    return {
+        if ctx.get("active", True):
+            paragraphs.append(_("Sign in before that date to keep your account."))
+        else:
+            paragraphs.append(_(REACTIVATE_FIRST))
+    content = {
         "subject": _("Your account will be anonymised on %(date)s")
         % {"date": _day(ctx["on"])},
         "paragraphs": paragraphs,
     }
+    if not ctx.get("active", True):
+        content["link"] = contact_url("reactivation")
+        content["button"] = _("Contact the team")
+    return content
 
 
 def contact_url(reason):
@@ -265,6 +311,7 @@ CONTENT = {
     "workflow_notice": _workflow_notice,
     "workflow_cleaned": _workflow_cleaned,
     "invitation": _invitation,
+    "two_factor_reset": _two_factor_reset,
     "anonymisation_notice": _anonymisation_notice,
     "deactivation_notice": _deactivation_notice,
     "anonymisation_summary": _anonymisation_summary,

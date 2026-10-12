@@ -1307,10 +1307,12 @@ Create the test accounts in the admin and delete them afterwards.
 
 ### 8.5 Embargo and workflow cleanup
 
-- [ ] Restrict a test resource, open its Embargo in the admin and date it; `make -C deploy manage ARGS="release_expired_embargoes"`
-  lists nothing to lift yet. Move the end date to yesterday in the admin (a rehearsal shortcut) and run
-  `release_expired_embargoes --apply`: the resource is public, the creator got the "now public" mail in Mailpit, the
-  history shows the lift, `manuspectrum_embargo_lifts_total{outcome="lifted"}` increased.
+- [ ] Restrict a test resource: within a day the pass (or `make -C deploy manage ARGS="release_expired_embargoes --apply"`)
+  gives it an Embargo dated 12 months out, with the events `detected` and `dated` in the admin. Shorten its "Ends on"
+  to tomorrow in the admin; `make -C deploy manage ARGS="release_expired_embargoes"` lists nothing to lift yet. Rehearse
+  the lift with `release_expired_embargoes --as-of <the day after tomorrow, YYYY-MM-DD> --apply` (an end date cannot be set in
+  the past): the resource is public, the creator got the "now public" mail in Mailpit, the history shows the lift,
+  `manuspectrum_embargo_lifts_total{outcome="lifted"}` increased.
 - [ ] `make -C deploy manage ARGS="prune_workflow_history"` (dry run) lists the idle runs and what it would delete and
   keep, and says "Dry run: nothing written or sent". Do not run `--apply` on the loaded snapshot.
 

@@ -34,16 +34,30 @@ because an administrator created it. People ask for one through the contact page
 - TOTP, with any authenticator application. Enrolment is self-service at
   `/<lang>/account/two-factor`.
 - Rollout order (`README.md`, "Upgrading"): deploy with `FORCE_TWO_FACTOR_AUTHENTICATION=false`
-  in `.env`, the administrators enrol, then set `true` and recreate `web`. From then on
-  a sign-in without a second factor is refused, so an account that has no secret cannot
-  enrol itself: every account, a newly invited one included, must enrol before the switch,
-  or the switch waits.
+  in `.env`, the administrators enrol, then set `true` and recreate `web`. With `true`, a
+  sign-in without a second factor is refused by Arches, and the project middleware keeps any
+  signed-in account that has no secret on `account/two-factor` (page navigations are
+  redirected there, every other request is refused with 403), so a newly invited person
+  enrols right after activating and nobody uses the site without a second factor. An
+  account that existed before the switch and never enrolled cannot sign in: reset it with
+  the action below, which mails it the enrolment link.
 - **Lost phone.** After checking the person's identity by another channel, a superuser
   opens the admin, User profiles, ticks the profile and chooses **Reset two-factor
-  authentication (superuser)** (it clears `UserProfile.encrypted_mfa_hash`; only superusers
-  can). The person enrols again at `account/two-factor`. If `FORCE_TWO_FACTOR_AUTHENTICATION`
-  is on and the person cannot sign in, switch it off for the time of the enrolment
-  (`.env`, recreate `web`) or enrol from a session of a superuser acting with the person.
+  authentication (superuser)** (only superusers can). The action clears the secret and mails
+  the person a personal link (`account/two-factor/reset/...`, valid 24 hours, single use):
+  they type their password, scan the new QR code, confirm one code and are signed in. A
+  wrong password counts as a failed sign-in (lockout). **Send the two-factor enrolment link
+  (superuser)** mails the link again to the selected profiles that hold no secret (lost
+  mail, expired link). An account without an address or inactive gets no mail: the action
+  says so.
+- **New `SECRET_KEY`.** Every stored secret becomes unreadable (`SECRETS.md`). In User
+  profiles, select all profiles with a secret and run **Reset two-factor authentication
+  (superuser)**: every person gets their link. Rotate when the working hours allow, since
+  those who do not follow their link stay locked out until they do (re-send it as needed).
+- An OAuth2 application with the password grant signs a user in at `o/token/` with a password
+  alone, whatever `FORCE_TWO_FACTOR_AUTHENTICATION` says. System check `manuspectrum.W004`
+  (run by `migrate`) warns when one exists; add "no OAuth2 application with the password
+  grant" to the production checklist.
 - Arches' own 2FA settings and reset routes are refused at the edge; enrolment and resets go
   through the project pages above, and no mail comes from Arches' routes.
 - The secrets are encrypted with `SECRET_KEY`: a new key makes everyone re-enrol
@@ -99,7 +113,8 @@ notice mailed 30 days before (`ACCOUNT_RETENTION_NOTICE_DAYS`). A sign-in after 
 cancels it. Anonymising never deletes: first and last name and e-mail are cleared, the user
 name becomes `former-user-<id>`, the password is unusable, the two-factor secret and phone
 are cleared, the account is deactivated, its sessions and sign-in records are removed, and in
-the edit history the e-mail is erased while the name stays as contribution credit.
+the edit history the e-mail is erased while the name stays as contribution credit; the admin history
+(`django_admin_log`) of the user object shows the new `former-user-<id>` name.
 Permissions, groups, accepted terms and Person resources stay. The `ms_account_retention`
 ledger keeps the user id and the dates, no personal data.
 
@@ -115,15 +130,22 @@ accounts anonymised in the month.
 ## Restrictions (embargoes)
 
 A restriction is an Arches permission; the **Embargo** record in the admin carries its end
-date and its history. Restrictions are temporary by construction: 12 months at most from the
-day the record was created (`EMBARGO_MAX_MONTHS`).
+date and its history. Restrictions are temporary by construction: 12 months at most (`EMBARGO_MAX_MONTHS`)
+unless an administrator records an exception (below).
 
-- **Date.** The daily pass (06:00 Europe/Paris) records new restrictions; open Embargoes in the
-  admin and set "Ends on" (the last day of the restriction). It is lifted the day after at 06:00.
+- **Date.** The daily pass (06:00 Europe/Paris) records every restriction it finds without an
+  Embargo row and dates it at the detection day plus 12 months (events `detected`, then
+  `dated` by nobody); open Embargoes in the admin and edit "Ends on" (the last day of the
+  restriction) to shorten it. It is lifted the day after at 06:00. A row restored or
+  migrated with the database keeps its dates; one already past its end is lifted at the
+  next pass with the usual mail. After moving data between hosts without the `ms_embargo`
+  table, the first pass therefore dates every restriction it finds at its own detection day
+  + 12 months: review the list and shorten what must end sooner.
   Notices go to the resource creator and the user who set the restriction at 30 and 7 days
   before and on the day it becomes public, with a summary to `ALERT_EMAILS`.
-- **No end date.** A restriction without an end date is never lifted automatically. The list
-  filter "Undated" shows them and the monthly report counts them.
+- **No end date.** An exception only a superuser can record (clear "Ends on"; it is logged as
+  `undated`). Such a restriction is never lifted automatically. The list filter "End date",
+  value "No end date", shows them and the monthly report counts them.
 - **Extend.** Administrators only, in the admin: edit "Ends on", or tick embargoes and choose
   "Extend the end date by 3, 6 or 12 months". Beyond the maximum duration only a superuser can
   set the date. Each change is recorded: who, when, from and to.
@@ -132,7 +154,8 @@ day the record was created (`EMBARGO_MAX_MONTHS`).
 - **Rehearsal / by hand.** `make -C deploy manage ARGS="release_expired_embargoes"` lists what
   the pass would do (dry run); `--apply` runs it as the beat task does.
 - Alerts: `EmbargoLiftFailures`, `EmbargoOverdue`, `EmbargoPassStale` (`runbooks/application.md`,
-  `runbooks/celery.md`).
+  `runbooks/celery.md`). `release_expired_embargoes --as-of YYYY-MM-DD` runs the pass as if it
+  were 06:00 Paris that day (rehearsal: an end date cannot be set in the past).
 
 ## Abandoned workflows
 

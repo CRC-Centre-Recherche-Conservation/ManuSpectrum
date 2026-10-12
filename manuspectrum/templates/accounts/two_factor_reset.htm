@@ -1,0 +1,50 @@
+{% extends "base.htm" %}
+{% load i18n %}
+
+{% block loading_mask %}
+{% endblock loading_mask %}
+
+{% block body %}
+<div id="container" class="cls-container arches-login">
+    <div class="cls-content arches-signin">
+        <div class="cls-content-sm panel login-panel">
+            <div class="panel-body two-factor-panel">
+                <h3 class="login-panel-header arches-signin">{% trans "Set up two-factor authentication again" %}</h3>
+                <hr>
+
+                {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
+                {% if pending_secret %}
+                    <p>{% blocktrans %}Scan the QR code with an authenticator application, then enter the code it shows to finish.{% endblocktrans %}</p>
+                    <img class="img-responsive center-block" src="{{ qr_data_uri }}" alt="{% trans 'QR code to scan with your authenticator application' %}" width="240" height="240">
+                    <p class="text-muted text-center">
+                        {% trans "Or enter this key by hand:" %}
+                        <code>{{ pending_secret }}</code>
+                    </p>
+                    <form method="post" class="form-group">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="confirm">
+                        <label for="code">{% trans "Code from your application" %}</label>
+                        <input id="code" name="code" class="form-control input-lg" type="text" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" required autofocus>
+                        <button type="submit" class="btn btn-success btn-block">{% trans "Confirm and sign in" %}</button>
+                    </form>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="cancel">
+                        <button type="submit" class="btn btn-link">{% trans "Cancel" %}</button>
+                    </form>
+                {% else %}
+                    <p>{% trans "Your two-factor authentication was reset. Type your password to set it up again." %}</p>
+                    <form method="post" class="form-group">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="password">
+                        <label for="password">{% trans "Password" %}</label>
+                        <input id="password" name="password" class="form-control input-lg" type="password" autocomplete="current-password" required autofocus>
+                        <button type="submit" class="btn btn-success btn-block">{% trans "Continue" %}</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock body %}

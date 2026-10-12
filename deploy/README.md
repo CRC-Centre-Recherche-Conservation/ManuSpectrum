@@ -155,8 +155,8 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `.env`: add `COMPOSE_PROFILES`, `ALERT_EMAILS`, `ALERT_EMAIL_FROM` and
   `DEFAULT_FROM_EMAIL` before pulling, then
   `make -C deploy volumes secrets up monitoring-init observability-on`.
-- Accounts (PP-4, `ADMIN.md`): the upgrade applies migrations `0009_embargo_and_workflow_cleanup`
-  and `0010_terms_acceptance` (`init` and `migrate` run them) and the django-axes tables.
+- Accounts (PP-4, `ADMIN.md`): the upgrade applies migrations `0009_embargo_and_workflow_cleanup`,
+  `0010_terms_acceptance` and `0011_account_retention` (`init` and `migrate` run them) and the django-axes tables.
   Sign-up is closed; accounts are created by an administrator and invited. Compulsory
   two-factor sign-in is `FORCE_TWO_FACTOR_AUTHENTICATION` in `.env` (default `false`, see
   `compose/.env.example`). **Outgoing mail must work first**: invitations and notices are

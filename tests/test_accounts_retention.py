@@ -118,6 +118,25 @@ class NoticeTests(RetentionCase):
         self.assertEqual(self.go(NOW + timedelta(days=5)).noticed, [])
         self.assertEqual(len(self.notices()), 1)
 
+    def test_a_deactivated_account_is_told_to_ask_for_reactivation_not_to_sign_in(
+        self,
+    ):
+        user = self.user(last_login=months_ago(24) + timedelta(days=30))
+        User.objects.filter(pk=user.pk).update(is_active=False)
+        self.assertEqual(self.go().noticed, [user.pk])
+        (message,) = self.notices()
+        self.assertNotIn("Sign in before", message.body)
+        self.assertNotIn("Connectez-vous avant", message.body)
+        self.assertIn("reactivation", message.body)
+        self.assertIn("reason=reactivation", message.body)
+
+    def test_an_active_account_is_told_to_sign_in(self):
+        self.user(last_login=months_ago(24) + timedelta(days=30))
+        self.go()
+        (message,) = self.notices()
+        self.assertIn("Sign in before that date to keep your account.", message.body)
+        self.assertNotIn("reason=reactivation", message.body)
+
     def test_nothing_is_sent_29_days_before(self):
         self.user(last_login=months_ago(24) + timedelta(days=31))
         self.assertEqual(self.go().noticed, [])
@@ -261,6 +280,35 @@ class AnonymiseTests(RetentionCase):
         self.assertEqual((mine.user_firstname, mine.user_lastname), ("First", "Last"))
         self.assertEqual(theirs.user_email, "bob@manuspectrum.test")
         self.assertEqual(theirs.user_username, "bob")
+
+    def test_the_admin_history_of_the_account_loses_its_name(self):
+        from django.contrib.admin.models import CHANGE, LogEntry
+        from django.contrib.contenttypes.models import ContentType
+
+        admin_user = User.objects.create_superuser(
+            "boss", "boss@manuspectrum.test", "x"
+        )
+        kind = ContentType.objects.get_for_model(User)
+        mine = LogEntry.objects.create(
+            user=admin_user,
+            content_type=kind,
+            object_id=str(self.user_.pk),
+            object_repr="alice",
+            action_flag=CHANGE,
+            change_message='[{"changed": {"fields": ["Email address"]}}]',
+        )
+        other = LogEntry.objects.create(
+            user=admin_user,
+            content_type=kind,
+            object_id=str(admin_user.pk),
+            object_repr="boss",
+            action_flag=CHANGE,
+        )
+        self.anonymise()
+        mine.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(mine.object_repr, f"former-user-{self.user_.pk}")
+        self.assertEqual(other.object_repr, "boss")
 
     def test_a_failure_rolls_the_account_back_and_is_counted(self):
         self.go()

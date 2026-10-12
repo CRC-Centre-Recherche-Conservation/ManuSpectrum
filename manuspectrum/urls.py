@@ -8,7 +8,7 @@ from arches.app.views.auth import PasswordResetView
 
 from manuspectrum.accounts.notices import AccountPasswordResetForm
 from manuspectrum.accounts.activation import AcceptTermsView, ActivateAccountView
-from manuspectrum.accounts.twofactor import TwoFactorSetupView
+from manuspectrum.accounts.twofactor import TwoFactorResetView, TwoFactorSetupView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.legal_pages import LegalPageView
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
@@ -186,10 +186,16 @@ for _slug, _name, _tpl in [
     )
 
 ### Two-factor enrolment of the signed-in user (Arches' own settings page is
-### refused at the edge); wrapped like every page.
-urlpatterns.append(
-    path("account/two-factor", TwoFactorSetupView.as_view(), name="account-two-factor")
-)
+### refused at the edge) and the personal re-enrolment link of a reset;
+### wrapped like every page.
+urlpatterns += [
+    path("account/two-factor", TwoFactorSetupView.as_view(), name="account-two-factor"),
+    path(
+        "account/two-factor/reset/<token>",
+        TwoFactorResetView.as_view(),
+        name="account-two-factor-reset",
+    ),
+]
 
 ### Account activation from the invitation link and (re)acceptance of the terms
 ### of use; wrapped like every page.

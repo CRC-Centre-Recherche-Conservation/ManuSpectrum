@@ -317,6 +317,13 @@ group_log() {
   get '/en/api/resource/x?q=1' >/dev/null
   get '/en/%72eset/tok-enc-1/' >/dev/null
   get '/en/reset%2Ftok-enc-2/' >/dev/null
+  get '/fr/account/two-factor/reset/tok-uri-1' >/dev/null
+  get '/query?r=1' -e 'https://elsewhere.example/en/account/activate/Mg/tok-ref-1' >/dev/null
+  get '/query?r=2' -e 'https://elsewhere.example/en/reset/Mg/tok-ref-2/?x=1' >/dev/null
+  get '/query?r=3' -e 'https://elsewhere.example/en/%72eset/Mg/tok-ref-3/' >/dev/null
+  get '/query?r=4' -e 'https://elsewhere.example/fr/account/two-factor/reset/tok-ref-4' >/dev/null
+  get '/query?r=5' -e 'https://elsewhere.example/en/%61ccount%2Factivate/Mg/tok-ref-5' >/dev/null
+  get '/query?r=6' -e 'https://elsewhere.example/en/account/two-factor?q=1' >/dev/null
   sleep 1
   local request_id seen
   seen="$(get '/rid?x=1')"
@@ -356,6 +363,18 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
 import json, sys
 text = open(sys.argv[1]).read()
 assert "tok-enc" not in text' "$LOGS/access.log"
+  check "a two-factor re-enrolment link is logged without its token" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["uri"] == "/fr/account/two-factor/reset/[redacted]" for r in rows)
+assert "tok-uri" not in open(sys.argv[1]).read()' "$LOGS/access.log"
+  check "a referer naming an activation, reset or re-enrolment link is redacted" python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+assert "tok-ref" not in text
+rows = [json.loads(l) for l in text.splitlines()]
+assert sum(r["referer"] == "[redacted]" for r in rows) == 5
+assert any(r["referer"] == "https://elsewhere.example/en/account/two-factor" for r in rows)' "$LOGS/access.log"
   check "error.log exists in the same directory" test -f "$LOGS/error.log"
 }
 

@@ -5,7 +5,7 @@ from arches.app.models.models import ResourceInstance
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import JSONField
 from django.utils.translation import gettext_lazy as _
 
@@ -41,9 +41,11 @@ class Embargo(models.Model):
     place for, the end date and the audit of its changes, and is edited by
     administrators in the Django admin.
 
-    ``ends_on`` empty means the restriction has no end and is never lifted
-    automatically. The end may not be later than ``EMBARGO_MAX_MONTHS`` after
-    the day the record was created, unless a superuser sets it.
+    A restriction detected by the daily pass is dated ``EMBARGO_MAX_MONTHS``
+    after its detection day. ``ends_on`` empty means the restriction has no end
+    and is never lifted automatically: an exception only a superuser records.
+    The end may not be later than ``EMBARGO_MAX_MONTHS`` after the day the
+    record was created, unless a superuser sets it.
     """
 
     ACTIVE = "active"
@@ -105,7 +107,7 @@ class Embargo(models.Model):
     def validate_end(self, ends_on, *, superuser=False, today=None):
         """Raise ``ValidationError`` unless *ends_on* is an acceptable end date.
 
-        Empty is accepted (no end). A date must be after *today*; beyond the
+        Empty is accepted (no end; the admin form leaves that to a superuser). A date must be after *today*; beyond the
         maximum duration only a superuser may set it.
         """
         if ends_on is None:
@@ -130,26 +132,34 @@ class Embargo(models.Model):
     def change_end(self, ends_on, by):
         """Set the end date, record who changed it, and restart the notices.
 
-        Saves the row and writes the ``EmbargoEvent`` in one call; does
-        nothing when the date is unchanged.
+        Saves the row and writes the ``EmbargoEvent`` in one transaction, under
+        a row lock so a lift cannot run in between; does nothing when the date
+        is unchanged. Raises ``ValidationError`` unless the embargo is active.
         """
-        old = self.ends_on
-        if ends_on == old:
-            return None
-        if old is None:
-            kind = EmbargoEvent.DATED
-        elif ends_on is None:
-            kind = EmbargoEvent.UNDATED
-        elif ends_on > old:
-            kind = EmbargoEvent.EXTENDED
-        else:
-            kind = EmbargoEvent.SHORTENED
-        self.ends_on = ends_on
-        self.notices_sent = []
-        self.save(update_fields=["ends_on", "notices_sent"])
-        return EmbargoEvent.objects.create(
-            embargo=self, kind=kind, by=by, from_date=old, to_date=ends_on
-        )
+        with transaction.atomic():
+            locked = Embargo.objects.select_for_update().get(pk=self.pk)
+            if locked.state != self.ACTIVE:
+                raise ValidationError(
+                    _("Only an active embargo can change its end date.")
+                )
+            old = locked.ends_on
+            if ends_on == old:
+                return None
+            if old is None:
+                kind = EmbargoEvent.DATED
+            elif ends_on is None:
+                kind = EmbargoEvent.UNDATED
+            elif ends_on > old:
+                kind = EmbargoEvent.EXTENDED
+            else:
+                kind = EmbargoEvent.SHORTENED
+            self.state = locked.state
+            self.ends_on = ends_on
+            self.notices_sent = []
+            self.save(update_fields=["ends_on", "notices_sent"])
+            return EmbargoEvent.objects.create(
+                embargo=self, kind=kind, by=by, from_date=old, to_date=ends_on
+            )
 
 
 class EmbargoEvent(models.Model):

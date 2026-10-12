@@ -32,13 +32,15 @@ from arches.app.models.models import EditLog, UserProfile
 from axes.models import AccessAttempt, AccessFailureLog, AccessLog
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.sessions.models import Session
 from django.db import transaction
 from django.utils import timezone
 
 from manuspectrum.accounts import notices
-from manuspectrum.accounts.embargo import LOCAL_TZ, local_today, single_pass
+from manuspectrum.accounts.embargo import LOCAL_TZ, aware, local_today, single_pass
 from manuspectrum.models import AccountRetention
 from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import ANONYMOUS_USERNAME
@@ -135,7 +137,7 @@ def run_pass(now=None, *, apply=True, send_mail=True):
 
     ``apply=False`` writes nothing, takes no lock and sends nothing.
     """
-    now = now or timezone.now()
+    now = aware(now)
     report = PassReport()
     if not apply:
         _run(now, report, apply=False, send_mail=False)
@@ -255,6 +257,10 @@ def anonymise(user_id, today=None):
         EditLog.objects.filter(provisional_userid=str(user.pk)).update(
             provisional_user_username=new_username
         )
+        LogEntry.objects.filter(
+            content_type=ContentType.objects.get_for_model(User),
+            object_id=str(user.pk),
+        ).update(object_repr=new_username)
         user.first_name = user.last_name = user.email = ""
         user.username = new_username
         user.set_unusable_password()
@@ -291,6 +297,7 @@ def _mail_notices(claimed):
                 "on": on,
                 "days": settings.ACCOUNT_RETENTION_NOTICE_DAYS,
                 "review": user.is_superuser,
+                "active": user.is_active,
             },
             allow_inactive=True,
         )

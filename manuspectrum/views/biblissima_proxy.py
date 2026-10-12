@@ -4454,6 +4454,7 @@ class BiblissimaCreateResourceView(View):
         if not tiles:
             return
 
+        default_transaction_id = default_transaction_id or uuid.uuid4()
         factory = DataTypeFactory()
         nodes_by_id = self._nodes_by_id(resource.get_serialized_graph())
 

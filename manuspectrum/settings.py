@@ -264,6 +264,7 @@ MIDDLEWARE = [
     "axes.middleware.AxesMiddleware",
     "manuspectrum.accounts.lockout.TwoFactorLoginMiddleware",
     "manuspectrum.accounts.activation.TermsAcceptanceMiddleware",
+    "manuspectrum.accounts.twofactor.RequireTwoFactorMiddleware",
     # "silk.middleware.SilkyMiddleware",
 ]
 

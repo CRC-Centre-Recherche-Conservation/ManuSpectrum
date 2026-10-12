@@ -61,7 +61,7 @@
         </tr>
         <tr>
             <th scope="row">{% trans "History of the data" %}</th>
-            <td>{% trans "Kept as long as the record exists." %}</td>
+            <td>{% trans "Kept with the platform's history. When an account is anonymised, the e-mail address is erased and the name stays as contribution credit." %}</td>
         </tr>
         <tr>
             <th scope="row">{% trans "Backups" %}</th>
@@ -106,11 +106,11 @@
 
 <h2>{% trans "Restricted records" %}</h2>
 <p>{% blocktrans trimmed count n=embargo_max_months with notices=embargo_notice_days_text %}
-    A restriction on a record is temporary by construction: {{ n }} month at most. It is lifted automatically the day
+    A restriction on a record is temporary by construction: {{ n }} month at most, unless an administrator records an exception. It is lifted automatically the day
     after its end date. The person who recorded it and the creator of the record are told {{ notices }} days before,
     and again when the record becomes public.
     {% plural %}
-    A restriction on a record is temporary by construction: {{ n }} months at most. It is lifted automatically the day
+    A restriction on a record is temporary by construction: {{ n }} months at most, unless an administrator records an exception. It is lifted automatically the day
     after its end date. The person who recorded it and the creator of the record are told {{ notices }} days before,
     and again when the record becomes public.
     {% endblocktrans %}</p>

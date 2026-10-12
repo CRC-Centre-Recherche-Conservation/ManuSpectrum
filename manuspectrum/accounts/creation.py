@@ -2,9 +2,11 @@
 
 One rule, used by the activity report (SQL), the embargo notices and the
 abandoned-workflow cleanup (ORM): a resource is created by an ``edit_log`` row
-``create`` (Arches writes one per ``Resource.save()``) or by a ``tile create``
-noted ``resource creation`` (the Biblissima bulk path writes no ``create``
-row). Its creator is the ``userid`` of its earliest such row.
+``create`` (Arches writes one per ``Resource.save()``, and the Biblissima write
+path writes its own) or by a ``tile create`` noted ``resource creation`` (what
+Arches writes next to a ``create``, and the only mark of Biblissima resources
+written before that path wrote a ``create`` row). Its creator is the ``userid``
+of its earliest such row.
 """
 
 import contextlib
@@ -14,6 +16,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import translation
+from django.utils.translation import get_language
 
 CREATION_NOTE = "resource creation"
 
@@ -89,10 +92,18 @@ def created_in_transaction(transaction_id):
     }
 
 
+def resource_label(resourceinstance):
+    """The resource's display name in the active language, else any language."""
+    descriptors = resourceinstance.descriptors or {}
+    for language in (get_language(), *descriptors):
+        name = (descriptors.get(language) or {}).get("name")
+        if name:
+            return name
+    return str(resourceinstance.pk)
+
+
 def resource_items(resources):
     """``[{"name", "url"}]`` for account mail: display name and absolute report link."""
-    from manuspectrum.admin import resource_label
-
     base = settings.PUBLIC_SERVER_ADDRESS.rstrip("/")
     items = []
     with translation.override(settings.LANGUAGE_CODE):

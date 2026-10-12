@@ -38,6 +38,14 @@ def link_path(user):
     )
 
 
+def placeholder_path(user):
+    return (
+        "/en/account/activate/"
+        + urlsafe_base64_encode(force_bytes(user.pk))
+        + "/set-password"
+    )
+
+
 def activate(client, path, **data):
     return client.post(path, data, HTTP_X_REAL_IP=IP, REMOTE_ADDR="10.0.0.1")
 
@@ -80,8 +88,9 @@ class InvitationTests(Base):
         )
         path = re.search(r"https?://[^\s]+/account/activate/[^\s]+", body).group(0)
         path = "/" + path.split("/", 3)[3]
-        response = self.client.get(path)
+        response = self.client.get(path, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="accept_terms"')
 
     def test_refused_for_a_usable_password_or_no_address(self):
         has_password = User.objects.create_user("p", "p@manuspectrum.test", PASSWORD)
@@ -100,7 +109,9 @@ class ActivationTests(Base):
     def setUp(self):
         super().setUp()
         self.user = invited()
-        self.path = link_path(self.user)
+        self.link = link_path(self.user)
+        self.path = placeholder_path(self.user)
+        self.client.get(self.link)
 
     def good(self, **overrides):
         data = {
@@ -123,8 +134,33 @@ class ActivationTests(Base):
 
     def test_an_expired_token_is_refused(self):
         with override_settings(PASSWORD_RESET_TIMEOUT=-1):
-            response = self.client.get(self.path)
+            response = Client().get(self.link)
+            expired = self.client.get(self.path)
         self.assertEqual(response.status_code, 410)
+        self.assertEqual(expired.status_code, 410)
+
+    def test_a_valid_link_moves_its_token_to_the_session_and_redirects(self):
+        client = Client()
+        response = client.get(self.link)
+        self.assertRedirects(response, self.path, fetch_redirect_response=False)
+        self.assertNotIn(self.link.rsplit("/", 1)[1], response["Location"])
+        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        page = client.get(self.path)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page["Referrer-Policy"], "no-referrer")
+        self.assertNotContains(page, self.link.rsplit("/", 1)[1])
+
+    def test_the_token_less_page_needs_the_session_token(self):
+        for client in (Client(), Client(raise_request_exception=False)):
+            response = client.get(self.path)
+            self.assertEqual(response.status_code, 410)
+            self.assertEqual(response["Referrer-Policy"], "no-referrer")
+            self.assertNotContains(response, "<form", status_code=410)
+            self.assertEqual(
+                activate(client, self.path, **self.good()).status_code, 410
+            )
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.has_usable_password())
 
     def test_the_terms_and_the_version_are_shown(self):
         response = self.client.get(self.path)
@@ -163,7 +199,8 @@ class ActivationTests(Base):
             ).exists()
         )
         self.assertEqual(self.client.session["_auth_user_id"], str(self.user.pk))
-        self.assertEqual(Client().get(self.path).status_code, 410)
+        self.assertEqual(Client().get(self.link).status_code, 410)
+        self.assertEqual(self.client.get(self.path).status_code, 410)
 
     def test_the_post_is_rate_limited(self):
         statuses = [

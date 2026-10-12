@@ -779,8 +779,6 @@ def account_mails(prom, start, end):
         for labels, v in rows
         if labels.get("outcome") == "failed" and round(v) > 0
     }
-    if not rows:
-        return [NO_DATA]
     lines = [f"courriels de compte envoyés : {count(sent)}"]
     if failed:
         detail = ", ".join(f"{kind} {count(v)}" for kind, v in sorted(failed.items()))

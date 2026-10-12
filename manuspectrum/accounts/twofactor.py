@@ -11,29 +11,59 @@ profile only once the user has typed one valid code from it; until then it
 waits, encrypted, in the session. An enrolled user must give a current code to
 replace or remove the secret. Removing is refused when
 `FORCE_TWO_FACTOR_AUTHENTICATION` is on.
+
+With `FORCE_TWO_FACTOR_AUTHENTICATION` on, `RequireTwoFactorMiddleware` keeps a
+signed-in user without a secret on the enrolment page. A user whose secret was
+cleared by an administrator (lost device, new `SECRET_KEY`) cannot sign in to
+get there, so the reset mails a personal link (`TwoFactorResetView`): a signed
+token bound to the password hash and to the empty secret, so it dies with the
+first enrolment or any password change. The token moves to the session and the
+browser is redirected to the same route with the placeholder `enrol`, as in
+`ActivateAccountView`. The user types the password (counted by django-axes like
+a sign-in), enrols with a valid code and is signed in.
 """
 
 import base64
+import hmac
 import io
 import logging
+from datetime import timedelta
 
 import pyotp
 import qrcode
 from arches.app.models.models import UserProfile
 from arches.app.utils.arches_crypto import AESCipher
 from django.conf import settings
+from django.contrib.auth import authenticate, get_user_model, login
 from django.contrib.auth.views import redirect_to_login
-from django.http import Http404
+from django.core import signing
+from django.http import Http404, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone, translation
+from django.utils.crypto import salted_hmac
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
 
+from manuspectrum.accounts import notices
+from manuspectrum.accounts.activation import (
+    LOGIN_BACKEND,
+    is_real_user,
+)
+
 logger = logging.getLogger(__name__)
 
 PENDING_KEY = "ms_pending_mfa_secret"
+
+RESET_SALT = "manuspectrum.two-factor-reset"
+RESET_MAX_AGE = 24 * 3600
+RESET_PLACEHOLDER = "enrol"
+RESET_TOKEN_KEY = "_ms_two_factor_reset_token"
+RESET_VERIFIED_KEY = "_ms_two_factor_reset_verified"
+RESET_PENDING_KEY = "ms_reset_pending_mfa_secret"
 
 
 def encrypt_secret(secret):
@@ -173,3 +203,233 @@ class TwoFactorSetupView(View):
             "done": done,
         }
         return render(request, "accounts/two_factor.htm", context, status=status)
+
+
+def _reset_state(user, stored_secret):
+    return salted_hmac(
+        RESET_SALT, f"{user.pk}|{user.password}|{stored_secret or ''}"
+    ).hexdigest()
+
+
+def reset_token(user):
+    """A signed enrolment token for *user*, valid while the password and the empty secret stay."""
+    profile = UserProfile.objects.filter(user=user).first()
+    return signing.dumps(
+        {
+            "u": user.pk,
+            "s": _reset_state(user, profile.encrypted_mfa_hash if profile else None),
+        },
+        salt=RESET_SALT,
+    )
+
+
+def user_for_reset(token):
+    """The account a re-enrolment token is for, or None when it is not valid."""
+    try:
+        data = signing.loads(token, salt=RESET_SALT, max_age=RESET_MAX_AGE)
+        user = (
+            get_user_model()
+            .objects.filter(pk=data["u"], is_active=True)
+            .exclude(username="anonymous")
+            .first()
+        )
+    except (signing.BadSignature, KeyError, TypeError, ValueError):
+        return None
+    if user is None:
+        return None
+    profile = UserProfile.objects.filter(user=user).first()
+    stored = profile.encrypted_mfa_hash if profile else None
+    if stored or not hmac.compare_digest(data.get("s", ""), _reset_state(user, stored)):
+        return None
+    return user
+
+
+def reset_link(user):
+    """The absolute, personal re-enrolment URL of *user* (never logged)."""
+    with translation.override(settings.LANGUAGE_CODE):
+        path = reverse("account-two-factor-reset", kwargs={"token": reset_token(user)})
+    return settings.PUBLIC_SERVER_ADDRESS.rstrip("/") + path
+
+
+def send_reset_link(user):
+    """Mail *user* the re-enrolment link; returns the mail outcome."""
+    expires_on = (timezone.now() + timedelta(seconds=RESET_MAX_AGE)).date()
+    return notices.send_account_mail(
+        user,
+        "two_factor_reset",
+        {"link": reset_link(user), "expires_on": expires_on},
+    )
+
+
+@method_decorator(never_cache, name="dispatch")
+class TwoFactorResetView(View):
+    """Password, then a new authenticator, behind the personal link of a reset."""
+
+    def dispatch(self, request, *args, **kwargs):
+        response = self._dispatch(request, *args, **kwargs)
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+    def _dispatch(self, request, *args, **kwargs):
+        if not settings.ENABLE_TWO_FACTOR_AUTHENTICATION:
+            raise Http404
+        token = kwargs["token"]
+        if token == RESET_PLACEHOLDER:
+            token = request.session.get(RESET_TOKEN_KEY, "")
+        elif user_for_reset(token) is not None:
+            request.session[RESET_TOKEN_KEY] = token
+            return redirect("account-two-factor-reset", token=RESET_PLACEHOLDER)
+        self.account = user_for_reset(token) if token else None
+        if self.account is None:
+            return render(request, "accounts/two_factor_reset_invalid.htm", status=410)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, token):
+        return self.render(request)
+
+    @method_decorator(
+        ratelimit(key="ip", rate=settings.RATE_LIMIT, method="POST", block=False)
+    )
+    def post(self, request, token):
+        if getattr(request, "limited", False):
+            return self.render(
+                request, error=_("Too many attempts. Wait a minute."), status=429
+            )
+        action = request.POST.get("action")
+        if action == "password":
+            return self.check_password(request)
+        if action == "confirm":
+            return self.confirm(request)
+        if action == "cancel":
+            self.forget(request)
+        return redirect(request.path)
+
+    def verified(self, request):
+        return request.session.get(RESET_VERIFIED_KEY) == self.account.pk
+
+    def forget(self, request):
+        for key in (RESET_VERIFIED_KEY, RESET_PENDING_KEY):
+            request.session.pop(key, None)
+
+    def check_password(self, request):
+        user = authenticate(
+            request=request,
+            username=self.account.get_username(),
+            password=request.POST.get("password") or "",
+        )
+        if user is None or user.pk != self.account.pk:
+            return self.render(
+                request, error=_("The password is not valid."), status=400
+            )
+        request.session[RESET_VERIFIED_KEY] = user.pk
+        request.session[RESET_PENDING_KEY] = encrypt_secret(pyotp.random_base32())
+        return self.render(request)
+
+    def confirm(self, request):
+        secret = decrypt_secret(request.session.get(RESET_PENDING_KEY))
+        if not self.verified(request) or not secret:
+            return redirect(request.path)
+        if not code_matches(secret, request.POST.get("code")):
+            return self.render(
+                request,
+                error=_("The code is not valid. Check the code and try again."),
+                status=400,
+            )
+        profile, _created = UserProfile.objects.get_or_create(user=self.account)
+        profile.encrypted_mfa_hash = encrypt_secret(secret)
+        profile.save(update_fields=["encrypted_mfa_hash"])
+        self.forget(request)
+        request.session.pop(RESET_TOKEN_KEY, None)
+        self.account.backend = LOGIN_BACKEND
+        login(request, self.account)
+        logger.info("Two-factor authenticator re-enrolled for user %s", self.account.pk)
+        return redirect("account-two-factor")
+
+    def render(self, request, error=None, status=200):
+        pending = (
+            decrypt_secret(request.session.get(RESET_PENDING_KEY))
+            if self.verified(request)
+            else None
+        )
+        context = {
+            "pending_secret": pending,
+            "qr_data_uri": (
+                qr_data_uri(pending, self.account.email or self.account.username)
+                if pending
+                else None
+            ),
+            "error": error,
+        }
+        return render(request, "accounts/two_factor_reset.htm", context, status=status)
+
+
+class RequireTwoFactorMiddleware:
+    """Keep a signed-in user without an authenticator on the enrolment page.
+
+    Active only when `FORCE_TWO_FACTOR_AUTHENTICATION` is on. Placed after
+    authentication. A signed-in user (the `anonymous` visitor excepted) whose
+    profile holds no secret is redirected to `account/two-factor` on a page
+    navigation (a GET asking for HTML, not an XHR) and gets a 403 on any other
+    request. Never touched: static and media files, the monitoring endpoints and
+    the routes in `EXEMPT_ROUTES` (enrolment and its re-enrolment link, the
+    terms, sign-in and sign-out, password reset, activation). The secret is read
+    from the database on every request of such a user, so a reset by an
+    administrator applies to the sessions that are open.
+    """
+
+    EXEMPT_ROUTES = frozenset(
+        {
+            "account-two-factor",
+            "account-two-factor-reset",
+            "account-terms",
+            "account-activate",
+            "auth",
+            "two-factor-authentication-login",
+            "password_reset",
+            "password_reset_confirm",
+            "admin:logout",
+        }
+    )
+    EXEMPT_PREFIXES = ("/healthz", "/readyz", "/metrics")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        if not settings.FORCE_TWO_FACTOR_AUTHENTICATION:
+            return None
+        if not is_real_user(request.user) or self.exempt(request):
+            return None
+        if (
+            UserProfile.objects.filter(user_id=request.user.pk)
+            .exclude(encrypted_mfa_hash__isnull=True)
+            .exclude(encrypted_mfa_hash="")
+            .exists()
+        ):
+            return None
+        if self.is_navigation(request):
+            return HttpResponseRedirect(reverse("account-two-factor"))
+        return HttpResponseForbidden("Two-factor authentication is required.")
+
+    def exempt(self, request):
+        match = request.resolver_match
+        if match is not None and match.view_name in self.EXEMPT_ROUTES:
+            return True
+        path = request.path
+        if path.startswith(self.EXEMPT_PREFIXES):
+            return True
+        return any(
+            base and path.startswith(base)
+            for base in (settings.STATIC_URL, settings.MEDIA_URL)
+        )
+
+    def is_navigation(self, request):
+        return (
+            request.method == "GET"
+            and request.headers.get("x-requested-with") != "XMLHttpRequest"
+            and "text/html" in request.headers.get("accept", "")
+            and "/api/" not in request.path
+        )
