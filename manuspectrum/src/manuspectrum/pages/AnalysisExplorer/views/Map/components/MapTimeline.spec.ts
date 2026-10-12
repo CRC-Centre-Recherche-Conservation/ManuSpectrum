@@ -20,6 +20,7 @@ function lapis() {
         name: label("Lapis lazuli"),
         reliability: null,
         characterization: uuid(300),
+        matches: true,
     };
 }
 

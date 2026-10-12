@@ -31,6 +31,7 @@ function material(id: string): EventMaterial {
         name: label(id),
         reliability: null,
         characterization: uuid(500),
+        matches: true,
     };
 }
 

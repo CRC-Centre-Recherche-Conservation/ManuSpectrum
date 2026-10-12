@@ -297,6 +297,14 @@ class MaterialOwnColourTests(EventsCase):
         self.assertIn(LEAD_WHITE, {m["id"] for m in event["materials"]})
         self.assertEqual(bundle.event_materials[LEAD_WHITE]["colours"], [])
 
+    def test_a_ticked_colour_no_material_carries_is_named_in_the_colours(self):
+        payload = self.client.get(
+            f"/en/api/explorer/events?colour={PART_BLUE},http://vocab/unknown"
+        ).json()
+        self.assertEqual(payload["colours"][PART_BLUE]["label"]["value"], "Blue")
+        self.assertEqual(payload["colours"][PART_BLUE]["uri"], PART_BLUE)
+        self.assertNotIn("http://vocab/unknown", payload["colours"])
+
 
 class CharacterizationFilterTests(EventsCase):
     @classmethod
@@ -318,20 +326,52 @@ class CharacterizationFilterTests(EventsCase):
             e for e in events if e["carrier"]["id"] == str(self.components["open"].pk)
         ]
 
-    def test_a_kept_material_event_lists_only_the_materials_that_meet_the_filter(self):
+    def test_ticking_a_material_keeps_the_materials_found_beside_it(self):
         self.assertEqual(
             {m["id"] for m in self.kept("")[0]["materials"]}, {LEAD_WHITE, OCHRE}
         )
-        [event] = self.kept(f"colour={RED}")
-        self.assertEqual({m["id"] for m in event["materials"]}, {LEAD_WHITE})
-
-    def test_ticking_a_material_keeps_the_materials_found_beside_it(self):
         [event] = self.kept(f"material={OCHRE}")
         self.assertEqual({m["id"] for m in event["materials"]}, {LEAD_WHITE, OCHRE})
 
-    def test_a_colour_still_narrows_the_listed_materials_under_a_ticked_material(self):
-        [event] = self.kept(f"material={OCHRE}&colour={GREEN}")
-        self.assertEqual({m["id"] for m in event["materials"]}, {OCHRE})
+    def test_ticking_a_colour_keeps_the_materials_found_beside_it(self):
+        for query in (f"colour={RED}", f"material={OCHRE}&colour={GREEN}"):
+            with self.subTest(query=query):
+                [event] = self.kept(query)
+                self.assertEqual(
+                    {m["id"] for m in event["materials"]}, {LEAD_WHITE, OCHRE}
+                )
+
+    def test_a_colour_no_material_of_the_event_meets_drops_the_event(self):
+        self.assertEqual(self.kept(f"material={OCHRE}&colour={RED}"), [])
+
+    def matches(self, query):
+        [event] = self.kept(query)
+        return {m["id"]: m["matches"] for m in event["materials"]}
+
+    def test_each_listed_material_says_whether_it_meets_every_filter(self):
+        self.assertEqual(self.matches(""), {LEAD_WHITE: True, OCHRE: True})
+        self.assertEqual(
+            self.matches(f"colour={RED}"), {LEAD_WHITE: True, OCHRE: False}
+        )
+        self.assertEqual(
+            self.matches(f"material={OCHRE}&colour={GREEN}"),
+            {LEAD_WHITE: False, OCHRE: True},
+        )
+
+    def test_the_exports_keep_only_the_materials_that_meet_the_filters(self):
+        import csv
+        import json
+
+        query = f"lang=en&colour={RED}"
+        response = self.client.get(f"/api/explorer/events.csv?{query}")
+        lines = b"".join(response.streaming_content).decode().splitlines()
+        rows = list(csv.DictReader(l for l in lines if not l.startswith("#")))
+        self.assertEqual({r["material"] for r in rows}, {LEAD_WHITE})
+        response = self.client.get(f"/api/explorer/events.geojson?{query}")
+        body = json.loads(b"".join(response.streaming_content))
+        materials = [m for f in body["features"] for m in f["properties"]["materials"]]
+        self.assertEqual({m["id"] for m in materials}, {LEAD_WHITE})
+        self.assertFalse(any("matches" in m for m in materials))
 
 
 class OwnPlaceTests(EventsCase):

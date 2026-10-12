@@ -22,6 +22,7 @@ function material(id: string): EventMaterial {
         name: label(id),
         reliability: null,
         characterization: uuid(500),
+        matches: true,
     };
 }
 
@@ -101,6 +102,24 @@ describe("colour tree", () => {
         );
         expect(tree.map((g) => g.colour)).toEqual(["red"]);
         expect(tree[0].rows.map((r) => r.uri)).toEqual(["minium"]);
+    });
+
+    it("keeps a group without rows for each ticked colour it names", () => {
+        const tree = colourTree(
+            events,
+            materials,
+            colours,
+            new Set(["minium"]),
+            ["blue", "green"],
+        );
+        expect(tree.map((g) => g.colour)).toEqual(["red", "blue"]);
+        expect(tree[1]).toMatchObject({
+            label: label("Blue"),
+            swatch: "#00c",
+            rows: [],
+            documents: 0,
+            components: 0,
+        });
     });
 
     it("orders groups by components then label, rows by components then label", () => {

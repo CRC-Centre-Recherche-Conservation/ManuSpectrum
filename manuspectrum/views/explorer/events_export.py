@@ -76,7 +76,19 @@ def _resolve(request):
     with translation.override(language):
         bundle = corpus_bundle(reader, language, explorer_memo.ticket(reader, language))
         events, _keep, _filters = kept_events(bundle, request.GET)
-    return language, bundle, events
+    return language, bundle, [_matching(event) for event in events]
+
+
+def _matching(event):
+    """*event* with only its materials that meet the filters, without their ``matches`` flag."""
+    return {
+        **event,
+        "materials": [
+            {key: value for key, value in m.items() if key != "matches"}
+            for m in event["materials"]
+            if m["matches"]
+        ],
+    }
 
 
 def _citation(bundle, events, language, query_text):

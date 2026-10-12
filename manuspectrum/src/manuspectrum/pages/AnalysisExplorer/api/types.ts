@@ -231,6 +231,8 @@ export interface EventMaterial {
     name: Label;
     reliability: string | null;
     characterization: string;
+    /** Meets every active characterization filter; true for all without one. */
+    matches: boolean;
 }
 
 export interface MapEvent {
@@ -277,6 +279,7 @@ export interface EventsResponse {
     unplaced: number;
     period: RangeFacet | null;
     materials: Record<string, MapMaterial>;
+    /** The colours of `materials` and every ticked `colour` filter value, by uri. */
     colours: Record<string, MapColour>;
     analysisNames: Record<string, Label>;
     /** The technique mark of each cited analysis that names a technique. */
@@ -739,6 +742,7 @@ export const SHAPE_KEYS = {
         name: true,
         reliability: true,
         characterization: true,
+        matches: true,
     } satisfies Record<keyof EventMaterial, true>,
     MapPlace: {
         id: true,

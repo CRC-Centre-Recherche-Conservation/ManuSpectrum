@@ -88,6 +88,7 @@ function response(): EventsResponse {
                         name: label("Lapis lazuli"),
                         reliability: null,
                         characterization: uuid(200),
+                        matches: true,
                     },
                 ],
             }),
@@ -210,6 +211,83 @@ describe("MapView", () => {
         const bar = wrapper.get(".active-filters").text();
         expect(bar).toContain("Lapis lazuli");
         expect(bar).not.toContain(LAPIS);
+    });
+
+    it("ticks a colour head into the Corpus colour filter and names its chip", async () => {
+        const blue = "http://colour.test/blue";
+        const coloured = response();
+        coloured.materials[LAPIS].colours = [blue];
+        coloured.colours = {
+            [blue]: { uri: blue, label: label("Blue"), swatch: "#2244aa" },
+        };
+        fetchMock.mockImplementation(async (url: string) =>
+            url.includes("explorer-events")
+                ? jsonResponse(coloured)
+                : jsonResponse({ values: [], total: 0 }),
+        );
+        const labels = ref(new Map<string, Label>());
+        wrapper = mount(Shell, {
+            attachTo: document.body,
+            global: {
+                plugins: [pinia, PrimeVue],
+                provide: {
+                    [ANNOUNCE_KEY as symbol]: announce,
+                    [FACET_LABELS_KEY as symbol]: labels,
+                },
+            },
+        });
+        await flushPromises();
+        await flushPromises();
+        const head = wrapper.get(".colour-group .head input[type=checkbox]");
+        expect(head.attributes("aria-label")).toBe("Filter: colour Blue");
+        await head.setValue(true);
+        expect(useExplorerStore().filters.colour).toEqual([blue]);
+        await flushPromises();
+        expect(wrapper.get(".active-filters").text()).toContain("Colour: Blue");
+    });
+
+    it("leaves the Corpus filters to the active-filter chips, with no rail note", async () => {
+        const view = await mountView();
+        expect(view.find(".rail-note").exists()).toBe(false);
+        expect(view.text()).not.toContain("the Corpus filters");
+    });
+
+    it("lists a material that does not meet the filters in the rail only, without a pip or a panel line", async () => {
+        const azurite = "http://material.test/azurite";
+        const filtered = response();
+        filtered.events[0].materials.push({
+            id: azurite,
+            name: label("Azurite"),
+            reliability: null,
+            characterization: uuid(201),
+            matches: false,
+        });
+        filtered.materials[azurite] = {
+            uri: azurite,
+            label: label("Azurite"),
+            colours: [],
+            swatch: null,
+        };
+        fetchMock.mockImplementation(async (url: string) =>
+            url.includes("explorer-events")
+                ? jsonResponse(filtered)
+                : jsonResponse({ values: [], total: 0 }),
+        );
+        useExplorerStore().setMapState({ track: [azurite] });
+        const view = await mountView();
+        expect(view.get(".materials-control").text()).toContain("Azurite");
+        const map = FakeMap.last();
+        expect(
+            map.featureStates.some(
+                ([target, state]) => target.id === PARIS && state.t1 !== 0,
+            ),
+        ).toBe(false);
+        await view.get(`.place-list [data-place='${PARIS}']`).trigger("click");
+        await flushPromises();
+        const panel = view.get(".map-panel").text();
+        expect(panel).toContain("Lapis lazuli");
+        expect(panel).toContain("Azurite not attested");
+        expect(panel).not.toContain("Azurite1 doc");
     });
 
     it("asks the events of the filters", async () => {

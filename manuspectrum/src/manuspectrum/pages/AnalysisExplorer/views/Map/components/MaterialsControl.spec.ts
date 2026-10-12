@@ -79,6 +79,7 @@ function events(): MapEvent[] {
                     name: label(NAMES[index]),
                     reliability: null,
                     characterization: uuid(200 + index),
+                    matches: true,
                 },
             ],
         }),
@@ -134,13 +135,76 @@ describe("MaterialsControl", () => {
     });
 
     it("heads a group with its whole colour name, the counts after it in the same wrapping line", () => {
-        const head = mountControl().get(".colour-group h4");
+        const head = mountControl().get(".colour-group h4 .head");
         const text = head.get(".head-text");
         expect(
             [...text.element.children].map((child) => child.className),
         ).toEqual(["name", "counts"]);
         expect(text.get(".name").attributes("title")).toBeUndefined();
-        expect(head.element.firstElementChild?.classList).toContain("swatch");
+        expect(
+            [...head.element.children].map((child) => child.classList[0]),
+        ).toEqual([undefined, "swatch", "head-text"]);
+        expect(head.element.firstElementChild?.tagName).toBe("INPUT");
+    });
+
+    it("ticks a colour head into the Corpus colour filter and unticks it", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountControl();
+        const head = () => wrapper.findAll(".colour-group .head")[1];
+        const box = head().get("input[type=checkbox]");
+        expect(head().element.tagName).toBe("LABEL");
+        expect(box.attributes("aria-label")).toBe("Filter: colour Red");
+        await box.setValue(true);
+        expect(store.filters.colour).toEqual([RED]);
+        expect(store.filters.material).toEqual([]);
+        expect(head().classes()).toContain("ticked");
+        await head().get("input[type=checkbox]").setValue(false);
+        expect(store.filters.colour).toEqual([]);
+        expect(head().classes()).not.toContain("ticked");
+    });
+
+    it("shows a colour ticked in the Corpus as a ticked head", async () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", [BLUE]);
+        const wrapper = mountControl();
+        const [blue, red] = wrapper.findAll(".colour-group .head");
+        expect((blue.get("input").element as HTMLInputElement).checked).toBe(
+            true,
+        );
+        expect(blue.classes()).toContain("ticked");
+        expect((red.get("input").element as HTMLInputElement).checked).toBe(
+            false,
+        );
+        store.setFacet("colour", []);
+        await flushPromises();
+        expect((blue.get("input").element as HTMLInputElement).checked).toBe(
+            false,
+        );
+    });
+
+    it("keeps the head of a ticked colour no row falls under, without counts", async () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", [GREEN]);
+        const wrapper = mountControl();
+        const green = wrapper
+            .findAll(".colour-group")
+            .find((group) => group.get(".name").text() === "Green");
+        expect(green).toBeDefined();
+        expect(green?.findAll("li.row")).toHaveLength(0);
+        expect(green?.find(".counts").exists()).toBe(false);
+        await green?.get(".head input").setValue(false);
+        expect(store.filters.colour).toEqual([]);
+        expect(
+            wrapper.findAll(".colour-group .name").map((name) => name.text()),
+        ).not.toContain("Green");
+    });
+
+    it("gives the group without a recorded colour no checkbox", () => {
+        const heads = mountControl().findAll(".colour-group .head");
+        const none = heads[heads.length - 1];
+        expect(none.get(".name").text()).toBe("No colour recorded");
+        expect(none.element.tagName).toBe("SPAN");
+        expect(none.find("input").exists()).toBe(false);
     });
 
     it("ticks a material into the material filter and unticks it", async () => {
@@ -284,6 +348,7 @@ describe("MaterialsControl", () => {
                         name: entry.label,
                         reliability: null,
                         characterization: uuid(500 + n),
+                        matches: true,
                     },
                 ],
             }),
@@ -367,7 +432,7 @@ describe("MaterialsControl", () => {
     it("says how the materials are grouped, with no separate counts legend", () => {
         const wrapper = mountControl();
         expect(wrapper.get(".grouping-hint").text()).toBe(
-            "Grouped by the colour most often observed on each material.",
+            "Grouped by the colour most often observed on each material; tick a colour to filter by it.",
         );
         expect(wrapper.get(".columns").element.nextElementSibling).toBe(
             wrapper.get(".grouping-hint").element,

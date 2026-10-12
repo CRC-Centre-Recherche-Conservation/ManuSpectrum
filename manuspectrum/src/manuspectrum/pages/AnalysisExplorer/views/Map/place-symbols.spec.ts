@@ -23,7 +23,13 @@ import type { EventMaterial } from "@/manuspectrum/pages/AnalysisExplorer/api/ty
 const LOW = new Set(["low"]);
 
 function material(id: string, reliability: string | null): EventMaterial {
-    return { id, name: label(id), reliability, characterization: uuid(500) };
+    return {
+        id,
+        name: label(id),
+        reliability,
+        characterization: uuid(500),
+        matches: true,
+    };
 }
 
 const places = {

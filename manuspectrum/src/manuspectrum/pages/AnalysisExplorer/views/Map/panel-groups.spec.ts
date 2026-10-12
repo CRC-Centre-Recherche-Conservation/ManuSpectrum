@@ -87,6 +87,7 @@ describe("panel groups", () => {
             name: label("m"),
             reliability: null,
             characterization: uuid(500),
+            matches: true,
         };
         const events = [
             mapEvent({ id: "paris" }),
@@ -122,6 +123,7 @@ describe("panel groups", () => {
             name: label("m"),
             reliability: null,
             characterization: uuid(500),
+            matches: true,
         };
         const tracked = [
             { uri: "m", slot: 1 },

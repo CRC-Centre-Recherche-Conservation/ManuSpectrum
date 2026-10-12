@@ -55,6 +55,9 @@ const ROWS_SHOWN = 5;
  * The followed materials are chips above the groups, with « any / all »
  * from two on. A fifth Follow changes nothing, is announced, and leaves a
  * notice until the next Follow.
+ * A colour group's head is a checkbox of the Corpus `colour` filter, the
+ * colour's uri as the Corpus colour facet stores it; a ticked colour keeps
+ * its head when no row falls under it.
  * The search asks the material facet (synonyms included) and keeps the rows
  * it answers. Each colour group shows its ticked and followed rows, then
  * others up to five, and « Show more » for the rest; a search shows every
@@ -106,14 +109,20 @@ const searching = computed(
     () => query.value.trim() !== "" && search.status.value === "loading",
 );
 const groups = computed<ColourGroup[]>(() =>
-    colourTree(props.events, props.materials, props.colours, only.value),
+    colourTree(
+        props.events,
+        props.materials,
+        props.colours,
+        only.value,
+        store.filters.colour,
+    ),
 );
 const noMatch = computed(
     () =>
         query.value.trim() !== "" &&
         !searching.value &&
         only.value !== undefined &&
-        groups.value.length === 0,
+        groups.value.every((group) => group.rows.length === 0),
 );
 const counts = computed(() => materialCounts(props.events));
 const tracked = computed(() => trackedOf(store.mapState.track));
@@ -237,6 +246,18 @@ function isTicked(uri: string): boolean {
     return store.filters.material.includes(uri);
 }
 
+function isColourTicked(group: ColourGroup): boolean {
+    return group.colour !== null && store.filters.colour.includes(group.colour);
+}
+
+function colourFilterName(group: ColourGroup): string {
+    return interpolate(
+        $gettext("Filter: colour %{colour}"),
+        { colour: groupLabel(group) },
+        true,
+    );
+}
+
 function slot(uri: string): number | null {
     return slotOf(store.mapState.track, uri);
 }
@@ -290,6 +311,12 @@ function onTick(uri: string, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     const others = store.filters.material.filter((entry) => entry !== uri);
     store.setFacet("material", checked ? [...others, uri] : others);
+}
+
+function onColourTick(colour: string, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const others = store.filters.colour.filter((entry) => entry !== colour);
+    store.setFacet("colour", checked ? [...others, colour] : others);
 }
 
 function onFollow(uri: string): void {
@@ -459,7 +486,7 @@ function onSearch(text: string | undefined): void {
         >
             <span>{{
                 $gettext(
-                    "Grouped by the colour most often observed on each material.",
+                    "Grouped by the colour most often observed on each material; tick a colour to filter by it.",
                 )
             }}</span>
         </p>
@@ -475,28 +502,48 @@ function onSearch(text: string | undefined): void {
                 class="colour-group"
             >
                 <h4>
-                    <span
-                        class="swatch"
-                        :class="{ unknown: !group.swatch }"
-                        aria-hidden="true"
-                        :style="swatchStyle(group.swatch)"
-                    ></span>
-                    <span class="head-text">
+                    <component
+                        :is="group.colour === null ? 'span' : 'label'"
+                        class="head"
+                        :class="{ ticked: isColourTicked(group) }"
+                    >
+                        <input
+                            v-if="group.colour !== null"
+                            type="checkbox"
+                            :checked="isColourTicked(group)"
+                            :aria-label="colourFilterName(group)"
+                            @change="onColourTick(group.colour, $event)"
+                        />
                         <span
-                            class="name"
-                            :lang="group.label?.lang || undefined"
-                            >{{ groupLabel(group) }}</span
-                        >
-                        <span
-                            class="counts"
-                            :title="
-                                countsName(group.documents, group.components)
-                            "
-                            >{{
-                                countsText(group.documents, group.components)
-                            }}</span
-                        >
-                    </span>
+                            class="swatch"
+                            :class="{ unknown: !group.swatch }"
+                            aria-hidden="true"
+                            :style="swatchStyle(group.swatch)"
+                        ></span>
+                        <span class="head-text">
+                            <span
+                                class="name"
+                                :lang="group.label?.lang || undefined"
+                                >{{ groupLabel(group) }}</span
+                            >
+                            <span
+                                v-if="group.rows.length > 0"
+                                class="counts"
+                                :title="
+                                    countsName(
+                                        group.documents,
+                                        group.components,
+                                    )
+                                "
+                                >{{
+                                    countsText(
+                                        group.documents,
+                                        group.components,
+                                    )
+                                }}</span
+                            >
+                        </span>
+                    </component>
                 </h4>
                 <ul class="rows">
                     <li
@@ -796,16 +843,31 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .colour-group h4 {
+    margin: 0;
+    font-weight: 400;
+}
+
+/* tick | swatch | name, counts; the uncoloured group has no tick. */
+.materials-control .colour-group .head {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     column-gap: 0.375rem;
     align-items: baseline;
     min-inline-size: 0;
-    margin: 0;
-    font-weight: 400;
 }
 
-.materials-control .colour-group h4 .swatch {
+.materials-control .colour-group label.head {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    cursor: pointer;
+}
+
+.materials-control .colour-group .head input {
+    align-self: center;
+    margin: 0;
+    accent-color: var(--blue-text);
+}
+
+.materials-control .colour-group .head .swatch {
     align-self: center;
 }
 
@@ -826,6 +888,11 @@ function onSearch(text: string | undefined): void {
     letter-spacing: 0.12em;
     overflow-wrap: anywhere;
     text-transform: uppercase;
+}
+
+.materials-control .colour-group .head.ticked .name {
+    color: var(--ink);
+    font-weight: 600;
 }
 
 .materials-control .counts,

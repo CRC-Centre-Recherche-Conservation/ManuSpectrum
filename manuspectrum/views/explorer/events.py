@@ -66,6 +66,10 @@ from manuspectrum.views.explorer.values import fold, reference_items, string_tex
 from manuspectrum.views.summary_service import _date
 
 EVENT_TYPES = ("production", "modification", "alteration")
+# Facets ticked from the Map rail's own list: an event's materials are not narrowed
+# by them, so the materials and colours found beside a ticked one stay listed;
+# `matches` marks the ones that meet every filter.
+LISTED_SKIP = ("material", "colour")
 PUBLIC_KEYS = (
     "id",
     "type",
@@ -645,13 +649,14 @@ def kept_events(bundle, query):
     period left out. Under characterization filters an event is kept when one of
     its materials meets them.
     ``analyses`` and ``materials`` keep the kept ones; ``materials`` are narrowed
-    by every characterization facet but ``material``, so the materials found
-    beside a ticked one stay listed.
+    by the characterization facets but ``LISTED_SKIP``, and each carries
+    ``matches``: whether it meets every active characterization facet (true for
+    all without one). Whatever shows results reads only the matching ones.
     """
     keep, active, filters, *_ = row_filter(bundle.rows, query, universe=bundle.universe)
     kept_rows = {row["id"] for row in bundle.rows if keep(row, "period")}
     wanted = characterization_wanted(active)
-    listed = characterization_wanted(active, skip="material")
+    listed = [(key, selected) for key, selected in wanted if key not in LISTED_SKIP]
     types = set(parse_event_types(query))
     found = []
     for event in bundle.events:
@@ -665,10 +670,13 @@ def kept_events(bundle, query):
         analyses = [a for a in event["analyses"] if a in kept_rows]
         if not analyses:
             continue
-        materials = event["materials"]
+        values = bundle.characterization_values
+        materials = [
+            {**m, "matches": not wanted or meets(values[m["characterization"]], wanted)}
+            for m in event["materials"]
+        ]
         if wanted:
-            values = bundle.characterization_values
-            if not any(meets(values[m["characterization"]], wanted) for m in materials):
+            if not any(m["matches"] for m in materials):
                 continue
             materials = [
                 m for m in materials if meets(values[m["characterization"]], listed)
@@ -689,7 +697,11 @@ def place_subset(places, used):
 
 
 def events_payload(query, user, language, ticket=None):
-    """``EventsResponse`` of the events *query* keeps (``kept_events``)."""
+    """``EventsResponse`` of the events *query* keeps (``kept_events``).
+
+    ``colours`` names the colours of the listed materials and every ticked
+    colour the corpus knows, carried by a listed material or not.
+    """
     bundle = corpus_bundle(user, language, ticket)
     events, keep, filters = kept_events(bundle, query)
     places = place_subset(bundle.event_places, {e["place"] for e in events})
@@ -715,9 +727,20 @@ def events_payload(query, user, language, ticket=None):
             if bundle.by_id[a]["technique"]
         },
         "colours": {
-            colour: bundle.event_colours[colour]
-            for m in materials.values()
-            for colour in m["colours"]
+            **{
+                colour: {
+                    "uri": colour,
+                    "label": bundle.labels["colour"][colour],
+                    "swatch": bundle.swatches.get(colour),
+                }
+                for colour in filters["colour"]
+                if colour in bundle.labels.get("colour", {})
+            },
+            **{
+                colour: bundle.event_colours[colour]
+                for m in materials.values()
+                for colour in m["colours"]
+            },
         },
         "certaintyScale": bundle.certainty,
     }

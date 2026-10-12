@@ -75,13 +75,15 @@ function byLabel(a: Label | null, b: Label | null): number {
 /**
  * Materials grouped by their first observed colour, those without one last.
  * Groups by components then label, rows likewise; `only` narrows to those
- * uris and empty groups are left out.
+ * uris and empty groups are left out, except a group of each `ticked` colour
+ * that `colours` names, kept without rows.
  */
 export function colourTree(
     events: readonly MapEvent[],
     materials: Readonly<Record<string, MapMaterial>>,
     colours: Readonly<Record<string, MapColour>>,
     only?: ReadonlySet<string>,
+    ticked: readonly string[] = [],
 ): ColourGroup[] {
     const kept = events
         .map((event) => ({
@@ -104,6 +106,9 @@ export function colourTree(
         };
         const key = row.colours[0] ?? null;
         members.set(key, [...(members.get(key) ?? []), row]);
+    }
+    for (const colour of ticked) {
+        if (colours[colour] && !members.has(colour)) members.set(colour, []);
     }
     const groups = [...members].map(([colour, rows]): ColourGroup => {
         const own = new Set(rows.map((row) => row.uri));

@@ -41,6 +41,7 @@ import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-ke
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { intervalOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/aoristic.ts";
 import { materialCounts } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/colour-groups.ts";
+import { matchingEvents } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/matching.ts";
 import {
     boundsOf,
     fitAspect,
@@ -189,6 +190,7 @@ const low = computed(() =>
     lowLevels(response.value?.certaintyScale ?? { levels: [] }),
 );
 const places = computed(() => response.value?.places ?? {});
+/** Every listed material of the kept events: the rail's list of materials reads these. */
 const events = computed<MapEvent[]>(() => {
     const all = response.value?.events ?? [];
     return withoutLevels(
@@ -196,8 +198,10 @@ const events = computed<MapEvent[]>(() => {
         hiddenLevels.value,
     );
 });
+/** The kept events with their matching materials only: every result reads these. */
+const shown = computed(() => matchingEvents(events.value));
 const brushed = computed(() =>
-    events.value.filter((event) => inBrush(event, store.mapState.brush)),
+    shown.value.filter((event) => inBrush(event, store.mapState.brush)),
 );
 const tracked = computed(() => trackedOf(store.mapState.track));
 const summaries = computed(() =>
@@ -259,7 +263,7 @@ const nothingToDraw = computed(
 const eventsRange = computed<[number, number] | null>(() => {
     let from = Infinity;
     let to = -Infinity;
-    for (const event of events.value) {
+    for (const event of shown.value) {
         const interval = intervalOf(event.date);
         if (!interval) continue;
         from = Math.min(from, interval[0]);
@@ -362,7 +366,9 @@ const levels = computed(() =>
         (a, b) => a.rank - b.rank,
     ),
 );
-const levelCount = computed(() => levelCounts(response.value?.events ?? []));
+const levelCount = computed(() =>
+    levelCounts(matchingEvents(response.value?.events ?? [])),
+);
 const shownTypes = computed(() => shownEventTypes(store.filters.eventType));
 const typeCounts = computed(() => {
     const counts = new Map<EventType, number>();
@@ -395,7 +401,7 @@ const selectedPlace = computed(() =>
 );
 /** A period opens on every kept event of its years; any other subject on the brushed ones, as the map shows them. */
 const panelEvents = computed(() =>
-    subject.value?.kind === "period" ? events.value : brushed.value,
+    subject.value?.kind === "period" ? shown.value : brushed.value,
 );
 const drawerVisible = computed({
     get: () => narrow.value && subject.value !== null,
@@ -967,13 +973,6 @@ function skipToTimeline(): void {
                         @select="pickPlace"
                         @hover="listHovered = $event"
                     />
-                    <p class="rail-note">
-                        <span>{{
-                            $gettext(
-                                "+ the Corpus filters (Component, technique, place…)",
-                            )
-                        }}</span>
-                    </p>
                 </div>
             </RailPanel>
             <div class="main">
@@ -1587,7 +1586,7 @@ function skipToTimeline(): void {
                 >
                     <MapTimeline
                         v-model:approximate="approximateShown"
-                        :events="events"
+                        :events="shown"
                         :tracked="tracked"
                         :brush="store.mapState.brush"
                         @brush="store.setMapState({ brush: $event })"
@@ -1913,8 +1912,7 @@ function skipToTimeline(): void {
     font-variant-numeric: tabular-nums;
 }
 
-.map-rail .hint,
-.map-rail .rail-note {
+.map-rail .hint {
     color: var(--ink-dim);
     font-size: 0.75rem;
 }

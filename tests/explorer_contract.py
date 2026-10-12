@@ -128,6 +128,7 @@ SHAPES = {
         "name": "Label",
         "reliability": (str, type(None)),
         "characterization": str,
+        "matches": bool,
     },
     "MapPlace": {
         "id": str,
