@@ -697,10 +697,13 @@ async function snapshotLarge(size: SnapshotSize): Promise<void> {
     if (ticket === largeTicket && shot) largeBackground.value = shot;
 }
 
-/** The main map in Places with what a map of the series shows: its material alone, or its century as the period. */
+/** The main map in Places with what a map of the series shows: its material added to the ticked ones, or its century as the period. */
 function showSeriesMap(mini: MiniMap): void {
     if (mini.uri) {
-        store.setFilter("material", [mini.uri]);
+        const ticked = store.filters.material;
+        if (!ticked.includes(mini.uri)) {
+            store.setFilter("material", [...ticked, mini.uri]);
+        }
     } else if (mini.century !== null) {
         store.setMapState({
             brush: [mini.century * 100 + 1, (mini.century + 1) * 100],
@@ -950,18 +953,6 @@ function skipToTimeline(): void {
                                     </label>
                                 </li>
                             </ul>
-                            <label
-                                class="value approximate"
-                                :class="{ checked: approximateShown }"
-                            >
-                                <input
-                                    v-model="approximateShown"
-                                    type="checkbox"
-                                />
-                                <span class="label">{{
-                                    $gettext("Include approximate dates (“c.”)")
-                                }}</span>
-                            </label>
                         </div>
                     </section>
                     <PlaceList
@@ -1574,6 +1565,7 @@ function skipToTimeline(): void {
                     :aria-busy="refetching ? 'true' : 'false'"
                 >
                     <MapTimeline
+                        v-model:approximate="approximateShown"
                         :events="events"
                         :tracked="tracked"
                         :brush="store.mapState.brush"
@@ -1889,10 +1881,6 @@ function skipToTimeline(): void {
     margin: 0;
     padding: 0;
     list-style: none;
-}
-
-.map-rail .value.approximate .label {
-    white-space: normal;
 }
 
 .map-rail .value .count {

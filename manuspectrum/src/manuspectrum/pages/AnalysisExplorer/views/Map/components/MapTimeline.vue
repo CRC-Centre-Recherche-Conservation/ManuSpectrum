@@ -90,9 +90,11 @@ const props = defineProps<{
     events: MapEvent[];
     tracked: TrackedMaterial[];
     brush: [number, number] | null;
+    approximate: boolean;
 }>();
 const emit = defineEmits<{
     brush: [value: [number, number] | null];
+    "update:approximate": [value: boolean];
     "open-period": [range: { from: number; to: number }];
     "open-document": [id: string];
 }>();
@@ -519,6 +521,19 @@ function showMore(): void {
                 <span aria-hidden="true">{{ " · " }}</span>
                 <span>{{ stackText }}</span>
             </p>
+            <label class="approximate">
+                <input
+                    type="checkbox"
+                    :checked="props.approximate"
+                    @change="
+                        emit(
+                            'update:approximate',
+                            ($event.target as HTMLInputElement).checked,
+                        )
+                    "
+                />
+                <span>{{ $gettext("Include approximate dates (“c.”)") }}</span>
+            </label>
             <button
                 v-if="props.brush"
                 type="button"
@@ -746,11 +761,7 @@ function showMore(): void {
                         >
                             <span
                                 v-if="laneStyle(event)"
-                                :class="[
-                                    'bar',
-                                    `type-${event.type}`,
-                                    { approx: event.date.approximate },
-                                ]"
+                                :class="['bar', `type-${event.type}`]"
                                 :style="laneStyle(event) ?? undefined"
                                 :title="eventTitle(event)"
                             >
@@ -811,6 +822,26 @@ function showMore(): void {
     flex: 1 1 16rem;
     color: var(--ink-muted);
     font-size: 0.75rem;
+}
+
+.map-timeline .approximate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-block-size: var(--explorer-target, 2.75rem);
+    color: var(--ink-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.map-timeline .approximate input {
+    margin: 0;
+    accent-color: var(--blue-text);
+}
+
+.map-timeline .approximate input:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 /* CorpusDocument .rail-foot .clear */
@@ -1098,16 +1129,6 @@ function showMore(): void {
     transform: translateY(-50%);
     min-inline-size: 0.5rem;
     border-radius: 999rem;
-}
-
-.map-timeline .bar.approx {
-    mask-image: linear-gradient(
-        90deg,
-        transparent,
-        black 0.5rem,
-        black calc(100% - 0.5rem),
-        transparent
-    );
 }
 
 .map-timeline .pips {

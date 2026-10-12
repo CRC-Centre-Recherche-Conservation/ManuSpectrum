@@ -344,8 +344,10 @@ describe("MapView", () => {
         base.events[1].date = { start: 1401, end: 1450, approximate: true };
         fetchMock.mockImplementation(async () => jsonResponse(base));
         const view = await mountView();
-        const box = view.get(".value.approximate input[type='checkbox']");
-        expect(view.get(".value.approximate").text()).toBe(
+        const box = view.get(
+            ".map-timeline .approximate input[type='checkbox']",
+        );
+        expect(view.get(".map-timeline .approximate").text()).toBe(
             "Include approximate dates (“c.”)",
         );
         expect((box.element as HTMLInputElement).checked).toBe(true);
@@ -365,6 +367,7 @@ describe("MapView", () => {
         expect(
             view.findAll(".event-types input[type='checkbox']"),
         ).toHaveLength(3);
+        expect(view.find(".map-rail .approximate").exists()).toBe(false);
     });
 
     it("lists the four reliability levels, all ticked, and drops a level's materials when unticked", async () => {
@@ -605,7 +608,7 @@ describe("MapView", () => {
         expect(south).toBeLessThan(north);
     });
 
-    it("enlarges a map of the series on a snapshot taken at the dialog's size, then shows its material alone on the map", async () => {
+    it("enlarges a map of the series on a snapshot taken at the dialog's size, then adds its material to the ticked ones on the map", async () => {
         const restore = installDialog();
         try {
             const store = useExplorerStore();
@@ -643,6 +646,31 @@ describe("MapView", () => {
             await dialog.get(".show").trigger("click");
             await flushPromises();
             expect(store.filters.material).toEqual([LAPIS]);
+            expect(store.mapState.mode).toBe("places");
+        } finally {
+            restore();
+        }
+    });
+
+    it("keeps the ticked materials, without a duplicate, when an enlarged map of the series shows its material", async () => {
+        const restore = installDialog();
+        try {
+            const store = useExplorerStore();
+            const other = "http://material.test/none-0";
+            store.setFilter("material", [other, LAPIS]);
+            store.setMapState({ mode: "multiples" });
+            const view = await mountView();
+            FakeMap.last().fire("idle");
+            await flushPromises();
+            view.get<HTMLButtonElement>(
+                ".small-multiples [data-action='enlarge']",
+            ).element.click();
+            await flushPromises();
+            await view.get(".series-map-dialog .show").trigger("click");
+            await flushPromises();
+            expect([...store.filters.material].sort()).toEqual(
+                [other, LAPIS].sort(),
+            );
             expect(store.mapState.mode).toBe("places");
         } finally {
             restore();

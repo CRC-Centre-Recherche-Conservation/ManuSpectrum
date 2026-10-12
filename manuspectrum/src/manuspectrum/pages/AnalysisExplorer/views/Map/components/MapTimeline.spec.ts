@@ -52,6 +52,7 @@ function mountTimeline(
         events?: MapEvent[];
         tracked?: TrackedMaterial[];
         brush?: [number, number] | null;
+        approximate?: boolean;
     } = {},
 ) {
     return mount(MapTimeline, {
@@ -59,6 +60,7 @@ function mountTimeline(
             events: events(),
             tracked: [],
             brush: null,
+            approximate: true,
             ...props,
         },
     });
@@ -92,6 +94,21 @@ describe("MapTimeline", () => {
         expect(wrapper.findAll(".part.other").length).toBe(1);
         expect(wrapper.find(".part.type-production").exists()).toBe(false);
         expect(wrapper.find(".key").text()).toContain("Lapis lazuli");
+    });
+
+    it("carries the approximate-dates switch, ticked from its prop, and emits its change", async () => {
+        const wrapper = mountTimeline();
+        const box = wrapper.get(".head .approximate input[type='checkbox']");
+        expect(wrapper.get(".head .approximate").text()).toBe(
+            "Include approximate dates (“c.”)",
+        );
+        expect((box.element as HTMLInputElement).checked).toBe(true);
+        await box.setValue(false);
+        expect(wrapper.emitted("update:approximate")).toEqual([[false]]);
+        const off = mountTimeline({ approximate: false });
+        expect(
+            (off.get(".approximate input").element as HTMLInputElement).checked,
+        ).toBe(false);
     });
 
     it("draws an approximate date like any other, with no key entry of its own", () => {
@@ -316,7 +333,7 @@ describe("MapTimeline", () => {
         const bar = rows[0].find(".bar.type-production");
         expect(bar.attributes("style")).toContain("inset-inline-start: 0%");
         expect(bar.find(".focus-slot-dot").text()).toBe("2");
-        expect(rows[1].find(".bar.approx").exists()).toBe(true);
+        expect(rows[1].find(".bar.type-modification").exists()).toBe(true);
         expect(rows[2].find(".bar").exists()).toBe(false);
     });
 
