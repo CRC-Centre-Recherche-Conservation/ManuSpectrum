@@ -1973,11 +1973,21 @@ def _shelfmark(tiles, value_node, type_node, language):
     return min(found, key=lambda f: f[0])[1] if found else None
 
 
+def _has_thumbnail_source(manifest):
+    """Whether a Document's manifest value can yield a thumbnail.
+
+    Mirrors ``DocumentThumbnailFetcher``: a string naming a manifest. A
+    Document without one answers the thumbnail route with a 404.
+    """
+    return isinstance(manifest, str) and "manifest" in manifest.lower()
+
+
 def document_hits(document_ids, per_document, visible, user, language, label_of):
     """``DocumentHit`` of each of *document_ids*, in order, read in one batch.
 
     A field whose nodegroup the reader may not read is None; the holding is
-    the first owner a linked reference may show.
+    the first owner a linked reference may show. ``thumbnail`` is the route of
+    the Document's thumbnail, None when it holds no manifest.
     """
     values = Values(
         document_ids,
@@ -1990,6 +2000,7 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
             "doc_approx",
             "doc_description",
             "doc_type",
+            "doc_manifest",
         ],
         user,
     )
@@ -2034,7 +2045,11 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
                 "name": label_of[d],
                 "holding": owner_names[owner_of[d][0]] if owner_of[d] else None,
                 "analysisCount": per_document[d],
-                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
+                "thumbnail": (
+                    reverse("thumbnail", kwargs={"resource_id": d})
+                    if _has_thumbnail_source(values.first(d, "doc_manifest"))
+                    else None
+                ),
                 "unpublished": d in visible.unpublished,
                 "shelfmark": (
                     _shelfmark(

@@ -73,7 +73,7 @@ class SearchRouteTests(ServiceCase):
         )
         self.assertEqual(again.status_code, 304)
 
-    def test_a_document_thumbnail_is_a_path_on_the_site_that_serves_the_page(self):
+    def test_a_document_without_a_manifest_has_no_thumbnail(self):
         results = self.get("?grain=documents").json()["results"]
 
         self.assertTrue(results)
@@ -81,9 +81,20 @@ class SearchRouteTests(ServiceCase):
             assert_shape(self, hit, "DocumentHit")
             if hit["dates"]:
                 assert_shape(self, hit["dates"], "ProductionDates")
-            self.assertTrue(
-                hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
-            )
+            self.assertIsNone(hit["thumbnail"], hit)
+
+    def test_a_document_with_a_manifest_has_a_thumbnail_path_on_the_site(self):
+        self.tile(self.documents["open"], "facsimiles", MANIFEST)
+
+        hits = {h["id"]: h for h in self.get("?grain=documents").json()["results"]}
+
+        self.assertEqual(
+            hits[str(self.documents["open"].pk)]["thumbnail"],
+            f"/en/thumbnail/{self.documents['open'].pk}",
+        )
+        others = [h for i, h in hits.items() if i != str(self.documents["open"].pk)]
+        self.assertTrue(others)
+        self.assertTrue(all(h["thumbnail"] is None for h in others))
 
     def test_facets_0_leaves_the_facets_out_and_keeps_the_results(self):
         full = self.get("?grain=analyses").json()
