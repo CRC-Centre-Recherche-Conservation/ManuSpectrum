@@ -35,6 +35,11 @@ CACHE_SHAPE_MODULES = (
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "views/explorer/swatches.py",
+    # The thumbnail-source rule a search hit advertises.
+    "utils/manifest_values.py",
+    # The map's events, their places, materials and colours, stored in the bundle.
+    "views/explorer/events.py",
+    "views/explorer/places.py",
     "utils/role_links.py",
     "utils/roles.py",
     # IIIF documents: the sources and zones the Explorer memo reads, and the

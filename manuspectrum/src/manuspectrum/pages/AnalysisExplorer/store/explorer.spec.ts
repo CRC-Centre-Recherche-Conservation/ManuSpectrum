@@ -9,6 +9,14 @@ import {
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
+import {
+    FLOOR,
+    THRESHOLD_MAX,
+    THRESHOLD_MIN,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+
+import type { ExplorerView } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+
 function uuid(n: number): string {
     return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 }
@@ -188,10 +196,16 @@ describe("setPeriod", () => {
 });
 
 describe("navigation", () => {
-    it("ignores a view that is not available yet", () => {
+    it("ignores a view that is not available", () => {
+        const store = useExplorerStore();
+        store.setView("nowhere" as ExplorerView);
+        expect(store.view).toBe("corpus");
+    });
+
+    it("opens the map view", () => {
         const store = useExplorerStore();
         store.setView("map");
-        expect(store.view).toBe("corpus");
+        expect(store.view).toBe("map");
     });
 
     it("opens a document on the corpus view and clears the focus", () => {
@@ -602,5 +616,45 @@ describe("Compare state", () => {
         expect(store.hiddenCurves).toEqual({ "auto:xy:a": ["an:1:-|f1"] });
         store.pruneHiddenCurves("auto:xy:a", () => false);
         expect(store.hiddenCurves).toEqual({});
+    });
+});
+
+describe("map state", () => {
+    it("merges a patch and clamps the radius", () => {
+        const store = useExplorerStore();
+        store.setMapState({ mode: "territories", radius: 9000 });
+        expect(store.mapState.mode).toBe("territories");
+        expect(store.mapState.radius).toBe(400);
+        store.setMapState({ colour: "dominant" });
+        expect(store.mapState.radius).toBe(400);
+    });
+
+    it("clamps the threshold to the slider's grid and range", () => {
+        const store = useExplorerStore();
+        store.setMapState({ threshold: 9000 });
+        expect(store.mapState.threshold).toBe(THRESHOLD_MAX);
+        store.setMapState({ threshold: -3 });
+        expect(store.mapState.threshold).toBe(THRESHOLD_MIN);
+        store.setMapState({ threshold: Number.NaN });
+        expect(store.mapState.threshold).toBe(FLOOR);
+        store.setMapState({ radius: 100 });
+        expect(store.mapState.threshold).toBe(FLOOR);
+    });
+
+    it("follows up to four materials and refuses a fifth without changing", () => {
+        const store = useExplorerStore();
+        for (const uri of ["a", "b", "c", "d"]) {
+            expect(store.toggleTrack(uri)).toBe("pinned");
+        }
+        expect(store.toggleTrack("e")).toBe("refused");
+        expect(store.mapState.track).toEqual(["a", "b", "c", "d"]);
+        expect(store.toggleTrack("b")).toBe("unpinned");
+        expect(store.mapState.track).toEqual(["a", null, "c", "d"]);
+    });
+
+    it("sets the track mode", () => {
+        const store = useExplorerStore();
+        store.setTrackMode("all");
+        expect(store.trackMode).toBe("all");
     });
 });

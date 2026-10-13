@@ -3,7 +3,9 @@ import { useGettext } from "vue3-gettext";
 import type {
     DataKind,
     FacetGroup,
+    EventType,
     FacetKey,
+    PlaceSource,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ExplorerView } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
@@ -15,6 +17,8 @@ export function useVocabulary(): {
     periodTitle: () => string;
     dataKindBadge: (kind: DataKind) => string;
     viewTitle: (view: ExplorerView) => string;
+    eventTypeLabel: (type: EventType) => string;
+    placeSourceLabel: (source: PlaceSource) => string;
 } {
     const { $gettext } = useGettext();
 
@@ -100,6 +104,28 @@ export function useVocabulary(): {
         }
     }
 
+    function eventTypeLabel(type: EventType): string {
+        switch (type) {
+            case "production":
+                return $gettext("Production");
+            case "modification":
+                return $gettext("Modification");
+            case "alteration":
+                return $gettext("Alteration");
+        }
+    }
+
+    function placeSourceLabel(source: PlaceSource): string {
+        switch (source) {
+            case "own":
+                return $gettext("Recorded location");
+            case "place":
+                return $gettext("Linked place");
+            case "parent":
+                return $gettext("Attributed place (broader place)");
+        }
+    }
+
     return {
         facetTitle,
         filterTitle,
@@ -107,5 +133,7 @@ export function useVocabulary(): {
         periodTitle,
         dataKindBadge,
         viewTitle,
+        eventTypeLabel,
+        placeSourceLabel,
     };
 }

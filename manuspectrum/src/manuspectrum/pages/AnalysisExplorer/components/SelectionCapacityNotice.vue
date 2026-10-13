@@ -16,9 +16,13 @@ import { BASKET_LIMIT } from "@/manuspectrum/pages/AnalysisExplorer/store/basket
  * select-all is refused and no grouped change is on screen (one message per
  * spot); it is not a live region, the refused click announces itself. Its
  * `id` is what the zone's checkboxes name in `aria-describedby`. « Open the
- * Selection » opens the drawer, to remove items.
+ * Selection » opens the drawer, to remove items. `scope` names the zone in
+ * the text: the page (default) or « here », for a panel.
  */
-const props = defineProps<{ keys: string[]; id: string }>();
+const props = withDefaults(
+    defineProps<{ keys: string[]; id: string; scope?: "page" | "here" }>(),
+    { scope: "page" },
+);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 const toggle = useSelectionToggle();
@@ -55,9 +59,15 @@ const text = computed(() => {
         return $gettext("Remove items to add others.");
     }
     return interpolate(
-        $gettext(
-            "This page has %{n} analyses to add: tick them one by one or make room.",
-        ),
+        props.scope === "here"
+            ? $ngettext(
+                  "%{n} analysis here to add: tick it or make room.",
+                  "%{n} analyses here to add: tick them one by one or make room.",
+                  refused.needed,
+              )
+            : $gettext(
+                  "This page has %{n} analyses to add: tick them one by one or make room.",
+              ),
         { n: refused.needed },
         true,
     );

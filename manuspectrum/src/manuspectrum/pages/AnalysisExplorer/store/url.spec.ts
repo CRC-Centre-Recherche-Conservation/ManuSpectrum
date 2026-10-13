@@ -13,6 +13,7 @@ import {
     snapshotOf,
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import { defaultMapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 
 import type { UrlSnapshot } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
@@ -28,6 +29,7 @@ function home(): UrlSnapshot {
         folioView: "analyses",
         outside: true,
         filters: emptyFilters(),
+        map: defaultMapState(),
     };
 }
 
@@ -307,15 +309,15 @@ describe("historyMode", () => {
 });
 
 describe("store round trip", () => {
-    it("applies a snapshot and reads it back, keeping an unavailable view on corpus", () => {
+    it("applies a snapshot and reads it back, keeping the map view", () => {
         const store = useExplorerStore();
         const snapshot = fromQuery(
             new URLSearchParams(`view=map&doc=${DOC}&technique=t1`),
         );
         applySnapshot(store, snapshot);
-        expect(store.view).toBe("corpus");
+        expect(store.view).toBe("map");
         expect(store.document?.id).toBe(DOC);
-        expect(snapshotOf(store)).toEqual({ ...snapshot, view: "corpus" });
+        expect(snapshotOf(store)).toEqual(snapshot);
     });
 
     it("applies and reads back the outside state", () => {
@@ -407,5 +409,49 @@ describe("place in the address", () => {
             "screen=results&place=p1&place=p2",
         );
         expect(toQuery(fromQuery(new URLSearchParams(""))).toString()).toBe("");
+    });
+});
+
+describe("map keys in the address", () => {
+    const MAP =
+        "view=map&mode=territories&radius=90&track=a&track=-&track=b&brush=1300,1400&layers=borders";
+
+    it("are written only on the map view", () => {
+        const snapshot = fromQuery(new URLSearchParams(MAP));
+        expect(toQuery(snapshot).toString()).toBe(
+            "view=map&mode=territories&radius=90&track=a&track=-&track=b&brush=1300%2C1400&layers=borders",
+        );
+        expect(toQuery({ ...snapshot, view: "corpus" }).has("mode")).toBe(
+            false,
+        );
+        expect(toQuery({ ...snapshot, view: "corpus" }).has("track")).toBe(
+            false,
+        );
+    });
+
+    it("survive fromQuery, applySnapshot and snapshotOf", () => {
+        const store = useExplorerStore();
+        const snapshot = fromQuery(new URLSearchParams(MAP));
+        applySnapshot(store, snapshot);
+        expect(snapshotOf(store).map).toEqual(snapshot.map);
+        expect(store.mapState.track).toEqual(["a", null, "b"]);
+        expect(store.mapState.radius).toBe(90);
+    });
+
+    it("keep the reader's legend open state across back and forward", () => {
+        const store = useExplorerStore();
+        store.setMapState({ legend: true });
+        applySnapshot(store, fromQuery(new URLSearchParams(MAP)));
+        expect(store.mapState.legend).toBe(true);
+        expect(store.mapState.mode).toBe("territories");
+    });
+
+    it("keep the legacy current-location, analysis and sampling types out of the event types", () => {
+        const snapshot = fromQuery(
+            new URLSearchParams(
+                "view=map&eventType=current-location&eventType=analysis&eventType=sampling&eventType=alteration",
+            ),
+        );
+        expect(snapshot.filters.eventType).toEqual(["alteration"]);
     });
 });

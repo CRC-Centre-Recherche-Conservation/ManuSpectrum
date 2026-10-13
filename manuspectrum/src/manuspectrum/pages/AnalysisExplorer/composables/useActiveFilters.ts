@@ -35,7 +35,8 @@ export function useActiveFilters(): {
         true,
     );
     const { $gettext, interpolate } = useGettext();
-    const { facetTitle, filterTitle, periodTitle } = useVocabulary();
+    const { eventTypeLabel, facetTitle, filterTitle, periodTitle } =
+        useVocabulary();
 
     function named(facet: string, value: string): string {
         return interpolate(
@@ -101,7 +102,7 @@ export function useActiveFilters(): {
             for (const type of filters.eventType) {
                 entries.push({
                     id: `eventType:${type}`,
-                    label: named($gettext("Event"), type),
+                    label: named($gettext("Event"), eventTypeLabel(type)),
                     clear: () => store.clearFilter("eventType", type),
                 });
             }

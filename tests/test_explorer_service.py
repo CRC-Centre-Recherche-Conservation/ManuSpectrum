@@ -1673,19 +1673,26 @@ class PeriodTests(ServiceCase):
         payload = document_payload(self.documents["open"].pk, self.anonymous, "en")
 
         self.assertEqual(
-            payload["history"],
-            [
-                {
-                    "type": "production",
-                    "places": [
-                        {
-                            "id": str(self.places["paris"].pk),
-                            "name": {"value": "Paris", "lang": "en"},
-                        }
-                    ],
-                    "date": {"start": "1401-01", "end": "1500-12", "approximate": True},
-                }
-            ],
+            [line["type"] for line in payload["history"]],
+            ["production"],
+        )
+        self.assertEqual(
+            payload["history"][0],
+            {
+                "type": "production",
+                "carrier": {
+                    "id": str(self.documents["open"].pk),
+                    "model": "document",
+                    "name": {"value": "Ms 59", "lang": "en"},
+                },
+                "places": [
+                    {
+                        "id": str(self.places["paris"].pk),
+                        "name": {"value": "Paris", "lang": "en"},
+                    }
+                ],
+                "date": {"start": "1401-01", "end": "1500-12", "approximate": True},
+            },
         )
 
     def test_history_is_empty_without_a_bound_or_a_readable_place(self):

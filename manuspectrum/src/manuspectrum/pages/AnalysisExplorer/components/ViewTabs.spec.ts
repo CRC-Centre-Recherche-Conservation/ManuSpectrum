@@ -25,18 +25,29 @@ describe("ViewTabs", () => {
     });
 
     it("marks the current view and switches on click", async () => {
-        available.views = ["corpus", "compare"] satisfies ExplorerView[];
+        available.views = ["corpus", "map", "compare"] satisfies ExplorerView[];
         const store = useExplorerStore();
         store.addToBasket("ch:00000000-0000-4000-8000-000000000001:-");
         const wrapper = mount(ViewTabs);
         const buttons = wrapper.findAll(".view-tabs button");
         expect(buttons.map((button) => button.text())).toEqual([
             "Corpus",
+            "Map & timeline",
             "Compare (1)",
         ]);
         expect(buttons[0].attributes("aria-current")).toBe("page");
         await buttons[1].trigger("click");
-        expect(store.view).toBe("compare");
+        expect(store.view).toBe("map");
         expect(buttons[1].attributes("aria-current")).toBe("page");
+        await buttons[2].trigger("click");
+        expect(store.view).toBe("compare");
+        expect(buttons[2].attributes("aria-current")).toBe("page");
+    });
+
+    it("draws no spectral rule: the title's accent is the only spectral mark", () => {
+        available.views = ["corpus", "map"] satisfies ExplorerView[];
+        const wrapper = mount(ViewTabs);
+        expect(wrapper.find(".spectral-line-thin").exists()).toBe(false);
+        expect(wrapper.find(".view-tabs > .list").exists()).toBe(true);
     });
 });

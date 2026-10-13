@@ -1,0 +1,768 @@
+"""The map's events (spec 2026-10-09 §2.1), computed once per corpus bundle.
+
+An event is one (carrier, place). A carrier is a Document or Component production,
+a Modification or an Alteration of the visible set; its
+dates, places and own geometry are read off its own nodegroups by role. Four-bound
+dates widen the interval to the lowest and highest year present; a single bound
+stands for both. A carrier with neither a bound, a visible linked place nor an own
+geometry has no occurrence.
+
+Place: the own geometry (a derived copy is not one), else each visible linked
+Place with a geometry, else its nearest visible ancestor with one
+(``placeSource`` ``parent``); a linked place left unmapped keeps the place with
+``placeSource`` None. A hidden place is never a place and cuts the chain.
+
+Material: an identified material goes to the Modifications citing it
+(``observed_by_characterisation``) and to the Alterations of an object it observes
+that name its material (``occured_in_presence_of_material``); otherwise to the
+production of each linked Component, else of that Component's Document, else of the
+Document it observes.
+
+Only material events exist: analyses and samplings are not events. An
+occurrence becomes events only with a supporting analysis among the rows: the
+evidence of the materials a modification or an alteration carries (and the
+analyses an alteration names), otherwise every analysis on the carrier's
+Component, else its Document.
+``histories`` hold the production line of each document, supporting analyses or not.
+
+A Modification or an Alteration of objects in several documents is one event,
+under the lowest document id; the other documents get neither the event nor a
+history line. ``MapPlace.parent`` is the visible parent place with the lowest id,
+whereas the place facet (``place_closure``) follows every visible parent. Own
+geometries that round to the same four decimals are one place, named after the
+first carrier and unpublished only when every carrier merged into it is. An own
+place is named after its linked place only when its point lies within that
+place's extent (``extentKm``, ``OWN_NEAR_KM`` for a point place); farther away it
+takes its first carrier's name, and ``parent`` stays the linked place either way.
+"""
+
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+
+from manuspectrum.utils.public_visibility import readable_nodegroup_ids
+from manuspectrum.views.explorer.places import (
+    authorities_of,
+    derived_only,
+    geometry_summary,
+    haversine_km,
+)
+from manuspectrum.views.explorer.service import (
+    PLACE_DEPTH,
+    Values,
+    _bound_year,
+    _links,
+    _ordered_refs,
+    bounds_meet,
+    characterization_wanted,
+    corpus_bundle,
+    meets,
+    names,
+    period_facet,
+    qualified_values,
+    row_filter,
+)
+from manuspectrum.views.explorer.swatches import colour_rank
+from manuspectrum.views.explorer.values import fold, reference_items, string_texts
+from manuspectrum.views.summary_service import _date
+
+EVENT_TYPES = ("production", "modification", "alteration")
+# Facets ticked from the Map rail's own list: an event's materials are not narrowed
+# by them, so the materials and colours found beside a ticked one stay listed;
+# `matches` marks the ones that meet every filter.
+LISTED_SKIP = ("material", "colour")
+PUBLIC_KEYS = (
+    "id",
+    "type",
+    "carrier",
+    "document",
+    "component",
+    "place",
+    "placeSource",
+    "date",
+    "materials",
+    "analyses",
+)
+OWN_PREFIX = "own:"
+OWN_NEAR_KM = 25
+NO_YEAR = 10**6
+DATE_ROLES = {
+    "document": ("doc_start", "doc_end", None, None, "doc_approx"),
+    "component": (
+        "comp_start",
+        "comp_end",
+        "comp_end_begin",
+        "comp_end_end",
+        "comp_approx",
+    ),
+    "modification": (
+        "mod_start",
+        "mod_end",
+        "mod_end_begin",
+        "mod_end_end",
+        "mod_approx",
+    ),
+    "alteration": (
+        "alt_start",
+        "alt_end",
+        "alt_end_begin",
+        "alt_end_end",
+        "alt_approx",
+    ),
+}
+PLACE_ROLES = {
+    "document": "doc_place",
+    "component": "comp_place",
+    "modification": "mod_place",
+    "alteration": "alt_place",
+}
+GEOMETRY_ROLES = {
+    "document": "doc_geometry",
+    "component": "comp_geometry",
+    "modification": "mod_geometry",
+}
+TYPE_OF = {
+    "document": "production",
+    "component": "production",
+    "modification": "modification",
+    "alteration": "alteration",
+}
+
+
+@dataclass(frozen=True)
+class Occurrence:
+    type: str
+    carrier: str
+    model: str
+    document: str
+    component: str | None
+    years: tuple | None
+    approximate: bool
+    stored: tuple
+    linked: tuple
+    own: object
+
+    @property
+    def key(self):
+        return (self.model, self.carrier)
+
+
+@dataclass(frozen=True)
+class EventSet:
+    events: tuple
+    places: dict
+    materials: dict
+    material_terms: dict
+    histories: dict
+
+
+def parse_event_types(query):
+    """The event types ``eventType`` names (repeated or comma-separated), in ``EVENT_TYPES`` order; others ignored.
+
+    Without a known type, every ``EVENT_TYPES``.
+    """
+    asked = {
+        v.strip()
+        for raw in query.getlist("eventType")
+        for v in raw.split(",")
+        if v.strip()
+    }
+    wanted = asked & set(EVENT_TYPES) or set(EVENT_TYPES)
+    return [t for t in EVENT_TYPES if t in wanted]
+
+
+def colour_order(counts):
+    """The colour uris of the ``Counter`` *counts*, most counted first, then by ``colour_rank``, then by uri."""
+    return [
+        colour
+        for colour, _ in sorted(
+            counts.items(),
+            key=lambda kv: (
+                -kv[1],
+                colour_rank(kv[0]) if colour_rank(kv[0]) is not None else 999,
+                kv[0],
+            ),
+        )
+    ]
+
+
+def _keys(model):
+    return [
+        k
+        for k in (*DATE_ROLES[model], PLACE_ROLES[model], GEOMETRY_ROLES.get(model))
+        if k
+    ]
+
+
+def dates_of(values, rid, model):
+    """``(years, approximate, stored)`` of the first tile of *rid* holding a bound of its *model*'s date roles.
+
+    *stored* is the stored text of the start bound and of the latest end bound
+    (end, end of the end); without an end, the start alone.
+    """
+    start_key, end_key, begin_key, last_key, approx_key = DATE_ROLES[model]
+    nodes = {
+        k: values.node(k)
+        for k in (start_key, end_key, begin_key, last_key)
+        if k and values.node(k)
+    }
+    approx = values.node(approx_key) if approx_key else None
+    for data in values.tiles(rid, start_key) or values.tiles(rid, end_key):
+        dated = {k: data.get(n.nodeid) for k, n in nodes.items()}
+        dated = {
+            k: t
+            for k, t in dated.items()
+            if isinstance(t, str) and _bound_year(t) is not None
+        }
+        if not dated:
+            continue
+        years = [_bound_year(t) for t in dated.values()]
+        ends = [dated[k] for k in (end_key, last_key) if k in dated]
+        start_text = dated.get(start_key) or (
+            None if ends else min(dated.values(), key=_bound_year)
+        )
+        return (
+            (min(years), max(years)),
+            bool(approx) and data.get(approx.nodeid) is True,
+            (start_text, max(ends, key=_bound_year) if ends else None),
+        )
+    return None, False, (None, None)
+
+
+def _occurrence(model, rid, values, document, component, places):
+    years, approximate, stored = dates_of(values, rid, model)
+    linked = tuple(
+        p for p in _ordered_refs(values.get(rid, PLACE_ROLES[model])) if p in places
+    )
+    own = None
+    if model in GEOMETRY_ROLES:
+        for collection in values.get(rid, GEOMETRY_ROLES[model]):
+            if isinstance(collection, dict) and not derived_only(collection):
+                own = geometry_summary(collection)
+                if own:
+                    break
+    if years is None and not linked and own is None:
+        return None
+    return Occurrence(
+        TYPE_OF[model],
+        rid,
+        model,
+        document,
+        component,
+        years,
+        approximate,
+        stored,
+        linked,
+        own,
+    )
+
+
+def _first(ids, wanted):
+    shown = sorted(i for i in ids if i in wanted)
+    return shown[0] if shown else None
+
+
+def _object_chain(objects, visible, part_of):
+    documents, components = set(), set()
+    for o in objects:
+        if o in visible.documents:
+            documents.add(o)
+        elif o in visible.components:
+            components.add(o)
+            documents |= {d for d in part_of.get(o, ()) if d in visible.documents}
+    if not documents:
+        return None
+    return min(documents), (next(iter(components)) if len(components) == 1 else None)
+
+
+def build_events(
+    user,
+    language,
+    visible,
+    chains,
+    links,
+    rows,
+    order,
+    label_of,
+    characterization_values,
+    own_values,
+    material_components,
+    swatches,
+):
+    """The ``EventSet`` of the visible corpus: events in document-name order, their places, materials and the documents' histories.
+
+    *characterization_values* are the Corpus filter's values per material (kept
+    for ``kept_events``). An event material's ``colours`` are its characterization's
+    *own_values* colours, its own ``color_aspect`` without the colours of the
+    Components it is linked to (``colour_order``); a ``MapMaterial``'s colours are
+    counted over its event materials.
+    """
+    readable = readable_nodegroup_ids(user)
+    by_id = {row["id"]: row for row in rows}
+    rows_of = defaultdict(set)
+    for row in rows:
+        rows_of[row["document"]].add(row["id"])
+        if row["component"]:
+            rows_of[row["component"]].add(row["id"])
+    part_of, places = links["part_of"], visible.places
+    read = {
+        model: Values(
+            ids,
+            _keys(model) + (["alt_material"] if model == "alteration" else []),
+            user,
+        )
+        for model, ids in (
+            ("document", visible.documents),
+            ("component", visible.components),
+            ("modification", visible.modifications),
+            ("alteration", visible.alterations),
+        )
+    }
+    mod_objects = _links("modification", "document_modified", readable)
+    alt_objects = _links("alteration", "object_altered", readable)
+    mod_cites = _links("modification", "observed_by_characterisation", readable)
+    alt_analyses = _links(
+        "alteration", "analysis_reference_observed_about_inference_making", readable
+    )
+
+    occurrences = []
+    for d in sorted(visible.documents):
+        occurrences.append(
+            _occurrence("document", d, read["document"], d, None, places)
+        )
+    for c in sorted(visible.components):
+        document = _first(part_of.get(c, ()), visible.documents)
+        if document:
+            occurrences.append(
+                _occurrence("component", c, read["component"], document, c, places)
+            )
+    for model, objects in (("modification", mod_objects), ("alteration", alt_objects)):
+        for carrier in sorted(getattr(visible, f"{model}s")):
+            chain = _object_chain(objects.get(carrier, ()), visible, part_of)
+            if chain:
+                occurrences.append(
+                    _occurrence(model, carrier, read[model], *chain, places)
+                )
+    occurrences = [o for o in occurrences if o and o.document in label_of]
+    by_key = {o.key: o for o in occurrences}
+
+    material_values = Values(
+        visible.characterizations, ["material", "confidence"], user
+    )
+    qualified = qualified_values(material_values, visible.characterizations, language)
+    entries, terms = {}, defaultdict(set)
+    for c in visible.characterizations:
+        own_colours = colour_order(Counter(own_values.get(c, {}).get("colour", ())))
+        entries[c] = [
+            {
+                "id": ref["uri"],
+                "name": ref["label"],
+                "reliability": q["id"] if q else None,
+                "characterization": c,
+                "colours": own_colours,
+            }
+            for refs, _, q in qualified[c]["material"]
+            for ref in refs
+        ]
+        for _, stored, _ in qualified[c]["material"]:
+            for item in reference_items(stored):
+                terms[item["uri"]] |= {
+                    fold(e["value"])
+                    for e in item.get("labels") or []
+                    if isinstance(e, dict) and isinstance(e.get("value"), str)
+                }
+    named = {
+        a: {
+            item["uri"]
+            for v in read["alteration"].get(a, "alt_material")
+            for item in reference_items(v)
+        }
+        for a in visible.alterations
+    }
+    cited_by = defaultdict(list)
+    for m in sorted(visible.modifications):
+        for c in mod_cites.get(m, ()):
+            cited_by[c].append(("modification", m))
+    objects_of = links["objects"]
+    attached = defaultdict(list)
+    for c in sorted(visible.characterizations):
+        reach = (
+            set(objects_of.get(c, ())) & (visible.documents | visible.components)
+        ) | set(material_components.get(c, ()))
+        reach |= {
+            d
+            for k in material_components.get(c, ())
+            for d in part_of.get(k, ())
+            if d in visible.documents
+        }
+        uris = {e["id"] for e in entries[c]}
+        homes = [k for k in cited_by[c] if k in by_key]
+        homes += [
+            ("alteration", a)
+            for a in sorted(visible.alterations)
+            if ("alteration", a) in by_key
+            and uris & named[a]
+            and set(alt_objects.get(a, ())) & reach
+        ]
+        if not homes:
+            for k in material_components.get(c, ()):
+                if ("component", k) in by_key:
+                    homes.append(("component", k))
+                else:
+                    d = _first(part_of.get(k, ()), visible.documents)
+                    if d and ("document", d) in by_key:
+                        homes.append(("document", d))
+            homes += [
+                ("document", d)
+                for d in sorted(set(objects_of.get(c, ())) & visible.documents)
+                if ("document", d) in by_key
+            ]
+        for key in dict.fromkeys(homes):
+            attached[key].append(c)
+
+    def supporting(occ):
+        cited = {
+            a
+            for c in attached[occ.key]
+            for a in visible.evidence.get(c, ())
+            if a in by_id
+        }
+        if occ.type == "alteration":
+            cited |= {a for a in alt_analyses.get(occ.carrier, ()) if a in by_id}
+        if occ.type in ("modification", "alteration") and cited:
+            return sorted(cited, key=order.__getitem__)
+        return sorted(
+            rows_of.get(occ.component or occ.document, ()), key=order.__getitem__
+        )
+
+    parent_links = _links("place", "part_of_places", readable)
+    parent_of = {p: _first(parent_links.get(p, ()), places) for p in places}
+    place_values = Values(places, ["place_geometry", "place_identifier"], user)
+    geometry = {}
+    for p in places:
+        for value in place_values.get(p, "place_geometry"):
+            found = geometry_summary(value) if isinstance(value, dict) else None
+            if found:
+                geometry[p] = found
+                break
+
+    def mapped_ancestor(place):
+        seen, current = {place}, parent_of.get(place)
+        for _ in range(PLACE_DEPTH):
+            if current is None or current in seen:
+                return None
+            if current in geometry:
+                return current
+            seen.add(current)
+            current = parent_of.get(current)
+        return None
+
+    own_places = {}
+    own_carriers = defaultdict(set)
+
+    def resolve(occ):
+        if occ.own is not None:
+            pid = f"{OWN_PREFIX}{occ.own.lng_lat[0]:.4f},{occ.own.lng_lat[1]:.4f}"
+            own_places.setdefault(
+                pid, (occ.own, occ.linked[0] if occ.linked else None, occ.carrier)
+            )
+            own_carriers[pid].add(occ.carrier)
+            return [(pid, "own")]
+        if not occ.linked:
+            return [(None, None)]
+        found = []
+        for p in occ.linked:
+            above = None if p in geometry else mapped_ancestor(p)
+            found.append(
+                (p, "place")
+                if p in geometry
+                else (above, "parent") if above else (p, None)
+            )
+        return list(dict.fromkeys(found))
+
+    extra = {
+        o.carrier for o in occurrences if o.model in ("modification", "alteration")
+    }
+    extra |= {
+        o.component for o in occurrences if o.component and o.component not in label_of
+    }
+    carrier_names = names(extra, language, user)
+
+    def name_of(rid):
+        if rid in by_id:
+            return by_id[rid]["name"]
+        return (
+            label_of.get(rid)
+            or carrier_names.get(rid)
+            or {"value": rid[:8], "lang": language}
+        )
+
+    events = []
+    for occ in occurrences:
+        analyses = supporting(occ)
+        if not analyses:
+            continue
+        materials = [e for c in attached[occ.key] for e in entries[c]]
+        for place, source in resolve(occ):
+            events.append(
+                {
+                    "id": f"{occ.type}:{occ.carrier}:{place or '-'}",
+                    "type": occ.type,
+                    "carrier": {
+                        "id": occ.carrier,
+                        "model": occ.model,
+                        "name": name_of(occ.carrier),
+                    },
+                    "document": {"id": occ.document, "name": name_of(occ.document)},
+                    "component": (
+                        {"id": occ.component, "name": name_of(occ.component)}
+                        if occ.component
+                        else None
+                    ),
+                    "place": place,
+                    "placeSource": source,
+                    "date": {
+                        "start": occ.years[0] if occ.years else None,
+                        "end": occ.years[1] if occ.years else None,
+                        "approximate": occ.approximate,
+                    },
+                    "materials": materials,
+                    "analyses": analyses,
+                }
+            )
+    events.sort(
+        key=lambda e: (
+            fold(e["document"]["name"]["value"]),
+            e["document"]["id"],
+            EVENT_TYPES.index(e["type"]),
+            e["date"]["start"] if e["date"]["start"] is not None else NO_YEAR,
+            e["carrier"]["id"],
+            e["place"] or "",
+        )
+    )
+
+    wanted = {
+        e["place"]
+        for e in events
+        if e["place"] and not e["place"].startswith(OWN_PREFIX)
+    }
+    wanted |= {linked for _, linked, _ in own_places.values() if linked}
+    frontier = set(wanted)
+    while frontier:
+        frontier = {parent_of.get(p) for p in frontier if parent_of.get(p)} - wanted
+        wanted |= frontier
+    linked_all = {p for o in occurrences for p in o.linked}
+    place_names = names(wanted | linked_all, language, user)
+    places_out = {}
+    for p in sorted(wanted):
+        g = geometry.get(p)
+        texts = [
+            t
+            for v in place_values.get(p, "place_identifier")
+            for t in string_texts(v).values()
+        ]
+        places_out[p] = {
+            "id": p,
+            "name": place_names.get(p, {"value": p[:8], "lang": language}),
+            "lngLat": list(g.lng_lat) if g else None,
+            "geometryKind": g.kind if g else "point",
+            "extentKm": g.extent_km if g else None,
+            "parent": parent_of.get(p),
+            "unpublished": p in visible.unpublished,
+            "authorities": authorities_of(texts),
+        }
+    for pid, (g, linked, carrier) in sorted(own_places.items()):
+        linked_geometry = geometry.get(linked)
+        near = (
+            linked in place_names
+            and linked_geometry is not None
+            and haversine_km(g.lng_lat, linked_geometry.lng_lat)
+            <= (linked_geometry.extent_km or OWN_NEAR_KM)
+        )
+        places_out[pid] = {
+            "id": pid,
+            "name": place_names[linked] if near else name_of(carrier),
+            "lngLat": list(g.lng_lat),
+            "geometryKind": g.kind,
+            "extentKm": g.extent_km,
+            "parent": linked,
+            "unpublished": own_carriers[pid] <= visible.unpublished,
+            "authorities": {},
+        }
+
+    labels, colours = {}, defaultdict(Counter)
+    for e in events:
+        for m in e["materials"]:
+            labels.setdefault(m["id"], m["name"])
+            for colour in m["colours"]:
+                colours[m["id"]][colour] += 1
+
+    def swatch_of(uri):
+        for colour in colour_order(colours[uri]):
+            if swatches.get(colour):
+                return swatches[colour]
+        return None
+
+    materials_out = {
+        uri: {
+            "uri": uri,
+            "label": labels[uri],
+            "colours": colour_order(colours[uri]),
+            "swatch": swatch_of(uri),
+        }
+        for uri in sorted(labels)
+    }
+
+    histories = {}
+    for occ in occurrences:
+        if occ.model != "document":
+            continue
+        start, end = occ.stored
+        histories[occ.document] = (
+            {
+                "type": occ.type,
+                "carrier": {
+                    "id": occ.carrier,
+                    "model": occ.model,
+                    "name": name_of(occ.carrier),
+                },
+                "places": [
+                    {"id": p, "name": place_names[p]}
+                    for p in occ.linked
+                    if p in place_names
+                ],
+                "date": {
+                    "start": _date(start) if start else None,
+                    "end": _date(end) if end else None,
+                    "approximate": occ.approximate,
+                },
+            },
+        )
+    return EventSet(
+        events=tuple(events),
+        places=places_out,
+        materials=materials_out,
+        material_terms={uri: frozenset(found) for uri, found in terms.items()},
+        histories=histories,
+    )
+
+
+def kept_events(bundle, query):
+    """``(events, keep, filters)``: the public ``MapEvent`` of the events *query* keeps, in bundle order.
+
+    An event is kept when its type is among ``eventType`` (every type without
+    one), its own dates meet the period (``bounds_meet``; ``periodEvent`` does not
+    apply) and one of its supporting analyses is kept by the Corpus rule with the
+    period left out. Under characterization filters an event is kept when one of
+    its materials meets them.
+    ``analyses`` and ``materials`` keep the kept ones; ``materials`` are narrowed
+    by the characterization facets but ``LISTED_SKIP``, and each carries
+    ``matches``: whether it meets every active characterization facet (true for
+    all without one), and ``componentColours``: the ticked colours it carries
+    only through a linked Component's colour, not in its own ``colours``.
+    Whatever shows results reads only the matching ones.
+    """
+    keep, active, filters, *_ = row_filter(bundle.rows, query, universe=bundle.universe)
+    kept_rows = {row["id"] for row in bundle.rows if keep(row, "period")}
+    wanted = characterization_wanted(active)
+    listed = [(key, selected) for key, selected in wanted if key not in LISTED_SKIP]
+    ticked = dict(wanted).get("colour", set())
+    types = set(parse_event_types(query))
+    found = []
+    for event in bundle.events:
+        if event["type"] not in types:
+            continue
+        date = event["date"]
+        if not bounds_meet(
+            None if date["start"] is None else (date["start"], date["end"]), filters
+        ):
+            continue
+        analyses = [a for a in event["analyses"] if a in kept_rows]
+        if not analyses:
+            continue
+        values = bundle.characterization_values
+        materials = [
+            {
+                **m,
+                "matches": not wanted or meets(values[m["characterization"]], wanted),
+                "componentColours": sorted(
+                    (ticked & values[m["characterization"]]["colour"])
+                    - set(m["colours"])
+                ),
+            }
+            for m in event["materials"]
+        ]
+        if wanted:
+            if not any(m["matches"] for m in materials):
+                continue
+            materials = [
+                m for m in materials if meets(values[m["characterization"]], listed)
+            ]
+        found.append({**event, "analyses": analyses, "materials": materials})
+    return found, keep, filters
+
+
+def place_subset(places, used):
+    """The ``MapPlace`` of *used* and of their ancestors, by id."""
+    wanted, frontier = set(), {p for p in used if p}
+    while frontier:
+        wanted |= frontier
+        frontier = {
+            places[p]["parent"] for p in frontier if p in places and places[p]["parent"]
+        } - wanted
+    return {p: places[p] for p in sorted(wanted) if p in places}
+
+
+def map_colour(labels, swatches, uri, language):
+    """``MapColour`` of the colour *uri*: its facet label, else the uri itself."""
+    return {
+        "uri": uri,
+        "label": labels.get(uri, {"value": uri, "lang": language}),
+        "swatch": swatches.get(uri),
+    }
+
+
+def events_payload(query, user, language, ticket=None):
+    """``EventsResponse`` of the events *query* keeps (``kept_events``).
+
+    ``colours`` names the colours of the listed materials and every ticked
+    colour the corpus knows, carried by a listed material or not.
+    """
+    bundle = corpus_bundle(user, language, ticket)
+    events, keep, filters = kept_events(bundle, query)
+    places = place_subset(bundle.event_places, {e["place"] for e in events})
+    event = filters["periodEvent"]
+    materials = {
+        m["id"]: bundle.event_materials[m["id"]] for e in events for m in e["materials"]
+    }
+    colour_labels = bundle.labels.get("colour", {})
+    return {
+        "events": events,
+        "places": places,
+        "unplaced": sum(
+            1 for e in events if not e["place"] or places[e["place"]]["lngLat"] is None
+        ),
+        "period": period_facet(bundle.rows, keep, event, bundle.period_bounds[event]),
+        "materials": materials,
+        "analysisNames": {
+            a: bundle.by_id[a]["name"] for e in events for a in e["analyses"]
+        },
+        "analysisTechniques": {
+            a: bundle.marks[bundle.by_id[a]["technique"]["uri"]]
+            for e in events
+            for a in e["analyses"]
+            if bundle.by_id[a]["technique"]
+        },
+        "colours": {
+            **{
+                colour: map_colour(colour_labels, bundle.swatches, colour, language)
+                for colour in filters["colour"]
+                if colour in colour_labels
+            },
+            **{
+                colour: bundle.event_colours[colour]
+                for m in materials.values()
+                for colour in m["colours"]
+            },
+        },
+        "certaintyScale": bundle.certainty,
+    }

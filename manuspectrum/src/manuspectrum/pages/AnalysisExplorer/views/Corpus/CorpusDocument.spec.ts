@@ -323,6 +323,11 @@ describe("CorpusDocument", () => {
             history: [
                 {
                     type: "production",
+                    carrier: {
+                        id: uuid(1),
+                        model: "document",
+                        name: label("Ms 59"),
+                    },
                     places: [
                         { id: uuid(500), name: label("Le Mont-Saint-Michel") },
                         { id: uuid(501), name: label("Avranches") },
@@ -344,6 +349,11 @@ describe("CorpusDocument", () => {
             history: [
                 {
                     type: "production",
+                    carrier: {
+                        id: uuid(1),
+                        model: "document",
+                        name: label("Ms 59"),
+                    },
                     places: [],
                     date: { start: "1464", end: "1464", approximate: true },
                 },
@@ -362,6 +372,11 @@ describe("CorpusDocument", () => {
             history: [
                 {
                     type: "production",
+                    carrier: {
+                        id: uuid(1),
+                        model: "document",
+                        name: label("Ms 59"),
+                    },
                     places: [{ id: uuid(500), name: label("Avranches") }],
                     date: { start: null, end: null, approximate: false },
                 },

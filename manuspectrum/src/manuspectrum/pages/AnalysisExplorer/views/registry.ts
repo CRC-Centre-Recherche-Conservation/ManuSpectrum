@@ -5,10 +5,9 @@ export interface ExplorerViewEntry {
     available: boolean;
 }
 
-// Map & timeline is unavailable: not built yet.
 export const EXPLORER_VIEWS: readonly ExplorerViewEntry[] = [
     { id: "corpus", available: true },
-    { id: "map", available: false },
+    { id: "map", available: true },
     { id: "compare", available: true },
 ];
 

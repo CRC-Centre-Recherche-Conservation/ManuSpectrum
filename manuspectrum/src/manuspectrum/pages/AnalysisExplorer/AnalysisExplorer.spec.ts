@@ -9,11 +9,13 @@ import AnalysisExplorer from "@/manuspectrum/pages/AnalysisExplorer/AnalysisExpl
 import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { loadCompareView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts";
+import { loadMapView } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/load-map-view.ts";
 import {
     analysisHit,
     analysisPayload,
     documentMatch,
     documentPayload,
+    eventsResponse,
     homeResponse,
     searchResponse,
     uuid,
@@ -42,6 +44,25 @@ vi.mock(
     },
 );
 
+vi.mock(
+    "@/manuspectrum/pages/AnalysisExplorer/views/Map/load-map-view.ts",
+    async (importOriginal) => {
+        const actual =
+            await importOriginal<
+                typeof import("@/manuspectrum/pages/AnalysisExplorer/views/Map/load-map-view.ts")
+            >();
+        return { loadMapView: vi.fn(actual.loadMapView) };
+    },
+);
+
+vi.mock("maplibre-gl", async () =>
+    (
+        await import(
+            "@/manuspectrum/pages/AnalysisExplorer/testing/maplibre.ts"
+        )
+    ).maplibreModule(),
+);
+
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
@@ -68,6 +89,9 @@ beforeEach(() => {
         vi.fn(async (url: string) => {
             if (url.includes("explorer-synthesis")) {
                 return jsonResponse(EMPTY_SYNTHESIS);
+            }
+            if (url.includes("explorer-events")) {
+                return jsonResponse(eventsResponse());
             }
             return url.includes("explorer-items")
                 ? jsonResponse({ items: [], missing: [] })
@@ -117,6 +141,53 @@ describe("AnalysisExplorer", () => {
         await flushPromises();
         expect(wrapper.find(".unavailable-state").exists()).toBe(false);
         expect(wrapper.find(".compare-view").exists()).toBe(true);
+        failure.mockRestore();
+        wrapper.unmount();
+    });
+
+    it("shows the Map view when it is chosen", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia, PrimeVue] },
+        });
+        await flushPromises();
+        useExplorerStore().setView("map");
+        await nextTick();
+        expect(wrapper.find(".compare-loading").text()).toBe(
+            "Loading the map…",
+        );
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".map-view").exists()).toBe(true);
+        expect(wrapper.find(".corpus-home").exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("says the Map view could not be loaded, and loads it again on Retry", async () => {
+        const failure = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.mocked(loadMapView).mockRejectedValueOnce(
+            new Error("Loading chunk explorer-map failed."),
+        );
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia, PrimeVue] },
+        });
+        useExplorerStore().setView("map");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".map-view").exists()).toBe(false);
+        expect(failure).toHaveBeenCalledWith(
+            "The Map view could not be loaded",
+            expect.any(Error),
+        );
+        await wrapper.find(".unavailable-state .retry").trigger("click");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(wrapper.find(".unavailable-state").exists()).toBe(false);
+        expect(wrapper.find(".map-view").exists()).toBe(true);
         failure.mockRestore();
         wrapper.unmount();
     });
@@ -325,6 +396,23 @@ describe("AnalysisExplorer", () => {
         expect(document.body.dataset.explorerScreen).toBeUndefined();
     });
 
+    it("names the Map & timeline and Compare views as screens for the folded page intro", async () => {
+        window.history.replaceState(null, "", "/en/discover");
+        const wrapper = mount(AnalysisExplorer, {
+            global: { plugins: [pinia, PrimeVue] },
+        });
+        await flushPromises();
+        expect(document.body.dataset.explorerScreen).toBe("home");
+        useExplorerStore().setView("map");
+        await nextTick();
+        expect(document.body.dataset.explorerScreen).toBe("map");
+        useExplorerStore().setView("compare");
+        await nextTick();
+        expect(document.body.dataset.explorerScreen).toBe("compare");
+        wrapper.unmount();
+        expect(document.body.dataset.explorerScreen).toBeUndefined();
+    });
+
     it("puts the back link and the Selection button in the intro line of the page", async () => {
         const bar = document.createElement("div");
         bar.id = "ms-explorer-intro-bar";
@@ -435,12 +523,17 @@ describe("AnalysisExplorer", () => {
     it("moves the focus to the heading of the view chosen in the tabs, and back", async () => {
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia] },
+            global: { plugins: [pinia, PrimeVue] },
             attachTo: document.body,
         });
         await flushPromises();
         const tabs = wrapper.findAll(".view-tabs .tab");
         await tabs[1].trigger("click");
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(document.activeElement?.id).toBe("explorer-map-title");
+        await tabs[2].trigger("click");
         await flushPromises();
         await vi.dynamicImportSettled();
         await flushPromises();

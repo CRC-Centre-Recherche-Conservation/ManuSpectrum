@@ -5,6 +5,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 JSON_LD = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+DOCUMENT_ID = "5fbfe388-8acc-4da8-8f8a-382bd2b6ad17"
 
 
 class AnalysisExplorerPageTests(TestCase):
@@ -107,6 +108,81 @@ class AnalysisExplorerPageTests(TestCase):
             f'href="{reverse("analysis-explorer")}" class="ms-mobile-nav-link" aria-current="page"',
             html,
         )
+
+    def test_body_names_the_screen_the_address_opens_on(self):
+        doc = DOCUMENT_ID
+        for query, screen in (
+            ("?view=map", "map"),
+            ("?view=compare&doc=" + doc, "compare"),
+            ("?doc=" + doc, "document"),
+            ("?doc=" + doc.upper(), "document"),
+            ("?screen=results", "results"),
+            ("?grain=analyses&technique=x", "results"),
+            ("?q=lead", "results"),
+            ("?period=1200,1300", "results"),
+        ):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn(
+                f'<body class="ms-page ms-page--app" data-explorer-screen="{screen}">',
+                html,
+                query,
+            )
+
+    def test_home_and_unread_queries_leave_the_body_unmarked(self):
+        for query in (
+            "",
+            "?view=atlas",
+            "?doc=not-a-uuid",
+            "?doc=" + DOCUMENT_ID.replace("-", ""),
+            "?doc={" + DOCUMENT_ID + "}",
+            "?doc=urn:uuid:" + DOCUMENT_ID,
+            "?grain=analyses",
+            "?period=x",
+        ):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn('<body class="ms-page ms-page--app">', html, query)
+
+    def test_loading_skeleton_announces_itself_and_follows_the_screen(self):
+        home = self.client.get(reverse("analysis-explorer")).content.decode()
+        mapped = self.client.get(
+            reverse("analysis-explorer") + "?view=map"
+        ).content.decode()
+        compare = self.client.get(
+            reverse("analysis-explorer") + "?view=compare"
+        ).content.decode()
+        self.assertIn(
+            '<p class="ms-explorer-loading__status" role="status" aria-live="polite">Loading the explorer…</p>',
+            home,
+        )
+        self.assertIn("ms-explorer-loading--home", home)
+        self.assertIn("ms-explorer-loading__cards", home)
+        self.assertIn("ms-explorer-loading--screen", mapped)
+        self.assertIn("ms-explorer-loading__rail", mapped)
+        self.assertIn("ms-explorer-loading--compare", compare)
+        self.assertNotIn("ms-explorer-loading__body", compare)
+
+    def test_loading_skeleton_carries_no_spectral_line_on_every_screen(self):
+        for query in ("", "?view=map", "?view=compare"):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertNotIn("spectral-line-thin", html, query)
+            self.assertIn("ms-explorer-loading__tabs", html, query)
+
+    def test_title_accent_is_in_the_server_markup_for_the_loading_scan(self):
+        for query in ("", "?view=map"):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn(
+                '<span class="ms-explorer-intro__accent" aria-hidden="true"></span>',
+                html,
+                query,
+            )
 
 
 class AnalysisExplorerIndexingTests(TestCase):

@@ -12,9 +12,12 @@ import type {
     FacetValue,
     FileEntry,
     FileLayer,
+    EventsResponse,
     HomeResponse,
     LayerMethod,
     LayerUnit,
+    MapEvent,
+    MapPlace,
     ProductLink,
     RangeFacet,
     SampleSummary,
@@ -216,6 +219,53 @@ export function documentPayload(
         unpublished: false,
         certaintyScale: { levels: [] },
         samples: [],
+        ...overrides,
+    };
+}
+
+export function mapEvent(overrides: Partial<MapEvent> = {}): MapEvent {
+    return {
+        id: "production:d1:p1",
+        type: "production",
+        carrier: { id: uuid(1), model: "document", name: label("Ms 59") },
+        document: { id: uuid(1), name: label("Ms 59") },
+        component: null,
+        place: uuid(10),
+        placeSource: "place",
+        date: { start: 1301, end: 1400, approximate: false },
+        materials: [],
+        analyses: [uuid(100)],
+        ...overrides,
+    };
+}
+
+export function mapPlace(overrides: Partial<MapPlace> = {}): MapPlace {
+    return {
+        id: uuid(10),
+        name: label("Paris"),
+        lngLat: [2.35, 48.85],
+        geometryKind: "point",
+        extentKm: null,
+        parent: null,
+        unpublished: false,
+        authorities: {},
+        ...overrides,
+    };
+}
+
+export function eventsResponse(
+    overrides: Partial<EventsResponse> = {},
+): EventsResponse {
+    return {
+        events: [mapEvent()],
+        places: { [uuid(10)]: mapPlace() },
+        unplaced: 0,
+        period: null,
+        materials: {},
+        colours: {},
+        analysisNames: { [uuid(100)]: label("X01") },
+        analysisTechniques: {},
+        certaintyScale: { levels: [] },
         ...overrides,
     };
 }

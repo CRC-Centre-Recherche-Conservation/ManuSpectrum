@@ -2,6 +2,7 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
+import { useGettext } from "vue3-gettext";
 
 import SelectionCapacityNotice from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionCapacityNotice.vue";
 
@@ -28,9 +29,9 @@ function hold(count: number): void {
     useExplorerStore().addManyToBasket(keys(count, 100));
 }
 
-function mountNotice(zone: string[]) {
+function mountNotice(zone: string[], scope?: "page" | "here") {
     return mount(SelectionCapacityNotice, {
-        props: { keys: zone, id: "zone-notice" },
+        props: { keys: zone, id: "zone-notice", ...(scope ? { scope } : {}) },
         global: {
             provide: {
                 [ANNOUNCE_KEY as symbol]: vi.fn(),
@@ -103,6 +104,25 @@ describe("SelectionCapacityNotice", () => {
         expect(notice.get(".text").text()).toBe(
             "This page has 4 analyses to add: tick them one by one or make room.",
         );
+    });
+
+    it("says « here » instead of « this page » for a panel", () => {
+        hold(27);
+        expect(mountNotice(keys(4), "here").get(".text").text()).toBe(
+            "4 analyses here to add: tick them one by one or make room.",
+        );
+    });
+
+    it("counts the analyses « here » with a plural-aware message", () => {
+        hold(27);
+        const plural = vi.spyOn(useGettext(), "$ngettext");
+        mountNotice(keys(4), "here");
+        expect(plural).toHaveBeenCalledWith(
+            "%{n} analysis here to add: tick it or make room.",
+            "%{n} analyses here to add: tick them one by one or make room.",
+            4,
+        );
+        plural.mockRestore();
     });
 
     it("uses the singular for one place left", () => {

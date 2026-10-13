@@ -7,6 +7,10 @@ import {
     markImageFailed,
 } from "@/manuspectrum/pages/AnalysisExplorer/failed-images.ts";
 import {
+    ICONS,
+    ICON_VIEW_BOX,
+} from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import {
     formatProductionDate,
     safeHref,
 } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
@@ -21,7 +25,8 @@ import type {
  * description and its number of analyses. The title link is stretched over
  * the whole card, so the card opens the document with one link named by the
  * title. The thumbnail is drawn only from a site path or an http(s) address
- * (`safeHref`); one the server refuses leaves the neutral placeholder, and is
+ * (`safeHref`); a document without one, or one the server refuses, shows a muted
+ * book icon in the same frame, and is
  * not asked for again for a minute (`IMAGE_RETRY_AFTER_MS`).
  */
 const props = defineProps<{ hit: DocumentHit; href: string }>();
@@ -91,6 +96,19 @@ function open(event: MouseEvent): void {
                 :src="thumbnail"
                 @error="onThumbnailError"
             />
+            <svg
+                v-else
+                class="placeholder"
+                :viewBox="ICON_VIEW_BOX"
+                aria-hidden="true"
+                focusable="false"
+            >
+                <path
+                    v-for="(path, index) in ICONS.book"
+                    :key="index"
+                    :d="path"
+                />
+            </svg>
         </span>
         <div class="body">
             <h3 class="name">
@@ -161,6 +179,15 @@ function open(event: MouseEvent): void {
     overflow: hidden;
     border-radius: 0.375rem;
     background: var(--bg-alt);
+}
+
+.document-card .thumbnail .placeholder {
+    inline-size: 100%;
+    block-size: 100%;
+    padding: 1rem 0.5rem;
+    box-sizing: border-box;
+    fill: var(--ink-muted);
+    opacity: 0.6;
 }
 
 .document-card .thumbnail img {

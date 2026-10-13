@@ -44,6 +44,7 @@ import {
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { localDay } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
 import { loadCompareView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts";
+import { loadMapView } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/load-map-view.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
     SELECTION_PARAM,
@@ -104,11 +105,14 @@ const selectionDrawer =
 const compareView = shallowRef<Component>();
 /** Its chunk is on its way, or could not be fetched (Retry fetches it again). */
 const compareChunk = ref<"idle" | "loading" | "failed">("idle");
+/** The Map & timeline view once its chunk has arrived, and the state of that chunk. */
+const mapView = shallowRef<Component>();
+const mapChunk = ref<"idle" | "loading" | "failed">("idle");
 /** The shared reading of the Selection, started by its first reader (the Selection panel or the Compare view). */
 const selectionScope = effectScope();
 let selectionItems: SelectionItems | null = null;
 
-/** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
+/** The screen shown, as CorpusView decides it: the page intro folds to one line everywhere but the Corpus home. */
 const screen = computed(() => {
     if (store.view !== "corpus") return store.view;
     if (store.corpusScreen === "document" && store.document) return "document";
@@ -160,6 +164,7 @@ watch(
     () => store.view,
     (view) => {
         if (view === "compare") void openCompare();
+        if (view === "map") void openMap();
     },
     { immediate: true },
 );
@@ -216,6 +221,19 @@ async function openCompare(): Promise<void> {
     } catch (error: unknown) {
         compareChunk.value = "failed";
         console.error("The Compare view could not be loaded", error);
+    }
+}
+
+/** Fetches the Map view's chunk, once; a failure is shown with Retry. */
+async function openMap(): Promise<void> {
+    if (mapView.value || mapChunk.value === "loading") return;
+    mapChunk.value = "loading";
+    try {
+        mapView.value = await loadMapView();
+        mapChunk.value = "idle";
+    } catch (error: unknown) {
+        mapChunk.value = "failed";
+        console.error("The Map view could not be loaded", error);
     }
 }
 
@@ -279,6 +297,26 @@ function onSelectionResolved(message: string): void {
             >
                 <LoadingSpinner />
                 <span>{{ $gettext("Loading the Compare view…") }}</span>
+            </p>
+        </template>
+        <template v-else-if="store.view === 'map'">
+            <component
+                :is="mapView"
+                v-if="mapView"
+            />
+            <UnavailableState
+                v-else-if="mapChunk === 'failed'"
+                status="error"
+                :hide-home="true"
+                @retry="openMap"
+            />
+            <p
+                v-else
+                class="compare-loading"
+                role="status"
+            >
+                <LoadingSpinner />
+                <span>{{ $gettext("Loading the map…") }}</span>
             </p>
         </template>
         <p

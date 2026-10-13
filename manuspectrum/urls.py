@@ -53,6 +53,7 @@ from manuspectrum.views.explorer.api import (
     ExplorerAnalysisView,
     ExplorerDocumentMatchView,
     ExplorerDocumentView,
+    ExplorerEventsView,
     ExplorerFacetView,
     ExplorerHomeView,
     ExplorerItemsView,
@@ -60,6 +61,10 @@ from manuspectrum.views.explorer.api import (
     ExplorerSearchView,
     ExplorerShareView,
     ExplorerSynthesisView,
+)
+from manuspectrum.views.explorer.events_export import (
+    ExplorerEventsCsvView,
+    ExplorerEventsGeoJsonView,
 )
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
@@ -276,6 +281,13 @@ urlpatterns.append(
         name="explorer-synthesis",
     )
 )
+urlpatterns.append(
+    path(
+        "api/explorer/events",
+        ExplorerEventsView.as_view(),
+        name="explorer-events",
+    )
+)
 
 if settings.ROOT_URLCONF == __name__:
     # set_language must live INSIDE i18n_patterns: Django's view calls
@@ -444,6 +456,20 @@ urlpatterns.append(
 )
 urlpatterns.append(
     path("api/explorer/export", ExplorerExportView.as_view(), name="explorer-export")
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events.csv",
+        ExplorerEventsCsvView.as_view(),
+        name="explorer-events-csv",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events.geojson",
+        ExplorerEventsGeoJsonView.as_view(),
+        name="explorer-events-geojson",
+    )
 )
 
 ### Manuspectrum URL - IIIF Annotations

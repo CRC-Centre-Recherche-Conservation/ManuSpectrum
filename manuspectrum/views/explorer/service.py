@@ -16,7 +16,7 @@ import re
 import textwrap
 import uuid
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import nh3
 import orjson
@@ -56,6 +56,7 @@ from manuspectrum.utils.public_visibility import (
 )
 from manuspectrum.utils.role_links import readable_links, role_node
 from manuspectrum.utils.roles import ROLES
+from manuspectrum.utils.manifest_values import first_manifest_url
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.citations import (
     CitedAnalysis,
@@ -652,9 +653,10 @@ def material_components(visible, chains, objects_of):
 
 
 def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
-    """``(rows, values, parents, linked)``: the ``corpus_rows``, per visible
+    """``(rows, values, own_values, parents, linked)``: the ``corpus_rows``, per visible
     identified material ``{key: set of uris}`` of the characterization facets
-    for ``match_payload``,
+    for ``match_payload`` and, as *own_values*, the same keys without the
+    colours of its linked components (the material's own ``color_aspect``),
     the ``place_closure`` parents of the places the rows carry and the
     ``material_components``.
 
@@ -935,7 +937,7 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "periods": production_of(document, component)[1],
             }
         )
-    return rows, match_sets, place_parents, linked
+    return rows, match_sets, value_sets, place_parents, linked
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -960,7 +962,13 @@ class CorpusBundle:
     the order the colour facet shows them. ``places`` maps every place the rows
     carry, ancestors included, to ``{"parent": id or None, "unpublished":
     bool}``; ``period_bounds`` holds per event the ``(min start, max end)``
-    years of the dated rows, or None.
+    years of the dated rows, or None. ``events`` are the map's events
+    (``events.build_events``), ``event_places`` the ``MapPlace`` of their
+    places and ancestors, ``event_materials`` the ``MapMaterial`` by uri, ``event_colours`` the
+    ``MapColour`` of every colour they use,
+    ``material_terms`` the folded labels (preferred and alternative) of each
+    material uri, ``histories`` the ``HistoryLine`` tuple (the Production) of each document,
+    ``certainty`` the ``certainty_scale``.
     """
 
     visible: VisibleSet
@@ -982,6 +990,13 @@ class CorpusBundle:
     colour_items: list
     places: dict
     period_bounds: dict
+    events: tuple = ()
+    event_places: dict = field(default_factory=dict)
+    event_materials: dict = field(default_factory=dict)
+    event_colours: dict = field(default_factory=dict)
+    material_terms: dict = field(default_factory=dict)
+    histories: dict = field(default_factory=dict)
+    certainty: dict = field(default_factory=dict)
 
     @property
     def colour_ranks(self):
@@ -1014,7 +1029,7 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows, characterization_values, place_parents, linked = _corpus_rows(
+    rows, characterization_values, own_values, place_parents, linked = _corpus_rows(
         user, language, visible, chains, links["projects"], links["objects"]
     )
     colour_items, colour_labels, colour_swatches = colour_list(language)
@@ -1046,6 +1061,41 @@ def build_bundle(user, language, visible):
     placed = {place for row in rows for place in row["places"]}
     drafts = unpublished_resource_ids(placed)
     produced = [r["periods"]["production"] for r in rows if r["periods"]["production"]]
+    order = {
+        row["id"]: (
+            folded(label_of[row["document"]]["value"]),
+            row["component"] or "",
+            folded(row["name"]["value"]),
+            row["id"],
+        )
+        for row in rows
+    }
+    swatches = {
+        **colour_swatches,
+        **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
+    }
+    from manuspectrum.views.explorer.events import build_events, map_colour
+
+    event_set = build_events(
+        user,
+        language,
+        visible,
+        chains,
+        links,
+        rows,
+        order,
+        label_of,
+        characterization_values,
+        own_values,
+        linked,
+        swatches,
+    )
+    labels = _with_colour_labels(_facet_labels(rows, language, user), colour_labels)
+    event_colours = {
+        colour: map_colour(labels.get("colour", {}), swatches, colour, language)
+        for material in event_set.materials.values()
+        for colour in material["colours"]
+    }
     return CorpusBundle(
         visible=visible,
         chains=chains,
@@ -1054,7 +1104,7 @@ def build_bundle(user, language, visible):
         by_id={row["id"]: row for row in rows},
         by_document=dict(by_document),
         universe=facet_universe(rows),
-        labels=_with_colour_labels(_facet_labels(rows, language, user), colour_labels),
+        labels=labels,
         marks={
             row["technique"]["uri"]: {
                 k: row["technique"][k] for k in ("code", "colour", "family")
@@ -1062,22 +1112,11 @@ def build_bundle(user, language, visible):
             for row in rows
             if row["technique"]
         },
-        swatches={
-            **colour_swatches,
-            **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
-        },
+        swatches=swatches,
         label_of=label_of,
         folded=names_folded,
         documents=sorted(documents, key=lambda d: (names_folded[d], d)),
-        order={
-            row["id"]: (
-                folded(label_of[row["document"]]["value"]),
-                row["component"] or "",
-                folded(row["name"]["value"]),
-                row["id"],
-            )
-            for row in rows
-        },
+        order=order,
         characterization_values=characterization_values,
         material_components=linked,
         colour_items=colour_items,
@@ -1093,6 +1132,13 @@ def build_bundle(user, language, visible):
             ),
             "modification": None,
         },
+        events=event_set.events,
+        event_places=event_set.places,
+        event_materials=event_set.materials,
+        event_colours=event_colours,
+        material_terms=event_set.material_terms,
+        histories=event_set.histories,
+        certainty=certainty_scale(language),
     )
 
 
@@ -1320,23 +1366,27 @@ def meets(values, wanted):
     return all(values[key] & selected for key, selected in wanted)
 
 
-def in_period(row, filters):
-    """Whether *row* meets the ``period`` of *filters*: true without one.
+def bounds_meet(bounds, filters):
+    """Whether years ``(start, end)`` meet the ``period`` of *filters*: true without one.
 
-    The row's years for the ``periodEvent`` overlap the period, or lie within
-    it with ``periodMatch=within``; a row without a date for the event is kept
-    only with ``undated``.
+    They overlap the period, or lie within it with ``periodMatch=within``;
+    *bounds* None is kept only with ``undated``.
     """
     if not filters["period"]:
         return True
-    bounds = row["periods"].get(filters["periodEvent"])
     if bounds is None:
         return filters["undated"]
     low, high = filters["period"]
-    start, end, _ = bounds
     if filters["periodMatch"] == "within":
-        return start >= low and end <= high
-    return start <= high and end >= low
+        return bounds[0] >= low and bounds[1] <= high
+    return bounds[0] <= high and bounds[1] >= low
+
+
+def in_period(row, filters):
+    """Whether *row* meets the ``period`` of *filters* for its ``periodEvent`` (``bounds_meet``)."""
+    if not filters["period"]:
+        return True
+    return bounds_meet(row["periods"].get(filters["periodEvent"]), filters)
 
 
 def row_filter(rows, query, universe=None):
@@ -1760,6 +1810,12 @@ def facet_payload(key, query, user, language, ticket=None):
             for value in facet["values"]
             if needle in fold(value["label"]["value"])
         }
+        if key == "material":
+            matching |= {
+                v["id"]
+                for v in facet["values"]
+                if any(needle in t for t in bundle.material_terms.get(v["id"], ()))
+            }
         if key == "place":
             matching |= place_ancestors(matching | selected, bundle.places)
         facet["values"] = [
@@ -1918,7 +1974,8 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
     """``DocumentHit`` of each of *document_ids*, in order, read in one batch.
 
     A field whose nodegroup the reader may not read is None; the holding is
-    the first owner a linked reference may show.
+    the first owner a linked reference may show. ``thumbnail`` is the route of
+    the Document's thumbnail, None when it holds no manifest.
     """
     values = Values(
         document_ids,
@@ -1931,6 +1988,7 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
             "doc_approx",
             "doc_description",
             "doc_type",
+            "doc_manifest",
         ],
         user,
     )
@@ -1975,7 +2033,11 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
                 "name": label_of[d],
                 "holding": owner_names[owner_of[d][0]] if owner_of[d] else None,
                 "analysisCount": per_document[d],
-                "thumbnail": reverse("thumbnail", kwargs={"resource_id": d}),
+                "thumbnail": (
+                    reverse("thumbnail", kwargs={"resource_id": d})
+                    if first_manifest_url(values.get(d, "doc_manifest"))
+                    else None
+                ),
                 "unpublished": d in visible.unpublished,
                 "shelfmark": (
                     _shelfmark(
@@ -2298,22 +2360,9 @@ def component_zones(document_id, bundle, dims, position, readable):
     return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
 
 
-def history_of(values, document_id, places, label_of):
-    """The ``HistoryLine`` list of a document: its Production, or none without a bound or a place.
-
-    *places* are the production places a reference may show, in stored
-    order; *label_of* names them.
-    """
-    dates = production_dates(values, document_id)
-    if dates is None and not places:
-        return []
-    return [
-        {
-            "type": "production",
-            "places": [{"id": p, "name": label_of[p]} for p in places if p in label_of],
-            "date": dates or {"start": None, "end": None, "approximate": False},
-        }
-    ]
+def history_of(bundle, document_id):
+    """The ``HistoryLine`` list of a document: its Production line (``CorpusBundle.histories``)."""
+    return [dict(line) for line in bundle.histories.get(document_id, ())]
 
 
 def document_payload(document_id, user, language, ticket=None):
@@ -2328,8 +2377,7 @@ def document_payload(document_id, user, language, ticket=None):
     visible Components placed on its pages (``component_zones``) or observed
     by one of its analyses, the placed ones by first page then name, the
     others by name after them. ``document_match`` says what the filters keep. ``history`` holds
-    the document's Production line when it has a bound or a place a linked
-    reference may show (a Draft place included, a hidden one left out).
+    the document's Production line when it has a bound, a visible place or an own geometry (``history_of``).
     """
     bundle = corpus_bundle(user, language, ticket)
     visible = bundle.visible
@@ -2344,10 +2392,6 @@ def document_payload(document_id, user, language, ticket=None):
             "doc_name",
             "doc_manifest",
             "doc_owner",
-            "doc_start",
-            "doc_end",
-            "doc_approx",
-            "doc_place",
         ],
         user,
     )
@@ -2399,12 +2443,9 @@ def document_payload(document_id, user, language, ticket=None):
         for v in values.get(document_id, "doc_owner")
         if isinstance(v, dict) and str(v.get("resourceId")) in shown
     ]
-    produced = _ordered_refs(values.get(document_id, "doc_place"))
-    shown_places = set(linkable(produced, user))
-    produced_at = [p for p in produced if p in shown_places]
     observed = {row["component"] for row in rows if row["component"]}
     label_of = names(
-        {document_id} | set(owners[:1]) | set(placed) | observed | set(produced_at),
+        {document_id} | set(owners[:1]) | set(placed) | observed,
         language,
         user,
     )
@@ -2447,7 +2488,7 @@ def document_payload(document_id, user, language, ticket=None):
             for c in components
         ],
         "characterizations": summaries,
-        "history": history_of(values, document_id, produced_at, label_of),
+        "history": history_of(bundle, document_id),
         "unpublishedCount": sum(1 for row in rows if row["unpublished"])
         + sum(1 for s in summaries if s["unpublished"]),
         "unpublished": document_id in visible.unpublished,

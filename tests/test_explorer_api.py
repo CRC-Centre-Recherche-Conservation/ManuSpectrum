@@ -73,7 +73,7 @@ class SearchRouteTests(ServiceCase):
         )
         self.assertEqual(again.status_code, 304)
 
-    def test_a_document_thumbnail_is_a_path_on_the_site_that_serves_the_page(self):
+    def test_a_document_without_a_manifest_has_no_thumbnail(self):
         results = self.get("?grain=documents").json()["results"]
 
         self.assertTrue(results)
@@ -81,9 +81,33 @@ class SearchRouteTests(ServiceCase):
             assert_shape(self, hit, "DocumentHit")
             if hit["dates"]:
                 assert_shape(self, hit["dates"], "ProductionDates")
-            self.assertTrue(
-                hit["thumbnail"].startswith("/en/thumbnail/"), hit["thumbnail"]
-            )
+            self.assertIsNone(hit["thumbnail"], hit)
+
+    def test_a_document_with_a_manifest_has_a_thumbnail_path_on_the_site(self):
+        self.tile(self.documents["open"], "facsimiles", MANIFEST)
+
+        hits = {h["id"]: h for h in self.get("?grain=documents").json()["results"]}
+
+        self.assertEqual(
+            hits[str(self.documents["open"].pk)]["thumbnail"],
+            f"/en/thumbnail/{self.documents['open'].pk}",
+        )
+        others = [h for i, h in hits.items() if i != str(self.documents["open"].pk)]
+        self.assertTrue(others)
+        self.assertTrue(all(h["thumbnail"] is None for h in others))
+
+    def test_a_later_facsimile_naming_a_manifest_gives_the_thumbnail(self):
+        document = self.documents["open"]
+        first = self.tile(document, "facsimiles", "https://example.org/ms59/scan")
+        later = self.tile(document, "facsimiles", MANIFEST)
+        TileModel.objects.filter(pk=first.pk).update(sortorder=0)
+        TileModel.objects.filter(pk=later.pk).update(sortorder=1)
+
+        hits = {h["id"]: h for h in self.get("?grain=documents").json()["results"]}
+
+        self.assertEqual(
+            hits[str(document.pk)]["thumbnail"], f"/en/thumbnail/{document.pk}"
+        )
 
     def test_facets_0_leaves_the_facets_out_and_keeps_the_results(self):
         full = self.get("?grain=analyses").json()
@@ -278,7 +302,10 @@ class ReadRightsTests(ReadRightsCase):
     def test_a_restricted_production_nodegroup_leaves_dates_and_places_out(self):
         document = str(self.documents["open"].pk)
         shown = self.document(self.documents["open"].pk)
-        self.assertEqual(len(shown["history"]), 1)
+        self.assertEqual(
+            len([l for l in shown["history"] if l["carrier"]["model"] == "document"]),
+            1,
+        )
 
         self.deny(("document", "production_at_place"))
 
@@ -290,7 +317,14 @@ class ReadRightsTests(ReadRightsCase):
             if r["id"] == document
         )
         self.assertIsNone(hit["dates"])
-        self.assertEqual(self.document(self.documents["open"].pk)["history"], [])
+        self.assertEqual(
+            [
+                l
+                for l in self.document(self.documents["open"].pk)["history"]
+                if l["carrier"]["model"] == "document"
+            ],
+            [],
+        )
         self.assertNotIn("Paris", str(self.document(self.documents["open"].pk)))
 
     def test_a_value_nodegroup_the_visitor_cannot_read_leaves_its_values_out(self):
@@ -408,7 +442,7 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         assert_shape(self, payload, "DocumentPayload")
-        self.assertEqual(len(payload["history"]), 1)
+        self.assertEqual(payload["history"][0]["carrier"]["model"], "document")
         for line in payload["history"]:
             assert_shape(self, line, "HistoryLine")
             for place in line["places"]:

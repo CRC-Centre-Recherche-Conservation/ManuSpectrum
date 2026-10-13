@@ -470,7 +470,7 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
 }
 
 .facet-rail .group + .group {
-    padding-block-start: 0.75rem;
+    padding-block-start: 0;
     border-block-start: 0.0625rem solid var(--border);
 }
 
@@ -480,11 +480,24 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
     gap: 1rem;
 }
 
+/*
+ * A stuck title covers the rail's top padding (RailPanel .rail-panel,
+ * 1rem) with its own: a sticky box stops at the scroll container's padding
+ * edge, and the rows scrolled past would show through that strip.
+ */
 .facet-rail .group-title {
+    --rail-inset: 1rem;
+
     position: sticky;
-    inset-block-start: 0;
-    z-index: 1;
+    inset-block-start: calc(-1 * var(--rail-inset));
+    z-index: 3;
+    padding-block-start: var(--rail-inset);
     background: var(--surface);
+}
+
+/* The rail's own gap already separates the first title from the rail title. */
+.facet-rail .group:first-child > .group-title {
+    margin-block-start: calc(-1 * var(--rail-inset));
 }
 
 .facet-rail .disclosure {

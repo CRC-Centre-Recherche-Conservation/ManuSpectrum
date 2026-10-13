@@ -66,6 +66,7 @@ BUNDLE_BUILDERS = (
     "views/explorer/home.py",
     "views/explorer/memo.py",
     "views/explorer/values.py",
+    "views/explorer/events.py",
     "utils/role_links.py",
 )
 NOT_SHAPING = {

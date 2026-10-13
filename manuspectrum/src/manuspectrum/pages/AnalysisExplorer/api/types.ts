@@ -31,13 +31,7 @@ export type ImageRef = {
     width: number;
     height: number;
 };
-export type EventType =
-    | "production"
-    | "current-location"
-    | "modification"
-    | "alteration"
-    | "analysis"
-    | "sampling";
+export type EventType = "production" | "modification" | "alteration";
 export type FacetKey =
     | "place"
     | "partType"
@@ -217,8 +211,84 @@ export interface SampleSummary {
 
 export interface HistoryLine {
     type: EventType;
+    carrier: Ref;
     places: NamedRef[];
     date: ProductionDates;
+}
+
+export type PlaceSource = "own" | "place" | "parent";
+
+/** Years of an event: the widest interval of its bounds; a single bound stands for both; null when undated. */
+export interface EventDate {
+    start: number | null;
+    end: number | null;
+    approximate: boolean;
+}
+
+/** An identified material placed on an event (`id` is its uri, `reliability` the Confidence item id). */
+export interface EventMaterial {
+    id: string;
+    name: Label;
+    reliability: string | null;
+    characterization: string;
+    /** The characterization's own colour uris (never its Component's), as `MapMaterial.colours` orders them. */
+    colours: string[];
+    /** Meets every active characterization filter; true for all without one. */
+    matches: boolean;
+    /** The ticked colour uris it carries only through a linked Component's colour. */
+    componentColours: string[];
+}
+
+export interface MapEvent {
+    id: string;
+    type: EventType;
+    carrier: Ref;
+    document: NamedRef;
+    component: NamedRef | null;
+    place: string | null;
+    placeSource: PlaceSource | null;
+    date: EventDate;
+    materials: EventMaterial[];
+    analyses: string[];
+}
+
+export interface MapPlace {
+    id: string;
+    name: Label;
+    lngLat: [number, number] | null;
+    geometryKind: "point" | "area";
+    extentKm: number | null;
+    parent: string | null;
+    unpublished: boolean;
+    authorities: { geonames?: string; wikidata?: string };
+}
+
+/** A material of the events; `colours` are the uris of its observed colours, most frequent first. */
+export interface MapMaterial {
+    uri: string;
+    label: Label;
+    colours: string[];
+    swatch: string | null;
+}
+
+export interface MapColour {
+    uri: string;
+    label: Label;
+    swatch: string | null;
+}
+
+export interface EventsResponse {
+    events: MapEvent[];
+    places: Record<string, MapPlace>;
+    unplaced: number;
+    period: RangeFacet | null;
+    materials: Record<string, MapMaterial>;
+    /** The colours of `materials` and every ticked `colour` filter value, by uri. */
+    colours: Record<string, MapColour>;
+    analysisNames: Record<string, Label>;
+    /** The technique mark of each cited analysis that names a technique. */
+    analysisTechniques: Record<string, TechniqueMark>;
+    certaintyScale: CertaintyScale;
 }
 
 export interface CharacterizationSummary {
@@ -639,9 +709,68 @@ export const SHAPE_KEYS = {
     } satisfies Record<keyof ProductionDates, true>,
     HistoryLine: {
         type: true,
+        carrier: true,
         places: true,
         date: true,
     } satisfies Record<keyof HistoryLine, true>,
+    EventsResponse: {
+        events: true,
+        places: true,
+        unplaced: true,
+        period: true,
+        materials: true,
+        colours: true,
+        analysisNames: true,
+        analysisTechniques: true,
+        certaintyScale: true,
+    } satisfies Record<keyof EventsResponse, true>,
+    MapEvent: {
+        id: true,
+        type: true,
+        carrier: true,
+        document: true,
+        component: true,
+        place: true,
+        placeSource: true,
+        date: true,
+        materials: true,
+        analyses: true,
+    } satisfies Record<keyof MapEvent, true>,
+    EventDate: {
+        start: true,
+        end: true,
+        approximate: true,
+    } satisfies Record<keyof EventDate, true>,
+    EventMaterial: {
+        id: true,
+        name: true,
+        reliability: true,
+        characterization: true,
+        colours: true,
+        matches: true,
+        componentColours: true,
+    } satisfies Record<keyof EventMaterial, true>,
+    MapPlace: {
+        id: true,
+        name: true,
+        lngLat: true,
+        geometryKind: true,
+        extentKm: true,
+        parent: true,
+        unpublished: true,
+        authorities: true,
+    } satisfies Record<keyof MapPlace, true>,
+    MapMaterial: {
+        uri: true,
+        label: true,
+        colours: true,
+        swatch: true,
+    } satisfies Record<keyof MapMaterial, true>,
+    MapColour: {
+        uri: true,
+        label: true,
+        swatch: true,
+    } satisfies Record<keyof MapColour, true>,
     ImageRef: {
         service: true,
         url: true,

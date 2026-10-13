@@ -67,6 +67,11 @@ describe("DocumentCard", () => {
         await wrapper.find("img").trigger("error");
         expect(wrapper.find("img").exists()).toBe(false);
         expect(wrapper.find(".thumbnail").exists()).toBe(true);
+        expect(
+            wrapper
+                .find(".thumbnail svg.placeholder")
+                .attributes("aria-hidden"),
+        ).toBe("true");
     });
 
     it("does not ask again for a while for a thumbnail that failed", async () => {
@@ -82,6 +87,18 @@ describe("DocumentCard", () => {
             props: { hit: documentHit(4), href: "?doc=y" },
         });
         expect(other.find("img").exists()).toBe(true);
+    });
+
+    it("keeps the placeholder without drawing an image when the hit has no thumbnail", () => {
+        const wrapper = mount(DocumentCard, {
+            props: {
+                hit: { ...documentHit(6), thumbnail: null },
+                href: "?doc=x",
+            },
+        });
+        expect(wrapper.find("img").exists()).toBe(false);
+        expect(wrapper.find(".thumbnail").exists()).toBe(true);
+        expect(wrapper.find(".thumbnail svg.placeholder").exists()).toBe(true);
     });
 
     it("draws no thumbnail from an address outside http(s)", () => {

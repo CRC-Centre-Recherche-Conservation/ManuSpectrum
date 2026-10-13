@@ -173,6 +173,36 @@ export function formatProductionDate(
 }
 
 /**
+ * « 1300, 14th century »: a year followed by the century it falls in, the
+ * wording of the period sliders' `aria-valuetext`. A year below 1 is printed
+ * as is.
+ */
+export function yearAndCentury(
+    year: number,
+    $gettext: Translate,
+    interpolate: Interpolate,
+    lang = "en",
+): string {
+    if (year < 1) return String(year);
+    const first = Math.floor((year - 1) / CENTURY_YEARS) * CENTURY_YEARS + 1;
+    const century = formatProductionDate(
+        {
+            start: String(first),
+            end: String(first + CENTURY_YEARS - 1),
+            approximate: false,
+        },
+        $gettext,
+        interpolate,
+        lang,
+    );
+    return interpolate(
+        $gettext("%{year}, %{century}"),
+        { year, century },
+        true,
+    );
+}
+
+/**
  * An address safe to put in `href`: an absolute http or https URL as given, a
  * bare DOI (`10.xxxx/…`) as its doi.org address, a path of this site (one
  * leading `/`, read on no other host) as given; null for anything else (other

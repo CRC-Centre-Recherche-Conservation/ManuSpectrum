@@ -24,6 +24,25 @@ function mountTip() {
     });
 }
 
+function mountToggle(onAction = vi.fn()) {
+    return mount(HelpTip, {
+        props: { text: HELP, toggle: true },
+        slots: {
+            default: ({ describedby }: { describedby?: string }) =>
+                h(
+                    "button",
+                    {
+                        type: "button",
+                        "aria-describedby": describedby,
+                        onClick: onAction,
+                    },
+                    "i",
+                ),
+        },
+        attachTo: document.body,
+    });
+}
+
 const LABEL = "Download CSV";
 const DETAIL = "Two columns per curve.";
 
@@ -355,6 +374,90 @@ describe("HelpTip", () => {
         expect(shown()).not.toBeNull();
         watchers.at(-1)?.([{ isIntersecting: false }]);
         await wrapper.vm.$nextTick();
+        expect(shown()).toBeNull();
+    });
+
+    describe("toggle", () => {
+        it("opens on a touch tap and closes on the next", async () => {
+            const wrapper = mountToggle();
+            const button = wrapper.find("button");
+
+            button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            wrapper.element.dispatchEvent(pointer("pointerleave", "touch"));
+            await button.trigger("click");
+            expect(shown()).not.toBeNull();
+
+            button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            wrapper.element.dispatchEvent(pointer("pointerleave", "touch"));
+            await button.trigger("click");
+            expect(shown()).toBeNull();
+        });
+
+        it("closes on Escape and on a press outside, not on a press inside", async () => {
+            const wrapper = mountToggle();
+            const button = wrapper.find("button");
+            button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            await button.trigger("click");
+
+            document.body.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+            );
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+
+            button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            await button.trigger("click");
+            document.body.dispatchEvent(pointer("pointerdown", "touch"));
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+
+            button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            await button.trigger("click");
+            wrapper
+                .find('[role="tooltip"]')
+                .element.dispatchEvent(pointer("pointerdown", "touch"));
+            await wrapper.vm.$nextTick();
+            expect(shown()).not.toBeNull();
+        });
+
+        it("does not toggle twice on a mouse click after a hover", async () => {
+            const wrapper = mountToggle();
+            const button = wrapper.find("button");
+
+            wrapper.element.dispatchEvent(pointer("pointerenter"));
+            vi.advanceTimersByTime(DELAY_MS);
+            await wrapper.vm.$nextTick();
+            expect(shown()).not.toBeNull();
+
+            button.element.dispatchEvent(pointer("pointerdown", "mouse"));
+            await button.trigger("click");
+            expect(shown()).toBeNull();
+            vi.advanceTimersByTime(DELAY_MS * 4);
+            await wrapper.vm.$nextTick();
+            expect(shown()).toBeNull();
+        });
+
+        it("opens on a keyboard activation", async () => {
+            const wrapper = mountToggle();
+            await wrapper.find("button").trigger("click");
+            expect(shown()).not.toBeNull();
+        });
+    });
+
+    it("keeps an action trigger working and never leaves its tip open after a tap", async () => {
+        const action = vi.fn();
+        const wrapper = mount(HelpTip, {
+            props: { text: HELP },
+            slots: {
+                default: () => h("button", { type: "button", onClick: action }),
+            },
+            attachTo: document.body,
+        });
+        const button = wrapper.find("button");
+
+        button.element.dispatchEvent(pointer("pointerdown", "touch"));
+        await button.trigger("click");
+        expect(action).toHaveBeenCalledTimes(1);
         expect(shown()).toBeNull();
     });
 });
