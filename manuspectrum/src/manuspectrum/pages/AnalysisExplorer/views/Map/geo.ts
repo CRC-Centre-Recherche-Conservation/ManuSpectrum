@@ -52,6 +52,56 @@ export function boundsOf(points: readonly LngLat[]): Bounds | null {
     );
 }
 
+/**
+ * The bounds of `points` for fitting the map: across the antimeridian (east
+ * past 180) when the points fit in half a world that way and in less than
+ * the plain bounds span, else `boundsOf`.
+ */
+export function fitBoundsOf(points: readonly LngLat[]): Bounds | null {
+    const plain = boundsOf(points);
+    if (!plain || points.length < 2) return plain;
+    const lngs = [...new Set(points.map(([lng]) => lng))].sort((a, b) => a - b);
+    let gap = 0;
+    let after = 0;
+    for (let i = 1; i < lngs.length; i += 1) {
+        if (lngs[i] - lngs[i - 1] > gap) {
+            gap = lngs[i] - lngs[i - 1];
+            after = i;
+        }
+    }
+    const wrappedSpan = 360 - gap;
+    const plainSpan = plain.east - plain.west;
+    if (after === 0 || wrappedSpan > 180 || wrappedSpan >= plainSpan) {
+        return plain;
+    }
+    return { ...plain, west: lngs[after], east: lngs[after - 1] + 360 };
+}
+
+export interface FitPadding {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+}
+
+/** Room left around fitted places for their names (CSS pixels per side). */
+export const FIT_LABEL_ROOM_PX = { x: 120, y: 48 } as const;
+const FIT_ROOM_SHARE = 0.2;
+
+/**
+ * The `fitBounds` padding of a `width`×`height` frame: `FIT_LABEL_ROOM_PX`,
+ * at most `FIT_ROOM_SHARE` of the frame per side on a small screen.
+ */
+export function fitPadding(width: number, height: number): FitPadding {
+    const x = Math.round(
+        Math.min(FIT_LABEL_ROOM_PX.x, Math.max(0, width) * FIT_ROOM_SHARE),
+    );
+    const y = Math.round(
+        Math.min(FIT_LABEL_ROOM_PX.y, Math.max(0, height) * FIT_ROOM_SHARE),
+    );
+    return { top: y, right: x, bottom: y, left: x };
+}
+
 export function padBounds(bounds: Bounds, km: number): Bounds {
     const dLat = km / KM_PER_DEGREE;
     const midLat = (bounds.south + bounds.north) / 2;

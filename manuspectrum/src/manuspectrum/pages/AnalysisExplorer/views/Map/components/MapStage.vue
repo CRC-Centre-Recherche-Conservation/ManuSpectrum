@@ -13,6 +13,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useGettext } from "vue3-gettext";
 
+import { fitPadding } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import {
     BASE_SOURCE,
     OHM_TILES,
@@ -43,6 +44,7 @@ import {
 
 import type { FeatureCollection, Point } from "geojson";
 import type {
+    FitBoundsOptions,
     GeoJSONSource,
     JumpToOptions,
     LayerSpecification,
@@ -73,11 +75,11 @@ interface SnapshotRequest {
 
 const START_CENTRE: [number, number] = [2.5, 47];
 const START_ZOOM = 4;
-const FIT_PADDING_PX = 40;
 const FIT_DURATION_MS = 420;
 const PAINT_TRANSITION_MS = 160;
 const OHM_MAX_ZOOM = 14;
 const SNAPSHOT_TIMEOUT_MS = 8000;
+const VIEW_SETTLE_MS = 150;
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const PIP_FONT_CHECK = "700 18px 'JetBrains Mono'";
 
@@ -90,6 +92,10 @@ const PIP_FONT_CHECK = "700 18px 'JetBrains Mono'";
  * change of `places` or `territories` replaces source data; `isolate` (a
  * slot, or null) fades the other slots' territories by paint. The historical borders load from
  * `BORDERS_MIN_ZOOM` on, overzoomed past `OHM_MAX_ZOOM`.
+ * `fit` is framed with room for the names of the places on its edges
+ * (`fitPadding`). `view` gives the bounds shown: on load, then
+ * `VIEW_SETTLE_MS` after the map stops moving (a new move cancels it),
+ * never for a snapshot's camera, and only when they changed.
  * No attribution control: the view prints the credits under the map.
  * Overlays of the parent (legend, note, tooltip) go in the default slot,
  * inside the frame.
@@ -109,6 +115,7 @@ const emit = defineEmits<{
     select: [id: string];
     hover: [payload: { id: string; x: number; y: number } | null];
     failed: [];
+    view: [bounds: Bounds];
 }>();
 defineExpose({ snapshot, cancelSnapshots, resize, revealPlace });
 
@@ -127,6 +134,8 @@ let drawnColours: MapColours = props.colours;
 let shooting = false;
 let queued: SnapshotRequest | null = null;
 let userMoved = false;
+let settle: ReturnType<typeof setTimeout> | undefined;
+let emittedView = "";
 
 watch(
     () => props.places,
@@ -214,6 +223,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     ready = false;
+    clearTimeout(settle);
     dropQueued();
     map.value?.remove();
     map.value = null;
@@ -229,6 +239,35 @@ function fitDurationMs(): number {
 
 function geojson(id: string): GeoJSONSource | undefined {
     return map.value?.getSource(id) as GeoJSONSource | undefined;
+}
+
+function fitOptions(duration: number): FitBoundsOptions {
+    const element = container.value;
+    return {
+        padding: fitPadding(
+            element?.clientWidth ?? 0,
+            element?.clientHeight ?? 0,
+        ),
+        duration,
+    };
+}
+
+/** Emits `view` with the bounds shown, unless a snapshot holds the camera or they did not change. */
+function emitView(current: MapLibreMap): void {
+    if (shooting || !ready || map.value !== current) return;
+    const shown = current.getBounds();
+    const bounds: Bounds = {
+        west: shown.getWest(),
+        south: shown.getSouth(),
+        east: shown.getEast(),
+        north: shown.getNorth(),
+    };
+    const key = [bounds.west, bounds.south, bounds.east, bounds.north]
+        .map((value) => value.toFixed(4))
+        .join(",");
+    if (key === emittedView) return;
+    emittedView = key;
+    emit("view", bounds);
 }
 
 function boundsLike(bounds: Bounds): LngLatBoundsLike {
@@ -380,7 +419,12 @@ function onLoad(current: MapLibreMap): void {
     current.on("mousemove", onMove);
     current.on("mouseout", clearHover);
     current.on("movestart", (event: { originalEvent?: unknown }) => {
+        clearTimeout(settle);
         if (shooting && event.originalEvent) userMoved = true;
+    });
+    current.on("moveend", () => {
+        clearTimeout(settle);
+        settle = setTimeout(() => emitView(current), VIEW_SETTLE_MS);
     });
     ready = true;
     if (drawnColours !== props.colours) recolour(current, props.colours);
@@ -388,12 +432,8 @@ function onLoad(current: MapLibreMap): void {
     redrawPipsWhenFontsLoad(current);
     applyStates();
     if (props.isolate) isolateTerritory(current, props.isolate);
-    if (props.fit) {
-        current.fitBounds(boundsLike(props.fit), {
-            padding: FIT_PADDING_PX,
-            duration: 0,
-        });
-    }
+    if (props.fit) current.fitBounds(boundsLike(props.fit), fitOptions(0));
+    emitView(current);
     if (queued) void runSnapshots(current);
 }
 
@@ -449,10 +489,7 @@ function zoomOut(): void {
 
 function wholeMap(): void {
     if (!props.fit) return;
-    map.value?.fitBounds(boundsLike(props.fit), {
-        padding: FIT_PADDING_PX,
-        duration: fitDurationMs(),
-    });
+    map.value?.fitBounds(boundsLike(props.fit), fitOptions(fitDurationMs()));
 }
 
 function retryBase(): void {
@@ -557,6 +594,7 @@ async function runSnapshots(current: MapLibreMap): Promise<void> {
         if (!userMoved) current.jumpTo(camera);
     }
     shooting = false;
+    emitView(current);
 }
 
 /** Lays the canvas at `size`, or back at the stage's size with null. */

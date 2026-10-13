@@ -167,7 +167,13 @@ describe("MapStage on load", () => {
         }
     });
 
-    it("fits the given bounds at once and mounts no navigation control", async () => {
+    it("fits the given bounds at once, with room for the edge places' names, and mounts no navigation control", async () => {
+        vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(
+            1200,
+        );
+        vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(
+            700,
+        );
         mountStage();
         await flushPromises();
         const map = FakeMap.last();
@@ -176,7 +182,10 @@ describe("MapStage on load", () => {
                 [-5, 42],
                 [8, 51],
             ],
-            { padding: 40, duration: 0 },
+            {
+                padding: { top: 48, right: 120, bottom: 48, left: 120 },
+                duration: 0,
+            },
         ]);
         expect(map.controls).toEqual([]);
         expect(map.options.attributionControl).toBe(false);
@@ -467,6 +476,70 @@ describe("MapStage pointer", () => {
             "out",
         ]);
         expect(map.fitCalls).toHaveLength(2);
+    });
+});
+
+describe("MapStage view", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("gives the bounds shown on load", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        expect(wrapper.emitted("view")).toEqual([
+            [{ west: -5, south: 42, east: 8, north: 51 }],
+        ]);
+    });
+
+    it("gives the new bounds once the map has stood still, a new move cancelling the wait", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        vi.useFakeTimers();
+        const map = FakeMap.last();
+        map.shown = [
+            [0, 44],
+            [6, 49],
+        ];
+        map.fire("moveend");
+        vi.advanceTimersByTime(100);
+        map.fire("movestart", { originalEvent: {} });
+        vi.advanceTimersByTime(200);
+        expect(wrapper.emitted("view")).toHaveLength(1);
+        map.fire("moveend");
+        vi.advanceTimersByTime(149);
+        expect(wrapper.emitted("view")).toHaveLength(1);
+        vi.advanceTimersByTime(1);
+        expect(wrapper.emitted("view")?.[1]).toEqual([
+            { west: 0, south: 44, east: 6, north: 49 },
+        ]);
+        map.fire("moveend");
+        vi.advanceTimersByTime(150);
+        expect(wrapper.emitted("view")).toHaveLength(2);
+    });
+
+    it("gives no bounds for a snapshot's camera", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        const map = FakeMap.last();
+        const shot = wrapper.vm.snapshot({
+            west: 100,
+            south: 10,
+            east: 120,
+            north: 30,
+        });
+        vi.useFakeTimers();
+        map.fire("moveend");
+        vi.advanceTimersByTime(150);
+        vi.useRealTimers();
+        expect(wrapper.emitted("view")).toHaveLength(1);
+        map.shown = [
+            [-5, 42],
+            [8, 51],
+        ];
+        map.fire("idle");
+        await shot;
+        expect(wrapper.emitted("view")).toHaveLength(1);
     });
 });
 

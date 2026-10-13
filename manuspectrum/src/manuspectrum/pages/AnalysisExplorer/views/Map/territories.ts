@@ -16,6 +16,13 @@ export const TIE_SHARE = 0.55;
 export const CELL_RATIO = 0.18;
 export const CELL_MIN_KM = 10;
 export const MAX_CELLS = 6000;
+/** Share of the viewport's span added on each side of the grid. */
+export const VIEW_PAD = 0.1;
+/** Kernel radii past the grid within which an attestation still counts. */
+export const REACH_RADII = 3;
+const LAT_STEP = 5;
+const MAX_LATITUDE = 85.0511;
+const KM_PER_DEGREE = 111.32;
 const EACH_ALPHA = { base: 0.06, step: 0.025, max: 0.32 };
 const DOMINANT_ALPHA = { base: 0.15, span: 0.6 };
 const GROWTH = 1.25;
@@ -80,12 +87,63 @@ export function influenceAt(
     return total;
 }
 
+/** Attestations sorted by latitude, with the farthest distance at which one still counts. */
+interface Reach {
+    sorted: Attestation[];
+    km: number;
+}
+
+function reachOf(
+    attestations: readonly Attestation[],
+    radiusKm: number,
+): Reach {
+    const sorted = [...attestations].sort((a, b) => a.lngLat[1] - b.lngLat[1]);
+    const extent = sorted.reduce((max, a) => Math.max(max, a.extentKm), 0);
+    return { sorted, km: REACH_RADII * Math.max(radiusKm, extent) };
+}
+
+/** `influenceAt` over the attestations of `reach` within its distance of `point` in latitude and longitude. */
+function influenceNear(point: LngLat, reach: Reach, radiusKm: number): number {
+    const { sorted } = reach;
+    const dLat = reach.km / KM_PER_DEGREE;
+    const poleward = Math.min(MAX_LATITUDE, Math.abs(point[1]) + dLat);
+    const dLng =
+        reach.km / (KM_PER_DEGREE * Math.max(0.05, Math.cos(poleward * DEG)));
+    let low = 0;
+    let high = sorted.length;
+    while (low < high) {
+        const mid = (low + high) >> 1;
+        if (sorted[mid].lngLat[1] < point[1] - dLat) low = mid + 1;
+        else high = mid;
+    }
+    let total = 0;
+    for (let i = low; i < sorted.length; i += 1) {
+        const attestation = sorted[i];
+        if (attestation.lngLat[1] > point[1] + dLat) break;
+        const apart = Math.abs(attestation.lngLat[0] - point[0]) % 360;
+        if (Math.min(apart, 360 - apart) > dLng) continue;
+        const ratio =
+            haversineKm(point, attestation.lngLat) /
+            Math.max(radiusKm, attestation.extentKm);
+        total += attestation.weight * Math.exp(-(ratio * ratio));
+    }
+    return total;
+}
+
+/**
+ * The lattice covering `bounds`, anchored on a world-wide lattice (origin
+ * snapped to whole columns and to pairs of rows, scale latitude rounded to
+ * `LAT_STEP`) so a pan keeps the cells it still shows in place.
+ */
 function lattice(bounds: Bounds, cellKm: number): Lattice {
-    const radius =
-        (cellKm * 1000) / Math.cos(((bounds.south + bounds.north) / 2) * DEG);
-    const [x0, y0] = toMercator([bounds.west, bounds.south]);
-    const [x1, y1] = toMercator([bounds.east, bounds.north]);
+    const scaleLat =
+        Math.round((bounds.south + bounds.north) / 2 / LAT_STEP) * LAT_STEP;
+    const radius = (cellKm * 1000) / Math.cos(scaleLat * DEG);
     const width = SQRT3 * radius;
+    const [west, south] = toMercator([bounds.west, bounds.south]);
+    const [x1, y1] = toMercator([bounds.east, bounds.north]);
+    const x0 = Math.floor(west / width) * width;
+    const y0 = Math.floor(south / (3 * radius)) * 3 * radius;
     return {
         x0,
         y0,
@@ -93,6 +151,30 @@ function lattice(bounds: Bounds, cellKm: number): Lattice {
         width,
         columns: Math.ceil((x1 - x0) / width) + 1,
         rows: Math.ceil((y1 - y0) / (1.5 * radius)) + 1,
+    };
+}
+
+/**
+ * The grid's bounds for the map's `view`: widened by `VIEW_PAD` of its span
+ * on each side so the zones do not stop at the frame, latitudes kept inside
+ * Web Mercator, at most one world wide around the view's centre. Longitudes
+ * may pass ±180 (a view across the antimeridian).
+ */
+export function gridBounds(view: Bounds): Bounds {
+    const padLng = (view.east - view.west) * VIEW_PAD;
+    const padLat = (view.north - view.south) * VIEW_PAD;
+    let west = view.west - padLng;
+    let east = view.east + padLng;
+    if (east - west > 360) {
+        const centre = (view.west + view.east) / 2;
+        west = centre - 180;
+        east = centre + 180;
+    }
+    return {
+        west,
+        south: Math.max(-MAX_LATITUDE, view.south - padLat),
+        east,
+        north: Math.min(MAX_LATITUDE, view.north + padLat),
     };
 }
 
@@ -106,6 +188,37 @@ export function cellSizeKm(radiusKm: number, bounds: Bounds): number {
         size *= GROWTH;
     }
     return size;
+}
+
+/** Whether even `MAX_CELLS` cells over `bounds` are larger than the kernel radius: too coarse to draw. */
+export function tooCoarse(radiusKm: number, bounds: Bounds): boolean {
+    return cellSizeKm(radiusKm, bounds) > radiusKm;
+}
+
+/**
+ * Whether `attestation` lies within `REACH_RADII` kernel radii (or its own
+ * extent if larger) of `bounds`, on any world copy.
+ */
+export function reaches(
+    attestation: Attestation,
+    bounds: Bounds,
+    radiusKm: number,
+): boolean {
+    const km = REACH_RADII * Math.max(radiusKm, attestation.extentKm);
+    const dLat = km / KM_PER_DEGREE;
+    const poleward = Math.min(
+        MAX_LATITUDE,
+        Math.max(Math.abs(bounds.south), Math.abs(bounds.north)) + dLat,
+    );
+    const dLng =
+        km / (KM_PER_DEGREE * Math.max(0.05, Math.cos(poleward * DEG)));
+    const [lng, lat] = attestation.lngLat;
+    if (lat < bounds.south - dLat || lat > bounds.north + dLat) return false;
+    return [-360, 0, 360].some(
+        (shift) =>
+            lng + shift >= bounds.west - dLng &&
+            lng + shift <= bounds.east + dLng,
+    );
 }
 
 export function hexGrid(bounds: Bounds, cellKm: number): HexCell[] {
@@ -191,8 +304,11 @@ function line(
 }
 
 /**
- * The influence model of the followed materials over a hex grid of `bounds`.
- * `each`: one translucent area per field where its influence reaches `FLOOR`,
+ * The influence model of the followed materials over a hex grid of `bounds`
+ * (the map's padded view, `gridBounds`), cells sized from the radius
+ * (`cellSizeKm`); nothing when that grid is `tooCoarse`. Only the
+ * attestations that `reaches` the bounds are summed, each on the cells
+ * within `REACH_RADII` radii of it (`influenceNear`). `each`: one translucent area per field where its influence reaches `FLOOR`,
  * outlined where the neighbour does not. `dominant`: each cell in the colour of
  * its most attested field, opacity from its share of every field, hatched
  * when the runner-up nearly ties (`nearlyTied`), borders (slot 0) only
@@ -208,14 +324,21 @@ export function territories(
     if (fields.every((field) => field.attestations.length === 0)) {
         return { type: "FeatureCollection", features };
     }
+    if (tooCoarse(radiusKm, bounds)) {
+        return { type: "FeatureCollection", features };
+    }
+    const reached = fields.map((field) =>
+        reachOf(
+            field.attestations.filter((a) => reaches(a, bounds, radiusKm)),
+            radiusKm,
+        ),
+    );
     const cells = hexGrid(bounds, cellSizeKm(radiusKm, bounds));
     const index = new Map(
         cells.map((cell, i) => [`${cell.col}:${cell.row}`, i]),
     );
     const influence = cells.map((cell) =>
-        fields.map((field) =>
-            influenceAt(cell.centre, field.attestations, radiusKm),
-        ),
+        reached.map((reach) => influenceNear(cell.centre, reach, radiusKm)),
     );
     const near = (cell: HexCell, k: number): number | null => {
         const [col, row] = neighbour(cell.col, cell.row, k);

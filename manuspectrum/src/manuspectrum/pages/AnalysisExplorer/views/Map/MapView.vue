@@ -45,6 +45,7 @@ import { matchingEvents } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/
 import {
     boundsOf,
     fitAspect,
+    fitBoundsOf,
     padBounds,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import {
@@ -73,7 +74,11 @@ import {
     withoutApproximate,
     withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
-import { territories } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+import {
+    gridBounds,
+    territories,
+    tooCoarse,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
 import { trackedOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import { webglAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/webgl.ts";
 
@@ -165,6 +170,8 @@ const mapFailed = ref(false);
 const mapColours = shallowRef(FALLBACK_COLOURS);
 /** The followed slot whose territory reads alone while its legend row or rail chip is hovered. */
 const isolated = ref<number | null>(null);
+/** The bounds the stage shows, once it has loaded: the territories' grid covers them. */
+const viewport = shallowRef<Bounds | null>(null);
 const radiusDraft = ref(store.mapState.radius);
 const folded = ref(new Set<RailGroup>());
 let opener: HTMLElement | null = null;
@@ -227,6 +234,14 @@ const bounds = computed(() =>
         store.mapState.radius,
     ),
 );
+/** The stage's fitted view: like `bounds`, across the antimeridian when the places sit around it. */
+const fit = computed(() =>
+    padBounds(
+        fitBoundsOf(summaryList.value.map((summary) => summary.lngLat)) ??
+            EUROPE,
+        store.mapState.radius,
+    ),
+);
 /** The bounds rounded to a hundredth of a degree: equal bounds ask no new snapshot. */
 const boundsKey = computed(() =>
     [
@@ -243,19 +258,34 @@ const territoryReason = computed(() =>
         ? $gettext("Follow at least one material to draw territories.")
         : null,
 );
+const territoryGrid = computed(() =>
+    viewport.value ? gridBounds(viewport.value) : null,
+);
+/** Zoomed out past what `MAX_CELLS` cells can show at the kernel radius: no zone is drawn. */
+const territoryCoarse = computed(
+    () =>
+        mode.value === "territories" &&
+        territoryGrid.value !== null &&
+        tooCoarse(store.mapState.radius, territoryGrid.value),
+);
 const territoryData = computed(() => {
-    if (mode.value !== "territories" || tracked.value.length === 0) {
+    if (
+        mode.value !== "territories" ||
+        tracked.value.length === 0 ||
+        !territoryGrid.value
+    ) {
         return null;
     }
     return territories(
         territoryFields(summaries.value, tracked.value, low.value),
         store.mapState.radius,
-        bounds.value,
+        territoryGrid.value,
         store.mapState.colour,
     );
 });
 const nothingToDraw = computed(
     () =>
+        !territoryCoarse.value &&
         territoryData.value !== null &&
         territoryData.value.features.length === 0,
 );
@@ -456,6 +486,9 @@ const territorySentence = computed(() => {
               "Gaussian kernel estimate: each place where a followed material is attested spreads a weight proportional to its attestations, fading with distance. An area is drawn above an influence threshold; its opacity grows with influence.",
           );
 });
+const coarseSentence = $gettext(
+    "Zoom in to see the influence zones: at this scale the grid is coarser than the kernel radius.",
+);
 const legendOpen = computed(() => store.mapState.legend);
 /** The influence note folds to its title; the reader's choice lasts for the view. */
 const noteOpen = ref(false);
@@ -463,7 +496,8 @@ const isolateHint = computed(
     () =>
         store.mapState.colour === "each" &&
         tracked.value.length >= 3 &&
-        !nothingToDraw.value,
+        !nothingToDraw.value &&
+        !territoryCoarse.value,
 );
 const radiusHelp = $gettext(
     "Distance at which a place's weight falls to about 37 % (or the place's own extent if larger)",
@@ -1185,12 +1219,13 @@ function skipToTimeline(): void {
                             :colours="mapColours"
                             :borders="bordersShown"
                             :borders-year="bordersYear"
-                            :fit="bounds"
+                            :fit="fit"
                             :selected="selectedPlace"
                             :isolate="mode === 'territories' ? isolated : null"
                             @select="openSubject({ kind: 'place', id: $event })"
                             @hover="onStageHover"
                             @failed="mapFailed = true"
+                            @view="viewport = $event"
                         >
                             <div
                                 class="legend"
@@ -1354,6 +1389,12 @@ function skipToTimeline(): void {
                                             )
                                         }}</span>
                                     </button>
+                                </p>
+                                <p
+                                    v-if="territoryCoarse"
+                                    class="sentence coarse"
+                                >
+                                    <span>{{ coarseSentence }}</span>
                                 </p>
                                 <div
                                     v-show="noteOpen"
@@ -1535,6 +1576,12 @@ function skipToTimeline(): void {
                                     "Influence zones: a spatial model, not observed data",
                                 )
                             }}</span>
+                        </p>
+                        <p
+                            v-if="territoryCoarse"
+                            class="sentence coarse"
+                        >
+                            <span>{{ coarseSentence }}</span>
                         </p>
                         <p class="sentence">
                             <span>{{ territorySentence }}</span>
@@ -2331,6 +2378,10 @@ function skipToTimeline(): void {
 
 .map-view .territory-note .sentence {
     color: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.map-view .territory-note .sentence.coarse {
+    color: var(--surface);
 }
 
 .map-view .territory-note .radius {

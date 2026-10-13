@@ -137,6 +137,57 @@ function response(): EventsResponse {
     });
 }
 
+/** `response()` with the lapis also attested in three documents at `lngLat`, a place far from Paris. */
+function farResponse(lngLat: [number, number]): EventsResponse {
+    const base = response();
+    const far = uuid(12);
+    return {
+        ...base,
+        events: [
+            ...base.events,
+            ...[4, 5, 6].map((n) =>
+                mapEvent({
+                    id: `production:d${n}:p${n}`,
+                    document: { id: uuid(n), name: label(`Ms ${n}`) },
+                    carrier: {
+                        id: uuid(n),
+                        model: "document",
+                        name: label(`Ms ${n}`),
+                    },
+                    place: far,
+                    materials: base.events[0].materials,
+                }),
+            ),
+        ],
+        places: {
+            ...base.places,
+            [far]: mapPlace({ id: far, name: label("Far"), lngLat }),
+        },
+    };
+}
+
+function serve(payload: EventsResponse): void {
+    fetchMock.mockImplementation(async (url: string) =>
+        url.includes("explorer-events")
+            ? jsonResponse(payload)
+            : jsonResponse({ values: [], total: 0 }),
+    );
+}
+
+/** The first corner of every territory cell the map holds. */
+function cellCorners(map: FakeMap): number[][] {
+    const source = map.getSource(TERRITORIES_SOURCE);
+    const drawn = (source?.setDataCalls.at(-1) ?? source?.data) as {
+        features: {
+            geometry: { coordinates: number[][][] };
+            properties: { layer: string };
+        }[];
+    };
+    return drawn.features
+        .filter((feature) => feature.properties.layer === "cell")
+        .map((feature) => feature.geometry.coordinates[0][0]);
+}
+
 async function mountView(): Promise<VueWrapper> {
     wrapper = mount(MapView, {
         attachTo: document.body,
@@ -575,6 +626,75 @@ describe("MapView", () => {
         await flushPromises();
         expect(toggle().attributes("aria-expanded")).toBe("true");
         expect(view.get("div.legend").classes()).toContain("open");
+    });
+
+    it("lays the territories' grid over the view shown, rebuilt once the map stands still", async () => {
+        serve(farResponse([116.4, 39.9]));
+        const store = useExplorerStore();
+        store.setMapState({ track: [LAPIS], mode: "territories" });
+        await mountView();
+        const map = FakeMap.last();
+        expect(cellCorners(map).some(([lng]) => lng > 100)).toBe(true);
+        vi.useFakeTimers();
+        try {
+            map.shown = [
+                [-5, 42],
+                [8, 52],
+            ];
+            map.fire("moveend");
+            vi.advanceTimersByTime(150);
+        } finally {
+            vi.useRealTimers();
+        }
+        await flushPromises();
+        const corners = cellCorners(map);
+        expect(corners.length).toBeGreaterThan(0);
+        expect(corners.every(([lng]) => lng > -9 && lng < 12)).toBe(true);
+    });
+
+    it("draws no zone and asks to zoom in when the view is too wide for the radius", async () => {
+        const store = useExplorerStore();
+        store.setMapState({ track: [LAPIS], mode: "territories", radius: 60 });
+        const view = await mountView();
+        const map = FakeMap.last();
+        expect(cellCorners(map).length).toBeGreaterThan(0);
+        const zoomIn =
+            "Zoom in to see the influence zones: at this scale the grid is coarser than the kernel radius.";
+        expect(view.text()).not.toContain(zoomIn);
+        vi.useFakeTimers();
+        try {
+            map.shown = [
+                [-180, -80],
+                [180, 80],
+            ];
+            map.fire("moveend");
+            vi.advanceTimersByTime(150);
+        } finally {
+            vi.useRealTimers();
+        }
+        await flushPromises();
+        expect(cellCorners(map)).toEqual([]);
+        expect(view.get(".territory-note .coarse").text()).toBe(zoomIn);
+        expect(view.text()).not.toContain("Nothing to draw");
+    });
+
+    it("fits places around the Pacific across the antimeridian", async () => {
+        const base = farResponse([-178.4, -18.1]);
+        serve({
+            ...base,
+            places: {
+                ...base.places,
+                [PARIS]: mapPlace({ lngLat: [166.45, -22.27] }),
+                [ROUEN]: mapPlace({ id: ROUEN, lngLat: [174.76, -36.85] }),
+            },
+        });
+        await mountView();
+        const [[west], [east]] = FakeMap.last().fitCalls[0][0] as [
+            [number, number],
+            [number, number],
+        ];
+        expect(west).toBeGreaterThan(150);
+        expect(east).toBeGreaterThan(180);
     });
 
     it("isolates a followed material's territory while its legend row is hovered", async () => {
