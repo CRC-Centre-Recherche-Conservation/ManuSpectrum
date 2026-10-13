@@ -108,6 +108,58 @@ class AnalysisExplorerPageTests(TestCase):
             html,
         )
 
+    def test_body_names_the_screen_the_address_opens_on(self):
+        doc = "5fbfe388-8acc-4da8-8f8a-382bd2b6ad17"
+        for query, screen in (
+            ("?view=map", "map"),
+            ("?view=compare&doc=" + doc, "compare"),
+            ("?doc=" + doc, "document"),
+            ("?screen=results", "results"),
+            ("?grain=analyses&technique=x", "results"),
+            ("?q=lead", "results"),
+            ("?period=1200,1300", "results"),
+        ):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn(
+                f'<body class="ms-page ms-page--app" data-explorer-screen="{screen}">',
+                html,
+                query,
+            )
+
+    def test_home_and_unread_queries_leave_the_body_unmarked(self):
+        for query in (
+            "",
+            "?view=atlas",
+            "?doc=not-a-uuid",
+            "?grain=analyses",
+            "?period=x",
+        ):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn('<body class="ms-page ms-page--app">', html, query)
+
+    def test_loading_skeleton_announces_itself_and_follows_the_screen(self):
+        home = self.client.get(reverse("analysis-explorer")).content.decode()
+        mapped = self.client.get(
+            reverse("analysis-explorer") + "?view=map"
+        ).content.decode()
+        compare = self.client.get(
+            reverse("analysis-explorer") + "?view=compare"
+        ).content.decode()
+        self.assertIn(
+            '<p class="ms-explorer-loading__status" role="status" aria-live="polite">Loading the explorer…</p>',
+            home,
+        )
+        self.assertIn("ms-explorer-loading--home", home)
+        self.assertIn("ms-explorer-loading__cards", home)
+        self.assertIn("ms-explorer-loading--screen", mapped)
+        self.assertIn("ms-explorer-loading__rail", mapped)
+        self.assertIn("ms-explorer-loading--compare", compare)
+        self.assertNotIn("ms-explorer-loading__body", compare)
+
 
 class AnalysisExplorerIndexingTests(TestCase):
     def test_sitemap_lists_the_explorer_with_its_french_alternate(self):

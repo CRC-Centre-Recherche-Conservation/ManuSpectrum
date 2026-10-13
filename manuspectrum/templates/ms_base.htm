@@ -47,7 +47,7 @@
     {% render_bundle 'css/pages' 'css' %}
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}ms-page{% endblock %}">
+<body class="{% block body_class %}ms-page{% endblock %}"{% block body_attrs %}{% endblock %}>
     {% block arches_js_data %}{% include 'javascript.htm' %}{% endblock %}
     {% include 'includes/ms_header.htm' %}
     <main id="ms-main">
