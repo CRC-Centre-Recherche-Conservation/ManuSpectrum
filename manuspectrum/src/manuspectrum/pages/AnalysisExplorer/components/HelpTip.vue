@@ -108,7 +108,8 @@ function onPointerEnter(event: PointerEvent): void {
     if (event.pointerType !== "touch") schedule();
 }
 
-function onPointerLeave(): void {
+function onPointerLeave(event: PointerEvent): void {
+    if (event.pointerType === "touch") return;
     suppressed = false;
     hide();
 }

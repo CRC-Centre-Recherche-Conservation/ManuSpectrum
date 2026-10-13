@@ -383,10 +383,12 @@ describe("HelpTip", () => {
             const button = wrapper.find("button");
 
             button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            wrapper.element.dispatchEvent(pointer("pointerleave", "touch"));
             await button.trigger("click");
             expect(shown()).not.toBeNull();
 
             button.element.dispatchEvent(pointer("pointerdown", "touch"));
+            wrapper.element.dispatchEvent(pointer("pointerleave", "touch"));
             await button.trigger("click");
             expect(shown()).toBeNull();
         });
