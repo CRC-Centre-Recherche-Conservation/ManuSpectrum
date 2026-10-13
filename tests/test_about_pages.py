@@ -472,7 +472,7 @@ class LegalPagesTests(TestCase):
             for host in ("tiles.openfreemap.org", "vtiles.openhistoricalmap.org"):
                 self.assertIn(host, html)
 
-    def test_privacy_third_party_section_lists_every_external_host(self):
+    def test_privacy_third_party_section_lists_the_known_hosts(self):
         for lang in ("en", "fr"):
             html = self.get("about-privacy", lang)
             for host in (
@@ -502,6 +502,34 @@ class LegalPagesTests(TestCase):
             html = self.get("about-privacy", lang)
             self.assertIn(label, html)
             self.assertIn(text, html)
+
+    def test_privacy_error_log_is_listed_with_the_same_retention_as_the_access_log(
+        self,
+    ):
+        rule = (
+            Path(settings.APP_ROOT).parent
+            / "deploy"
+            / "logrotate"
+            / "manuspectrum-nginx.in"
+        ).read_text()
+        self.assertRegex(rule, r"error\.log \{")
+        days = re.search(r"^\s*maxage (\d+)", rule, re.M).group(1)
+        for lang, kept, label, text in (
+            (
+                "en",
+                "web server's error log",
+                "Error log",
+                f"{days} days, then deleted.",
+            ),
+            ("fr", "journal d", "Journal d.erreurs", f"{days} jours"),
+        ):
+            html = self.get("about-privacy", lang)
+            self.assertIn(kept, html, lang)
+            self.assertRegex(
+                html,
+                rf"{label}</th>\s*<td>[^<]*{text}",
+                f"{lang}: {label}",
+            )
 
     def test_privacy_printed_durations_follow_the_settings(self):
         with override_settings(

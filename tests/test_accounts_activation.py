@@ -172,7 +172,7 @@ class ActivationTests(Base):
         self.assertNotIn('data-rule="symbol"', html)
 
     def info_items(self, html):
-        block = re.search(r'<ul class="ms-pw-info__list">(.*?)</ul>', html, re.S)
+        block = re.search(r'<ul class="ms-pw-info__list"[^>]*>(.*?)</ul>', html, re.S)
         self.assertIsNotNone(block)
         return re.findall(r"<li>(.*?)</li>", block.group(1))
 
@@ -248,6 +248,25 @@ class ActivationTests(Base):
         (first,) = tree.xpath('//input[@name="new_password1"]')
         (line,) = tree.xpath("//*[@data-ms-pw-match]")
         self.assertEqual(line.get("data-with"), first.get("id"))
+
+    def test_the_first_field_is_described_by_the_rules_and_the_meter_word(self):
+        tree = self.page_tree()
+        (first,) = tree.xpath('//input[@name="new_password1"]')
+        ids = first.get("aria-describedby").split()
+        self.assertEqual(ids, [f"{first.get('id')}-rules", f"{first.get('id')}-word"])
+        (rules,) = tree.xpath('//ul[contains(@class, "ms-pw-rules")]')
+        (word,) = tree.xpath("//*[@data-ms-pw-word]")
+        self.assertEqual([rules.get("id"), word.get("id")], ids)
+
+    def test_without_a_meter_the_first_field_is_described_by_the_rule_list(self):
+        validators = [
+            {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"}
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            tree = lxml.html.fromstring(self.client.get(self.path).content)
+        (first,) = tree.xpath('//input[@name="new_password1"]')
+        (info,) = tree.xpath('//ul[contains(@class, "ms-pw-info__list")]')
+        self.assertEqual(first.get("aria-describedby"), info.get("id"))
 
     def test_without_a_checkable_rule_there_is_no_meter(self):
         validators = [

@@ -34,6 +34,7 @@
     <li>{% trans "Account: name, user name, institutional e-mail address, groups, password (stored only as a hash) and the secret of your second factor." %}</li>
     <li>{% trans "Sign-in records: date, user name, IP address, browser identification and the outcome (success or failure)." %}</li>
     <li>{% trans "Access log, for every visitor, with or without an account: date and time, IP address, method, page requested (without the query string; the tokens of password-reset, activation and two-factor links are removed), status, size, duration, host, path of the referring page and browser identification. Purpose: security and operation of the service. It is not shared and not used for statistics about individuals." %}</li>
+    <li>{% trans "The web server's error log (date, IP address and request of failed requests), kept for the same purpose and not shared." %}</li>
     <li>{% trans "History of the data: the account that created or changed each resource, and the date." %}</li>
     <li>{% trans "Resources can name researchers (authors, contacts) as part of the scientific description." %}</li>
     <li>{% trans "The contact form opens your own mail application: nothing you type is stored by the platform before you send it." %}</li>
@@ -52,6 +53,10 @@
         </tr>
         <tr>
             <th scope="row">{% trans "Access log" %}</th>
+            <td>{% trans "30 days, then deleted." %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "Error log" %}</th>
             <td>{% trans "30 days, then deleted." %}</td>
         </tr>
         <tr>

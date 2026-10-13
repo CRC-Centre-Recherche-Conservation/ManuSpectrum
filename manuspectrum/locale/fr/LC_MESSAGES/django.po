@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 09:58-0500\n"
+"POT-Creation-Date: 2026-10-13 10:48-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -86,8 +86,8 @@ msgid ""
 "so are the resources it created and listed below, if they are still drafts, "
 "were not modified elsewhere and are not linked to other resources."
 msgstr ""
-"Le workflow « %(workflow)s » n'a pas été utilisé depuis longtemps et n'est "
-"pas terminé. Le %(date)s (%(when)s), il sera nettoyé : sa trace est "
+"Le workflow « %(workflow)s » n'a pas été utilisé depuis longtemps et n'est "
+"pas terminé. Le %(date)s (%(when)s), il sera nettoyé : sa trace sera "
 "supprimée, ainsi que les ressources qu'il a créées et listées ci-dessous, si "
 "ce sont encore des brouillons, qu'elles n'ont pas été modifiées ailleurs et "
 "qu'aucune autre ressource n'y renvoie."
@@ -107,7 +107,7 @@ msgstr "Le workflow inachevé « %(workflow)s » a été nettoyé."
 
 #: accounts/notices.py:150
 msgid "Deleted resources:"
-msgstr "Ressources supprimées :"
+msgstr "Ressources supprimées :"
 
 #: accounts/notices.py:152
 msgid "Unfinished workflow cleaned"
@@ -115,7 +115,7 @@ msgstr "Workflow inachevé nettoyé"
 
 #: accounts/notices.py:156
 msgid "Resources kept, because other work depends on them:"
-msgstr "Ressources conservées, car d'autres travaux en dépendent :"
+msgstr "Ressources conservées, car d'autres travaux en dépendent :"
 
 #: accounts/notices.py:166
 msgid "Your ManuSpectrum account"
@@ -458,7 +458,7 @@ msgstr "Avis envoyés"
 #, python-format
 msgid "%(resource)s: only a dated, active restriction can be extended."
 msgstr ""
-"%(resource)s : seule une restriction active et datée peut être prolongée."
+"%(resource)s : seule une restriction active et datée peut être prolongée."
 
 #: admin.py:279
 #, python-format
@@ -563,15 +563,6 @@ msgstr "Manifeste introuvable"
 #: datatypes/manifest.py:218
 msgid "Invalid URL format"
 msgstr "Format d'URL invalide"
-
-#: docs_claude/csv_import/plan_snapshot_after_review.md:613
-#: docs_claude/csv_import/review_ux.md:391
-msgid "Why this step"
-msgstr "Pourquoi cette étape"
-
-#: docs_claude/csv_import/plan_snapshot_after_review.md:754
-msgid "Document not found? Import it from Biblissima"
-msgstr "Document introuvable ? Importez-le depuis Biblissima"
 
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
@@ -856,7 +847,7 @@ msgid ""
 "date."
 msgstr ""
 "La date de fin dépasse %(months)d mois après le début de la restriction "
-"(dernière date permise : %(latest)s). Seul un superutilisateur peut fixer "
+"(dernière date permise : %(latest)s). Seul un superutilisateur peut fixer "
 "une date plus tardive."
 
 #: models.py:184
@@ -1033,16 +1024,16 @@ msgstr "Fort"
 #: templates/accounts/_password_field.htm:29
 #: templates/accounts/_password_field.htm:30
 #: templates/accounts/_password_field.htm:31
-msgid "met"
-msgstr "respectée"
+msgid "rule met"
+msgstr "règle respectée"
 
 #: templates/accounts/_password_field.htm:27
 #: templates/accounts/_password_field.htm:28
 #: templates/accounts/_password_field.htm:29
 #: templates/accounts/_password_field.htm:30
 #: templates/accounts/_password_field.htm:31
-msgid "not met"
-msgstr "non respectée"
+msgid "rule not met"
+msgstr "règle non respectée"
 
 #: templates/accounts/_password_field.htm:33
 msgid ""
@@ -1187,7 +1178,7 @@ msgstr "Ou saisissez cette clé à la main :"
 
 #: templates/accounts/two_factor.htm:34
 #: templates/accounts/two_factor_reset.htm:24
-#: templates/admin/copy_addresses.html:26
+#: templates/admin/copy_addresses.html:27
 msgid "Copied"
 msgstr "Copié"
 
@@ -1280,50 +1271,57 @@ msgid_plural "%(counter)s addresses to copy."
 msgstr[0] "%(counter)s adresse à copier."
 msgstr[1] "%(counter)s adresses à copier."
 
-#: templates/admin/copy_addresses.html:24
+#: templates/admin/copy_addresses.html:23
+#, python-format
+msgid "%(counter)s duplicate address was merged."
+msgid_plural "%(counter)s duplicate addresses were merged."
+msgstr[0] "%(counter)s adresse en double a été fusionnée."
+msgstr[1] "%(counter)s adresses en double ont été fusionnées."
+
+#: templates/admin/copy_addresses.html:25
 msgid "E-mail addresses"
 msgstr "Adresses e-mail"
 
-#: templates/admin/copy_addresses.html:26
+#: templates/admin/copy_addresses.html:27
 msgid "Copy"
 msgstr "Copier"
 
-#: templates/admin/copy_addresses.html:30
+#: templates/admin/copy_addresses.html:31
 msgid ""
 "Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
 msgstr ""
 "Collez-les dans le champ Cci de la boîte mail partagée du projet, jamais "
 "dans À ni Cc."
 
-#: templates/admin/copy_addresses.html:32
+#: templates/admin/copy_addresses.html:33
 #, python-format
 msgid "%(counter)s selected user was left out:"
 msgid_plural "%(counter)s selected users were left out:"
-msgstr[0] "%(counter)s utilisateur sélectionné a été écarté :"
-msgstr[1] "%(counter)s utilisateurs sélectionnés ont été écartés :"
+msgstr[0] "%(counter)s utilisateur sélectionné a été écarté :"
+msgstr[1] "%(counter)s utilisateurs sélectionnés ont été écartés :"
 
-#: templates/admin/copy_addresses.html:34
+#: templates/admin/copy_addresses.html:35
 #, python-format
 msgid "%(counter)s inactive"
 msgid_plural "%(counter)s inactive"
 msgstr[0] "%(counter)s inactif"
 msgstr[1] "%(counter)s inactifs"
 
-#: templates/admin/copy_addresses.html:35
+#: templates/admin/copy_addresses.html:36
 #, python-format
 msgid "%(counter)s without an e-mail address"
 msgid_plural "%(counter)s without an e-mail address"
 msgstr[0] "%(counter)s sans adresse e-mail"
 msgstr[1] "%(counter)s sans adresse e-mail"
 
-#: templates/admin/copy_addresses.html:36
+#: templates/admin/copy_addresses.html:37
 #, python-format
 msgid "%(counter)s anonymised"
 msgid_plural "%(counter)s anonymised"
 msgstr[0] "%(counter)s anonymisé"
 msgstr[1] "%(counter)s anonymisés"
 
-#: templates/admin/copy_addresses.html:39
+#: templates/admin/copy_addresses.html:40
 msgid "Back to the users"
 msgstr "Retour aux utilisateurs"
 
@@ -1943,7 +1941,7 @@ msgstr "Légal"
 
 #: templates/includes/ms_footer.htm:39 templates/views/pages/legal.htm:3
 #: templates/views/pages/legal.htm:4 templates/views/pages/legal.htm:7
-#: templates/views/pages/privacy.htm:146 templates/views/pages/terms.htm:87
+#: templates/views/pages/privacy.htm:151 templates/views/pages/terms.htm:87
 msgid "Legal notice"
 msgstr "Mentions légales"
 
@@ -1954,7 +1952,7 @@ msgid "Privacy policy"
 msgstr "Politique de confidentialité"
 
 #: templates/includes/ms_footer.htm:41 templates/views/pages/legal.htm:59
-#: templates/views/pages/privacy.htm:146 templates/views/pages/terms.htm:3
+#: templates/views/pages/privacy.htm:151 templates/views/pages/terms.htm:3
 #: templates/views/pages/terms.htm:4 templates/views/pages/terms.htm:7
 msgid "Terms of use"
 msgstr "Conditions d'utilisation"
@@ -2933,7 +2931,7 @@ msgstr "Question"
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:83 templates/views/pages/privacy.htm:119
+#: templates/javascript.htm:83 templates/views/pages/privacy.htm:124
 msgid "Name"
 msgstr "Nom"
 
@@ -5741,7 +5739,10 @@ msgid ""
 "Reading ManuSpectrum needs no account and sets no tracker. This page covers "
 "what the platform records about visitors and about the people who have an "
 "account."
-msgstr "Lire ManuSpectrum ne demande aucun compte et ne dépose aucun traceur. Cette page explique ce que la plateforme enregistre sur les visiteurs et sur les personnes qui ont un compte."
+msgstr ""
+"Lire ManuSpectrum ne demande aucun compte et ne dépose aucun traceur. Cette "
+"page explique ce que la plateforme enregistre sur les visiteurs et sur les "
+"personnes qui ont un compte."
 
 #: templates/views/pages/privacy.htm:14
 msgid "Data controller"
@@ -5849,13 +5850,21 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:37
 msgid ""
+"The web server's error log (date, IP address and request of failed "
+"requests), kept for the same purpose and not shared."
+msgstr ""
+"Le journal d'erreurs du serveur web (date, adresse IP et requête des "
+"requêtes en échec), conservé pour la même finalité et non partagé."
+
+#: templates/views/pages/privacy.htm:38
+msgid ""
 "History of the data: the account that created or changed each resource, and "
 "the date."
 msgstr ""
 "Historique des données : le compte qui a créé ou modifié chaque ressource, "
 "et la date."
 
-#: templates/views/pages/privacy.htm:38
+#: templates/views/pages/privacy.htm:39
 msgid ""
 "Resources can name researchers (authors, contacts) as part of the scientific "
 "description."
@@ -5863,7 +5872,7 @@ msgstr ""
 "Les ressources peuvent nommer des chercheurs (auteurs, contacts) dans la "
 "description scientifique."
 
-#: templates/views/pages/privacy.htm:39
+#: templates/views/pages/privacy.htm:40
 msgid ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
@@ -5871,34 +5880,38 @@ msgstr ""
 "Le formulaire de contact ouvre votre propre messagerie : la plateforme ne "
 "conserve rien de ce que vous saisissez avant l'envoi."
 
-#: templates/views/pages/privacy.htm:42
+#: templates/views/pages/privacy.htm:43
 msgid "Retention periods"
 msgstr "Durées de conservation"
 
-#: templates/views/pages/privacy.htm:46
+#: templates/views/pages/privacy.htm:47
 msgid "Sign-in records"
 msgstr "Journaux de connexion"
 
-#: templates/views/pages/privacy.htm:47
+#: templates/views/pages/privacy.htm:48
 #, python-format
 msgid "%(n)s month (%(days)s days), then deleted."
 msgid_plural "%(n)s months (%(days)s days), then deleted."
 msgstr[0] "%(n)s mois (%(days)s jours), puis supprimés."
 msgstr[1] "%(n)s mois (%(days)s jours), puis supprimés."
 
-#: templates/views/pages/privacy.htm:54
+#: templates/views/pages/privacy.htm:55
 msgid "Access log"
 msgstr "Journal d'accès"
 
-#: templates/views/pages/privacy.htm:55
+#: templates/views/pages/privacy.htm:56 templates/views/pages/privacy.htm:60
 msgid "30 days, then deleted."
 msgstr "30 jours, puis supprimé."
 
-#: templates/views/pages/privacy.htm:58
+#: templates/views/pages/privacy.htm:59
+msgid "Error log"
+msgstr "Journal d'erreurs"
+
+#: templates/views/pages/privacy.htm:63
 msgid "Accounts"
 msgstr "Comptes"
 
-#: templates/views/pages/privacy.htm:59
+#: templates/views/pages/privacy.htm:64
 #, python-format
 msgid ""
 "Kept while the contributor works on the platform. An account without a sign-"
@@ -5916,11 +5929,11 @@ msgstr ""
 "modifications, l'adresse e-mail est effacée et le nom reste en mention de la "
 "contribution."
 
-#: templates/views/pages/privacy.htm:68
+#: templates/views/pages/privacy.htm:73
 msgid "History of the data"
 msgstr "Historique des données"
 
-#: templates/views/pages/privacy.htm:69
+#: templates/views/pages/privacy.htm:74
 msgid ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
@@ -5928,19 +5941,19 @@ msgstr ""
 "Conservé avec l'historique de la plateforme. Quand un compte est anonymisé, "
 "l'adresse e-mail est effacée et le nom reste comme crédit de contribution."
 
-#: templates/views/pages/privacy.htm:72
+#: templates/views/pages/privacy.htm:77
 msgid "Backups"
 msgstr "Sauvegardes"
 
-#: templates/views/pages/privacy.htm:73
+#: templates/views/pages/privacy.htm:78
 msgid "Nightly backups are kept for up to six months."
 msgstr "Les sauvegardes quotidiennes sont conservées jusqu'à six mois."
 
-#: templates/views/pages/privacy.htm:78
+#: templates/views/pages/privacy.htm:83
 msgid "Recipients"
 msgstr "Destinataires"
 
-#: templates/views/pages/privacy.htm:79
+#: templates/views/pages/privacy.htm:84
 msgid ""
 "The administrators and the team of the Centre de recherche sur la "
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
@@ -5950,11 +5963,11 @@ msgstr ""
 "et l'hébergeur de la plateforme, l'UAR Huma-Num. Rien n'est vendu et aucune "
 "donnée n'est transmise à des annonceurs."
 
-#: templates/views/pages/privacy.htm:81
+#: templates/views/pages/privacy.htm:86
 msgid "Third-party services"
 msgstr "Services tiers"
 
-#: templates/views/pages/privacy.htm:82
+#: templates/views/pages/privacy.htm:87
 msgid ""
 "Some content is not hosted by ManuSpectrum: your browser loads it directly "
 "from the services below. Each of them receives your IP address and your "
@@ -5971,7 +5984,7 @@ msgstr ""
 "ne stocke rien sur votre appareil pour eux. Ils sont situés dans l'Union "
 "européenne, sauf indication contraire."
 
-#: templates/views/pages/privacy.htm:83
+#: templates/views/pages/privacy.htm:88
 msgid ""
 "Purpose: to show you the images and maps of the platform. Legal basis: "
 "legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
@@ -5982,11 +5995,11 @@ msgstr ""
 "services réservés aux éditeurs connectés, la même base s'applique aux outils "
 "d'édition."
 
-#: templates/views/pages/privacy.htm:85
+#: templates/views/pages/privacy.htm:90
 msgid "Every visitor"
 msgstr "Tout visiteur"
 
-#: templates/views/pages/privacy.htm:87
+#: templates/views/pages/privacy.htm:92
 msgid ""
 "Image servers of the institutions that hold the manuscripts (IIIF). When the "
 "images of a document are not hosted by ManuSpectrum, your browser loads them "
@@ -6003,7 +6016,7 @@ msgstr ""
 "e-codices, la Bibliothèque apostolique vaticane ou la BVMM de l'IRHT. La "
 "liste dépend des documents décrits."
 
-#: templates/views/pages/privacy.htm:88
+#: templates/views/pages/privacy.htm:93
 msgid ""
 "Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
 "images loaded from its IIIF server."
@@ -6011,7 +6024,7 @@ msgstr ""
 "Université de Caen Normandie (iiif.unicaen.fr) : la page d'accueil affiche "
 "trois images chargées depuis son serveur IIIF."
 
-#: templates/views/pages/privacy.htm:89
+#: templates/views/pages/privacy.htm:94
 msgid ""
 "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
 "the base map, loaded whenever the Map view of the Explorer is opened. Data © "
@@ -6021,7 +6034,7 @@ msgstr ""
 "sprites du fond de carte, chargés dès que la vue Carte de l'Explorateur est "
 "ouverte. Données © OpenMapTiles, © contributeurs OpenStreetMap."
 
-#: templates/views/pages/privacy.htm:90
+#: templates/views/pages/privacy.htm:95
 msgid ""
 "OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
 "names of political entities, loaded only when you tick « Historical borders "
@@ -6031,11 +6044,11 @@ msgstr ""
 "noms des entités politiques, chargés uniquement si vous cochez « Frontières "
 "historiques ». Données © contributeurs OpenHistoricalMap."
 
-#: templates/views/pages/privacy.htm:93
+#: templates/views/pages/privacy.htm:98
 msgid "Signed-in editors and administrators only"
 msgstr "Éditeurs connectés et administrateurs uniquement"
 
-#: templates/views/pages/privacy.htm:95
+#: templates/views/pages/privacy.htm:100
 msgid ""
 "Biblissima import workflow: the thumbnails are loaded from the Biblissima "
 "portal or from the IIIF server of the holding library."
@@ -6044,7 +6057,7 @@ msgstr ""
 "Biblissima ou depuis le serveur IIIF de la bibliothèque qui conserve le "
 "document."
 
-#: templates/views/pages/privacy.htm:96
+#: templates/views/pages/privacy.htm:101
 msgid ""
 "Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
 "cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
@@ -6061,7 +6074,7 @@ msgstr ""
 "notre contrôle. Nous conseillons d'utiliser plutôt le correcteur de votre "
 "navigateur."
 
-#: templates/views/pages/privacy.htm:97
+#: templates/views/pages/privacy.htm:102
 msgid ""
 "Thesaurus page of Arches (administrators only): the fonts are loaded from "
 "Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
@@ -6071,11 +6084,11 @@ msgstr ""
 "chargées depuis Google Fonts (fonts.googleapis.com, fonts.gstatic.com), "
 "exploité par Google, qui peut traiter la requête hors de l'Union européenne."
 
-#: templates/views/pages/privacy.htm:100
+#: templates/views/pages/privacy.htm:105
 msgid "Services used by the platform itself"
 msgstr "Services utilisés par la plateforme elle-même"
 
-#: templates/views/pages/privacy.htm:101
+#: templates/views/pages/privacy.htm:106
 msgid ""
 "These calls come from the server and carry no visitor data. The platform "
 "asks Biblissima and the IIIF servers of the holding institutions for data "
@@ -6092,11 +6105,11 @@ msgstr ""
 "Les certificats sont délivrés par Let's Encrypt (États-Unis), qui n'apprend "
 "que l'adresse de l'opérateur."
 
-#: templates/views/pages/privacy.htm:103
+#: templates/views/pages/privacy.htm:108
 msgid "Not used"
 msgstr "Non utilisés"
 
-#: templates/views/pages/privacy.htm:104
+#: templates/views/pages/privacy.htm:109
 msgid ""
 "No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
 "social network widget. The Mapbox map service of Arches is not configured."
@@ -6105,11 +6118,11 @@ msgstr ""
 "aucune publicité, aucun widget de réseau social. Le service de cartes Mapbox "
 "d'Arches n'est pas configuré."
 
-#: templates/views/pages/privacy.htm:106
+#: templates/views/pages/privacy.htm:111
 msgid "Transfers outside the European Union"
 msgstr "Transferts hors de l'Union européenne"
 
-#: templates/views/pages/privacy.htm:107
+#: templates/views/pages/privacy.htm:112
 msgid ""
 "None by the platform, which is hosted in France. The exceptions are the "
 "services above that are stated to process data outside the European Union or "
@@ -6121,11 +6134,11 @@ msgstr ""
 "des données hors de l'Union européenne ou dont le lieu de traitement n'est "
 "pas indiqué : Google Fonts, WebSpellChecker et Let's Encrypt."
 
-#: templates/views/pages/privacy.htm:109
+#: templates/views/pages/privacy.htm:114
 msgid "Your rights"
 msgstr "Vos droits"
 
-#: templates/views/pages/privacy.htm:110
+#: templates/views/pages/privacy.htm:115
 msgid ""
 "You can ask for access to your data, its correction, its erasure where the "
 "law allows it, a restriction of the processing, and you can object to it. "
@@ -6135,39 +6148,39 @@ msgstr ""
 "effacement lorsque la loi le permet, la limitation du traitement, et vous y "
 "opposer. Vous pouvez aussi déposer une réclamation auprès de la CNIL."
 
-#: templates/views/pages/privacy.htm:112
+#: templates/views/pages/privacy.htm:117
 msgid "To exercise your rights, write to:"
 msgstr "Pour exercer vos droits, écrivez à :"
 
-#: templates/views/pages/privacy.htm:113
+#: templates/views/pages/privacy.htm:118
 msgid "the contact page"
 msgstr "la page de contact"
 
-#: templates/views/pages/privacy.htm:114
+#: templates/views/pages/privacy.htm:119
 msgid "or to the data protection officer above."
 msgstr "ou au délégué à la protection des données ci-dessus."
 
-#: templates/views/pages/privacy.htm:116
+#: templates/views/pages/privacy.htm:121
 msgid "Cookies and browser storage"
 msgstr "Cookies et stockage du navigateur"
 
-#: templates/views/pages/privacy.htm:119
+#: templates/views/pages/privacy.htm:124
 msgid "Purpose"
 msgstr "Finalité"
 
-#: templates/views/pages/privacy.htm:122
+#: templates/views/pages/privacy.htm:127
 msgid "Keeps you signed in."
 msgstr "Vous garde connecté."
 
-#: templates/views/pages/privacy.htm:123
+#: templates/views/pages/privacy.htm:128
 msgid "Protects forms against forged requests."
 msgstr "Protège les formulaires contre les requêtes falsifiées."
 
-#: templates/views/pages/privacy.htm:124
+#: templates/views/pages/privacy.htm:129
 msgid "Remembers the language you chose."
 msgstr "Mémorise la langue que vous avez choisie."
 
-#: templates/views/pages/privacy.htm:127
+#: templates/views/pages/privacy.htm:132
 msgid ""
 "There is no tracker, no analytics service and no advertising cookie. The "
 "Analysis Explorer keeps your selection and layout in your browser's local "
@@ -6178,11 +6191,11 @@ msgstr ""
 "disposition dans le stockage local de votre navigateur ; elles ne sont "
 "jamais envoyées au serveur."
 
-#: templates/views/pages/privacy.htm:129
+#: templates/views/pages/privacy.htm:134
 msgid "Restricted resources"
 msgstr "Ressources sous restriction"
 
-#: templates/views/pages/privacy.htm:130
+#: templates/views/pages/privacy.htm:135
 #, python-format
 msgid ""
 "A restriction on a resource is temporary by construction: %(n)s month at "
@@ -6209,11 +6222,11 @@ msgstr[1] ""
 "posée et le créateur de la ressource sont prévenus %(notices)s jours avant, "
 "puis de nouveau quand la ressource devient publique."
 
-#: templates/views/pages/privacy.htm:140
+#: templates/views/pages/privacy.htm:145
 msgid "Abandoned workflows"
 msgstr "Workflows abandonnés"
 
-#: templates/views/pages/privacy.htm:141
+#: templates/views/pages/privacy.htm:146
 #, python-format
 msgid ""
 "A workflow with no activity for %(days)s days is cleaned. Its creators are "
@@ -6509,9 +6522,9 @@ msgid ""
 "Biblissima » or « Create a project ») that creates or edits resources step "
 "by step."
 msgstr ""
-"Un formulaire guidé en plusieurs étapes de ManuSpectrum (par exemple « "
-"Importer depuis Biblissima » ou « Créer un projet ») qui crée ou modifie des "
-"ressources étape par étape."
+"Un formulaire guidé en plusieurs étapes de ManuSpectrum (par exemple "
+"« Importer depuis Biblissima » ou « Créer un projet ») qui crée ou modifie "
+"des ressources étape par étape."
 
 #: templates/views/pages/terms.htm:42
 msgid "Team"
@@ -7080,6 +7093,15 @@ msgid ""
 msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
+
+#~ msgid "met"
+#~ msgstr "respectée"
+
+#~ msgid "Why this step"
+#~ msgstr "Pourquoi cette étape"
+
+#~ msgid "Document not found? Import it from Biblissima"
+#~ msgstr "Document introuvable ? Importez-le depuis Biblissima"
 
 #~ msgid "One letter"
 #~ msgstr "Une lettre"

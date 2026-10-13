@@ -7,6 +7,7 @@ Usage:
 from datetime import date
 
 from django.contrib.auth.models import Permission, User
+from django.contrib.staticfiles import finders
 from django.core import mail
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -68,6 +69,38 @@ class CopyAddressesTests(TestCase):
         self.assertNotContains(response, "anon@manuspectrum.test")
         self.assertNotContains(response, "gone@manuspectrum.test")
         self.assertNotContains(response, "renamed@manuspectrum.test")
+
+    def test_merged_duplicates_are_counted_on_the_page(self):
+        users = [
+            make("a", "amy@manuspectrum.test"),
+            make("b", "AMY@manuspectrum.test"),
+            make("c", "Amy@manuspectrum.test"),
+        ]
+        self.client.force_login(self.boss)
+        response = self.run_action(self.client, *users)
+        self.assertContains(response, "2 duplicate addresses were merged.")
+        one = self.run_action(self.client, *users[:2])
+        self.assertContains(one, "1 duplicate address was merged.")
+
+    def test_no_duplicate_line_without_duplicates(self):
+        user = make("a", "amy@manuspectrum.test")
+        self.client.force_login(self.boss)
+        response = self.run_action(self.client, user)
+        self.assertNotContains(response, "duplicate")
+
+    def test_the_copy_box_is_driven_by_the_shared_script(self):
+        user = make("a", "amy@manuspectrum.test")
+        self.client.force_login(self.boss)
+        response = self.run_action(self.client, user)
+        self.assertContains(response, "js/standalone/copy-text.js")
+        self.assertContains(response, 'data-ms-copy data-ms-copy-source="textarea"')
+        self.assertContains(response, "data-ms-copy-button")
+        self.assertContains(response, "data-ms-copy-status")
+
+    def test_the_shared_copy_script_is_found_by_staticfiles(self):
+        self.assertIsNotNone(finders.find("js/standalone/copy-text.js"))
+        self.assertIsNone(finders.find("js/accounts/copy-key.js"))
+        self.assertIsNone(finders.find("js/admin/copy-addresses.js"))
 
     def test_the_page_sends_nothing_and_links_no_mailto(self):
         user = make("u", "u@manuspectrum.test")

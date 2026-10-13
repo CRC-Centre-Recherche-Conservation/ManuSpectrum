@@ -3,7 +3,7 @@
 
 {% block extrahead %}
     {{ block.super }}
-    <script src="{% static 'js/admin/copy-addresses.js' %}" defer></script>
+    <script src="{% static 'js/standalone/copy-text.js' %}" defer></script>
 {% endblock %}
 
 {% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }}{% endblock %}
@@ -18,13 +18,14 @@
 {% endblock %}
 
 {% block content %}
-<div data-ms-copy-addresses>
+<div data-ms-copy data-ms-copy-source="textarea">
     <p>{% blocktranslate count counter=audience.addresses|length %}{{ counter }} address to copy.{% plural %}{{ counter }} addresses to copy.{% endblocktranslate %}</p>
+    {% if audience.duplicates %}<p>{% blocktranslate count counter=audience.duplicates %}{{ counter }} duplicate address was merged.{% plural %}{{ counter }} duplicate addresses were merged.{% endblocktranslate %}</p>{% endif %}
     {% if audience.addresses %}
     <textarea readonly rows="8" cols="80" class="vLargeTextField" aria-label="{% translate 'E-mail addresses' %}">{{ addresses_text }}</textarea>
     <p>
-        <button type="button" class="ms-copy-addresses__button" hidden data-copied="{% translate 'Copied' %}">{% translate "Copy" %}</button>
-        <span class="ms-copy-addresses__status" role="status"></span>
+        <button type="button" class="ms-copy-addresses__button" hidden data-ms-copy-button data-copied="{% translate 'Copied' %}">{% translate "Copy" %}</button>
+        <span class="ms-copy-addresses__status" data-ms-copy-status role="status"></span>
     </p>
     {% endif %}
     <p><strong>{% translate "Paste them in the Bcc field of the shared project mailbox, never in To or Cc." %}</strong></p>

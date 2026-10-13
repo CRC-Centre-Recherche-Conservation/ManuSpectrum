@@ -27,12 +27,12 @@
                 {% if pending_secret %}
                     <p>{% blocktrans %}Scan the QR code with an authenticator application, then enter the code it shows to finish.{% endblocktrans %}</p>
                     <img class="img-responsive center-block" src="{{ qr_data_uri }}" alt="{% trans 'QR code to scan with your authenticator application' %}" width="240" height="240">
-                    <div class="text-muted text-center ms-mfa-key" data-ms-copy-key="{{ pending_secret }}">
+                    <div class="text-muted text-center ms-mfa-key" data-ms-copy data-ms-copy-source="#ms-mfa-key" data-ms-copy-text="{{ pending_secret }}">
                         <p class="ms-mfa-key__label">{% trans "Or enter this key by hand:" %}</p>
                         <code class="ms-mfa-key__value" id="ms-mfa-key">{{ pending_secret|group_key }}</code>
-                        <button type="button" class="btn btn-default btn-sm ms-mfa-key__copy" hidden
+                        <button type="button" class="btn btn-default btn-sm ms-mfa-key__copy" hidden data-ms-copy-button
                                 data-copied="{% trans 'Copied' %}">{% trans "Copy the key" %}</button>
-                        <span class="ms-mfa-key__status" role="status"></span>
+                        <span class="ms-mfa-key__status" data-ms-copy-status role="status"></span>
                     </div>
                     <form method="post" class="form-group">
                         {% csrf_token %}
@@ -71,5 +71,5 @@
         </div>
     </div>
 </div>
-{% if pending_secret %}<script src="{% static 'js/accounts/copy-key.js' %}" defer></script>{% endif %}
+{% if pending_secret %}<script src="{% static 'js/standalone/copy-text.js' %}" defer></script>{% endif %}
 {% endblock body %}

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 09:58-0500\n"
+"POT-Creation-Date: 2026-10-13 10:48-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -546,15 +546,6 @@ msgstr "Manifest not found"
 msgid "Invalid URL format"
 msgstr "Invalid URL format"
 
-#: docs_claude/csv_import/plan_snapshot_after_review.md:613
-#: docs_claude/csv_import/review_ux.md:391
-msgid "Why this step"
-msgstr "Why this step"
-
-#: docs_claude/csv_import/plan_snapshot_after_review.md:754
-msgid "Document not found? Import it from Biblissima"
-msgstr "Document not found? Import it from Biblissima"
-
 #: functions/multi_descriptor.py:167
 msgid "Undefined"
 msgstr "Undefined"
@@ -1014,16 +1005,16 @@ msgstr "Strong"
 #: templates/accounts/_password_field.htm:29
 #: templates/accounts/_password_field.htm:30
 #: templates/accounts/_password_field.htm:31
-msgid "met"
-msgstr "met"
+msgid "rule met"
+msgstr "rule met"
 
 #: templates/accounts/_password_field.htm:27
 #: templates/accounts/_password_field.htm:28
 #: templates/accounts/_password_field.htm:29
 #: templates/accounts/_password_field.htm:30
 #: templates/accounts/_password_field.htm:31
-msgid "not met"
-msgstr "not met"
+msgid "rule not met"
+msgstr "rule not met"
 
 #: templates/accounts/_password_field.htm:33
 msgid ""
@@ -1161,7 +1152,7 @@ msgstr "Or enter this key by hand:"
 
 #: templates/accounts/two_factor.htm:34
 #: templates/accounts/two_factor_reset.htm:24
-#: templates/admin/copy_addresses.html:26
+#: templates/admin/copy_addresses.html:27
 msgid "Copied"
 msgstr "Copied"
 
@@ -1254,49 +1245,56 @@ msgid_plural "%(counter)s addresses to copy."
 msgstr[0] "%(counter)s address to copy."
 msgstr[1] "%(counter)s addresses to copy."
 
-#: templates/admin/copy_addresses.html:24
+#: templates/admin/copy_addresses.html:23
+#, python-format
+msgid "%(counter)s duplicate address was merged."
+msgid_plural "%(counter)s duplicate addresses were merged."
+msgstr[0] "%(counter)s duplicate address was merged."
+msgstr[1] "%(counter)s duplicate addresses were merged."
+
+#: templates/admin/copy_addresses.html:25
 msgid "E-mail addresses"
 msgstr "E-mail addresses"
 
-#: templates/admin/copy_addresses.html:26
+#: templates/admin/copy_addresses.html:27
 msgid "Copy"
 msgstr "Copy"
 
-#: templates/admin/copy_addresses.html:30
+#: templates/admin/copy_addresses.html:31
 msgid ""
 "Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
 msgstr ""
 "Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
 
-#: templates/admin/copy_addresses.html:32
+#: templates/admin/copy_addresses.html:33
 #, python-format
 msgid "%(counter)s selected user was left out:"
 msgid_plural "%(counter)s selected users were left out:"
 msgstr[0] "%(counter)s selected user was left out:"
 msgstr[1] "%(counter)s selected users were left out:"
 
-#: templates/admin/copy_addresses.html:34
+#: templates/admin/copy_addresses.html:35
 #, python-format
 msgid "%(counter)s inactive"
 msgid_plural "%(counter)s inactive"
 msgstr[0] "%(counter)s inactive"
 msgstr[1] "%(counter)s inactive"
 
-#: templates/admin/copy_addresses.html:35
+#: templates/admin/copy_addresses.html:36
 #, python-format
 msgid "%(counter)s without an e-mail address"
 msgid_plural "%(counter)s without an e-mail address"
 msgstr[0] "%(counter)s without an e-mail address"
 msgstr[1] "%(counter)s without an e-mail address"
 
-#: templates/admin/copy_addresses.html:36
+#: templates/admin/copy_addresses.html:37
 #, python-format
 msgid "%(counter)s anonymised"
 msgid_plural "%(counter)s anonymised"
 msgstr[0] "%(counter)s anonymised"
 msgstr[1] "%(counter)s anonymised"
 
-#: templates/admin/copy_addresses.html:39
+#: templates/admin/copy_addresses.html:40
 msgid "Back to the users"
 msgstr "Back to the users"
 
@@ -1910,7 +1908,7 @@ msgstr "Legal"
 
 #: templates/includes/ms_footer.htm:39 templates/views/pages/legal.htm:3
 #: templates/views/pages/legal.htm:4 templates/views/pages/legal.htm:7
-#: templates/views/pages/privacy.htm:146 templates/views/pages/terms.htm:87
+#: templates/views/pages/privacy.htm:151 templates/views/pages/terms.htm:87
 msgid "Legal notice"
 msgstr "Legal notice"
 
@@ -1921,7 +1919,7 @@ msgid "Privacy policy"
 msgstr "Privacy policy"
 
 #: templates/includes/ms_footer.htm:41 templates/views/pages/legal.htm:59
-#: templates/views/pages/privacy.htm:146 templates/views/pages/terms.htm:3
+#: templates/views/pages/privacy.htm:151 templates/views/pages/terms.htm:3
 #: templates/views/pages/terms.htm:4 templates/views/pages/terms.htm:7
 msgid "Terms of use"
 msgstr "Terms of use"
@@ -2876,7 +2874,7 @@ msgstr "Question"
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:83 templates/views/pages/privacy.htm:119
+#: templates/javascript.htm:83 templates/views/pages/privacy.htm:124
 msgid "Name"
 msgstr "Name"
 
@@ -5630,7 +5628,10 @@ msgid ""
 "Reading ManuSpectrum needs no account and sets no tracker. This page covers "
 "what the platform records about visitors and about the people who have an "
 "account."
-msgstr "Reading ManuSpectrum needs no account and sets no tracker. This page covers what the platform records about visitors and about the people who have an account."
+msgstr ""
+"Reading ManuSpectrum needs no account and sets no tracker. This page covers "
+"what the platform records about visitors and about the people who have an "
+"account."
 
 #: templates/views/pages/privacy.htm:14
 msgid "Data controller"
@@ -5732,21 +5733,27 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:37
 msgid ""
-"History of the data: the account that created or changed each resource, and "
-"the date."
+"The web server's error log (date, IP address and request of failed "
+"requests), kept for the same purpose and not shared."
 msgstr ""
-"History of the data: the account that created or changed each resource, and "
-"the date."
 
 #: templates/views/pages/privacy.htm:38
 msgid ""
+"History of the data: the account that created or changed each resource, and "
+"the date."
+msgstr ""
+"History of the data: the account that created or changed each resource, and "
+"the date."
+
+#: templates/views/pages/privacy.htm:39
+msgid ""
 "Resources can name researchers (authors, contacts) as part of the scientific "
 "description."
 msgstr ""
 "Resources can name researchers (authors, contacts) as part of the scientific "
 "description."
 
-#: templates/views/pages/privacy.htm:39
+#: templates/views/pages/privacy.htm:40
 msgid ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
@@ -5754,34 +5761,38 @@ msgstr ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
 
-#: templates/views/pages/privacy.htm:42
+#: templates/views/pages/privacy.htm:43
 msgid "Retention periods"
 msgstr "Retention periods"
 
-#: templates/views/pages/privacy.htm:46
+#: templates/views/pages/privacy.htm:47
 msgid "Sign-in records"
 msgstr "Sign-in records"
 
-#: templates/views/pages/privacy.htm:47
+#: templates/views/pages/privacy.htm:48
 #, python-format
 msgid "%(n)s month (%(days)s days), then deleted."
 msgid_plural "%(n)s months (%(days)s days), then deleted."
 msgstr[0] "%(n)s month (%(days)s days), then deleted."
 msgstr[1] "%(n)s months (%(days)s days), then deleted."
 
-#: templates/views/pages/privacy.htm:54
+#: templates/views/pages/privacy.htm:55
 msgid "Access log"
 msgstr "Access log"
 
-#: templates/views/pages/privacy.htm:55
+#: templates/views/pages/privacy.htm:56 templates/views/pages/privacy.htm:60
 msgid "30 days, then deleted."
 msgstr "30 days, then deleted."
 
-#: templates/views/pages/privacy.htm:58
+#: templates/views/pages/privacy.htm:59
+msgid "Error log"
+msgstr "Error log"
+
+#: templates/views/pages/privacy.htm:63
 msgid "Accounts"
 msgstr "Accounts"
 
-#: templates/views/pages/privacy.htm:59
+#: templates/views/pages/privacy.htm:64
 #, python-format
 msgid ""
 "Kept while the contributor works on the platform. An account without a sign-"
@@ -5798,11 +5809,11 @@ msgstr ""
 "of the data keeps its author. In the edit history, the e-mail address is "
 "erased and the name stays as credit for the contribution."
 
-#: templates/views/pages/privacy.htm:68
+#: templates/views/pages/privacy.htm:73
 msgid "History of the data"
 msgstr "History of the data"
 
-#: templates/views/pages/privacy.htm:69
+#: templates/views/pages/privacy.htm:74
 msgid ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
@@ -5810,19 +5821,19 @@ msgstr ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
 
-#: templates/views/pages/privacy.htm:72
+#: templates/views/pages/privacy.htm:77
 msgid "Backups"
 msgstr "Backups"
 
-#: templates/views/pages/privacy.htm:73
+#: templates/views/pages/privacy.htm:78
 msgid "Nightly backups are kept for up to six months."
 msgstr "Nightly backups are kept for up to six months."
 
-#: templates/views/pages/privacy.htm:78
+#: templates/views/pages/privacy.htm:83
 msgid "Recipients"
 msgstr "Recipients"
 
-#: templates/views/pages/privacy.htm:79
+#: templates/views/pages/privacy.htm:84
 msgid ""
 "The administrators and the team of the Centre de recherche sur la "
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
@@ -5832,128 +5843,128 @@ msgstr ""
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
 "and no data is given to advertisers."
 
-#: templates/views/pages/privacy.htm:81
+#: templates/views/pages/privacy.htm:86
 msgid "Third-party services"
 msgstr "Third-party services"
 
-#: templates/views/pages/privacy.htm:82
-msgid ""
-"Some content is not hosted by ManuSpectrum: your browser loads it directly "
-"from the services below. Each of them receives your IP address and your "
-"browser identification (user agent), and, when the request is a fetch made "
-"by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets "
-"no cookie for them and stores nothing on your device for them. They are in "
-"the European Union unless stated otherwise."
-msgstr ""
-"Some content is not hosted by ManuSpectrum: your browser loads it directly "
-"from the services below. Each of them receives your IP address and your "
-"browser identification (user agent), and, when the request is a fetch made "
-"by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets "
-"no cookie for them and stores nothing on your device for them. They are in "
-"the European Union unless stated otherwise."
-
-#: templates/views/pages/privacy.htm:83
-msgid ""
-"Purpose: to show you the images and maps of the platform. Legal basis: "
-"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
-"signed-in editors, the same basis applies to the editing tools."
-msgstr ""
-"Purpose: to show you the images and maps of the platform. Legal basis: "
-"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
-"signed-in editors, the same basis applies to the editing tools."
-
-#: templates/views/pages/privacy.htm:85
-msgid "Every visitor"
-msgstr "Every visitor"
-
 #: templates/views/pages/privacy.htm:87
 msgid ""
-"Image servers of the institutions that hold the manuscripts (IIIF). When the "
-"images of a document are not hosted by ManuSpectrum, your browser loads them "
-"from the IIIF server of the holding institution, in the Explorer and on "
-"resource pages: for example the Bibliothèque nationale de France (Gallica), "
-"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
-"of the IRHT. The list depends on the documents described."
+"Some content is not hosted by ManuSpectrum: your browser loads it directly "
+"from the services below. Each of them receives your IP address and your "
+"browser identification (user agent), and, when the request is a fetch made "
+"by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets "
+"no cookie for them and stores nothing on your device for them. They are in "
+"the European Union unless stated otherwise."
 msgstr ""
-"Image servers of the institutions that hold the manuscripts (IIIF). When the "
-"images of a document are not hosted by ManuSpectrum, your browser loads them "
-"from the IIIF server of the holding institution, in the Explorer and on "
-"resource pages: for example the Bibliothèque nationale de France (Gallica), "
-"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
-"of the IRHT. The list depends on the documents described."
+"Some content is not hosted by ManuSpectrum: your browser loads it directly "
+"from the services below. Each of them receives your IP address and your "
+"browser identification (user agent), and, when the request is a fetch made "
+"by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets "
+"no cookie for them and stores nothing on your device for them. They are in "
+"the European Union unless stated otherwise."
 
 #: templates/views/pages/privacy.htm:88
 msgid ""
-"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
-"images loaded from its IIIF server."
+"Purpose: to show you the images and maps of the platform. Legal basis: "
+"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
+"signed-in editors, the same basis applies to the editing tools."
 msgstr ""
-"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
-"images loaded from its IIIF server."
-
-#: templates/views/pages/privacy.htm:89
-msgid ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
-"OpenMapTiles, © OpenStreetMap contributors."
-msgstr ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
-"OpenMapTiles, © OpenStreetMap contributors."
+"Purpose: to show you the images and maps of the platform. Legal basis: "
+"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
+"signed-in editors, the same basis applies to the editing tools."
 
 #: templates/views/pages/privacy.htm:90
+msgid "Every visitor"
+msgstr "Every visitor"
+
+#: templates/views/pages/privacy.htm:92
 msgid ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
-"names of political entities, loaded only when you tick « Historical borders "
-"». Data © OpenHistoricalMap contributors."
+"Image servers of the institutions that hold the manuscripts (IIIF). When the "
+"images of a document are not hosted by ManuSpectrum, your browser loads them "
+"from the IIIF server of the holding institution, in the Explorer and on "
+"resource pages: for example the Bibliothèque nationale de France (Gallica), "
+"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
+"of the IRHT. The list depends on the documents described."
 msgstr ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
-"names of political entities, loaded only when you tick « Historical borders "
-"». Data © OpenHistoricalMap contributors."
+"Image servers of the institutions that hold the manuscripts (IIIF). When the "
+"images of a document are not hosted by ManuSpectrum, your browser loads them "
+"from the IIIF server of the holding institution, in the Explorer and on "
+"resource pages: for example the Bibliothèque nationale de France (Gallica), "
+"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
+"of the IRHT. The list depends on the documents described."
 
 #: templates/views/pages/privacy.htm:93
-msgid "Signed-in editors and administrators only"
-msgstr "Signed-in editors and administrators only"
+msgid ""
+"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
+"images loaded from its IIIF server."
+msgstr ""
+"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
+"images loaded from its IIIF server."
+
+#: templates/views/pages/privacy.htm:94
+msgid ""
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
+"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
+"OpenMapTiles, © OpenStreetMap contributors."
+msgstr ""
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
+"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
+"OpenMapTiles, © OpenStreetMap contributors."
 
 #: templates/views/pages/privacy.htm:95
 msgid ""
-"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
-"portal or from the IIIF server of the holding library."
+"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
+"names of political entities, loaded only when you tick « Historical borders "
+"». Data © OpenHistoricalMap contributors."
 msgstr ""
-"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
-"portal or from the IIIF server of the holding library."
+"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
+"names of political entities, loaded only when you tick « Historical borders "
+"». Data © OpenHistoricalMap contributors."
 
-#: templates/views/pages/privacy.htm:96
-msgid ""
-"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
-"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
-"checker (SCAYT) is off by default; if you switch it on, the text you type is "
-"sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
-"where it processes it: this is outside our control. We advise using your "
-"browser's spell checker instead."
-msgstr ""
-"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
-"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
-"checker (SCAYT) is off by default; if you switch it on, the text you type is "
-"sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
-"where it processes it: this is outside our control. We advise using your "
-"browser's spell checker instead."
-
-#: templates/views/pages/privacy.htm:97
-msgid ""
-"Thesaurus page of Arches (administrators only): the fonts are loaded from "
-"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
-"which may process the request outside the European Union."
-msgstr ""
-"Thesaurus page of Arches (administrators only): the fonts are loaded from "
-"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
-"which may process the request outside the European Union."
+#: templates/views/pages/privacy.htm:98
+msgid "Signed-in editors and administrators only"
+msgstr "Signed-in editors and administrators only"
 
 #: templates/views/pages/privacy.htm:100
-msgid "Services used by the platform itself"
-msgstr "Services used by the platform itself"
+msgid ""
+"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
+"portal or from the IIIF server of the holding library."
+msgstr ""
+"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
+"portal or from the IIIF server of the holding library."
 
 #: templates/views/pages/privacy.htm:101
 msgid ""
+"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
+"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
+"checker (SCAYT) is off by default; if you switch it on, the text you type is "
+"sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
+"where it processes it: this is outside our control. We advise using your "
+"browser's spell checker instead."
+msgstr ""
+"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
+"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
+"checker (SCAYT) is off by default; if you switch it on, the text you type is "
+"sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
+"where it processes it: this is outside our control. We advise using your "
+"browser's spell checker instead."
+
+#: templates/views/pages/privacy.htm:102
+msgid ""
+"Thesaurus page of Arches (administrators only): the fonts are loaded from "
+"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
+"which may process the request outside the European Union."
+msgstr ""
+"Thesaurus page of Arches (administrators only): the fonts are loaded from "
+"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
+"which may process the request outside the European Union."
+
+#: templates/views/pages/privacy.htm:105
+msgid "Services used by the platform itself"
+msgstr "Services used by the platform itself"
+
+#: templates/views/pages/privacy.htm:106
+msgid ""
 "These calls come from the server and carry no visitor data. The platform "
 "asks Biblissima and the IIIF servers of the holding institutions for data "
 "and images. E-mail goes through the mail relay of Huma-Num, which handles "
@@ -5968,11 +5979,11 @@ msgstr ""
 "Certificates are issued by Let's Encrypt (United States), which only learns "
 "the address of the operator."
 
-#: templates/views/pages/privacy.htm:103
+#: templates/views/pages/privacy.htm:108
 msgid "Not used"
 msgstr "Not used"
 
-#: templates/views/pages/privacy.htm:104
+#: templates/views/pages/privacy.htm:109
 msgid ""
 "No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
 "social network widget. The Mapbox map service of Arches is not configured."
@@ -5980,11 +5991,11 @@ msgstr ""
 "No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
 "social network widget. The Mapbox map service of Arches is not configured."
 
-#: templates/views/pages/privacy.htm:106
+#: templates/views/pages/privacy.htm:111
 msgid "Transfers outside the European Union"
 msgstr "Transfers outside the European Union"
 
-#: templates/views/pages/privacy.htm:107
+#: templates/views/pages/privacy.htm:112
 msgid ""
 "None by the platform, which is hosted in France. The exceptions are the "
 "services above that are stated to process data outside the European Union or "
@@ -5996,11 +6007,11 @@ msgstr ""
 "whose location is not stated: Google Fonts, WebSpellChecker and Let's "
 "Encrypt."
 
-#: templates/views/pages/privacy.htm:109
+#: templates/views/pages/privacy.htm:114
 msgid "Your rights"
 msgstr "Your rights"
 
-#: templates/views/pages/privacy.htm:110
+#: templates/views/pages/privacy.htm:115
 msgid ""
 "You can ask for access to your data, its correction, its erasure where the "
 "law allows it, a restriction of the processing, and you can object to it. "
@@ -6010,39 +6021,39 @@ msgstr ""
 "law allows it, a restriction of the processing, and you can object to it. "
 "You can also lodge a complaint with the CNIL."
 
-#: templates/views/pages/privacy.htm:112
+#: templates/views/pages/privacy.htm:117
 msgid "To exercise your rights, write to:"
 msgstr "To exercise your rights, write to:"
 
-#: templates/views/pages/privacy.htm:113
+#: templates/views/pages/privacy.htm:118
 msgid "the contact page"
 msgstr "the contact page"
 
-#: templates/views/pages/privacy.htm:114
+#: templates/views/pages/privacy.htm:119
 msgid "or to the data protection officer above."
 msgstr "or to the data protection officer above."
 
-#: templates/views/pages/privacy.htm:116
+#: templates/views/pages/privacy.htm:121
 msgid "Cookies and browser storage"
 msgstr "Cookies and browser storage"
 
-#: templates/views/pages/privacy.htm:119
+#: templates/views/pages/privacy.htm:124
 msgid "Purpose"
 msgstr "Purpose"
 
-#: templates/views/pages/privacy.htm:122
+#: templates/views/pages/privacy.htm:127
 msgid "Keeps you signed in."
 msgstr "Keeps you signed in."
 
-#: templates/views/pages/privacy.htm:123
+#: templates/views/pages/privacy.htm:128
 msgid "Protects forms against forged requests."
 msgstr "Protects forms against forged requests."
 
-#: templates/views/pages/privacy.htm:124
+#: templates/views/pages/privacy.htm:129
 msgid "Remembers the language you chose."
 msgstr "Remembers the language you chose."
 
-#: templates/views/pages/privacy.htm:127
+#: templates/views/pages/privacy.htm:132
 msgid ""
 "There is no tracker, no analytics service and no advertising cookie. The "
 "Analysis Explorer keeps your selection and layout in your browser's local "
@@ -6052,11 +6063,11 @@ msgstr ""
 "Analysis Explorer keeps your selection and layout in your browser's local "
 "storage; they are never sent to the server."
 
-#: templates/views/pages/privacy.htm:129
+#: templates/views/pages/privacy.htm:134
 msgid "Restricted resources"
 msgstr "Restricted resources"
 
-#: templates/views/pages/privacy.htm:130
+#: templates/views/pages/privacy.htm:135
 #, python-format
 msgid ""
 "A restriction on a resource is temporary by construction: %(n)s month at "
@@ -6083,11 +6094,11 @@ msgstr[1] ""
 "creator of the resource are told %(notices)s days before, and again when the "
 "resource becomes public."
 
-#: templates/views/pages/privacy.htm:140
+#: templates/views/pages/privacy.htm:145
 msgid "Abandoned workflows"
 msgstr "Abandoned workflows"
 
-#: templates/views/pages/privacy.htm:141
+#: templates/views/pages/privacy.htm:146
 #, python-format
 msgid ""
 "A workflow with no activity for %(days)s days is cleaned. Its creators are "
@@ -6938,6 +6949,15 @@ msgid ""
 msgstr ""
 "This configuration was changed by someone else since it was loaded. Reload "
 "it before saving."
+
+#~ msgid "met"
+#~ msgstr "met"
+
+#~ msgid "Why this step"
+#~ msgstr "Why this step"
+
+#~ msgid "Document not found? Import it from Biblissima"
+#~ msgstr "Document not found? Import it from Biblissima"
 
 #~ msgid "One letter"
 #~ msgstr "One letter"

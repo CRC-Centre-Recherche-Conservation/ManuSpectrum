@@ -98,10 +98,10 @@ class EnrolmentTests(SetupBase):
         html = self.client.get(PAGE).content.decode()
         grouped = " ".join(secret[i : i + 4] for i in range(0, len(secret), 4))
         self.assertIn(f">{grouped}</code>", html)
-        self.assertIn(f'data-ms-copy-key="{secret}"', html)
-        self.assertIn("ms-mfa-key__copy", html)
-        self.assertIn("js/accounts/copy-key.js", html)
-        self.assertNotIn('querySelector("[data-ms-copy-key]")', html)
+        self.assertIn(f'data-ms-copy-text="{secret}"', html)
+        self.assertIn("data-ms-copy-button", html)
+        self.assertIn("js/standalone/copy-text.js", html)
+        self.assertNotIn("querySelector(", html)
 
     def test_a_valid_code_stores_the_secret_the_way_arches_reads_it(self):
         secret = self.start()

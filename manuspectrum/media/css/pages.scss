@@ -864,7 +864,6 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
     label { display: inline-block; margin-bottom: 4px; font-weight: 600; }
     input[type="password"] { width: 100%; max-width: 28rem; padding: 8px 10px; border: 1px solid $ms-line; border-radius: 8px; }
     .ms-form-check { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 1rem; font-weight: 600; }
-    .ms-form-help { display: block; margin-top: 6px; color: $ms-ink-soft; font-size: 0.88rem; ul { margin: 4px 0 0; padding-left: 1.2rem; } }
     .ms-form-error { display: block; color: $ms-red-text; font-size: 0.9rem; }
     button { padding: 8px 18px; border: 0; border-radius: 8px; background: $ms-red-text; color: #fff; font-weight: 600; cursor: pointer; } }
 .ms-contact-include { margin: 0 0 1.4rem; padding: 14px 18px; background: #fff; border: 1px solid $ms-line; border-radius: 12px;
