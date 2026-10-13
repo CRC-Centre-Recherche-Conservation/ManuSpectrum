@@ -4,6 +4,7 @@ import re
 from html.parser import HTMLParser
 from unittest import mock
 
+import lxml.html
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
@@ -224,25 +225,29 @@ class ActivationTests(Base):
         parser.feed(html)
         self.assertEqual(parser.offenders, [])
 
-    def test_the_lists_sit_in_the_meter_and_the_field_wrapper(self):
-        from bs4 import BeautifulSoup
+    def page_tree(self):
+        return lxml.html.fromstring(self.client.get(self.path).content)
 
-        soup = BeautifulSoup(self.client.get(self.path).content, "html.parser")
-        field = soup.select_one(".ms-pw-field")
-        self.assertEqual(field.name, "div")
-        self.assertIsNotNone(field.select_one("details.ms-pw-info ul.ms-pw-info__list"))
-        meter = soup.select_one("[data-ms-pw-meter]")
-        self.assertTrue(meter.has_attr("hidden"))
-        self.assertIsNotNone(meter.select_one("ul.ms-pw-rules"))
-        self.assertIsNone(soup.select_one("p ul, p details, p div"))
+    def test_the_lists_sit_in_the_meter_and_the_field_wrapper(self):
+        tree = self.page_tree()
+        fields = tree.xpath('//*[contains(concat(" ", @class, " "), " ms-pw-field ")]')
+        self.assertEqual({field.tag for field in fields}, {"div"})
+        self.assertTrue(
+            fields[0].xpath(
+                './/details[contains(@class, "ms-pw-info")]'
+                '//ul[contains(@class, "ms-pw-info__list")]'
+            )
+        )
+        (meter,) = tree.xpath("//*[@data-ms-pw-meter]")
+        self.assertIn("hidden", meter.attrib)
+        self.assertTrue(meter.xpath('.//ul[contains(@class, "ms-pw-rules")]'))
+        self.assertEqual(tree.xpath("//p//ul | //p//details | //p//div"), [])
 
     def test_the_match_line_names_the_first_field_by_its_id(self):
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(self.client.get(self.path).content, "html.parser")
-        first = soup.select_one("input[name=new_password1]")["id"]
-        line = soup.select_one("[data-ms-pw-match]")
-        self.assertEqual(line["data-with"], first)
+        tree = self.page_tree()
+        (first,) = tree.xpath('//input[@name="new_password1"]')
+        (line,) = tree.xpath("//*[@data-ms-pw-match]")
+        self.assertEqual(line.get("data-with"), first.get("id"))
 
     def test_without_a_checkable_rule_there_is_no_meter(self):
         validators = [
