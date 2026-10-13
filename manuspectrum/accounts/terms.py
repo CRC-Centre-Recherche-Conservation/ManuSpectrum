@@ -9,4 +9,4 @@ accept the terms again, then update `TERMS_DIGEST`; for a typo fix, update
 """
 
 TERMS_VERSION = "2026-10-12"
-TERMS_DIGEST = "f6b9911b06de4d01df27e2dc493a8b0ff19062858f8793b7143704b1148b331f"
+TERMS_DIGEST = "fdb8ca07c440ac7ff09f5dab4e8c4e32e8e40325bc4bf6d62c7960669d61f048"
