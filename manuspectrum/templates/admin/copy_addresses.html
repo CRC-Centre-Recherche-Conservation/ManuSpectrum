@@ -1,0 +1,41 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <script src="{% static 'js/admin/copy-addresses.js' %}" defer></script>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; {% translate 'Copy the e-mail addresses' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-ms-copy-addresses>
+    <p>{% blocktranslate count counter=audience.addresses|length %}{{ counter }} address to copy.{% plural %}{{ counter }} addresses to copy.{% endblocktranslate %}</p>
+    {% if audience.addresses %}
+    <textarea readonly rows="8" cols="80" class="vLargeTextField" aria-label="{% translate 'E-mail addresses' %}">{{ addresses_text }}</textarea>
+    <p>
+        <button type="button" class="ms-copy-addresses__button" hidden data-copied="{% translate 'Copied' %}">{% translate "Copy" %}</button>
+        <span class="ms-copy-addresses__status" role="status"></span>
+    </p>
+    {% endif %}
+    <p><strong>{% translate "Paste them in the Bcc field of the shared project mailbox, never in To or Cc." %}</strong></p>
+    {% if audience.left_out %}
+    <p>{% blocktranslate count counter=audience.left_out %}{{ counter }} selected user was left out:{% plural %}{{ counter }} selected users were left out:{% endblocktranslate %}</p>
+    <ul>
+        {% if audience.inactive %}<li>{% blocktranslate count counter=audience.inactive %}{{ counter }} inactive{% plural %}{{ counter }} inactive{% endblocktranslate %}</li>{% endif %}
+        {% if audience.no_address %}<li>{% blocktranslate count counter=audience.no_address %}{{ counter }} without an e-mail address{% plural %}{{ counter }} without an e-mail address{% endblocktranslate %}</li>{% endif %}
+        {% if audience.anonymised %}<li>{% blocktranslate count counter=audience.anonymised %}{{ counter }} anonymised{% plural %}{{ counter }} anonymised{% endblocktranslate %}</li>{% endif %}
+    </ul>
+    {% endif %}
+    <p><a href="{% url opts|admin_urlname:'changelist' %}">{% translate "Back to the users" %}</a></p>
+</div>
+{% endblock %}

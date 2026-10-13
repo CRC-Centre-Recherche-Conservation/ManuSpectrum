@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 08:42-0500\n"
+"POT-Creation-Date: 2026-10-13 08:52-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -330,7 +330,8 @@ msgstr "Pas un mot de passe courant"
 
 #: accounts/password_rules.py:99
 msgid "Not too close to your name, username or e-mail address"
-msgstr "Pas trop proche de votre nom, de votre identifiant ou de votre adresse e-mail"
+msgstr ""
+"Pas trop proche de votre nom, de votre identifiant ou de votre adresse e-mail"
 
 #: accounts/twofactor.py:142
 msgid "The code is not valid. Enter the current code of your authenticator."
@@ -369,24 +370,24 @@ msgstr "Créer un projet"
 msgid "Import from Biblissima"
 msgstr "Importer depuis Biblissima"
 
-#: admin.py:45 templates/accounts/two_factor.htm:12
+#: admin.py:46 templates/accounts/two_factor.htm:12
 msgid "Two-factor authentication"
 msgstr "Authentification à deux facteurs"
 
-#: admin.py:54
+#: admin.py:55
 msgid "Only a superuser can reset two-factor authentication."
 msgstr ""
 "Seul un superutilisateur peut réinitialiser l'authentification à deux "
 "facteurs."
 
-#: admin.py:66
+#: admin.py:67
 #, python-format
 msgid "The enrolment link was mailed to %(count)d account."
 msgid_plural "The enrolment link was mailed to %(count)d accounts."
 msgstr[0] "Le lien d'inscription a été envoyé à %(count)d compte."
 msgstr[1] "Le lien d'inscription a été envoyé à %(count)d comptes."
 
-#: admin.py:76
+#: admin.py:77
 #, python-format
 msgid "%(count)d account got no mail (inactive, no address or mail failure)."
 msgid_plural ""
@@ -398,11 +399,11 @@ msgstr[1] ""
 "%(count)d comptes n'ont reçu aucun courriel (inactifs, sans adresse ou échec "
 "d'envoi)."
 
-#: admin.py:84
+#: admin.py:85
 msgid "Reset two-factor authentication (superuser)"
 msgstr "Réinitialiser l'authentification à deux facteurs (superutilisateur)"
 
-#: admin.py:102
+#: admin.py:103
 #, python-format
 msgid "Two-factor authentication was reset for %(count)d account."
 msgid_plural "Two-factor authentication was reset for %(count)d accounts."
@@ -412,77 +413,85 @@ msgstr[1] ""
 "L'authentification à deux facteurs a été réinitialisée pour %(count)d "
 "comptes."
 
-#: admin.py:110
+#: admin.py:111
 msgid "Send the two-factor enrolment link (superuser)"
 msgstr ""
 "Envoyer le lien d'inscription à l'authentification à deux facteurs "
 "(superutilisateur)"
 
-#: admin.py:140
+#: admin.py:141
 msgid "Only a superuser can remove the end date of a restriction."
 msgstr ""
 "Seul un superutilisateur peut supprimer la date de fin d'une restriction."
 
-#: admin.py:144 models.py:149
+#: admin.py:145 models.py:149
 msgid "Only an active restriction can change its end date."
 msgstr "Seule une restriction active peut changer de date de fin."
 
-#: admin.py:164
+#: admin.py:165
 msgid "end date"
 msgstr "date de fin"
 
-#: admin.py:168
+#: admin.py:169
 msgid "No end date"
 msgstr "Sans date de fin"
 
-#: admin.py:168
+#: admin.py:169
 msgid "Has an end date"
 msgstr "Avec date de fin"
 
-#: admin.py:205 models.py:64 templates/views/pages/terms.htm:36
+#: admin.py:206 models.py:64 templates/views/pages/terms.htm:36
 msgid "Resource"
 msgstr "Ressource"
 
-#: admin.py:209 templates/javascript.htm:120
+#: admin.py:210 templates/javascript.htm:120
 #: templates/views/components/ms-summary-popup.htm:40
 #: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Modèle"
 
-#: admin.py:213 models.py:88 models.py:229
+#: admin.py:214 models.py:88 models.py:229
 msgid "Notices sent"
 msgstr "Avis envoyés"
 
-#: admin.py:247
+#: admin.py:248
 #, python-format
 msgid "%(resource)s: only a dated, active restriction can be extended."
 msgstr ""
 "%(resource)s : seule une restriction active et datée peut être prolongée."
 
-#: admin.py:278
+#: admin.py:279
 #, python-format
 msgid "%(count)d restriction was extended."
 msgid_plural "%(count)d restrictions were extended."
 msgstr[0] "%(count)d restriction a été prolongée."
 msgstr[1] "%(count)d restrictions ont été prolongées."
 
-#: admin.py:285
+#: admin.py:286
 msgid "Extend the end date by 3 months"
 msgstr "Prolonger la date de fin de 3 mois"
 
-#: admin.py:289
+#: admin.py:290
 msgid "Extend the end date by 6 months"
 msgstr "Prolonger la date de fin de 6 mois"
 
-#: admin.py:293
+#: admin.py:294
 msgid "Extend the end date by 12 months"
 msgstr "Prolonger la date de fin de 12 mois"
 
-#: admin.py:345
+#: admin.py:351 admin.py:368 templates/admin/copy_addresses.html:16
+msgid "Copy the e-mail addresses"
+msgstr "Copier les adresses e-mail"
+
+#: admin.py:356
+msgid "Only a superuser can copy the e-mail addresses."
+msgstr "Seul un superutilisateur peut copier les adresses e-mail."
+
+#: admin.py:376
 msgid "Send invitation (account with no password)"
 msgstr "Envoyer l'invitation (compte sans mot de passe)"
 
-#: admin.py:355
+#: admin.py:386
 #, python-format
 msgid ""
 "%(user)s was skipped: the account must be active, have an e-mail address and "
@@ -491,12 +500,12 @@ msgstr ""
 "%(user)s a été ignoré : le compte doit être actif, avoir une adresse e-mail "
 "et aucun mot de passe utilisable."
 
-#: admin.py:370
+#: admin.py:401
 #, python-format
 msgid "The invitation to %(user)s could not be sent."
 msgstr "L'invitation à %(user)s n'a pas pu être envoyée."
 
-#: admin.py:378
+#: admin.py:409
 #, python-format
 msgid "%(count)d invitation was sent."
 msgid_plural "%(count)d invitations were sent."
@@ -1178,6 +1187,7 @@ msgstr "Ou saisissez cette clé à la main :"
 
 #: templates/accounts/two_factor.htm:34
 #: templates/accounts/two_factor_reset.htm:24
+#: templates/admin/copy_addresses.html:26
 msgid "Copied"
 msgstr "Copié"
 
@@ -1253,6 +1263,70 @@ msgstr "Le lien a expiré, a déjà été utilisé ou est incorrect."
 #: templates/accounts/two_factor_reset_invalid.htm:8
 msgid "Ask the team for a new link."
 msgstr "Demandez un nouveau lien à l'équipe."
+
+#: templates/admin/copy_addresses.html:13
+#: templates/views/pages/analysis-explorer.htm:14
+#: templates/views/pages/conceptual-model.htm:14
+#: templates/views/pages/contact.htm:14
+#: templates/views/pages/graph-explorer.htm:14
+#: templates/views/pages/team.htm:14
+msgid "Home"
+msgstr "Accueil"
+
+#: templates/admin/copy_addresses.html:22
+#, python-format
+msgid "%(counter)s address to copy."
+msgid_plural "%(counter)s addresses to copy."
+msgstr[0] "%(counter)s adresse à copier."
+msgstr[1] "%(counter)s adresses à copier."
+
+#: templates/admin/copy_addresses.html:24
+msgid "E-mail addresses"
+msgstr "Adresses e-mail"
+
+#: templates/admin/copy_addresses.html:26
+msgid "Copy"
+msgstr "Copier"
+
+#: templates/admin/copy_addresses.html:30
+msgid ""
+"Paste them in the Bcc field of the shared project mailbox, never in To or "
+"Cc."
+msgstr ""
+"Collez-les dans le champ Cci de la boîte mail partagée du projet, jamais "
+"dans À ni Cc."
+
+#: templates/admin/copy_addresses.html:32
+#, python-format
+msgid "%(counter)s selected user was left out:"
+msgid_plural "%(counter)s selected users were left out:"
+msgstr[0] "%(counter)s utilisateur sélectionné a été écarté :"
+msgstr[1] "%(counter)s utilisateurs sélectionnés ont été écartés :"
+
+#: templates/admin/copy_addresses.html:34
+#, python-format
+msgid "%(counter)s inactive"
+msgid_plural "%(counter)s inactive"
+msgstr[0] "%(counter)s inactif"
+msgstr[1] "%(counter)s inactifs"
+
+#: templates/admin/copy_addresses.html:35
+#, python-format
+msgid "%(counter)s without an e-mail address"
+msgid_plural "%(counter)s without an e-mail address"
+msgstr[0] "%(counter)s sans adresse e-mail"
+msgstr[1] "%(counter)s sans adresse e-mail"
+
+#: templates/admin/copy_addresses.html:36
+#, python-format
+msgid "%(counter)s anonymised"
+msgid_plural "%(counter)s anonymised"
+msgstr[0] "%(counter)s anonymisé"
+msgstr[1] "%(counter)s anonymisés"
+
+#: templates/admin/copy_addresses.html:39
+msgid "Back to the users"
+msgstr "Retour aux utilisateurs"
 
 #: templates/custom_email_footer.htm:47
 msgid ""
@@ -4865,14 +4939,6 @@ msgstr ""
 "Parcourez les analyses physico-chimiques des manuscrits : cherchez par "
 "technique, matériau, projet ou année, et ouvrez chaque document là où il a "
 "été analysé."
-
-#: templates/views/pages/analysis-explorer.htm:14
-#: templates/views/pages/conceptual-model.htm:14
-#: templates/views/pages/contact.htm:14
-#: templates/views/pages/graph-explorer.htm:14
-#: templates/views/pages/team.htm:14
-msgid "Home"
-msgstr "Accueil"
 
 #: templates/views/pages/analysis-explorer.htm:33
 msgid ""
