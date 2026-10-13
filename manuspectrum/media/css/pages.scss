@@ -859,7 +859,7 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
     p:last-child { margin-bottom: 0; } }
 .ms-legal-pending { background: #fef3c7; color: $ms-ink; padding: 0 6px; border-radius: 4px; }
 .ms-account-form { margin: 0 0 1.6rem;
-    p { margin: 0 0 1.25rem; }
+    p { position: relative; margin: 0 0 1.25rem; }
     label { display: inline-block; margin-bottom: 4px; font-weight: 600; }
     input[type="password"] { width: 100%; max-width: 28rem; padding: 8px 10px; border: 1px solid $ms-line; border-radius: 8px; }
     .ms-form-check { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 1rem; font-weight: 600; }
@@ -893,6 +893,14 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
     li { position: relative; padding-left: 1.5rem; margin: 2px 0;
         &::before { content: "\25CB"; position: absolute; left: 0; }
         &.is-met { color: #15803d; &::before { content: "\2713"; } } } }
+.ms-pw-note { display: block; margin-top: 6px; font-size: 0.88rem; color: $ms-ink-soft; }
+.ms-pw-info { display: inline-block; vertical-align: middle; margin-left: 6px;
+    summary { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: $ms-ink-soft; cursor: pointer; list-style: none;
+        &::-webkit-details-marker { display: none; }
+        &:hover { color: $ms-ink; }
+        &:focus-visible { outline: 2px solid $ms-red-text; outline-offset: 2px; } }
+    &[open] summary { color: $ms-ink; } }
+.ms-pw-info__list { position: absolute; left: 0; right: 0; z-index: 2; box-sizing: border-box; max-width: 28rem; margin: 6px 0 0; padding: 10px 14px 10px 2rem; background: #fff; border: 1px solid $ms-line; border-radius: 8px; font-size: 0.88rem; font-weight: 400; color: $ms-ink-soft; }
 .ms-pw-match { display: block; min-height: 1.4em; margin-top: 6px; font-size: 0.9rem; max-width: 28rem;
     &[data-state="match"] { color: #15803d; }
     &[data-state="mismatch"] { color: $ms-red-text; } }

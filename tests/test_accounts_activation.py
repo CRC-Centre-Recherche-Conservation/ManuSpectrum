@@ -143,6 +143,66 @@ class ActivationTests(Base):
         self.assertNotIn('data-rule="upper"', html)
         self.assertNotIn('data-rule="symbol"', html)
 
+    def info_items(self, html):
+        block = re.search(r'<ul class="ms-pw-info__list">(.*?)</ul>', html, re.S)
+        self.assertIsNotNone(block)
+        return re.findall(r"<li>(.*?)</li>", block.group(1))
+
+    def test_the_raw_validator_help_list_is_not_rendered(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertNotIn("ms-form-help", html)
+        self.assertNotIn("Be longer than", html)
+
+    def test_the_info_lists_each_configured_rule_once(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertIn('<summary aria-label="Password rules">', html)
+        self.assertEqual(
+            self.info_items(html),
+            [
+                "At least 12 characters",
+                "One upper-case letter",
+                "One lower-case letter",
+                "One digit",
+                "One symbol",
+                "Not a commonly used password",
+                "Not too close to your name, username or e-mail address",
+            ],
+        )
+        self.assertEqual(html.count("ms-pw-info__list"), 1)
+
+    def test_the_info_is_in_french_under_fr(self):
+        html = self.client.get("/fr" + self.path.removeprefix("/en")).content.decode()
+        self.assertIn('aria-label="Règles du mot de passe"', html)
+        items = self.info_items(html)
+        self.assertIn("Au moins 12 caractères", items)
+        self.assertIn("Un symbole", items)
+        self.assertEqual(len(items), len(set(items)))
+        self.assertFalse([i for i in items if i.startswith("Not ")])
+
+    def test_an_unconfigured_validator_has_no_rule_and_no_note(self):
+        validators = [
+            {
+                "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 20},
+            }
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            html = self.client.get(self.path).content.decode()
+        self.assertEqual(self.info_items(html), ["At least 20 characters"])
+        self.assertNotIn("ms-pw-note", html)
+
+    def test_the_numeric_rule_is_listed_only_without_a_case_rule(self):
+        numeric = {
+            "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"
+        }
+        with override_settings(AUTH_PASSWORD_VALIDATORS=[numeric]):
+            html = self.client.get(self.path).content.decode()
+        self.assertEqual(self.info_items(html), ["One letter"])
+
+    def test_the_static_note_follows_the_common_and_similarity_validators(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertEqual(html.count("ms-pw-note"), 1)
+
     def test_a_bad_token_is_refused_without_a_form(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         response = self.client.get(f"/en/account/activate/{uid}/bad-token")

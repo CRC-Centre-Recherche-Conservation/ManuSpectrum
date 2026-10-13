@@ -46,7 +46,7 @@ from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
 
 from manuspectrum.accounts import notices
-from manuspectrum.accounts.password_rules import password_rules
+from manuspectrum.accounts.password_rules import password_rule_list, password_rules
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
 from manuspectrum.views.legal_pages import LegalPageView
@@ -171,7 +171,9 @@ class ActivateAccountView(_TermsPage):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["password_rules"] = password_rules()
+        rules = password_rules()
+        context["password_rules"] = rules
+        context["password_rule_list"] = password_rule_list(rules)
         return context
 
     def dispatch(self, request, *args, **kwargs):
