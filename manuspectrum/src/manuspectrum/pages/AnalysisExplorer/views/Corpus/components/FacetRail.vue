@@ -495,6 +495,11 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
     background: var(--surface);
 }
 
+/* The rail's own gap already separates the first title from the rail title. */
+.facet-rail .group:first-child > .group-title {
+    margin-block-start: calc(-1 * var(--rail-inset));
+}
+
 .facet-rail .disclosure {
     display: inline-flex;
     align-items: center;

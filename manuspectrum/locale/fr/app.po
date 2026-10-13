@@ -2677,10 +2677,6 @@ msgstr "Carte et chronologie"
 msgid "Map %{n} of %{total}"
 msgstr "Carte %{n} sur %{total}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:903
-msgid "Map filters"
-msgstr "Filtres de la carte"
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:115
 msgid "map layer"
 msgstr "couche cartographique"

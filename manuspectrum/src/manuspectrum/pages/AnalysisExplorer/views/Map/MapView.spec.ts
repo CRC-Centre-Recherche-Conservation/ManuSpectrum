@@ -304,6 +304,11 @@ describe("MapView", () => {
         expect(wrapper.get(".active-filters").text()).toContain("Colour: Blue");
     });
 
+    it("titles the rail Filters, as the Corpus rail does", async () => {
+        const view = await mountView();
+        expect(view.get(".rail-title").text()).toBe("Filters");
+    });
+
     it("leaves the Corpus filters to the active-filter chips, with no rail note", async () => {
         const view = await mountView();
         expect(view.find(".rail-note").exists()).toBe(false);

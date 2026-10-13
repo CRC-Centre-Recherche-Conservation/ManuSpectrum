@@ -2593,10 +2593,6 @@ msgstr "Map & timeline"
 msgid "Map %{n} of %{total}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:903
-msgid "Map filters"
-msgstr ""
-
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue:115
 msgid "map layer"
 msgstr "map layer"

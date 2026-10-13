@@ -900,7 +900,6 @@ function skipToTimeline(): void {
             <RailPanel
                 ref="rail"
                 class="rail"
-                :title="$gettext('Map filters')"
                 :show-label="showLabel"
             >
                 <div class="map-rail">
@@ -2012,6 +2011,10 @@ function skipToTimeline(): void {
     z-index: 3;
     padding-block-start: var(--rail-inset);
     background: var(--surface);
+}
+
+.map-rail .group:first-child > .group-title {
+    margin-block-start: calc(-1 * var(--rail-inset));
 }
 
 .map-rail .disclosure {
