@@ -30,6 +30,12 @@ const FOCUS_VISIBLE = ":focus-visible";
  * hover area, so it can be hovered), on blur, and on Escape wherever focus is:
  * the document listener exists only while a show is pending or shown. The
  * Escape is left to the page, so a dialog the tooltip sits in still closes.
+ *
+ * With `toggle`, for a control that only reveals the tip (an info button), a
+ * tap, a pen-less touch or a keyboard activation opens and closes it, and a
+ * press outside closes it; a mouse or pen click keeps the behaviour above, so
+ * a click after a hover does not toggle twice. Left off, the control is an
+ * action and a click never leaves the tip open.
  */
 const props = withDefaults(
     defineProps<{
@@ -38,12 +44,14 @@ const props = withDefaults(
         detail?: string;
         placement?: "above" | "below";
         align?: "start" | "end";
+        toggle?: boolean;
     }>(),
     {
         mode: "description",
         detail: "",
         placement: "above",
         align: "start",
+        toggle: false,
     },
 );
 
@@ -66,6 +74,7 @@ const { style: bubbleStyle } = useAnchoredPopover(shown, bubble, root, {
 });
 let timer: ReturnType<typeof setTimeout> | null = null;
 let suppressed = false;
+let pressType = "";
 
 const labelling = computed(() => props.mode === "label");
 const labelledby = computed(() => (labelling.value ? labelId : undefined));
@@ -92,6 +101,7 @@ function hide(): void {
     }
     shown.value = false;
     document.removeEventListener("keydown", onDocumentKeydown);
+    document.removeEventListener("pointerdown", onDocumentPointerdown, true);
 }
 
 function onPointerEnter(event: PointerEvent): void {
@@ -103,14 +113,40 @@ function onPointerLeave(): void {
     hide();
 }
 
-function onPointerDown(): void {
+function togglesOnClick(): boolean {
+    return props.toggle && pressType !== "mouse" && pressType !== "pen";
+}
+
+function onPointerDown(event: PointerEvent): void {
+    pressType = event.pointerType;
+    if (togglesOnClick()) return;
     suppressed = true;
     hide();
 }
 
 function onClick(): void {
-    suppressed = true;
-    hide();
+    const toggling = togglesOnClick();
+    pressType = "";
+    if (!toggling) {
+        suppressed = true;
+        hide();
+        return;
+    }
+    if (shown.value) {
+        hide();
+        return;
+    }
+    if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+    }
+    shown.value = true;
+    document.addEventListener("keydown", onDocumentKeydown);
+    document.addEventListener("pointerdown", onDocumentPointerdown, true);
+}
+
+function onDocumentPointerdown(event: PointerEvent): void {
+    if (!root.value?.contains(event.target as Node)) hide();
 }
 
 function onFocusIn(event: FocusEvent): void {
