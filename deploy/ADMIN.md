@@ -89,7 +89,23 @@ entries. Changing them:
    the acceptance page at the next sign-in. A typo fix: update `TERMS_DIGEST` only, nobody is
    asked again.
 
-The admin lists each acceptance (user, version, date) under "Terms acceptances".
+The admin lists each acceptance (user, version, date) under "Terms acceptances". No mail is
+sent when the terms change: acceptance at the next sign-in is the record, and someone who does
+not sign in again does not use the service under the new terms.
+
+### Privacy policy
+
+The privacy policy (`manuspectrum/templates/views/pages/privacy.htm`) is information, not
+something users accept: the processing rests on the public-interest mission, not on consent.
+Changing it:
+
+- Wording, a clarification, a corrected address: edit the page and its French entries, nothing
+  else.
+- A change of substance (a new purpose, a new recipient, a new third-party service, a transfer
+  outside the European Union, a longer retention): the people concerned are told actively
+  (GDPR art. 12-14, transparency). Send one mail by hand from the shared project mailbox, with
+  the active accounts in blind copy (export the addresses from the admin user list), saying what
+  changes and linking the page. Note the date and the change in the register below.
 
 ### Inactive accounts
 
