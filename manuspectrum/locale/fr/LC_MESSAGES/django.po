@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 07:25-0500\n"
+"POT-Creation-Date: 2026-10-13 07:46-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -16,17 +16,17 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: accounts/activation.py:202 accounts/twofactor.py:126
+#: accounts/activation.py:208 accounts/twofactor.py:126
 #: accounts/twofactor.py:304
 msgid "Too many attempts. Wait a minute."
 msgstr "Trop de tentatives. Patientez une minute."
 
-#: accounts/activation.py:212
+#: accounts/activation.py:218
 msgid "You must accept the terms of use to activate your account."
 msgstr ""
 "Vous devez accepter les conditions d'utilisation pour activer votre compte."
 
-#: accounts/activation.py:256
+#: accounts/activation.py:262
 msgid "You must accept the terms of use to continue."
 msgstr "Vous devez accepter les conditions d'utilisation pour continuer."
 
@@ -80,11 +80,6 @@ msgstr "Workflow inachevé : nettoyage prévu le %(date)s"
 
 #: accounts/notices.py:124
 #, python-format
-#| msgid ""
-#| "The workflow « %(workflow)s » has not been used for a long time and is not "
-#| "finished. On %(date)s (%(when)s), it is cleaned: its trace is deleted, and "
-#| "so are the records it created and listed below, if they are still drafts, "
-#| "were not modified elsewhere and are not linked to other records."
 msgid ""
 "The workflow « %(workflow)s » has not been used for a long time and is not "
 "finished. On %(date)s (%(when)s), it is cleaned: its trace is deleted, and "
@@ -111,7 +106,6 @@ msgid "The unfinished workflow « %(workflow)s » has been cleaned."
 msgstr "Le workflow inachevé « %(workflow)s » a été nettoyé."
 
 #: accounts/notices.py:150
-#| msgid "Related resources"
 msgid "Deleted resources:"
 msgstr "Ressources supprimées :"
 
@@ -120,7 +114,6 @@ msgid "Unfinished workflow cleaned"
 msgstr "Workflow inachevé nettoyé"
 
 #: accounts/notices.py:156
-#| msgid "Records kept, because other work depends on them:"
 msgid "Resources kept, because other work depends on them:"
 msgstr "Ressources conservées, car d'autres travaux en dépendent :"
 
@@ -145,7 +138,7 @@ msgstr "Ce lien est personnel et valable jusqu'au %(date)s."
 
 #: accounts/notices.py:177 templates/accounts/activate.htm:3
 #: templates/accounts/activate.htm:4 templates/accounts/activate.htm:5
-#: templates/accounts/activate.htm:25
+#: templates/accounts/activate.htm:20
 msgid "Activate my account"
 msgstr "Activer mon compte"
 
@@ -399,7 +392,6 @@ msgstr ""
 "Seul un superutilisateur peut supprimer la date de fin d'une restriction."
 
 #: admin.py:144 models.py:149
-#| msgid "Only an active embargo can change its end date."
 msgid "Only an active restriction can change its end date."
 msgstr "Seule une restriction active peut changer de date de fin."
 
@@ -431,15 +423,12 @@ msgstr "Avis envoyés"
 
 #: admin.py:247
 #, python-format
-#| msgid "%(resource)s: only a dated, active embargo can be extended."
 msgid "%(resource)s: only a dated, active restriction can be extended."
 msgstr ""
 "%(resource)s : seule une restriction active et datée peut être prolongée."
 
 #: admin.py:278
 #, python-format
-#| msgid "%(count)d embargo was extended."
-#| msgid_plural "%(count)d embargoes were extended."
 msgid "%(count)d restriction was extended."
 msgid_plural "%(count)d restrictions were extended."
 msgstr[0] "%(count)d restriction a été prolongée."
@@ -809,12 +798,10 @@ msgid "Recorded on"
 msgstr "Enregistrée le"
 
 #: models.py:93
-#| msgid "Restriction"
 msgid "restriction"
 msgstr "restriction"
 
 #: models.py:94
-#| msgid "Restriction"
 msgid "restrictions"
 msgstr "restrictions"
 
@@ -824,9 +811,6 @@ msgstr "La date de fin doit être postérieure à aujourd'hui."
 
 #: models.py:128
 #, python-format
-#| msgid ""
-#| "The end date is more than %(months)d months after the start of the embargo "
-#| "(latest allowed: %(latest)s). Only a superuser can set a later date."
 msgid ""
 "The end date is more than %(months)d months after the start of the "
 "restriction (latest allowed: %(latest)s). Only a superuser can set a later "
@@ -885,12 +869,10 @@ msgid "New end"
 msgstr "Nouvelle fin"
 
 #: models.py:214
-#| msgid "Restriction detected"
 msgid "restriction event"
 msgstr "événement de restriction"
 
 #: models.py:215
-#| msgid "Restriction detected"
 msgid "restriction events"
 msgstr "événements de restriction"
 
@@ -982,6 +964,80 @@ msgstr "Anglais"
 msgid "French"
 msgstr "Français"
 
+#: templates/accounts/_password_field.htm:7
+#: templates/accounts/_password_field.htm:8
+#| msgid "Password"
+msgid "Show password"
+msgstr "Afficher le mot de passe"
+
+#: templates/accounts/_password_field.htm:8
+#| msgid "Reset my password"
+msgid "Hide password"
+msgstr "Masquer le mot de passe"
+
+#: templates/accounts/_password_field.htm:19
+msgid "Weak"
+msgstr "Faible"
+
+#: templates/accounts/_password_field.htm:19
+msgid "Fair"
+msgstr "Moyen"
+
+#: templates/accounts/_password_field.htm:19
+msgid "Strong"
+msgstr "Fort"
+
+#: templates/accounts/_password_field.htm:21
+#: templates/accounts/_password_field.htm:22
+#: templates/accounts/_password_field.htm:23
+#: templates/accounts/_password_field.htm:24
+#: templates/accounts/_password_field.htm:25
+#| msgid "Pigment"
+msgid "met"
+msgstr "respectée"
+
+#: templates/accounts/_password_field.htm:21
+#: templates/accounts/_password_field.htm:22
+#: templates/accounts/_password_field.htm:23
+#: templates/accounts/_password_field.htm:24
+#: templates/accounts/_password_field.htm:25
+msgid "not met"
+msgstr "non respectée"
+
+#: templates/accounts/_password_field.htm:21
+#, python-format
+#| msgid "Type at least 2 characters..."
+msgid "At least %(n)s character"
+msgid_plural "At least %(n)s characters"
+msgstr[0] "Au moins %(n)s caractère"
+msgstr[1] "Au moins %(n)s caractères"
+
+#: templates/accounts/_password_field.htm:22
+msgid "One upper-case letter"
+msgstr "Une lettre majuscule"
+
+#: templates/accounts/_password_field.htm:23
+msgid "One lower-case letter"
+msgstr "Une lettre minuscule"
+
+#: templates/accounts/_password_field.htm:24
+msgid "One digit"
+msgstr "Un chiffre"
+
+#: templates/accounts/_password_field.htm:25
+msgid "One symbol"
+msgstr "Un symbole"
+
+#: templates/accounts/_password_field.htm:30
+#| msgid "The password is not valid."
+msgid "The two passwords match"
+msgstr "Les deux mots de passe correspondent"
+
+#: templates/accounts/_password_field.htm:31
+#| msgid "The password is not valid."
+msgid "The two passwords do not match"
+msgstr "Les deux mots de passe ne correspondent pas"
+
 #: templates/accounts/_terms_form_fields.htm:4
 msgid "I have read and accept the terms of use"
 msgstr "J'ai lu et j'accepte les conditions d'utilisation"
@@ -1057,7 +1113,7 @@ msgstr ""
 "avez perdu votre mot de passe, utilisez le lien de réinitialisation de la "
 "page de connexion."
 
-#: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:66
+#: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:69
 #: templates/errors/400.htm:18 templates/errors/403.htm:19
 #: templates/errors/404.htm:63
 msgid "Back to the homepage"
@@ -1108,39 +1164,50 @@ msgstr "QR code à scanner avec votre application d'authentification"
 msgid "Or enter this key by hand:"
 msgstr "Ou saisissez cette clé à la main :"
 
-#: templates/accounts/two_factor.htm:37
-#: templates/accounts/two_factor_reset.htm:27
+#: templates/accounts/two_factor.htm:34
+#: templates/accounts/two_factor_reset.htm:24
+#| msgid "Copied."
+msgid "Copied"
+msgstr "Copié"
+
+#: templates/accounts/two_factor.htm:34
+#: templates/accounts/two_factor_reset.htm:24
+msgid "Copy the key"
+msgstr "Copier la clé"
+
+#: templates/accounts/two_factor.htm:40
+#: templates/accounts/two_factor_reset.htm:30
 msgid "Code from your application"
 msgstr "Code de votre application"
 
-#: templates/accounts/two_factor.htm:39
+#: templates/accounts/two_factor.htm:42
 msgid "Confirm and turn on"
 msgstr "Confirmer et activer"
 
-#: templates/accounts/two_factor.htm:44
-#: templates/accounts/two_factor_reset.htm:34
+#: templates/accounts/two_factor.htm:47
+#: templates/accounts/two_factor_reset.htm:37
 #: templates/views/components/plugins/importer-configuration.htm:278
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Annuler"
 
-#: templates/accounts/two_factor.htm:50
+#: templates/accounts/two_factor.htm:53
 msgid "Current code from your application"
 msgstr "Code actuel de votre application"
 
-#: templates/accounts/two_factor.htm:54
+#: templates/accounts/two_factor.htm:57
 msgid "Set up a new authenticator"
 msgstr "Configurer une nouvelle application d'authentification"
 
-#: templates/accounts/two_factor.htm:54
+#: templates/accounts/two_factor.htm:57
 msgid "Turn on two-factor authentication"
 msgstr "Activer l'authentification à deux facteurs"
 
-#: templates/accounts/two_factor.htm:57
+#: templates/accounts/two_factor.htm:60
 msgid "Turn off two-factor authentication"
 msgstr "Désactiver l'authentification à deux facteurs"
 
-#: templates/accounts/two_factor.htm:61
+#: templates/accounts/two_factor.htm:64
 msgid ""
 "Two-factor authentication is compulsory. If you lose your device, ask an "
 "administrator to reset it."
@@ -1148,11 +1215,11 @@ msgstr ""
 "L'authentification à deux facteurs est obligatoire. Si vous perdez votre "
 "appareil, demandez à un administrateur de la réinitialiser."
 
-#: templates/accounts/two_factor_reset.htm:29
+#: templates/accounts/two_factor_reset.htm:32
 msgid "Confirm and sign in"
 msgstr "Confirmer et se connecter"
 
-#: templates/accounts/two_factor_reset.htm:37
+#: templates/accounts/two_factor_reset.htm:40
 msgid ""
 "Your two-factor authentication was reset. Type your password to set it up "
 "again."
@@ -1160,11 +1227,11 @@ msgstr ""
 "Votre authentification à deux facteurs a été réinitialisée. Saisissez votre "
 "mot de passe pour la configurer à nouveau."
 
-#: templates/accounts/two_factor_reset.htm:41
+#: templates/accounts/two_factor_reset.htm:44
 msgid "Password"
 msgstr "Mot de passe"
 
-#: templates/accounts/two_factor_reset.htm:43
+#: templates/accounts/two_factor_reset.htm:46
 msgid "Continue"
 msgstr "Continuer"
 
@@ -5579,10 +5646,6 @@ msgid "Software and content"
 msgstr "Logiciel et contenus"
 
 #: templates/views/pages/legal.htm:55
-#| msgid ""
-#| "The platform's source code is published under the GNU General Public License"
-#| " v3. Each record states the licence that applies to its data and files; read"
-#| " it before reusing them."
 msgid ""
 "The platform's source code is published under the GNU General Public License"
 " v3. Each resource states the licence that applies to its data and files; "
@@ -5642,8 +5705,6 @@ msgstr ""
 "les abus."
 
 #: templates/views/pages/privacy.htm:24
-#| msgid ""
-#| "Keeping the history of the data: who entered or changed a record, and when."
 msgid ""
 "Keeping the history of the data: who entered or changed a resource, and "
 "when."
@@ -5699,9 +5760,6 @@ msgstr ""
 "navigateur et résultat (succès ou échec)."
 
 #: templates/views/pages/privacy.htm:36
-#| msgid ""
-#| "History of the data: the account that created or changed each record, and "
-#| "the date."
 msgid ""
 "History of the data: the account that created or changed each resource, and "
 "the date."
@@ -5710,9 +5768,6 @@ msgstr ""
 "et la date."
 
 #: templates/views/pages/privacy.htm:37
-#| msgid ""
-#| "Records can name researchers (authors, contacts) as part of the scientific "
-#| "description."
 msgid ""
 "Resources can name researchers (authors, contacts) as part of the scientific"
 " description."
@@ -5911,24 +5966,11 @@ msgstr ""
 "jamais envoyées au serveur."
 
 #: templates/views/pages/privacy.htm:107
-#| msgid "Restricted records"
 msgid "Restricted resources"
 msgstr "Ressources sous restriction"
 
 #: templates/views/pages/privacy.htm:108
 #, python-format
-#| msgid ""
-#| "A restriction on a record is temporary by construction: %(n)s month at most,"
-#| " unless an administrator records an exception. It is lifted automatically "
-#| "the day after its end date. The person who recorded it and the creator of "
-#| "the record are told %(notices)s days before, and again when the record "
-#| "becomes public."
-#| msgid_plural ""
-#| "A restriction on a record is temporary by construction: %(n)s months at "
-#| "most, unless an administrator records an exception. It is lifted "
-#| "automatically the day after its end date. The person who recorded it and the"
-#| " creator of the record are told %(notices)s days before, and again when the "
-#| "record becomes public."
 msgid ""
 "A restriction on a resource is temporary by construction: %(n)s month at "
 "most, unless an administrator records an exception. It is lifted "
@@ -6184,12 +6226,6 @@ msgstr ""
 
 #: templates/views/pages/terms.htm:19
 #, python-format
-#| msgid ""
-#| "A restriction on a record is temporary: %(n)s month at most, then it is "
-#| "lifted automatically, unless the team records an exception."
-#| msgid_plural ""
-#| "A restriction on a record is temporary: %(n)s months at most, then it is "
-#| "lifted automatically, unless the team records an exception."
 msgid ""
 "A restriction on a resource is temporary: %(n)s month at most, then it is "
 "lifted automatically, unless the team records an exception."
@@ -6247,7 +6283,6 @@ msgid "Restriction"
 msgstr "Restriction"
 
 #: templates/views/pages/terms.htm:39
-#| msgid "A record that only some people can see until an end date."
 msgid ""
 "A resource that only some people can see until an end date, also called an "
 "embargo."
@@ -6312,9 +6347,6 @@ msgid "3. Images and files: you need the rights"
 msgstr "3. Images et fichiers : il faut en avoir les droits"
 
 #: templates/views/pages/terms.htm:55
-#| msgid ""
-#| "Upload or link an image or a file only if you hold the rights to it or have "
-#| "permission from the holder. Give the licence and the credit on the record."
 msgid ""
 "Upload or link an image or a file only if you hold the rights to it or have "
 "permission from the holder. Give the licence and the credit on the resource."
@@ -6328,10 +6360,6 @@ msgid "4. Licences of published data"
 msgstr "4. Licences des données publiées"
 
 #: templates/views/pages/terms.htm:58
-#| msgid ""
-#| "Each record states the licence that applies to its data and files, and who "
-#| "produced them. Whoever reuses them follows that licence and cites the "
-#| "depositing laboratory."
 msgid ""
 "Each resource states the licence that applies to its data and files, and who"
 " produced them. Whoever reuses them follows that licence and cites the "
@@ -6346,10 +6374,6 @@ msgid "5. Raw data goes to a repository"
 msgstr "5. Les données brutes vont dans un entrepôt"
 
 #: templates/views/pages/terms.htm:61
-#| msgid ""
-#| "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a "
-#| "recognised repository and link it from your record. We may remove files that"
-#| " the platform cannot hold."
 msgid ""
 "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a "
 "recognised repository and link it from your resource. We may remove files "
@@ -6365,18 +6389,6 @@ msgstr "6. Une restriction ne dure pas toujours"
 
 #: templates/views/pages/terms.htm:64
 #, python-format
-#| msgid ""
-#| "You can restrict a record for %(n)s month at most. We write to you "
-#| "%(notices)s days before the end date and again the day the record becomes "
-#| "public. The record is lifted automatically the day after the end date. A "
-#| "restriction with no end date is not lifted by itself, and the team keeps a "
-#| "list of them."
-#| msgid_plural ""
-#| "You can restrict a record for %(n)s months at most. We write to you "
-#| "%(notices)s days before the end date and again the day the record becomes "
-#| "public. The record is lifted automatically the day after the end date. A "
-#| "restriction with no end date is not lifted by itself, and the team keeps a "
-#| "list of them."
 msgid ""
 "You can restrict a resource for %(n)s month at most. We write to you "
 "%(notices)s days before the end date and again the day the resource becomes "

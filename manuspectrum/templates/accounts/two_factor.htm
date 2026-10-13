@@ -1,5 +1,5 @@
 {% extends "base.htm" %}
-{% load i18n %}
+{% load i18n account_tags %}
 
 {% block loading_mask %}
 {% endblock loading_mask %}
@@ -27,10 +27,13 @@
                 {% if pending_secret %}
                     <p>{% blocktrans %}Scan the QR code with an authenticator application, then enter the code it shows to finish.{% endblocktrans %}</p>
                     <img class="img-responsive center-block" src="{{ qr_data_uri }}" alt="{% trans 'QR code to scan with your authenticator application' %}" width="240" height="240">
-                    <p class="text-muted text-center">
-                        {% trans "Or enter this key by hand:" %}
-                        <code>{{ pending_secret }}</code>
-                    </p>
+                    <div class="text-muted text-center ms-mfa-key" data-ms-copy-key="{{ pending_secret }}">
+                        <p class="ms-mfa-key__label">{% trans "Or enter this key by hand:" %}</p>
+                        <code class="ms-mfa-key__value" id="ms-mfa-key">{{ pending_secret|group_key }}</code>
+                        <button type="button" class="btn btn-default btn-sm ms-mfa-key__copy" hidden
+                                data-copied="{% trans 'Copied' %}">{% trans "Copy the key" %}</button>
+                        <span class="ms-mfa-key__status" role="status"></span>
+                    </div>
                     <form method="post" class="form-group">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="confirm">
@@ -68,4 +71,5 @@
         </div>
     </div>
 </div>
+{% if pending_secret %}{% include "accounts/_copy_key_script.htm" %}{% endif %}
 {% endblock body %}

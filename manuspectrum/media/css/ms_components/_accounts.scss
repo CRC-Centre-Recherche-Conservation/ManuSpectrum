@@ -1,0 +1,40 @@
+// Two-factor enrolment pages (templates/accounts/two_factor*.htm).
+.two-factor-panel {
+    img.center-block {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .form-control,
+    .btn-block {
+        max-width: 100%;
+    }
+}
+
+.ms-mfa-key {
+    .ms-mfa-key__label {
+        margin-bottom: 6px;
+    }
+
+    .ms-mfa-key__value {
+        display: block;
+        max-width: 100%;
+        padding: 8px 10px;
+        overflow-wrap: anywhere;
+        word-break: break-all;
+        white-space: normal;
+        font-size: 1.05em;
+        letter-spacing: 0.04em;
+        user-select: all;
+    }
+
+    .ms-mfa-key__copy {
+        margin-top: 8px;
+    }
+
+    .ms-mfa-key__status {
+        display: block;
+        min-height: 1.4em;
+        margin-top: 4px;
+    }
+}

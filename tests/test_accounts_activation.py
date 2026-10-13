@@ -122,6 +122,27 @@ class ActivationTests(Base):
         data.update(overrides)
         return {k: v for k, v in data.items() if v is not None}
 
+    def test_the_page_carries_the_rules_the_server_enforces(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertIn('data-min-length="12"', html)
+        for rule in ("length", "upper", "lower", "digit", "symbol"):
+            self.assertIn(f'data-rule="{rule}"', html)
+        self.assertIn("data-ms-pw-match", html)
+        self.assertEqual(html.count("data-ms-pw-wrap"), 2)
+
+    def test_the_minimum_length_follows_the_settings(self):
+        validators = [
+            {
+                "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 20},
+            }
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            html = self.client.get(self.path).content.decode()
+        self.assertIn('data-min-length="20"', html)
+        self.assertNotIn('data-rule="upper"', html)
+        self.assertNotIn('data-rule="symbol"', html)
+
     def test_a_bad_token_is_refused_without_a_form(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         response = self.client.get(f"/en/account/activate/{uid}/bad-token")
