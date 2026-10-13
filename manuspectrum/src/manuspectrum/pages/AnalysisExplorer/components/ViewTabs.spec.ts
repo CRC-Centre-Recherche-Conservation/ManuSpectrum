@@ -44,10 +44,10 @@ describe("ViewTabs", () => {
         expect(buttons[2].attributes("aria-current")).toBe("page");
     });
 
-    it("closes the row with the site's spectral rule", () => {
+    it("draws no spectral rule: the title's accent is the only spectral mark", () => {
         available.views = ["corpus", "map"] satisfies ExplorerView[];
-        const rule = mount(ViewTabs).find(".view-tabs > .spectral-line-thin");
-        expect(rule.exists()).toBe(true);
-        expect(rule.attributes("aria-hidden")).toBe("true");
+        const wrapper = mount(ViewTabs);
+        expect(wrapper.find(".spectral-line-thin").exists()).toBe(false);
+        expect(wrapper.find(".view-tabs > .list").exists()).toBe(true);
     });
 });

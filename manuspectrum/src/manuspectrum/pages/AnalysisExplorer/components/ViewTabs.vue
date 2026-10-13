@@ -53,10 +53,6 @@ function select(view: ExplorerView): void {
                 </button>
             </li>
         </ul>
-        <div
-            class="spectral-line-thin"
-            aria-hidden="true"
-        />
     </nav>
 </template>
 
@@ -65,6 +61,7 @@ function select(view: ExplorerView): void {
     display: flex;
     gap: 0.25rem;
     list-style: none;
+    border-block-end: 0.0625rem solid var(--border-hover);
 }
 
 .view-tabs .tab {

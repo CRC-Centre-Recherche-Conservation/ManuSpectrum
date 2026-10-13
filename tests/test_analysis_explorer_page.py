@@ -160,13 +160,21 @@ class AnalysisExplorerPageTests(TestCase):
         self.assertIn("ms-explorer-loading--compare", compare)
         self.assertNotIn("ms-explorer-loading__body", compare)
 
-    def test_loading_scans_the_tabs_rule_on_every_screen(self):
+    def test_loading_skeleton_carries_no_spectral_line_on_every_screen(self):
         for query in ("", "?view=map", "?view=compare"):
             html = self.client.get(
                 reverse("analysis-explorer") + query
             ).content.decode()
+            self.assertNotIn("spectral-line-thin", html, query)
+            self.assertIn("ms-explorer-loading__tabs", html, query)
+
+    def test_title_accent_is_in_the_server_markup_for_the_loading_scan(self):
+        for query in ("", "?view=map"):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
             self.assertIn(
-                '<div class="spectral-line-thin spectral-line-thin--scan"></div>',
+                '<span class="ms-explorer-intro__accent" aria-hidden="true"></span>',
                 html,
                 query,
             )

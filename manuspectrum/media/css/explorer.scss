@@ -114,37 +114,57 @@ body.ms-page--app::after {
     }
 }
 
-body[data-explorer-screen='results'] .ms-explorer-intro__bar,
-body[data-explorer-screen='map'] .ms-explorer-intro__bar,
-body[data-explorer-screen='compare'] .ms-explorer-intro__bar,
-body[data-explorer-screen='document'] .ms-explorer-intro__bar {
-    flex: 1 1 18rem;
-}
-
 body[data-explorer-screen='results'] .ms-explorer-intro,
 body[data-explorer-screen='map'] .ms-explorer-intro,
 body[data-explorer-screen='compare'] .ms-explorer-intro,
 body[data-explorer-screen='document'] .ms-explorer-intro {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.5rem 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.375rem 0.75rem;
     padding-block: 5rem 0;
+
+    @media (min-width: 48rem) {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: baseline;
+        justify-items: start;
+    }
 }
 
 body[data-explorer-screen='results'] .ms-explorer-intro__title,
 body[data-explorer-screen='map'] .ms-explorer-intro__title,
 body[data-explorer-screen='compare'] .ms-explorer-intro__title,
 body[data-explorer-screen='document'] .ms-explorer-intro__title {
-    order: -1;
     font-size: 1.25rem;
+
+    @media (min-width: 48rem) {
+        grid-area: 1 / 1;
+    }
 }
 
-// One header row: the title, then the bar. The tabs' spectral rule closes it.
+// One header row: the title, then the bar. A short spectral accent sits under
+// the title (the home hero's accent, smaller); the tabs' neutral rule closes it.
+body[data-explorer-screen='results'] .ms-explorer-intro__bar,
+body[data-explorer-screen='map'] .ms-explorer-intro__bar,
+body[data-explorer-screen='compare'] .ms-explorer-intro__bar,
+body[data-explorer-screen='document'] .ms-explorer-intro__bar {
+    @media (min-width: 48rem) {
+        grid-area: 1 / 2 / 3 / 3;
+        align-self: start;
+    }
+}
+
 body[data-explorer-screen='results'] .ms-explorer-intro__accent,
 body[data-explorer-screen='map'] .ms-explorer-intro__accent,
 body[data-explorer-screen='compare'] .ms-explorer-intro__accent,
-body[data-explorer-screen='document'] .ms-explorer-intro__accent,
+body[data-explorer-screen='document'] .ms-explorer-intro__accent {
+    inline-size: 3.5rem;
+    block-size: 0.125rem;
+    border-radius: 0.0625rem;
+
+    @media (min-width: 48rem) {
+        grid-area: 2 / 1;
+    }
+}
+
 body[data-explorer-screen='results'] .ms-explorer-intro__kicker,
 body[data-explorer-screen='map'] .ms-explorer-intro__kicker,
 body[data-explorer-screen='compare'] .ms-explorer-intro__kicker,
@@ -154,6 +174,34 @@ body[data-explorer-screen='map'] .ms-explorer-intro__lead,
 body[data-explorer-screen='compare'] .ms-explorer-intro__lead,
 body[data-explorer-screen='document'] .ms-explorer-intro__lead {
     display: none;
+}
+
+// Until the app mounts, the accent is the loading indicator: the faint accent
+// stays and a window of the site's scan travels along it.
+body[data-explorer-screen='results']:has(.ms-explorer[aria-busy='true']) .ms-explorer-intro__accent,
+body[data-explorer-screen='map']:has(.ms-explorer[aria-busy='true']) .ms-explorer-intro__accent,
+body[data-explorer-screen='compare']:has(.ms-explorer[aria-busy='true']) .ms-explorer-intro__accent,
+body[data-explorer-screen='document']:has(.ms-explorer[aria-busy='true']) .ms-explorer-intro__accent {
+    position: relative;
+    background: none;
+
+    &::before,
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+    }
+
+    &::before {
+        @include ms-spectral-gradient();
+        opacity: 0.3;
+    }
+
+    &::after {
+        @include ms-spectral-scan;
+    }
 }
 
 // Until the app mounts, the bar keeps the height and the text baseline of the
@@ -194,7 +242,7 @@ body[data-explorer-screen='document']:has(.ms-explorer[aria-busy='true']) .ms-ex
 
 // --- Loading: the frames of the first view, replaced by the mounted app ---
 // The mount point is busy until then, but draws neither the busy line nor the
-// dim: its skeleton scans the tabs' rule instead, where ViewTabs draws it.
+// dim: the title's accent scans instead.
 body.ms-page--app .ms-explorer[aria-busy='true']::before {
     content: none;
 }
@@ -210,7 +258,7 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
     gap: 0.5rem;
     min-block-size: 49rem;
 
-    // The scanned rule is the only thing that moves.
+    // The title's scanned accent is the only thing that moves.
     body.ms-page--app & .ms-skeleton {
         animation: none;
     }
@@ -233,12 +281,13 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
     min-block-size: 0;
 }
 
-// The ViewTabs row: 2.75rem tabs over the spectral rule, scanned until mount.
+// The ViewTabs row: 2.75rem tabs over their neutral hairline.
 .ms-explorer-loading__tabs {
+    border-block-end: 0.0625rem solid var(--border-hover);
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    block-size: 2.75rem;
+    block-size: 2.8125rem;
     overflow: hidden;
 
     > .ms-skeleton {
