@@ -1,4 +1,3 @@
-<script>
 (function () {
     var box = document.querySelector("[data-ms-copy-key]");
     if (!box) return;
@@ -10,7 +9,9 @@
     function done() {
         status.textContent = button.getAttribute("data-copied");
         clearTimeout(timer);
-        timer = setTimeout(function () { status.textContent = ""; }, 2500);
+        timer = setTimeout(function () {
+            status.textContent = "";
+        }, 2500);
     }
     function select() {
         var range = document.createRange();
@@ -28,4 +29,3 @@
         }
     });
 })();
-</script>

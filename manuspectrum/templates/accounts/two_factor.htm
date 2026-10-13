@@ -1,5 +1,5 @@
 {% extends "base.htm" %}
-{% load i18n account_tags %}
+{% load i18n static account_tags %}
 
 {% block loading_mask %}
 {% endblock loading_mask %}
@@ -71,5 +71,5 @@
         </div>
     </div>
 </div>
-{% if pending_secret %}{% include "accounts/_copy_key_script.htm" %}{% endif %}
+{% if pending_secret %}<script src="{% static 'js/accounts/copy-key.js' %}" defer></script>{% endif %}
 {% endblock body %}

@@ -1,6 +1,7 @@
 """Invitation, account activation and acceptance of the terms (PP-4, decision 13)."""
 
 import re
+from html.parser import HTMLParser
 from unittest import mock
 
 from django.contrib import admin
@@ -16,10 +17,15 @@ from django.utils.http import urlsafe_base64_encode
 from manuspectrum.accounts import activation
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
+from manuspectrum.password_validation import HasLowerCaseValidator
 
 PASSWORD = "Str0ng!Passphrase-for-tests"
 HTML = {"HTTP_ACCEPT": "text/html,application/xhtml+xml"}
 IP = "203.0.113.20"
+
+
+class LowerSubclass(HasLowerCaseValidator):
+    pass
 
 
 def invited(username="newbie", email="newbie@manuspectrum.test"):
@@ -48,6 +54,27 @@ def placeholder_path(user):
 
 def activate(client, path, **data):
     return client.post(path, data, HTTP_X_REAL_IP=IP, REMOTE_ADDR="10.0.0.1")
+
+
+class _ParagraphNesting(HTMLParser):
+    """Collect the block elements that a browser would pull out of an open `<p>`."""
+
+    BLOCKS = {"details", "div", "ul", "ol", "table", "form", "p"}
+
+    def __init__(self):
+        super().__init__()
+        self.open_p = 0
+        self.offenders = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.BLOCKS and self.open_p:
+            self.offenders.append(tag)
+        if tag == "p":
+            self.open_p += 1
+
+    def handle_endtag(self, tag):
+        if tag == "p" and self.open_p:
+            self.open_p -= 1
 
 
 class Base(TestCase):
@@ -191,13 +218,58 @@ class ActivationTests(Base):
         self.assertEqual(self.info_items(html), ["At least 20 characters"])
         self.assertNotIn("ms-pw-note", html)
 
+    def test_no_block_element_sits_inside_a_paragraph(self):
+        html = self.client.get(self.path).content.decode()
+        parser = _ParagraphNesting()
+        parser.feed(html)
+        self.assertEqual(parser.offenders, [])
+
+    def test_the_lists_sit_in_the_meter_and_the_field_wrapper(self):
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(self.client.get(self.path).content, "html.parser")
+        field = soup.select_one(".ms-pw-field")
+        self.assertEqual(field.name, "div")
+        self.assertIsNotNone(field.select_one("details.ms-pw-info ul.ms-pw-info__list"))
+        meter = soup.select_one("[data-ms-pw-meter]")
+        self.assertTrue(meter.has_attr("hidden"))
+        self.assertIsNotNone(meter.select_one("ul.ms-pw-rules"))
+        self.assertIsNone(soup.select_one("p ul, p details, p div"))
+
+    def test_the_match_line_names_the_first_field_by_its_id(self):
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(self.client.get(self.path).content, "html.parser")
+        first = soup.select_one("input[name=new_password1]")["id"]
+        line = soup.select_one("[data-ms-pw-match]")
+        self.assertEqual(line["data-with"], first)
+
+    def test_without_a_checkable_rule_there_is_no_meter(self):
+        validators = [
+            {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+            {
+                "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+            },
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            html = self.client.get(self.path).content.decode()
+        self.assertNotIn("data-ms-pw-meter", html)
+        self.assertIn("ms-pw-info__list", html)
+
+    def test_a_subclass_of_the_lower_case_validator_is_detected(self):
+        from manuspectrum.accounts.password_rules import password_rules
+
+        validators = [{"NAME": "tests.test_accounts_activation.LowerSubclass"}]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            self.assertTrue(password_rules()["lower"])
+
     def test_the_numeric_rule_is_listed_only_without_a_case_rule(self):
         numeric = {
             "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"
         }
         with override_settings(AUTH_PASSWORD_VALIDATORS=[numeric]):
             html = self.client.get(self.path).content.decode()
-        self.assertEqual(self.info_items(html), ["One letter"])
+        self.assertEqual(self.info_items(html), ["Not only digits"])
 
     def test_the_static_note_follows_the_common_and_similarity_validators(self):
         html = self.client.get(self.path).content.decode()

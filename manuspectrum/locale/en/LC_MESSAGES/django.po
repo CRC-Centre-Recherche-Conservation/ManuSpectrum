@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 09:21-0500\n"
+"POT-Creation-Date: 2026-10-13 09:58-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -295,38 +295,38 @@ msgstr ""
 "This is a service notice about your account or your data, so it has no "
 "unsubscribe link. Questions:"
 
-#: accounts/password_rules.py:83 templates/accounts/_password_field.htm:27
+#: accounts/password_rules.py:93 templates/accounts/_password_field.htm:27
 #, python-format
 msgid "At least %(n)s character"
 msgid_plural "At least %(n)s characters"
 msgstr[0] "At least %(n)s character"
 msgstr[1] "At least %(n)s characters"
 
-#: accounts/password_rules.py:87 templates/accounts/_password_field.htm:28
+#: accounts/password_rules.py:97 templates/accounts/_password_field.htm:28
 msgid "One upper-case letter"
 msgstr "One upper-case letter"
 
-#: accounts/password_rules.py:89 templates/accounts/_password_field.htm:29
+#: accounts/password_rules.py:99 templates/accounts/_password_field.htm:29
 msgid "One lower-case letter"
 msgstr "One lower-case letter"
 
-#: accounts/password_rules.py:91
-msgid "One letter"
-msgstr "One letter"
+#: accounts/password_rules.py:101
+msgid "Not only digits"
+msgstr "Not only digits"
 
-#: accounts/password_rules.py:93 templates/accounts/_password_field.htm:30
+#: accounts/password_rules.py:103 templates/accounts/_password_field.htm:30
 msgid "One digit"
 msgstr "One digit"
 
-#: accounts/password_rules.py:95 templates/accounts/_password_field.htm:31
+#: accounts/password_rules.py:105 templates/accounts/_password_field.htm:31
 msgid "One symbol"
 msgstr "One symbol"
 
-#: accounts/password_rules.py:97
+#: accounts/password_rules.py:107
 msgid "Not a commonly used password"
 msgstr "Not a commonly used password"
 
-#: accounts/password_rules.py:99
+#: accounts/password_rules.py:109
 msgid "Not too close to your name, username or e-mail address"
 msgstr ""
 
@@ -5628,10 +5628,9 @@ msgstr ""
 #: templates/views/pages/privacy.htm:9
 msgid ""
 "Reading ManuSpectrum needs no account and sets no tracker. This page covers "
-"the people who have an account."
-msgstr ""
-"Reading ManuSpectrum needs no account and sets no tracker. This page covers "
-"the people who have an account."
+"what the platform records about visitors and about the people who have an "
+"account."
+msgstr "Reading ManuSpectrum needs no account and sets no tracker. This page covers what the platform records about visitors and about the people who have an account."
 
 #: templates/views/pages/privacy.htm:14
 msgid "Data controller"
@@ -6939,6 +6938,9 @@ msgid ""
 msgstr ""
 "This configuration was changed by someone else since it was loaded. Reload "
 "it before saving."
+
+#~ msgid "One letter"
+#~ msgstr "One letter"
 
 #~ msgid "Deleted records:"
 #~ msgstr "Deleted records:"

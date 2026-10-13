@@ -100,6 +100,8 @@ class EnrolmentTests(SetupBase):
         self.assertIn(f">{grouped}</code>", html)
         self.assertIn(f'data-ms-copy-key="{secret}"', html)
         self.assertIn("ms-mfa-key__copy", html)
+        self.assertIn("js/accounts/copy-key.js", html)
+        self.assertNotIn('querySelector("[data-ms-copy-key]")', html)
 
     def test_a_valid_code_stores_the_secret_the_way_arches_reads_it(self):
         secret = self.start()

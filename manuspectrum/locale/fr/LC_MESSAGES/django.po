@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ManuSpectrum\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 09:21-0500\n"
+"POT-Creation-Date: 2026-10-13 09:58-0500\n"
 "PO-Revision-Date: 2026-02-16 08:53-0600\n"
 "Last-Translator: \n"
 "Language-Team: French\n"
@@ -297,38 +297,38 @@ msgstr ""
 "Ceci est un avis de service concernant votre compte ou vos données : il n'a "
 "donc pas de lien de désabonnement. Questions :"
 
-#: accounts/password_rules.py:83 templates/accounts/_password_field.htm:27
+#: accounts/password_rules.py:93 templates/accounts/_password_field.htm:27
 #, python-format
 msgid "At least %(n)s character"
 msgid_plural "At least %(n)s characters"
 msgstr[0] "Au moins %(n)s caractère"
 msgstr[1] "Au moins %(n)s caractères"
 
-#: accounts/password_rules.py:87 templates/accounts/_password_field.htm:28
+#: accounts/password_rules.py:97 templates/accounts/_password_field.htm:28
 msgid "One upper-case letter"
 msgstr "Une lettre majuscule"
 
-#: accounts/password_rules.py:89 templates/accounts/_password_field.htm:29
+#: accounts/password_rules.py:99 templates/accounts/_password_field.htm:29
 msgid "One lower-case letter"
 msgstr "Une lettre minuscule"
 
-#: accounts/password_rules.py:91
-msgid "One letter"
-msgstr "Une lettre"
+#: accounts/password_rules.py:101
+msgid "Not only digits"
+msgstr "Pas uniquement des chiffres"
 
-#: accounts/password_rules.py:93 templates/accounts/_password_field.htm:30
+#: accounts/password_rules.py:103 templates/accounts/_password_field.htm:30
 msgid "One digit"
 msgstr "Un chiffre"
 
-#: accounts/password_rules.py:95 templates/accounts/_password_field.htm:31
+#: accounts/password_rules.py:105 templates/accounts/_password_field.htm:31
 msgid "One symbol"
 msgstr "Un symbole"
 
-#: accounts/password_rules.py:97
+#: accounts/password_rules.py:107
 msgid "Not a commonly used password"
 msgstr "Pas un mot de passe courant"
 
-#: accounts/password_rules.py:99
+#: accounts/password_rules.py:109
 msgid "Not too close to your name, username or e-mail address"
 msgstr ""
 "Pas trop proche de votre nom, de votre identifiant ou de votre adresse e-mail"
@@ -5665,7 +5665,7 @@ msgid ""
 "conservation (CRC), under the supervision of:"
 msgstr ""
 "Le site est publié pour l'UAR 3224 Centre de recherche sur la conservation "
-"(CRC), placée sous la tutelle de :"
+"(CRC), placée sous la tutelle de :"
 
 #: templates/views/pages/legal.htm:23
 msgid ""
@@ -5726,7 +5726,7 @@ msgid ""
 msgstr ""
 "Le code source de la plateforme est publié sous licence GNU General Public "
 "License v3. Chaque ressource indique la licence qui s'applique à ses données "
-"et à ses fichiers : lisez-la avant de les réutiliser."
+"et à ses fichiers : lisez-la avant de les réutiliser."
 
 #: templates/views/pages/privacy.htm:5 templates/views/pages/privacy.htm:6
 msgid ""
@@ -5739,10 +5739,9 @@ msgstr ""
 #: templates/views/pages/privacy.htm:9
 msgid ""
 "Reading ManuSpectrum needs no account and sets no tracker. This page covers "
-"the people who have an account."
-msgstr ""
-"Lire ManuSpectrum ne demande aucun compte et ne dépose aucun traceur. Cette "
-"page concerne les personnes qui ont un compte."
+"what the platform records about visitors and about the people who have an "
+"account."
+msgstr "Lire ManuSpectrum ne demande aucun compte et ne dépose aucun traceur. Cette page explique ce que la plateforme enregistre sur les visiteurs et sur les personnes qui ont un compte."
 
 #: templates/views/pages/privacy.htm:14
 msgid "Data controller"
@@ -5767,21 +5766,21 @@ msgstr "Finalités"
 #: templates/views/pages/privacy.htm:22
 msgid "Managing accounts: letting contributors sign in and describe analyses."
 msgstr ""
-"Gérer les comptes : permettre aux contributeurs de se connecter et de "
+"Gérer les comptes : permettre aux contributeurs de se connecter et de "
 "décrire des analyses."
 
 #: templates/views/pages/privacy.htm:23
 msgid ""
 "Securing the platform: limiting sign-in attempts and investigating abuse."
 msgstr ""
-"Sécuriser la plateforme : limiter les tentatives de connexion et examiner "
+"Sécuriser la plateforme : limiter les tentatives de connexion et examiner "
 "les abus."
 
 #: templates/views/pages/privacy.htm:24
 msgid ""
 "Keeping the history of the data: who entered or changed a resource, and when."
 msgstr ""
-"Garder l'historique des données : qui a saisi ou modifié une ressource, et "
+"Garder l'historique des données : qui a saisi ou modifié une ressource, et "
 "quand."
 
 #: templates/views/pages/privacy.htm:25
@@ -5789,7 +5788,7 @@ msgid ""
 "Service notices: mails about restrictions that end and workflows that will "
 "be cleaned."
 msgstr ""
-"Avis de service : courriels sur les restrictions qui se terminent et les "
+"Avis de service : courriels sur les restrictions qui se terminent et les "
 "workflows qui seront nettoyés."
 
 #: templates/views/pages/privacy.htm:26
@@ -5806,7 +5805,7 @@ msgid ""
 "the CNRS: running a research platform (GDPR, article 6(1)(e)). Sending us a "
 "message by e-mail rests on your request."
 msgstr ""
-"Le traitement est nécessaire à une mission d'intérêt public du CNRS : faire "
+"Le traitement est nécessaire à une mission d'intérêt public du CNRS : faire "
 "fonctionner une plateforme de recherche (RGPD, article 6, paragraphe 1, "
 "point e). L'envoi d'un message par courriel repose sur votre demande."
 
@@ -5819,7 +5818,7 @@ msgid ""
 "Account: name, user name, institutional e-mail address, groups, password "
 "(stored only as a hash) and the secret of your second factor."
 msgstr ""
-"Compte : nom, identifiant, adresse e-mail institutionnelle, groupes, mot de "
+"Compte : nom, identifiant, adresse e-mail institutionnelle, groupes, mot de "
 "passe (conservé uniquement sous forme d'empreinte) et secret de votre second "
 "facteur."
 
@@ -5828,7 +5827,7 @@ msgid ""
 "Sign-in records: date, user name, IP address, browser identification and the "
 "outcome (success or failure)."
 msgstr ""
-"Journaux de connexion : date, identifiant, adresse IP, identification du "
+"Journaux de connexion : date, identifiant, adresse IP, identification du "
 "navigateur et résultat (succès ou échec)."
 
 #: templates/views/pages/privacy.htm:36
@@ -5840,11 +5839,11 @@ msgid ""
 "Purpose: security and operation of the service. It is not shared and not "
 "used for statistics about individuals."
 msgstr ""
-"Journal d'accès, pour tout visiteur, avec ou sans compte : date et heure, "
-"adresse IP, méthode, page demandée (sans la chaîne de requête ; les jetons "
+"Journal d'accès, pour tout visiteur, avec ou sans compte : date et heure, "
+"adresse IP, méthode, page demandée (sans la chaîne de requête ; les jetons "
 "des liens de réinitialisation de mot de passe, d'activation et de double "
 "authentification sont retirés), statut, taille, durée, hôte, chemin de la "
-"page d'origine et identification du navigateur. Finalité : sécurité et "
+"page d'origine et identification du navigateur. Finalité : sécurité et "
 "exploitation du service. Il n'est pas partagé et n'est pas utilisé pour des "
 "statistiques sur les personnes."
 
@@ -5853,7 +5852,7 @@ msgid ""
 "History of the data: the account that created or changed each resource, and "
 "the date."
 msgstr ""
-"Historique des données : le compte qui a créé ou modifié chaque ressource, "
+"Historique des données : le compte qui a créé ou modifié chaque ressource, "
 "et la date."
 
 #: templates/views/pages/privacy.htm:38
@@ -5869,7 +5868,7 @@ msgid ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
 msgstr ""
-"Le formulaire de contact ouvre votre propre messagerie : la plateforme ne "
+"Le formulaire de contact ouvre votre propre messagerie : la plateforme ne "
 "conserve rien de ce que vous saisissez avant l'envoi."
 
 #: templates/views/pages/privacy.htm:42
@@ -5911,7 +5910,7 @@ msgid ""
 msgstr ""
 "Conservé tant que la personne contribue à la plateforme. Un compte sans "
 "connexion depuis %(months)s mois est anonymisé, %(days)s jours après un avis "
-"envoyé à son adresse e-mail : le nom, l'adresse e-mail et le mot de passe "
+"envoyé à son adresse e-mail : le nom, l'adresse e-mail et le mot de passe "
 "sont effacés et le compte est fermé. Un compte n'est jamais supprimé, afin "
 "que l'historique des données garde son auteur. Dans l'historique des "
 "modifications, l'adresse e-mail est effacée et le nom reste en mention de la "
@@ -5964,7 +5963,7 @@ msgid ""
 "no cookie for them and stores nothing on your device for them. They are in "
 "the European Union unless stated otherwise."
 msgstr ""
-"Certains contenus ne sont pas hébergés par ManuSpectrum : votre navigateur "
+"Certains contenus ne sont pas hébergés par ManuSpectrum : votre navigateur "
 "les charge directement depuis les services ci-dessous. Chacun reçoit votre "
 "adresse IP et l'identification de votre navigateur (user agent) et, lorsque "
 "la requête est un appel émis par un script de la page, l'adresse de "
@@ -5978,8 +5977,8 @@ msgid ""
 "legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
 "signed-in editors, the same basis applies to the editing tools."
 msgstr ""
-"Finalité : vous montrer les images et les cartes de la plateforme. Base "
-"légale : intérêt légitime (RGPD, article 6, paragraphe 1, point f). Pour les "
+"Finalité : vous montrer les images et les cartes de la plateforme. Base "
+"légale : intérêt légitime (RGPD, article 6, paragraphe 1, point f). Pour les "
 "services réservés aux éditeurs connectés, la même base s'applique aux outils "
 "d'édition."
 
@@ -5999,7 +5998,7 @@ msgstr ""
 "Serveurs d'images des institutions qui conservent les manuscrits (IIIF). "
 "Lorsque les images d'un document ne sont pas hébergées par ManuSpectrum, "
 "votre navigateur les charge depuis le serveur IIIF de l'institution qui le "
-"conserve, dans l'Explorateur et sur les pages de ressource : par exemple la "
+"conserve, dans l'Explorateur et sur les pages de ressource : par exemple la "
 "Bibliothèque nationale de France (Gallica), l'Université de Caen Normandie, "
 "e-codices, la Bibliothèque apostolique vaticane ou la BVMM de l'IRHT. La "
 "liste dépend des documents décrits."
@@ -6009,7 +6008,7 @@ msgid ""
 "Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
 "images loaded from its IIIF server."
 msgstr ""
-"Université de Caen Normandie (iiif.unicaen.fr) : la page d'accueil affiche "
+"Université de Caen Normandie (iiif.unicaen.fr) : la page d'accueil affiche "
 "trois images chargées depuis son serveur IIIF."
 
 #: templates/views/pages/privacy.htm:89
@@ -6018,7 +6017,7 @@ msgid ""
 "the base map, loaded whenever the Map view of the Explorer is opened. Data © "
 "OpenMapTiles, © OpenStreetMap contributors."
 msgstr ""
-"OpenFreeMap (tiles.openfreemap.org) : les tuiles vectorielles, polices et "
+"OpenFreeMap (tiles.openfreemap.org) : les tuiles vectorielles, polices et "
 "sprites du fond de carte, chargés dès que la vue Carte de l'Explorateur est "
 "ouverte. Données © OpenMapTiles, © contributeurs OpenStreetMap."
 
@@ -6028,9 +6027,9 @@ msgid ""
 "names of political entities, loaded only when you tick « Historical borders "
 "». Data © OpenHistoricalMap contributors."
 msgstr ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org) : frontières historiques et "
-"noms des entités politiques, chargés uniquement si vous cochez « Frontières "
-"historiques ». Données © contributeurs OpenHistoricalMap."
+"OpenHistoricalMap (vtiles.openhistoricalmap.org) : frontières historiques et "
+"noms des entités politiques, chargés uniquement si vous cochez « Frontières "
+"historiques ». Données © contributeurs OpenHistoricalMap."
 
 #: templates/views/pages/privacy.htm:93
 msgid "Signed-in editors and administrators only"
@@ -6041,7 +6040,7 @@ msgid ""
 "Biblissima import workflow: the thumbnails are loaded from the Biblissima "
 "portal or from the IIIF server of the holding library."
 msgstr ""
-"Workflow d'import Biblissima : les vignettes sont chargées depuis le portail "
+"Workflow d'import Biblissima : les vignettes sont chargées depuis le portail "
 "Biblissima ou depuis le serveur IIIF de la bibliothèque qui conserve le "
 "document."
 
@@ -6054,11 +6053,11 @@ msgid ""
 "where it processes it: this is outside our control. We advise using your "
 "browser's spell checker instead."
 msgstr ""
-"Éditeur de texte enrichi (CKEditor, intégré à Arches) : à chaque ouverture, "
+"Éditeur de texte enrichi (CKEditor, intégré à Arches) : à chaque ouverture, "
 "il demande à cke4.ckeditor.com (CKSource) si sa version est à jour. Son "
-"correcteur orthographique (SCAYT) est désactivé par défaut ; si vous "
+"correcteur orthographique (SCAYT) est désactivé par défaut ; si vous "
 "l'activez, le texte que vous saisissez est envoyé à WebSpellChecker (svc."
-"webspellchecker.net), qui n'indique pas où il le traite : cela échappe à "
+"webspellchecker.net), qui n'indique pas où il le traite : cela échappe à "
 "notre contrôle. Nous conseillons d'utiliser plutôt le correcteur de votre "
 "navigateur."
 
@@ -6068,7 +6067,7 @@ msgid ""
 "Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
 "which may process the request outside the European Union."
 msgstr ""
-"Page du thésaurus d'Arches (administrateurs uniquement) : les polices sont "
+"Page du thésaurus d'Arches (administrateurs uniquement) : les polices sont "
 "chargées depuis Google Fonts (fonts.googleapis.com, fonts.gstatic.com), "
 "exploité par Google, qui peut traiter la requête hors de l'Union européenne."
 
@@ -6120,7 +6119,7 @@ msgstr ""
 "Aucun transfert par la plateforme, qui est hébergée en France. Les "
 "exceptions sont les services ci-dessus dont il est indiqué qu'ils traitent "
 "des données hors de l'Union européenne ou dont le lieu de traitement n'est "
-"pas indiqué : Google Fonts, WebSpellChecker et Let's Encrypt."
+"pas indiqué : Google Fonts, WebSpellChecker et Let's Encrypt."
 
 #: templates/views/pages/privacy.htm:109
 msgid "Your rights"
@@ -6138,7 +6137,7 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:112
 msgid "To exercise your rights, write to:"
-msgstr "Pour exercer vos droits, écrivez à :"
+msgstr "Pour exercer vos droits, écrivez à :"
 
 #: templates/views/pages/privacy.htm:113
 msgid "the contact page"
@@ -6176,7 +6175,7 @@ msgid ""
 msgstr ""
 "Il n'y a ni traceur, ni service d'analyse d'audience, ni cookie "
 "publicitaire. L'Explorateur d'analyses garde votre sélection et votre "
-"disposition dans le stockage local de votre navigateur ; elles ne sont "
+"disposition dans le stockage local de votre navigateur ; elles ne sont "
 "jamais envoyées au serveur."
 
 #: templates/views/pages/privacy.htm:129
@@ -6198,13 +6197,13 @@ msgid_plural ""
 "creator of the resource are told %(notices)s days before, and again when the "
 "resource becomes public."
 msgstr[0] ""
-"Une restriction sur une ressource est temporaire par construction : %(n)s "
+"Une restriction sur une ressource est temporaire par construction : %(n)s "
 "mois au plus, sauf exception enregistrée par un administrateur. Elle est "
 "levée automatiquement le lendemain de sa date de fin. La personne qui l'a "
 "posée et le créateur de la ressource sont prévenus %(notices)s jours avant, "
 "puis de nouveau quand la ressource devient publique."
 msgstr[1] ""
-"Une restriction sur une ressource est temporaire par construction : %(n)s "
+"Une restriction sur une ressource est temporaire par construction : %(n)s "
 "mois au plus, sauf exception enregistrée par un administrateur. Elle est "
 "levée automatiquement le lendemain de sa date de fin. La personne qui l'a "
 "posée et le créateur de la ressource sont prévenus %(notices)s jours avant, "
@@ -6447,10 +6446,10 @@ msgid_plural ""
 "A restriction on a resource is temporary: %(n)s months at most, then it is "
 "lifted automatically, unless the team records an exception."
 msgstr[0] ""
-"Une restriction sur une ressource est temporaire : %(n)s mois au plus, puis "
+"Une restriction sur une ressource est temporaire : %(n)s mois au plus, puis "
 "elle est levée automatiquement, sauf exception décidée par l'équipe."
 msgstr[1] ""
-"Une restriction sur une ressource est temporaire : %(n)s mois au plus, puis "
+"Une restriction sur une ressource est temporaire : %(n)s mois au plus, puis "
 "elle est levée automatiquement, sauf exception décidée par l'équipe."
 
 #: templates/views/pages/terms.htm:24
@@ -6510,8 +6509,8 @@ msgid ""
 "Biblissima » or « Create a project ») that creates or edits resources step "
 "by step."
 msgstr ""
-"Un formulaire guidé en plusieurs étapes de ManuSpectrum (par exemple « "
-"Importer depuis Biblissima » ou « Créer un projet ») qui crée ou modifie des "
+"Un formulaire guidé en plusieurs étapes de ManuSpectrum (par exemple « "
+"Importer depuis Biblissima » ou « Créer un projet ») qui crée ou modifie des "
 "ressources étape par étape."
 
 #: templates/views/pages/terms.htm:42
@@ -6558,7 +6557,7 @@ msgstr ""
 
 #: templates/views/pages/terms.htm:54
 msgid "3. Images and files: you need the rights"
-msgstr "3. Images et fichiers : il faut en avoir les droits"
+msgstr "3. Images et fichiers : il faut en avoir les droits"
 
 #: templates/views/pages/terms.htm:55
 msgid ""
@@ -6673,7 +6672,7 @@ msgstr ""
 
 #: templates/views/pages/terms.htm:87
 msgid "Questions about these terms or about your data:"
-msgstr "Questions sur ces conditions ou sur vos données :"
+msgstr "Questions sur ces conditions ou sur vos données :"
 
 #: templates/views/pages/terms.htm:87
 msgid "contact the team"
@@ -7081,6 +7080,9 @@ msgid ""
 msgstr ""
 "Cette configuration a été modifiée par quelqu’un d’autre depuis son "
 "chargement. Rechargez-la avant d’enregistrer."
+
+#~ msgid "One letter"
+#~ msgstr "Une lettre"
 
 #~ msgid "Deleted records:"
 #~ msgstr "Fiches supprimées :"

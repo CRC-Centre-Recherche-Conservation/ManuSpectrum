@@ -71,6 +71,15 @@ describe("password-field", () => {
         expect(word.textContent).toBe("");
     });
 
+    it("counts the length in code points, like the server", () => {
+        init(document);
+        const length = $('[data-rule="length"]');
+        type($("#id_new_password1"), "Abcdefghi1\u{1F600}");
+        expect(length.classList.contains("is-met")).toBe(false);
+        type($("#id_new_password1"), "Abcdefghij1\u{1F600}");
+        expect(length.classList.contains("is-met")).toBe(true);
+    });
+
     it("reads the minimum length from the data attribute", () => {
         document.body.innerHTML = markup(20);
         init(document);

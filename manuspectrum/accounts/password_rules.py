@@ -11,6 +11,8 @@ from django.utils.module_loading import import_string
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
+from manuspectrum.password_validation import HasLowerCaseValidator
+
 DEFAULT_MIN_LENGTH = 8
 
 
@@ -29,7 +31,8 @@ def password_rules():
     Keys: `min_length` (int, 0 when no length validator), `upper`, `lower`,
     `digit` (bool), `symbols` (the accepted symbol characters, "" when no
     symbol rule), `letter` (bool, a numeric-only refusal), `common` and
-    `similarity` (bool, the validators that cannot be ticked live).
+    `similarity` (bool, the validators that cannot be ticked live) and
+    `checkable` (bool, at least one rule above can be ticked live).
     """
     from arches.app.utils import password_validation as arches_rules
     from django.contrib.auth import password_validation as django_rules
@@ -53,7 +56,7 @@ def password_rules():
             )
         elif issubclass(cls, arches_rules.HasUpperAndLowerCaseValidator):
             rules["upper"] = True
-        elif cls.__name__ == "HasLowerCaseValidator":
+        elif issubclass(cls, HasLowerCaseValidator):
             rules["lower"] = True
         elif issubclass(cls, arches_rules.HasNumericCharacterValidator):
             rules["digit"] = True
@@ -67,6 +70,13 @@ def password_rules():
             rules["common"] = True
         elif issubclass(cls, django_rules.UserAttributeSimilarityValidator):
             rules["similarity"] = True
+    rules["checkable"] = bool(
+        rules["min_length"]
+        or rules["upper"]
+        or rules["lower"]
+        or rules["digit"]
+        or rules["symbols"]
+    )
     return rules
 
 
@@ -88,7 +98,7 @@ def password_rule_list(rules):
     if rules["lower"]:
         words.append(_("One lower-case letter"))
     if rules["letter"] and not (rules["upper"] or rules["lower"]):
-        words.append(_("One letter"))
+        words.append(_("Not only digits"))
     if rules["digit"]:
         words.append(_("One digit"))
     if rules["symbols"]:

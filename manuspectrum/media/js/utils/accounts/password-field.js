@@ -4,9 +4,12 @@
 // reveals and drives it. The server stays the only judge of a password: the
 // value is read on `input` events, never sent, logged or stored.
 
+// Length counts code points like Python's `len()`. The Unicode classes below
+// may be stricter than `isdigit`/`isupper`/`islower`: a client hint only, the
+// server decides.
 const RULE_TESTS = {
     length: (value, meter) =>
-        value.length >= (Number(meter.dataset.minLength) || 0),
+        [...value].length >= (Number(meter.dataset.minLength) || 0),
     upper: (value) => /\p{Lu}/u.test(value),
     lower: (value) => /\p{Ll}/u.test(value),
     digit: (value) => /\p{Nd}/u.test(value),
