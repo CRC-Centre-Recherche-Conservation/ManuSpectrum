@@ -142,8 +142,8 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "verbose_name": "embargo",
-                "verbose_name_plural": "embargoes",
+                "verbose_name": "restriction",
+                "verbose_name_plural": "restrictions",
                 "db_table": "ms_embargo",
             },
         ),
@@ -207,8 +207,8 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "verbose_name": "embargo event",
-                "verbose_name_plural": "embargo events",
+                "verbose_name": "restriction event",
+                "verbose_name_plural": "restriction events",
                 "db_table": "ms_embargo_event",
                 "ordering": ("at", "pk"),
             },

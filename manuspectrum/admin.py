@@ -141,7 +141,7 @@ class EmbargoForm(forms.ModelForm):
                 )
             if self.instance.state != Embargo.ACTIVE:
                 raise forms.ValidationError(
-                    _("Only an active embargo can change its end date.")
+                    _("Only an active restriction can change its end date.")
                 )
             self.instance.validate_end(
                 ends_on, superuser=bool(self.user and self.user.is_superuser)
@@ -244,7 +244,7 @@ class EmbargoAdmin(admin.ModelAdmin):
             if embargo.state != Embargo.ACTIVE or embargo.ends_on is None:
                 self.message_user(
                     request,
-                    _("%(resource)s: only a dated, active embargo can be extended.")
+                    _("%(resource)s: only a dated, active restriction can be extended.")
                     % {"resource": resource_label(embargo.resourceinstance)},
                     messages.WARNING,
                 )
@@ -275,8 +275,8 @@ class EmbargoAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 ngettext(
-                    "%(count)d embargo was extended.",
-                    "%(count)d embargoes were extended.",
+                    "%(count)d restriction was extended.",
+                    "%(count)d restrictions were extended.",
                     done,
                 )
                 % {"count": done},

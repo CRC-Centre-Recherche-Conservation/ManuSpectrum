@@ -21,7 +21,7 @@
 <ul>
     <li>{% trans "Managing accounts: letting contributors sign in and describe analyses." %}</li>
     <li>{% trans "Securing the platform: limiting sign-in attempts and investigating abuse." %}</li>
-    <li>{% trans "Keeping the history of the data: who entered or changed a record, and when." %}</li>
+    <li>{% trans "Keeping the history of the data: who entered or changed a resource, and when." %}</li>
     <li>{% trans "Service notices: mails about restrictions that end and workflows that will be cleaned." %}</li>
     <li>{% trans "Answering the messages you send us." %}</li>
 </ul>
@@ -33,8 +33,8 @@
 <ul>
     <li>{% trans "Account: name, user name, institutional e-mail address, groups, password (stored only as a hash) and the secret of your second factor." %}</li>
     <li>{% trans "Sign-in records: date, user name, IP address, browser identification and the outcome (success or failure)." %}</li>
-    <li>{% trans "History of the data: the account that created or changed each record, and the date." %}</li>
-    <li>{% trans "Records can name researchers (authors, contacts) as part of the scientific description." %}</li>
+    <li>{% trans "History of the data: the account that created or changed each resource, and the date." %}</li>
+    <li>{% trans "Resources can name researchers (authors, contacts) as part of the scientific description." %}</li>
     <li>{% trans "The contact form opens your own mail application: nothing you type is stored by the platform before you send it." %}</li>
 </ul>
 
@@ -104,15 +104,15 @@
 </table>
 <p>{% trans "There is no tracker, no analytics service and no advertising cookie. The Analysis Explorer keeps your selection and layout in your browser's local storage; they are never sent to the server." %}</p>
 
-<h2>{% trans "Restricted records" %}</h2>
+<h2>{% trans "Restricted resources" %}</h2>
 <p>{% blocktrans trimmed count n=embargo_max_months with notices=embargo_notice_days_text %}
-    A restriction on a record is temporary by construction: {{ n }} month at most, unless an administrator records an exception. It is lifted automatically the day
-    after its end date. The person who recorded it and the creator of the record are told {{ notices }} days before,
-    and again when the record becomes public.
+    A restriction on a resource is temporary by construction: {{ n }} month at most, unless an administrator records an exception. It is lifted automatically the day
+    after its end date. The person who set it and the creator of the resource are told {{ notices }} days before,
+    and again when the resource becomes public.
     {% plural %}
-    A restriction on a record is temporary by construction: {{ n }} months at most, unless an administrator records an exception. It is lifted automatically the day
-    after its end date. The person who recorded it and the creator of the record are told {{ notices }} days before,
-    and again when the record becomes public.
+    A restriction on a resource is temporary by construction: {{ n }} months at most, unless an administrator records an exception. It is lifted automatically the day
+    after its end date. The person who set it and the creator of the resource are told {{ notices }} days before,
+    and again when the resource becomes public.
     {% endblocktrans %}</p>
 
 <h2>{% trans "Abandoned workflows" %}</h2>

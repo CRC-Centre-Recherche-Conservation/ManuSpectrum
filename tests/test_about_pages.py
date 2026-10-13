@@ -454,7 +454,7 @@ class LegalPagesTests(TestCase):
             "Transfers outside the European Union",
             "Your rights",
             "Cookies and browser storage",
-            "Restricted records",
+            "Restricted resources",
             "Abandoned workflows",
         ):
             self.assertIn(f"<h2>{heading}</h2>", html)
