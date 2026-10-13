@@ -40,10 +40,13 @@
 </section>
 <div id="ms-explorer-app" class="ms-explorer" aria-busy="true"{% if explorer_mirador_url %} data-mirador-url="{{ explorer_mirador_url }}"{% endif %}>
     <div class="ms-explorer-loading ms-explorer-loading--{% if initial_screen == "home" or initial_screen == "compare" %}{{ initial_screen }}{% else %}screen{% endif %}">
-        <div class="ms-explorer-loading__tabs" aria-hidden="true">
-            <span class="ms-skeleton"></span>
-            <span class="ms-skeleton"></span>
-            <span class="ms-skeleton"></span>
+        <div aria-hidden="true">
+            <div class="ms-explorer-loading__tabs">
+                <span class="ms-skeleton"></span>
+                <span class="ms-skeleton"></span>
+                <span class="ms-skeleton"></span>
+            </div>
+            <div class="spectral-line-thin spectral-line-thin--scan"></div>
         </div>
         <p class="ms-explorer-loading__status" role="status" aria-live="polite">{% trans "Loading the explorer…" %}</p>
         {% if initial_screen != "compare" %}
@@ -55,48 +58,13 @@
                 <span class="ms-skeleton"></span>
             </span>
             <span class="ms-explorer-loading__cards">
-                <span class="ms-explorer-loading__card">
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                </span>
-                <span class="ms-explorer-loading__card">
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                </span>
-                <span class="ms-explorer-loading__card">
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                    <span class="ms-skeleton"></span>
-                </span>
+                <span class="ms-explorer-loading__card"></span>
+                <span class="ms-explorer-loading__card"></span>
+                <span class="ms-explorer-loading__card"></span>
             </span>
         {% else %}
-            <span class="ms-explorer-loading__card ms-explorer-loading__rail">
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-            </span>
-            <span class="ms-explorer-loading__card ms-explorer-loading__main">
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-                <span class="ms-skeleton"></span>
-            </span>
+            <span class="ms-explorer-loading__card ms-explorer-loading__rail"></span>
+            <span class="ms-explorer-loading__card ms-explorer-loading__main"></span>
         {% endif %}
         </div>
         {% endif %}

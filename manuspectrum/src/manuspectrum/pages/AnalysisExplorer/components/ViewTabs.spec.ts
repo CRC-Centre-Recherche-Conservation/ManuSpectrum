@@ -43,4 +43,11 @@ describe("ViewTabs", () => {
         expect(store.view).toBe("compare");
         expect(buttons[2].attributes("aria-current")).toBe("page");
     });
+
+    it("closes the row with the site's spectral rule", () => {
+        available.views = ["corpus", "map"] satisfies ExplorerView[];
+        const rule = mount(ViewTabs).find(".view-tabs > .spectral-line-thin");
+        expect(rule.exists()).toBe(true);
+        expect(rule.attributes("aria-hidden")).toBe("true");
+    });
 });

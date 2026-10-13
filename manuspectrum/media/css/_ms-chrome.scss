@@ -19,6 +19,7 @@
 // Self-hosted webfonts — replaces the Google Fonts <link> both templates used
 // to carry (see _ms-fonts.scss for the why).
 @import 'ms-fonts';
+@import 'ms-tokens';
 
 // --- RESET & CUSTOM PROPERTIES ---
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -310,8 +311,42 @@ img { max-width: 100%; height: auto; display: block; }
 
 .spectral-line-thin {
     height: 1px;
-    background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
+    @include ms-spectral-thin;
     opacity: 0.45;
+}
+
+// The same rule while something loads: the faint line stays (::before) and a
+// 2px window of its gradient at full strength travels along it (::after).
+.spectral-line-thin--scan {
+    position: relative;
+    background: none;
+    opacity: 1;
+}
+
+.spectral-line-thin--scan::before,
+.spectral-line-thin--scan::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    pointer-events: none;
+}
+
+.spectral-line-thin--scan::before {
+    block-size: 1px;
+    @include ms-spectral-thin;
+    opacity: 0.45;
+}
+
+.spectral-line-thin--scan::after {
+    block-size: 2px;
+    @include ms-spectral-scan;
+}
+
+// A window 30% wide, from just off the start to just off the end.
+@keyframes ms-spectral-scan {
+    from { -webkit-mask-position: -43% 0; mask-position: -43% 0; }
+    to { -webkit-mask-position: 143% 0; mask-position: 143% 0; }
 }
 
 // --- SECTION HEADINGS (shared by homepage + About pages) ---

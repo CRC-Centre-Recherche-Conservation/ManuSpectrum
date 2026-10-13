@@ -140,17 +140,11 @@ body[data-explorer-screen='document'] .ms-explorer-intro__title {
     font-size: 1.25rem;
 }
 
-// One header row (title, then the bar), closed by the spectral band across the column.
+// One header row: the title, then the bar. The tabs' spectral rule closes it.
 body[data-explorer-screen='results'] .ms-explorer-intro__accent,
 body[data-explorer-screen='map'] .ms-explorer-intro__accent,
 body[data-explorer-screen='compare'] .ms-explorer-intro__accent,
-body[data-explorer-screen='document'] .ms-explorer-intro__accent {
-    order: 2;
-    flex: 0 0 100%;
-    inline-size: 100%;
-    block-size: 0.125rem;
-}
-
+body[data-explorer-screen='document'] .ms-explorer-intro__accent,
 body[data-explorer-screen='results'] .ms-explorer-intro__kicker,
 body[data-explorer-screen='map'] .ms-explorer-intro__kicker,
 body[data-explorer-screen='compare'] .ms-explorer-intro__kicker,
@@ -198,8 +192,9 @@ body[data-explorer-screen='document']:has(.ms-explorer[aria-busy='true']) .ms-ex
     line-height: 1.5;
 }
 
-// --- Loading: the skeleton of the first view, replaced by the mounted app ---
-// The mount point is busy until then, but draws neither the rainbow bar nor the dim.
+// --- Loading: the frames of the first view, replaced by the mounted app ---
+// The mount point is busy until then, but draws neither the busy line nor the
+// dim: its skeleton scans the tabs' rule instead, where ViewTabs draws it.
 body.ms-page--app .ms-explorer[aria-busy='true']::before {
     content: none;
 }
@@ -214,6 +209,11 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
     align-content: start;
     gap: 0.5rem;
     min-block-size: 49rem;
+
+    // The scanned rule is the only thing that moves.
+    body.ms-page--app & .ms-skeleton {
+        animation: none;
+    }
 
     .ms-explorer[aria-busy='false'] > & {
         display: none;
@@ -233,15 +233,13 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
     min-block-size: 0;
 }
 
-// The ViewTabs row: 2.75rem tabs over a hairline.
+// The ViewTabs row: 2.75rem tabs over the spectral rule, scanned until mount.
 .ms-explorer-loading__tabs {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    box-sizing: border-box;
-    block-size: 2.8125rem;
+    block-size: 2.75rem;
     overflow: hidden;
-    border-block-end: 0.0625rem solid var(--border-hover);
 
     > .ms-skeleton {
         flex: 0 1 auto;
@@ -315,20 +313,6 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
     border-radius: var(--explorer-radius);
     background: var(--surface);
 
-    > .ms-skeleton {
-        inline-size: 90%;
-        block-size: 0.875rem;
-    }
-
-    > .ms-skeleton:first-child {
-        inline-size: 40%;
-        block-size: 0.625rem;
-    }
-
-    > .ms-skeleton:nth-child(3n) {
-        inline-size: 70%;
-    }
-
     @media (min-width: 48rem) {
         min-block-size: 27rem;
     }
@@ -352,10 +336,6 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
         padding: 0;
         border-color: var(--border-hover);
         border-radius: 999rem;
-
-        body.ms-page--app & > .ms-skeleton {
-            display: none;
-        }
     }
 
     @media (min-width: 80rem) {
@@ -377,7 +357,8 @@ body.ms-page--app .ms-explorer[aria-busy='true'] > * {
     color: var(--blue-text);
 }
 
-// --- Busy regions: a rainbow bar on top, the stale content dimmed ---
+// --- Busy regions: the scanned spectral line along the top edge, the stale
+// content dimmed. The gradient's transparent ends keep it off rounded corners.
 body.ms-page--app [aria-busy='true'] {
     position: relative;
 }
@@ -393,28 +374,9 @@ body.ms-page--app [aria-busy='true']::before {
     inset-block-start: 0;
     inset-inline: 0;
     z-index: 5;
-    block-size: 0.1875rem;
-    border-radius: 0.125rem;
-    background: linear-gradient(
-        90deg,
-        transparent,
-        var(--spectral-1),
-        var(--spectral-2),
-        var(--spectral-3),
-        var(--spectral-4),
-        var(--spectral-5),
-        var(--spectral-6),
-        transparent
-    );
-    background-size: 50% 100%;
-    background-repeat: no-repeat;
-    animation: ms-explorer-busy 1.4s ease-in-out infinite;
+    block-size: 0.125rem;
     pointer-events: none;
-}
-
-@keyframes ms-explorer-busy {
-    from { background-position: -100% 0; }
-    to { background-position: 200% 0; }
+    @include ms-spectral-scan;
 }
 
 // --- Skeletons of first loads ---
@@ -471,11 +433,6 @@ body.ms-page--app .ms-skeleton {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    body.ms-page--app [aria-busy='true']::before {
-        animation: none;
-        background-size: 100% 100%;
-    }
-
     body.ms-page--app .ms-skeleton {
         animation: none;
     }

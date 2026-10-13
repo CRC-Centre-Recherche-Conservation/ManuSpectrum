@@ -160,6 +160,17 @@ class AnalysisExplorerPageTests(TestCase):
         self.assertIn("ms-explorer-loading--compare", compare)
         self.assertNotIn("ms-explorer-loading__body", compare)
 
+    def test_loading_scans_the_tabs_rule_on_every_screen(self):
+        for query in ("", "?view=map", "?view=compare"):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn(
+                '<div class="spectral-line-thin spectral-line-thin--scan"></div>',
+                html,
+                query,
+            )
+
 
 class AnalysisExplorerIndexingTests(TestCase):
     def test_sitemap_lists_the_explorer_with_its_french_alternate(self):
