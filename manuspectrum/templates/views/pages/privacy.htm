@@ -33,6 +33,7 @@
 <ul>
     <li>{% trans "Account: name, user name, institutional e-mail address, groups, password (stored only as a hash) and the secret of your second factor." %}</li>
     <li>{% trans "Sign-in records: date, user name, IP address, browser identification and the outcome (success or failure)." %}</li>
+    <li>{% trans "Access log, for every visitor, with or without an account: date and time, IP address, method, page requested (without the query string; the tokens of password-reset, activation and two-factor links are removed), status, size, duration, host, path of the referring page and browser identification. Purpose: security and operation of the service. It is not shared and not used for statistics about individuals." %}</li>
     <li>{% trans "History of the data: the account that created or changed each resource, and the date." %}</li>
     <li>{% trans "Resources can name researchers (authors, contacts) as part of the scientific description." %}</li>
     <li>{% trans "The contact form opens your own mail application: nothing you type is stored by the platform before you send it." %}</li>
@@ -48,6 +49,10 @@
                 {% plural %}
                 {{ n }} months ({{ days }} days), then deleted.
                 {% endblocktrans %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "Access log" %}</th>
+            <td>{% trans "30 days, then deleted." %}</td>
         </tr>
         <tr>
             <th scope="row">{% trans "Accounts" %}</th>
@@ -74,15 +79,32 @@
 <p>{% trans "The administrators and the team of the Centre de recherche sur la conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, and no data is given to advertisers." %}</p>
 
 <h2 id="third-party-services">{% trans "Third-party services" %}</h2>
-<p>{% trans "The Map view of the Explorer makes your browser load resources from two third parties. They therefore receive your IP address, your user agent and the referer of the request. No cookie is set and nothing is stored on your device. No other page and no other Explorer view calls these hosts." %}</p>
+<p>{% trans "Some content is not hosted by ManuSpectrum: your browser loads it directly from the services below. Each of them receives your IP address and your browser identification (user agent), and, when the request is a fetch made by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets no cookie for them and stores nothing on your device for them. They are in the European Union unless stated otherwise." %}</p>
+<p>{% trans "Purpose: to show you the images and maps of the platform. Legal basis: legitimate interest (GDPR, article 6(1)(f)). For the services used only by signed-in editors, the same basis applies to the editing tools." %}</p>
+
+<h3>{% trans "Every visitor" %}</h3>
 <ul>
-    <li>{% trans "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of the base map, loaded whenever the Map view is opened. Data © OpenMapTiles, © OpenStreetMap contributors." %}</li>
+    <li>{% trans "Image servers of the institutions that hold the manuscripts (IIIF). When the images of a document are not hosted by ManuSpectrum, your browser loads them from the IIIF server of the holding institution, in the Explorer and on resource pages: for example the Bibliothèque nationale de France (Gallica), the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM of the IRHT. The list depends on the documents described." %}</li>
+    <li>{% trans "Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three images loaded from its IIIF server." %}</li>
+    <li>{% trans "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of the base map, loaded whenever the Map view of the Explorer is opened. Data © OpenMapTiles, © OpenStreetMap contributors." %}</li>
     <li>{% trans "OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and names of political entities, loaded only when you tick « Historical borders ». Data © OpenHistoricalMap contributors." %}</li>
 </ul>
-<p>{% trans "Purpose: to display the base map and, on request, historical borders. Legal basis: legitimate interest (GDPR, article 6(1)(f))." %}</p>
+
+<h3>{% trans "Signed-in editors and administrators only" %}</h3>
+<ul>
+    <li>{% trans "Biblissima import workflow: the thumbnails are loaded from the Biblissima portal or from the IIIF server of the holding library." %}</li>
+    <li>{% trans "Rich-text editor (CKEditor, part of Arches): each time it opens, it asks cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell checker (SCAYT) is off by default; if you switch it on, the text you type is sent to WebSpellChecker (svc.webspellchecker.net), which does not state where it processes it: this is outside our control. We advise using your browser's spell checker instead." %}</li>
+    <li>{% trans "Thesaurus page of Arches (administrators only): the fonts are loaded from Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, which may process the request outside the European Union." %}</li>
+</ul>
+
+<h3>{% trans "Services used by the platform itself" %}</h3>
+<p>{% trans "These calls come from the server and carry no visitor data. The platform asks Biblissima and the IIIF servers of the holding institutions for data and images. E-mail goes through the mail relay of Huma-Num, which handles the names and addresses of the account holders in the messages it carries. Certificates are issued by Let's Encrypt (United States), which only learns the address of the operator." %}</p>
+
+<h3>{% trans "Not used" %}</h3>
+<p>{% trans "No analytics or tracking service, no Google reCAPTCHA, no advertising, no social network widget. The Mapbox map service of Arches is not configured." %}</p>
 
 <h2>{% trans "Transfers outside the European Union" %}</h2>
-<p>{% trans "None. The platform is hosted in France." %}</p>
+<p>{% trans "None by the platform, which is hosted in France. The exceptions are the services above that are stated to process data outside the European Union or whose location is not stated: Google Fonts, WebSpellChecker and Let's Encrypt." %}</p>
 
 <h2>{% trans "Your rights" %}</h2>
 <p>{% trans "You can ask for access to your data, its correction, its erasure where the law allows it, a restriction of the processing, and you can object to it. You can also lodge a complaint with the CNIL." %}</p>

@@ -1,3 +1,6 @@
+import re
+from pathlib import Path
+
 from django.conf import settings
 from django.template import Context, Template
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
@@ -468,6 +471,37 @@ class LegalPagesTests(TestCase):
             self.assertIn(f'<h2 id="third-party-services">{heading}</h2>', html)
             for host in ("tiles.openfreemap.org", "vtiles.openhistoricalmap.org"):
                 self.assertIn(host, html)
+
+    def test_privacy_third_party_section_lists_every_external_host(self):
+        for lang in ("en", "fr"):
+            html = self.get("about-privacy", lang)
+            for host in (
+                "iiif.unicaen.fr",
+                "tiles.openfreemap.org",
+                "vtiles.openhistoricalmap.org",
+                "cke4.ckeditor.com",
+                "svc.webspellchecker.net",
+                "fonts.googleapis.com",
+            ):
+                self.assertIn(host, html, f"{lang}: {host}")
+            self.assertNotIn("No other page and no other Explorer view", html)
+            self.assertNotIn("Aucune autre page", html)
+
+    def test_privacy_access_log_is_listed_with_the_logrotate_retention(self):
+        rule = (
+            Path(settings.APP_ROOT).parent
+            / "deploy"
+            / "logrotate"
+            / "manuspectrum-nginx.in"
+        ).read_text()
+        days = re.search(r"^\s*maxage (\d+)", rule, re.M).group(1)
+        for lang, label, text in (
+            ("en", "Access log", f"{days} days, then deleted."),
+            ("fr", "Journal d", f"{days} jours"),
+        ):
+            html = self.get("about-privacy", lang)
+            self.assertIn(label, html)
+            self.assertIn(text, html)
 
     def test_privacy_printed_durations_follow_the_settings(self):
         with override_settings(

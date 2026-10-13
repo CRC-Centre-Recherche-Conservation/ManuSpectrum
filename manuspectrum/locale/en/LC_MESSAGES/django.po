@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 08:52-0500\n"
+"POT-Creation-Date: 2026-10-13 09:21-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1264,11 +1264,9 @@ msgstr "Copy"
 
 #: templates/admin/copy_addresses.html:30
 msgid ""
-"Paste them in the Bcc field of the shared project mailbox, never in To or "
-"Cc."
+"Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
 msgstr ""
-"Paste them in the Bcc field of the shared project mailbox, never in To or "
-"Cc."
+"Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
 
 #: templates/admin/copy_addresses.html:32
 #, python-format
@@ -1912,7 +1910,7 @@ msgstr "Legal"
 
 #: templates/includes/ms_footer.htm:39 templates/views/pages/legal.htm:3
 #: templates/views/pages/legal.htm:4 templates/views/pages/legal.htm:7
-#: templates/views/pages/privacy.htm:124 templates/views/pages/terms.htm:87
+#: templates/views/pages/privacy.htm:146 templates/views/pages/terms.htm:87
 msgid "Legal notice"
 msgstr "Legal notice"
 
@@ -1923,7 +1921,7 @@ msgid "Privacy policy"
 msgstr "Privacy policy"
 
 #: templates/includes/ms_footer.htm:41 templates/views/pages/legal.htm:59
-#: templates/views/pages/privacy.htm:124 templates/views/pages/terms.htm:3
+#: templates/views/pages/privacy.htm:146 templates/views/pages/terms.htm:3
 #: templates/views/pages/terms.htm:4 templates/views/pages/terms.htm:7
 msgid "Terms of use"
 msgstr "Terms of use"
@@ -2878,7 +2876,7 @@ msgstr "Question"
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:83 templates/views/pages/privacy.htm:97
+#: templates/javascript.htm:83 templates/views/pages/privacy.htm:119
 msgid "Name"
 msgstr "Name"
 
@@ -5719,21 +5717,37 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:36
 msgid ""
-"History of the data: the account that created or changed each resource, and "
-"the date."
+"Access log, for every visitor, with or without an account: date and time, IP "
+"address, method, page requested (without the query string; the tokens of "
+"password-reset, activation and two-factor links are removed), status, size, "
+"duration, host, path of the referring page and browser identification. "
+"Purpose: security and operation of the service. It is not shared and not "
+"used for statistics about individuals."
 msgstr ""
-"History of the data: the account that created or changed each resource, and "
-"the date."
+"Access log, for every visitor, with or without an account: date and time, IP "
+"address, method, page requested (without the query string; the tokens of "
+"password-reset, activation and two-factor links are removed), status, size, "
+"duration, host, path of the referring page and browser identification. "
+"Purpose: security and operation of the service. It is not shared and not "
+"used for statistics about individuals."
 
 #: templates/views/pages/privacy.htm:37
 msgid ""
+"History of the data: the account that created or changed each resource, and "
+"the date."
+msgstr ""
+"History of the data: the account that created or changed each resource, and "
+"the date."
+
+#: templates/views/pages/privacy.htm:38
+msgid ""
 "Resources can name researchers (authors, contacts) as part of the scientific "
 "description."
 msgstr ""
 "Resources can name researchers (authors, contacts) as part of the scientific "
 "description."
 
-#: templates/views/pages/privacy.htm:38
+#: templates/views/pages/privacy.htm:39
 msgid ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
@@ -5741,26 +5755,34 @@ msgstr ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
 
-#: templates/views/pages/privacy.htm:41
+#: templates/views/pages/privacy.htm:42
 msgid "Retention periods"
 msgstr "Retention periods"
 
-#: templates/views/pages/privacy.htm:45
+#: templates/views/pages/privacy.htm:46
 msgid "Sign-in records"
 msgstr "Sign-in records"
 
-#: templates/views/pages/privacy.htm:46
+#: templates/views/pages/privacy.htm:47
 #, python-format
 msgid "%(n)s month (%(days)s days), then deleted."
 msgid_plural "%(n)s months (%(days)s days), then deleted."
 msgstr[0] "%(n)s month (%(days)s days), then deleted."
 msgstr[1] "%(n)s months (%(days)s days), then deleted."
 
-#: templates/views/pages/privacy.htm:53
+#: templates/views/pages/privacy.htm:54
+msgid "Access log"
+msgstr "Access log"
+
+#: templates/views/pages/privacy.htm:55
+msgid "30 days, then deleted."
+msgstr "30 days, then deleted."
+
+#: templates/views/pages/privacy.htm:58
 msgid "Accounts"
 msgstr "Accounts"
 
-#: templates/views/pages/privacy.htm:54
+#: templates/views/pages/privacy.htm:59
 #, python-format
 msgid ""
 "Kept while the contributor works on the platform. An account without a sign-"
@@ -5777,11 +5799,11 @@ msgstr ""
 "of the data keeps its author. In the edit history, the e-mail address is "
 "erased and the name stays as credit for the contribution."
 
-#: templates/views/pages/privacy.htm:63
+#: templates/views/pages/privacy.htm:68
 msgid "History of the data"
 msgstr "History of the data"
 
-#: templates/views/pages/privacy.htm:64
+#: templates/views/pages/privacy.htm:69
 msgid ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
@@ -5789,19 +5811,19 @@ msgstr ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
 
-#: templates/views/pages/privacy.htm:67
+#: templates/views/pages/privacy.htm:72
 msgid "Backups"
 msgstr "Backups"
 
-#: templates/views/pages/privacy.htm:68
+#: templates/views/pages/privacy.htm:73
 msgid "Nightly backups are kept for up to six months."
 msgstr "Nightly backups are kept for up to six months."
 
-#: templates/views/pages/privacy.htm:73
+#: templates/views/pages/privacy.htm:78
 msgid "Recipients"
 msgstr "Recipients"
 
-#: templates/views/pages/privacy.htm:74
+#: templates/views/pages/privacy.htm:79
 msgid ""
 "The administrators and the team of the Centre de recherche sur la "
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
@@ -5811,64 +5833,176 @@ msgstr ""
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
 "and no data is given to advertisers."
 
-#: templates/views/pages/privacy.htm:76
+#: templates/views/pages/privacy.htm:81
 msgid "Third-party services"
 msgstr "Third-party services"
 
-#: templates/views/pages/privacy.htm:77
-msgid ""
-"The Map view of the Explorer makes your browser load resources from two "
-"third parties. They therefore receive your IP address, your user agent and "
-"the referer of the request. No cookie is set and nothing is stored on your "
-"device. No other page and no other Explorer view calls these hosts."
-msgstr ""
-"The Map view of the Explorer makes your browser load resources from two "
-"third parties. They therefore receive your IP address, your user agent and "
-"the referer of the request. No cookie is set and nothing is stored on your "
-"device. No other page and no other Explorer view calls these hosts."
-
-#: templates/views/pages/privacy.htm:79
-msgid ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view is opened. Data © OpenMapTiles, © "
-"OpenStreetMap contributors."
-msgstr ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view is opened. Data © OpenMapTiles, © "
-"OpenStreetMap contributors."
-
-#: templates/views/pages/privacy.htm:80
-msgid ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
-"names of political entities, loaded only when you tick « Historical borders "
-"». Data © OpenHistoricalMap contributors."
-msgstr ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
-"names of political entities, loaded only when you tick « Historical borders "
-"». Data © OpenHistoricalMap contributors."
-
 #: templates/views/pages/privacy.htm:82
 msgid ""
-"Purpose: to display the base map and, on request, historical borders. Legal "
-"basis: legitimate interest (GDPR, article 6(1)(f))."
+"Some content is not hosted by ManuSpectrum: your browser loads it directly "
+"from the services below. Each of them receives your IP address and your "
+"browser identification (user agent), and, when the request is a fetch made "
+"by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets "
+"no cookie for them and stores nothing on your device for them. They are in "
+"the European Union unless stated otherwise."
 msgstr ""
-"Purpose: to display the base map and, on request, historical borders. Legal "
-"basis: legitimate interest (GDPR, article 6(1)(f))."
+"Some content is not hosted by ManuSpectrum: your browser loads it directly "
+"from the services below. Each of them receives your IP address and your "
+"browser identification (user agent), and, when the request is a fetch made "
+"by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets "
+"no cookie for them and stores nothing on your device for them. They are in "
+"the European Union unless stated otherwise."
 
-#: templates/views/pages/privacy.htm:84
-msgid "Transfers outside the European Union"
-msgstr "Transfers outside the European Union"
+#: templates/views/pages/privacy.htm:83
+msgid ""
+"Purpose: to show you the images and maps of the platform. Legal basis: "
+"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
+"signed-in editors, the same basis applies to the editing tools."
+msgstr ""
+"Purpose: to show you the images and maps of the platform. Legal basis: "
+"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
+"signed-in editors, the same basis applies to the editing tools."
 
 #: templates/views/pages/privacy.htm:85
-msgid "None. The platform is hosted in France."
-msgstr "None. The platform is hosted in France."
+msgid "Every visitor"
+msgstr "Every visitor"
 
 #: templates/views/pages/privacy.htm:87
-msgid "Your rights"
-msgstr "Your rights"
+msgid ""
+"Image servers of the institutions that hold the manuscripts (IIIF). When the "
+"images of a document are not hosted by ManuSpectrum, your browser loads them "
+"from the IIIF server of the holding institution, in the Explorer and on "
+"resource pages: for example the Bibliothèque nationale de France (Gallica), "
+"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
+"of the IRHT. The list depends on the documents described."
+msgstr ""
+"Image servers of the institutions that hold the manuscripts (IIIF). When the "
+"images of a document are not hosted by ManuSpectrum, your browser loads them "
+"from the IIIF server of the holding institution, in the Explorer and on "
+"resource pages: for example the Bibliothèque nationale de France (Gallica), "
+"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
+"of the IRHT. The list depends on the documents described."
 
 #: templates/views/pages/privacy.htm:88
 msgid ""
+"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
+"images loaded from its IIIF server."
+msgstr ""
+"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
+"images loaded from its IIIF server."
+
+#: templates/views/pages/privacy.htm:89
+msgid ""
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
+"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
+"OpenMapTiles, © OpenStreetMap contributors."
+msgstr ""
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
+"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
+"OpenMapTiles, © OpenStreetMap contributors."
+
+#: templates/views/pages/privacy.htm:90
+msgid ""
+"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
+"names of political entities, loaded only when you tick « Historical borders "
+"». Data © OpenHistoricalMap contributors."
+msgstr ""
+"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
+"names of political entities, loaded only when you tick « Historical borders "
+"». Data © OpenHistoricalMap contributors."
+
+#: templates/views/pages/privacy.htm:93
+msgid "Signed-in editors and administrators only"
+msgstr "Signed-in editors and administrators only"
+
+#: templates/views/pages/privacy.htm:95
+msgid ""
+"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
+"portal or from the IIIF server of the holding library."
+msgstr ""
+"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
+"portal or from the IIIF server of the holding library."
+
+#: templates/views/pages/privacy.htm:96
+msgid ""
+"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
+"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
+"checker (SCAYT) is off by default; if you switch it on, the text you type is "
+"sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
+"where it processes it: this is outside our control. We advise using your "
+"browser's spell checker instead."
+msgstr ""
+"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
+"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
+"checker (SCAYT) is off by default; if you switch it on, the text you type is "
+"sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
+"where it processes it: this is outside our control. We advise using your "
+"browser's spell checker instead."
+
+#: templates/views/pages/privacy.htm:97
+msgid ""
+"Thesaurus page of Arches (administrators only): the fonts are loaded from "
+"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
+"which may process the request outside the European Union."
+msgstr ""
+"Thesaurus page of Arches (administrators only): the fonts are loaded from "
+"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
+"which may process the request outside the European Union."
+
+#: templates/views/pages/privacy.htm:100
+msgid "Services used by the platform itself"
+msgstr "Services used by the platform itself"
+
+#: templates/views/pages/privacy.htm:101
+msgid ""
+"These calls come from the server and carry no visitor data. The platform "
+"asks Biblissima and the IIIF servers of the holding institutions for data "
+"and images. E-mail goes through the mail relay of Huma-Num, which handles "
+"the names and addresses of the account holders in the messages it carries. "
+"Certificates are issued by Let's Encrypt (United States), which only learns "
+"the address of the operator."
+msgstr ""
+"These calls come from the server and carry no visitor data. The platform "
+"asks Biblissima and the IIIF servers of the holding institutions for data "
+"and images. E-mail goes through the mail relay of Huma-Num, which handles "
+"the names and addresses of the account holders in the messages it carries. "
+"Certificates are issued by Let's Encrypt (United States), which only learns "
+"the address of the operator."
+
+#: templates/views/pages/privacy.htm:103
+msgid "Not used"
+msgstr "Not used"
+
+#: templates/views/pages/privacy.htm:104
+msgid ""
+"No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
+"social network widget. The Mapbox map service of Arches is not configured."
+msgstr ""
+"No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
+"social network widget. The Mapbox map service of Arches is not configured."
+
+#: templates/views/pages/privacy.htm:106
+msgid "Transfers outside the European Union"
+msgstr "Transfers outside the European Union"
+
+#: templates/views/pages/privacy.htm:107
+msgid ""
+"None by the platform, which is hosted in France. The exceptions are the "
+"services above that are stated to process data outside the European Union or "
+"whose location is not stated: Google Fonts, WebSpellChecker and Let's "
+"Encrypt."
+msgstr ""
+"None by the platform, which is hosted in France. The exceptions are the "
+"services above that are stated to process data outside the European Union or "
+"whose location is not stated: Google Fonts, WebSpellChecker and Let's "
+"Encrypt."
+
+#: templates/views/pages/privacy.htm:109
+msgid "Your rights"
+msgstr "Your rights"
+
+#: templates/views/pages/privacy.htm:110
+msgid ""
 "You can ask for access to your data, its correction, its erasure where the "
 "law allows it, a restriction of the processing, and you can object to it. "
 "You can also lodge a complaint with the CNIL."
@@ -5877,39 +6011,39 @@ msgstr ""
 "law allows it, a restriction of the processing, and you can object to it. "
 "You can also lodge a complaint with the CNIL."
 
-#: templates/views/pages/privacy.htm:90
+#: templates/views/pages/privacy.htm:112
 msgid "To exercise your rights, write to:"
 msgstr "To exercise your rights, write to:"
 
-#: templates/views/pages/privacy.htm:91
+#: templates/views/pages/privacy.htm:113
 msgid "the contact page"
 msgstr "the contact page"
 
-#: templates/views/pages/privacy.htm:92
+#: templates/views/pages/privacy.htm:114
 msgid "or to the data protection officer above."
 msgstr "or to the data protection officer above."
 
-#: templates/views/pages/privacy.htm:94
+#: templates/views/pages/privacy.htm:116
 msgid "Cookies and browser storage"
 msgstr "Cookies and browser storage"
 
-#: templates/views/pages/privacy.htm:97
+#: templates/views/pages/privacy.htm:119
 msgid "Purpose"
 msgstr "Purpose"
 
-#: templates/views/pages/privacy.htm:100
+#: templates/views/pages/privacy.htm:122
 msgid "Keeps you signed in."
 msgstr "Keeps you signed in."
 
-#: templates/views/pages/privacy.htm:101
+#: templates/views/pages/privacy.htm:123
 msgid "Protects forms against forged requests."
 msgstr "Protects forms against forged requests."
 
-#: templates/views/pages/privacy.htm:102
+#: templates/views/pages/privacy.htm:124
 msgid "Remembers the language you chose."
 msgstr "Remembers the language you chose."
 
-#: templates/views/pages/privacy.htm:105
+#: templates/views/pages/privacy.htm:127
 msgid ""
 "There is no tracker, no analytics service and no advertising cookie. The "
 "Analysis Explorer keeps your selection and layout in your browser's local "
@@ -5919,11 +6053,11 @@ msgstr ""
 "Analysis Explorer keeps your selection and layout in your browser's local "
 "storage; they are never sent to the server."
 
-#: templates/views/pages/privacy.htm:107
+#: templates/views/pages/privacy.htm:129
 msgid "Restricted resources"
 msgstr "Restricted resources"
 
-#: templates/views/pages/privacy.htm:108
+#: templates/views/pages/privacy.htm:130
 #, python-format
 msgid ""
 "A restriction on a resource is temporary by construction: %(n)s month at "
@@ -5950,11 +6084,11 @@ msgstr[1] ""
 "creator of the resource are told %(notices)s days before, and again when the "
 "resource becomes public."
 
-#: templates/views/pages/privacy.htm:118
+#: templates/views/pages/privacy.htm:140
 msgid "Abandoned workflows"
 msgstr "Abandoned workflows"
 
-#: templates/views/pages/privacy.htm:119
+#: templates/views/pages/privacy.htm:141
 #, python-format
 msgid ""
 "A workflow with no activity for %(days)s days is cleaned. Its creators are "

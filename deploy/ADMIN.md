@@ -28,6 +28,7 @@ because an administrator created it. People ask for one through the contact page
    or similar passwords are refused), then sets up two-factor authentication with an
    authenticator application at `/<lang>/account/two-factor`.
 4. An invitation never activated shows in the monthly report (below) after three months.
+5. Advise editors not to switch on the spell checker (SCAYT) of the rich-text editor: it sends the typed text to a third party (WebSpellChecker); the browser's own spell checker does not.
 
 ### Two-factor authentication
 
