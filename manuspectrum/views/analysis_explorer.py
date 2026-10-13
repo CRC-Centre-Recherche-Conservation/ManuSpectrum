@@ -1,4 +1,4 @@
-import uuid
+import re
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -9,6 +9,12 @@ from django.views.generic import TemplateView
 from manuspectrum.views.explorer.service import FACET_KEYS, parse_filters
 
 APP_VIEWS = ("map", "compare")
+
+# The ``validate`` of the ``uuid`` npm package (``store/url.ts`` ``uuidOrNull``).
+DOCUMENT_ID = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+    r"|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff"
+)
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -47,11 +53,8 @@ def initial_screen(query):
     view = query.get("view")
     if view in APP_VIEWS:
         return view
-    try:
-        uuid.UUID(query.get("doc", "").strip())
+    if DOCUMENT_ID.fullmatch(query.get("doc", "").strip().lower()):
         return "document"
-    except ValueError:
-        pass
     if query.get("screen") == "results":
         return "results"
     filters, _ = parse_filters(query)

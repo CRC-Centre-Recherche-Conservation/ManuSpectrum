@@ -154,3 +154,15 @@ class EventsExportColourTests(EventsCase):
             if m["id"] == VERMILION
         ]
         self.assertEqual(material["colours"], [RED])
+
+    def test_the_geojson_materials_carry_no_query_flags(self):
+        body = json.loads(
+            streamed(
+                self.client.get(f"/api/explorer/events.geojson?lang=en&colour={RED}")
+            )
+        )
+        materials = [m for f in body["features"] for m in f["properties"]["materials"]]
+        self.assertTrue(materials)
+        for material in materials:
+            self.assertNotIn("matches", material)
+            self.assertNotIn("componentColours", material)

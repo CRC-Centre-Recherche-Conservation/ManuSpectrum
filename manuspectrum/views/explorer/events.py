@@ -12,13 +12,13 @@ Place with a geometry, else its nearest visible ancestor with one
 (``placeSource`` ``parent``); a linked place left unmapped keeps the place with
 ``placeSource`` None. A hidden place is never a place and cuts the chain.
 
-Material (PO rule): an identified material goes to the Modifications citing it
+Material: an identified material goes to the Modifications citing it
 (``observed_by_characterisation``) and to the Alterations of an object it observes
 that name its material (``occured_in_presence_of_material``); otherwise to the
 production of each linked Component, else of that Component's Document, else of the
 Document it observes.
 
-Only material events exist (PO 12/10): analyses and samplings are not events. An
+Only material events exist: analyses and samplings are not events. An
 occurrence becomes events only with a supporting analysis among the rows: the
 evidence of the materials a modification or an alteration carries (and the
 analyses an alteration names), otherwise every analysis on the carrier's
@@ -657,12 +657,15 @@ def kept_events(bundle, query):
     ``analyses`` and ``materials`` keep the kept ones; ``materials`` are narrowed
     by the characterization facets but ``LISTED_SKIP``, and each carries
     ``matches``: whether it meets every active characterization facet (true for
-    all without one). Whatever shows results reads only the matching ones.
+    all without one), and ``componentColours``: the ticked colours it carries
+    only through a linked Component's colour, not in its own ``colours``.
+    Whatever shows results reads only the matching ones.
     """
     keep, active, filters, *_ = row_filter(bundle.rows, query, universe=bundle.universe)
     kept_rows = {row["id"] for row in bundle.rows if keep(row, "period")}
     wanted = characterization_wanted(active)
     listed = [(key, selected) for key, selected in wanted if key not in LISTED_SKIP]
+    ticked = dict(wanted).get("colour", set())
     types = set(parse_event_types(query))
     found = []
     for event in bundle.events:
@@ -678,7 +681,14 @@ def kept_events(bundle, query):
             continue
         values = bundle.characterization_values
         materials = [
-            {**m, "matches": not wanted or meets(values[m["characterization"]], wanted)}
+            {
+                **m,
+                "matches": not wanted or meets(values[m["characterization"]], wanted),
+                "componentColours": sorted(
+                    (ticked & values[m["characterization"]]["colour"])
+                    - set(m["colours"])
+                ),
+            }
             for m in event["materials"]
         ]
         if wanted:
@@ -702,6 +712,15 @@ def place_subset(places, used):
     return {p: places[p] for p in sorted(wanted) if p in places}
 
 
+def map_colour(labels, swatches, uri, language):
+    """``MapColour`` of the colour *uri*: its facet label, else the uri itself."""
+    return {
+        "uri": uri,
+        "label": labels.get(uri, {"value": uri, "lang": language}),
+        "swatch": swatches.get(uri),
+    }
+
+
 def events_payload(query, user, language, ticket=None):
     """``EventsResponse`` of the events *query* keeps (``kept_events``).
 
@@ -715,6 +734,7 @@ def events_payload(query, user, language, ticket=None):
     materials = {
         m["id"]: bundle.event_materials[m["id"]] for e in events for m in e["materials"]
     }
+    colour_labels = bundle.labels.get("colour", {})
     return {
         "events": events,
         "places": places,
@@ -734,13 +754,9 @@ def events_payload(query, user, language, ticket=None):
         },
         "colours": {
             **{
-                colour: {
-                    "uri": colour,
-                    "label": bundle.labels["colour"][colour],
-                    "swatch": bundle.swatches.get(colour),
-                }
+                colour: map_colour(colour_labels, bundle.swatches, colour, language)
                 for colour in filters["colour"]
-                if colour in bundle.labels.get("colour", {})
+                if colour in colour_labels
             },
             **{
                 colour: bundle.event_colours[colour]

@@ -96,6 +96,19 @@ class SearchRouteTests(ServiceCase):
         self.assertTrue(others)
         self.assertTrue(all(h["thumbnail"] is None for h in others))
 
+    def test_a_later_facsimile_naming_a_manifest_gives_the_thumbnail(self):
+        document = self.documents["open"]
+        first = self.tile(document, "facsimiles", "https://example.org/ms59/scan")
+        later = self.tile(document, "facsimiles", MANIFEST)
+        TileModel.objects.filter(pk=first.pk).update(sortorder=0)
+        TileModel.objects.filter(pk=later.pk).update(sortorder=1)
+
+        hits = {h["id"]: h for h in self.get("?grain=documents").json()["results"]}
+
+        self.assertEqual(
+            hits[str(document.pk)]["thumbnail"], f"/en/thumbnail/{document.pk}"
+        )
+
     def test_facets_0_leaves_the_facets_out_and_keeps_the_results(self):
         full = self.get("?grain=analyses").json()
         bare = self.get("?grain=analyses&facets=0")

@@ -57,6 +57,8 @@ HEADER = (
     "analyses",
 )
 ROWS_PER_CHUNK = 500
+# Event-material keys that describe the query, not the material.
+QUERY_FIELDS = ("matches", "componentColours")
 
 
 def _query_text(query):
@@ -80,11 +82,11 @@ def _resolve(request):
 
 
 def _matching(event):
-    """*event* with only its materials that meet the filters, without their ``matches`` flag."""
+    """*event* with only its materials that meet the filters, without their ``matches`` and ``componentColours``."""
     return {
         **event,
         "materials": [
-            {key: value for key, value in m.items() if key != "matches"}
+            {key: value for key, value in m.items() if key not in QUERY_FIELDS}
             for m in event["materials"]
             if m["matches"]
         ],

@@ -182,15 +182,6 @@ ROLE_NODES = [
         "resource-instance-list",
         "alt_analyses",
     ),
-    ("analysis", "analysis_took_place_at_place", "resource-instance-list", "an_place"),
-    ("sample", "date_start_of_of_sample_taking", "date", "sample_dates"),
-    ("sample", "date_end_of_sample_taking", "date", "sample_dates"),
-    (
-        "sample",
-        "location_of_sampling_taking_activity",
-        "resource-instance",
-        "sample_place",
-    ),
 ]
 
 # Roles whose node carries the id it has in the ManuSpectrum model, for readers

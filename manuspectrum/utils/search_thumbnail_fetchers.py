@@ -6,6 +6,7 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
 )
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import CanvasIIIF, BBoxCalculator
+from manuspectrum.utils.manifest_values import first_manifest_url
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +81,9 @@ class DocumentThumbnailFetcher(SearchThumbnailFetcher):
                 resourceinstance=self.resource, nodegroup__node__datatype="manifest"
             )
 
-            manifest_url = None
-            for tile in tiles:
-                for _, value in tile.data.items():
-                    if value and isinstance(value, str) and "manifest" in value.lower():
-                        manifest_url = value
-                        break
-                if manifest_url:
-                    break
+            manifest_url = first_manifest_url(
+                value for tile in tiles for value in tile.data.values()
+            )
 
             if not manifest_url:
                 logger.warning(

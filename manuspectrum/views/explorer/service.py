@@ -56,6 +56,7 @@ from manuspectrum.utils.public_visibility import (
 )
 from manuspectrum.utils.role_links import readable_links, role_node
 from manuspectrum.utils.roles import ROLES
+from manuspectrum.utils.manifest_values import first_manifest_url
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.citations import (
     CitedAnalysis,
@@ -1073,7 +1074,7 @@ def build_bundle(user, language, visible):
         **colour_swatches,
         **{uri: swatch for row in rows for uri, swatch in row["swatches"].items()},
     }
-    from manuspectrum.views.explorer.events import build_events
+    from manuspectrum.views.explorer.events import build_events, map_colour
 
     event_set = build_events(
         user,
@@ -1091,11 +1092,7 @@ def build_bundle(user, language, visible):
     )
     labels = _with_colour_labels(_facet_labels(rows, language, user), colour_labels)
     event_colours = {
-        colour: {
-            "uri": colour,
-            "label": labels["colour"].get(colour, {"value": colour, "lang": language}),
-            "swatch": swatches.get(colour),
-        }
+        colour: map_colour(labels.get("colour", {}), swatches, colour, language)
         for material in event_set.materials.values()
         for colour in material["colours"]
     }
@@ -1973,15 +1970,6 @@ def _shelfmark(tiles, value_node, type_node, language):
     return min(found, key=lambda f: f[0])[1] if found else None
 
 
-def _has_thumbnail_source(manifest):
-    """Whether a Document's manifest value can yield a thumbnail.
-
-    Mirrors ``DocumentThumbnailFetcher``: a string naming a manifest. A
-    Document without one answers the thumbnail route with a 404.
-    """
-    return isinstance(manifest, str) and "manifest" in manifest.lower()
-
-
 def document_hits(document_ids, per_document, visible, user, language, label_of):
     """``DocumentHit`` of each of *document_ids*, in order, read in one batch.
 
@@ -2047,7 +2035,7 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
                 "analysisCount": per_document[d],
                 "thumbnail": (
                     reverse("thumbnail", kwargs={"resource_id": d})
-                    if _has_thumbnail_source(values.first(d, "doc_manifest"))
+                    if first_manifest_url(values.get(d, "doc_manifest"))
                     else None
                 ),
                 "unpublished": d in visible.unpublished,

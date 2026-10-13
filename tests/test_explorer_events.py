@@ -317,6 +317,27 @@ class MaterialOwnColourTests(EventsCase):
         self.assertIn(LEAD_WHITE, {m["id"] for m in event["materials"]})
         self.assertEqual(bundle.event_materials[LEAD_WHITE]["colours"], [])
 
+    def test_a_ticked_colour_reached_through_the_component_is_named_on_the_material(
+        self,
+    ):
+        from django.http import QueryDict
+        from manuspectrum.views.explorer.events import kept_events
+
+        bundle = self.bundle()
+        ticked, *_ = kept_events(bundle, QueryDict(f"colour={PART_BLUE},{RED}"))
+        [event] = [
+            e
+            for e in ticked
+            if e["type"] == "production"
+            and e["carrier"]["id"] == str(self.components["open"].pk)
+        ]
+        [lead] = [m for m in event["materials"] if m["id"] == LEAD_WHITE]
+        self.assertEqual(lead["componentColours"], [PART_BLUE])
+        untouched, *_ = kept_events(bundle, QueryDict(""))
+        self.assertTrue(
+            all(not m["componentColours"] for e in untouched for m in e["materials"])
+        )
+
     def test_a_ticked_colour_no_material_carries_is_named_in_the_colours(self):
         payload = self.client.get(
             f"/en/api/explorer/events?colour={PART_BLUE},http://vocab/unknown"

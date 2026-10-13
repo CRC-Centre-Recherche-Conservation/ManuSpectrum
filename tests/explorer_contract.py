@@ -130,6 +130,7 @@ SHAPES = {
         "characterization": str,
         "colours": list,
         "matches": bool,
+        "componentColours": list,
     },
     "MapPlace": {
         "id": str,

@@ -5,6 +5,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 JSON_LD = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+DOCUMENT_ID = "5fbfe388-8acc-4da8-8f8a-382bd2b6ad17"
 
 
 class AnalysisExplorerPageTests(TestCase):
@@ -109,11 +110,12 @@ class AnalysisExplorerPageTests(TestCase):
         )
 
     def test_body_names_the_screen_the_address_opens_on(self):
-        doc = "5fbfe388-8acc-4da8-8f8a-382bd2b6ad17"
+        doc = DOCUMENT_ID
         for query, screen in (
             ("?view=map", "map"),
             ("?view=compare&doc=" + doc, "compare"),
             ("?doc=" + doc, "document"),
+            ("?doc=" + doc.upper(), "document"),
             ("?screen=results", "results"),
             ("?grain=analyses&technique=x", "results"),
             ("?q=lead", "results"),
@@ -133,6 +135,9 @@ class AnalysisExplorerPageTests(TestCase):
             "",
             "?view=atlas",
             "?doc=not-a-uuid",
+            "?doc=" + DOCUMENT_ID.replace("-", ""),
+            "?doc={" + DOCUMENT_ID + "}",
+            "?doc=urn:uuid:" + DOCUMENT_ID,
             "?grain=analyses",
             "?period=x",
         ):
