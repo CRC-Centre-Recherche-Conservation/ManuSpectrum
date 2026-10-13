@@ -9,6 +9,12 @@ import {
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
+import {
+    FLOOR,
+    THRESHOLD_MAX,
+    THRESHOLD_MIN,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+
 import type { ExplorerView } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
 function uuid(n: number): string {
@@ -621,6 +627,18 @@ describe("map state", () => {
         expect(store.mapState.radius).toBe(400);
         store.setMapState({ colour: "dominant" });
         expect(store.mapState.radius).toBe(400);
+    });
+
+    it("clamps the threshold to the slider's grid and range", () => {
+        const store = useExplorerStore();
+        store.setMapState({ threshold: 9000 });
+        expect(store.mapState.threshold).toBe(THRESHOLD_MAX);
+        store.setMapState({ threshold: -3 });
+        expect(store.mapState.threshold).toBe(THRESHOLD_MIN);
+        store.setMapState({ threshold: Number.NaN });
+        expect(store.mapState.threshold).toBe(FLOOR);
+        store.setMapState({ radius: 100 });
+        expect(store.mapState.threshold).toBe(FLOOR);
     });
 
     it("follows up to four materials and refuses a fifth without changing", () => {

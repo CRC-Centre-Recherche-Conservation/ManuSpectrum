@@ -78,6 +78,8 @@ const START_ZOOM = 4;
 const FIT_DURATION_MS = 420;
 const PAINT_TRANSITION_MS = 160;
 const OHM_MAX_ZOOM = 14;
+/** Tiling stops here, then tiles are overzoomed: a cell is at least `CELL_MIN_KM` (10 km, ~65 px at zoom 10) and a tile unit is ~10 m there, so edges stay exact. */
+const TERRITORIES_MAX_ZOOM = 10;
 const SNAPSHOT_TIMEOUT_MS = 8000;
 const VIEW_SETTLE_MS = 150;
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -93,9 +95,11 @@ const PIP_FONT_CHECK = "700 18px 'JetBrains Mono'";
  * slot, or null) fades the other slots' territories by paint. The historical borders load from
  * `BORDERS_MIN_ZOOM` on, overzoomed past `OHM_MAX_ZOOM`.
  * `fit` is framed with room for the names of the places on its edges
- * (`fitPadding`). `view` gives the bounds shown: on load, then
- * `VIEW_SETTLE_MS` after the map stops moving (a new move cancels it),
- * never for a snapshot's camera, and only when they changed.
+ * (`fitPadding`). `view` gives the bounds shown: on load, then as soon
+ * as a move that changed the zoom ends, or `VIEW_SETTLE_MS` after a pan
+ * ends (a new move cancels the wait); never for a snapshot's camera, and
+ * only when they changed. The zoom is read off the bounds' longitude span,
+ * which a pan keeps.
  * No attribution control: the view prints the credits under the map.
  * Overlays of the parent (legend, note, tooltip) go in the default slot,
  * inside the frame.
@@ -136,6 +140,7 @@ let queued: SnapshotRequest | null = null;
 let userMoved = false;
 let settle: ReturnType<typeof setTimeout> | undefined;
 let emittedView = "";
+let emittedSpan = 0;
 
 watch(
     () => props.places,
@@ -267,7 +272,15 @@ function emitView(current: MapLibreMap): void {
         .join(",");
     if (key === emittedView) return;
     emittedView = key;
+    emittedSpan = bounds.east - bounds.west;
     emit("view", bounds);
+}
+
+/** Whether the map's zoom changed since the last `view`: its longitude span differs. */
+function zoomed(current: MapLibreMap): boolean {
+    const shown = current.getBounds();
+    const span = shown.getEast() - shown.getWest();
+    return Math.abs(span - emittedSpan) > span * 1e-6;
 }
 
 function boundsLike(bounds: Bounds): LngLatBoundsLike {
@@ -403,6 +416,7 @@ function onLoad(current: MapLibreMap): void {
     current.addSource(TERRITORIES_SOURCE, {
         type: "geojson",
         data: props.territories ?? EMPTY,
+        maxzoom: TERRITORIES_MAX_ZOOM,
     });
     current.addSource(OHM_SOURCE, {
         type: "vector",
@@ -424,7 +438,8 @@ function onLoad(current: MapLibreMap): void {
     });
     current.on("moveend", () => {
         clearTimeout(settle);
-        settle = setTimeout(() => emitView(current), VIEW_SETTLE_MS);
+        if (zoomed(current)) emitView(current);
+        else settle = setTimeout(() => emitView(current), VIEW_SETTLE_MS);
     });
     ready = true;
     if (drawnColours !== props.colours) recolour(current, props.colours);

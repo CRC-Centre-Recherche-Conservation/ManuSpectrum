@@ -15,6 +15,7 @@ import { useGettext } from "vue3-gettext";
 
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
@@ -75,6 +76,9 @@ import {
     withoutLevels,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import {
+    THRESHOLD_MAX,
+    THRESHOLD_MIN,
+    THRESHOLD_STEP,
     gridBounds,
     territories,
     tooCoarse,
@@ -126,6 +130,7 @@ const CANVAS_SELECTOR = ".maplibregl-canvas";
  * territories of the followed materials, or small multiples), their
  * timeline, the filters of the map in a rail, and the panel of the place,
  * period, document or material opened. The mode, the followed materials,
+ * the kernel radius and influence threshold of Territories,
  * the brushed period and the borders live in the store (`mapState`, in the
  * address), with the legend's open state (folded by default, not in the
  * address); the reliability and approximate-date switches, the hovered
@@ -173,6 +178,7 @@ const isolated = ref<number | null>(null);
 /** The bounds the stage shows, once it has loaded: the territories' grid covers them. */
 const viewport = shallowRef<Bounds | null>(null);
 const radiusDraft = ref(store.mapState.radius);
+const thresholdDraft = ref(store.mapState.threshold);
 const folded = ref(new Set<RailGroup>());
 let opener: HTMLElement | null = null;
 let snapshotTicket = 0;
@@ -268,6 +274,12 @@ const territoryCoarse = computed(
         territoryGrid.value !== null &&
         tooCoarse(store.mapState.radius, territoryGrid.value),
 );
+/** The attestations of the followed materials, read once per set of kept places, not once per view. */
+const territoryInput = computed(() =>
+    mode.value === "territories"
+        ? territoryFields(summaries.value, tracked.value, low.value)
+        : [],
+);
 const territoryData = computed(() => {
     if (
         mode.value !== "territories" ||
@@ -277,10 +289,11 @@ const territoryData = computed(() => {
         return null;
     }
     return territories(
-        territoryFields(summaries.value, tracked.value, low.value),
+        territoryInput.value,
         store.mapState.radius,
         territoryGrid.value,
         store.mapState.colour,
+        store.mapState.threshold,
     );
 });
 const nothingToDraw = computed(
@@ -480,12 +493,35 @@ const territorySentence = computed(() => {
     }
     return store.mapState.colour === "dominant"
         ? $gettext(
-              "Gaussian kernel estimate: each place where a followed material is attested spreads a weight proportional to its attestations, fading with distance. Each cell takes the colour of the most influential material; hatched cells are nearly tied (the leader holds less than 55 % of the top two).",
+              "Gaussian kernel estimate from the attesting places, each cell in the colour of the most influential material: see ⓘ for the method.",
           )
         : $gettext(
-              "Gaussian kernel estimate: each place where a followed material is attested spreads a weight proportional to its attestations, fading with distance. An area is drawn above an influence threshold; its opacity grows with influence.",
+              "Gaussian kernel estimate from the attesting places, one area per material: see ⓘ for the method.",
           );
 });
+/** The method of the influence model, one paragraph per step, for the note's ⓘ. */
+const methodText = computed(() =>
+    [
+        $gettext(
+            "Attestation: each document and each component of the kept events that carries a followed material at a place. It weighs 1, or 0.5 when every identification of that material it carries has a lower reliability.",
+        ),
+        $gettext(
+            "Kernel: an attestation of weight w spreads w × exp(−(d/r)²) at distance d, where r is the kernel radius, or the place's own extent if larger; at d = r it still weighs about 37 %.",
+        ),
+        $gettext(
+            "Grid: the influences of every place are summed at the centre of each cell of a hexagonal grid laid over the visible map.",
+        ),
+        $gettext(
+            "Threshold t: a cell is drawn when its summed influence reaches t, and a place always colours its own cell. One attestation alone reaches t out to d = r × √(ln(1/t)) when t < 1: 0.83 r at the default 0.5.",
+        ),
+        $gettext(
+            "Dominant: each cell takes the colour of the most influential material, its opacity that material's share of the total; it is hatched when the leader holds less than 55 % of the top two.",
+        ),
+        $gettext(
+            "The zones are a model that extrapolates between attested places, not observed data.",
+        ),
+    ].join("\n\n"),
+);
 const coarseSentence = $gettext(
     "Zoom in to see the influence zones: at this scale the grid is coarser than the kernel radius.",
 );
@@ -504,6 +540,22 @@ const radiusHelp = $gettext(
 );
 const radiusText = computed(() =>
     interpolate($gettext("%{n} km"), { n: radiusDraft.value }),
+);
+const thresholdHelp = $gettext(
+    "Summed influence a cell must reach to be drawn; one full attestation weighs 1 at its place",
+);
+const thresholdNumber = computed(() =>
+    new Intl.NumberFormat(language.value, {
+        maximumFractionDigits: 2,
+    }).format(thresholdDraft.value),
+);
+const thresholdText = computed(() =>
+    interpolate($gettext("≥ %{n}"), { n: thresholdNumber.value }),
+);
+const thresholdValueText = computed(() =>
+    interpolate($gettext("at least %{n} attestations"), {
+        n: thresholdNumber.value,
+    }),
 );
 const tooltip = computed(() => {
     const current = hovered.value;
@@ -569,6 +621,12 @@ watch(
         radiusDraft.value = radius;
     },
 );
+watch(
+    () => store.mapState.threshold,
+    (threshold) => {
+        thresholdDraft.value = threshold;
+    },
+);
 
 onMounted(() => {
     if (root.value) mapColours.value = readColours(root.value);
@@ -629,6 +687,14 @@ function commitRadius(): void {
 
 function onRadiusInput(event: Event): void {
     radiusDraft.value = Number((event.target as HTMLInputElement).value);
+}
+
+function commitThreshold(): void {
+    store.setMapState({ threshold: thresholdDraft.value });
+}
+
+function onThresholdInput(event: Event): void {
+    thresholdDraft.value = Number((event.target as HTMLInputElement).value);
 }
 
 function setBorders(event: Event): void {
@@ -1389,6 +1455,20 @@ function skipToTimeline(): void {
                                             )
                                         }}</span>
                                     </button>
+                                    <span class="method">
+                                        <IconButton
+                                            icon="info-circle"
+                                            info
+                                            :label="
+                                                $gettext(
+                                                    'About the influence model',
+                                                )
+                                            "
+                                            :description="methodText"
+                                            tip-placement="above"
+                                            tip-align="start"
+                                        />
+                                    </span>
                                 </p>
                                 <p
                                     v-if="territoryCoarse"
@@ -1433,11 +1513,32 @@ function skipToTimeline(): void {
                                             :max="RADIUS_MAX"
                                             :step="RADIUS_STEP"
                                             :value="radiusDraft"
+                                            :aria-valuetext="radiusText"
                                             @input="onRadiusInput"
                                             @change="commitRadius"
                                         />
                                         <output for="explorer-map-radius">{{
                                             radiusText
+                                        }}</output>
+                                    </p>
+                                    <p class="radius">
+                                        <label for="explorer-map-threshold">{{
+                                            $gettext("Influence threshold")
+                                        }}</label>
+                                        <input
+                                            id="explorer-map-threshold"
+                                            :title="thresholdHelp"
+                                            type="range"
+                                            :min="THRESHOLD_MIN"
+                                            :max="THRESHOLD_MAX"
+                                            :step="THRESHOLD_STEP"
+                                            :value="thresholdDraft"
+                                            :aria-valuetext="thresholdValueText"
+                                            @input="onThresholdInput"
+                                            @change="commitThreshold"
+                                        />
+                                        <output for="explorer-map-threshold">{{
+                                            thresholdText
                                         }}</output>
                                     </p>
                                 </div>
@@ -1576,6 +1677,18 @@ function skipToTimeline(): void {
                                     "Influence zones: a spatial model, not observed data",
                                 )
                             }}</span>
+                            <span class="method">
+                                <IconButton
+                                    icon="info-circle"
+                                    info
+                                    :label="
+                                        $gettext('About the influence model')
+                                    "
+                                    :description="methodText"
+                                    tip-placement="above"
+                                    tip-align="start"
+                                />
+                            </span>
                         </p>
                         <p
                             v-if="territoryCoarse"
@@ -1615,11 +1728,32 @@ function skipToTimeline(): void {
                                 :max="RADIUS_MAX"
                                 :step="RADIUS_STEP"
                                 :value="radiusDraft"
+                                :aria-valuetext="radiusText"
                                 @input="onRadiusInput"
                                 @change="commitRadius"
                             />
                             <output for="explorer-map-radius-narrow">{{
                                 radiusText
+                            }}</output>
+                        </p>
+                        <p class="radius">
+                            <label for="explorer-map-threshold-narrow">{{
+                                $gettext("Influence threshold")
+                            }}</label>
+                            <input
+                                id="explorer-map-threshold-narrow"
+                                :title="thresholdHelp"
+                                type="range"
+                                :min="THRESHOLD_MIN"
+                                :max="THRESHOLD_MAX"
+                                :step="THRESHOLD_STEP"
+                                :value="thresholdDraft"
+                                :aria-valuetext="thresholdValueText"
+                                @input="onThresholdInput"
+                                @change="commitThreshold"
+                            />
+                            <output for="explorer-map-threshold-narrow">{{
+                                thresholdText
                             }}</output>
                         </p>
                     </div>
@@ -2349,7 +2483,37 @@ function skipToTimeline(): void {
 }
 
 .map-view .territory-note .title {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
     font-weight: 600;
+}
+
+.map-view .territory-note .method {
+    --explorer-target: 1.5rem;
+}
+
+.map-view .territory-note .method :deep(.icon-button-control) {
+    color: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.map-view .territory-note .method :deep(.icon-button-control:hover) {
+    background: color-mix(in srgb, var(--surface) 15%, transparent);
+    color: var(--surface);
+}
+
+.map-view .territory-note .method :deep(.icon-button-control:focus-visible) {
+    outline-color: var(--surface);
+}
+
+/* The method reads as paragraphs, wider than a one-line tooltip */
+.map-view .territory-note .method :deep(.bubble) {
+    max-inline-size: min(26rem, calc(100vw - 1rem));
+}
+
+.map-view .territory-note .method :deep(.detail) {
+    font-weight: 400;
+    white-space: pre-line;
 }
 
 .map-view .territory-note .note-toggle {

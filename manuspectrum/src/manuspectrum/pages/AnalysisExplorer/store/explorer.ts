@@ -14,6 +14,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import {
     clampRadius,
+    clampThreshold,
     defaultMapState,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import { toggleTracked } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
@@ -601,6 +602,9 @@ export const useExplorerStore = defineStore("explorer", () => {
             ...mapState.value,
             ...patch,
             radius: clampRadius(patch.radius ?? mapState.value.radius),
+            threshold: clampThreshold(
+                patch.threshold ?? mapState.value.threshold,
+            ),
         };
     }
 

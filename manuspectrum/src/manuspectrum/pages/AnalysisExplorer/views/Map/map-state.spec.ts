@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     clampRadius,
+    clampThreshold,
     DEFAULT_EVENT_TYPES,
     defaultMapState,
     mapStateFromQuery,
@@ -19,13 +20,14 @@ describe("map state in the address", () => {
     it("reads every key, clamping the radius and keeping the holes of track", () => {
         const state = mapStateFromQuery(
             new URLSearchParams(
-                "mode=territories&colour=dominant&radius=1000&multiples=century&track=a&track=-&track=b&brush=1300,1400&layers=borders",
+                "mode=territories&colour=dominant&radius=1000&threshold=1.3&multiples=century&track=a&track=-&track=b&brush=1300,1400&layers=borders",
             ),
         );
         expect(state).toEqual({
             mode: "territories",
             colour: "dominant",
             radius: 400,
+            threshold: 1.25,
             multiples: "century",
             track: ["a", null, "b"],
             brush: [1300, 1400],
@@ -43,14 +45,16 @@ describe("map state in the address", () => {
 
     it("falls back to the defaults on a reversed brush and a bad radius", () => {
         const state = mapStateFromQuery(
-            new URLSearchParams("brush=1400,1300&radius=abc&mode=nope"),
+            new URLSearchParams(
+                "brush=1400,1300&radius=abc&threshold=-1&mode=nope",
+            ),
         );
         expect(state).toEqual(defaultMapState());
     });
 
     it("round-trips", () => {
         const query = new URLSearchParams(
-            "mode=multiples&radius=90&track=a&track=-&track=b&brush=-100,50&layers=borders",
+            "mode=multiples&radius=90&threshold=2.5&track=a&track=-&track=b&brush=-100,50&layers=borders",
         );
         const out = new URLSearchParams();
         writeMapState(mapStateFromQuery(query), out);
@@ -62,6 +66,17 @@ describe("map state in the address", () => {
         expect(clampRadius(10)).toBe(60);
         expect(clampRadius(150.4)).toBe(150);
         expect(clampRadius(Number.NaN)).toBe(150);
+    });
+
+    it("keeps a threshold on its quarter steps, within its bounds", () => {
+        expect(defaultMapState().threshold).toBe(0.5);
+        expect(clampThreshold(0)).toBe(0.25);
+        expect(clampThreshold(9)).toBe(3);
+        expect(clampThreshold(0.8)).toBe(0.75);
+        expect(clampThreshold(Number.NaN)).toBe(0.5);
+        const query = new URLSearchParams();
+        writeMapState({ ...defaultMapState(), threshold: 1.5 }, query);
+        expect(query.toString()).toBe("threshold=1.5");
     });
 });
 

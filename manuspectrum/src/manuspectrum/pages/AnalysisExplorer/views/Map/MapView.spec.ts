@@ -6,7 +6,13 @@ import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
-import { TIE_SHARE } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+import {
+    FLOOR,
+    THRESHOLD_MAX,
+    THRESHOLD_MIN,
+    THRESHOLD_STEP,
+    TIE_SHARE,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
 import { LOW_WEIGHT } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
 import MapView from "@/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue";
 import MapTimeline from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue";
@@ -378,9 +384,83 @@ describe("MapView", () => {
         expect(store.mapState.mode).toBe("places");
     });
 
-    it("states the tie share and the low-reliability weight the note prints", () => {
+    it("states the tie share, the low-reliability weight and the default threshold the note prints", () => {
         expect(TIE_SHARE).toBe(0.55);
         expect(LOW_WEIGHT).toBe(0.5);
+        expect(FLOOR).toBe(0.5);
+        expect(Math.sqrt(Math.log(1 / FLOOR)).toFixed(2)).toBe("0.83");
+        expect(Math.exp(-1)).toBeCloseTo(0.37, 2);
+        expect([THRESHOLD_MIN, THRESHOLD_MAX, THRESHOLD_STEP]).toEqual([
+            0.25, 3, 0.25,
+        ]);
+    });
+
+    it("explains the influence model behind the note's info button", async () => {
+        const store = useExplorerStore();
+        store.setMapState({ track: [LAPIS], mode: "territories" });
+        const view = await mountView();
+        const note = view.get(".territory-note");
+        const button = note.get(".method button");
+        const label = document.getElementById(
+            button.attributes("aria-labelledby") ?? "",
+        );
+        expect(label?.textContent).toBe("About the influence model");
+        const method =
+            document.getElementById(button.attributes("aria-describedby") ?? "")
+                ?.textContent ?? "";
+        expect(method).toContain("It weighs 1, or 0.5 when every");
+        expect(method).toContain("at d = r it still weighs about 37 %");
+        expect(method).toContain("0.83 r at the default 0.5");
+        expect(method).toContain("less than 55 % of the top two");
+        expect(method).toContain("not observed data");
+        expect(note.text()).toContain("see ⓘ for the method");
+    });
+
+    it("redraws the territories under the influence threshold the reader commits", async () => {
+        const store = useExplorerStore();
+        store.setMapState({ track: [LAPIS], mode: "territories" });
+        const view = await mountView();
+        const map = FakeMap.last();
+        const before = cellCorners(map).length;
+        const note = view.get(".territory-note");
+        const slider = note.get("#explorer-map-threshold");
+        expect(note.get("label[for='explorer-map-threshold']").text()).toBe(
+            "Influence threshold",
+        );
+        expect(slider.attributes()).toMatchObject({
+            min: "0.25",
+            max: "3",
+            step: "0.25",
+            "aria-valuetext": "at least 0.5 attestations",
+        });
+        expect(note.get("output[for='explorer-map-threshold']").text()).toBe(
+            "≥ 0.5",
+        );
+        (slider.element as HTMLInputElement).value = "2.5";
+        await slider.trigger("input");
+        expect(note.get("output[for='explorer-map-threshold']").text()).toBe(
+            "≥ 2.5",
+        );
+        expect(store.mapState.threshold).toBe(0.5);
+        await slider.trigger("change");
+        await flushPromises();
+        expect(store.mapState.threshold).toBe(2.5);
+        expect(cellCorners(map).length).toBeLessThan(before);
+        expect(cellCorners(map).length).toBeGreaterThan(0);
+    });
+
+    it("keeps the territories as they are while a place is hovered or opened", async () => {
+        const store = useExplorerStore();
+        store.setMapState({ track: [LAPIS], mode: "territories" });
+        const view = await mountView();
+        const source = FakeMap.last().getSource(TERRITORIES_SOURCE);
+        const drawn = source?.setDataCalls.length ?? 0;
+        const row = view.get(`.place-list [data-place='${ROUEN}']`);
+        await row.trigger("mouseenter");
+        await row.trigger("click");
+        await flushPromises();
+        expect(view.find(".map-panel").exists()).toBe(true);
+        expect(source?.setDataCalls.length).toBe(drawn);
     });
 
     it("draws territories for a followed material, with the influence note", async () => {

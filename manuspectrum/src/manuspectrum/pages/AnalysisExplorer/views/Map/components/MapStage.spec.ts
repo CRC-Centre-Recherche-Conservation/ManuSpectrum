@@ -492,14 +492,14 @@ describe("MapStage view", () => {
         ]);
     });
 
-    it("gives the new bounds once the map has stood still, a new move cancelling the wait", async () => {
+    it("gives the new bounds once the map has stood still after a pan, a new move cancelling the wait", async () => {
         const wrapper = mountStage();
         await flushPromises();
         vi.useFakeTimers();
         const map = FakeMap.last();
         map.shown = [
             [0, 44],
-            [6, 49],
+            [13, 53],
         ];
         map.fire("moveend");
         vi.advanceTimersByTime(100);
@@ -511,9 +511,26 @@ describe("MapStage view", () => {
         expect(wrapper.emitted("view")).toHaveLength(1);
         vi.advanceTimersByTime(1);
         expect(wrapper.emitted("view")?.[1]).toEqual([
-            { west: 0, south: 44, east: 6, north: 49 },
+            { west: 0, south: 44, east: 13, north: 53 },
         ]);
         map.fire("moveend");
+        vi.advanceTimersByTime(150);
+        expect(wrapper.emitted("view")).toHaveLength(2);
+    });
+
+    it("gives the new bounds as soon as a zoom ends", async () => {
+        const wrapper = mountStage();
+        await flushPromises();
+        vi.useFakeTimers();
+        const map = FakeMap.last();
+        map.shown = [
+            [0, 44],
+            [6, 49],
+        ];
+        map.fire("moveend");
+        expect(wrapper.emitted("view")?.[1]).toEqual([
+            { west: 0, south: 44, east: 6, north: 49 },
+        ]);
         vi.advanceTimersByTime(150);
         expect(wrapper.emitted("view")).toHaveLength(2);
     });
@@ -763,6 +780,14 @@ describe("MapStage exposed", () => {
             maxzoom: 14,
         });
         expect(wrapper.emitted("zoom")).toBeUndefined();
+    });
+
+    it("stops tiling the territories at zoom 10, where a 10 km cell already spans tens of pixels", async () => {
+        mountStage();
+        await flushPromises();
+        expect(
+            FakeMap.last().getSource(TERRITORIES_SOURCE)?.spec,
+        ).toMatchObject({ type: "geojson", maxzoom: 10 });
     });
 
     it("settles a snapshot asked before the load when the map errors", async () => {

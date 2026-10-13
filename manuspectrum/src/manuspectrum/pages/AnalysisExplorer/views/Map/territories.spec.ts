@@ -1,9 +1,11 @@
+import type { MultiLineString } from "geojson";
 import { describe, expect, it } from "vitest";
 
 import {
     CELL_MIN_KM,
     CELL_RATIO,
     FLOOR,
+    THRESHOLD_MAX,
     cellSizeKm,
     dominantOf,
     gridBounds,
@@ -15,8 +17,27 @@ import {
     territories,
     tooCoarse,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/territories.ts";
+import { haversineKm } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+import { LOW_WEIGHT } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
+
+import type { Feature } from "geojson";
 
 const BOUNDS = { west: 0, south: 45, east: 4, north: 48 };
+const PARIS = [2.35, 48.85] as const;
+const AROUND_PARIS = { west: -4, south: 45, east: 9, north: 52 };
+/** The centre of each drawn cell, the mean of its ring's six corners. */
+const centres = (features: Feature[]): [number, number][] =>
+    features
+        .filter((f) => f.properties?.layer === "cell")
+        .map((f) => {
+            const ring = (
+                f.geometry as { coordinates: number[][][] }
+            ).coordinates[0].slice(0, 6);
+            return [
+                ring.reduce((sum, p) => sum + p[0], 0) / 6,
+                ring.reduce((sum, p) => sum + p[1], 0) / 6,
+            ];
+        });
 const near = (lng: number, lat: number, weight = 4, extentKm = 0) => ({
     lngLat: [lng, lat] as const,
     weight,
@@ -82,6 +103,28 @@ describe("territories", () => {
                 (f) => f.properties.layer === "edge" && f.properties.slot === 1,
             ),
         ).toBe(true);
+    });
+
+    it("carries the outline of a material as one MultiLineString of segments", () => {
+        const result = territories(
+            [
+                { slot: 1, attestations: [near(2, 46)] },
+                { slot: 3, attestations: [near(3, 47)] },
+            ],
+            150,
+            BOUNDS,
+            "each",
+        );
+        const edges = result.features.filter(
+            (f) => f.properties.layer === "edge",
+        );
+        expect(edges.map((f) => f.properties.slot).sort()).toEqual([1, 3]);
+        for (const edge of edges) {
+            expect(edge.geometry.type).toBe("MultiLineString");
+            const lines = (edge.geometry as MultiLineString).coordinates;
+            expect(lines.length).toBeGreaterThan(6);
+            expect(lines.every((l) => l.length === 2)).toBe(true);
+        }
     });
 
     it("dominant gives the share as opacity, hatches near ties and draws borders only where the dominant changes", () => {
@@ -270,5 +313,104 @@ describe("territories", () => {
             "each",
         ).features.filter((f) => f.properties.layer === "cell");
         expect(cells.length).toBeGreaterThan(0);
+    });
+
+    it("draws a zone around a place attested once, out to about 0.83 radius", () => {
+        for (const colour of ["each", "dominant"] as const) {
+            const drawn = centres(
+                territories(
+                    [{ slot: 1, attestations: [near(...PARIS, 1)] }],
+                    150,
+                    AROUND_PARIS,
+                    colour,
+                ).features,
+            );
+            const reach = 150 * Math.sqrt(Math.log(1 / FLOOR));
+            const cell = cellSizeKm(150, AROUND_PARIS);
+            expect(drawn.length).toBeGreaterThan(20);
+            const distances = drawn.map((c) => haversineKm(c, PARIS));
+            expect(Math.max(...distances)).toBeLessThan(reach + cell);
+            expect(Math.max(...distances)).toBeGreaterThan(reach - 2 * cell);
+        }
+    });
+
+    it("colours the own cell of a place under the threshold, a lower-reliability one or any one above it", () => {
+        for (const [weight, threshold] of [
+            [LOW_WEIGHT, FLOOR],
+            [1, THRESHOLD_MAX],
+        ]) {
+            for (const colour of ["each", "dominant"] as const) {
+                const drawn = centres(
+                    territories(
+                        [
+                            {
+                                slot: 2,
+                                attestations: [near(...PARIS, weight)],
+                            },
+                        ],
+                        150,
+                        AROUND_PARIS,
+                        colour,
+                        threshold,
+                    ).features,
+                );
+                expect(drawn).toHaveLength(1);
+                expect(haversineKm(drawn[0], PARIS)).toBeLessThan(
+                    cellSizeKm(150, AROUND_PARIS) * 1.5,
+                );
+            }
+        }
+    });
+
+    it("draws fewer cells under a higher threshold", () => {
+        const cells = (threshold: number) =>
+            centres(
+                territories(
+                    [{ slot: 1, attestations: [near(...PARIS, 4)] }],
+                    150,
+                    AROUND_PARIS,
+                    "each",
+                    threshold,
+                ).features,
+            ).length;
+        expect(cells(2)).toBeLessThan(cells(FLOOR));
+        expect(cells(2)).toBeGreaterThan(0);
+    });
+
+    it("bounds a dense place's zone at r·√(ln(w / threshold))", () => {
+        const weight = 20;
+        const drawn = centres(
+            territories(
+                [{ slot: 1, attestations: [near(...PARIS, weight)] }],
+                60,
+                AROUND_PARIS,
+                "dominant",
+            ).features,
+        );
+        const reach = 60 * Math.sqrt(Math.log(weight / FLOOR));
+        const cell = cellSizeKm(60, AROUND_PARIS);
+        const distances = drawn.map((c) => haversineKm(c, PARIS));
+        expect(Math.max(...distances)).toBeLessThan(reach + cell);
+        expect(Math.max(...distances)).toBeGreaterThan(reach - 2 * cell);
+    });
+
+    it("hatches the cells of a place attesting two followed materials once each", () => {
+        const cells = territories(
+            [
+                { slot: 2, attestations: [near(...PARIS, 1)] },
+                { slot: 3, attestations: [near(...PARIS, 1)] },
+            ],
+            150,
+            AROUND_PARIS,
+            "dominant",
+        ).features.filter((f) => f.properties.layer === "cell");
+        expect(cells.length).toBeGreaterThan(20);
+        expect(cells.every((f) => f.properties.hatched)).toBe(true);
+    });
+
+    it("leads a cell under the threshold by the most attested field with a place in it", () => {
+        expect(dominantOf([0.4, 0.3], FLOOR, [false, true])).toBe(1);
+        expect(dominantOf([0.4, 0.3], FLOOR, [false, false])).toBe(-1);
+        expect(dominantOf([0.6, 0.3], FLOOR, [false, true])).toBe(0);
     });
 });
