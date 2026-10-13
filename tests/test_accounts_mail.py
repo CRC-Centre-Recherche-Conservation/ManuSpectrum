@@ -258,3 +258,25 @@ class PasswordResetMailTests(TestCase):
             response = self.reset()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(failed.value, 1)
+
+
+class NoticeBranchTests(TestCase):
+    def test_an_active_superuser_is_told_to_sign_in_before_the_review(self):
+        content = notices.CONTENT["anonymisation_notice"](
+            {"on": date(2028, 10, 12), "days": 30, "active": True, "review": True}
+        )
+        self.assertIn(
+            "Sign in before that date to keep it as it is.", content["paragraphs"]
+        )
+
+    def test_a_deactivated_superuser_is_told_the_administrators_decide(self):
+        content = notices.CONTENT["deactivation_notice"](
+            {
+                "deactivated_on": date(2026, 10, 12),
+                "on": date(2028, 10, 12),
+                "review": True,
+            }
+        )
+        self.assertTrue(
+            any("the administrators decide" in p for p in content["paragraphs"])
+        )

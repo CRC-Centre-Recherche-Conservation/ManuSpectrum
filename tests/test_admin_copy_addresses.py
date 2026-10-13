@@ -90,3 +90,22 @@ class CopyAddressesTests(TestCase):
         response = self.run_action(self.client, target)
         self.assertEqual(response.status_code, 302)
         self.assertIsNone(getattr(response, "context_data", None))
+
+
+class CopyAddressesGuardTests(TestCase):
+    def test_the_action_refuses_a_staff_member_who_is_not_superuser(self):
+        from unittest import mock
+
+        from django.contrib import admin as django_admin
+        from django.test import RequestFactory
+
+        staff = User.objects.create_user(
+            "staff-only", "staff@example.org", is_staff=True
+        )
+        request = RequestFactory().post("/en/admin/auth/user/")
+        request.user = staff
+        model_admin = django_admin.site._registry[User]
+        with mock.patch.object(model_admin, "message_user") as told:
+            result = model_admin.copy_addresses(request, User.objects.all())
+        self.assertIsNone(result)
+        told.assert_called_once()

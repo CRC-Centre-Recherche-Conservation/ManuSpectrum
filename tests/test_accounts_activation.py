@@ -457,3 +457,19 @@ class MiddlewareTests(Base):
         response = Client().get("/en/account/terms")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response["Location"].startswith("/en/auth/"))
+
+
+class PasswordRulesConfigTests(TestCase):
+    def test_an_unknown_validator_is_skipped(self):
+        from manuspectrum.accounts.password_rules import password_rules
+
+        validators = [
+            {"NAME": "no.such.module.Validator"},
+            {
+                "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 14},
+            },
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            rules = password_rules()
+        self.assertEqual(rules["min_length"], 14)
