@@ -2,7 +2,10 @@
 import { computed } from "vue";
 
 import { focusHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
-import { project } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
+import {
+    project,
+    wrapInto,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 import { snapshotFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 
 import type { Bounds } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
@@ -58,7 +61,7 @@ const dotStyle = computed<Record<string, string>>(() => {
 
 function at(entry: MiniDot): [number, number] {
     const [x, y] = project(
-        entry.lngLat,
+        wrapInto(entry.lngLat, props.bounds),
         props.bounds,
         props.width,
         props.height,

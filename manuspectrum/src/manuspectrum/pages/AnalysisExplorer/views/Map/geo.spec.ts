@@ -11,6 +11,7 @@ import {
     padBounds,
     project,
     toMercator,
+    wrapInto,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/geo.ts";
 
 describe("geography helpers", () => {
@@ -111,6 +112,19 @@ describe("geography helpers", () => {
         expect(fit?.west).toBe(166.45);
         expect(fit?.east).toBeCloseTo(181.6, 9);
         expect([fit?.south, fit?.north]).toEqual([-36.85, -18.1]);
+    });
+
+    it("projects a place past the antimeridian inside bounds that cross it", () => {
+        const fit = { west: 166.45, south: -36.85, east: 181.6, north: -18.1 };
+        const [lng, lat] = wrapInto([-178.4, -18.1], fit);
+        expect(lng).toBeCloseTo(181.6, 9);
+        expect(lat).toBe(-18.1);
+        expect(wrapInto([174.76, -36.85], fit)).toEqual([174.76, -36.85]);
+        const [x] = project(wrapInto([-178.4, -18.1], fit), fit, 100, 100);
+        expect(x).toBeGreaterThan(50);
+        expect(x).toBeLessThanOrEqual(100);
+        const plain = { west: -10, south: 40, east: 10, north: 50 };
+        expect(wrapInto([170, 45], plain)).toEqual([170, 45]);
     });
 
     it("keeps a worldwide spread in plain bounds, Europe in the middle", () => {

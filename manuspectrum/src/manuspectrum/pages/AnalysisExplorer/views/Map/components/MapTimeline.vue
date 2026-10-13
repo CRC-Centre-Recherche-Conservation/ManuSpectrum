@@ -64,6 +64,8 @@ const ROWS_STEP = 100;
 const EDGES: readonly Edge[] = ["low", "high"];
 const ARROW_STEP = 1;
 const PAGE_STEP = 25;
+/** A release closer than this to its press, in CSS pixels, is a click: it sets no brush. */
+const CLICK_SLOP_PX = 3;
 const KEY_STEPS: Readonly<Record<string, number>> = {
     ArrowRight: ARROW_STEP,
     ArrowUp: ARROW_STEP,
@@ -80,7 +82,8 @@ const KEY_STEPS: Readonly<Record<string, number>> = {
  * hatched column. Each bin has a button that opens its period. The two
  * edges of the brush are its sliders (at the domain ends while nothing is
  * brushed): a captured pointer drags one along the histogram's own axis
- * and sends the brush once, on release; arrows move it a year, Page keys
+ * and sends the brush once, on release, unless the edge did not move (a
+ * press focuses the edge and sets nothing); arrows move it a year, Page keys
  * 25, Home and End to the bound, an edge never passing the other one. The
  * bins outside the brush fade. The
  * « Documents » rows list the documents of the brushed events with their
@@ -110,6 +113,7 @@ const hot = ref<number | null>(null);
 const plot = useTemplateRef<HTMLElement>("plot");
 const held = ref<Edge | null>(null);
 const draft = ref<[number, number] | null>(null);
+let pressX = 0;
 
 const items = computed<DatedItem[]>(() =>
     props.events.flatMap((event) => {
@@ -374,7 +378,9 @@ function onEdgePointerdown(edge: Edge, event: PointerEvent): void {
     event.preventDefault();
     held.value = edge;
     draft.value = edges.value;
+    pressX = event.clientX;
     const target = event.currentTarget as HTMLElement | null;
+    target?.focus({ preventScroll: true });
     target?.setPointerCapture?.(event.pointerId);
 }
 
@@ -388,8 +394,12 @@ function onEdgePointerup(edge: Edge, event: PointerEvent): void {
     if (held.value !== edge) return;
     const year = edgeYearAt(edge, event.clientX);
     const next = year === null ? draft.value : withEdge(edge, year);
+    const pressed = edges.value;
+    const clicked = Math.abs(event.clientX - pressX) < CLICK_SLOP_PX;
     releaseEdge();
-    if (next !== null) emit("brush", next);
+    if (next === null || clicked) return;
+    if (next[0] === pressed[0] && next[1] === pressed[1]) return;
+    emit("brush", next);
 }
 
 function releaseEdge(): void {

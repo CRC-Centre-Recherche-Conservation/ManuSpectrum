@@ -77,6 +77,18 @@ export function fitBoundsOf(points: readonly LngLat[]): Bounds | null {
     return { ...plain, west: lngs[after], east: lngs[after - 1] + 360 };
 }
 
+/**
+ * `point` on the world copy nearest the centre of `bounds` when they cross
+ * the antimeridian (`east` past 180, as `fitBoundsOf` gives them); otherwise
+ * `point` itself.
+ */
+export function wrapInto(point: LngLat, bounds: Bounds): LngLat {
+    if (bounds.east <= 180) return point;
+    const centre = (bounds.west + bounds.east) / 2;
+    const turns = Math.round((centre - point[0]) / 360);
+    return turns === 0 ? point : [point[0] + 360 * turns, point[1]];
+}
+
 export interface FitPadding {
     top: number;
     right: number;

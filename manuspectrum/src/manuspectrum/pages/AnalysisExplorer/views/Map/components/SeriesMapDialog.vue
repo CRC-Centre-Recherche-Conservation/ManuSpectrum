@@ -35,8 +35,9 @@ const STEPS: Readonly<Record<string, number>> = {
  * size; null, it closes. The map is drawn in that box by `SeriesMap`, on
  * `background`, with its caption, the key of its symbols, the previous and
  * next maps of the series (also on the arrow keys) and « Show on the map »
- * (`show`). Closing, however it happens, emits `close`; the parent gives
- * the focus back.
+ * (`show`). While open, a change of `bounds` measures and emits `measure`
+ * again, and a `maps` that no longer holds `index` closes it. Closing,
+ * however it happens, emits `close`; the parent gives the focus back.
  */
 const props = defineProps<{
     maps: MiniMap[];
@@ -66,6 +67,14 @@ let pageOverflow: string | null = null;
 const map = computed(() =>
     props.index === null ? null : props.maps[props.index] ?? null,
 );
+const boundsKey = computed(() =>
+    [
+        props.bounds.west,
+        props.bounds.south,
+        props.bounds.east,
+        props.bounds.north,
+    ].join(","),
+);
 const atFirst = computed(() => (props.index ?? 0) <= 0);
 const atLast = computed(() => (props.index ?? 0) >= props.maps.length - 1);
 const position = computed(() =>
@@ -92,6 +101,19 @@ watch(
         size.value = measure();
         emit("measure", size.value);
         closeButton.value?.element?.focus({ preventScroll: true });
+    },
+    { flush: "post" },
+);
+
+watch(map, (current) => {
+    if (current === null && dialog.value?.open) close();
+});
+watch(
+    boundsKey,
+    () => {
+        if (!dialog.value?.open) return;
+        size.value = measure();
+        emit("measure", size.value);
     },
     { flush: "post" },
 );

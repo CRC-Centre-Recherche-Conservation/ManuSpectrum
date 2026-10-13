@@ -30,6 +30,7 @@ function material(id: string, reliability: string | null): EventMaterial {
         characterization: uuid(500),
         colours: [],
         matches: true,
+        componentColours: [],
     };
 }
 

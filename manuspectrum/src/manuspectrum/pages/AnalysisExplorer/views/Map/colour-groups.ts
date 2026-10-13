@@ -15,10 +15,13 @@ export interface MaterialRow {
     colours: string[];
     /**
      * The ticked colour of the group the row stands in; its counts are then
-     * those of the events where it is observed in that colour. Null for a
-     * usual row (all colours counted).
+     * those of the events where it is observed in that colour, or reaches it
+     * through a linked Component's colour (`EventMaterial.componentColours`).
+     * Null for a usual row (all colours counted).
      */
     observedIn: string | null;
+    /** With `observedIn`: no counted event observes the material itself in that colour. */
+    viaComponent: boolean;
 }
 
 export interface ColourGroup {
@@ -36,6 +39,8 @@ interface Carried {
     label: Label;
     documents: Set<string>;
     components: Set<string>;
+    /** One of the events observes the material itself in the colour asked. */
+    observed: boolean;
 }
 
 function carriedBy(
@@ -45,16 +50,21 @@ function carriedBy(
     const found = new Map<string, Carried>();
     for (const event of events) {
         for (const material of event.materials) {
-            if (colour !== null && !material.colours.includes(colour)) continue;
+            const own = colour === null || material.colours.includes(colour);
+            const throughComponent =
+                colour !== null && material.componentColours.includes(colour);
+            if (!own && !throughComponent) continue;
             let entry = found.get(material.id);
             if (!entry) {
                 entry = {
                     label: material.name,
                     documents: new Set(),
                     components: new Set(),
+                    observed: false,
                 };
                 found.set(material.id, entry);
             }
+            entry.observed ||= own;
             entry.documents.add(event.document.id);
             if (event.component) entry.components.add(event.component.id);
         }
@@ -92,6 +102,7 @@ function observedRow(
         documents: entry.documents.size,
         components: entry.components.size,
         observedIn: colour,
+        viaComponent: !entry.observed,
     };
 }
 
@@ -103,7 +114,11 @@ function carries(
     return event.materials.some((m) => {
         if (!rows.has(m.id)) return false;
         const colour = rows.get(m.id) ?? null;
-        return colour === null || m.colours.includes(colour);
+        return (
+            colour === null ||
+            m.colours.includes(colour) ||
+            m.componentColours.includes(colour)
+        );
     });
 }
 
@@ -113,10 +128,11 @@ function carries(
  * uris and empty groups are left out, except a group of each `ticked` colour
  * that `colours` names, kept without rows. A ticked colour's group lists,
  * once each, every material an event observes in that colour (the event
- * material's own `colours`), its own materials and those whose main colour
- * is another, with `observedIn` set and the counts of those events only; a
- * material of the group that no kept event observes in it keeps its usual
- * row.
+ * material's own `colours`) or reaches it through a linked Component
+ * (`componentColours`, then `viaComponent` when no event observes it so),
+ * its own materials and those whose main colour is another, with
+ * `observedIn` set and the counts of those events only; a material of the
+ * group that no kept event observes in it keeps its usual row.
  */
 export function colourTree(
     events: readonly MapEvent[],
@@ -144,6 +160,7 @@ export function colourTree(
             components: entry.components.size,
             colours: known?.colours ?? [],
             observedIn: null,
+            viaComponent: false,
         };
         const key = row.colours[0] ?? null;
         members.set(key, [...(members.get(key) ?? []), row]);
@@ -169,6 +186,7 @@ export function colourTree(
                         components: 0,
                         colours: known?.colours ?? [],
                         observedIn: null,
+                        viaComponent: false,
                     },
                     entry,
                     colour,

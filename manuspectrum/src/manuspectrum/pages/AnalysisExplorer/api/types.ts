@@ -235,6 +235,8 @@ export interface EventMaterial {
     colours: string[];
     /** Meets every active characterization filter; true for all without one. */
     matches: boolean;
+    /** The ticked colour uris it carries only through a linked Component's colour. */
+    componentColours: string[];
 }
 
 export interface MapEvent {
@@ -746,6 +748,7 @@ export const SHAPE_KEYS = {
         characterization: true,
         colours: true,
         matches: true,
+        componentColours: true,
     } satisfies Record<keyof EventMaterial, true>,
     MapPlace: {
         id: true,

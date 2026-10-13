@@ -349,6 +349,34 @@ describe("SmallMultiples", () => {
         );
     });
 
+    it("asks a new snapshot when the bounds change while the dialog is open, not for equal bounds", async () => {
+        const wrapper = mountMultiples();
+        enlargeButton(wrapper).click();
+        await flushPromises();
+        expect(wrapper.emitted("enlarge-snapshot")).toHaveLength(1);
+        await wrapper.setProps({ bounds: { ...BOUNDS } });
+        await flushPromises();
+        expect(wrapper.emitted("enlarge-snapshot")).toHaveLength(1);
+        await wrapper.setProps({ bounds: { ...BOUNDS, east: 12 } });
+        await flushPromises();
+        expect(wrapper.emitted("enlarge-snapshot")).toHaveLength(2);
+    });
+
+    it("closes when the series loses the enlarged map, the focus on a map left", async () => {
+        const wrapper = mountMultiples({
+            maps: [materialMap(1), materialMap(2)],
+        });
+        const trigger = enlargeButton(wrapper, 1);
+        trigger.focus();
+        trigger.click();
+        await flushPromises();
+        expect(dialogOf(wrapper).element.open).toBe(true);
+        await wrapper.setProps({ maps: [materialMap(1)] });
+        await flushPromises();
+        expect(dialogOf(wrapper).element.open).toBe(false);
+        expect(document.activeElement).toBe(wrapper.get(".mini .open").element);
+    });
+
     it("steps through the series with the arrows and the buttons", async () => {
         const maps = [materialMap(1), materialMap(2), materialMap(3)];
         const wrapper = mountMultiples({ maps });

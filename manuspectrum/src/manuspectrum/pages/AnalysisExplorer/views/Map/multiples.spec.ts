@@ -33,6 +33,7 @@ function material(id: string): EventMaterial {
         characterization: uuid(500),
         colours: [],
         matches: true,
+        componentColours: [],
     };
 }
 
@@ -169,6 +170,22 @@ describe("small multiples", () => {
         const [inX, inY] = project(paris, shown, frame.width, frame.height);
         expect(frame.x + inX).toBeCloseTo(dotX, 6);
         expect(frame.y + inY).toBeCloseTo(dotY, 6);
+    });
+
+    it("lays a snapshot returned one world away in the copy of bounds crossing 180", () => {
+        const bounds = { west: 170, south: 40, east: 190, north: 60 };
+        const shown = fitAspect(bounds, MINI_WIDTH, MINI_HEIGHT);
+        const apart = {
+            ...shown,
+            west: shown.west - 360,
+            east: shown.east - 360,
+        };
+        const expected = snapshotFrame({ url: "data:", bounds: shown }, bounds);
+        const frame = snapshotFrame({ url: "data:", bounds: apart }, bounds);
+        expect(frame.x).toBeCloseTo(expected.x, 6);
+        expect(frame.width).toBeCloseTo(expected.width, 6);
+        expect(frame.x).toBeCloseTo(0, 6);
+        expect(frame.width).toBeCloseTo(MINI_WIDTH, 6);
     });
 
     it("frames a snapshot taken at another size the same way, in that size's box", () => {

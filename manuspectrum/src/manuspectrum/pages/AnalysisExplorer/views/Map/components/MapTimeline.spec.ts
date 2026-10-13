@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import MapTimeline from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue";
@@ -22,6 +22,7 @@ function lapis() {
         characterization: uuid(300),
         colours: [],
         matches: true,
+        componentColours: [],
     };
 }
 
@@ -199,6 +200,20 @@ describe("MapTimeline", () => {
         await low.trigger("pointermove", { clientX: 101, pointerId: 2 });
         await low.trigger("pointerup", { clientX: 101, pointerId: 2 });
         expect(wrapper.emitted("brush")?.[1]).toEqual([[1326, 1400]]);
+    });
+
+    it("focuses an edge on a press and sets no brush when it does not move", async () => {
+        const wrapper = mountTimeline();
+        sizePlot(wrapper);
+        const [low, high] = handles(wrapper);
+        const focus = vi.spyOn(low.element as HTMLElement, "focus");
+        await low.trigger("pointerdown", { clientX: 1, pointerId: 1 });
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+        await low.trigger("pointerup", { clientX: 2, pointerId: 1 });
+        await high.trigger("pointerdown", { clientX: 559, pointerId: 2 });
+        await high.trigger("pointermove", { clientX: 557, pointerId: 2 });
+        await high.trigger("pointerup", { clientX: 557, pointerId: 2 });
+        expect(wrapper.emitted("brush")).toBeUndefined();
     });
 
     it("never drags an edge past the other one nor out of the domain", async () => {

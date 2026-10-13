@@ -59,9 +59,10 @@ const ROWS_SHOWN = 5;
  * colour's uri as the Corpus colour facet stores it; a ticked colour keeps
  * its head when no row falls under it. A ticked colour's group lists every
  * material observed in that colour, with the counts of that colour and
- * « observed <colour> » after them; a material whose main colour is another
- * keeps its usual row there too, and both rows are the same `material`
- * filter.
+ * « observed <colour> » after them, or « via its Component » for a material
+ * that reaches the colour only through a linked Component; a material whose
+ * main colour is another keeps its usual row there too, and both rows are
+ * the same `material` filter.
  * The search asks the material facet (synonyms included) and keeps the rows
  * it answers. Each colour group shows its ticked and followed rows, then
  * others up to five, and « Show more » for the rest; a search shows every
@@ -204,8 +205,9 @@ function groupLabel(group: ColourGroup): string {
     return group.label?.value ?? $gettext("No colour recorded");
 }
 
-/** « observed blue »: the colour's label in lower case. */
-function observedName(colour: string): string {
+/** « observed blue »: the colour's label in lower case; « via its Component » when only the Component carries it. */
+function observedName(colour: string, viaComponent: boolean): string {
+    if (viaComponent) return $gettext("via its Component");
     const found = props.colours[colour]?.label;
     return interpolate(
         $gettext("observed %{colour}"),
@@ -601,7 +603,12 @@ function onSearch(text: string | undefined): void {
                                 <span
                                     v-if="row.observedIn !== null"
                                     class="observed"
-                                    >{{ observedName(row.observedIn) }}</span
+                                    >{{
+                                        observedName(
+                                            row.observedIn,
+                                            row.viaComponent,
+                                        )
+                                    }}</span
                                 >
                                 <span
                                     v-else-if="row.colours.length > 1"

@@ -81,6 +81,7 @@ function events(): MapEvent[] {
                     characterization: uuid(200 + index),
                     colours: [],
                     matches: true,
+                    componentColours: [],
                 },
             ],
         }),
@@ -221,6 +222,7 @@ describe("MaterialsControl", () => {
                             characterization: uuid(700 + n),
                             colours: [colour],
                             matches: true,
+                            componentColours: [],
                         },
                     ],
                 }),
@@ -275,6 +277,7 @@ describe("MaterialsControl", () => {
                             characterization: uuid(900 + n),
                             colours,
                             matches: true,
+                            componentColours: [],
                         },
                     ],
                 });
@@ -321,6 +324,49 @@ describe("MaterialsControl", () => {
             expect(rows).toHaveLength(1);
             expect(wrapper.find(".observed").exists()).toBe(false);
         });
+    });
+
+    it("lists a colourless material under a ticked colour its Component carries, « via its Component »", () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", [BLUE]);
+        const throughComponent = (n: number, reached: string[]): MapEvent =>
+            mapEvent({
+                id: `production:white${n}`,
+                document: { id: uuid(400 + n), name: label(`Ms W${n}`) },
+                component: { id: uuid(450 + n), name: label(`f. W${n}`) },
+                materials: [
+                    {
+                        id: URIS[3],
+                        name: label("Lead white"),
+                        reliability: null,
+                        characterization: uuid(500 + n),
+                        colours: [],
+                        matches: true,
+                        componentColours: reached,
+                    },
+                ],
+            });
+        const shown = [
+            ...events().filter((event) =>
+                event.materials.every((m) => m.id !== URIS[3]),
+            ),
+            throughComponent(0, [BLUE]),
+            throughComponent(1, []),
+        ];
+        const wrapper = mountControl(shown);
+        const rowsUnder = (name: string) =>
+            wrapper
+                .findAll(".colour-group")
+                .find((found) => found.get(".name").text() === name)
+                ?.findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Lead white") ??
+            [];
+        const [underBlue] = rowsUnder("Blue");
+        expect(underBlue.get(".row-counts").text()).toBe("1 doc · 1 Comp.");
+        expect(underBlue.get(".observed").text()).toBe("via its Component");
+        const [uncoloured] = rowsUnder("No colour recorded");
+        expect(uncoloured.get(".row-counts").text()).toBe("2 docs · 2 Comp.");
+        expect(uncoloured.find(".observed").exists()).toBe(false);
     });
 
     it("gives the group without a recorded colour no checkbox", () => {
@@ -474,6 +520,7 @@ describe("MaterialsControl", () => {
                         characterization: uuid(500 + n),
                         colours: [],
                         matches: true,
+                        componentColours: [],
                     },
                 ],
             }),

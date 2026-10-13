@@ -44,7 +44,6 @@ import { intervalOf } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/aori
 import { materialCounts } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/colour-groups.ts";
 import { matchingEvents } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/matching.ts";
 import {
-    boundsOf,
     fitAspect,
     fitBoundsOf,
     padBounds,
@@ -124,6 +123,7 @@ const RADIUS_MAX = 400;
 const RADIUS_STEP = 10;
 const HEADING_ID = "explorer-map-title";
 const CANVAS_SELECTOR = ".maplibregl-canvas";
+const PRESSED_MODE_SELECTOR = ".mode-switch button[aria-pressed='true']";
 
 /**
  * The Map & timeline view: the kept events on a MapLibre stage (places,
@@ -203,14 +203,15 @@ const low = computed(() =>
     lowLevels(response.value?.certaintyScale ?? { levels: [] }),
 );
 const places = computed(() => response.value?.places ?? {});
-/** Every listed material of the kept events: the rail's list of materials reads these. */
-const events = computed<MapEvent[]>(() => {
+/** The kept events under « Include approximate dates »: every count reads these. */
+const dated = computed<MapEvent[]>(() => {
     const all = response.value?.events ?? [];
-    return withoutLevels(
-        approximateShown.value ? all : withoutApproximate(all),
-        hiddenLevels.value,
-    );
+    return approximateShown.value ? all : withoutApproximate(all);
 });
+/** Every listed material of the kept events: the rail's list of materials reads these. */
+const events = computed<MapEvent[]>(() =>
+    withoutLevels(dated.value, hiddenLevels.value),
+);
 /** The kept events with their matching materials only: every result reads these. */
 const shown = computed(() => matchingEvents(events.value));
 const brushed = computed(() =>
@@ -234,14 +235,8 @@ const states = computed(
             ]),
         ),
 );
+/** The fitted view of the stage and of the series maps: across the antimeridian when the places sit around it. */
 const bounds = computed(() =>
-    padBounds(
-        boundsOf(summaryList.value.map((summary) => summary.lngLat)) ?? EUROPE,
-        store.mapState.radius,
-    ),
-);
-/** The stage's fitted view: like `bounds`, across the antimeridian when the places sit around it. */
-const fit = computed(() =>
     padBounds(
         fitBoundsOf(summaryList.value.map((summary) => summary.lngLat)) ??
             EUROPE,
@@ -409,13 +404,11 @@ const levels = computed(() =>
         (a, b) => a.rank - b.rank,
     ),
 );
-const levelCount = computed(() =>
-    levelCounts(matchingEvents(response.value?.events ?? [])),
-);
+const levelCount = computed(() => levelCounts(matchingEvents(dated.value)));
 const shownTypes = computed(() => shownEventTypes(store.filters.eventType));
 const typeCounts = computed(() => {
     const counts = new Map<EventType, number>();
-    for (const event of response.value?.events ?? []) {
+    for (const event of shown.value) {
         counts.set(event.type, (counts.get(event.type) ?? 0) + 1);
     }
     return counts;
@@ -503,10 +496,10 @@ const territorySentence = computed(() => {
 const methodText = computed(() =>
     [
         $gettext(
-            "Attestation: each document and each component of the kept events that carries a followed material at a place. It weighs 1, or 0.5 when every identification of that material it carries has a lower reliability.",
+            "Attestation: each document and each Component of the kept events that carries a followed material at a place. It weighs 1, or 0.5 when every identification of that material it carries has a lower reliability.",
         ),
         $gettext(
-            "Kernel: an attestation of weight w spreads w × exp(−(d/r)²) at distance d, where r is the kernel radius, or the place's own extent if larger; at d = r it still weighs about 37 %.",
+            "Kernel: an attestation of weight w spreads w × exp(−(d/r)²) at distance d, where r is the kernel radius, or the place's own extent if larger; at d = r it still weighs about 37%.",
         ),
         $gettext(
             "Grid: the influences of every place are summed at the centre of each cell of a hexagonal grid laid over the visible map.",
@@ -515,7 +508,7 @@ const methodText = computed(() =>
             "Threshold t: a cell is drawn when its summed influence reaches t, and a place always colours its own cell. One attestation alone reaches t out to d = r × √(ln(1/t)) when t < 1: 0.83 r at the default 0.5.",
         ),
         $gettext(
-            "Dominant: each cell takes the colour of the most influential material, its opacity that material's share of the total; it is hatched when the leader holds less than 55 % of the top two.",
+            "Dominant: each cell takes the colour of the most influential material, its opacity that material's share of the total; it is hatched when the leader holds less than 55% of the top two.",
         ),
         $gettext(
             "The zones are a model that extrapolates between attested places, not observed data.",
@@ -536,7 +529,7 @@ const isolateHint = computed(
         !territoryCoarse.value,
 );
 const radiusHelp = $gettext(
-    "Distance at which a place's weight falls to about 37 % (or the place's own extent if larger)",
+    "Distance at which a place's weight falls to about 37% (or the place's own extent if larger)",
 );
 const radiusText = computed(() =>
     interpolate($gettext("%{n} km"), { n: radiusDraft.value }),
@@ -553,9 +546,14 @@ const thresholdText = computed(() =>
     interpolate($gettext("≥ %{n}"), { n: thresholdNumber.value }),
 );
 const thresholdValueText = computed(() =>
-    interpolate($gettext("at least %{n} attestations"), {
-        n: thresholdNumber.value,
-    }),
+    interpolate(
+        $ngettext(
+            "at least %{n} attestation",
+            "at least %{n} attestations",
+            thresholdDraft.value,
+        ),
+        { n: thresholdNumber.value },
+    ),
 );
 const tooltip = computed(() => {
     const current = hovered.value;
@@ -592,12 +590,14 @@ watch(
         const shot = await stage.value.snapshot(
             fitAspect(bounds.value, MINI_WIDTH, MINI_HEIGHT),
         );
-        if (ticket === snapshotTicket) background.value = shot;
+        if (ticket === snapshotTicket && shot) background.value = shot;
     },
     { immediate: true, flush: "post" },
 );
 watch(boundsKey, () => {
+    snapshotTicket += 1;
     largeTicket += 1;
+    background.value = null;
     largeBackground.value = null;
 });
 watch(mode, (current, previous) => {
@@ -806,7 +806,7 @@ async function snapshotLarge(size: SnapshotSize): Promise<void> {
     if (ticket === largeTicket && shot) largeBackground.value = shot;
 }
 
-/** The main map in Places with what a map of the series shows: its material added to the ticked ones, or its century as the period. */
+/** The main map in Places with what a map of the series shows: its material added to the ticked ones, or its century as the period. The focus moves to the stage, or to the pressed mode without a map. */
 function showSeriesMap(mini: MiniMap): void {
     if (mini.uri) {
         const ticked = store.filters.material;
@@ -819,6 +819,12 @@ function showSeriesMap(mini: MiniMap): void {
         });
     }
     setMode("places");
+    void nextTick(() => {
+        const target =
+            root.value?.querySelector<HTMLElement>(CANVAS_SELECTOR) ??
+            root.value?.querySelector<HTMLElement>(PRESSED_MODE_SELECTOR);
+        target?.focus({ preventScroll: true });
+    });
 }
 
 /** Opens a place picked in the list, easing the map to it when it is off screen. */
@@ -1284,7 +1290,7 @@ function skipToTimeline(): void {
                             :colours="mapColours"
                             :borders="bordersShown"
                             :borders-year="bordersYear"
-                            :fit="fit"
+                            :fit="bounds"
                             :selected="selectedPlace"
                             :isolate="mode === 'territories' ? isolated : null"
                             @select="openSubject({ kind: 'place', id: $event })"

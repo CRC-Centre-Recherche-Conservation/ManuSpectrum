@@ -65,6 +65,23 @@ export interface SnapshotSize {
 }
 
 /**
+ * `shown` moved by whole turns of 360 degrees into the world copy of `bounds`
+ * when those cross the antimeridian (`east` past 180), as `wrapInto` does for
+ * a point.
+ */
+function shiftInto(shown: Bounds, bounds: Bounds): Bounds {
+    if (bounds.east <= 180) return shown;
+    const centre = (bounds.west + bounds.east) / 2;
+    const turns = Math.round((centre - (shown.west + shown.east) / 2) / 360);
+    if (turns === 0) return shown;
+    return {
+        ...shown,
+        west: shown.west + 360 * turns,
+        east: shown.east + 360 * turns,
+    };
+}
+
+/**
  * Where a map of the series drawn `width`×`height` (the mini map's box by
  * default) lays `snapshot` so that it lines up with dots projected in
  * `bounds` by `project` in the same box.
@@ -75,7 +92,7 @@ export function snapshotFrame(
     width: number = MINI_WIDTH,
     height: number = MINI_HEIGHT,
 ): { x: number; y: number; width: number; height: number } {
-    const shown = snapshot.bounds;
+    const shown = shiftInto(snapshot.bounds, bounds);
     const [left, top] = project(
         [shown.west, shown.north],
         bounds,

@@ -89,6 +89,7 @@ describe("panel groups", () => {
             characterization: uuid(500),
             colours: [],
             matches: true,
+            componentColours: [],
         };
         const events = [
             mapEvent({ id: "paris" }),
@@ -126,6 +127,7 @@ describe("panel groups", () => {
             characterization: uuid(500),
             colours: [],
             matches: true,
+            componentColours: [],
         };
         const tracked = [
             { uri: "m", slot: 1 },

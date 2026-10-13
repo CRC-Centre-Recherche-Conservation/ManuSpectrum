@@ -24,6 +24,7 @@ function material(id: string, colours: string[] = []): EventMaterial {
         characterization: uuid(500),
         colours,
         matches: true,
+        componentColours: [],
     };
 }
 
@@ -199,6 +200,45 @@ describe("colour tree", () => {
                 }),
             ]);
             expect(blue).toMatchObject({ documents: 2, components: 2 });
+        });
+
+        it("lists a material reaching it only through its Component, marked so", () => {
+            const throughComponent = [
+                ...events,
+                mapEvent({
+                    id: "10",
+                    document: { id: uuid(10), name: label("d10") },
+                    component: { id: uuid(30), name: label("c") },
+                    materials: [
+                        { ...material("mystery"), componentColours: ["blue"] },
+                    ],
+                }),
+            ];
+            const tree = colourTree(
+                throughComponent,
+                materials,
+                colours,
+                undefined,
+                ["blue"],
+            );
+            const blue = tree.find((g) => g.colour === "blue");
+            const mystery = blue?.rows.find((row) => row.uri === "mystery");
+            expect(mystery).toMatchObject({
+                observedIn: "blue",
+                viaComponent: true,
+                documents: 1,
+                components: 1,
+            });
+            expect(
+                blue?.rows.find((row) => row.uri === "azurite")?.viaComponent,
+            ).toBe(false);
+            expect(blue).toMatchObject({ documents: 2, components: 3 });
+            const none = tree.find((g) => g.colour === null);
+            expect(none?.rows[0]).toMatchObject({
+                uri: "mystery",
+                observedIn: null,
+                documents: 2,
+            });
         });
 
         it("lists it once when no colour is ticked", () => {

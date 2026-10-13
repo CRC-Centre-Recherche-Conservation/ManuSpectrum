@@ -80,6 +80,7 @@ function azurite(reliability: string | null = SURE) {
         characterization: uuid(300),
         colours: [],
         matches: true,
+        componentColours: [],
     };
 }
 
@@ -319,6 +320,7 @@ describe("MapPanel", () => {
                                   characterization: uuid(301),
                                   colours: [],
                                   matches: true,
+                                  componentColours: [],
                               },
                           ],
                       }
@@ -533,6 +535,7 @@ describe("MapPanel", () => {
                         characterization: uuid(700 + n),
                         colours: [],
                         matches: true,
+                        componentColours: [],
                     },
                 ],
             }),

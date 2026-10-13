@@ -96,6 +96,7 @@ function response(): EventsResponse {
                         characterization: uuid(200),
                         colours: [],
                         matches: true,
+                        componentColours: [],
                     },
                 ],
             }),
@@ -325,6 +326,7 @@ describe("MapView", () => {
             characterization: uuid(201),
             colours: [],
             matches: false,
+            componentColours: [],
         });
         filtered.materials[azurite] = {
             uri: azurite,
@@ -414,9 +416,9 @@ describe("MapView", () => {
             document.getElementById(button.attributes("aria-describedby") ?? "")
                 ?.textContent ?? "";
         expect(method).toContain("It weighs 1, or 0.5 when every");
-        expect(method).toContain("at d = r it still weighs about 37 %");
+        expect(method).toContain("at d = r it still weighs about 37%");
         expect(method).toContain("0.83 r at the default 0.5");
-        expect(method).toContain("less than 55 % of the top two");
+        expect(method).toContain("less than 55% of the top two");
         expect(method).toContain("not observed data");
         expect(note.text()).toContain("see ⓘ for the method");
     });
@@ -440,6 +442,11 @@ describe("MapView", () => {
         });
         expect(note.get("output[for='explorer-map-threshold']").text()).toBe(
             "≥ 0.5",
+        );
+        (slider.element as HTMLInputElement).value = "1";
+        await slider.trigger("input");
+        expect(slider.attributes("aria-valuetext")).toBe(
+            "at least 1 attestation",
         );
         (slider.element as HTMLInputElement).value = "2.5";
         await slider.trigger("input");
@@ -493,7 +500,7 @@ describe("MapView", () => {
         );
         expect(note.get("label").text()).toBe("Kernel radius");
         expect(note.get("input[type='range']").attributes("title")).toContain(
-            "falls to about 37 %",
+            "falls to about 37%",
         );
         expect(note.find("input[type='range']").attributes("min")).toBe("60");
         expect(note.find("output").text()).toBe("150 km");
@@ -601,6 +608,38 @@ describe("MapView", () => {
             view.findAll(".event-types input[type='checkbox']"),
         ).toHaveLength(3);
         expect(view.find(".map-rail .approximate").exists()).toBe(false);
+    });
+
+    it("counts the reliability levels and the events without the approximate dates once they are left out", async () => {
+        const base = response();
+        base.events[0].date = { start: 1300, end: 1350, approximate: true };
+        base.events[0].materials[0].reliability = "sure";
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({
+                ...base,
+                certaintyScale: {
+                    levels: [
+                        {
+                            id: "sure",
+                            uri: "sure",
+                            label: label("Certain"),
+                            rank: 0,
+                        },
+                    ],
+                },
+            }),
+        );
+        const view = await mountView();
+        const levelCount = () => view.get(".levels .value .count").text();
+        const typeCount = () => view.get(".event-types .count").text();
+        expect(levelCount()).toBe("1");
+        expect(typeCount()).toBe("3");
+        await view
+            .get(".map-timeline .approximate input[type='checkbox']")
+            .setValue(false);
+        await flushPromises();
+        expect(levelCount()).toBe("0");
+        expect(typeCount()).toBe("2");
     });
 
     it("lists the four reliability levels, all ticked, and drops a level's materials when unticked", async () => {
@@ -1011,6 +1050,9 @@ describe("MapView", () => {
             await flushPromises();
             expect(store.mapState.brush).toEqual([1301, 1400]);
             expect(store.mapState.mode).toBe("places");
+            const focused = document.activeElement as HTMLElement | null;
+            expect(focused?.textContent?.trim()).toBe("Places");
+            expect(focused?.getAttribute("aria-pressed")).toBe("true");
         } finally {
             restore();
         }
@@ -1025,6 +1067,23 @@ describe("MapView", () => {
         store.setMapState({ radius: 300 });
         await flushPromises();
         map.fire("idle");
+        await flushPromises();
+        expect(view.find(".small-multiples image").exists()).toBe(false);
+        map.fire("idle");
+        await flushPromises();
+        expect(view.find(".small-multiples image").exists()).toBe(true);
+    });
+
+    it("drops the mini maps' picture while the new bounds' one is awaited", async () => {
+        const store = useExplorerStore();
+        const view = await mountView();
+        const map = FakeMap.last();
+        await modeButton(view, "Map series").trigger("click");
+        await flushPromises();
+        map.fire("idle");
+        await flushPromises();
+        expect(view.find(".small-multiples image").exists()).toBe(true);
+        store.setMapState({ radius: 300 });
         await flushPromises();
         expect(view.find(".small-multiples image").exists()).toBe(false);
         map.fire("idle");

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
@@ -27,6 +27,8 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/multiples.ts";
 import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 
+const MINI_OPEN_SELECTOR = ".mini .open";
+
 /**
  * The map series: one mini map per identified material (every analysed
  * place drawn, hollow where the material is not attested) or per century
@@ -35,7 +37,8 @@ import type { TrackedMaterial } from "@/manuspectrum/pages/AnalysisExplorer/view
  * `open`; its « Enlarge » shows it in `SeriesMapDialog`, which asks
  * (`enlarge-snapshot`) for a snapshot at its own size, drawn from
  * `largeBackground` (the mini maps' one meanwhile); the focus goes back to
- * that « Enlarge » on close, and the dialog's « Show on the map » emits
+ * that « Enlarge » on close (the first mini map once it is gone), and the
+ * dialog's « Show on the map » emits
  * `show`. `maps` may be the whole list or the page already cut: the page
  * `page` (0-based) of twelve is drawn either way, and the dialog steps
  * through `maps`. `tracked` gives a material map its slot.
@@ -63,6 +66,7 @@ const emit = defineEmits<{
 const gettext = useGettext();
 const { $gettext, $ngettext, interpolate } = gettext;
 
+const root = useTemplateRef<HTMLElement>("root");
 /** The place in `maps` of the map shown enlarged, if any. */
 const enlarged = ref<number | null>(null);
 let opener: HTMLElement | null = null;
@@ -179,7 +183,9 @@ function onDialogClosed(): void {
     enlarged.value = null;
     const target = opener;
     opener = null;
-    if (target?.isConnected) target.focus({ preventScroll: true });
+    const fallback =
+        root.value?.querySelector<HTMLElement>(MINI_OPEN_SELECTOR) ?? null;
+    (target?.isConnected ? target : fallback)?.focus({ preventScroll: true });
 }
 
 function showOnMap(map: MiniMap): void {
@@ -194,7 +200,10 @@ function go(next: number): void {
 </script>
 
 <template>
-    <div class="small-multiples">
+    <div
+        ref="root"
+        class="small-multiples"
+    >
         <p class="axis-note">
             <span>{{ axisNote }}</span>
         </p>
