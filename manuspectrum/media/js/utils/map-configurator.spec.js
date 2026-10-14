@@ -3,21 +3,34 @@
  * project hook that `viewmodels/map.js` calls around its map `load` handler).
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { archesStub } = vi.hoisted(() => ({ archesStub: { mapboxApiKey: '' } }));
+const { archesStub } = vi.hoisted(() => ({
+    archesStub: { mapboxApiKey: "", activeLanguage: "en" },
+}));
 
-vi.mock('arches', () => ({ default: archesStub }));
-vi.mock('mapbox-gl-geocoder', () => ({
+vi.mock("arches", () => ({ default: archesStub }));
+vi.mock("mapbox-gl-geocoder", () => ({
     default: class MapboxGeocoder {},
 }));
 
-import MapboxGeocoder from 'mapbox-gl-geocoder';
-import mapConfigurator from 'utils/map-configurator';
+import MapboxGeocoder from "mapbox-gl-geocoder";
+import mapConfigurator, { labelField } from "utils/map-configurator";
+import { validate } from "mapbox-gl/dist/style-spec/index.es.js";
+
+import positron from "../../../constants/openfreemap_positron_layers.json";
 
 class FakeMap {
     constructor() {
         this.added = [];
+        this.layers = [];
+        this.set = [];
+    }
+    getStyle() {
+        return { layers: this.layers };
+    }
+    setLayoutProperty(id, name, value) {
+        this.set.push([id, name, value]);
     }
     addControl(control, position) {
         this.added.push([control, position]);
@@ -25,38 +38,165 @@ class FakeMap {
     }
 }
 
-describe('map-configurator', () => {
+describe("map-configurator", () => {
     beforeEach(() => {
-        archesStub.mapboxApiKey = '';
+        archesStub.mapboxApiKey = "";
+        archesStub.activeLanguage = "en";
     });
 
-    it('skips the MapboxGeocoder without a Mapbox key and keeps the other controls', () => {
+    it("skips the MapboxGeocoder without a Mapbox key and keeps the other controls", () => {
         const map = new FakeMap();
-        const navigation = { name: 'navigation' };
+        const navigation = { name: "navigation" };
         mapConfigurator.preConfig(map);
-        map.addControl(navigation, 'top-left');
-        const result = map.addControl(new MapboxGeocoder(), 'top-right');
-        expect(map.added).toEqual([[navigation, 'top-left']]);
+        map.addControl(navigation, "top-left");
+        const result = map.addControl(new MapboxGeocoder(), "top-right");
+        expect(map.added).toEqual([[navigation, "top-left"]]);
         expect(result).toBe(map);
     });
 
-    it('adds the MapboxGeocoder when a Mapbox key is set', () => {
-        archesStub.mapboxApiKey = 'pk.example';
+    it("adds the MapboxGeocoder when a Mapbox key is set", () => {
+        archesStub.mapboxApiKey = "pk.example";
         const map = new FakeMap();
         const geocoder = new MapboxGeocoder();
         mapConfigurator.preConfig(map);
-        map.addControl(geocoder, 'top-right');
-        expect(map.added).toEqual([[geocoder, 'top-right']]);
+        map.addControl(geocoder, "top-right");
+        expect(map.added).toEqual([[geocoder, "top-right"]]);
     });
 
-    it('puts the map back as it was in postConfig', () => {
+    it("puts the map back as it was in postConfig", () => {
         const map = new FakeMap();
         mapConfigurator.preConfig(map);
-        expect(Object.prototype.hasOwnProperty.call(map, 'addControl')).toBe(true);
+        expect(Object.prototype.hasOwnProperty.call(map, "addControl")).toBe(
+            true,
+        );
         mapConfigurator.postConfig(map);
-        expect(Object.prototype.hasOwnProperty.call(map, 'addControl')).toBe(false);
+        expect(Object.prototype.hasOwnProperty.call(map, "addControl")).toBe(
+            false,
+        );
         const geocoder = new MapboxGeocoder();
-        map.addControl(geocoder, 'top-right');
-        expect(map.added).toEqual([[geocoder, 'top-right']]);
+        map.addControl(geocoder, "top-right");
+        expect(map.added).toEqual([[geocoder, "top-right"]]);
+    });
+
+    describe("basemap labels", () => {
+        const english = ["coalesce", ["get", "name_en"], ["get", "name"]];
+        const nested = [
+            "case",
+            ["has", "name:nonlatin"],
+            ["concat", ["get", "name:latin"], "\n", ["get", "name:nonlatin"]],
+            english,
+        ];
+
+        it("labelField leaves English and other languages alone", () => {
+            expect(labelField("en", english)).toBe(english);
+            expect(labelField("de", english)).toBe(english);
+            expect(labelField(undefined, english)).toBe(english);
+        });
+
+        it("labelField puts name:fr first on a French page and keeps the formatting", () => {
+            expect(labelField("fr", english)).toEqual([
+                "coalesce",
+                ["get", "name:fr"],
+                english,
+            ]);
+            expect(labelField("fr-FR", nested)).toEqual([
+                "coalesce",
+                ["get", "name:fr"],
+                nested,
+            ]);
+        });
+
+        it("labelField ignores an expression that reads no name", () => {
+            const ref = ["to-string", ["get", "ref"]];
+            expect(labelField("fr", ref)).toBe(ref);
+            expect(labelField("fr", undefined)).toBe(undefined);
+        });
+
+        const fakeMapOf = (layers) => {
+            const map = new FakeMap();
+            map.layers = layers;
+            return map;
+        };
+
+        it("postConfig rewrites only the name symbol layers of the basemap on a French page", () => {
+            archesStub.activeLanguage = "fr";
+            const map = fakeMapOf([
+                {
+                    id: "a",
+                    type: "symbol",
+                    source: "openfreemap",
+                    layout: { "text-field": english },
+                },
+                {
+                    id: "ref",
+                    type: "symbol",
+                    source: "openfreemap",
+                    layout: { "text-field": ["to-string", ["get", "ref"]] },
+                },
+                {
+                    id: "icon",
+                    type: "symbol",
+                    source: "openfreemap",
+                    layout: {},
+                },
+                {
+                    id: "other",
+                    type: "symbol",
+                    source: "resources",
+                    layout: { "text-field": english },
+                },
+                { id: "fill", type: "fill", source: "openfreemap", paint: {} },
+            ]);
+            mapConfigurator.preConfig(map);
+            mapConfigurator.postConfig(map);
+            expect(map.set).toEqual([
+                ["a", "text-field", ["coalesce", ["get", "name:fr"], english]],
+            ]);
+        });
+
+        it("postConfig sets nothing on an English page", () => {
+            const map = fakeMapOf([
+                {
+                    id: "a",
+                    type: "symbol",
+                    source: "openfreemap",
+                    layout: { "text-field": english },
+                },
+            ]);
+            mapConfigurator.postConfig(map);
+            expect(map.set).toEqual([]);
+        });
+
+        it("the rewritten vendored layers are a valid mapbox-gl 1.13 style", () => {
+            const map = fakeMapOf(JSON.parse(JSON.stringify(positron)));
+            archesStub.activeLanguage = "fr";
+            mapConfigurator.postConfig(map);
+            expect(map.set.length).toBeGreaterThan(10);
+            const byId = new Map(map.set.map(([id, , value]) => [id, value]));
+            const layers = map.layers.map((layer) =>
+                byId.has(layer.id)
+                    ? {
+                          ...layer,
+                          layout: {
+                              ...layer.layout,
+                              "text-field": byId.get(layer.id),
+                          },
+                      }
+                    : layer,
+            );
+            const style = {
+                version: 8,
+                sources: {
+                    openfreemap: {
+                        type: "vector",
+                        url: "https://tiles.openfreemap.org/planet",
+                    },
+                },
+                sprite: "https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
+                glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+                layers,
+            };
+            expect(validate(style)).toEqual([]);
+        });
     });
 });
