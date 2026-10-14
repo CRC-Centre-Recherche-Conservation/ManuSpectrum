@@ -249,3 +249,11 @@ class MigrationTests(TestCase):
         self.assertEqual(self.value(sprites), basemaps.MAPBOX_SPRITES_URL)
         self.assertEqual(self.value(glyphs), basemaps.MAPBOX_GLYPHS_URL)
         self.assertEqual(self.value(custom), "https://fonts.example/{range}")
+
+
+class MigrationOrderTests(SimpleTestCase):
+    def test_the_migration_runs_after_arches_removed_the_mapzen_rows(self):
+        from importlib import import_module
+
+        migration = import_module("manuspectrum.migrations.0013_openfreemap_basemap")
+        self.assertIn(("models", "0010_4_1_0"), migration.Migration.dependencies)

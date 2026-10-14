@@ -708,7 +708,8 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
     `*.mapbox.com`;
 - [ ] the Network tab shows no request outside the domain (spec §6.2) except the expected third
   parties of the privacy policy (`tiles.openfreemap.org`, the holding institutions' IIIF servers,
-  `iiif.unicaen.fr` on the homepage), and no 4xx or 5xx except the expected ones; the console lists
+  `iiif.unicaen.fr` on the homepage; for signed-in editors `cke4.ckeditor.com`, and
+  `svc.webspellchecker.net` only if the spell checker is switched on; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
   the CSP Report-Only violations: copy them into the issue for F5.
 
 ### 4.7 Restart paths
