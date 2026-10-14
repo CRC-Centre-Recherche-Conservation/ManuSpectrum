@@ -472,6 +472,16 @@ class LegalPagesTests(TestCase):
             for host in ("tiles.openfreemap.org", "vtiles.openhistoricalmap.org"):
                 self.assertIn(host, html)
 
+    def test_privacy_says_openfreemap_is_served_through_cloudflare_for_every_map(self):
+        for lang, maps, transfer in (
+            ("en", "the search map", "OpenFreeMap (served through Cloudflare"),
+            ("fr", "carte de la recherche", "OpenFreeMap (servi par Cloudflare"),
+        ):
+            html = self.get("about-privacy", lang)
+            self.assertIn("Cloudflare", html)
+            self.assertIn(maps, html)
+            self.assertIn(transfer, html)
+
     def test_privacy_third_party_section_lists_the_known_hosts(self):
         for lang in ("en", "fr"):
             html = self.get("about-privacy", lang)
