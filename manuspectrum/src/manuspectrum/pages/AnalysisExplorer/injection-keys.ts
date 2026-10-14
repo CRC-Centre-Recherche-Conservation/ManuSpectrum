@@ -28,6 +28,10 @@ export interface ResultsMemo {
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
     Symbol("facet-labels");
 
+/** The facet values seen with a narrower term in their facet (`FacetValue.narrower`), keyed as `FACET_LABELS_KEY`; filled with it. */
+export const FACET_NARROWER_KEY: InjectionKey<Ref<Set<string>>> =
+    Symbol("facet-narrower");
+
 /** Number of documents of the whole corpus, or null while it is unknown; provided by the shell from the home payload. */
 export const CORPUS_COUNT_KEY: InjectionKey<Ref<number | null>> =
     Symbol("corpus-count");

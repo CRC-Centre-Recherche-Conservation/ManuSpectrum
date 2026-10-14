@@ -2,7 +2,10 @@ import { computed, inject, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
-import { FACET_LABELS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FACET_LABELS_KEY,
+    FACET_NARROWER_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import {
     LIST_FILTER_KEYS,
     useExplorerStore,
@@ -22,7 +25,9 @@ export interface ActiveFilter {
  * Every active filter as a removable entry (D42), in a stable order.
  *
  * A facet value shows the label recorded under `FACET_LABELS_KEY`, or its id
- * when no payload has named it yet. Event types count only in the Map view.
+ * when no payload has named it yet, followed by « (and narrower terms) » when
+ * it has a narrower term in its facet (`FACET_NARROWER_KEY`), never for a
+ * place. Event types count only in the Map view.
  */
 export function useActiveFilters(): {
     activeFilters: ComputedRef<ActiveFilter[]>;
@@ -32,6 +37,11 @@ export function useActiveFilters(): {
     const facetLabels = inject(
         FACET_LABELS_KEY,
         () => ref(new Map<string, Label>()),
+        true,
+    );
+    const facetNarrower = inject(
+        FACET_NARROWER_KEY,
+        () => ref(new Set<string>()),
         true,
     );
     const { $gettext, interpolate } = useGettext();
@@ -64,11 +74,19 @@ export function useActiveFilters(): {
         }
         for (const key of LIST_FILTER_KEYS) {
             for (const value of filters[key]) {
-                const valueLabel =
-                    facetLabels.value.get(`${key}:${value}`)?.value ?? value;
+                const id = `${key}:${value}`;
+                const valueLabel = facetLabels.value.get(id)?.value ?? value;
+                const shown =
+                    key !== "place" && facetNarrower.value.has(id)
+                        ? interpolate(
+                              $gettext("%{label} (and narrower terms)"),
+                              { label: valueLabel },
+                              true,
+                          )
+                        : valueLabel;
                 entries.push({
-                    id: `${key}:${value}`,
-                    label: named(filterTitle(key), valueLabel),
+                    id,
+                    label: named(filterTitle(key), shown),
                     clear: () => store.clearFilter(key, value),
                 });
             }

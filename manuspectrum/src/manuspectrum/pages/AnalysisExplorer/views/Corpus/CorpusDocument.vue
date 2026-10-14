@@ -1151,6 +1151,11 @@ function goHome(): void {
                         :facets="currentMatch?.facets ?? []"
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
+                        :term-count-hint="
+                            $gettext(
+                                '%{n} in this document, with this term or a narrower one',
+                            )
+                        "
                         :facet-query="facetQuery"
                         :document-group="false"
                         @change="onFacetChange"

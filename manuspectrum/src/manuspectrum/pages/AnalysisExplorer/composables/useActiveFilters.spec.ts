@@ -4,7 +4,10 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
-import { FACET_LABELS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    FACET_LABELS_KEY,
+    FACET_NARROWER_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 import type { ActiveFilter } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
@@ -27,7 +30,18 @@ function entries(): ActiveFilter[] {
                     new Map([
                         ["colour:c1", { value: "Bleu", lang: "fr" }],
                         ["place:p1", { value: "Paris", lang: "fr" }],
+                        [
+                            "material:m:blue",
+                            { value: "Blue pigment", lang: "en" },
+                        ],
+                        [
+                            "material:m:azurite",
+                            { value: "Azurite", lang: "en" },
+                        ],
                     ]),
+                ),
+                [FACET_NARROWER_KEY as symbol]: ref(
+                    new Set(["material:m:blue", "place:p1"]),
                 ),
             },
         },
@@ -41,6 +55,17 @@ describe("useActiveFilters", () => {
     it("names a colour chip « Colour », by the label the payload gave", () => {
         useExplorerStore().setFilter("colour", ["c1"]);
         expect(entries().map((entry) => entry.label)).toEqual(["Colour: Bleu"]);
+    });
+
+    it("a value with narrower terms gets the suffix, a leaf and a place never", () => {
+        const store = useExplorerStore();
+        store.setFilter("material", ["m:blue", "m:azurite"]);
+        store.setFilter("place", ["p1"]);
+        expect(entries().map((entry) => entry.label)).toEqual([
+            "Place of production: Paris",
+            "Identified material: Azurite",
+            "Identified material: Blue pigment (and narrower terms)",
+        ]);
     });
 
     it("has one chip per place, named by its label, and clearing it leaves the others", () => {

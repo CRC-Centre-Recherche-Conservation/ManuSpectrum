@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    ancestorsOf,
+    ancestorIds,
     buildTree,
+    coveringIds,
+    descendantIds,
+    domToken,
     flatten,
     nodeState,
     toggle,
@@ -10,169 +13,258 @@ import {
 
 import { facetValue } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
-const VALUES = [
+import type { TreeNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
+
+const PLACES = [
     facetValue("europe", "Europe"),
-    facetValue("france", "France (nord)", { parent: "europe" }),
-    facetValue("paris", "Paris", { parent: "france" }),
-    facetValue("lille", "Lille", { parent: "france" }),
-    facetValue("italy", "Italie", { parent: "europe" }),
-    facetValue("lost", "Ailleurs", { parent: "unknown" }),
+    facetValue("france", "France (nord)", { parents: ["europe"] }),
+    facetValue("paris", "Paris", { parents: ["france"] }),
+    facetValue("lille", "Lille", { parents: ["france"] }),
+    facetValue("italy", "Italie", { parents: ["europe"] }),
+    facetValue("lost", "Ailleurs", { parents: ["unknown"] }),
+];
+
+/** Pigments: lapis sits under two parents; `blue` is under `pigment`. */
+const TERMS = [
+    facetValue("pigment", "Pigment"),
+    facetValue("mineral", "Mineral"),
+    facetValue("blue", "Blue pigment", { parents: ["pigment"] }),
+    facetValue("lapis", "Lapis lazuli", { parents: ["blue", "mineral"] }),
+    facetValue("azurite", "Azurite", { parents: ["blue"] }),
 ];
 
 function sorted(ids: string[]): string[] {
     return [...ids].sort();
 }
 
+function ids(nodes: readonly TreeNode[]): string[] {
+    return nodes.map((node) => node.value.id);
+}
+
+function occurrences(nodes: readonly TreeNode[], id: string): TreeNode[] {
+    return nodes.flatMap((node) => [
+        ...(node.value.id === id ? [node] : []),
+        ...occurrences(node.children, id),
+    ]);
+}
+
 describe("buildTree", () => {
-    it("makes a root of a value with no parent or an unknown parent, children by folded label", () => {
-        const tree = buildTree(VALUES);
-        expect(tree.map((node) => node.value.id)).toEqual(["lost", "europe"]);
-        const europe = tree[1];
-        expect(europe.children.map((node) => node.value.id)).toEqual([
-            "france",
-            "italy",
-        ]);
-        expect(europe.children[0].children.map((n) => n.value.id)).toEqual([
-            "lille",
-            "paris",
-        ]);
+    it("makes a root of a value whose parents are absent, children by folded label", () => {
+        const tree = buildTree(PLACES);
+        expect(ids(tree)).toEqual(["lost", "europe"]);
+        expect(ids(tree[1].children)).toEqual(["france", "italy"]);
+        expect(ids(tree[1].children[0].children)).toEqual(["lille", "paris"]);
     });
 
-    it("survives a cycle by dropping it from the roots", () => {
+    it("draws a value under each parent present", () => {
+        const tree = buildTree(TERMS);
+        expect(occurrences(tree, "lapis")).toHaveLength(2);
+        const keys = occurrences(tree, "lapis").map((node) => node.key);
+        expect(sorted(keys)).toEqual(["mineral/lapis", "pigment/blue/lapis"]);
+        expect(ids(tree)).toEqual(["mineral", "pigment"]);
+    });
+
+    it("ignores a parent that is absent and keeps the present one", () => {
         const tree = buildTree([
-            facetValue("a", "A", { parent: "b" }),
-            facetValue("b", "B", { parent: "a" }),
+            facetValue("a", "A"),
+            facetValue("b", "B", { parents: ["gone", "a"] }),
         ]);
-        expect(tree).toEqual([]);
+        expect(ids(tree)).toEqual(["a"]);
+        expect(ids(tree[0].children)).toEqual(["b"]);
+    });
+
+    it("makes a root of a value whose parents are all absent", () => {
+        const tree = buildTree([
+            facetValue("a", "A", { parents: ["gone", "also-gone"] }),
+        ]);
+        expect(ids(tree)).toEqual(["a"]);
+        expect(tree[0].key).toBe("a");
+    });
+
+    it("never loops on a cycle and keeps its values reachable", () => {
+        const tree = buildTree([
+            facetValue("a", "A", { parents: ["b"] }),
+            facetValue("b", "B", { parents: ["a"] }),
+        ]);
+        expect(ids(tree)).toEqual(["a"]);
+        expect(ids(tree[0].children)).toEqual(["b"]);
+        expect(tree[0].children[0].children).toEqual([]);
+    });
+
+    it("orders siblings by folded label, not by input order", () => {
+        const tree = buildTree([
+            facetValue("z", "Zinc"),
+            facetValue("e", "Étain"),
+            facetValue("a", "azurite"),
+        ]);
+        expect(ids(tree)).toEqual(["a", "e", "z"]);
     });
 });
 
-describe("ancestorsOf", () => {
-    it("lists the ancestors nearest first, none for a root or an unknown id", () => {
-        const tree = buildTree(VALUES);
-        expect(ancestorsOf("paris", tree)).toEqual(["france", "europe"]);
-        expect(ancestorsOf("europe", tree)).toEqual([]);
-        expect(ancestorsOf("nope", tree)).toEqual([]);
+describe("ancestorIds and descendantIds", () => {
+    it("close over every path, never include the value, survive a cycle", () => {
+        expect(sorted([...ancestorIds("lapis", TERMS)])).toEqual([
+            "blue",
+            "mineral",
+            "pigment",
+        ]);
+        expect([...ancestorIds("pigment", TERMS)]).toEqual([]);
+        expect([...ancestorIds("nope", TERMS)]).toEqual([]);
+        expect(sorted([...descendantIds("pigment", TERMS)])).toEqual([
+            "azurite",
+            "blue",
+            "lapis",
+        ]);
+        const loop = [
+            facetValue("a", "A", { parents: ["b"] }),
+            facetValue("b", "B", { parents: ["a"] }),
+        ];
+        expect([...ancestorIds("a", loop)]).toEqual(["b"]);
+        expect([...descendantIds("a", loop)]).toEqual(["b"]);
+    });
+});
+
+describe("coveringIds", () => {
+    it("lists the ticked ancestors over every path, by folded label", () => {
+        expect(
+            coveringIds("lapis", ["pigment", "mineral", "azurite"], TERMS),
+        ).toEqual(["mineral", "pigment"]);
+        expect(coveringIds("lapis", ["lapis"], TERMS)).toEqual([]);
     });
 });
 
 describe("nodeState", () => {
-    const tree = buildTree(VALUES);
-    const node = (id: string) => {
-        const find = (nodes: typeof tree): (typeof tree)[number] | null => {
-            for (const entry of nodes) {
-                if (entry.value.id === id) return entry;
-                const inside = find(entry.children);
-                if (inside) return inside;
-            }
-            return null;
-        };
-        return find(tree)!;
-    };
-
-    it("is checked for a ticked node", () => {
-        expect(nodeState(node("france"), ["france"], tree)).toBe("checked");
+    it("is checked for a ticked value", () => {
+        expect(nodeState("france", ["france"], PLACES)).toBe("checked");
     });
 
-    it("is implicit under a ticked ancestor", () => {
-        expect(nodeState(node("paris"), ["europe"], tree)).toBe("implicit");
+    it("is implicit under any ticked ancestor, covering ancestors in label order", () => {
+        expect(nodeState("paris", ["europe"], PLACES)).toBe("implicit");
+        expect(nodeState("lapis", ["mineral"], TERMS)).toBe("implicit");
+        expect(nodeState("lapis", ["pigment"], TERMS)).toBe("implicit");
     });
 
-    it("is mixed above a ticked descendant", () => {
-        expect(nodeState(node("europe"), ["paris"], tree)).toBe("mixed");
+    it("is mixed above a ticked descendant on any path", () => {
+        expect(nodeState("europe", ["paris"], PLACES)).toBe("mixed");
+        expect(nodeState("mineral", ["lapis"], TERMS)).toBe("mixed");
+        expect(nodeState("pigment", ["lapis"], TERMS)).toBe("mixed");
     });
 
     it("is none otherwise", () => {
-        expect(nodeState(node("italy"), ["paris"], tree)).toBe("none");
+        expect(nodeState("italy", ["paris"], PLACES)).toBe("none");
+        expect(nodeState("azurite", ["mineral"], TERMS)).toBe("none");
+    });
+
+    it("reads checked for a ticked value under a ticked ancestor", () => {
+        expect(nodeState("lapis", ["pigment", "lapis"], TERMS)).toBe("checked");
+    });
+
+    it("gives every occurrence of a term the same state", () => {
+        const tree = buildTree(TERMS);
+        const selected = ["mineral"];
+        const states = occurrences(tree, "lapis").map((node) =>
+            nodeState(node.value.id, selected, TERMS),
+        );
+        expect(states).toEqual(["implicit", "implicit"]);
     });
 });
 
 describe("toggle", () => {
-    const tree = buildTree(VALUES);
-    const node = (id: string) => {
-        const find = (nodes: typeof tree): (typeof tree)[number] | null => {
-            for (const entry of nodes) {
-                if (entry.value.id === id) return entry;
-                const inside = find(entry.children);
-                if (inside) return inside;
-            }
-            return null;
-        };
-        return find(tree)!;
-    };
-
-    it("ticks an unticked node", () => {
-        expect(toggle(node("paris"), [], tree)).toEqual(["paris"]);
+    it("ticks an unticked value", () => {
+        expect(toggle("paris", [], PLACES)).toEqual(["paris"]);
     });
 
-    it("ticking a node drops its ticked descendants", () => {
+    it("ticking drops the ticked descendants of every path", () => {
         expect(
-            sorted(toggle(node("europe"), ["paris", "italy", "lost"], tree)),
+            sorted(toggle("pigment", ["lapis", "azurite", "mineral"], TERMS)),
+        ).toEqual(["mineral", "pigment"]);
+        expect(
+            sorted(toggle("europe", ["paris", "italy", "lost"], PLACES)),
         ).toEqual(["europe", "lost"]);
     });
 
-    it("ticking a mixed node ticks it and drops the descendants", () => {
-        expect(toggle(node("france"), ["paris"], tree)).toEqual(["france"]);
+    it("ticking a mixed value ticks it and drops the descendants", () => {
+        expect(toggle("france", ["paris"], PLACES)).toEqual(["france"]);
     });
 
-    it("unticks a ticked node", () => {
-        expect(
-            sorted(toggle(node("france"), ["france", "lost"], tree)),
-        ).toEqual(["lost"]);
-    });
-
-    it("unticking an implicit child replaces the parent by its other children", () => {
-        expect(sorted(toggle(node("paris"), ["france"], tree))).toEqual([
-            "lille",
+    it("unticks a ticked value", () => {
+        expect(sorted(toggle("france", ["france", "lost"], PLACES))).toEqual([
+            "lost",
         ]);
     });
 
-    it("unticking an implicit grandchild replaces the ancestor by the siblings along the path", () => {
-        expect(sorted(toggle(node("paris"), ["europe"], tree))).toEqual([
-            "italy",
-            "lille",
-        ]);
+    it("changes nothing on an implicit value", () => {
+        const selected = ["pigment"];
+        const next = toggle("lapis", selected, TERMS);
+        expect(next).toEqual(["pigment"]);
+        expect(next).not.toBe(selected);
+    });
+
+    it("unticking a covered place changes nothing and never ticks its siblings", () => {
+        expect(toggle("paris", ["france"], PLACES)).toEqual(["france"]);
+        expect(toggle("paris", ["europe"], PLACES)).toEqual(["europe"]);
     });
 
     it("leaves the ticks outside the ticked ancestor alone", () => {
-        expect(sorted(toggle(node("lille"), ["europe", "lost"], tree))).toEqual(
-            ["italy", "lost", "paris"],
-        );
+        expect(sorted(toggle("lille", ["europe", "lost"], PLACES))).toEqual([
+            "europe",
+            "lost",
+        ]);
     });
 
-    it("unticking the only child of a ticked parent leaves just the rest", () => {
-        const single = buildTree([
-            facetValue("a", "A"),
-            facetValue("b", "B", { parent: "a" }),
-        ]);
-        expect(toggle(single[0].children[0], ["a"], single)).toEqual([]);
+    it("unticks a place tree value as before", () => {
+        expect(toggle("paris", ["paris"], PLACES)).toEqual([]);
     });
 });
 
 describe("flatten", () => {
-    const tree = buildTree(VALUES);
-
-    it("lists every node with the path of its ancestors, nearest first", () => {
-        const entries = flatten(tree, "");
-        const paris = entries.find((entry) => entry.node.value.id === "paris")!;
-        expect(paris.path).toBe("France (nord) — Europe");
-        expect(entries.find((e) => e.node.value.id === "europe")!.path).toBe(
-            "",
-        );
+    it("lists the found ids with every path", () => {
+        const entries = flatten(TERMS, "ignored", ["lapis", "pigment"]);
+        expect(entries.map((entry) => entry.value.id)).toEqual([
+            "lapis",
+            "pigment",
+        ]);
+        expect(sorted(entries[0].paths)).toEqual([
+            "Mineral",
+            "Pigment — Blue pigment",
+        ]);
+        expect(entries[1].paths).toEqual([""]);
     });
 
-    it("keeps the nodes whose folded label holds the folded query, in label order", () => {
-        expect(flatten(tree, "ITAL").map((e) => e.node.value.id)).toEqual([
+    it("lists nothing for an empty found and skips ids that are absent", () => {
+        expect(flatten(TERMS, "", [])).toEqual([]);
+        expect(
+            flatten(TERMS, "", ["nope", "azurite"]).map(
+                (entry) => entry.value.id,
+            ),
+        ).toEqual(["azurite"]);
+    });
+
+    it("filters by folded label without found", () => {
+        expect(flatten(PLACES, "ITAL").map((e) => e.value.id)).toEqual([
             "italy",
         ]);
-        expect(flatten(tree, "par").map((e) => e.node.value.id)).toEqual([
-            "paris",
+        expect(flatten(PLACES, "ITAL", null).map((e) => e.value.id)).toEqual([
+            "italy",
         ]);
+        const paris = flatten(PLACES, "par")[0];
+        expect(paris.paths).toEqual(["Europe — France (nord)"]);
+        expect(flatten(PLACES, "").map((e) => e.value.id)).toHaveLength(6);
     });
 
-    it("gives an empty path to a node whose parent is unknown", () => {
-        expect(flatten(tree, "ailleurs").map((entry) => entry.path)).toEqual([
-            "",
-        ]);
+    it("gives an empty path to a value whose parent is unknown", () => {
+        expect(flatten(PLACES, "ailleurs").map((e) => e.paths)).toEqual([[""]]);
+    });
+});
+
+describe("domToken", () => {
+    it("gives two occurrences of one value two DOM-safe tokens, the same each time", () => {
+        const first = domToken("http://x.test/blue/http://x.test/azurite");
+        const second = domToken("http://x.test/mineral/http://x.test/azurite");
+        expect(first).not.toBe(second);
+        expect(first).toMatch(/^[a-z0-9]+$/);
+        expect(domToken("http://x.test/blue/http://x.test/azurite")).toBe(
+            first,
+        );
     });
 });

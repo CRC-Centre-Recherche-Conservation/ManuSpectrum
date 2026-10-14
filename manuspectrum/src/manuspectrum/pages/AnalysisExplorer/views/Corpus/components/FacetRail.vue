@@ -5,13 +5,13 @@ import { useGettext } from "vue3-gettext";
 import InputText from "primevue/inputtext";
 import Tooltip from "primevue/tooltip";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import FacetTree from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue";
 import FacetValues from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue";
 import PeriodFacet from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodFacet.vue";
 import PeriodRuleMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodRuleMenu.vue";
 
 import {
-    buildTree,
     flatten,
     SEARCH_THRESHOLD,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
@@ -54,24 +54,51 @@ const RAIL_KEYS: readonly FacetKey[] = [
 /** Facets that list every value, in the order served, with no search box nor « Show all ». */
 const FIXED_LIST_KEYS: readonly FacetKey[] = ["colour"];
 /** Facets drawn as a tree by `FacetTree`: they always hold every value (a tree needs the parents), searched, never cut to a preview. */
-const TREE_KEYS: readonly FacetKey[] = ["place"];
+const TREE_KEYS: readonly FacetKey[] = [
+    "place",
+    "partType",
+    "layer",
+    "technique",
+    "material",
+];
+/** Trees of terms of a controlled list: a count holds the rows of the narrower terms too. */
+const TERM_TREE_KEYS: readonly FacetKey[] = [
+    "partType",
+    "layer",
+    "technique",
+    "material",
+];
+/** Trees drawn unfolded; the others show their roots and the paths of the ticked values. */
+const EXPANDED_TREE_KEYS: readonly FacetKey[] = [
+    "technique",
+    "partType",
+    "layer",
+];
 
 /**
  * The facets of a Corpus screen, in four groups (document, studied
  * component, analysis, identified material), each folding to its heading
- * (state in the store). The place is a tree (`FacetTree`). The Colour facet lists every colour in the order served (a colour
- * with no hit greyed, never dropped).
+ * (state in the store). The place and the terms of a controlled list
+ * (component type, layer, technique, material) are trees (`FacetTree`):
+ * technique, component type and layer unfolded, place and material showing
+ * their roots and the paths of the ticked values; the Material title carries
+ * a help on materials listed under several families. The Colour facet lists
+ * every colour in the order served (a colour with no hit greyed, never
+ * dropped).
  * What is ticked comes from `selected` (the filters in force), never from the
  * payload's `selected`, which lags behind while the next search loads.
  * The period (`period`, the `RangeFacet` of the payload) closes the Document
  * group; its state is read from the filters and every edit is emitted whole
  * as `period-change`. `documentGroup` false leaves the Document group out
  * (a document's own screen: its rows share its place and date). `countHint`, a translated text with `%{n}`, says what a count counts
- * (« %{n} in this document »). Under `facetQuery`, the query of the facet
+ * (« %{n} in this document »); `termCountHint` says it for the term trees,
+ * whose counts hold the narrower terms (« %{n} rows carrying this term or a
+ * narrower one » when not given). Under `facetQuery`, the query of the facet
  * route (the filters, `filtersOf`, and `document=` on a document's rail),
  * a facet longer than `SEARCH_THRESHOLD` has a search box: the values shown
  * are the server's answer to the typed text (`facet/<key>?find=`), marked
- * busy until it arrives, plus the ticked values it lacks. A facet the server
+ * busy until it arrives, plus the ticked values it lacks; a tree lists the
+ * values the server found (`Facet.found`), synonyms included. A facet the server
  * cut short (`total` above its values) asks the server for every value when
  * unfolded. Without `facetQuery` the rail shows what it holds, with no
  * search box.
@@ -81,11 +108,18 @@ const props = withDefaults(
         facets: Facet[];
         selected: Partial<Record<FacetKey, readonly string[]>>;
         countHint?: string;
+        termCountHint?: string;
         facetQuery?: string | null;
         period?: RangeFacet | null;
         documentGroup?: boolean;
     }>(),
-    { countHint: "", facetQuery: null, period: null, documentGroup: true },
+    {
+        countHint: "",
+        termCountHint: "",
+        facetQuery: null,
+        period: null,
+        documentGroup: true,
+    },
 );
 const emit = defineEmits<{
     change: [key: FacetKey, ids: string[]];
@@ -131,6 +165,19 @@ function isTree(key: FacetKey): boolean {
     return TREE_KEYS.includes(key);
 }
 
+function isExpandedTree(key: FacetKey): boolean {
+    return EXPANDED_TREE_KEYS.includes(key);
+}
+
+/** What a count of `key` counts: the term trees hold their narrower terms. */
+function countHintOf(key: FacetKey): string {
+    if (!TERM_TREE_KEYS.includes(key)) return props.countHint;
+    return (
+        props.termCountHint ||
+        $gettext("%{n} rows carrying this term or a narrower one")
+    );
+}
+
 function isCollapsed(group: FacetGroup): boolean {
     return store.collapsedGroups.includes(group);
 }
@@ -172,8 +219,8 @@ function lookupFor(key: FacetKey): FacetLookup | null {
     return { filters: props.facetQuery, find };
 }
 
-/** Every value of `facet` the rail holds: the server's full list once it answered for these filters, else the values sent. */
-function valuesOf(facet: Facet): FacetValue[] {
+/** The server's answer for `facet` once it answered for these filters, else null. */
+function lazyAnswer(facet: Facet): Facet | null {
     const lazy = lazyFacets.get(facet.key);
     const loaded = lazy?.loaded.value;
     if (
@@ -182,9 +229,19 @@ function valuesOf(facet: Facet): FacetValue[] {
         lookupFor(facet.key) === null ||
         (JSON.parse(loaded) as FacetLookup).filters !== props.facetQuery
     ) {
-        return facet.values;
+        return null;
     }
-    return lazy.data.value.values;
+    return lazy.data.value;
+}
+
+/** Every value of `facet` the rail holds: the server's full list once it answered for these filters, else the values sent. */
+function valuesOf(facet: Facet): FacetValue[] {
+    return lazyAnswer(facet)?.values ?? facet.values;
+}
+
+/** The ids the server found for the typed text, from the answer `valuesOf` shows; null without one. */
+function foundOf(facet: Facet): readonly string[] | null {
+    return queryOf(facet.key) ? lazyAnswer(facet)?.found ?? null : null;
 }
 
 function isLoading(key: FacetKey): boolean {
@@ -232,7 +289,8 @@ function visibleValues(facet: Facet): FacetValue[] {
 function hasNoMatch(facet: Facet): boolean {
     if (queryOf(facet.key) === "" || isLoading(facet.key)) return false;
     return isTree(facet.key)
-        ? flatten(buildTree(valuesOf(facet)), queryOf(facet.key)).length === 0
+        ? flatten(valuesOf(facet), queryOf(facet.key), foundOf(facet))
+              .length === 0
         : visibleValues(facet).length === 0;
 }
 
@@ -369,6 +427,19 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                             >
                         </span>
                         <span v-else>{{ facetTitle(facet.key) }}</span>
+                        <IconButton
+                            v-if="facet.key === 'material'"
+                            class="title-help"
+                            icon="info-circle"
+                            tip-align="start"
+                            :info="true"
+                            :label="$gettext('About material families')"
+                            :description="
+                                $gettext(
+                                    'A material can belong to several families (colour, origin); it appears under each.',
+                                )
+                            "
+                        />
                     </legend>
                     <span
                         v-if="selectionSummary(facet)"
@@ -392,8 +463,10 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
                         :facet="facet"
                         :values="valuesOf(facet)"
                         :selected="props.selected[facet.key] ?? []"
-                        :count-hint="props.countHint"
+                        :count-hint="countHintOf(facet.key)"
+                        :expanded-by-default="isExpandedTree(facet.key)"
                         :query="queryOf(facet.key)"
+                        :found="foundOf(facet)"
                         :busy="isLoading(facet.key)"
                         @change="(ids) => onTreeChange(facet, ids)"
                     />
@@ -541,6 +614,17 @@ function onChange(facet: Facet, id: string, checked: boolean): void {
     gap: 0.25rem;
     min-inline-size: 0;
     border: none;
+}
+
+.facet-rail .facet .title {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.facet-rail .title-help {
+    letter-spacing: normal;
+    text-transform: none;
 }
 
 .facet-rail .title-row {

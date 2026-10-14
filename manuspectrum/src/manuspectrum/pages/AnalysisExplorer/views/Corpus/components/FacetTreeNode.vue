@@ -2,6 +2,7 @@
 import { computed, inject } from "vue";
 import { useGettext } from "vue3-gettext";
 
+import FacetMark from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetMark.vue";
 import FacetTreeNode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTreeNode.vue";
 
 import {
@@ -13,15 +14,23 @@ import { FACET_TREE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/views/Corp
 import type { TreeNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 /**
- * One place of `FacetTree`: its native checkbox, label, « unpublished » badge
- * and count, then its unfold button at the end of the row when it has
- * children (a leaf row is laid like a `FacetValues` row), then, once
- * unfolded, the list of its children. In the flat list (`path` given, `flat`)
- * it shows the path of the place under its label and never unfolds.
+ * One occurrence of a value in `FacetTree`: its native checkbox, mark
+ * (`FacetMark`), label, « unpublished » badge and count, then its unfold
+ * button at the end of the row when it has children (a leaf row is laid like
+ * a `FacetValues` row), then, once unfolded, the list of its children. A
+ * covered value keeps a focusable checkbox, ticked in a pale tone and
+ * `aria-disabled`, described by « covered by X » under its label; its click
+ * is cancelled, so neither the pointer nor Space changes it. In the flat
+ * list (`flat`) each of its `paths` is a line under its label and it never
+ * unfolds.
  */
 const props = withDefaults(
-    defineProps<{ node: TreeNode; path?: string; flat?: boolean }>(),
-    { path: "", flat: false },
+    defineProps<{
+        node: TreeNode;
+        paths?: readonly string[];
+        flat?: boolean;
+    }>(),
+    { paths: () => [], flat: false },
 );
 
 const { $gettext } = useGettext();
@@ -30,7 +39,11 @@ if (!tree) {
     throw new Error("FacetTreeNode is drawn by FacetTree");
 }
 
-const state = computed(() => tree.stateOf(props.node));
+const state = computed(() => tree.stateOf(props.node.value.id));
+const covered = computed(() => state.value === "implicit");
+const coveredText = computed(() => tree.coveredText(props.node.value.id));
+const coveredId = computed(() => `${tree.nodeId(props.node)}-covered`);
+const listId = computed(() => `${tree.nodeId(props.node)}-list`);
 const hasChildren = computed(
     () => !props.flat && props.node.children.length > 0,
 );
@@ -38,6 +51,10 @@ const isOpen = computed(() => hasChildren.value && tree.isOpen(props.node));
 const isDisabled = computed(
     () => props.node.value.count === 0 && state.value === "none",
 );
+
+function onClick(event: MouseEvent): void {
+    if (covered.value) event.preventDefault();
+}
 </script>
 
 <template>
@@ -45,7 +62,7 @@ const isDisabled = computed(
         class="node"
         :class="{
             leaf: !hasChildren,
-            implicit: state === 'implicit',
+            implicit: covered,
         }"
     >
         <div class="row">
@@ -53,10 +70,18 @@ const isDisabled = computed(
                 <input
                     type="checkbox"
                     :value="props.node.value.id"
-                    :checked="state === 'checked' || state === 'implicit'"
+                    :checked="state === 'checked' || covered"
                     :indeterminate="state === 'mixed'"
                     :disabled="isDisabled"
-                    @change="tree.change(props.node)"
+                    :aria-disabled="covered ? 'true' : undefined"
+                    :aria-describedby="covered ? coveredId : undefined"
+                    @click="onClick"
+                    @change="tree.change(props.node.value.id)"
+                />
+                <FacetMark
+                    :facet-key="tree.facetKey"
+                    :mark="props.node.value.mark"
+                    :swatch="props.node.value.swatch"
                 />
                 <span class="text">
                     <span
@@ -66,10 +91,17 @@ const isDisabled = computed(
                         >{{ props.node.value.label.value }}</span
                     >
                     <span
-                        v-if="props.path"
+                        v-for="path in props.paths"
+                        :key="path"
                         class="path"
-                        :title="props.path"
-                        >{{ props.path }}</span
+                        :title="path"
+                        >{{ path }}</span
+                    >
+                    <span
+                        v-if="covered"
+                        :id="coveredId"
+                        class="covered"
+                        >{{ coveredText }}</span
                     >
                 </span>
                 <span
@@ -88,7 +120,7 @@ const isDisabled = computed(
                 type="button"
                 class="expander"
                 :aria-expanded="isOpen ? 'true' : 'false'"
-                :aria-controls="tree.listId(props.node)"
+                :aria-controls="listId"
                 :aria-label="tree.expanderLabel(props.node)"
                 @click="tree.toggleOpen(props.node)"
             >
@@ -110,12 +142,12 @@ const isDisabled = computed(
         </div>
         <ul
             v-if="isOpen"
-            :id="tree.listId(props.node)"
+            :id="listId"
             class="children"
         >
             <FacetTreeNode
                 v-for="child in props.node.children"
-                :key="child.value.id"
+                :key="child.key"
                 :node="child"
             />
         </ul>
@@ -170,8 +202,16 @@ const isDisabled = computed(
     cursor: pointer;
 }
 
+.node .value input {
+    flex: none;
+}
+
 .node .value:has(input:disabled) {
     color: var(--ink-dim);
+    cursor: default;
+}
+
+.node.implicit > .row .value {
     cursor: default;
 }
 
@@ -186,15 +226,21 @@ const isDisabled = computed(
 }
 
 .node .label,
-.node .path {
+.node .path,
+.node .covered {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.node .path {
+.node .path,
+.node .covered {
     color: var(--ink-muted);
     font-size: 0.6875rem;
+}
+
+.node .covered {
+    font-style: italic;
 }
 
 .node .unpublished {

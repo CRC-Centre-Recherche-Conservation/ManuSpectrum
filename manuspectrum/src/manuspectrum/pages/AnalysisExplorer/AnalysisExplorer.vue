@@ -30,6 +30,7 @@ import {
     CITE_OPEN_KEY,
     CORPUS_COUNT_KEY,
     FACET_LABELS_KEY,
+    FACET_NARROWER_KEY,
     MIRADOR_URL_KEY,
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
@@ -94,6 +95,7 @@ const hasIntroBar = introBar() !== null;
 const sharedSelection = ref<SharedSelection | null>(INITIAL_SELECTION);
 const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
+const facetNarrower = ref(new Set<string>());
 const screenFocusPending = ref(false);
 const resultsMemo = ref<ResultsMemo | null>(null);
 const selectionHints = ref(new Map<string, SelectionHint>());
@@ -136,6 +138,7 @@ const corpusCount = computed(() => {
 
 provide(CORPUS_COUNT_KEY, corpusCount);
 provide(FACET_LABELS_KEY, facetLabels);
+provide(FACET_NARROWER_KEY, facetNarrower);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
 provide(RESULTS_MEMO_KEY, resultsMemo);
 provide(SELECTION_HINTS_KEY, selectionHints);

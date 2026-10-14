@@ -233,6 +233,7 @@ describe("CorpusResults", () => {
             group: "analysis",
             values: [...facet("year", 2).values, facetValue("2021")],
             total: 3,
+            found: null,
         };
         fetchMock.mockResolvedValue(
             jsonResponse(

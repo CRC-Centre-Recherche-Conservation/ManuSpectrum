@@ -23,6 +23,7 @@ function colourFacet(): Facet {
             }),
         ],
         total: 3,
+        found: null,
     };
 }
 
@@ -95,6 +96,7 @@ describe("FacetValues", () => {
                 }),
             ],
             total: 2,
+            found: null,
         };
         const rows = mountValues({ facet: technique }).findAll(".value");
         expect(rows[0].find(".dot").classes()).toContain("dot--tech-3");

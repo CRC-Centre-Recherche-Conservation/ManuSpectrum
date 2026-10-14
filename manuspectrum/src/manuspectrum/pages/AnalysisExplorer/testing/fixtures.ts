@@ -109,7 +109,8 @@ export function facetValue(
         count: 1,
         mark: null,
         swatch: null,
-        parent: null,
+        parents: [],
+        narrower: false,
         unpublished: false,
         ...overrides,
     };
@@ -129,10 +130,12 @@ export function facet(key: Facet["key"], count: number): Facet {
                     ? { code: `T${n}`, colour: n + 1, family: `${key}-${n}` }
                     : null,
             swatch: null,
-            parent: null,
+            parents: [],
+            narrower: false,
             unpublished: false,
         })),
         total: count,
+        found: null,
     };
 }
 
@@ -262,6 +265,7 @@ export function eventsResponse(
         unplaced: 0,
         period: null,
         materials: {},
+        coveringMaterials: {},
         colours: {},
         analysisNames: { [uuid(100)]: label("X01") },
         analysisTechniques: {},
