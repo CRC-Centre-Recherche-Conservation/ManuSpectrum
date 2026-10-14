@@ -61,8 +61,10 @@ certbot() { # certbot ARGS... : the `certbot` service, pointed at Pebble
 }
 
 docker network create "$RUN_ID" >/dev/null
+# PEBBLE_WFE_NONCEREJECT=0: Pebble rejects 5 % of nonces by default to test
+# client retries, which made the renew step fail at random.
 pebble_container="$(docker create --name "$RUN_ID-pebble" --network "$RUN_ID" \
-  --network-alias pebble -e PEBBLE_VA_NOSLEEP=1 "$PEBBLE_IMAGE")"
+  --network-alias pebble -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0 "$PEBBLE_IMAGE")"
 docker cp "$pebble_container:/test/certs/pebble.minica.pem" "$TMP/pebble-ca.pem"
 docker start "$RUN_ID-pebble" >/dev/null
 assert "Pebble started" $?
