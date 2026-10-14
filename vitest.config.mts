@@ -43,6 +43,8 @@ function generateConfig(): Promise<UserConfig> {
             'uuid-esm': path.join(filePath, 'node_modules', 'uuid', 'dist', 'esm-browser', 'index.js'),
             // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
             'leaflet-side-by-side': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'plugins', 'leaflet-side-by-side', 'index.js'),
+            // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
+            'mapbox-gl-geocoder': path.join(filePath, 'node_modules', '@mapbox', 'mapbox-gl-geocoder', 'dist', 'mapbox-gl-geocoder.min.js'),
         };
 
         for (
