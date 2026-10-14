@@ -58,4 +58,19 @@
     {% endblocktrans %}
     <a href="{% url 'about-terms' %}">{% trans "Terms of use" %}</a>.
 </p>
+
+<h2>{% trans "Maps" %}</h2>
+<p>
+    {% blocktrans trimmed %}
+    The map background is served by OpenFreeMap from OpenMapTiles vector tiles and the data of the OpenStreetMap
+    contributors. It is drawn with the Positron style designed by CARTO (CC BY 4.0, derived from CartoDB Basemaps,
+    CC BY 3.0).
+    {% endblocktrans %}
+</p>
+<ul>
+    <li><a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a></li>
+    <li><a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a></li>
+    <li><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">&copy; OpenStreetMap contributors</a></li>
+    <li><a href="https://github.com/openmaptiles/positron-gl-style" target="_blank" rel="noopener">Positron, CARTO</a></li>
+</ul>
 {% endblock %}

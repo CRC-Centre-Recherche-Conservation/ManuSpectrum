@@ -440,6 +440,20 @@ class LegalPagesTests(TestCase):
         ):
             self.assertIn(name, html)
 
+    def test_legal_notice_credits_the_basemap_in_both_languages(self):
+        for lang, heading in (("en", "Maps"), ("fr", "Cartes")):
+            html = self.get("about-legal", lang)
+            self.assertIn(f"<h2>{heading}</h2>", html)
+            for needle in (
+                "https://openfreemap.org",
+                "https://www.openmaptiles.org/",
+                "https://www.openstreetmap.org/copyright",
+                "OpenStreetMap contributors",
+                "Positron",
+                "CARTO",
+            ):
+                self.assertIn(needle, html, lang)
+
     @override_settings(CONTACT_EMAIL="legal@manuspectrum.test")
     def test_legal_notice_prints_the_contact_setting(self):
         self.assertIn("legal@manuspectrum.test", self.get("about-legal"))
@@ -471,6 +485,16 @@ class LegalPagesTests(TestCase):
             self.assertIn(f'<h2 id="third-party-services">{heading}</h2>', html)
             for host in ("tiles.openfreemap.org", "vtiles.openhistoricalmap.org"):
                 self.assertIn(host, html)
+
+    def test_privacy_says_openfreemap_is_served_through_cloudflare_for_every_map(self):
+        for lang, maps, transfer in (
+            ("en", "the search map", "OpenFreeMap (served through Cloudflare"),
+            ("fr", "carte de la recherche", "OpenFreeMap (servi par Cloudflare"),
+        ):
+            html = self.get("about-privacy", lang)
+            self.assertIn("Cloudflare", html)
+            self.assertIn(maps, html)
+            self.assertIn(transfer, html)
 
     def test_privacy_third_party_section_lists_the_known_hosts(self):
         for lang in ("en", "fr"):

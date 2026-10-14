@@ -5607,6 +5607,16 @@ msgstr ""
 "v3. Each resource states the licence that applies to its data and files; read"
 " it before reusing them."
 
+#: templates/views/pages/legal.htm:62
+msgid "Maps"
+msgstr "Maps"
+
+#: templates/views/pages/legal.htm:63
+msgid ""
+"The map background is served by OpenFreeMap from OpenMapTiles vector tiles and the data of the OpenStreetMap contributors. It is drawn with the Positron style designed by CARTO (CC BY 4.0, derived from CartoDB Basemaps, CC BY 3.0)."
+msgstr ""
+"The map background is served by OpenFreeMap from OpenMapTiles vector tiles and the data of the OpenStreetMap contributors. It is drawn with the Positron style designed by CARTO (CC BY 4.0, derived from CartoDB Basemaps, CC BY 3.0)."
+
 #: templates/views/pages/privacy.htm:5 templates/views/pages/privacy.htm:6
 msgid ""
 "What personal data ManuSpectrum keeps, why, for how long, and how to exercise"
@@ -5899,13 +5909,17 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:94
 msgid ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
-"OpenMapTiles, © OpenStreetMap contributors."
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites "
+"of the base map, loaded whenever a map is shown: the Map view of the "
+"Explorer, the search map, the maps of the resource reports and the map "
+"widgets of the editing tools. OpenFreeMap is served through Cloudflare "
+"(United States). Data © OpenMapTiles, © OpenStreetMap contributors."
 msgstr ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
-"OpenMapTiles, © OpenStreetMap contributors."
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites "
+"of the base map, loaded whenever a map is shown: the Map view of the "
+"Explorer, the search map, the maps of the resource reports and the map "
+"widgets of the editing tools. OpenFreeMap is served through Cloudflare "
+"(United States). Data © OpenMapTiles, © OpenStreetMap contributors."
 
 #: templates/views/pages/privacy.htm:95
 msgid ""
@@ -5994,14 +6008,14 @@ msgstr "Transfers outside the European Union"
 #: templates/views/pages/privacy.htm:112
 msgid ""
 "None by the platform, which is hosted in France. The exceptions are the "
-"services above that are stated to process data outside the European Union or "
-"whose location is not stated: Google Fonts, WebSpellChecker and Let's "
-"Encrypt."
+"services above that are stated to process data outside the European Union "
+"or whose location is not stated: Google Fonts, WebSpellChecker, Let's "
+"Encrypt and OpenFreeMap (served through Cloudflare, United States)."
 msgstr ""
 "None by the platform, which is hosted in France. The exceptions are the "
-"services above that are stated to process data outside the European Union or "
-"whose location is not stated: Google Fonts, WebSpellChecker and Let's "
-"Encrypt."
+"services above that are stated to process data outside the European Union "
+"or whose location is not stated: Google Fonts, WebSpellChecker, Let's "
+"Encrypt and OpenFreeMap (served through Cloudflare, United States)."
 
 #: templates/views/pages/privacy.htm:114
 msgid "Your rights"

@@ -22,6 +22,7 @@ from django.test import TestCase
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
+from manuspectrum import basemaps
 from manuspectrum.management.commands import check_pkg_inventory
 from tests.test_export_pkg import ORIGIN, make_widget_row, SETTINGS_NODES, make_list
 
@@ -286,6 +287,40 @@ class CheckPkgInventoryTests(TestCase):
             nodegroup_id=SETTINGS_NODES["mapbox_api_key"],
             data={SETTINGS_NODES["mapbox_api_key"]: {"en": {"value": ""}}},
         )
+        self.assertIn("Inventory check passed", self.check())
+
+    def settings_tile(self, node_id, value):
+        resource, _ = models.ResourceInstance.objects.get_or_create(
+            resourceinstanceid=settings.SYSTEM_SETTINGS_RESOURCE_ID,
+            graph_id=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID,
+        )
+        group, _ = models.NodeGroup.objects.get_or_create(nodegroupid=node_id)
+        models.TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=resource,
+            nodegroup=group,
+            data={node_id: {"en": {"value": value}}},
+        )
+
+    def test_a_mapbox_map_source_is_reported(self):
+        models.MapSource.objects.create(
+            name="mapbox-streets",
+            source={"type": "vector", "url": "mapbox://mapbox.mapbox-streets-v8"},
+        )
+        failure = self.failure()
+        self.assertIn("map source mapbox-streets", failure)
+        self.assertIn("needs a Mapbox token", failure)
+
+    def test_a_mapbox_sprite_or_glyphs_setting_is_reported(self):
+        self.settings_tile(basemaps.SPRITES_NODE_ID, basemaps.MAPBOX_SPRITES_URL)
+        self.settings_tile(basemaps.GLYPHS_NODE_ID, basemaps.MAPBOX_GLYPHS_URL)
+        failure = self.failure()
+        self.assertIn(f"System Settings node {basemaps.SPRITES_NODE_ID}", failure)
+        self.assertIn(f"System Settings node {basemaps.GLYPHS_NODE_ID}", failure)
+
+    def test_the_openfreemap_sprite_and_glyphs_pass(self):
+        self.settings_tile(basemaps.SPRITES_NODE_ID, basemaps.SPRITES_URL)
+        self.settings_tile(basemaps.GLYPHS_NODE_ID, basemaps.GLYPHS_URL)
         self.assertIn("Inventory check passed", self.check())
 
     def test_a_count_of_the_database_section_is_reported(self):

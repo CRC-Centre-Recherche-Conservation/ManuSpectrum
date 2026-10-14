@@ -1064,6 +1064,18 @@ WORKFLOW_NOTICE_DAYS = (21, 7)
 ACCOUNT_RETENTION_MONTHS = 24
 ACCOUNT_RETENTION_NOTICE_DAYS = 30
 
+# ---------------------------------------------------------------------------
+# Maps
+# ---------------------------------------------------------------------------
+# The basemap is OpenFreeMap (manuspectrum/basemaps.py): no Mapbox key. The
+# System Settings tile of each node wins over these values at start
+# (update_from_db). Migration 0013 rewrites the tiles of EXISTING databases; a
+# fresh setup_db takes them from the overlay system_settings/System_Settings.json
+# (dev) or from the package (make init).
+MAPBOX_API_KEY = ""
+MAPBOX_SPRITES = "https://tiles.openfreemap.org/sprites/ofm_f384/ofm"
+MAPBOX_GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
+
 try:
     from .package_settings import *
 except ImportError:
