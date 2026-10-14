@@ -7,6 +7,7 @@ two things that must never drift: the output is byte-stable, and nothing private
 
 import copy
 import hashlib
+import importlib
 import json
 import os
 import subprocess
@@ -29,6 +30,9 @@ from arches.app.models import models
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 from arches_controlled_lists.utils.skos import ARCHES
 
+from django.apps import apps
+
+from manuspectrum import basemaps
 from manuspectrum.management.commands import export_pkg
 from manuspectrum.management.commands.export_pkg import (
     CORE_SETTINGS_JSON,
@@ -42,6 +46,8 @@ from manuspectrum.management.commands.export_pkg import (
     slugify,
     values_digest,
 )
+
+migration = importlib.import_module("manuspectrum.migrations.0013_openfreemap_basemap")
 
 ORIGIN = "https://manuspectrum.test/"
 SETTINGS_NODES = {
@@ -893,14 +899,60 @@ class ExportPkgTests(TestCase):
         with self.assertRaisesMessage(CommandError, "project-layer"):
             self.export("again")
 
-    def test_a_modified_core_map_source_is_refused(self):
-        source = models.MapSource.objects.filter(name="mapbox-streets").first()
-        if source is None:
-            self.skipTest("the test database has no core map source")
-        source.source = {"type": "vector", "url": "mapbox://changed"}
-        source.save()
-        with self.assertRaisesMessage(CommandError, "mapbox-streets"):
+    def test_the_openfreemap_basemap_is_accepted_and_counted(self):
+        out = self.export()
+        inventory = json.loads((out / "expected-inventory.json").read_text())
+        self.assertEqual(inventory["map_layers"], 1)
+        self.assertEqual(inventory["map_sources"], 3)
+
+    def test_a_modified_openfreemap_source_is_refused(self):
+        models.MapSource.objects.filter(name="openfreemap").update(
+            source={"type": "vector", "url": "https://tiles.example/planet"}
+        )
+        with self.assertRaisesMessage(CommandError, "map source openfreemap"):
             self.export()
+
+    def test_a_modified_openfreemap_layer_is_refused(self):
+        models.MapLayer.objects.filter(name="streets").update(
+            layerdefinitions=[{"id": "background", "type": "background"}]
+        )
+        with self.assertRaisesMessage(CommandError, "map layer streets"):
+            self.export()
+
+    def test_the_mapbox_rows_of_arches_are_refused(self):
+        migration.reverse(apps, None)
+        with self.assertRaises(CommandError) as raised:
+            self.export()
+        message = str(raised.exception)
+        for label in (
+            "map layer satellite",
+            "map layer streets",
+            "map source mapbox-streets",
+            "map source mapbox-satellite",
+        ):
+            self.assertIn(label, message)
+
+    def test_a_mapbox_url_in_a_core_source_is_refused(self):
+        models.MapSource.objects.create(
+            name="mapbox-streets",
+            source={"type": "vector", "url": "mapbox://mapbox.mapbox-streets-v8"},
+        )
+        with self.assertRaisesMessage(CommandError, "map source mapbox-streets"):
+            self.export()
+
+    def test_system_settings_carry_the_openfreemap_sprite_and_glyphs(self):
+        out = self.export()
+        text = (out / SETTINGS_FILE).read_text(encoding="utf-8")
+        self.assertNotIn("mapbox://", text)
+        data = {}
+        for tile in json.loads(text)["business_data"]["resources"][0]["tiles"]:
+            data.update(tile["data"])
+        self.assertEqual(
+            data[basemaps.SPRITES_NODE_ID]["en"]["value"], basemaps.SPRITES_URL
+        )
+        self.assertEqual(
+            data[basemaps.GLYPHS_NODE_ID]["en"]["value"], basemaps.GLYPHS_URL
+        )
 
     def test_constraints_file_is_sorted_with_an_empty_load_order(self):
         nodes = list(

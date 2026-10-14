@@ -16,7 +16,8 @@ the widgets the graphs reference (each registered, the same set, and the
 number of card-node-widget rows per graph), controlled lists (counts,
 `searchable`, and per list the item, value and sort-order digests of
 `export_pkg`; the item digest is always compared), map layers and sources, resource constraints, functions, plugins, renderer
-configurations, and that the Mapbox key of the System Settings is empty.
+configurations, that the Mapbox key of the System Settings is empty and that
+no map source or System Settings sprite/glyph value needs Mapbox (`mapbox://`).
 
 The loader reads each item's sort order under `ARCHES_NAMESPACE_FOR_DATA_EXPORT`.
 When the inventory's `public_origin` differs from it (a rehearsal host, for
@@ -41,6 +42,7 @@ from manuspectrum.management.commands.export_pkg import (
     values_digest,
     widget_usage,
 )
+from manuspectrum import basemaps
 from manuspectrum.models import RendererConfig
 
 
@@ -76,6 +78,23 @@ def mapbox_key_values():
             value = [value]
         values += [v for v in value or [] if v]
     return values
+
+
+def mapbox_references():
+    """Map sources and System Settings sprite/glyph values that need Mapbox."""
+    found = [
+        f"map source {source.name}"
+        for source in models.MapSource.objects.all()
+        if basemaps.needs_mapbox(source.source)
+    ]
+    for node_id in (basemaps.SPRITES_NODE_ID, basemaps.GLYPHS_NODE_ID):
+        for tile in models.TileModel.objects.filter(
+            resourceinstance_id=settings.SYSTEM_SETTINGS_RESOURCE_ID,
+            data__has_key=node_id,
+        ):
+            if basemaps.needs_mapbox((tile.data or {}).get(node_id)):
+                found.append(f"System Settings node {node_id}")
+    return sorted(found)
 
 
 def compare(expected, warnings):
@@ -210,6 +229,8 @@ def compare(expected, warnings):
 
     if mapbox_key_values():
         problems.append("System Settings: the Mapbox key is not empty")
+    for reference in mapbox_references():
+        problems.append(f"{reference}: a mapbox:// URL needs a Mapbox token")
     return problems
 
 

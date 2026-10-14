@@ -19,15 +19,19 @@ Output:
         The SKOS format drops `List.searchable`; this restores it by list id.
     system_settings/System_Settings.json
         The core `Arches_System_Settings.json` with `app_name`,
-        `search_items_per_page` and an empty Mapbox key in every language. The
+        `search_items_per_page`, an empty Mapbox key in every language and the
+        OpenFreeMap sprite and glyph URLs (written by node id; the nodes are
+        named `MAPBOX_*` or `MAPLIBRE_*` depending on the Arches version). The
         System Settings tile of the database is never read.
     package_config.json
         Arches' `export_package_configs` (resource-to-resource constraints),
         sorted, with an empty `business_data_load_order`.
     map_layers/mapbox_spec_json/{basemaps,overlays}/.gitkeep
         Written only once every `map_layers` / `map_sources` row is checked to be
-        an Arches core row; project layer settings travel in the node configs of
-        the graphs.
+        an Arches core row or the OpenFreeMap basemap of `basemaps.py` (data
+        migration 0013 turns the first into the second on the loaded database; a
+        row that needs a Mapbox token is refused); project layer settings travel
+        in the node configs of the graphs.
     expected-inventory.json
         What a fresh database loaded from the package must contain, and the
         `public_origin` the lists were rewritten to. Per list,
@@ -83,6 +87,8 @@ from arches_controlled_lists.management.commands.packages import (
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 from arches_controlled_lists.utils.skos import ARCHES, SKOSWriter
 
+from manuspectrum import basemaps
+from manuspectrum.basemaps import core_map_rows
 from manuspectrum.models import RendererConfig
 
 LOCAL_ORIGIN = "http://localhost:8000/"
@@ -110,7 +116,6 @@ MANAGED = (
     Path("expected-inventory.json"),
 )
 
-CORE_DATA_SQL = Path(arches.__file__).parent / "db" / "dml" / "db_data.sql"
 CORE_SETTINGS_JSON = (
     Path(arches.__file__).parent
     / "db"
@@ -481,41 +486,36 @@ def rewrite_origin(root, files, public_origin):
     return total
 
 
-def core_map_rows():
-    """({layer name: definitions}, {source name: source}) of Arches' own
-    `db_data.sql`."""
-    sql = CORE_DATA_SQL.read_text(encoding="utf-8")
-    layers = re.findall(
-        r"INSERT INTO map_layers\(.*?\)\s*VALUES \(public\.uuid_generate_v1mc\(\), "
-        r"'([^']+)', '(.*?)',\s*(?:TRUE|FALSE)",
-        sql,
-        re.DOTALL,
-    )
-    sources = re.findall(
-        r"INSERT INTO map_sources\(name, source\)\s*VALUES \('([^']+)', '(.*?)'\);",
-        sql,
-        re.DOTALL,
-    )
-    return (
-        {name: json.loads(body) for name, body in layers},
-        {name: json.loads(body) for name, body in sources},
-    )
-
-
 def non_core_map_rows():
-    """Sorted labels of the `map_layers` / `map_sources` rows that are not
-    Arches' own, or that differ from them."""
+    """Sorted labels of the `map_layers` / `map_sources` rows that the package
+    cannot carry: neither Arches' own nor the OpenFreeMap basemap, or a row that
+    needs a Mapbox token (a `mapbox://` source, a layer drawing from a `mapbox-`
+    source). Data migration 0013 turns the Arches rows into the OpenFreeMap ones.
+    """
     core_layers, core_sources = core_map_rows()
-    extra = [
-        f"map layer {layer.name}"
-        for layer in models.MapLayer.objects.all()
-        if core_layers.get(layer.name) != layer.layerdefinitions
-    ]
-    extra += [
-        f"map source {source.name}"
-        for source in models.MapSource.objects.all()
-        if core_sources.get(source.name) != source.source
-    ]
+    own_layers = {
+        **core_layers,
+        basemaps.STREETS_LAYER_NAME: basemaps.positron_layers(),
+    }
+    own_sources = {
+        **core_sources,
+        basemaps.OPENFREEMAP_SOURCE_NAME: basemaps.OPENFREEMAP_SOURCE,
+    }
+    extra = []
+    for layer in models.MapLayer.objects.all():
+        definitions = layer.layerdefinitions
+        needs_token = any(
+            str(entry.get("source", "")).startswith("mapbox-")
+            for entry in definitions
+            if isinstance(entry, dict)
+        )
+        if needs_token or own_layers.get(layer.name) != definitions:
+            extra.append(f"map layer {layer.name}")
+    for source in models.MapSource.objects.all():
+        if basemaps.needs_mapbox(source.source) or (
+            own_sources.get(source.name) != source.source
+        ):
+            extra.append(f"map source {source.name}")
     return sorted(extra)
 
 
@@ -817,6 +817,8 @@ class Command(BaseCommand):
             nodes["app_name"]: {"en": text(APP_NAME)},
             nodes["search_items_per_page"]: SEARCH_ITEMS_PER_PAGE,
             nodes["mapbox_api_key"]: {code: text("") for code, _ in settings.LANGUAGES},
+            basemaps.SPRITES_NODE_ID: {"en": text(basemaps.SPRITES_URL)},
+            basemaps.GLYPHS_NODE_ID: {"en": text(basemaps.GLYPHS_URL)},
         }
         seen = set()
         for resource in document["business_data"]["resources"]:
