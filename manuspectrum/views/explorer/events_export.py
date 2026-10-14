@@ -28,7 +28,11 @@ from manuspectrum.views.explorer.citations import Home, citation_entry
 from manuspectrum.views.explorer.events import kept_events
 from manuspectrum.views.explorer.scopes import ScopeError, export_language
 from manuspectrum.views.explorer.series import _comment, _Line, neutralise
-from manuspectrum.views.explorer.service import cited_analysis, corpus_bundle
+from manuspectrum.views.explorer.service import (
+    REF_FACETS,
+    cited_analysis,
+    corpus_bundle,
+)
 
 HEADER = (
     "event",
@@ -59,6 +63,10 @@ HEADER = (
 ROWS_PER_CHUNK = 500
 # Event-material keys that describe the query, not the material.
 QUERY_FIELDS = ("matches", "componentColours")
+LABEL_ALIASES = {"partColour": "colour"}
+LABELLED_KEYS = frozenset(
+    (*REF_FACETS, "technique", "place", "part", "project", "operator", *LABEL_ALIASES)
+)
 
 
 def _query_text(query):
@@ -69,17 +77,18 @@ def _query_text(query):
 
 
 def _labelled(bundle, query_text):
-    """*query_text* with each value a facet knows written as its label and its uri (« label <uri> »).
+    """*query_text* with each value of a reference facet written as its label and its uri (« label <uri> »).
 
-    The uri stands alone when no label is known; the other parameters are kept
-    as they are.
+    Reference facets are those of ``LABELLED_KEYS``; ``partColour`` reads the
+    ``colour`` labels. The uri stands alone when no label is known; the other
+    parameters are kept as they are.
     """
     parts = []
     for key, value in parse_qsl(query_text):
-        names = bundle.labels.get(key)
-        if names is None:
+        if key not in LABELLED_KEYS:
             parts.append(f"{key}={value}")
             continue
+        names = bundle.labels.get(LABEL_ALIASES.get(key, key), {})
         shown = [
             f"{names[v]['value']} <{v}>" if v in names else v for v in value.split(",")
         ]

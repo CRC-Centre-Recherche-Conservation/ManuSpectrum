@@ -1757,10 +1757,10 @@ def offered_values(bundle, key):
     return bundle.universe[key]
 
 
-def corpus_facets(bundle, rows, active, counted):
-    """The ``Facet`` of every key the visible corpus carries; ``LAZY_FACETS`` come as a ``preview``."""
+def corpus_facets(bundle, rows, active, counted, keys=FACET_KEYS):
+    """The ``Facet`` of every key of *keys* the visible corpus carries; ``LAZY_FACETS`` come as a ``preview``."""
     facets = []
-    for key in FACET_KEYS:
+    for key in keys:
         if not bundle.universe[key]:
             continue
         facet = facet_entry(
@@ -2089,16 +2089,22 @@ def nearest_carried(tree, carried):
 
 
 def home_techniques(user, language, ticket=None):
-    """The ``FacetValue`` list of the techniques the analyses carry themselves, with closed counts, nested.
-
-    A value's ``parents`` are its nearest carried ancestors (implied ones are
-    skipped). The values are in tree order: depth first, siblings by folded
-    label, a value under several carried parents listed under the first.
-    """
+    """``carried_techniques`` of the unfiltered corpus of the reader."""
     bundle = corpus_bundle(user, language, ticket)
     _, active, *_, counted = row_filter(
         bundle.rows, QueryDict(""), universe=bundle.universe
     )
+    return carried_techniques(bundle, active, counted)
+
+
+def carried_techniques(bundle, active, counted):
+    """The ``FacetValue`` list of the techniques the analyses carry themselves, with closed counts.
+
+    A value's ``parents`` are its nearest carried ancestors (implied ones are
+    skipped); both homes draw a value under each of them. The values are in
+    tree order: depth first, siblings in facet order, a value under several
+    carried parents listed once, under the first reached.
+    """
     carried = bundle.carried["technique"]
     nearest = nearest_carried(bundle.trees["technique"], carried)
     facet = facet_entry(
@@ -2141,7 +2147,7 @@ def home_payload(day, user, language, ticket=None):
 
     ``documentCount`` counts the documents with a visible analysis,
     ``unpublishedCount`` the unpublished ones among them; ``techniques`` are
-    ``home_techniques`` and ``projects`` the facet of the unfiltered search; ``featured`` is the
+    ``carried_techniques`` and ``projects`` the facet of the unfiltered search; ``featured`` is the
     ``DocumentHit`` at ``day_index`` of those documents in name order, None
     without any.
     """
@@ -2152,8 +2158,9 @@ def home_payload(day, user, language, ticket=None):
     )
     facets = {
         facet["key"]: facet["values"]
-        for facet in corpus_facets(bundle, bundle.rows, active, counted)
-        if facet["key"] == "project"
+        for facet in corpus_facets(
+            bundle, bundle.rows, active, counted, keys=("project",)
+        )
     }
     position = day_index(day, len(listed))
     featured = None
@@ -2169,7 +2176,7 @@ def home_payload(day, user, language, ticket=None):
         )[0]
     return {
         "documentCount": len(listed),
-        "techniques": home_techniques(user, language, ticket),
+        "techniques": carried_techniques(bundle, active, counted),
         "projects": facets.get("project", []),
         "featured": featured,
         "unpublishedCount": sum(1 for d in listed if d in bundle.visible.unpublished),

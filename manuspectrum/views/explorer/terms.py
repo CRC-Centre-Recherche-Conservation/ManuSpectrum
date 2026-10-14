@@ -9,6 +9,7 @@ every occurrence. Reads ``arches_controlled_lists_listitem`` and
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from uuid import UUID
 
 from arches_controlled_lists.models import ListItem, ListItemValue
 from django.db.models import F
@@ -58,10 +59,11 @@ def term_closures(lists, used, language):
     ``sortorder`` and id (Arches' label lookup order); a label is the
     prefLabel of *language*, English, the first language, then an altLabel,
     else the uri. ``terms`` holds every pref and alt label, folded. At most
-    ``TERM_DEPTH`` levels are walked, each uri once.
+    ``TERM_DEPTH`` levels are walked, each uri once. List ids are compared
+    in their canonical form, whatever the case of the node config.
     """
     closures = {key: TermClosure() for key in used}
-    wanted = {k: str(l) for k, l in lists.items() if l and used.get(k)}
+    wanted = {k: str(UUID(str(l))) for k, l in lists.items() if l and used.get(k)}
     if not wanted:
         return closures
     uri_of, occurrences = {}, defaultdict(lambda: defaultdict(list))

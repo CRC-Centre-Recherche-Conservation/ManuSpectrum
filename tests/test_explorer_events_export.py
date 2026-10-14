@@ -6,11 +6,12 @@ Usage:
 
 import csv
 import json
+from types import SimpleNamespace
 
 from tests.explorer_events_fixtures import LEAD_WHITE, SMALT, VERMILION, EventsCase
 from tests.test_explorer_service import RED
 
-from manuspectrum.views.explorer.events_export import HEADER
+from manuspectrum.views.explorer.events_export import HEADER, _labelled
 
 
 def streamed(response):
@@ -224,3 +225,18 @@ class EventsExportHierarchyTests(EventsCase):
         ]
 
         self.assertIn(f"Pigment (fr) <{self.PIGMENT}>", line)
+
+    def test_the_filters_line_labels_reference_values_only_and_reads_the_colour_alias(
+        self,
+    ):
+        bundle = SimpleNamespace(
+            labels={
+                "year": {"1450": {"value": "1450"}},
+                "colour": {RED: {"value": "Red"}},
+            }
+        )
+
+        self.assertEqual(
+            _labelled(bundle, f"colour={RED}&partColour={RED}&year=1450"),
+            f"colour=Red <{RED}>&partColour=Red <{RED}>&year=1450",
+        )

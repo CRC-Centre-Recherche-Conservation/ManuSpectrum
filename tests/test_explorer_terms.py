@@ -73,6 +73,17 @@ class TermClosureTests(TestCase):
         )
         self.assertEqual(closure.parents[V + "mineral"], ())
 
+    def test_a_list_id_written_in_capitals_keeps_its_hierarchy(self):
+        lists = {**self.lists(), "material": str(self.materials.pk).upper()}
+
+        closure = term_closures(lists, {"material": {V + "azurite"}}, "en")["material"]
+
+        self.assertEqual(
+            closure.reach[V + "azurite"],
+            {V + "azurite", V + "blue-pigment", V + "mineral"},
+        )
+        self.assertEqual(closure.labels[V + "blue-pigment"]["value"], "Blue pigment")
+
     def test_one_uri_in_two_lists_is_closed_in_each_list_apart(self):
         found = term_closures(
             self.lists(), {"layer": {V + "shared"}, "partType": {V + "shared"}}, "en"
