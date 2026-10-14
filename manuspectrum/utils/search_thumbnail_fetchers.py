@@ -4,6 +4,7 @@ from arches.app.utils.search_thumbnail_fetcher import SearchThumbnailFetcher
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
+from manuspectrum.iiif.sources import manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import CanvasIIIF, BBoxCalculator
 from manuspectrum.utils.manifest_values import first_manifest_url
@@ -66,7 +67,8 @@ def _image_payload(response):
 class DocumentThumbnailFetcher(SearchThumbnailFetcher):
     """
     Fetcher for Documents: the thumbnail of the IIIF manifest (v2/v3) held in
-    the Document's 'manifest' node (facsimiles).
+    the Document's 'manifest' node (facsimiles). An Arches-hosted manifest
+    (``/manifest/<uuid>``) is read from the database, any other over HTTP.
     """
 
     def get_thumbnail(self, retrieve=False):
@@ -91,7 +93,7 @@ class DocumentThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+            manifest_data = manifest_json(manifest_url)
             if not manifest_data:
                 return None
 
@@ -163,7 +165,7 @@ class ComponentThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+            manifest_data = manifest_json(manifest_url)
             if not manifest_data:
                 return None
 
@@ -229,7 +231,8 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
     """
     Fetcher for analysis resources with manifest or IIIF annotations.
     Priority:
-    1. Manifest thumbnail if manifest tile exists
+    1. Manifest thumbnail if manifest tile exists (any failure of that step
+       falls through to the annotation)
     2. Annotation-based thumbnail (Point with circle or Polygon region)
     """
 
@@ -263,17 +266,25 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                         break
 
             if manifest_url:
-                manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
-                if manifest_data:
-                    thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
-                    if thumb_url:
-                        payload = _image_payload(
-                            safe_fetch(
-                                thumb_url, headers=_IMAGE_HEADERS, purpose="thumbnail"
+                payload = None
+                try:
+                    manifest_data = manifest_json(manifest_url)
+                    if manifest_data:
+                        thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
+                        if thumb_url:
+                            payload = _image_payload(
+                                safe_fetch(
+                                    thumb_url,
+                                    headers=_IMAGE_HEADERS,
+                                    purpose="thumbnail",
+                                )
                             )
-                        )
-                        if payload:
-                            return payload
+                except Exception as e:
+                    logger.warning(
+                        f"Manifest thumbnail unavailable for resource {self.resource.resourceinstanceid}: {e}"
+                    )
+                if payload:
+                    return payload
 
             # 2) Fallback: annotation-based (Point or Polygon)
             annotation = VwAnnotation.objects.filter(
@@ -295,7 +306,7 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+            manifest_data = manifest_json(manifest_url)
             if not manifest_data:
                 return None
 
