@@ -82,6 +82,7 @@ from manuspectrum.views.explorer.values import (
     string_texts,
     value_refs,
 )
+from manuspectrum.views.explorer.terms import TERM_FACETS, facet_list, term_closures
 from manuspectrum.views.explorer.swatches import (
     SWATCH_ORDER,
     colour_rank,
@@ -117,6 +118,7 @@ CHARACTERIZATION_ROLES = {
 TECHNIQUE_PALETTE = 10
 SWATCH_FACETS = ("colour",)
 LAZY_FACETS = ("part",)
+TREE_FACETS = ("place", *TERM_FACETS)
 PERIOD_EVENTS = ("production", "modification")
 PERIOD_BOUND = re.compile(r"-?\d{1,4}")
 PREVIEW_SIZE = 6
@@ -653,12 +655,17 @@ def material_components(visible, chains, objects_of):
 
 
 def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
-    """``(rows, values, own_values, parents, linked)``: the ``corpus_rows``, per visible
+    """``(rows, values, own_values, parents, linked, closures)``: the ``corpus_rows``, per visible
     identified material ``{key: set of uris}`` of the characterization facets
     for ``match_payload`` and, as *own_values*, the same keys without the
     colours of its linked components (the material's own ``color_aspect``),
-    the ``place_closure`` parents of the places the rows carry and the
-    ``material_components``.
+    the ``place_closure`` parents of the places the rows carry, the
+    ``material_components`` and the ``term_closures`` of the term facets.
+
+    A row's ``terms`` hold, per ``TERM_FACETS`` key, the frozenset of the
+    uris it carries closed upwards (a term and its ancestors in its list);
+    each material's ``material`` and ``layer`` values are closed the same
+    way, so ``meets`` and the plain-facet test stay exact membership.
 
     A row's ``places`` are the production places of its component and of its
     document with their visible ancestors (sorted ids); its ``periods`` hold
@@ -761,16 +768,57 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
             )
         return colours_memo[component]
 
-    value_sets = {}
-    match_sets = {}
-    for c in visible.characterizations:
-        value_sets[c] = {
+    used = {}
+    for a in analyses:
+        value = values.first(a, "technique")
+        for ref in memo.refs(value)[:1]:
+            used.setdefault(ref["id"], (ref["uri"], value))
+
+    all_components = {c for _, c in chains.values() if c} | {
+        k for components in linked.values() for k in components
+    }
+    types_of = {
+        k: frozenset(
+            ref["uri"] for v in parts.get(k, "comp_type") for ref in memo.refs(v)
+        )
+        for k in all_components
+    }
+    own_sets = {
+        c: {
             key: {
                 ref["uri"]
                 for v in characterizations.get(c, role)
                 for ref in memo.refs(v)
             }
             for key, role in CHARACTERIZATION_ROLES.items()
+        }
+        for c in visible.characterizations
+    }
+    closures = term_closures(
+        {key: facet_list(key) for key in TERM_FACETS},
+        {
+            "technique": {uri for uri, _ in used.values()},
+            "partType": set().union(*types_of.values()),
+            "material": set().union(*(own["material"] for own in own_sets.values())),
+            "layer": set().union(*(own["layer"] for own in own_sets.values())),
+        },
+        language,
+    )
+    closed_memo = {}
+
+    def closed(key, uris):
+        """The frozenset of *uris* closed upwards in the list of facet *key*, one object per input."""
+        uris = frozenset(uris)
+        if (key, uris) not in closed_memo:
+            closed_memo[(key, uris)] = closures[key].closed(uris)
+        return closed_memo[(key, uris)]
+
+    value_sets = {}
+    match_sets = {}
+    for c in visible.characterizations:
+        value_sets[c] = {
+            key: closed(key, uris) if key in TERM_FACETS else uris
+            for key, uris in own_sets[c].items()
         }
         match_sets[c] = {
             **value_sets[c],
@@ -814,17 +862,33 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
     )
     analysis_index = GraphIndex.for_slug("analysis")
     analysis_model = analysis_index.name if analysis_index else {}
-    used = {}
-    for a in analyses:
-        value = values.first(a, "technique")
-        for ref in memo.refs(value)[:1]:
-            used.setdefault(ref["id"], (ref["uri"], value))
     parents = parent_chains(used)
     marks = technique_marks(used, parents)
     ancestors = ancestor_terms(used, parents)
     related = {d for d, _ in chains.values()} | {c for _, c in chains.values() if c}
     label_of = names(related, language, user)
     techniques_of = {}
+    terms_memo, by_input, cited_memo = {}, {}, {}
+
+    def terms_of(technique, component, cited):
+        """The ``terms`` of a row: its technique, component types and cited materials, closed; one dict per distinct value."""
+        given = (technique, component, tuple(cited))
+        if given not in by_input:
+            if given[2] not in cited_memo:
+                cited_memo[given[2]] = (
+                    frozenset().union(*(value_sets[c]["material"] for c in cited)),
+                    frozenset().union(*(value_sets[c]["layer"] for c in cited)),
+                )
+            key = (
+                closed("technique", (technique,) if technique else ()),
+                closed("partType", types_of.get(component, ())),
+                *cited_memo[given[2]],
+            )
+            by_input[given] = terms_memo.setdefault(
+                key, dict(zip(TERM_FACETS.keys(), key))
+            )
+        return by_input[given]
+
     rows = []
     for a in analyses:
         document, component = chains[a]
@@ -935,9 +999,12 @@ def _corpus_rows(user, language, visible, chains, projects_of, objects_of=None):
                 "text": " ".join(memo.fold(t) for t in texts),
                 "places": production_of(document, component)[0],
                 "periods": production_of(document, component)[1],
+                "terms": terms_of(
+                    technique["uri"] if technique else None, component, cited
+                ),
             }
         )
-    return rows, match_sets, value_sets, place_parents, linked
+    return rows, match_sets, value_sets, place_parents, linked, closures
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -967,7 +1034,12 @@ class CorpusBundle:
     places and ancestors, ``event_materials`` the ``MapMaterial`` by uri, ``event_colours`` the
     ``MapColour`` of every colour they use,
     ``material_terms`` the folded labels (preferred and alternative) of each
-    material uri, ``histories`` the ``HistoryLine`` tuple (the Production) of each document,
+    material uri, the implied ancestors included; ``universe`` holds the
+    term facets (``TERM_FACETS``) closed upwards, ``trees`` maps each value
+    of the place and term facets to the tuple of its parents and ``carried``
+    holds, per term facet, the uris the rows carry themselves (the homes list
+    those); ``narrower`` the uris of each term facet that have a descendant in
+    its universe; ``histories`` the ``HistoryLine`` tuple (the Production) of each document,
     ``certainty`` the ``certainty_scale``.
     """
 
@@ -997,6 +1069,9 @@ class CorpusBundle:
     material_terms: dict = field(default_factory=dict)
     histories: dict = field(default_factory=dict)
     certainty: dict = field(default_factory=dict)
+    trees: dict = field(default_factory=dict)
+    carried: dict = field(default_factory=dict)
+    narrower: dict = field(default_factory=dict)
 
     @property
     def colour_ranks(self):
@@ -1029,7 +1104,14 @@ def build_bundle(user, language, visible):
         for name, (slug, alias) in LINK_ROLES.items()
     }
     chains = structure(visible, user, part_of=links["part_of"])
-    rows, characterization_values, own_values, place_parents, linked = _corpus_rows(
+    (
+        rows,
+        characterization_values,
+        own_values,
+        place_parents,
+        linked,
+        closures,
+    ) = _corpus_rows(
         user, language, visible, chains, links["projects"], links["objects"]
     )
     colour_items, colour_labels, colour_swatches = colour_list(language)
@@ -1089,12 +1171,31 @@ def build_bundle(user, language, visible):
         own_values,
         linked,
         swatches,
+        closures["material"],
     )
     labels = _with_colour_labels(_facet_labels(rows, language, user), colour_labels)
+    universe = facet_universe(rows)
+    for key in TERM_FACETS:
+        for uri in universe[key]:
+            if uri in closures[key].labels:
+                labels.setdefault(key, {}).setdefault(uri, closures[key].labels[uri])
+    places = {
+        place: {"parent": place_parents.get(place), "unpublished": place in drafts}
+        for place in sorted(placed)
+    }
+    material_terms = dict(event_set.material_terms)
+    for uri in universe["material"]:
+        material_terms[uri] = material_terms.get(uri, frozenset()) | closures[
+            "material"
+        ].terms.get(uri, frozenset())
     event_colours = {
         colour: map_colour(labels.get("colour", {}), swatches, colour, language)
         for material in event_set.materials.values()
         for colour in material["colours"]
+    }
+    term_trees = {
+        key: {uri: closures[key].parents.get(uri, ()) for uri in universe[key]}
+        for key in TERM_FACETS
     }
     return CorpusBundle(
         visible=visible,
@@ -1103,7 +1204,7 @@ def build_bundle(user, language, visible):
         rows=rows,
         by_id={row["id"]: row for row in rows},
         by_document=dict(by_document),
-        universe=facet_universe(rows),
+        universe=universe,
         labels=labels,
         marks={
             row["technique"]["uri"]: {
@@ -1120,10 +1221,7 @@ def build_bundle(user, language, visible):
         characterization_values=characterization_values,
         material_components=linked,
         colour_items=colour_items,
-        places={
-            place: {"parent": place_parents.get(place), "unpublished": place in drafts}
-            for place in sorted(placed)
-        },
+        places=places,
         period_bounds={
             "production": (
                 (min(p[0] for p in produced), max(p[1] for p in produced))
@@ -1136,7 +1234,21 @@ def build_bundle(user, language, visible):
         event_places=event_set.places,
         event_materials=event_set.materials,
         event_colours=event_colours,
-        material_terms=event_set.material_terms,
+        material_terms=material_terms,
+        trees={
+            "place": {
+                p: (v["parent"],) if v["parent"] else () for p, v in places.items()
+            },
+            **term_trees,
+        },
+        carried={
+            key: frozenset(v for row in rows for v in _own_values(row, key))
+            for key in TERM_FACETS
+        },
+        narrower={
+            key: frozenset(p for parents in tree.values() for p in parents)
+            for key, tree in term_trees.items()
+        },
         histories=event_set.histories,
         certainty=certainty_scale(language),
     )
@@ -1279,9 +1391,18 @@ def parse_filters(query):
     return filters, page
 
 
-def _facet_values(row, key):
+def _own_values(row, key):
+    """The uris a row carries itself for the term facet *key*, ancestors left out."""
     if key == "technique":
         return [row["technique"]["uri"]] if row["technique"] else []
+    return list(
+        dict.fromkeys(ref["uri"] for field in REF_FACETS[key] for ref in row[field])
+    )
+
+
+def _facet_values(row, key):
+    if key in TERM_FACETS:
+        return row["terms"][key]
     if key == "part":
         return [row["component"]] if row["component"] else []
     if key == "year":
@@ -1362,7 +1483,10 @@ def characterization_wanted(active, skip=None):
 
 
 def meets(values, wanted):
-    """Whether one identified material's ``{facet key: uris}`` carries a selected value of each *wanted* facet."""
+    """Whether one identified material's ``{facet key: uris}`` carries a selected value of each *wanted* facet.
+
+    Membership is exact; the term facets' sets are already closed upwards.
+    """
     return all(values[key] & selected for key, selected in wanted)
 
 
@@ -1399,7 +1523,9 @@ def row_filter(rows, query, universe=None):
     selected value of each of them. ``carried(row, key)`` is the set of
     values of *key* a row counts for under the other selections: in that
     group, the values of the characterizations that meet the other facets of
-    the group. ``universe`` holds, per facet, the values the rows carry; a
+    the group. Term facets (``TERM_FACETS``) are tested on the closed sets of
+    the rows (a selected parent keeps its descendants). ``universe`` holds,
+    per facet, the values the rows carry, ancestors included; a
     selected value outside it is ignored (§3.3). A caller filtering a part of
     the corpus passes the ``facet_universe`` of the whole corpus.
     """
@@ -1467,6 +1593,8 @@ def facet_entry(
     ranks=None,
     complete=False,
     places=None,
+    tree=None,
+    narrow=frozenset(),
 ):
     """One ``Facet`` over *rows*: the values of *offered* with a count and the selected ones.
 
@@ -1476,9 +1604,14 @@ def facet_entry(
     the number of values. ``colour`` is in the fixed order of ``colour_order``
     (*ranks*); with *complete*, every offered value is listed, at count 0 when
     no row counts for it. *places* is ``CorpusBundle.places``: ``place``
-    values name their ``parent`` and whether they are ``unpublished``.
+    values say whether they are ``unpublished``. *tree* is the ``CorpusBundle.trees``
+    entry of the key: each value names its ``parents`` there (none for a
+    value it does not hold); *narrow* holds the values with a descendant in
+    the universe (``CorpusBundle.narrower``), which read ``narrower``. ``found``
+    is None; ``facet_payload`` fills it for a ``find``.
     """
     places = (places or {}) if key == "place" else {}
+    tree = tree or {}
     counts = Counter(v for row in rows for v in counted(row, key))
     values = [
         {
@@ -1487,7 +1620,8 @@ def facet_entry(
             "count": counts[v],
             "mark": marks.get(v) if key == "technique" else None,
             "swatch": swatches.get(v) if key in SWATCH_FACETS else None,
-            "parent": places.get(v, {}).get("parent"),
+            "parents": list(tree.get(v, ())),
+            "narrower": v in narrow,
             "unpublished": places.get(v, {}).get("unpublished", False),
         }
         for v in offered | set(active[key])
@@ -1504,7 +1638,13 @@ def facet_entry(
                 else (lambda item: (fold(item["label"]["value"]), item["id"]))
             )
         )
-    return {"key": key, "group": GROUP_OF[key], "values": values, "total": len(values)}
+    return {
+        "key": key,
+        "group": GROUP_OF[key],
+        "values": values,
+        "total": len(values),
+        "found": None,
+    }
 
 
 def colour_order(ranks):
@@ -1571,14 +1711,29 @@ def period_facet(rows, keep, event, bounds):
     }
 
 
-def place_ancestors(ids, places):
-    """The ids above *ids* in the ``parent`` links of *places* (``CorpusBundle.places``), cycles cut."""
-    found = set()
-    for place in ids:
-        parent = places.get(place, {}).get("parent")
-        while parent and parent not in found:
-            found.add(parent)
-            parent = places.get(parent, {}).get("parent")
+def ancestors_in(ids, tree):
+    """The ids above *ids* in *tree* (``{id: parents tuple}``), every parent of every path, cycles cut."""
+    found, frontier = set(), list(ids)
+    while frontier:
+        for parent in tree.get(frontier.pop(), ()):
+            if parent not in found:
+                found.add(parent)
+                frontier.append(parent)
+    return found
+
+
+def descendants_in(ids, tree):
+    """The ids below *ids* in *tree* (``{id: parents tuple}``), cycles cut."""
+    below = defaultdict(list)
+    for child, parents in tree.items():
+        for parent in parents:
+            below[parent].append(child)
+    found, frontier = set(), list(ids)
+    while frontier:
+        for child in below.get(frontier.pop(), ()):
+            if child not in found:
+                found.add(child)
+                frontier.append(child)
     return found
 
 
@@ -1620,6 +1775,8 @@ def corpus_facets(bundle, rows, active, counted):
             bundle.colour_ranks,
             complete=key == "colour",
             places=bundle.places,
+            tree=bundle.trees.get(key),
+            narrow=bundle.narrower.get(key, frozenset()),
         )
         facets.append(preview(facet, active) if key in LAZY_FACETS else facet)
     return facets
@@ -1736,6 +1893,8 @@ def document_facet(key, bundle, rows, active, counted):
         {v for row in rows for v in _facet_values(row, key)},
         bundle.colour_ranks,
         places=bundle.places,
+        tree=bundle.trees.get(key),
+        narrow=bundle.narrower.get(key, frozenset()),
     )
     return facet if facet["values"] else None
 
@@ -1763,8 +1922,10 @@ def facet_payload(key, query, user, language, ticket=None):
     ``document`` names it: then the facet is the one ``match_payload`` lists
     for that document. ``find`` narrows the values to those whose folded
     label holds its folded text, the selected ones kept; ``total`` stays the
-    number of values without it. ``find`` on ``place`` keeps the ancestors of
-    the matches and of the selected places as well. The key ``period`` answers the ``RangeFacet`` (``find``
+    number of values without it; ``found`` lists the ids whose label (for
+    ``material``, a pref or alt label of the term) matches. ``find`` on a tree
+    facet (``TREE_FACETS``) keeps the ancestors of the matches and of the
+    selected values and the descendants of the matches as well. The key ``period`` answers the ``RangeFacet`` (``find``
     ignored). A key outside ``FACET_KEYS`` and ``period``, a facet the search
     or the match would not show (no value), or a ``document`` that is not a
     UUID or not visible, is None.
@@ -1801,6 +1962,8 @@ def facet_payload(key, query, user, language, ticket=None):
             bundle.colour_ranks,
             complete=key == "colour",
             places=bundle.places,
+            tree=bundle.trees.get(key),
+            narrow=bundle.narrower.get(key, frozenset()),
         )
     needle = fold(query.get("find", "").strip())
     if needle:
@@ -1816,8 +1979,12 @@ def facet_payload(key, query, user, language, ticket=None):
                 for v in facet["values"]
                 if any(needle in t for t in bundle.material_terms.get(v["id"], ()))
             }
-        if key == "place":
-            matching |= place_ancestors(matching | selected, bundle.places)
+        facet["found"] = sorted(matching)
+        if key in TREE_FACETS:
+            tree = bundle.trees[key]
+            matching |= ancestors_in(matching | selected, tree) | descendants_in(
+                matching, tree
+            )
         facet["values"] = [
             value
             for value in facet["values"]
@@ -1903,12 +2070,78 @@ def day_index(day, count):
     return digest % count
 
 
+def nearest_carried(tree, carried):
+    """``{uri: sorted nearest ancestors in carried}`` for each uri of *carried*, climbing *tree* through implied ones, cycles cut."""
+    nearest = {}
+    for uri in carried:
+        found, seen, frontier = set(), {uri}, list(tree.get(uri, ()))
+        while frontier:
+            above = frontier.pop()
+            if above in seen:
+                continue
+            seen.add(above)
+            if above in carried:
+                found.add(above)
+            else:
+                frontier.extend(tree.get(above, ()))
+        nearest[uri] = sorted(found)
+    return nearest
+
+
+def home_techniques(user, language, ticket=None):
+    """The ``FacetValue`` list of the techniques the analyses carry themselves, with closed counts, nested.
+
+    A value's ``parents`` are its nearest carried ancestors (implied ones are
+    skipped). The values are in tree order: depth first, siblings by folded
+    label, a value under several carried parents listed under the first.
+    """
+    bundle = corpus_bundle(user, language, ticket)
+    _, active, *_, counted = row_filter(
+        bundle.rows, QueryDict(""), universe=bundle.universe
+    )
+    carried = bundle.carried["technique"]
+    nearest = nearest_carried(bundle.trees["technique"], carried)
+    facet = facet_entry(
+        "technique",
+        bundle.rows,
+        active,
+        counted,
+        bundle.labels,
+        bundle.marks,
+        bundle.swatches,
+        carried,
+        tree=nearest,
+        narrow=bundle.narrower["technique"],
+    )
+    by_id = {v["id"]: v for v in facet["values"]}
+    children = defaultdict(list)
+    for value in facet["values"]:
+        if value["parents"] and value["parents"][0] in by_id:
+            children[value["parents"][0]].append(value)
+    ordered, seen = [], set()
+
+    def walk(value):
+        if value["id"] in seen:
+            return
+        seen.add(value["id"])
+        ordered.append(value)
+        for child in children[value["id"]]:
+            walk(child)
+
+    for value in facet["values"]:
+        if not value["parents"] or value["parents"][0] not in by_id:
+            walk(value)
+    for value in facet["values"]:
+        walk(value)
+    return ordered
+
+
 def home_payload(day, user, language, ticket=None):
     """``HomeResponse``: the explorer home of *day* (a ``YYYY-MM-DD`` string) for the reader.
 
     ``documentCount`` counts the documents with a visible analysis,
-    ``unpublishedCount`` the unpublished ones among them; ``techniques`` and
-    ``projects`` are the facets of the unfiltered search; ``featured`` is the
+    ``unpublishedCount`` the unpublished ones among them; ``techniques`` are
+    ``home_techniques`` and ``projects`` the facet of the unfiltered search; ``featured`` is the
     ``DocumentHit`` at ``day_index`` of those documents in name order, None
     without any.
     """
@@ -1920,7 +2153,7 @@ def home_payload(day, user, language, ticket=None):
     facets = {
         facet["key"]: facet["values"]
         for facet in corpus_facets(bundle, bundle.rows, active, counted)
-        if facet["key"] in ("technique", "project")
+        if facet["key"] == "project"
     }
     position = day_index(day, len(listed))
     featured = None
@@ -1936,7 +2169,7 @@ def home_payload(day, user, language, ticket=None):
         )[0]
     return {
         "documentCount": len(listed),
-        "techniques": facets.get("technique", []),
+        "techniques": home_techniques(user, language, ticket),
         "projects": facets.get("project", []),
         "featured": featured,
         "unpublishedCount": sum(1 for d in listed if d in bundle.visible.unpublished),

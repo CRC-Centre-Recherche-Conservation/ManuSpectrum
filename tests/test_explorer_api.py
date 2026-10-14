@@ -1626,6 +1626,20 @@ class FacetRouteTests(CorpusCase):
     def get(self, key, query=""):
         return self.client.get(f"/en/api/explorer/facet/{key}{query}")
 
+    def test_find_on_a_tree_facet_names_its_matches_and_revalidates(self):
+        response = self.get("material", "?find=azur")
+
+        facet = response.json()
+        assert_shape(self, facet, "Facet")
+        for value in facet["values"]:
+            assert_shape(self, value, "FacetValue")
+        self.assertEqual(facet["found"], [AZURITE])
+        again = self.client.get(
+            "/en/api/explorer/facet/material?find=azur",
+            HTTP_IF_NONE_MATCH=response["ETag"],
+        )
+        self.assertEqual(again.status_code, 304)
+
     def test_the_facet_lists_every_value_with_the_counts_of_the_search(self):
         search = self.client.get(f"/en/api/explorer/search?material={AZURITE}").json()
         response = self.get("technique", f"?material={AZURITE}")

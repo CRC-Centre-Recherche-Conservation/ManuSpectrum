@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-09 11:12-0500\n"
+"POT-Creation-Date: 2026-10-13 18:03-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -172,13 +172,13 @@ msgstr "Status"
 msgid "Draft"
 msgstr "Draft"
 
-#: iiif/bodies.py:46 iiif/sources.py:276 templates/explorer/export_readme.md:33
+#: iiif/bodies.py:46 iiif/sources.py:276 templates/explorer/export_readme.md:35
 #: templates/views/components/ms-file-workbench.htm:44
 #: templates/views/components/ms-file-workbench.htm:47
 msgid "Attribution"
 msgstr "Attribution"
 
-#: iiif/bodies.py:51 templates/explorer/export_readme.md:33
+#: iiif/bodies.py:51 templates/explorer/export_readme.md:35
 #: templates/views/components/ms-file-license.htm:14
 #: templates/views/components/ms-file-license.htm:15
 #: templates/views/components/widgets/file-xy.htm:9
@@ -468,30 +468,34 @@ msgstr ""
 msgid "How to cite"
 msgstr "How to cite"
 
-#: templates/explorer/export_readme.md:23
+#: templates/explorer/export_readme.md:23 views/explorer/events_export.py:165
+msgid "A filter term also keeps its narrower terms."
+msgstr ""
+
+#: templates/explorer/export_readme.md:25
 msgid "Data availability"
 msgstr ""
 
-#: templates/explorer/export_readme.md:27
+#: templates/explorer/export_readme.md:29
 msgid ""
 "The data come from the datasets below; cite and reuse them by their "
 "identifier."
 msgstr ""
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:509
+#: templates/explorer/export_readme.md:33 views/explorer/export.py:509
 msgid "Licences per file"
 msgstr ""
 
-#: templates/explorer/export_readme.md:33 templates/javascript.htm:161
+#: templates/explorer/export_readme.md:35 templates/javascript.htm:161
 #: templates/javascript.htm:168
 msgid "Path"
 msgstr "Path"
 
-#: templates/explorer/export_readme.md:33
+#: templates/explorer/export_readme.md:35
 msgid "Size (bytes)"
 msgstr ""
 
-#: templates/explorer/export_readme.md:36
+#: templates/explorer/export_readme.md:38
 msgid "No data file."
 msgstr ""
 
@@ -968,7 +972,7 @@ msgstr "Analyses"
 #: templates/index.htm:611 templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
 #: templates/views/pages/analysis-explorer.htm:15
-#: templates/views/pages/analysis-explorer.htm:30
+#: templates/views/pages/analysis-explorer.htm:31
 msgid "Discover the data"
 msgstr "Discover the data"
 
@@ -2613,7 +2617,7 @@ msgid "Has custom parsing"
 msgstr "Has custom parsing"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:159
-#: views/explorer/events_export.py:130
+#: views/explorer/events_export.py:164
 msgid "none"
 msgstr "none"
 
@@ -3790,7 +3794,7 @@ msgstr "Open project"
 #: templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
 #: templates/views/pages/analysis-explorer.htm:17
-#: templates/views/pages/analysis-explorer.htm:29
+#: templates/views/pages/analysis-explorer.htm:30
 msgid "Analysis explorer"
 msgstr "Analysis explorer"
 
@@ -3811,7 +3815,7 @@ msgstr ""
 msgid "Home"
 msgstr ""
 
-#: templates/views/pages/analysis-explorer.htm:33
+#: templates/views/pages/analysis-explorer.htm:34
 msgid ""
 "Search the analyses of written heritage by technique, material, project or "
 "year, then open a document to see where each analysis was made."
@@ -3819,20 +3823,20 @@ msgstr ""
 "Search the analyses of written heritage by technique, material, project or "
 "year, then open a document to see where each analysis was made."
 
-#: templates/views/pages/analysis-explorer.htm:41
+#: templates/views/pages/analysis-explorer.htm:48
 msgid "Loading the explorer…"
 msgstr "Loading the explorer…"
 
-#: templates/views/pages/analysis-explorer.htm:44
+#: templates/views/pages/analysis-explorer.htm:71
 msgid "The explorer could not start in this browser."
 msgstr "The explorer could not start in this browser."
 
-#: templates/views/pages/analysis-explorer.htm:45
-#: templates/views/pages/analysis-explorer.htm:50
+#: templates/views/pages/analysis-explorer.htm:72
+#: templates/views/pages/analysis-explorer.htm:77
 msgid "Use the advanced search instead"
 msgstr "Use the advanced search instead"
 
-#: templates/views/pages/analysis-explorer.htm:49
+#: templates/views/pages/analysis-explorer.htm:76
 msgid "The explorer needs JavaScript."
 msgstr "The explorer needs JavaScript."
 
@@ -4732,32 +4736,32 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/events_export.py:90
+#: views/explorer/events_export.py:123
 #, python-format
 msgid "%(site)s, map and timeline of the analyses"
 msgstr ""
 
-#: views/explorer/events_export.py:127
+#: views/explorer/events_export.py:160
 #, python-format
 msgid "%(site)s: events of the map and timeline"
 msgstr ""
 
-#: views/explorer/events_export.py:129 views/explorer/series.py:123
+#: views/explorer/events_export.py:162 views/explorer/series.py:123
 #, python-format
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/events_export.py:130
+#: views/explorer/events_export.py:163
 #, python-format
 msgid "Filters: %(filters)s"
 msgstr ""
 
-#: views/explorer/events_export.py:134
+#: views/explorer/events_export.py:169
 #, python-format
 msgid "Cite as: %(citation)s"
 msgstr ""
 
-#: views/explorer/events_export.py:137
+#: views/explorer/events_export.py:172
 msgid ""
 "Dates are intervals in years; approximate = dated « circa »; place_source: "
 "own = the record's own location, place = the linked place, parent = a "

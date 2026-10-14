@@ -11,7 +11,7 @@ and never gzipped.
 import datetime
 import csv
 import hashlib
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode
 
 import orjson
 from django.conf import settings
@@ -66,6 +66,25 @@ def _query_text(query):
         sorted((k, v) for k in query for v in query.getlist(k) if k != "lang"),
         safe=":,",
     )
+
+
+def _labelled(bundle, query_text):
+    """*query_text* with each value a facet knows written as its label and its uri (« label <uri> »).
+
+    The uri stands alone when no label is known; the other parameters are kept
+    as they are.
+    """
+    parts = []
+    for key, value in parse_qsl(query_text):
+        names = bundle.labels.get(key)
+        if names is None:
+            parts.append(f"{key}={value}")
+            continue
+        shown = [
+            f"{names[v]['value']} <{v}>" if v in names else v for v in value.split(",")
+        ]
+        parts.append(f"{key}={', '.join(shown)}")
+    return "&".join(parts)
 
 
 def _digest(text):
@@ -141,7 +160,9 @@ def csv_lines(language, bundle, events, query_text):
             _("%(site)s: events of the map and timeline")
             % {"site": settings.APP_TITLE},
             _("Generated on %(date)s") % {"date": datetime.date.today().isoformat()},
-            _("Filters: %(filters)s") % {"filters": query_text or _("none")},
+            _("Filters: %(filters)s")
+            % {"filters": _labelled(bundle, query_text) or _("none")},
+            _("A filter term also keeps its narrower terms."),
         ]
         citation = _citation(bundle, events, language, query_text)
         if citation:

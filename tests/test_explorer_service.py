@@ -230,6 +230,12 @@ class RowFilterTests(SimpleTestCase):
                 "places": [],
                 "periods": {"production": None, "modification": None},
                 "text": "ms 59 xrf",
+                "terms": {
+                    "technique": frozenset({"t:xrf"}),
+                    "partType": frozenset(),
+                    "material": frozenset(),
+                    "layer": frozenset(),
+                },
             },
             {
                 "technique": {"uri": "t:fors"},
@@ -247,6 +253,12 @@ class RowFilterTests(SimpleTestCase):
                 "places": [],
                 "periods": {"production": None, "modification": None},
                 "text": "ms 59 fors",
+                "terms": {
+                    "technique": frozenset({"t:fors"}),
+                    "partType": frozenset(),
+                    "material": frozenset(),
+                    "layer": frozenset(),
+                },
             },
         ]
 
@@ -1469,6 +1481,7 @@ ROW_KEYS = {
     "text",
     "places",
     "periods",
+    "terms",
 }
 
 
@@ -1806,9 +1819,11 @@ class PlaceFilterTests(ServiceCase):
     def test_a_place_value_names_its_parent_and_its_state(self):
         places = self.facet(self.search(), "place")
 
-        self.assertIsNone(places[self.place("europe")]["parent"])
-        self.assertEqual(places[self.place("france")]["parent"], self.place("europe"))
-        self.assertEqual(places[self.place("paris")]["parent"], self.place("france"))
+        self.assertEqual(places[self.place("europe")]["parents"], [])
+        self.assertEqual(
+            places[self.place("france")]["parents"], [self.place("europe")]
+        )
+        self.assertEqual(places[self.place("paris")]["parents"], [self.place("france")])
         self.assertIs(places[self.place("france")]["unpublished"], True)
         self.assertIs(places[self.place("paris")]["unpublished"], False)
         self.assertEqual(
@@ -1817,7 +1832,7 @@ class PlaceFilterTests(ServiceCase):
 
     def test_the_other_facets_carry_no_parent_and_are_published(self):
         for value in self.facet(self.search(), "technique").values():
-            self.assertIsNone(value["parent"])
+            self.assertEqual(value["parents"], [])
             self.assertIs(value["unpublished"], False)
 
     def test_find_on_place_returns_matches_with_their_ancestors(self):

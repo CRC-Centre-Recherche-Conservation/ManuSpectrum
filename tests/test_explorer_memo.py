@@ -20,6 +20,8 @@ from django.test import SimpleTestCase, override_settings
 from django.utils import translation
 from guardian.models import GroupObjectPermission
 
+from arches_controlled_lists.models import List, ListItem
+
 from arches.app.models.models import (
     GraphXPublishedGraph,
     ResourceInstance,
@@ -76,6 +78,17 @@ class DataVersionTests(MemoCase):
     def test_an_orm_tile_save_moves_the_data_version(self):
         before = data_version()
         self.tile(self.analyses["open"], "analysis_start_date", "2024-06-01")
+        self.assertNotEqual(data_version(), before)
+
+    def test_a_list_item_reparent_moves_the_data_version(self):
+        vocab = List.objects.create(name="reparent")
+        parent = ListItem.objects.create(list=vocab, uri="http://vocab/up", sortorder=0)
+        child = ListItem.objects.create(
+            list=vocab, uri="http://vocab/down", sortorder=1
+        )
+        before = data_version()
+        child.parent = parent
+        child.save()
         self.assertNotEqual(data_version(), before)
 
     def test_a_raw_sql_update_moves_the_data_version(self):

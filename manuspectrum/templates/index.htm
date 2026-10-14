@@ -624,7 +624,7 @@ Homepage — Prismatic Luminescence aesthetic
                 <p class="ms-technique-label" id="ms-technique-label">{% trans "Explore by technique" %}</p>
                 <div class="ms-technique-chips" role="group" aria-labelledby="ms-technique-label">
                     {% for technique in techniques %}
-                    <a class="ms-search-chip ms-technique-chip" lang="{{ technique.label.lang }}" href="{% url 'analysis-explorer' %}?grain=analyses&amp;technique={{ technique.id|urlencode:'' }}">{{ technique.label.value }}</a>
+                    <a class="ms-search-chip ms-technique-chip ms-technique-depth-{{ technique.depth }}" lang="{{ technique.label.lang }}" href="{% url 'analysis-explorer' %}?grain=analyses&amp;technique={{ technique.id|urlencode:'' }}">{{ technique.label.value }}</a>
                     {% endfor %}
                 </div>
                 {% endif %}

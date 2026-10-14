@@ -597,6 +597,16 @@ class ReadmeTests(PackageCase):
                 self.assertIn("CC BY 4.0", readme)
                 self.assertIn(citations[0]["title"], readme)
 
+    def test_the_readme_says_a_filter_term_keeps_its_narrower_terms(self):
+        for language, sentence in (
+            ("en", "A filter term also keeps its narrower terms."),
+            ("fr", "Un terme de filtre retient aussi ses termes plus précis."),
+        ):
+            with self.subTest(language=language):
+                members = self.members(self.document_query(), language=language)
+
+                self.assertIn(sentence, self.text(members["README.md"]))
+
     def test_drafts_are_marked_in_the_readme(self):
         drafts = self.members(f"ids=an:{self.pk('draft')}:-")
         plain = self.members(f"ids=an:{self.pk('open')}:-")

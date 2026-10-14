@@ -287,6 +287,7 @@ def build_events(
     own_values,
     material_components,
     swatches,
+    material_closure,
 ):
     """The ``EventSet`` of the visible corpus: events in document-name order, their places, materials and the documents' histories.
 
@@ -294,7 +295,9 @@ def build_events(
     for ``kept_events``). An event material's ``colours`` are its characterization's
     *own_values* colours, its own ``color_aspect`` without the colours of the
     Components it is linked to (``colour_order``); a ``MapMaterial``'s colours are
-    counted over its event materials.
+    counted over its event materials. *material_closure* is the ``TermClosure``
+    of the material list: a ``MapMaterial`` names the uris above it in
+    ``ancestors``.
     """
     readable = readable_nodegroup_ids(user)
     by_id = {row["id"]: row for row in rows}
@@ -608,6 +611,7 @@ def build_events(
             "label": labels[uri],
             "colours": colour_order(colours[uri]),
             "swatch": swatch_of(uri),
+            "ancestors": sorted(material_closure.reach.get(uri, {uri}) - {uri}),
         }
         for uri in sorted(labels)
     }
@@ -726,6 +730,8 @@ def events_payload(query, user, language, ticket=None):
 
     ``colours`` names the colours of the listed materials and every ticked
     colour the corpus knows, carried by a listed material or not.
+    ``coveringMaterials`` names every ticked material that is an ancestor of a
+    listed one.
     """
     bundle = corpus_bundle(user, language, ticket)
     events, keep, filters = kept_events(bundle, query)
@@ -735,6 +741,7 @@ def events_payload(query, user, language, ticket=None):
         m["id"]: bundle.event_materials[m["id"]] for e in events for m in e["materials"]
     }
     colour_labels = bundle.labels.get("colour", {})
+    material_labels = bundle.labels.get("material", {})
     return {
         "events": events,
         "places": places,
@@ -743,6 +750,12 @@ def events_payload(query, user, language, ticket=None):
         ),
         "period": period_facet(bundle.rows, keep, event, bundle.period_bounds[event]),
         "materials": materials,
+        "coveringMaterials": {
+            uri: material_labels[uri]
+            for uri in filters["material"]
+            if uri in material_labels
+            and any(uri in m["ancestors"] for m in materials.values())
+        },
         "analysisNames": {
             a: bundle.by_id[a]["name"] for e in events for a in e["analyses"]
         },
