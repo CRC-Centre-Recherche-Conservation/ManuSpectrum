@@ -1,7 +1,9 @@
 """Techniques the homepage offers: the thesaurus references the visible
-analyses carry themselves (``home_techniques``), as the visitor sees them."""
+analyses carry themselves (``home_techniques``), as the visitor sees them,
+nested under the carried techniques they are narrower than."""
 
 import logging
+from collections import defaultdict
 
 from django.conf import settings
 
@@ -12,12 +14,53 @@ from manuspectrum.views.explorer.service import home_techniques
 logger = logging.getLogger(__name__)
 
 
-def homepage_techniques(language):
-    """``[{"id": uri, "label": Label, "count": n, "depth": d}]``, techniques with
-    at least one analysis visible to the anonymous visitor, in tree order.
+def technique_tree(values):
+    """*values* (``FacetValue`` with ``count`` > 0, in tree order) as nested nodes ``{"id", "label", "count", "children"}``.
 
-    ``count`` includes the rows of the narrower techniques; ``depth`` is the
-    number of carried ancestors along the first path (the page indents by it).
+    A value sits under every one of its ``parents`` that is listed, in the
+    order of *values*; a value with no listed parent, or reached only through
+    a cycle, is a root. A path never repeats a value.
+    """
+    listed = {v["id"] for v in values}
+    children = defaultdict(list)
+    for value in values:
+        for parent in value["parents"]:
+            if parent in listed:
+                children[parent].append(value)
+
+    def node(value, path):
+        path = path | {value["id"]}
+        return {
+            "id": value["id"],
+            "label": value["label"],
+            "count": value["count"],
+            "children": [
+                node(child, path)
+                for child in children[value["id"]]
+                if child["id"] not in path
+            ],
+        }
+
+    roots, reached = [], set()
+    starts = [v for v in values if not any(p in listed for p in v["parents"])]
+    for value in starts + values:
+        if value["id"] in reached:
+            continue
+        root = node(value, frozenset())
+        roots.append(root)
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            reached.add(current["id"])
+            stack.extend(current["children"])
+    return roots
+
+
+def homepage_techniques(language):
+    """The techniques with at least one analysis visible to the anonymous visitor, as ``technique_tree`` nodes.
+
+    ``count`` includes the rows of the narrower techniques; a technique sits
+    under each of its nearest carried ancestors, the rule of the Explorer home.
 
     Always computed as the visitor, so the list is the same for every reader;
     memoised per language for ``EXPLORER_TECHNIQUES_TTL`` seconds. A build
@@ -26,30 +69,13 @@ def homepage_techniques(language):
 
     def build():
         try:
-            values = [
-                v for v in home_techniques(anonymous_user(), language) if v["count"] > 0
-            ]
-            by_id = {v["id"]: v for v in values}
-
-            def depth(value):
-                steps, seen = 0, {value["id"]}
-                while value["parents"] and value["parents"][0] in by_id:
-                    value = by_id[value["parents"][0]]
-                    if value["id"] in seen:
-                        break
-                    seen.add(value["id"])
-                    steps += 1
-                return steps
-
-            return [
-                {
-                    "id": v["id"],
-                    "label": v["label"],
-                    "count": v["count"],
-                    "depth": depth(v),
-                }
-                for v in values
-            ]
+            return technique_tree(
+                [
+                    v
+                    for v in home_techniques(anonymous_user(), language)
+                    if v["count"] > 0
+                ]
+            )
         except Exception:
             logger.exception("Homepage techniques: the explorer search failed")
             return None

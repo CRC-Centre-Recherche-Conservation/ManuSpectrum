@@ -118,7 +118,7 @@ class DiscoverEntryTests(TestCase):
                 "id": "http://example.org/technique/a",
                 "label": {"value": "Technique A", "lang": "fr"},
                 "count": 3,
-                "depth": 1,
+                "children": [],
             },
         ]
         with mock.patch(
@@ -127,12 +127,40 @@ class DiscoverEntryTests(TestCase):
         ):
             html = self.client.get("/fr/").content.decode()
         self.assertIn(
-            'class="ms-search-chip ms-technique-chip ms-technique-depth-1" lang="fr" '
+            'class="ms-search-chip ms-technique-chip" lang="fr" '
             'href="/fr/discover?grain=analyses&amp;technique=http%3A%2F%2Fexample.org%2Ftechnique%2Fa"',
             html,
         )
         self.assertNotIn('data-term="Raman"', html)
         self.assertNotIn('data-term="XRF"', html)
+
+    def test_narrower_technique_chips_are_a_list_nested_in_their_parent_item(self):
+        chip = lambda uri, *children: {
+            "id": f"http://example.org/technique/{uri}",
+            "label": {"value": uri, "lang": "en"},
+            "count": 1,
+            "children": [*children],
+        }
+        with mock.patch(
+            "manuspectrum.templatetags.explorer_home.homepage_techniques",
+            return_value=[chip("xrf", chip("pxrf"), chip("micro")), chip("fors")],
+        ):
+            html = self.client.get("/en/").content.decode()
+        tree = html[
+            html.index('<ul class="ms-technique-chips"') : html.index(
+                '<div class="ms-search-cta">'
+            )
+        ]
+        compact = re.sub(r"\s+", " ", re.sub(r"<a [^>]*>([^<]*)</a>", r"\1", tree))
+        self.assertIn('aria-labelledby="ms-technique-label"', compact)
+        self.assertIn(
+            '<li class="ms-technique-item ms-technique-branch"> xrf '
+            '<ul class="ms-technique-narrower" role="list"> '
+            '<li class="ms-technique-item"> pxrf </li> '
+            '<li class="ms-technique-item"> micro </li> </ul> </li> '
+            '<li class="ms-technique-item"> fors </li>',
+            compact,
+        )
 
     def test_no_technique_chip_row_without_visible_techniques(self):
         with mock.patch(

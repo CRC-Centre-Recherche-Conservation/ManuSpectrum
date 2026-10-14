@@ -5,12 +5,15 @@ Usage:
 """
 
 import json
+from unittest import mock
 
 from django.core.cache import cache
 from django.http import QueryDict
+from django.test import SimpleTestCase
 
 from manuspectrum.utils.public_visibility import visible_set
-from manuspectrum.views.explorer.home import homepage_techniques
+from manuspectrum.views.explorer import service
+from manuspectrum.views.explorer.home import homepage_techniques, technique_tree
 from manuspectrum.views.explorer.scopes import resolve_scope
 from manuspectrum.views.explorer.service import (
     build_bundle,
@@ -358,6 +361,25 @@ class HomesTests(HierarchyCase):
     def test_the_homepage_lists_only_carried_techniques(self):
         self.assertEqual({t["id"] for t in homepage_techniques("en")}, {XRF, FORS})
 
+    def test_the_explorer_home_filters_once_and_counts_only_techniques_and_projects(
+        self,
+    ):
+        home_payload("2026-10-13", self.anonymous, "en")
+        with (
+            mock.patch.object(
+                service, "row_filter", wraps=service.row_filter
+            ) as filtered,
+            mock.patch.object(
+                service, "facet_entry", wraps=service.facet_entry
+            ) as entries,
+        ):
+            home_payload("2026-10-13", self.anonymous, "en")
+
+        self.assertEqual(filtered.call_count, 1)
+        self.assertEqual(
+            sorted(c.args[0] for c in entries.call_args_list), ["project", "technique"]
+        )
+
 
 class NestedHomesTests(HierarchyCase):
     @classmethod
@@ -395,7 +417,37 @@ class NestedHomesTests(HierarchyCase):
         self.assertEqual(values[XRF_FAMILY]["parents"], [])
         self.assertNotIn(SPECTROMETRY, values)
 
-    def test_the_homepage_gives_each_technique_its_depth(self):
-        depths = {t["id"]: t["depth"] for t in homepage_techniques("en")}
+    def test_the_homepage_nests_each_technique_under_its_carried_parent(self):
+        tree = {t["id"]: t for t in homepage_techniques("en")}
 
-        self.assertEqual(depths, {XRF_FAMILY: 0, XRF: 1, FORS: 0})
+        self.assertEqual(set(tree), {XRF_FAMILY, FORS})
+        self.assertEqual([c["id"] for c in tree[XRF_FAMILY]["children"]], [XRF])
+        self.assertEqual(tree[XRF_FAMILY]["children"][0]["children"], [])
+        self.assertEqual(tree[FORS]["children"], [])
+
+
+class TechniqueTreeTests(SimpleTestCase):
+    @staticmethod
+    def value(uri, *parents):
+        return {"id": uri, "label": {"value": uri}, "count": 1, "parents": [*parents]}
+
+    def test_a_technique_with_two_carried_parents_sits_under_each(self):
+        tree = technique_tree(
+            [
+                self.value("a"),
+                self.value("b"),
+                self.value("c", "a", "b"),
+            ]
+        )
+
+        self.assertEqual([n["id"] for n in tree], ["a", "b"])
+        self.assertEqual(
+            [[c["id"] for c in n["children"]] for n in tree], [["c"], ["c"]]
+        )
+
+    def test_a_technique_reached_only_through_a_cycle_is_a_root(self):
+        tree = technique_tree([self.value("a", "b"), self.value("b", "a")])
+
+        self.assertEqual([n["id"] for n in tree], ["a"])
+        self.assertEqual([c["id"] for c in tree[0]["children"]], ["b"])
+        self.assertEqual(tree[0]["children"][0]["children"], [])
