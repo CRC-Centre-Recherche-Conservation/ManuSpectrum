@@ -35,6 +35,7 @@ from django.db import connection, transaction
 
 from arches_controlled_lists.models import List, ListItem, ListItemValue
 
+from manuspectrum import basemaps
 from manuspectrum.management.commands.export_pkg import (
     items_digest,
     list_digests,
@@ -42,7 +43,6 @@ from manuspectrum.management.commands.export_pkg import (
     values_digest,
     widget_usage,
 )
-from manuspectrum import basemaps
 from manuspectrum.models import RendererConfig
 
 

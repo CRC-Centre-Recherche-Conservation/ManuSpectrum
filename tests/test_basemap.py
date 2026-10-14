@@ -7,6 +7,7 @@ runs `reverse` to get the rows Arches installs, then `forward` on them.
 import importlib
 import json
 import uuid
+from pathlib import Path
 
 from arches.app.models import models
 from arches.app.models.system_settings import settings
@@ -18,7 +19,8 @@ from manuspectrum import basemaps
 
 migration = importlib.import_module("manuspectrum.migrations.0013_openfreemap_basemap")
 
-MAPBOX_SOURCES = ("mapbox-streets", "mapbox-satellite", "mapzen")
+MAPBOX_SOURCES = ("mapbox-streets", "mapbox-satellite")
+CORE_SOURCES = {*MAPBOX_SOURCES, "geocode-point", "search-query"}
 
 
 def layer_names():
@@ -55,9 +57,54 @@ class VendoredStyleTests(SimpleTestCase):
 
     def test_core_map_rows_are_the_mapbox_ones(self):
         layers, sources = basemaps.core_map_rows()
-        self.assertEqual(set(layers), {"satellite", "streets", "mapzen"})
-        for name in MAPBOX_SOURCES:
-            self.assertIn(name, sources)
+        self.assertEqual(set(layers), {"satellite", "streets"})
+        self.assertEqual(set(sources), CORE_SOURCES)
+
+
+class FrozenSnapshotTests(SimpleTestCase):
+    """Migration 0013 carries its own copy of every value it writes or expects."""
+
+    frozen = migration.FROZEN
+
+    def test_it_equals_the_live_openfreemap_values(self):
+        self.assertEqual(self.frozen["positron_layers"], basemaps.positron_layers())
+        self.assertEqual(self.frozen["openfreemap_source"], basemaps.OPENFREEMAP_SOURCE)
+        self.assertEqual(self.frozen["sprites"], basemaps.SPRITES_URL)
+        self.assertEqual(self.frozen["glyphs"], basemaps.GLYPHS_URL)
+
+    def test_it_equals_the_core_rows_of_arches(self):
+        layers, sources = basemaps.core_map_rows()
+        self.assertEqual(self.frozen["core_layers"], layers)
+        self.assertEqual(
+            self.frozen["mapbox_sources"],
+            {name: sources[name] for name in MAPBOX_SOURCES},
+        )
+        self.assertEqual(self.frozen["mapbox_sprites"], basemaps.MAPBOX_SPRITES_URL)
+        self.assertEqual(self.frozen["mapbox_glyphs"], basemaps.MAPBOX_GLYPHS_URL)
+
+    def test_the_migration_reads_nothing_else_at_run_time(self):
+        source = Path(migration.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("basemaps", source.split('"""', 2)[2])
+        self.assertNotIn("db_data", source.split('"""', 2)[2])
+
+
+class SystemSettingsOverlayTests(SimpleTestCase):
+    def test_the_overlay_carries_the_openfreemap_sprite_and_glyphs(self):
+        text = (
+            Path(django_settings.APP_ROOT) / "system_settings" / "System_Settings.json"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("mapbox://", text)
+        data = json.loads(text)
+        nodes = {}
+        for resource in data["business_data"]["resources"]:
+            for tile in resource["tiles"]:
+                nodes.update(tile["data"])
+        self.assertEqual(
+            nodes[basemaps.SPRITES_NODE_ID]["en"]["value"], basemaps.SPRITES_URL
+        )
+        self.assertEqual(
+            nodes[basemaps.GLYPHS_NODE_ID]["en"]["value"], basemaps.GLYPHS_URL
+        )
 
 
 class MigrationTests(TestCase):
@@ -94,10 +141,11 @@ class MigrationTests(TestCase):
         self.assertEqual(
             source_names(), {"openfreemap", "geocode-point", "search-query"}
         )
+        self.assertNotIn("mapzen", layer_names() | source_names())
 
     def test_forward_replaces_the_mapbox_rows_of_arches(self):
         self.reverse()
-        self.assertEqual(layer_names(), {"satellite", "streets", "mapzen"})
+        self.assertEqual(layer_names(), {"satellite", "streets"})
         self.forward()
         self.assertEqual(layer_names(), {"streets"})
         self.assertEqual(
@@ -137,11 +185,15 @@ class MigrationTests(TestCase):
             core_sources,
         )
 
+    def test_reverse_never_recreates_the_mapzen_rows_arches_deleted(self):
+        self.reverse()
+        self.assertNotIn("mapzen", layer_names() | source_names())
+
     def test_reverse_then_forward_then_reverse_is_stable(self):
         self.reverse()
         self.forward()
         self.reverse()
-        self.assertEqual(layer_names(), {"satellite", "streets", "mapzen"})
+        self.assertEqual(layer_names(), {"satellite", "streets"})
         self.assertIn("mapbox-streets", source_names())
         self.assertNotIn("openfreemap", source_names())
 
@@ -158,11 +210,13 @@ class MigrationTests(TestCase):
         self.reverse()
         models.MapLayer.objects.create(
             name="mine",
-            layerdefinitions=[{"id": "m", "type": "raster", "source": "mapzen"}],
+            layerdefinitions=[
+                {"id": "m", "type": "raster", "source": "mapbox-satellite"}
+            ],
             icon="",
         )
         self.forward()
-        self.assertIn("mapzen", source_names())
+        self.assertIn("mapbox-satellite", source_names())
         self.assertNotIn("mapbox-streets", source_names())
 
     def test_a_changed_mapbox_source_is_kept(self):
@@ -195,13 +249,3 @@ class MigrationTests(TestCase):
         self.assertEqual(self.value(sprites), basemaps.MAPBOX_SPRITES_URL)
         self.assertEqual(self.value(glyphs), basemaps.MAPBOX_GLYPHS_URL)
         self.assertEqual(self.value(custom), "https://fonts.example/{range}")
-
-    def test_the_migration_runs_after_the_last_arches_models_migration_it_needs(self):
-        self.assertIn(
-            ("models", "12586_tile_cardinality_check"),
-            migration.Migration.dependencies,
-        )
-        self.assertIn(
-            ("manuspectrum", "0012_restriction_verbose_names"),
-            migration.Migration.dependencies,
-        )

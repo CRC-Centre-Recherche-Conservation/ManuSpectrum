@@ -12,7 +12,11 @@
  * `postConfig` also follows the page language on the OpenFreeMap labels: on a
  * French page every symbol layer whose `text-field` reads a name falls back
  * from `name:fr` to the style's own expression (English name, then local name).
- * The style stays as the vendored JSON; nothing is fetched again.
+ * The style stays as the vendored JSON; nothing is fetched again. The core view
+ * models call `map.setStyle(style)` again when the layers change, which brings
+ * the vendored labels back: on a French page `postConfig` also installs an own
+ * `setStyle` that rewrites the labels of the style it is given, then calls the
+ * map's own method.
  *
  * Remove this file at Arches 8.2, whose map view model has no Mapbox geocoder.
  * After adding or deleting a shadow, stop `npm start`, delete
@@ -30,6 +34,13 @@ const readsName = (expression) => {
     return expression.some(readsName);
 };
 
+const isFrench = (expression) =>
+    Array.isArray(expression) &&
+    expression[0] === "coalesce" &&
+    Array.isArray(expression[1]) &&
+    expression[1][0] === "get" &&
+    expression[1][1] === "name:fr";
+
 /**
  * The `text-field` a basemap label layer takes for a page language: on a French
  * page `name:fr` first, then the layer's current expression (formatting kept);
@@ -42,27 +53,48 @@ export const labelField = (language, current) => {
             .startsWith("fr")
     )
         return current;
+    if (isFrench(current)) return current;
     if (!readsName(current)) return current;
     return ["coalesce", ["get", "name:fr"], current];
 };
 
+const isFrenchPage = () =>
+    String(arches.activeLanguage || "")
+        .toLowerCase()
+        .startsWith("fr");
+
+const localizeLayer = (layer) => {
+    if (layer.type !== "symbol" || layer.source !== BASEMAP_SOURCE)
+        return layer;
+    const current = layer.layout && layer.layout["text-field"];
+    const next = labelField(arches.activeLanguage, current);
+    if (next === current) return layer;
+    return { ...layer, layout: { ...layer.layout, "text-field": next } };
+};
+
 const localizeLabels = (map) => {
-    const language = arches.activeLanguage;
-    if (
-        !String(language || "")
-            .toLowerCase()
-            .startsWith("fr")
-    )
-        return;
+    if (!isFrenchPage()) return;
     const style = map.getStyle();
     if (!style || !Array.isArray(style.layers)) return;
     style.layers.forEach((layer) => {
-        if (layer.type !== "symbol" || layer.source !== BASEMAP_SOURCE) return;
-        const current = layer.layout && layer.layout["text-field"];
-        const next = labelField(language, current);
-        if (next !== current)
-            map.setLayoutProperty(layer.id, "text-field", next);
+        const localized = localizeLayer(layer);
+        if (localized !== layer)
+            map.setLayoutProperty(
+                layer.id,
+                "text-field",
+                localized.layout["text-field"],
+            );
     });
+};
+
+const localizeOnSetStyle = (map) => {
+    if (!isFrenchPage()) return;
+    const setStyle = map.setStyle;
+    map.setStyle = function (style, options) {
+        if (style && typeof style === "object" && Array.isArray(style.layers))
+            style = { ...style, layers: style.layers.map(localizeLayer) };
+        return setStyle.call(this, style, options);
+    };
 };
 
 const mapConfigurator = {
@@ -77,6 +109,7 @@ const mapConfigurator = {
     postConfig: function (map) {
         delete map.addControl;
         localizeLabels(map);
+        localizeOnSetStyle(map);
     },
 };
 

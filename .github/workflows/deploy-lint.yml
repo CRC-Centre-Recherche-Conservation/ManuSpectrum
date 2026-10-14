@@ -48,7 +48,7 @@ jobs:
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
           stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
-          build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/rewrite_dev_origin\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflow)")"

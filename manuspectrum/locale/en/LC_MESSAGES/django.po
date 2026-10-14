@@ -5607,6 +5607,16 @@ msgstr ""
 "v3. Each resource states the licence that applies to its data and files; read"
 " it before reusing them."
 
+#: templates/views/pages/legal.htm:62
+msgid "Maps"
+msgstr "Maps"
+
+#: templates/views/pages/legal.htm:63
+msgid ""
+"The map background is served by OpenFreeMap from OpenMapTiles vector tiles and the data of the OpenStreetMap contributors. It is drawn with the Positron style designed by CARTO (CC BY 4.0, derived from CartoDB Basemaps, CC BY 3.0)."
+msgstr ""
+"The map background is served by OpenFreeMap from OpenMapTiles vector tiles and the data of the OpenStreetMap contributors. It is drawn with the Positron style designed by CARTO (CC BY 4.0, derived from CartoDB Basemaps, CC BY 3.0)."
+
 #: templates/views/pages/privacy.htm:5 templates/views/pages/privacy.htm:6
 msgid ""
 "What personal data ManuSpectrum keeps, why, for how long, and how to exercise"

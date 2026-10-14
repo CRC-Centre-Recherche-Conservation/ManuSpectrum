@@ -17,7 +17,10 @@ style is a new data migration: the rows are written from this module.
 sprite path is versioned by OpenFreeMap (`ofm_f384`); the System Settings tile
 of each node wins over `settings.MAPBOX_SPRITES` / `MAPBOX_GLYPHS`.
 
-`core_map_rows()` reads the map rows Arches itself installs.
+`core_map_rows()` reads the map rows Arches installs, as left by its migrations
+(`0010_4_1_0` deletes the `mapzen` rows `db_data.sql` still inserts). It serves
+`export_pkg` and the checks; data migration 0013 carries its own frozen copy and
+a test pins the two together.
 """
 
 import json
@@ -35,6 +38,7 @@ GLYPHS_NODE_ID = "0e90031e-4148-11e7-a176-c4b301baab9f"
 OPENFREEMAP_SOURCE_NAME = "openfreemap"
 STREETS_LAYER_NAME = "streets"
 SATELLITE_LAYER_NAME = "satellite"
+RETIRED_MAPZEN = "mapzen"
 
 SPRITES_URL = "https://tiles.openfreemap.org/sprites/ofm_f384/ofm"
 GLYPHS_URL = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
@@ -76,7 +80,7 @@ def needs_mapbox(source):
 
 def core_map_rows():
     """({layer name: definitions}, {source name: source}) of Arches' own
-    `db_data.sql`."""
+    `db_data.sql`, minus the `mapzen` rows its migration `0010_4_1_0` deletes."""
     sql = CORE_DATA_SQL.read_text(encoding="utf-8")
     layers = re.findall(
         r"INSERT INTO map_layers\(.*?\)\s*VALUES \(public\.uuid_generate_v1mc\(\), "
@@ -90,6 +94,6 @@ def core_map_rows():
         re.DOTALL,
     )
     return (
-        {name: json.loads(body) for name, body in layers},
-        {name: json.loads(body) for name, body in sources},
+        {n: json.loads(b) for n, b in layers if n != RETIRED_MAPZEN},
+        {n: json.loads(b) for n, b in sources if n != RETIRED_MAPZEN},
     )

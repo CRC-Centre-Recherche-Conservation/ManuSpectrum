@@ -440,6 +440,20 @@ class LegalPagesTests(TestCase):
         ):
             self.assertIn(name, html)
 
+    def test_legal_notice_credits_the_basemap_in_both_languages(self):
+        for lang, heading in (("en", "Maps"), ("fr", "Cartes")):
+            html = self.get("about-legal", lang)
+            self.assertIn(f"<h2>{heading}</h2>", html)
+            for needle in (
+                "https://openfreemap.org",
+                "https://www.openmaptiles.org/",
+                "https://www.openstreetmap.org/copyright",
+                "OpenStreetMap contributors",
+                "Positron",
+                "CARTO",
+            ):
+                self.assertIn(needle, html, lang)
+
     @override_settings(CONTACT_EMAIL="legal@manuspectrum.test")
     def test_legal_notice_prints_the_contact_setting(self):
         self.assertIn("legal@manuspectrum.test", self.get("about-legal"))

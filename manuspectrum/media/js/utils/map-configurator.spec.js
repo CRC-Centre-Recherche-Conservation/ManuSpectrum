@@ -32,6 +32,9 @@ class FakeMap {
     setLayoutProperty(id, name, value) {
         this.set.push([id, name, value]);
     }
+    setStyle(style, options) {
+        this.styled = [style, options];
+    }
     addControl(control, position) {
         this.added.push([control, position]);
         return this;
@@ -152,6 +155,49 @@ describe("map-configurator", () => {
             expect(map.set).toEqual([
                 ["a", "text-field", ["coalesce", ["get", "name:fr"], english]],
             ]);
+        });
+
+        it("labelField does not wrap a label twice", () => {
+            const once = labelField("fr", english);
+            expect(labelField("fr", once)).toBe(once);
+        });
+
+        it("a setStyle after postConfig reaches the map with French labels, once", () => {
+            archesStub.activeLanguage = "fr";
+            const map = fakeMapOf([]);
+            mapConfigurator.postConfig(map);
+            const vendored = JSON.parse(JSON.stringify(positron));
+            map.setStyle({ version: 8, layers: vendored }, { diff: false });
+            const [style, options] = map.styled;
+            expect(options).toEqual({ diff: false });
+            const labels = style.layers.filter(
+                (layer) => layer.layout && layer.layout["text-field"],
+            );
+            const french = labels.filter(
+                (layer) => layer.layout["text-field"][0] === "coalesce",
+            );
+            expect(french.length).toBeGreaterThan(10);
+            const first = JSON.parse(JSON.stringify(style.layers));
+            map.setStyle(style);
+            expect(map.styled[0].layers).toEqual(first);
+            expect(vendored).toEqual(positron);
+        });
+
+        it("a setStyle with a URL or on an English page goes through untouched", () => {
+            archesStub.activeLanguage = "fr";
+            const frMap = fakeMapOf([]);
+            mapConfigurator.postConfig(frMap);
+            frMap.setStyle("https://style.example/s.json");
+            expect(frMap.styled[0]).toBe("https://style.example/s.json");
+            archesStub.activeLanguage = "en";
+            const enMap = fakeMapOf([]);
+            mapConfigurator.postConfig(enMap);
+            expect(
+                Object.prototype.hasOwnProperty.call(enMap, "setStyle"),
+            ).toBe(false);
+            const style = { version: 8, layers: positron };
+            enMap.setStyle(style);
+            expect(enMap.styled[0]).toBe(style);
         });
 
         it("postConfig sets nothing on an English page", () => {

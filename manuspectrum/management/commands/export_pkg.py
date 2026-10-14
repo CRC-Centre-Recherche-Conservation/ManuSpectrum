@@ -88,7 +88,6 @@ from arches_controlled_lists.models import List, ListItem, ListItemValue
 from arches_controlled_lists.utils.skos import ARCHES, SKOSWriter
 
 from manuspectrum import basemaps
-from manuspectrum.basemaps import core_map_rows
 from manuspectrum.models import RendererConfig
 
 LOCAL_ORIGIN = "http://localhost:8000/"
@@ -492,7 +491,7 @@ def non_core_map_rows():
     needs a Mapbox token (a `mapbox://` source, a layer drawing from a `mapbox-`
     source). Data migration 0013 turns the Arches rows into the OpenFreeMap ones.
     """
-    core_layers, core_sources = core_map_rows()
+    core_layers, core_sources = basemaps.core_map_rows()
     own_layers = {
         **core_layers,
         basemaps.STREETS_LAYER_NAME: basemaps.positron_layers(),

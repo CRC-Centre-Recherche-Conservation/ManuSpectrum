@@ -1069,7 +1069,9 @@ ACCOUNT_RETENTION_NOTICE_DAYS = 30
 # ---------------------------------------------------------------------------
 # The basemap is OpenFreeMap (manuspectrum/basemaps.py): no Mapbox key. The
 # System Settings tile of each node wins over these values at start
-# (update_from_db); data migration 0013 and the data package set the tile.
+# (update_from_db). Migration 0013 rewrites the tiles of EXISTING databases; a
+# fresh setup_db takes them from the overlay system_settings/System_Settings.json
+# (dev) or from the package (make init).
 MAPBOX_API_KEY = ""
 MAPBOX_SPRITES = "https://tiles.openfreemap.org/sprites/ofm_f384/ofm"
 MAPBOX_GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
