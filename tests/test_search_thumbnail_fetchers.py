@@ -21,6 +21,7 @@ name an image format.
 from types import SimpleNamespace
 from unittest import mock
 
+from django.conf import settings
 from django.test import SimpleTestCase
 
 from arches.app.utils.search_thumbnail_fetcher_factory import (
@@ -320,6 +321,142 @@ class ManifestFetcherRetrieveTests(SimpleTestCase):
         tile_model.objects.filter.side_effect = RuntimeError("connection lost")
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
+
+
+LOCAL_UUID = "1fef8336-b2b3-440b-8985-0069bea072a0"
+IIIF_MANIFEST_MODEL = "manuspectrum.iiif.sources.IIIFManifest"
+
+
+@mock.patch(SAFE_FETCH)
+@mock.patch(FETCH_MANIFEST)
+@mock.patch(IIIF_MANIFEST_MODEL)
+@mock.patch(TILE_MODEL)
+class LocalManifestFetcherTests(SimpleTestCase):
+    def setUp(self):
+        self.fetcher = DocumentThumbnailFetcher(RESOURCE)
+
+    def stored(self, iiif_manifest, manifest):
+        rows = iiif_manifest.objects.filter.return_value.values_list.return_value
+        rows.first.return_value = manifest
+
+    def test_a_relative_local_manifest_is_read_from_the_database_without_http(
+        self, tile_model, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [tile(**{MANIFEST_NODE: f"/manifest/{LOCAL_UUID}"})]
+        )
+        self.stored(iiif_manifest, v2_manifest())
+        safe_fetch.return_value = response()
+
+        self.assertEqual(
+            self.fetcher.get_thumbnail(retrieve=True), (JPEG_BYTES, "image/jpeg")
+        )
+        fetch_manifest.assert_not_called()
+        iiif_manifest.objects.filter.assert_called_once_with(globalid=LOCAL_UUID)
+        safe_fetch.assert_called_once_with(
+            DERIVED_THUMBNAIL, headers=IMAGE_HEADERS, purpose="thumbnail"
+        )
+
+    def test_an_absolute_local_manifest_is_read_from_the_database_without_http(
+        self, tile_model, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [
+                tile(
+                    **{
+                        MANIFEST_NODE: f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{LOCAL_UUID}"
+                    }
+                )
+            ]
+        )
+        self.stored(iiif_manifest, v2_manifest())
+        safe_fetch.return_value = response()
+
+        self.assertEqual(
+            self.fetcher.get_thumbnail(retrieve=True), (JPEG_BYTES, "image/jpeg")
+        )
+        fetch_manifest.assert_not_called()
+        iiif_manifest.objects.filter.assert_called_once_with(globalid=LOCAL_UUID)
+
+    def test_an_unknown_local_manifest_gives_no_thumbnail(
+        self, tile_model, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [tile(**{MANIFEST_NODE: f"/manifest/{LOCAL_UUID}"})]
+        )
+        self.stored(iiif_manifest, None)
+
+        self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
+        fetch_manifest.assert_not_called()
+        safe_fetch.assert_not_called()
+
+    def test_an_external_manifest_is_still_fetched_over_http(
+        self, tile_model, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [tile(**{MANIFEST_NODE: TILE_MANIFEST_URL})]
+        )
+        fetch_manifest.return_value = v2_manifest()
+        safe_fetch.return_value = response()
+
+        self.fetcher.get_thumbnail(retrieve=True)
+
+        fetch_manifest.assert_called_once_with(TILE_MANIFEST_URL)
+        iiif_manifest.objects.filter.assert_not_called()
+
+
+@mock.patch(SAFE_FETCH)
+@mock.patch(FETCH_MANIFEST)
+@mock.patch(IIIF_MANIFEST_MODEL)
+@mock.patch(ANNOTATION_MODEL)
+@mock.patch(TILE_MODEL)
+class LocalManifestAnnotationFetcherTests(SimpleTestCase):
+    def stored(self, iiif_manifest, manifest):
+        rows = iiif_manifest.objects.filter.return_value.values_list.return_value
+        rows.first.return_value = manifest
+
+    def test_a_component_reads_its_local_manifest_from_the_database(
+        self, tile_model, vw_annotation, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(manifest=f"/manifest/{LOCAL_UUID}")]
+        )
+        self.stored(iiif_manifest, v2_manifest())
+        safe_fetch.return_value = response(content=REGION_BYTES)
+
+        result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
+        fetch_manifest.assert_not_called()
+
+    def test_an_analysis_manifest_tile_reads_its_local_manifest_from_the_database(
+        self, tile_model, vw_annotation, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [tile(**{MANIFEST_NODE: f"/manifest/{LOCAL_UUID}"})]
+        )
+        self.stored(iiif_manifest, v2_manifest())
+        safe_fetch.return_value = response()
+
+        result = AnalysisThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        self.assertEqual(result, (JPEG_BYTES, "image/jpeg"))
+        fetch_manifest.assert_not_called()
+
+    def test_an_analysis_annotation_reads_its_local_manifest_from_the_database(
+        self, tile_model, vw_annotation, iiif_manifest, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset([])
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(manifest=f"/manifest/{LOCAL_UUID}")]
+        )
+        self.stored(iiif_manifest, v2_manifest())
+        safe_fetch.return_value = response(content=REGION_BYTES)
+
+        result = AnalysisThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
+        fetch_manifest.assert_not_called()
 
 
 class ComponentFetcherExistenceTests(SimpleTestCase):
@@ -638,6 +775,23 @@ class AnalysisFetcherRetrieveTests(SimpleTestCase):
         safe_fetch.assert_called_once_with(
             DERIVED_THUMBNAIL, headers=IMAGE_HEADERS, purpose="thumbnail"
         )
+
+    def test_a_refused_manifest_image_fetch_falls_back_to_the_annotation(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        self.with_manifest_tile(tile_model)
+        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        fetch_manifest.return_value = v2_manifest(
+            thumbnail="https://img.example.org/thumb.png"
+        )
+        safe_fetch.side_effect = [
+            RuntimeError("Disallowed port"),
+            response(content=REGION_BYTES),
+        ]
+
+        result = self.fetcher.get_thumbnail(retrieve=True)
+
+        self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
 
     def test_a_failed_manifest_fetch_falls_back_to_the_annotation(
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
