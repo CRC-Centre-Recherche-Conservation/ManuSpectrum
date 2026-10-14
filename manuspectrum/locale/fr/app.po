@@ -869,6 +869,14 @@ msgstr ""
 "Un matériau coché retient aussi ses termes plus précis ; Suivre suit ce "
 "matériau seul."
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:280
+msgid ""
+"A ticked term also keeps its narrower terms (e.g. X-ray fluorescence "
+"includes portable and micro-XRF)."
+msgstr ""
+"Un terme coché retient aussi ses termes plus précis (par ex. la fluorescence "
+"X inclut le pXRF et la micro-XRF)."
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:436
 msgid "About material families"
 msgstr "À propos des familles de matériaux"
@@ -1321,7 +1329,7 @@ msgstr ""
 "Clic : pose dans le volet cible. Glisser : sur n’importe quel volet. En mode "
 "Pile, le clic ajoute ou retire la carte."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:274
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:281
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CompareWindow.vue:454
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:1259
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/SeriesMapDialog.vue:218
@@ -1476,7 +1484,7 @@ msgstr "Case de couverture"
 msgid "Coverage matrix"
 msgstr "Matrice de couverture"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue:127
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue:136
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:325
 msgid "covered by %{terms}"
 msgstr "couvert par %{terms}"
@@ -1983,11 +1991,11 @@ msgstr "Filtre : couleur %{colour}"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerGallery.vue:493
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LayerStack.vue:525
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PaneFilters.vue:67
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue:36
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue:44
 msgid "Filters"
 msgstr "Filtres"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue:39
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue:48
 msgid "Filters (%{count})"
 msgstr "Filtres (%{count})"
 
@@ -2054,7 +2062,7 @@ msgstr "Mettre %{name} en focus"
 msgid "Fold"
 msgstr "Replier"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue:148
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue:157
 msgid "Fold %{place}"
 msgstr "Replier %{place}"
 
@@ -2082,8 +2090,8 @@ msgid "Folio photo · capture"
 msgstr "Photo du folio · capture"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:490
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:638
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:825
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:636
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:822
 msgid "Follow"
 msgstr "Suivre"
 
@@ -2244,7 +2252,7 @@ msgstr "Regrouper par"
 msgid "Group the identified materials"
 msgstr "Regrouper les matériaux identifiés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:645
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:643
 msgid ""
 "Grouped by the colour most often observed on each material; tick a colour to "
 "filter by it."
@@ -2619,8 +2627,8 @@ msgid "Light table"
 msgstr "Table lumineuse"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:421
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:560
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:564
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:559
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:563
 msgid "Light what relates to"
 msgstr "Éclairer ce qui est lié à"
 
@@ -2657,7 +2665,7 @@ msgstr "Lister les valeurs distinctes"
 msgid "Loading the analysis…"
 msgstr "Chargement de l'analyse…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:302
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:309
 msgid "Loading the Compare view…"
 msgstr "Chargement de la vue Comparer…"
 
@@ -2665,7 +2673,7 @@ msgstr "Chargement de la vue Comparer…"
 msgid "Loading the configuration…"
 msgstr "Chargement de la configuration…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:322
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:329
 msgid "Loading the map…"
 msgstr "Chargement de la carte…"
 
@@ -3023,7 +3031,7 @@ msgid "No longer available."
 msgstr "N'est plus disponible."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue:487
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:844
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:841
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/PlaceList.vue:214
 msgid "No match"
 msgstr "Aucune correspondance"
@@ -3079,7 +3087,7 @@ msgstr "Normalisé au total (TIC)"
 msgid "not attested here"
 msgstr "non attesté ici"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:535
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:534
 msgid "not attested in the kept events"
 msgstr "non attesté dans les événements retenus"
 
@@ -3222,7 +3230,7 @@ msgstr "Opacité de %{label}"
 msgid "Open %{title}: %{places}, %{documents}, %{components}"
 msgstr "Ouvrir %{title} : %{places}, %{documents}, %{components}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:280
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:296
 msgid "Open a document to see where each analysis was made."
 msgstr "Ouvrez un document pour voir où chaque analyse a été faite."
 
@@ -3708,8 +3716,8 @@ msgstr "SDD (≈ 140 eV à Mn Kα)"
 msgid "Search"
 msgstr "Rechercher"
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:592
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:593
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:594
 msgid "Search a material (synonyms included)"
 msgstr "Chercher un matériau (synonymes compris)"
 
@@ -3859,7 +3867,7 @@ msgstr "Partager et exporter"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:41
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:49
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:481
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:637
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue:635
 msgid "Show"
 msgstr "Afficher"
 
@@ -4367,6 +4375,14 @@ msgstr ""
 "un lieu colore toujours sa propre cellule. Une attestation seule atteint t "
 "jusqu’à d = r × √(ln(1/t)) quand t < 1 : 0,83 r au seuil par défaut de 0,5."
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusHome.vue:287
+msgid ""
+"Ticking a broader material (e.g. red pigment) now filters by every material "
+"under it."
+msgstr ""
+"Cocher un matériau générique (par ex. pigment rouge) filtre désormais sur "
+"tous les matériaux qu'il couvre."
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue:525
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1773
 msgid "Timeline"
@@ -4451,7 +4467,7 @@ msgstr "Annuler"
 msgid "Unfold"
 msgstr "Déplier"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue:148
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue:157
 msgid "Unfold %{place}"
 msgstr "Déplier %{place}"
 
@@ -4468,8 +4484,8 @@ msgstr "Lieu inconnu"
 msgid "Unlinked spectra"
 msgstr "Spectres non liés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTreeNode.vue:110
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue:94
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTreeNode.vue:134
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetValues.vue:93
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/PlaceList.vue:199
 msgid "unpublished"
 msgstr "non publié"
@@ -4520,6 +4536,10 @@ msgstr "Page entière"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue:554
 msgid "Whole period"
 msgstr "Toute la période"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue:131
+msgid "Widen the filters"
+msgstr "Élargir les filtres"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:274
 msgid "Wikidata record of %{place} (new tab)"
@@ -4616,8 +4636,8 @@ msgid_plural "Your Selection now holds the %{n} shared items."
 msgstr[0] "Votre Sélection contient maintenant l'élément partagé."
 msgstr[1] "Votre Sélection contient maintenant les %{n} éléments partagés."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:203
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:266
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:207
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue:273
 msgid "Your Selection, unchanged for more than 90 days, has been emptied."
 msgstr "Votre Sélection, inchangée depuis plus de 90 jours, a été vidée."
 

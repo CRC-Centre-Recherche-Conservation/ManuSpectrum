@@ -207,6 +207,41 @@ describe("CorpusHome", () => {
         expect(store.filters.technique).toEqual(["t:pxrf"]);
     });
 
+    it("draws a technique with two carried parents under each of them", async () => {
+        fetchMock.mockImplementation(async () =>
+            jsonResponse(
+                homeResponse({
+                    techniques: [
+                        facetValue("t:a", "Alpha", { count: 2 }),
+                        facetValue("t:b", "Beta", { count: 2 }),
+                        facetValue("t:c", "Gamma", {
+                            count: 1,
+                            parents: ["t:a", "t:b"],
+                        }),
+                    ],
+                }),
+            ),
+        );
+        const wrapper = mountHome();
+        await flushPromises();
+        const door = wrapper.find(".techniques");
+        const nested = door.findAll(".choices .choices .choice");
+        expect(nested.map((choice) => choice.text())).toEqual([
+            "Gamma (1)",
+            "Gamma (1)",
+        ]);
+    });
+
+    it("says in the how-to that a ticked term keeps its narrower terms", () => {
+        const notes = mountHome()
+            .findAll(".how-to .how-to-notes li")
+            .map((note) => note.text());
+        expect(notes).toEqual([
+            "A ticked term also keeps its narrower terms (e.g. X-ray fluorescence includes portable and micro-XRF).",
+            "Ticking a broader material (e.g. red pigment) now filters by every material under it.",
+        ]);
+    });
+
     it("the search box describes what free text looks in", () => {
         const wrapper = mountHome();
         const input = wrapper.find("input[type=search]");

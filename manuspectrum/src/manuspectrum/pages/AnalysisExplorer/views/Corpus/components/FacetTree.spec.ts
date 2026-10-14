@@ -47,23 +47,49 @@ describe("FacetTree", () => {
         expect(wrapper.find("[role=tree]").exists()).toBe(false);
     });
 
-    it("starts a row with its checkbox and ends it with the unfold button", () => {
+    it("starts a row with the unfold button, then the checkbox, in focus order", () => {
         const wrapper = mountTree({});
-        const row = wrapper.find(".node .row");
-        const parts = [...row.element.children];
-        expect(parts[0].tagName).toBe("LABEL");
-        expect(parts[0].querySelector("input[type=checkbox]")).not.toBeNull();
-        expect(parts[parts.length - 1].classList.contains("expander")).toBe(
-            true,
-        );
+        const parts = [...wrapper.find(".node .row").element.children];
+        expect(parts[0].classList.contains("expander")).toBe(true);
+        expect(parts[1].tagName).toBe("LABEL");
+        expect(parts[1].querySelector("input[type=checkbox]")).not.toBeNull();
     });
 
-    it("gives the label and, in the flat list, the path a title for a truncated text", () => {
+    it("lays a leaf without a button so its checkbox lines up with its siblings", () => {
+        const wrapper = mountTree({ expandedByDefault: true });
+        const leaf = wrapper.find<HTMLInputElement>('input[value="paris"]');
+        const node = leaf.element.closest(".node");
+        expect(node?.classList.contains("leaf")).toBe(true);
+        expect(node?.querySelector(".row > .expander")).toBeNull();
+        expect(
+            wrapper
+                .find('input[value="france"]')
+                .element.closest(".node")
+                ?.classList.contains("leaf"),
+        ).toBe(false);
+    });
+
+    it("reserves the leaf gap only when the tree has a branch", () => {
+        expect(mountTree({}).find(".tree").classes()).toContain("has-branches");
+        const flat = placeFacet();
+        flat.values = [
+            facetValue("paris", "Paris", { count: 3 }),
+            facetValue("lille", "Lille", { count: 1 }),
+        ];
+        const wrapper = mountTree({ facet: flat, values: flat.values });
+        expect(wrapper.find(".tree").classes()).not.toContain("has-branches");
+    });
+
+    it("shows labels and paths whole, with no hover-only title", () => {
         const wrapper = mountTree({});
-        expect(wrapper.find(".node .label").attributes("title")).toBe("Europe");
+        expect(
+            wrapper.find(".node .label").attributes("title"),
+        ).toBeUndefined();
         const flat = mountTree({ query: "par" });
-        expect(flat.find(".label").attributes("title")).toBe("Paris");
-        expect(flat.find(".path").attributes("title")).toBe("Europe — France");
+        expect(flat.find(".label").attributes("title")).toBeUndefined();
+        expect(flat.find(".path").text()).toBe("Europe — France");
+        expect(flat.find(".path").attributes("title")).toBeUndefined();
+        expect(flat.find(".node").classes()).toContain("flat");
     });
 
     it("unfolds a node with its button, naming what it controls", async () => {
@@ -343,7 +369,6 @@ describe("FacetTree", () => {
             "Blue pigment",
             "Mineral origin",
         ]);
-        expect(paths[1].attributes("title")).toBe("Mineral origin");
     });
 
     it("expandedByDefault opens every node", () => {

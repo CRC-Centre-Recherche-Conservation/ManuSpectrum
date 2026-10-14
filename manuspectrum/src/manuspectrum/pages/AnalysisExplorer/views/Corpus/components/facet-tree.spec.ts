@@ -7,8 +7,10 @@ import {
     descendantIds,
     domToken,
     flatten,
+    KEY_SEPARATOR,
     nodeState,
     toggle,
+    treeIndex,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 import { facetValue } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -60,7 +62,12 @@ describe("buildTree", () => {
         const tree = buildTree(TERMS);
         expect(occurrences(tree, "lapis")).toHaveLength(2);
         const keys = occurrences(tree, "lapis").map((node) => node.key);
-        expect(sorted(keys)).toEqual(["mineral/lapis", "pigment/blue/lapis"]);
+        expect(sorted(keys)).toEqual(
+            [
+                ["mineral", "lapis"],
+                ["pigment", "blue", "lapis"],
+            ].map((chain) => chain.join(KEY_SEPARATOR)),
+        );
         expect(ids(tree)).toEqual(["mineral", "pigment"]);
     });
 
@@ -98,6 +105,38 @@ describe("buildTree", () => {
             facetValue("a", "azurite"),
         ]);
         expect(ids(tree)).toEqual(["a", "e", "z"]);
+    });
+});
+
+describe("node keys", () => {
+    it("never confuse a uri root with a path whose ids join into the same text", () => {
+        const tree = buildTree([
+            facetValue("http://a/b", "Root with a slash"),
+            facetValue("http://a", "Parent"),
+            facetValue("b", "Child", { parents: ["http://a"] }),
+        ]);
+        const keys = [
+            ...occurrences(tree, "http://a/b"),
+            ...occurrences(tree, "b"),
+        ].map((node) => node.key);
+
+        expect(new Set(keys).size).toBe(2);
+    });
+});
+
+describe("treeIndex", () => {
+    it("is what the helpers read when one is given", () => {
+        const index = treeIndex(TERMS);
+        const flat = TERMS.map((value) => ({ ...value, parents: [] }));
+
+        expect(nodeState("azurite", ["pigment"], flat, index)).toBe("implicit");
+        expect(sorted([...ancestorIds("lapis", flat, index)])).toEqual(
+            sorted(["blue", "mineral", "pigment"]),
+        );
+        expect(toggle("pigment", ["azurite"], flat, index)).toEqual([
+            "pigment",
+        ]);
+        expect(ids(buildTree(flat, index))).toEqual(["mineral", "pigment"]);
     });
 });
 

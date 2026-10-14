@@ -14,10 +14,11 @@ import { FACET_TREE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/views/Corp
 import type { TreeNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 /**
- * One occurrence of a value in `FacetTree`: its native checkbox, mark
- * (`FacetMark`), label, « unpublished » badge and count, then its unfold
- * button at the end of the row when it has children (a leaf row is laid like
- * a `FacetValues` row), then, once unfolded, the list of its children. A
+ * One occurrence of a value in `FacetTree`: its unfold button when it has
+ * children (a leaf keeps the same room, so checkboxes align by level), then
+ * its native checkbox, mark (`FacetMark`), label, « unpublished » badge and
+ * count, then, once unfolded, the list of its children under a guide line.
+ * Labels, paths and « covered by X » wrap, never cut. A
  * covered value keeps a focusable checkbox, ticked in a pale tone and
  * `aria-disabled`, described by « covered by X » under its label; its click
  * is cancelled, so neither the pointer nor Space changes it. In the flat
@@ -62,59 +63,11 @@ function onClick(event: MouseEvent): void {
         class="node"
         :class="{
             leaf: !hasChildren,
+            flat: props.flat,
             implicit: covered,
         }"
     >
         <div class="row">
-            <label class="value">
-                <input
-                    type="checkbox"
-                    :value="props.node.value.id"
-                    :checked="state === 'checked' || covered"
-                    :indeterminate="state === 'mixed'"
-                    :disabled="isDisabled"
-                    :aria-disabled="covered ? 'true' : undefined"
-                    :aria-describedby="covered ? coveredId : undefined"
-                    @click="onClick"
-                    @change="tree.change(props.node.value.id)"
-                />
-                <FacetMark
-                    :facet-key="tree.facetKey"
-                    :mark="props.node.value.mark"
-                    :swatch="props.node.value.swatch"
-                />
-                <span class="text">
-                    <span
-                        class="label"
-                        :lang="props.node.value.label.lang"
-                        :title="props.node.value.label.value"
-                        >{{ props.node.value.label.value }}</span
-                    >
-                    <span
-                        v-for="path in props.paths"
-                        :key="path"
-                        class="path"
-                        :title="path"
-                        >{{ path }}</span
-                    >
-                    <span
-                        v-if="covered"
-                        :id="coveredId"
-                        class="covered"
-                        >{{ coveredText }}</span
-                    >
-                </span>
-                <span
-                    v-if="props.node.value.unpublished"
-                    class="unpublished"
-                    >{{ $gettext("unpublished") }}</span
-                >
-                <span
-                    class="count"
-                    :title="tree.countTitle(props.node.value)"
-                    >{{ props.node.value.count }}</span
-                >
-            </label>
             <button
                 v-if="hasChildren"
                 type="button"
@@ -139,6 +92,53 @@ function onClick(event: MouseEvent): void {
                     />
                 </svg>
             </button>
+            <label class="value">
+                <input
+                    type="checkbox"
+                    :value="props.node.value.id"
+                    :checked="state === 'checked' || covered"
+                    :indeterminate="state === 'mixed'"
+                    :disabled="isDisabled"
+                    :aria-disabled="covered ? 'true' : undefined"
+                    :aria-describedby="covered ? coveredId : undefined"
+                    @click="onClick"
+                    @change="tree.change(props.node.value.id)"
+                />
+                <FacetMark
+                    :facet-key="tree.facetKey"
+                    :mark="props.node.value.mark"
+                    :swatch="props.node.value.swatch"
+                />
+                <span class="text">
+                    <span
+                        class="label"
+                        :lang="props.node.value.label.lang"
+                        >{{ props.node.value.label.value }}</span
+                    >
+                    <span
+                        v-for="path in props.paths"
+                        :key="path"
+                        class="path"
+                        >{{ path }}</span
+                    >
+                    <span
+                        v-if="covered"
+                        :id="coveredId"
+                        class="covered"
+                        >{{ coveredText }}</span
+                    >
+                </span>
+                <span
+                    v-if="props.node.value.unpublished"
+                    class="unpublished"
+                    >{{ $gettext("unpublished") }}</span
+                >
+                <span
+                    class="count"
+                    :title="tree.countTitle(props.node.value)"
+                    >{{ props.node.value.count }}</span
+                >
+            </label>
         </div>
         <ul
             v-if="isOpen"
@@ -157,18 +157,24 @@ function onClick(event: MouseEvent): void {
 <style scoped>
 .node .row {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    align-items: flex-start;
+    gap: 0.25rem;
+}
+
+.tree.has-branches .node.leaf:not(.flat) > .row::before {
+    content: "";
+    flex: none;
+    inline-size: 1.5rem;
 }
 
 .node .expander {
     display: inline-flex;
     flex: none;
-    inline-size: 2rem;
-    min-block-size: var(--explorer-target, 2.75rem);
-    align-items: center;
+    inline-size: 1.5rem;
+    block-size: var(--explorer-target, 2rem);
+    align-items: flex-start;
     justify-content: center;
-    padding: 0;
+    padding: 0.34375rem 0 0;
     border: none;
     background: transparent;
     color: var(--ink-muted);
@@ -194,16 +200,23 @@ function onClick(event: MouseEvent): void {
 .node .value {
     display: flex;
     flex: 1 1 auto;
-    align-items: center;
-    gap: 0.5rem;
-    min-block-size: var(--explorer-target, 2.75rem);
+    align-items: flex-start;
+    gap: 0.375rem;
+    min-block-size: var(--explorer-target, 2rem);
     min-inline-size: 0;
+    padding-block: 0.3125rem;
     font-size: 0.8125rem;
+    line-height: 1.3;
     cursor: pointer;
 }
 
 .node .value input {
     flex: none;
+    margin-block-start: 0.125rem;
+}
+
+.node .value .facet-mark {
+    margin-block-start: 0.25rem;
 }
 
 .node .value:has(input:disabled) {
@@ -228,9 +241,10 @@ function onClick(event: MouseEvent): void {
 .node .label,
 .node .path,
 .node .covered {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
 .node .path,
@@ -254,6 +268,8 @@ function onClick(event: MouseEvent): void {
 
 .node .count {
     flex: none;
+    min-inline-size: 2.25rem;
+    padding-block-start: 0.0625rem;
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.6875rem;
@@ -261,7 +277,9 @@ function onClick(event: MouseEvent): void {
 }
 
 .node .children {
-    margin-inline-start: 1.25rem;
+    margin-inline-start: 0.75rem;
+    padding-inline-start: 0.25rem;
+    border-inline-start: 0.0625rem solid var(--border-hover);
     list-style: none;
 }
 </style>

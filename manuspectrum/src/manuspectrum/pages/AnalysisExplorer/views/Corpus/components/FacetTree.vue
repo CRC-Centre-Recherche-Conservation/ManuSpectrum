@@ -13,6 +13,7 @@ import {
     flatten,
     nodeState,
     toggle,
+    treeIndex,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 import type {
@@ -72,22 +73,27 @@ const baseId = useId();
 /** What the reader folded or unfolded by hand, by occurrence key; it wins over the default. */
 const manual = ref<Record<string, boolean>>({});
 
-const tree = computed(() => buildTree(props.values));
+const index = computed(() => treeIndex(props.values));
+const tree = computed(() => buildTree(props.values, index.value));
 const searching = computed(() => props.query.trim() !== "");
 const flatEntries = computed(() =>
-    flatten(props.values, props.query, props.found).map((entry) => ({
-        node: {
-            value: entry.value,
-            children: [],
-            key: `${FLAT_KEY_PREFIX}${entry.value.id}`,
-        } satisfies TreeNode,
-        paths: entry.paths.filter((path) => path !== ""),
-    })),
+    flatten(props.values, props.query, props.found, index.value).map(
+        (entry) => ({
+            node: {
+                value: entry.value,
+                children: [],
+                key: `${FLAT_KEY_PREFIX}${entry.value.id}`,
+            } satisfies TreeNode,
+            paths: entry.paths.filter((path) => path !== ""),
+        }),
+    ),
 );
 const openByTick = computed(
     () =>
         new Set(
-            props.selected.flatMap((id) => [...ancestorIds(id, props.values)]),
+            props.selected.flatMap((id) => [
+                ...ancestorIds(id, props.values, index.value),
+            ]),
         ),
 );
 const states = computed(
@@ -95,7 +101,7 @@ const states = computed(
         new Map(
             props.values.map((value) => [
                 value.id,
-                nodeState(value.id, props.selected, props.values),
+                nodeState(value.id, props.selected, props.values, index.value),
             ]),
         ),
 );
@@ -120,9 +126,12 @@ function stateOf(id: string): NodeState {
 
 function coveredText(id: string): string {
     if (stateOf(id) !== "implicit") return "";
-    const terms = coveringIds(id, props.selected, props.values).map(
-        (covering) => labels.value.get(covering) ?? covering,
-    );
+    const terms = coveringIds(
+        id,
+        props.selected,
+        props.values,
+        index.value,
+    ).map((covering) => labels.value.get(covering) ?? covering);
     return interpolate(
         $gettext("covered by %{terms}"),
         {
@@ -136,7 +145,7 @@ function coveredText(id: string): string {
 
 function change(id: string): void {
     if (stateOf(id) === "implicit") return;
-    emit("change", toggle(id, props.selected, props.values));
+    emit("change", toggle(id, props.selected, props.values, index.value));
 }
 
 function nodeId(node: TreeNode): string {
@@ -189,7 +198,10 @@ provide(FACET_TREE_KEY, context);
     <ul
         v-else
         class="tree"
-        :class="{ busy: props.busy }"
+        :class="{
+            busy: props.busy,
+            'has-branches': tree.some((root) => root.children.length > 0),
+        }"
         :aria-busy="props.busy ? 'true' : 'false'"
     >
         <FacetTreeNode

@@ -306,7 +306,7 @@ describe("FacetRail", () => {
         expect(wrapper.emitted("change")?.[0]).toEqual(["place", []]);
     });
 
-    it("keeps the whole label for a label cut on screen", () => {
+    it("shows a long label whole, with no hover-only title", () => {
         const project: Facet = {
             key: "project",
             group: "analysis",
@@ -320,9 +320,11 @@ describe("FacetRail", () => {
             found: null,
         };
         const wrapper = mountRail({ facets: [project], selected: {} });
-        expect(wrapper.find(".value .label").attributes("title")).toBe(
+        const label = wrapper.find(".value .label");
+        expect(label.text()).toBe(
             "ATRAMENTA — Encres ferrogalliques et carbonées",
         );
+        expect(label.attributes("title")).toBeUndefined();
     });
     it("technique and material are drawn as trees", () => {
         const technique: Facet = {

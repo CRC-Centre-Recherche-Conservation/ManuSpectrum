@@ -741,9 +741,7 @@ describe("MaterialsControl", () => {
             [...row.element.children].map((child) => child.classList[0]),
         ).toEqual(["value", "help-tip"]);
         expect(row.element.lastElementChild?.classList).toContain("follow-tip");
-        expect(row.get(".value .label").attributes("title")).toBe(
-            "Lapis lazuli",
-        );
+        expect(row.get(".value .label").attributes("title")).toBeUndefined();
     });
 
     it("isolates a followed chip's slot while it is hovered or focused", async () => {

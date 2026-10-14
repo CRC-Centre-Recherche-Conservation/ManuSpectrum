@@ -274,6 +274,22 @@ function hrefFor(id: string): string {
                         "Narrow the results by technique, material, project or year.",
                     )
                 }}</span>
+                <ul class="how-to-notes">
+                    <li>
+                        <span>{{
+                            $gettext(
+                                "A ticked term also keeps its narrower terms (e.g. X-ray fluorescence includes portable and micro-XRF).",
+                            )
+                        }}</span>
+                    </li>
+                    <li>
+                        <span>{{
+                            $gettext(
+                                "Ticking a broader material (e.g. red pigment) now filters by every material under it.",
+                            )
+                        }}</span>
+                    </li>
+                </ul>
             </li>
             <li>
                 <span>{{
@@ -408,6 +424,15 @@ function hrefFor(id: string): string {
     gap: 1rem;
     padding-inline-start: 1.25rem;
     color: var(--ink-muted);
+}
+
+.corpus-home .how-to-notes {
+    display: grid;
+    gap: 0.375rem;
+    margin-block-start: 0.5rem;
+    padding-inline-start: 1rem;
+    font-size: 0.8125rem;
+    list-style: disc;
 }
 
 .corpus-home .input:focus-visible,

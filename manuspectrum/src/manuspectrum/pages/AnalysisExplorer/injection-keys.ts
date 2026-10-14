@@ -5,6 +5,7 @@ import type {
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { RailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type { TableFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
@@ -127,3 +128,6 @@ export interface SelectionDrawerHandle {
 
 export const SELECTION_DRAWER_KEY: InjectionKey<SelectionDrawerHandle> =
     Symbol("selection-drawer");
+
+/** The width mode of the filter column (`useRailWidth`), shared by the Corpus, document and Map rails; provided by the shell. */
+export const RAIL_WIDTH_KEY: InjectionKey<RailWidth> = Symbol("rail-width");

@@ -1903,9 +1903,9 @@ function skipToTimeline(): void {
 /* CorpusDocument .workspace */
 .map-view .workspace {
     display: grid;
-    grid-template-columns: var(--explorer-rail) minmax(0, 1fr) var(
-            --explorer-side
-        );
+    grid-template-columns:
+        var(--explorer-rail-track-staged, var(--explorer-rail))
+        minmax(0, 1fr) var(--explorer-side);
     grid-template-areas: "rail main side";
     gap: 1rem;
     align-items: start;

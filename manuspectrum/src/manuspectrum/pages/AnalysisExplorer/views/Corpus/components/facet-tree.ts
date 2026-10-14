@@ -10,7 +10,7 @@ import type {
 export interface TreeNode {
     value: FacetValue;
     children: TreeNode[];
-    /** The ids from the root to this occurrence, joined by « / ». */
+    /** The ids from the root to this occurrence, joined by `KEY_SEPARATOR`. */
     key: string;
 }
 
@@ -28,7 +28,14 @@ export interface FlatEntry {
 /** Facets with more values than this offer a search box. */
 export const SEARCH_THRESHOLD = 8;
 const PATH_SEPARATOR = " — ";
-const KEY_SEPARATOR = "/";
+/** U+001F (unit separator): a control character no uri or id holds. */
+export const KEY_SEPARATOR = "\u001f";
+
+/** The parents present and the children of each value of one `values` list. */
+export interface TreeIndex {
+    parents: Map<string, FacetValue[]>;
+    children: Map<string, FacetValue[]>;
+}
 
 function labelOf(value: FacetValue): string {
     return foldText(value.label.value);
@@ -55,6 +62,12 @@ function presentParents(
     );
 }
 
+/** The parent and child index of `values`, to build once per list and pass to the helpers below. */
+export function treeIndex(values: readonly FacetValue[]): TreeIndex {
+    const parents = presentParents(values);
+    return { parents, children: childrenIndex(values, parents) };
+}
+
 function childrenIndex(
     values: readonly FacetValue[],
     parents: Map<string, FacetValue[]>,
@@ -77,9 +90,11 @@ function childrenIndex(
  * ordered by folded label. A path never repeats an id; a value reachable only
  * through a cycle becomes a root (the first by label, then the rest).
  */
-export function buildTree(values: readonly FacetValue[]): TreeNode[] {
-    const parents = presentParents(values);
-    const children = childrenIndex(values, parents);
+export function buildTree(
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
+): TreeNode[] {
+    const { parents, children } = index;
     const reached = new Set<string>();
 
     function grow(
@@ -130,18 +145,18 @@ function closure(
 export function ancestorIds(
     id: string,
     values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): Set<string> {
-    const parents = presentParents(values);
-    return closure(id, (current) => parents.get(current) ?? []);
+    return closure(id, (current) => index.parents.get(current) ?? []);
 }
 
 /** Every value below `id` over all its paths, never `id` itself. */
 export function descendantIds(
     id: string,
     values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): Set<string> {
-    const children = childrenIndex(values, presentParents(values));
-    return closure(id, (current) => children.get(current) ?? []);
+    return closure(id, (current) => index.children.get(current) ?? []);
 }
 
 /** The ticked ancestors of `id`, by folded label. */
@@ -149,8 +164,9 @@ export function coveringIds(
     id: string,
     selected: readonly string[],
     values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): string[] {
-    const above = ancestorIds(id, values);
+    const above = ancestorIds(id, values, index);
     return values
         .filter((value) => above.has(value.id) && selected.includes(value.id))
         .sort(byValueLabel)
@@ -166,10 +182,13 @@ export function nodeState(
     id: string,
     selected: readonly string[],
     values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): NodeState {
     if (selected.includes(id)) return "checked";
-    if (coveringIds(id, selected, values).length) return "implicit";
-    for (const below of descendantIds(id, values)) {
+    for (const above of ancestorIds(id, values, index)) {
+        if (selected.includes(above)) return "implicit";
+    }
+    for (const below of descendantIds(id, values, index)) {
         if (selected.includes(below)) return "mixed";
     }
     return "none";
@@ -185,16 +204,20 @@ export function toggle(
     id: string,
     selected: readonly string[],
     values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): string[] {
-    const state = nodeState(id, selected, values);
+    const state = nodeState(id, selected, values, index);
     if (state === "checked") return selected.filter((item) => item !== id);
     if (state === "implicit") return [...selected];
-    const covered = descendantIds(id, values);
+    const covered = descendantIds(id, values, index);
     return [...selected.filter((item) => !covered.has(item)), id];
 }
 
 /** The chains above each value: labels from the root to its parent. */
-function pathsOf(values: readonly FacetValue[]): Map<string, Set<string>> {
+function pathsOf(
+    values: readonly FacetValue[],
+    index: TreeIndex,
+): Map<string, Set<string>> {
     const paths = new Map<string, Set<string>>();
     function visit(nodes: readonly TreeNode[], labels: readonly string[]) {
         for (const node of nodes) {
@@ -204,7 +227,7 @@ function pathsOf(values: readonly FacetValue[]): Map<string, Set<string>> {
             visit(node.children, [...labels, node.value.label.value]);
         }
     }
-    visit(buildTree(values), []);
+    visit(buildTree(values, index), []);
     return paths;
 }
 
@@ -217,10 +240,11 @@ export function flatten(
     values: readonly FacetValue[],
     query: string,
     found: readonly string[] | null = null,
+    index: TreeIndex = treeIndex(values),
 ): FlatEntry[] {
     const needle = foldText(query.trim());
     const wanted = found ? new Set(found) : null;
-    const paths = pathsOf(values);
+    const paths = pathsOf(values, index);
     return values
         .filter((value) =>
             wanted
@@ -235,7 +259,7 @@ export function flatten(
 }
 
 /**
- * A DOM-safe token for a node `key` (ids joined by « / », uris included):
+ * A DOM-safe token for a node `key` (ids joined by `KEY_SEPARATOR`):
  * FNV-1a over its UTF-16 units, in base 36. Two occurrences of one value get
  * two tokens, since their keys differ.
  */

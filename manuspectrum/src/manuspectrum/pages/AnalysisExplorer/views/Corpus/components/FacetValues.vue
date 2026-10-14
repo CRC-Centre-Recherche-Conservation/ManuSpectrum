@@ -85,7 +85,6 @@ function onChange(value: FacetValue, event: Event): void {
                 <span
                     class="label"
                     :lang="value.label.lang"
-                    :title="value.label.value"
                     >{{ value.label.value }}</span
                 >
                 <span
@@ -120,11 +119,13 @@ function onChange(value: FacetValue, event: Event): void {
 
 .values .value {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.5rem;
     min-block-size: var(--explorer-target, 2.75rem);
     min-inline-size: 0;
+    padding-block: 0.3125rem;
     font-size: 0.8125rem;
+    line-height: 1.3;
     cursor: pointer;
 }
 
@@ -147,14 +148,20 @@ function onChange(value: FacetValue, event: Event): void {
 
 .values .value input {
     flex: none;
+    margin-block-start: 0.125rem;
+}
+
+.values .value .facet-mark {
+    margin-block-start: 0.25rem;
 }
 
 .values .label {
     flex: 1 1 auto;
     min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
 .values .unpublished {
@@ -168,6 +175,8 @@ function onChange(value: FacetValue, event: Event): void {
 
 .values .count {
     flex: none;
+    min-inline-size: 2.25rem;
+    padding-block-start: 0.0625rem;
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.6875rem;

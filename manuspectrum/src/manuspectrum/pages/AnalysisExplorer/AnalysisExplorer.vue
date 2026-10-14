@@ -24,6 +24,7 @@ import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/Corpu
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
 import { useHome } from "@/manuspectrum/pages/AnalysisExplorer/composables/useHome.ts";
+import { useRailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
@@ -32,6 +33,7 @@ import {
     FACET_LABELS_KEY,
     FACET_NARROWER_KEY,
     MIRADOR_URL_KEY,
+    RAIL_WIDTH_KEY,
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
     SELECTION_DRAWER_KEY,
@@ -84,6 +86,7 @@ const { $gettext } = useGettext();
 
 /** The stored Selection was emptied for age (on this load or by another tab); the notice stays until dismissed. */
 const { expired: selectionExpired } = useBasketPersistence(store);
+const railWidth = useRailWidth();
 useUrlState({
     snapshot: () => snapshotOf(store),
     toQuery,
@@ -146,6 +149,7 @@ provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
 provide(CITE_OPEN_KEY, citeOpen);
 provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
+provide(RAIL_WIDTH_KEY, railWidth);
 provide(SELECTION_DRAWER_KEY, {
     open: () => selectionDrawer.value?.open(document.activeElement),
 });
@@ -248,7 +252,10 @@ function onSelectionResolved(message: string): void {
 </script>
 
 <template>
-    <div class="analysis-explorer">
+    <div
+        class="analysis-explorer"
+        :class="{ 'is-rail-wide': railWidth.wide.value }"
+    >
         <Teleport
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"

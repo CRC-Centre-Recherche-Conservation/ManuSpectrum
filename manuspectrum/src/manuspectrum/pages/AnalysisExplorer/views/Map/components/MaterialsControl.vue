@@ -525,7 +525,6 @@ function onSearch(text: string | undefined): void {
                         <span
                             class="chip-label"
                             :lang="chip.label.lang || undefined"
-                            :title="chip.label.value"
                             >{{ chip.label.value }}</span
                         >
                         <span
@@ -616,7 +615,6 @@ function onSearch(text: string | undefined): void {
                         <span
                             class="head-label"
                             :lang="head.label.lang || undefined"
-                            :title="head.label.value"
                             >{{ head.label.value }}</span
                         >
                         <span
@@ -730,7 +728,6 @@ function onSearch(text: string | undefined): void {
                             <span
                                 class="label"
                                 :lang="row.label.lang || undefined"
-                                :title="row.label.value"
                                 >{{ row.label.value }}</span
                             >
                             <span class="meta">
@@ -910,20 +907,19 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .chip-label {
-    overflow: hidden;
     font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
 .materials-control .chip-counts,
 .materials-control .absent-note {
-    overflow: hidden;
     color: var(--ink-muted);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
 }
 
 .materials-control .unpin {
@@ -1082,12 +1078,13 @@ function onSearch(text: string | undefined): void {
 
 .materials-control .counts,
 .materials-control .row-counts {
-    flex: none;
+    flex: 0 1 auto;
+    min-inline-size: 0;
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 /* MaterialsTable .swatch */
@@ -1156,23 +1153,23 @@ function onSearch(text: string | undefined): void {
 .materials-control .value input {
     grid-row: 1;
     grid-column: 1;
-    margin: 0;
+    align-self: start;
+    margin: 0.125rem 0 0;
     accent-color: var(--blue-text);
 }
 
 .materials-control .value .label {
-    display: -webkit-box;
     grid-row: 1;
     grid-column: 2;
     min-inline-size: 0;
-    overflow: hidden;
     line-height: 1.3;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
-/* Counts first and unbroken; the other colours follow them or wrap below. */
+/* Counts first; the other colours follow them or wrap below, and a count shrinks and wraps before it is cut. */
 .materials-control .value .meta {
     display: flex;
     flex-wrap: wrap;
@@ -1187,7 +1184,7 @@ function onSearch(text: string | undefined): void {
 .materials-control .follow-tip {
     grid-row: 1;
     grid-column: 3;
-    align-self: center;
+    align-self: start;
     margin-block: -0.5rem;
 }
 
@@ -1203,12 +1200,13 @@ function onSearch(text: string | undefined): void {
 .materials-control .covered-by {
     flex-basis: 100%;
     min-inline-size: 0;
-    overflow: hidden;
     color: var(--ink-muted);
     font-size: 0.6875rem;
     font-style: italic;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
 /* A ticked broader material: tick | name, what it covers. */
@@ -1224,7 +1222,7 @@ function onSearch(text: string | undefined): void {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     column-gap: 0.5rem;
-    align-items: center;
+    align-items: start;
     min-inline-size: 0;
     padding-block: 0.25rem;
     font-size: 0.8125rem;
@@ -1232,7 +1230,7 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .covering-head input {
-    margin: 0;
+    margin: 0.125rem 0 0;
     accent-color: var(--blue-text);
 }
 
@@ -1243,10 +1241,11 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .covering-head .head-label {
-    overflow: hidden;
     font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
 .materials-control .covering-head .head-covers {

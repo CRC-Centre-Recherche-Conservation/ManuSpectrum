@@ -179,15 +179,14 @@ describe("FacetValues", () => {
         expect(busy.find(".values").classes()).toContain("busy");
     });
 
-    it("keeps the whole label for a label cut on screen", () => {
+    it("shows the whole label on screen, with no hover-only title", () => {
         const wrapper = mountValues({
             facet: {
                 ...facet("project", 0),
                 values: [facetValue("p1", "ATRAMENTA — Encres")],
             },
         });
-        expect(wrapper.find(".label").attributes("title")).toBe(
-            "ATRAMENTA — Encres",
-        );
+        expect(wrapper.find(".label").text()).toBe("ATRAMENTA — Encres");
+        expect(wrapper.find(".label").attributes("title")).toBeUndefined();
     });
 });
