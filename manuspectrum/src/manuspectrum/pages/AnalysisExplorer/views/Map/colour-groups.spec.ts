@@ -29,7 +29,7 @@ function material(id: string, colours: string[] = []): EventMaterial {
 }
 
 function known(uri: string, colours: string[]): MapMaterial {
-    return { uri, label: label(uri), colours, swatch: null };
+    return { uri, label: label(uri), colours, swatch: null, ancestors: [] };
 }
 
 const colours: Record<string, MapColour> = {

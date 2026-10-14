@@ -135,6 +135,7 @@ function response(): EventsResponse {
                 label: label("Lapis lazuli"),
                 colours: [],
                 swatch: null,
+                ancestors: [],
             },
         },
         analysisNames: {
@@ -316,6 +317,29 @@ describe("MapView", () => {
         expect(view.text()).not.toContain("the Corpus filters");
     });
 
+    it("passes the ticked covering materials to the materials control", async () => {
+        const pigment = "http://material.test/blue-pigment";
+        const covered = response();
+        covered.materials[LAPIS] = {
+            uri: LAPIS,
+            label: label("Lapis lazuli"),
+            colours: [],
+            swatch: null,
+            ancestors: [pigment],
+        };
+        covered.coveringMaterials = { [pigment]: label("Blue pigment") };
+        serve(covered);
+        useExplorerStore().setFacet("material", [pigment]);
+        const view = await mountView();
+        const head = view.get(".materials-control .covering-head");
+        expect(head.get(".head-label").text()).toBe("Blue pigment");
+        expect(
+            view
+                .get(".materials-control li.row input[type=checkbox]")
+                .attributes("aria-disabled"),
+        ).toBe("true");
+    });
+
     it("lists a material that does not meet the filters in the rail only, without a pip or a panel line", async () => {
         const azurite = "http://material.test/azurite";
         const filtered = response();
@@ -333,6 +357,7 @@ describe("MapView", () => {
             label: label("Azurite"),
             colours: [],
             swatch: null,
+            ancestors: [],
         };
         fetchMock.mockImplementation(async (url: string) =>
             url.includes("explorer-events")

@@ -941,6 +941,9 @@ function skipToTimeline(): void {
                                 :events="events"
                                 :materials="response?.materials ?? {}"
                                 :colours="response?.colours ?? {}"
+                                :covering-materials="
+                                    response?.coveringMaterials ?? {}
+                                "
                                 @isolate="isolated = $event"
                             />
                         </div>

@@ -63,12 +63,14 @@ const materials: Record<string, MapMaterial> = {
         label: label("Azurite"),
         colours: [],
         swatch: "#2244aa",
+        ancestors: [],
     },
     [LAPIS]: {
         uri: LAPIS,
         label: label("Lapis lazuli"),
         colours: [],
         swatch: null,
+        ancestors: [],
     },
 };
 
