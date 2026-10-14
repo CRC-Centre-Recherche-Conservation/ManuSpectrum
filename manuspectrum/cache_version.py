@@ -35,6 +35,7 @@ CACHE_SHAPE_MODULES = (
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "views/explorer/swatches.py",
+    "views/explorer/terms.py",
     # The thumbnail-source rule a search hit advertises.
     "utils/manifest_values.py",
     # The map's events, their places, materials and colours, stored in the bundle.
