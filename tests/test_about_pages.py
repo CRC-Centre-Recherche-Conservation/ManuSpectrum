@@ -687,6 +687,14 @@ class ContactAccessRequestTests(TestCase):
         html = self.client.get(reverse("about-team")).content.decode()
         self.assertIn(f'href="{reverse("about-contact")}?reason=access"', html)
 
+    def test_a_signed_in_user_is_not_offered_the_access_request(self):
+        from django.contrib.auth.models import User
+
+        member = User.objects.create_user("footer-member", "member@example.org", "x")
+        self.client.force_login(member)
+        html = self.client.get(reverse("about-team")).content.decode()
+        self.assertNotIn(f'href="{reverse("about-contact")}?reason=access"', html)
+
 
 class TermsDigestTests(SimpleTestCase):
     @staticmethod
