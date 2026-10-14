@@ -15,12 +15,7 @@
     {% csrf_token %}
     {% include "accounts/_terms_form_fields.htm" %}
     {% for field in form %}
-    <p>
-        <label for="{{ field.id_for_label }}">{{ field.label }}</label><br>
-        {{ field }}
-        {% if field.help_text %}<span class="ms-form-help">{{ field.help_text|safe }}</span>{% endif %}
-        {% for message in field.errors %}<span class="ms-form-error" role="alert">{{ message }}</span>{% endfor %}
-    </p>
+    {% include "accounts/_password_field.htm" %}
     {% endfor %}
     <button type="submit">{% trans "Activate my account" %}</button>
 </form>

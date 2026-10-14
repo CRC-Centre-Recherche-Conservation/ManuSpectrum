@@ -26,10 +26,11 @@ from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
-from manuspectrum.accounts import activation, notices, twofactor
+from manuspectrum.accounts import activation, audience, notices, twofactor
 from manuspectrum.accounts.creation import resource_label
 from manuspectrum.models import Embargo, EmbargoEvent, TermsAcceptance, WorkflowCleanup
 
@@ -141,7 +142,7 @@ class EmbargoForm(forms.ModelForm):
                 )
             if self.instance.state != Embargo.ACTIVE:
                 raise forms.ValidationError(
-                    _("Only an active embargo can change its end date.")
+                    _("Only an active restriction can change its end date.")
                 )
             self.instance.validate_end(
                 ends_on, superuser=bool(self.user and self.user.is_superuser)
@@ -244,7 +245,7 @@ class EmbargoAdmin(admin.ModelAdmin):
             if embargo.state != Embargo.ACTIVE or embargo.ends_on is None:
                 self.message_user(
                     request,
-                    _("%(resource)s: only a dated, active embargo can be extended.")
+                    _("%(resource)s: only a dated, active restriction can be extended.")
                     % {"resource": resource_label(embargo.resourceinstance)},
                     messages.WARNING,
                 )
@@ -275,8 +276,8 @@ class EmbargoAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 ngettext(
-                    "%(count)d embargo was extended.",
-                    "%(count)d embargoes were extended.",
+                    "%(count)d restriction was extended.",
+                    "%(count)d restrictions were extended.",
                     done,
                 )
                 % {"count": done},
@@ -339,7 +340,37 @@ _BaseUserAdmin = _user_admin_class()
 
 
 class InvitingUserAdmin(_BaseUserAdmin):
-    actions = [*(_BaseUserAdmin.actions or []), "send_invitation"]
+    actions = [*(_BaseUserAdmin.actions or []), "send_invitation", "copy_addresses"]
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not request.user.is_superuser:
+            actions.pop("copy_addresses", None)
+        return actions
+
+    @admin.action(description=_("Copy the e-mail addresses"))
+    def copy_addresses(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(
+                request,
+                _("Only a superuser can copy the e-mail addresses."),
+                messages.ERROR,
+            )
+            return None
+        reached = audience.audience(queryset)
+        logger.info(
+            "Addresses listed by user %s for %s account(s)",
+            request.user.pk,
+            len(reached.addresses),
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            "title": _("Copy the e-mail addresses"),
+            "opts": self.model._meta,
+            "audience": reached,
+            "addresses_text": ", ".join(reached.addresses),
+        }
+        return TemplateResponse(request, "admin/copy_addresses.html", context)
 
     @admin.action(
         description=_("Send invitation (account with no password)"),

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-12 11:06-0500\n"
+"POT-Creation-Date: 2026-10-13 17:05-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,16 +17,16 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: accounts/activation.py:202 accounts/twofactor.py:126
+#: accounts/activation.py:210 accounts/twofactor.py:126
 #: accounts/twofactor.py:304
 msgid "Too many attempts. Wait a minute."
 msgstr "Too many attempts. Wait a minute."
 
-#: accounts/activation.py:212
+#: accounts/activation.py:220
 msgid "You must accept the terms of use to activate your account."
 msgstr "You must accept the terms of use to activate your account."
 
-#: accounts/activation.py:256
+#: accounts/activation.py:264
 msgid "You must accept the terms of use to continue."
 msgstr "You must accept the terms of use to continue."
 
@@ -83,13 +83,13 @@ msgstr "Unfinished workflow: cleaning scheduled on %(date)s"
 msgid ""
 "The workflow « %(workflow)s » has not been used for a long time and is not "
 "finished. On %(date)s (%(when)s), it is cleaned: its trace is deleted, and so"
-" are the records it created and listed below, if they are still drafts, were "
-"not modified elsewhere and are not linked to other records."
+" are the resources it created and listed below, if they are still drafts, "
+"were not modified elsewhere and are not linked to other resources."
 msgstr ""
 "The workflow « %(workflow)s » has not been used for a long time and is not "
 "finished. On %(date)s (%(when)s), it is cleaned: its trace is deleted, and so"
-" are the records it created and listed below, if they are still drafts, were "
-"not modified elsewhere and are not linked to other records."
+" are the resources it created and listed below, if they are still drafts, "
+"were not modified elsewhere and are not linked to other resources."
 
 #: accounts/notices.py:136
 msgid ""
@@ -105,16 +105,16 @@ msgid "The unfinished workflow « %(workflow)s » has been cleaned."
 msgstr "The unfinished workflow « %(workflow)s » has been cleaned."
 
 #: accounts/notices.py:150
-msgid "Deleted records:"
-msgstr "Deleted records:"
+msgid "Deleted resources:"
+msgstr "Deleted resources:"
 
 #: accounts/notices.py:152
 msgid "Unfinished workflow cleaned"
 msgstr "Unfinished workflow cleaned"
 
 #: accounts/notices.py:156
-msgid "Records kept, because other work depends on them:"
-msgstr "Records kept, because other work depends on them:"
+msgid "Resources kept, because other work depends on them:"
+msgstr "Resources kept, because other work depends on them:"
 
 #: accounts/notices.py:166
 msgid "Your ManuSpectrum account"
@@ -137,7 +137,7 @@ msgstr "The link is personal and works until %(date)s."
 
 #: accounts/notices.py:177 templates/accounts/activate.htm:3
 #: templates/accounts/activate.htm:4 templates/accounts/activate.htm:5
-#: templates/accounts/activate.htm:25
+#: templates/accounts/activate.htm:20
 msgid "Activate my account"
 msgstr "Activate my account"
 
@@ -295,6 +295,41 @@ msgstr ""
 "This is a service notice about your account or your data, so it has no "
 "unsubscribe link. Questions:"
 
+#: accounts/password_rules.py:93 templates/accounts/_password_field.htm:27
+#, python-format
+msgid "At least %(n)s character"
+msgid_plural "At least %(n)s characters"
+msgstr[0] "At least %(n)s character"
+msgstr[1] "At least %(n)s characters"
+
+#: accounts/password_rules.py:97 templates/accounts/_password_field.htm:28
+msgid "One upper-case letter"
+msgstr "One upper-case letter"
+
+#: accounts/password_rules.py:99 templates/accounts/_password_field.htm:29
+msgid "One lower-case letter"
+msgstr "One lower-case letter"
+
+#: accounts/password_rules.py:101
+msgid "Not only digits"
+msgstr "Not only digits"
+
+#: accounts/password_rules.py:103 templates/accounts/_password_field.htm:30
+msgid "One digit"
+msgstr "One digit"
+
+#: accounts/password_rules.py:105 templates/accounts/_password_field.htm:31
+msgid "One symbol"
+msgstr "One symbol"
+
+#: accounts/password_rules.py:107
+msgid "Not a commonly used password"
+msgstr "Not a commonly used password"
+
+#: accounts/password_rules.py:109
+msgid "Not too close to your name, username or e-mail address"
+msgstr ""
+
 #: accounts/twofactor.py:142
 msgid "The code is not valid. Enter the current code of your authenticator."
 msgstr "The code is not valid. Enter the current code of your authenticator."
@@ -328,22 +363,22 @@ msgstr "Create a project"
 msgid "Import from Biblissima"
 msgstr "Import from Biblissima"
 
-#: admin.py:45 templates/accounts/two_factor.htm:12
+#: admin.py:46 templates/accounts/two_factor.htm:12
 msgid "Two-factor authentication"
 msgstr "Two-factor authentication"
 
-#: admin.py:54
+#: admin.py:55
 msgid "Only a superuser can reset two-factor authentication."
 msgstr "Only a superuser can reset two-factor authentication."
 
-#: admin.py:66
+#: admin.py:67
 #, python-format
 msgid "The enrolment link was mailed to %(count)d account."
 msgid_plural "The enrolment link was mailed to %(count)d accounts."
 msgstr[0] "The enrolment link was mailed to %(count)d account."
 msgstr[1] "The enrolment link was mailed to %(count)d accounts."
 
-#: admin.py:76
+#: admin.py:77
 #, python-format
 msgid "%(count)d account got no mail (inactive, no address or mail failure)."
 msgid_plural ""
@@ -353,84 +388,92 @@ msgstr[0] ""
 msgstr[1] ""
 "%(count)d accounts got no mail (inactive, no address or mail failure)."
 
-#: admin.py:84
+#: admin.py:85
 msgid "Reset two-factor authentication (superuser)"
 msgstr "Reset two-factor authentication (superuser)"
 
-#: admin.py:102
+#: admin.py:103
 #, python-format
 msgid "Two-factor authentication was reset for %(count)d account."
 msgid_plural "Two-factor authentication was reset for %(count)d accounts."
 msgstr[0] "Two-factor authentication was reset for %(count)d account."
 msgstr[1] "Two-factor authentication was reset for %(count)d accounts."
 
-#: admin.py:110
+#: admin.py:111
 msgid "Send the two-factor enrolment link (superuser)"
 msgstr "Send the two-factor enrolment link (superuser)"
 
-#: admin.py:140
+#: admin.py:141
 msgid "Only a superuser can remove the end date of a restriction."
 msgstr "Only a superuser can remove the end date of a restriction."
 
-#: admin.py:144 models.py:149
-msgid "Only an active embargo can change its end date."
-msgstr "Only an active embargo can change its end date."
+#: admin.py:145 models.py:149
+msgid "Only an active restriction can change its end date."
+msgstr "Only an active restriction can change its end date."
 
-#: admin.py:164
+#: admin.py:165
 msgid "end date"
 msgstr "end date"
 
-#: admin.py:168
+#: admin.py:169
 msgid "No end date"
 msgstr "No end date"
 
-#: admin.py:168
+#: admin.py:169
 msgid "Has an end date"
 msgstr "Has an end date"
 
-#: admin.py:205 models.py:64
+#: admin.py:206 models.py:64 templates/views/pages/terms.htm:36
 msgid "Resource"
 msgstr "Resource"
 
-#: admin.py:209 templates/javascript.htm:120
+#: admin.py:210 templates/javascript.htm:120
 #: templates/views/components/ms-summary-popup.htm:40
 #: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
 msgstr "Model"
 
-#: admin.py:213 models.py:88 models.py:229
+#: admin.py:214 models.py:88 models.py:229
 msgid "Notices sent"
 msgstr "Notices sent"
 
-#: admin.py:247
+#: admin.py:248
 #, python-format
-msgid "%(resource)s: only a dated, active embargo can be extended."
-msgstr "%(resource)s: only a dated, active embargo can be extended."
+msgid "%(resource)s: only a dated, active restriction can be extended."
+msgstr "%(resource)s: only a dated, active restriction can be extended."
 
-#: admin.py:278
+#: admin.py:279
 #, python-format
-msgid "%(count)d embargo was extended."
-msgid_plural "%(count)d embargoes were extended."
-msgstr[0] "%(count)d embargo was extended."
-msgstr[1] "%(count)d embargoes were extended."
+msgid "%(count)d restriction was extended."
+msgid_plural "%(count)d restrictions were extended."
+msgstr[0] "%(count)d restriction was extended."
+msgstr[1] "%(count)d restrictions were extended."
 
-#: admin.py:285
+#: admin.py:286
 msgid "Extend the end date by 3 months"
 msgstr "Extend the end date by 3 months"
 
-#: admin.py:289
+#: admin.py:290
 msgid "Extend the end date by 6 months"
 msgstr "Extend the end date by 6 months"
 
-#: admin.py:293
+#: admin.py:294
 msgid "Extend the end date by 12 months"
 msgstr "Extend the end date by 12 months"
 
-#: admin.py:345
+#: admin.py:351 admin.py:368 templates/admin/copy_addresses.html:16
+msgid "Copy the e-mail addresses"
+msgstr "Copy the e-mail addresses"
+
+#: admin.py:356
+msgid "Only a superuser can copy the e-mail addresses."
+msgstr "Only a superuser can copy the e-mail addresses."
+
+#: admin.py:376
 msgid "Send invitation (account with no password)"
 msgstr "Send invitation (account with no password)"
 
-#: admin.py:355
+#: admin.py:386
 #, python-format
 msgid ""
 "%(user)s was skipped: the account must be active, have an e-mail address and "
@@ -439,12 +482,12 @@ msgstr ""
 "%(user)s was skipped: the account must be active, have an e-mail address and "
 "no usable password."
 
-#: admin.py:370
+#: admin.py:401
 #, python-format
 msgid "The invitation to %(user)s could not be sent."
 msgstr "The invitation to %(user)s could not be sent."
 
-#: admin.py:378
+#: admin.py:409
 #, python-format
 msgid "%(count)d invitation was sent."
 msgid_plural "%(count)d invitations were sent."
@@ -766,12 +809,12 @@ msgid "Recorded on"
 msgstr "Recorded on"
 
 #: models.py:93
-msgid "embargo"
-msgstr "embargo"
+msgid "restriction"
+msgstr "restriction"
 
 #: models.py:94
-msgid "embargoes"
-msgstr "embargoes"
+msgid "restrictions"
+msgstr "restrictions"
 
 #: models.py:123
 msgid "The end date must be after today."
@@ -780,11 +823,13 @@ msgstr "The end date must be after today."
 #: models.py:128
 #, python-format
 msgid ""
-"The end date is more than %(months)d months after the start of the embargo "
-"(latest allowed: %(latest)s). Only a superuser can set a later date."
+"The end date is more than %(months)d months after the start of the "
+"restriction (latest allowed: %(latest)s). Only a superuser can set a later "
+"date."
 msgstr ""
-"The end date is more than %(months)d months after the start of the embargo "
-"(latest allowed: %(latest)s). Only a superuser can set a later date."
+"The end date is more than %(months)d months after the start of the "
+"restriction (latest allowed: %(latest)s). Only a superuser can set a later "
+"date."
 
 #: models.py:184
 msgid "Restriction detected"
@@ -835,12 +880,12 @@ msgid "New end"
 msgstr "New end"
 
 #: models.py:214
-msgid "embargo event"
-msgstr "embargo event"
+msgid "restriction event"
+msgstr "restriction event"
 
 #: models.py:215
-msgid "embargo events"
-msgstr "embargo events"
+msgid "restriction events"
+msgstr "restriction events"
 
 #: models.py:225
 msgid "Workflow run"
@@ -930,6 +975,61 @@ msgstr "English"
 msgid "French"
 msgstr "French"
 
+#: templates/accounts/_password_field.htm:6
+msgid "Password rules"
+msgstr "Password rules"
+
+#: templates/accounts/_password_field.htm:14
+#: templates/accounts/_password_field.htm:15
+msgid "Show password"
+msgstr "Show password"
+
+#: templates/accounts/_password_field.htm:15
+msgid "Hide password"
+msgstr "Hide password"
+
+#: templates/accounts/_password_field.htm:25
+msgid "Weak"
+msgstr "Weak"
+
+#: templates/accounts/_password_field.htm:25
+msgid "Fair"
+msgstr "Fair"
+
+#: templates/accounts/_password_field.htm:25
+msgid "Strong"
+msgstr "Strong"
+
+#: templates/accounts/_password_field.htm:27
+#: templates/accounts/_password_field.htm:28
+#: templates/accounts/_password_field.htm:29
+#: templates/accounts/_password_field.htm:30
+#: templates/accounts/_password_field.htm:31
+msgid "rule met"
+msgstr "rule met"
+
+#: templates/accounts/_password_field.htm:27
+#: templates/accounts/_password_field.htm:28
+#: templates/accounts/_password_field.htm:29
+#: templates/accounts/_password_field.htm:30
+#: templates/accounts/_password_field.htm:31
+msgid "rule not met"
+msgstr "rule not met"
+
+#: templates/accounts/_password_field.htm:33
+msgid ""
+"Common passwords and passwords close to your name or e-mail address are "
+"refused too."
+msgstr ""
+
+#: templates/accounts/_password_field.htm:37
+msgid "The two passwords match"
+msgstr "The two passwords match"
+
+#: templates/accounts/_password_field.htm:38
+msgid "The two passwords do not match"
+msgstr "The two passwords do not match"
+
 #: templates/accounts/_terms_form_fields.htm:4
 msgid "I have read and accept the terms of use"
 msgstr "I have read and accept the terms of use"
@@ -1001,7 +1101,7 @@ msgstr ""
 "sign-in failures. Wait a little, then try again. If you have lost your "
 "password, use the reset link on the sign-in page."
 
-#: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:66
+#: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:69
 #: templates/errors/400.htm:18 templates/errors/403.htm:19
 #: templates/errors/404.htm:63
 msgid "Back to the homepage"
@@ -1050,39 +1150,50 @@ msgstr "QR code to scan with your authenticator application"
 msgid "Or enter this key by hand:"
 msgstr "Or enter this key by hand:"
 
-#: templates/accounts/two_factor.htm:37
-#: templates/accounts/two_factor_reset.htm:27
+#: templates/accounts/two_factor.htm:34
+#: templates/accounts/two_factor_reset.htm:24
+#: templates/admin/copy_addresses.html:27
+msgid "Copied"
+msgstr "Copied"
+
+#: templates/accounts/two_factor.htm:34
+#: templates/accounts/two_factor_reset.htm:24
+msgid "Copy the key"
+msgstr "Copy the key"
+
+#: templates/accounts/two_factor.htm:40
+#: templates/accounts/two_factor_reset.htm:30
 msgid "Code from your application"
 msgstr "Code from your application"
 
-#: templates/accounts/two_factor.htm:39
+#: templates/accounts/two_factor.htm:42
 msgid "Confirm and turn on"
 msgstr "Confirm and turn on"
 
-#: templates/accounts/two_factor.htm:44
-#: templates/accounts/two_factor_reset.htm:34
+#: templates/accounts/two_factor.htm:47
+#: templates/accounts/two_factor_reset.htm:37
 #: templates/views/components/plugins/importer-configuration.htm:278
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:675
 msgid "Cancel"
 msgstr "Cancel"
 
-#: templates/accounts/two_factor.htm:50
+#: templates/accounts/two_factor.htm:53
 msgid "Current code from your application"
 msgstr "Current code from your application"
 
-#: templates/accounts/two_factor.htm:54
+#: templates/accounts/two_factor.htm:57
 msgid "Set up a new authenticator"
 msgstr "Set up a new authenticator"
 
-#: templates/accounts/two_factor.htm:54
+#: templates/accounts/two_factor.htm:57
 msgid "Turn on two-factor authentication"
 msgstr "Turn on two-factor authentication"
 
-#: templates/accounts/two_factor.htm:57
+#: templates/accounts/two_factor.htm:60
 msgid "Turn off two-factor authentication"
 msgstr "Turn off two-factor authentication"
 
-#: templates/accounts/two_factor.htm:61
+#: templates/accounts/two_factor.htm:64
 msgid ""
 "Two-factor authentication is compulsory. If you lose your device, ask an "
 "administrator to reset it."
@@ -1090,11 +1201,11 @@ msgstr ""
 "Two-factor authentication is compulsory. If you lose your device, ask an "
 "administrator to reset it."
 
-#: templates/accounts/two_factor_reset.htm:29
+#: templates/accounts/two_factor_reset.htm:32
 msgid "Confirm and sign in"
 msgstr "Confirm and sign in"
 
-#: templates/accounts/two_factor_reset.htm:37
+#: templates/accounts/two_factor_reset.htm:40
 msgid ""
 "Your two-factor authentication was reset. Type your password to set it up "
 "again."
@@ -1102,11 +1213,11 @@ msgstr ""
 "Your two-factor authentication was reset. Type your password to set it up "
 "again."
 
-#: templates/accounts/two_factor_reset.htm:41
+#: templates/accounts/two_factor_reset.htm:44
 msgid "Password"
 msgstr "Password"
 
-#: templates/accounts/two_factor_reset.htm:43
+#: templates/accounts/two_factor_reset.htm:46
 msgid "Continue"
 msgstr "Continue"
 
@@ -1117,6 +1228,75 @@ msgstr "The link has expired, has already been used or is incorrect."
 #: templates/accounts/two_factor_reset_invalid.htm:8
 msgid "Ask the team for a new link."
 msgstr "Ask the team for a new link."
+
+#: templates/admin/copy_addresses.html:13
+#: templates/views/pages/analysis-explorer.htm:14
+#: templates/views/pages/conceptual-model.htm:14
+#: templates/views/pages/contact.htm:14
+#: templates/views/pages/graph-explorer.htm:14
+#: templates/views/pages/team.htm:14
+msgid "Home"
+msgstr "Home"
+
+#: templates/admin/copy_addresses.html:22
+#, python-format
+msgid "%(counter)s address to copy."
+msgid_plural "%(counter)s addresses to copy."
+msgstr[0] "%(counter)s address to copy."
+msgstr[1] "%(counter)s addresses to copy."
+
+#: templates/admin/copy_addresses.html:23
+#, python-format
+msgid "%(counter)s duplicate address was merged."
+msgid_plural "%(counter)s duplicate addresses were merged."
+msgstr[0] "%(counter)s duplicate address was merged."
+msgstr[1] "%(counter)s duplicate addresses were merged."
+
+#: templates/admin/copy_addresses.html:25
+msgid "E-mail addresses"
+msgstr "E-mail addresses"
+
+#: templates/admin/copy_addresses.html:27
+msgid "Copy"
+msgstr "Copy"
+
+#: templates/admin/copy_addresses.html:31
+msgid ""
+"Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
+msgstr ""
+"Paste them in the Bcc field of the shared project mailbox, never in To or Cc."
+
+#: templates/admin/copy_addresses.html:33
+#, python-format
+msgid "%(counter)s selected user was left out:"
+msgid_plural "%(counter)s selected users were left out:"
+msgstr[0] "%(counter)s selected user was left out:"
+msgstr[1] "%(counter)s selected users were left out:"
+
+#: templates/admin/copy_addresses.html:35
+#, python-format
+msgid "%(counter)s inactive"
+msgid_plural "%(counter)s inactive"
+msgstr[0] "%(counter)s inactive"
+msgstr[1] "%(counter)s inactive"
+
+#: templates/admin/copy_addresses.html:36
+#, python-format
+msgid "%(counter)s without an e-mail address"
+msgid_plural "%(counter)s without an e-mail address"
+msgstr[0] "%(counter)s without an e-mail address"
+msgstr[1] "%(counter)s without an e-mail address"
+
+#: templates/admin/copy_addresses.html:37
+#, python-format
+msgid "%(counter)s anonymised"
+msgid_plural "%(counter)s anonymised"
+msgstr[0] "%(counter)s anonymised"
+msgstr[1] "%(counter)s anonymised"
+
+#: templates/admin/copy_addresses.html:40
+msgid "Back to the users"
+msgstr "Back to the users"
 
 #: templates/custom_email_footer.htm:47
 msgid ""
@@ -1730,7 +1910,7 @@ msgstr "Legal"
 
 #: templates/includes/ms_footer.htm:39 templates/views/pages/legal.htm:3
 #: templates/views/pages/legal.htm:4 templates/views/pages/legal.htm:7
-#: templates/views/pages/privacy.htm:124 templates/views/pages/terms.htm:87
+#: templates/views/pages/privacy.htm:151 templates/views/pages/terms.htm:87
 msgid "Legal notice"
 msgstr "Legal notice"
 
@@ -1741,7 +1921,7 @@ msgid "Privacy policy"
 msgstr "Privacy policy"
 
 #: templates/includes/ms_footer.htm:41 templates/views/pages/legal.htm:59
-#: templates/views/pages/privacy.htm:124 templates/views/pages/terms.htm:3
+#: templates/views/pages/privacy.htm:151 templates/views/pages/terms.htm:3
 #: templates/views/pages/terms.htm:4 templates/views/pages/terms.htm:7
 msgid "Terms of use"
 msgstr "Terms of use"
@@ -2696,7 +2876,7 @@ msgstr "Question"
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:83 templates/views/pages/privacy.htm:97
+#: templates/javascript.htm:83 templates/views/pages/privacy.htm:124
 msgid "Name"
 msgstr "Name"
 
@@ -4661,14 +4841,6 @@ msgstr ""
 "Browse the physicochemical analyses of manuscripts: search by technique, "
 "material, project or year, and open each document where it was analysed."
 
-#: templates/views/pages/analysis-explorer.htm:14
-#: templates/views/pages/conceptual-model.htm:14
-#: templates/views/pages/contact.htm:14
-#: templates/views/pages/graph-explorer.htm:14
-#: templates/views/pages/team.htm:14
-msgid "Home"
-msgstr "Home"
-
 #: templates/views/pages/analysis-explorer.htm:33
 msgid ""
 "Search the analyses of written heritage by technique, material, project or "
@@ -5428,12 +5600,12 @@ msgstr "Software and content"
 #: templates/views/pages/legal.htm:55
 msgid ""
 "The platform's source code is published under the GNU General Public License "
-"v3. Each record states the licence that applies to its data and files; read "
-"it before reusing them."
+"v3. Each resource states the licence that applies to its data and files; read"
+" it before reusing them."
 msgstr ""
 "The platform's source code is published under the GNU General Public License "
-"v3. Each record states the licence that applies to its data and files; read "
-"it before reusing them."
+"v3. Each resource states the licence that applies to its data and files; read"
+" it before reusing them."
 
 #: templates/views/pages/privacy.htm:5 templates/views/pages/privacy.htm:6
 msgid ""
@@ -5446,10 +5618,12 @@ msgstr ""
 #: templates/views/pages/privacy.htm:9
 msgid ""
 "Reading ManuSpectrum needs no account and sets no tracker. This page covers "
-"the people who have an account."
+"what the platform records about visitors and about the people who have an "
+"account."
 msgstr ""
 "Reading ManuSpectrum needs no account and sets no tracker. This page covers "
-"the people who have an account."
+"what the platform records about visitors and about the people who have an "
+"account."
 
 #: templates/views/pages/privacy.htm:14
 msgid "Data controller"
@@ -5483,9 +5657,9 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:24
 msgid ""
-"Keeping the history of the data: who entered or changed a record, and when."
+"Keeping the history of the data: who entered or changed a resource, and when."
 msgstr ""
-"Keeping the history of the data: who entered or changed a record, and when."
+"Keeping the history of the data: who entered or changed a resource, and when."
 
 #: templates/views/pages/privacy.htm:25
 msgid ""
@@ -5535,21 +5709,47 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:36
 msgid ""
-"History of the data: the account that created or changed each record, and the"
-" date."
+"Access log, for every visitor, with or without an account: date and time, IP "
+"address, method, page requested (without the query string; the tokens of "
+"password-reset, activation and two-factor links are removed), status, size, "
+"duration, host, path of the referring page and browser identification. "
+"Purpose: security and operation of the service. It is not shared and not used"
+" for statistics about individuals."
 msgstr ""
-"History of the data: the account that created or changed each record, and the"
-" date."
+"Access log, for every visitor, with or without an account: date and time, IP "
+"address, method, page requested (without the query string; the tokens of "
+"password-reset, activation and two-factor links are removed), status, size, "
+"duration, host, path of the referring page and browser identification. "
+"Purpose: security and operation of the service. It is not shared and not used"
+" for statistics about individuals."
 
 #: templates/views/pages/privacy.htm:37
 msgid ""
-"Records can name researchers (authors, contacts) as part of the scientific "
-"description."
+"The web server's error log, for failed requests only: date, IP address and "
+"the request line as sent (a link token included, for links that expire within"
+" days), kept for the same purpose and not shared."
 msgstr ""
-"Records can name researchers (authors, contacts) as part of the scientific "
-"description."
+"The web server's error log, for failed requests only: date, IP address and "
+"the request line as sent (a link token included, for links that expire within"
+" days), kept for the same purpose and not shared."
 
 #: templates/views/pages/privacy.htm:38
+msgid ""
+"History of the data: the account that created or changed each resource, and "
+"the date."
+msgstr ""
+"History of the data: the account that created or changed each resource, and "
+"the date."
+
+#: templates/views/pages/privacy.htm:39
+msgid ""
+"Resources can name researchers (authors, contacts) as part of the scientific "
+"description."
+msgstr ""
+"Resources can name researchers (authors, contacts) as part of the scientific "
+"description."
+
+#: templates/views/pages/privacy.htm:40
 msgid ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
@@ -5557,26 +5757,38 @@ msgstr ""
 "The contact form opens your own mail application: nothing you type is stored "
 "by the platform before you send it."
 
-#: templates/views/pages/privacy.htm:41
+#: templates/views/pages/privacy.htm:43
 msgid "Retention periods"
 msgstr "Retention periods"
 
-#: templates/views/pages/privacy.htm:45
+#: templates/views/pages/privacy.htm:47
 msgid "Sign-in records"
 msgstr "Sign-in records"
 
-#: templates/views/pages/privacy.htm:46
+#: templates/views/pages/privacy.htm:48
 #, python-format
 msgid "%(n)s month (%(days)s days), then deleted."
 msgid_plural "%(n)s months (%(days)s days), then deleted."
 msgstr[0] "%(n)s month (%(days)s days), then deleted."
 msgstr[1] "%(n)s months (%(days)s days), then deleted."
 
-#: templates/views/pages/privacy.htm:53
+#: templates/views/pages/privacy.htm:55
+msgid "Access log"
+msgstr "Access log"
+
+#: templates/views/pages/privacy.htm:56 templates/views/pages/privacy.htm:60
+msgid "30 days, then deleted."
+msgstr "30 days, then deleted."
+
+#: templates/views/pages/privacy.htm:59
+msgid "Error log"
+msgstr "Error log"
+
+#: templates/views/pages/privacy.htm:63
 msgid "Accounts"
 msgstr "Accounts"
 
-#: templates/views/pages/privacy.htm:54
+#: templates/views/pages/privacy.htm:64
 #, python-format
 msgid ""
 "Kept while the contributor works on the platform. An account without a sign-"
@@ -5593,11 +5805,11 @@ msgstr ""
 "of the data keeps its author. In the edit history, the e-mail address is "
 "erased and the name stays as credit for the contribution."
 
-#: templates/views/pages/privacy.htm:63
+#: templates/views/pages/privacy.htm:73
 msgid "History of the data"
 msgstr "History of the data"
 
-#: templates/views/pages/privacy.htm:64
+#: templates/views/pages/privacy.htm:74
 msgid ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
@@ -5605,19 +5817,19 @@ msgstr ""
 "Kept with the platform's history. When an account is anonymised, the e-mail "
 "address is erased and the name stays as contribution credit."
 
-#: templates/views/pages/privacy.htm:67
+#: templates/views/pages/privacy.htm:77
 msgid "Backups"
 msgstr "Backups"
 
-#: templates/views/pages/privacy.htm:68
+#: templates/views/pages/privacy.htm:78
 msgid "Nightly backups are kept for up to six months."
 msgstr "Nightly backups are kept for up to six months."
 
-#: templates/views/pages/privacy.htm:73
+#: templates/views/pages/privacy.htm:83
 msgid "Recipients"
 msgstr "Recipients"
 
-#: templates/views/pages/privacy.htm:74
+#: templates/views/pages/privacy.htm:84
 msgid ""
 "The administrators and the team of the Centre de recherche sur la "
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
@@ -5627,64 +5839,176 @@ msgstr ""
 "conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, "
 "and no data is given to advertisers."
 
-#: templates/views/pages/privacy.htm:76
+#: templates/views/pages/privacy.htm:86
 msgid "Third-party services"
 msgstr "Third-party services"
 
-#: templates/views/pages/privacy.htm:77
-msgid ""
-"The Map view of the Explorer makes your browser load resources from two third"
-" parties. They therefore receive your IP address, your user agent and the "
-"referer of the request. No cookie is set and nothing is stored on your "
-"device. No other page and no other Explorer view calls these hosts."
-msgstr ""
-"The Map view of the Explorer makes your browser load resources from two third"
-" parties. They therefore receive your IP address, your user agent and the "
-"referer of the request. No cookie is set and nothing is stored on your "
-"device. No other page and no other Explorer view calls these hosts."
-
-#: templates/views/pages/privacy.htm:79
-msgid ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view is opened. Data © OpenMapTiles, © "
-"OpenStreetMap contributors."
-msgstr ""
-"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever the Map view is opened. Data © OpenMapTiles, © "
-"OpenStreetMap contributors."
-
-#: templates/views/pages/privacy.htm:80
-msgid ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
-"names of political entities, loaded only when you tick « Historical borders "
-"». Data © OpenHistoricalMap contributors."
-msgstr ""
-"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
-"names of political entities, loaded only when you tick « Historical borders "
-"». Data © OpenHistoricalMap contributors."
-
-#: templates/views/pages/privacy.htm:82
-msgid ""
-"Purpose: to display the base map and, on request, historical borders. Legal "
-"basis: legitimate interest (GDPR, article 6(1)(f))."
-msgstr ""
-"Purpose: to display the base map and, on request, historical borders. Legal "
-"basis: legitimate interest (GDPR, article 6(1)(f))."
-
-#: templates/views/pages/privacy.htm:84
-msgid "Transfers outside the European Union"
-msgstr "Transfers outside the European Union"
-
-#: templates/views/pages/privacy.htm:85
-msgid "None. The platform is hosted in France."
-msgstr "None. The platform is hosted in France."
-
 #: templates/views/pages/privacy.htm:87
-msgid "Your rights"
-msgstr "Your rights"
+msgid ""
+"Some content is not hosted by ManuSpectrum: your browser loads it directly "
+"from the services below. Each of them receives your IP address and your "
+"browser identification (user agent), and, when the request is a fetch made by"
+" a page script, the address of ManuSpectrum as origin. ManuSpectrum sets no "
+"cookie for them and stores nothing on your device for them. They are in the "
+"European Union unless stated otherwise."
+msgstr ""
+"Some content is not hosted by ManuSpectrum: your browser loads it directly "
+"from the services below. Each of them receives your IP address and your "
+"browser identification (user agent), and, when the request is a fetch made by"
+" a page script, the address of ManuSpectrum as origin. ManuSpectrum sets no "
+"cookie for them and stores nothing on your device for them. They are in the "
+"European Union unless stated otherwise."
 
 #: templates/views/pages/privacy.htm:88
 msgid ""
+"Purpose: to show you the images and maps of the platform. Legal basis: "
+"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
+"signed-in editors, the same basis applies to the editing tools."
+msgstr ""
+"Purpose: to show you the images and maps of the platform. Legal basis: "
+"legitimate interest (GDPR, article 6(1)(f)). For the services used only by "
+"signed-in editors, the same basis applies to the editing tools."
+
+#: templates/views/pages/privacy.htm:90
+msgid "Every visitor"
+msgstr "Every visitor"
+
+#: templates/views/pages/privacy.htm:92
+msgid ""
+"Image servers of the institutions that hold the manuscripts (IIIF). When the "
+"images of a document are not hosted by ManuSpectrum, your browser loads them "
+"from the IIIF server of the holding institution, in the Explorer and on "
+"resource pages: for example the Bibliothèque nationale de France (Gallica), "
+"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
+"of the IRHT. The list depends on the documents described."
+msgstr ""
+"Image servers of the institutions that hold the manuscripts (IIIF). When the "
+"images of a document are not hosted by ManuSpectrum, your browser loads them "
+"from the IIIF server of the holding institution, in the Explorer and on "
+"resource pages: for example the Bibliothèque nationale de France (Gallica), "
+"the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM "
+"of the IRHT. The list depends on the documents described."
+
+#: templates/views/pages/privacy.htm:93
+msgid ""
+"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
+"images loaded from its IIIF server."
+msgstr ""
+"Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three "
+"images loaded from its IIIF server."
+
+#: templates/views/pages/privacy.htm:94
+msgid ""
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
+"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
+"OpenMapTiles, © OpenStreetMap contributors."
+msgstr ""
+"OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
+"the base map, loaded whenever the Map view of the Explorer is opened. Data © "
+"OpenMapTiles, © OpenStreetMap contributors."
+
+#: templates/views/pages/privacy.htm:95
+msgid ""
+"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
+"names of political entities, loaded only when you tick « Historical borders "
+"». Data © OpenHistoricalMap contributors."
+msgstr ""
+"OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and "
+"names of political entities, loaded only when you tick « Historical borders "
+"». Data © OpenHistoricalMap contributors."
+
+#: templates/views/pages/privacy.htm:98
+msgid "Signed-in editors and administrators only"
+msgstr "Signed-in editors and administrators only"
+
+#: templates/views/pages/privacy.htm:100
+msgid ""
+"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
+"portal or from the IIIF server of the holding library."
+msgstr ""
+"Biblissima import workflow: the thumbnails are loaded from the Biblissima "
+"portal or from the IIIF server of the holding library."
+
+#: templates/views/pages/privacy.htm:101
+msgid ""
+"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
+"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
+"checker (SCAYT) is off by default; if you switch it on, the text you type is "
+"sent to WebSpellChecker (svc.webspellchecker.net), which does not state where"
+" it processes it: this is outside our control. We advise using your browser's"
+" spell checker instead."
+msgstr ""
+"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
+"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
+"checker (SCAYT) is off by default; if you switch it on, the text you type is "
+"sent to WebSpellChecker (svc.webspellchecker.net), which does not state where"
+" it processes it: this is outside our control. We advise using your browser's"
+" spell checker instead."
+
+#: templates/views/pages/privacy.htm:102
+msgid ""
+"Thesaurus page of Arches (administrators only): the fonts are loaded from "
+"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
+"which may process the request outside the European Union."
+msgstr ""
+"Thesaurus page of Arches (administrators only): the fonts are loaded from "
+"Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, "
+"which may process the request outside the European Union."
+
+#: templates/views/pages/privacy.htm:105
+msgid "Services used by the platform itself"
+msgstr "Services used by the platform itself"
+
+#: templates/views/pages/privacy.htm:106
+msgid ""
+"These calls come from the server and carry no visitor data. The platform asks"
+" Biblissima and the IIIF servers of the holding institutions for data and "
+"images. E-mail goes through the mail relay of Huma-Num, which handles the "
+"names and addresses of the account holders in the messages it carries. "
+"Certificates are issued by Let's Encrypt (United States), which only learns "
+"the address of the operator."
+msgstr ""
+"These calls come from the server and carry no visitor data. The platform asks"
+" Biblissima and the IIIF servers of the holding institutions for data and "
+"images. E-mail goes through the mail relay of Huma-Num, which handles the "
+"names and addresses of the account holders in the messages it carries. "
+"Certificates are issued by Let's Encrypt (United States), which only learns "
+"the address of the operator."
+
+#: templates/views/pages/privacy.htm:108
+msgid "Not used"
+msgstr "Not used"
+
+#: templates/views/pages/privacy.htm:109
+msgid ""
+"No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
+"social network widget. The Mapbox map service of Arches is not configured."
+msgstr ""
+"No analytics or tracking service, no Google reCAPTCHA, no advertising, no "
+"social network widget. The Mapbox map service of Arches is not configured."
+
+#: templates/views/pages/privacy.htm:111
+msgid "Transfers outside the European Union"
+msgstr "Transfers outside the European Union"
+
+#: templates/views/pages/privacy.htm:112
+msgid ""
+"None by the platform, which is hosted in France. The exceptions are the "
+"services above that are stated to process data outside the European Union or "
+"whose location is not stated: Google Fonts, WebSpellChecker and Let's "
+"Encrypt."
+msgstr ""
+"None by the platform, which is hosted in France. The exceptions are the "
+"services above that are stated to process data outside the European Union or "
+"whose location is not stated: Google Fonts, WebSpellChecker and Let's "
+"Encrypt."
+
+#: templates/views/pages/privacy.htm:114
+msgid "Your rights"
+msgstr "Your rights"
+
+#: templates/views/pages/privacy.htm:115
+msgid ""
 "You can ask for access to your data, its correction, its erasure where the "
 "law allows it, a restriction of the processing, and you can object to it. You"
 " can also lodge a complaint with the CNIL."
@@ -5693,39 +6017,39 @@ msgstr ""
 "law allows it, a restriction of the processing, and you can object to it. You"
 " can also lodge a complaint with the CNIL."
 
-#: templates/views/pages/privacy.htm:90
+#: templates/views/pages/privacy.htm:117
 msgid "To exercise your rights, write to:"
 msgstr "To exercise your rights, write to:"
 
-#: templates/views/pages/privacy.htm:91
+#: templates/views/pages/privacy.htm:118
 msgid "the contact page"
 msgstr "the contact page"
 
-#: templates/views/pages/privacy.htm:92
+#: templates/views/pages/privacy.htm:119
 msgid "or to the data protection officer above."
 msgstr "or to the data protection officer above."
 
-#: templates/views/pages/privacy.htm:94
+#: templates/views/pages/privacy.htm:121
 msgid "Cookies and browser storage"
 msgstr "Cookies and browser storage"
 
-#: templates/views/pages/privacy.htm:97
+#: templates/views/pages/privacy.htm:124
 msgid "Purpose"
 msgstr "Purpose"
 
-#: templates/views/pages/privacy.htm:100
+#: templates/views/pages/privacy.htm:127
 msgid "Keeps you signed in."
 msgstr "Keeps you signed in."
 
-#: templates/views/pages/privacy.htm:101
+#: templates/views/pages/privacy.htm:128
 msgid "Protects forms against forged requests."
 msgstr "Protects forms against forged requests."
 
-#: templates/views/pages/privacy.htm:102
+#: templates/views/pages/privacy.htm:129
 msgid "Remembers the language you chose."
 msgstr "Remembers the language you chose."
 
-#: templates/views/pages/privacy.htm:105
+#: templates/views/pages/privacy.htm:132
 msgid ""
 "There is no tracker, no analytics service and no advertising cookie. The "
 "Analysis Explorer keeps your selection and layout in your browser's local "
@@ -5735,42 +6059,42 @@ msgstr ""
 "Analysis Explorer keeps your selection and layout in your browser's local "
 "storage; they are never sent to the server."
 
-#: templates/views/pages/privacy.htm:107
-msgid "Restricted records"
-msgstr "Restricted records"
+#: templates/views/pages/privacy.htm:134
+msgid "Restricted resources"
+msgstr "Restricted resources"
 
-#: templates/views/pages/privacy.htm:108
+#: templates/views/pages/privacy.htm:135
 #, python-format
 msgid ""
-"A restriction on a record is temporary by construction: %(n)s month at most, "
-"unless an administrator records an exception. It is lifted automatically the "
-"day after its end date. The person who recorded it and the creator of the "
-"record are told %(notices)s days before, and again when the record becomes "
-"public."
+"A restriction on a resource is temporary by construction: %(n)s month at "
+"most, unless an administrator records an exception. It is lifted "
+"automatically the day after its end date. The person who set it and the "
+"creator of the resource are told %(notices)s days before, and again when the "
+"resource becomes public."
 msgid_plural ""
-"A restriction on a record is temporary by construction: %(n)s months at most,"
-" unless an administrator records an exception. It is lifted automatically the"
-" day after its end date. The person who recorded it and the creator of the "
-"record are told %(notices)s days before, and again when the record becomes "
-"public."
+"A restriction on a resource is temporary by construction: %(n)s months at "
+"most, unless an administrator records an exception. It is lifted "
+"automatically the day after its end date. The person who set it and the "
+"creator of the resource are told %(notices)s days before, and again when the "
+"resource becomes public."
 msgstr[0] ""
-"A restriction on a record is temporary by construction: %(n)s month at most, "
-"unless an administrator records an exception. It is lifted automatically the "
-"day after its end date. The person who recorded it and the creator of the "
-"record are told %(notices)s days before, and again when the record becomes "
-"public."
+"A restriction on a resource is temporary by construction: %(n)s month at "
+"most, unless an administrator records an exception. It is lifted "
+"automatically the day after its end date. The person who set it and the "
+"creator of the resource are told %(notices)s days before, and again when the "
+"resource becomes public."
 msgstr[1] ""
-"A restriction on a record is temporary by construction: %(n)s months at most,"
-" unless an administrator records an exception. It is lifted automatically the"
-" day after its end date. The person who recorded it and the creator of the "
-"record are told %(notices)s days before, and again when the record becomes "
-"public."
+"A restriction on a resource is temporary by construction: %(n)s months at "
+"most, unless an administrator records an exception. It is lifted "
+"automatically the day after its end date. The person who set it and the "
+"creator of the resource are told %(notices)s days before, and again when the "
+"resource becomes public."
 
-#: templates/views/pages/privacy.htm:118
+#: templates/views/pages/privacy.htm:145
 msgid "Abandoned workflows"
 msgstr "Abandoned workflows"
 
-#: templates/views/pages/privacy.htm:119
+#: templates/views/pages/privacy.htm:146
 #, python-format
 msgid ""
 "A workflow with no activity for %(days)s days is cleaned. Its creators are "
@@ -5993,16 +6317,16 @@ msgstr ""
 #: templates/views/pages/terms.htm:19
 #, python-format
 msgid ""
-"A restriction on a record is temporary: %(n)s month at most, then it is "
+"A restriction on a resource is temporary: %(n)s month at most, then it is "
 "lifted automatically, unless the team records an exception."
 msgid_plural ""
-"A restriction on a record is temporary: %(n)s months at most, then it is "
+"A restriction on a resource is temporary: %(n)s months at most, then it is "
 "lifted automatically, unless the team records an exception."
 msgstr[0] ""
-"A restriction on a record is temporary: %(n)s month at most, then it is "
+"A restriction on a resource is temporary: %(n)s month at most, then it is "
 "lifted automatically, unless the team records an exception."
 msgstr[1] ""
-"A restriction on a record is temporary: %(n)s months at most, then it is "
+"A restriction on a resource is temporary: %(n)s months at most, then it is "
 "lifted automatically, unless the team records an exception."
 
 #: templates/views/pages/terms.htm:24
@@ -6034,33 +6358,37 @@ msgstr ""
 "A person with an account, who describes analyses, manuscripts or materials on"
 " the platform."
 
-#: templates/views/pages/terms.htm:36
-msgid "Record"
-msgstr "Record"
-
 #: templates/views/pages/terms.htm:37
 msgid ""
-"A description kept on the platform: a document, an analysis, a material, a "
-"characterization, and the files attached to it."
+"Anything ManuSpectrum describes (a document, a component, an analysis, a "
+"sample, a project, a person...), with its information and its files."
 msgstr ""
-"A description kept on the platform: a document, an analysis, a material, a "
-"characterization, and the files attached to it."
+"Anything ManuSpectrum describes (a document, a component, an analysis, a "
+"sample, a project, a person...), with its information and its files."
 
 #: templates/views/pages/terms.htm:38
 msgid "Restriction"
 msgstr "Restriction"
 
 #: templates/views/pages/terms.htm:39
-msgid "A record that only some people can see until an end date."
-msgstr "A record that only some people can see until an end date."
+msgid ""
+"A resource that only some people can see until an end date, also called an "
+"embargo."
+msgstr ""
+"A resource that only some people can see until an end date, also called an "
+"embargo."
 
 #: templates/views/pages/terms.htm:41
 msgid ""
-"A guided, multi-step entry (for example an import) that creates records as "
-"you go."
+"A guided, multi-step form of ManuSpectrum (for example « Import from "
+"Biblissima » or « Create a project ») that creates or edits resources step by"
+" step. Some French screens of Arches, the software ManuSpectrum is built on, "
+"call it a « flux de travail »."
 msgstr ""
-"A guided, multi-step entry (for example an import) that creates records as "
-"you go."
+"A guided, multi-step form of ManuSpectrum (for example « Import from "
+"Biblissima » or « Create a project ») that creates or edits resources step by"
+" step. Some French screens of Arches, the software ManuSpectrum is built on, "
+"call it a « flux de travail »."
 
 #: templates/views/pages/terms.htm:42
 msgid "Team"
@@ -6111,10 +6439,10 @@ msgstr "3. Images and files: you need the rights"
 #: templates/views/pages/terms.htm:55
 msgid ""
 "Upload or link an image or a file only if you hold the rights to it or have "
-"permission from the holder. Give the licence and the credit on the record."
+"permission from the holder. Give the licence and the credit on the resource."
 msgstr ""
 "Upload or link an image or a file only if you hold the rights to it or have "
-"permission from the holder. Give the licence and the credit on the record."
+"permission from the holder. Give the licence and the credit on the resource."
 
 #: templates/views/pages/terms.htm:57
 msgid "4. Licences of published data"
@@ -6122,11 +6450,11 @@ msgstr "4. Licences of published data"
 
 #: templates/views/pages/terms.htm:58
 msgid ""
-"Each record states the licence that applies to its data and files, and who "
+"Each resource states the licence that applies to its data and files, and who "
 "produced them. Whoever reuses them follows that licence and cites the "
 "depositing laboratory."
 msgstr ""
-"Each record states the licence that applies to its data and files, and who "
+"Each resource states the licence that applies to its data and files, and who "
 "produced them. Whoever reuses them follows that licence and cites the "
 "depositing laboratory."
 
@@ -6137,11 +6465,11 @@ msgstr "5. Raw data goes to a repository"
 #: templates/views/pages/terms.htm:61
 msgid ""
 "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a recognised"
-" repository and link it from your record. We may remove files that the "
+" repository and link it from your resource. We may remove files that the "
 "platform cannot hold."
 msgstr ""
 "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a recognised"
-" repository and link it from your record. We may remove files that the "
+" repository and link it from your resource. We may remove files that the "
 "platform cannot hold."
 
 #: templates/views/pages/terms.htm:63
@@ -6151,28 +6479,28 @@ msgstr "6. A restriction does not last forever"
 #: templates/views/pages/terms.htm:64
 #, python-format
 msgid ""
-"You can restrict a record for %(n)s month at most. We write to you "
-"%(notices)s days before the end date and again the day the record becomes "
-"public. The record is lifted automatically the day after the end date. A "
-"restriction with no end date is not lifted by itself, and the team keeps a "
+"You can restrict a resource for %(n)s month at most. We write to you "
+"%(notices)s days before the end date and again the day the resource becomes "
+"public. The restriction is lifted automatically the day after the end date. A"
+" restriction with no end date is not lifted by itself, and the team keeps a "
 "list of them."
 msgid_plural ""
-"You can restrict a record for %(n)s months at most. We write to you "
-"%(notices)s days before the end date and again the day the record becomes "
-"public. The record is lifted automatically the day after the end date. A "
-"restriction with no end date is not lifted by itself, and the team keeps a "
+"You can restrict a resource for %(n)s months at most. We write to you "
+"%(notices)s days before the end date and again the day the resource becomes "
+"public. The restriction is lifted automatically the day after the end date. A"
+" restriction with no end date is not lifted by itself, and the team keeps a "
 "list of them."
 msgstr[0] ""
-"You can restrict a record for %(n)s month at most. We write to you "
-"%(notices)s days before the end date and again the day the record becomes "
-"public. The record is lifted automatically the day after the end date. A "
-"restriction with no end date is not lifted by itself, and the team keeps a "
+"You can restrict a resource for %(n)s month at most. We write to you "
+"%(notices)s days before the end date and again the day the resource becomes "
+"public. The restriction is lifted automatically the day after the end date. A"
+" restriction with no end date is not lifted by itself, and the team keeps a "
 "list of them."
 msgstr[1] ""
-"You can restrict a record for %(n)s months at most. We write to you "
-"%(notices)s days before the end date and again the day the record becomes "
-"public. The record is lifted automatically the day after the end date. A "
-"restriction with no end date is not lifted by itself, and the team keeps a "
+"You can restrict a resource for %(n)s months at most. We write to you "
+"%(notices)s days before the end date and again the day the resource becomes "
+"public. The restriction is lifted automatically the day after the end date. A"
+" restriction with no end date is not lifted by itself, and the team keeps a "
 "list of them."
 
 #: templates/views/pages/terms.htm:74
@@ -6620,11 +6948,49 @@ msgstr ""
 "This configuration was changed by someone else since it was loaded. Reload it"
 " before saving."
 
+#~ msgid "met"
+#~ msgstr "met"
+
 #~ msgid "Why this step"
 #~ msgstr "Why this step"
 
 #~ msgid "Document not found? Import it from Biblissima"
 #~ msgstr "Document not found? Import it from Biblissima"
+
+#~ msgid "One letter"
+#~ msgstr "One letter"
+
+#~ msgid "Deleted records:"
+#~ msgstr "Deleted records:"
+
+#~ msgid "embargo"
+#~ msgstr "embargo"
+
+#~ msgid "embargoes"
+#~ msgstr "embargoes"
+
+#~ msgid "embargo event"
+#~ msgstr "embargo event"
+
+#~ msgid "embargo events"
+#~ msgstr "embargo events"
+
+#~ msgid "Record"
+#~ msgstr "Record"
+
+#~ msgid ""
+#~ "A description kept on the platform: a document, an analysis, a material, a "
+#~ "characterization, and the files attached to it."
+#~ msgstr ""
+#~ "A description kept on the platform: a document, an analysis, a material, a "
+#~ "characterization, and the files attached to it."
+
+#~ msgid ""
+#~ "A guided, multi-step entry (for example an import) that creates records as "
+#~ "you go."
+#~ msgstr ""
+#~ "A guided, multi-step entry (for example an import) that creates records as "
+#~ "you go."
 
 #~ msgid "Open the workflow again before that date to keep it."
 #~ msgstr "Open the workflow again before that date to keep it."

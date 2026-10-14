@@ -123,9 +123,9 @@ def _workflow_notice(ctx):
             _(
                 "The workflow « %(workflow)s » has not been used for a long time "
                 "and is not finished. On %(date)s (%(when)s), it is "
-                "cleaned: its trace is deleted, and so are the records it created "
+                "cleaned: its trace is deleted, and so are the resources it created "
                 "and listed below, if they are still drafts, were not modified "
-                "elsewhere and are not linked to other records."
+                "elsewhere and are not linked to other resources."
             )
             % {
                 "workflow": ctx["workflow"],
@@ -147,13 +147,13 @@ def _workflow_cleaned(ctx):
         % {"workflow": ctx["workflow"]}
     ]
     if ctx.get("deleted"):
-        paragraphs.append(_("Deleted records:"))
+        paragraphs.append(_("Deleted resources:"))
     return {
         "subject": _("Unfinished workflow cleaned"),
         "paragraphs": paragraphs,
         "items": ctx.get("deleted", []),
         "paragraphs_after": (
-            [_("Records kept, because other work depends on them:")]
+            [_("Resources kept, because other work depends on them:")]
             if ctx.get("kept")
             else []
         ),

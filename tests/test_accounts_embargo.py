@@ -359,8 +359,8 @@ class FrenchLabelTests(TestCase):
         from django.utils import translation
 
         with translation.override("fr"):
-            self.assertEqual(str(Embargo._meta.verbose_name), "embargo")
-            self.assertEqual(str(Embargo._meta.verbose_name_plural), "embargos")
+            self.assertEqual(str(Embargo._meta.verbose_name), "restriction")
+            self.assertEqual(str(Embargo._meta.verbose_name_plural), "restrictions")
             self.assertEqual(
                 str(dict(EmbargoEvent.KINDS)[EmbargoEvent.EXTENDED]), "Prolongé"
             )

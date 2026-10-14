@@ -853,16 +853,54 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
         th { color: $ms-ink; font-weight: 600; } } }
 .ms-legal-version { font-family: $ms-font-mono; font-size: 0.8rem; color: $ms-ink-soft; }
 .ms-legal-warning { border-left: 4px solid $ms-red-text; background: #fff; border-radius: 0 12px 12px 0;
-    padding: 16px 20px; margin: 0 0 1.6rem;
-    p { margin: 0 0 0.6rem; color: $ms-ink; }
+    padding: 18px 22px; margin: 1.4rem 0 1.6rem;
+    &:first-child { margin-top: 0; }
+    p { margin: 0 0 0.75rem; color: $ms-ink; }
     p:last-child { margin-bottom: 0; } }
 .ms-legal-pending { background: #fef3c7; color: $ms-ink; padding: 0 6px; border-radius: 4px; }
 .ms-account-form { margin: 0 0 1.6rem;
+    p { margin: 0 0 1.25rem; }
+    .ms-pw-field { position: relative; margin: 0 0 1.25rem; }
+    label { display: inline-block; margin-bottom: 4px; font-weight: 600; }
     input[type="password"] { width: 100%; max-width: 28rem; padding: 8px 10px; border: 1px solid $ms-line; border-radius: 8px; }
     .ms-form-check { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 1rem; font-weight: 600; }
-    .ms-form-help { display: block; color: $ms-ink-soft; font-size: 0.88rem; ul { margin: 4px 0 0; padding-left: 1.2rem; } }
     .ms-form-error { display: block; color: $ms-red-text; font-size: 0.9rem; }
     button { padding: 8px 18px; border: 0; border-radius: 8px; background: $ms-red-text; color: #fff; font-weight: 600; cursor: pointer; } }
 .ms-contact-include { margin: 0 0 1.4rem; padding: 14px 18px; background: #fff; border: 1px solid $ms-line; border-radius: 12px;
     h3 { font-size: 1rem; font-weight: 600; margin: 0 0 6px; }
     ul { margin: 0; padding-left: 1.2rem; color: $ms-ink-soft; font-size: 0.92rem; } }
+
+// Password fields (accounts/_password_field.htm, utils/accounts/password-field.js)
+.ms-pw-wrap { position: relative; display: block; max-width: 28rem;
+    input[type="password"], input[type="text"] { width: 100%; max-width: none; box-sizing: border-box; padding: 8px 44px 8px 10px; border: 1px solid $ms-line; border-radius: 8px; } }
+.ms-account-form .ms-pw-toggle { position: absolute; top: 0; right: 0; bottom: 0; width: 42px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: $ms-ink-soft; border-radius: 0 8px 8px 0;
+    &[hidden] { display: none; }
+    &:hover, &:focus-visible { color: $ms-ink; }
+    &:focus-visible { outline: 2px solid $ms-red-text; outline-offset: -2px; }
+    .ms-pw-toggle__eye-off { display: none; }
+    &.is-shown .ms-pw-toggle__eye { display: none; }
+    &.is-shown .ms-pw-toggle__eye-off { display: block; } }
+.ms-pw-meter { display: block; max-width: 28rem; margin-top: 8px;
+    &[hidden] { display: none; } }
+.ms-pw-bar { display: block; height: 6px; border-radius: 3px; background: $ms-line; overflow: hidden; }
+.ms-pw-bar__fill { display: block; height: 100%; width: 0; background: $ms-red-text; transition: width 0.2s ease; }
+.ms-pw-meter[data-level="weak"] .ms-pw-bar__fill { width: 33%; }
+.ms-pw-meter[data-level="fair"] .ms-pw-bar__fill { width: 66%; background: #b45309; }
+.ms-pw-meter[data-level="strong"] .ms-pw-bar__fill { width: 100%; background: #15803d; }
+.ms-pw-word { display: block; min-height: 1.4em; margin-top: 4px; font-size: 0.9rem; font-weight: 600; color: $ms-ink; }
+.ms-pw-rules { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.88rem; color: $ms-ink-soft;
+    li { position: relative; padding-left: 1.5rem; margin: 2px 0;
+        &::before { content: "\25CB"; position: absolute; left: 0; }
+        &.is-met { color: #15803d; &::before { content: "\2713"; } } } }
+.ms-pw-note { display: block; margin-top: 6px; font-size: 0.88rem; color: $ms-ink-soft; }
+.ms-pw-info { display: inline-block; vertical-align: middle; margin-left: 6px;
+    summary { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: $ms-ink-soft; cursor: pointer; list-style: none;
+        &::-webkit-details-marker { display: none; }
+        &:hover { color: $ms-ink; }
+        &:focus-visible { outline: 2px solid $ms-red-text; outline-offset: 2px; } }
+    &[open] summary { color: $ms-ink; } }
+.ms-pw-info__list { position: absolute; left: 0; right: 0; z-index: 2; box-sizing: border-box; max-width: 28rem; margin: 6px 0 0; padding: 10px 14px 10px 2rem; background: #fff; border: 1px solid $ms-line; border-radius: 8px; font-size: 0.88rem; font-weight: 400; color: $ms-ink-soft; }
+.ms-pw-match { display: block; min-height: 1.4em; margin-top: 6px; font-size: 0.9rem; max-width: 28rem;
+    &[data-state="match"] { color: #15803d; }
+    &[data-state="mismatch"] { color: $ms-red-text; } }

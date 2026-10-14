@@ -229,6 +229,17 @@ class ResetPageTests(TestCase):
         self.assertNotIn("ms_reset_pending_mfa_secret", self.client.session)
         self.assertIsNone(stored(self.alice))
 
+    def test_the_manual_key_is_grouped_by_four_with_a_copy_button(self):
+        self.open()
+        response = post(self.client, self.page, action="password", password=PASSWORD)
+        secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
+        grouped = " ".join(secret[i : i + 4] for i in range(0, len(secret), 4))
+        self.assertContains(response, f">{grouped}</code>")
+        self.assertContains(response, f'data-ms-copy-text="{secret}"')
+        self.assertContains(response, "data-ms-copy-button")
+        self.assertContains(response, "js/standalone/copy-text.js")
+        self.assertNotIn("querySelector(", response.content.decode())
+
     def test_the_password_then_a_valid_code_enrols_and_signs_in(self):
         self.open()
         response = post(self.client, self.page, action="password", password=PASSWORD)

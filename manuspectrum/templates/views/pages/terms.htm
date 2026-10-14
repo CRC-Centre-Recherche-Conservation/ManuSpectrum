@@ -17,9 +17,9 @@
     <p>{% trans "ManuSpectrum is not a data repository. It describes analyses, links them together and showcases them, in line with the FAIR principles." %}</p>
     <p>{% trans "It gives none of the guarantees of a repository (long-term preservation, persistent identifiers, citable deposits). Your raw data belongs in a recognised repository such as Recherche Data Gouv or Nakala, and ManuSpectrum links to it." %}</p>
     <p>{% blocktrans trimmed count n=embargo_max_months %}
-        A restriction on a record is temporary: {{ n }} month at most, then it is lifted automatically, unless the team records an exception.
+        A restriction on a resource is temporary: {{ n }} month at most, then it is lifted automatically, unless the team records an exception.
         {% plural %}
-        A restriction on a record is temporary: {{ n }} months at most, then it is lifted automatically, unless the team records an exception.
+        A restriction on a resource is temporary: {{ n }} months at most, then it is lifted automatically, unless the team records an exception.
         {% endblocktrans %}</p>
     <p>{% blocktrans trimmed with days=workflow_cleanup_days notices=workflow_notice_days_text %}
         An unfinished workflow is cleaned after {{ days }} days without activity, once we have written to you twice
@@ -33,12 +33,12 @@
     <dd>{% trans "The ManuSpectrum website and everything you can read or enter on it." %}</dd>
     <dt>{% trans "Contributor" %}</dt>
     <dd>{% trans "A person with an account, who describes analyses, manuscripts or materials on the platform." %}</dd>
-    <dt>{% trans "Record" %}</dt>
-    <dd>{% trans "A description kept on the platform: a document, an analysis, a material, a characterization, and the files attached to it." %}</dd>
+    <dt>{% trans "Resource" %}</dt>
+    <dd>{% trans "Anything ManuSpectrum describes (a document, a component, an analysis, a sample, a project, a person...), with its information and its files." %}</dd>
     <dt>{% trans "Restriction" %}</dt>
-    <dd>{% trans "A record that only some people can see until an end date." %}</dd>
+    <dd>{% trans "A resource that only some people can see until an end date, also called an embargo." %}</dd>
     <dt>{% trans "Workflow" %}</dt>
-    <dd>{% trans "A guided, multi-step entry (for example an import) that creates records as you go." %}</dd>
+    <dd>{% trans "A guided, multi-step form of ManuSpectrum (for example « Import from Biblissima » or « Create a project ») that creates or edits resources step by step. Some French screens of Arches, the software ManuSpectrum is built on, call it a « flux de travail »." %}</dd>
     <dt>{% trans "Team" %}</dt>
     <dd>{% trans "The people who run the platform at the Centre de recherche sur la conservation." %}</dd>
 </dl>
@@ -52,22 +52,22 @@
 <p>{% trans "You answer for the descriptions you enter. Check them, correct them when you find a mistake, and say so when something is uncertain." %}</p>
 
 <h3>{% trans "3. Images and files: you need the rights" %}</h3>
-<p>{% trans "Upload or link an image or a file only if you hold the rights to it or have permission from the holder. Give the licence and the credit on the record." %}</p>
+<p>{% trans "Upload or link an image or a file only if you hold the rights to it or have permission from the holder. Give the licence and the credit on the resource." %}</p>
 
 <h3>{% trans "4. Licences of published data" %}</h3>
-<p>{% trans "Each record states the licence that applies to its data and files, and who produced them. Whoever reuses them follows that licence and cites the depositing laboratory." %}</p>
+<p>{% trans "Each resource states the licence that applies to its data and files, and who produced them. Whoever reuses them follows that licence and cites the depositing laboratory." %}</p>
 
 <h3>{% trans "5. Raw data goes to a repository" %}</h3>
-<p>{% trans "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a recognised repository and link it from your record. We may remove files that the platform cannot hold." %}</p>
+<p>{% trans "Do not rely on ManuSpectrum to keep your raw data. Deposit it in a recognised repository and link it from your resource. We may remove files that the platform cannot hold." %}</p>
 
 <h3>{% trans "6. A restriction does not last forever" %}</h3>
 <p>{% blocktrans trimmed count n=embargo_max_months with notices=embargo_notice_days_text %}
-    You can restrict a record for {{ n }} month at most. We write to you {{ notices }} days before the end date
-    and again the day the record becomes public. The record is lifted automatically the day after the end date.
+    You can restrict a resource for {{ n }} month at most. We write to you {{ notices }} days before the end date
+    and again the day the resource becomes public. The restriction is lifted automatically the day after the end date.
     A restriction with no end date is not lifted by itself, and the team keeps a list of them.
     {% plural %}
-    You can restrict a record for {{ n }} months at most. We write to you {{ notices }} days before the end date
-    and again the day the record becomes public. The record is lifted automatically the day after the end date.
+    You can restrict a resource for {{ n }} months at most. We write to you {{ notices }} days before the end date
+    and again the day the resource becomes public. The restriction is lifted automatically the day after the end date.
     A restriction with no end date is not lifted by itself, and the team keeps a list of them.
     {% endblocktrans %}</p>
 

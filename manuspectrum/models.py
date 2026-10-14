@@ -90,8 +90,8 @@ class Embargo(models.Model):
 
     class Meta:
         db_table = "ms_embargo"
-        verbose_name = _("embargo")
-        verbose_name_plural = _("embargoes")
+        verbose_name = _("restriction")
+        verbose_name_plural = _("restrictions")
 
     def __str__(self):
         return str(self.resourceinstance_id)
@@ -126,7 +126,7 @@ class Embargo(models.Model):
             raise ValidationError(
                 _(
                     "The end date is more than %(months)d months after the start "
-                    "of the embargo (latest allowed: %(latest)s). Only a "
+                    "of the restriction (latest allowed: %(latest)s). Only a "
                     "superuser can set a later date."
                 ),
                 params={
@@ -146,7 +146,7 @@ class Embargo(models.Model):
             locked = Embargo.objects.select_for_update().get(pk=self.pk)
             if locked.state != self.ACTIVE:
                 raise ValidationError(
-                    _("Only an active embargo can change its end date.")
+                    _("Only an active restriction can change its end date.")
                 )
             old = locked.ends_on
             if ends_on == old:
@@ -211,8 +211,8 @@ class EmbargoEvent(models.Model):
     class Meta:
         db_table = "ms_embargo_event"
         ordering = ("at", "pk")
-        verbose_name = _("embargo event")
-        verbose_name_plural = _("embargo events")
+        verbose_name = _("restriction event")
+        verbose_name_plural = _("restriction events")
 
 
 class WorkflowCleanup(models.Model):

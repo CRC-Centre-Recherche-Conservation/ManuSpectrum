@@ -1,3 +1,6 @@
+import re
+from pathlib import Path
+
 from django.conf import settings
 from django.template import Context, Template
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
@@ -454,7 +457,7 @@ class LegalPagesTests(TestCase):
             "Transfers outside the European Union",
             "Your rights",
             "Cookies and browser storage",
-            "Restricted records",
+            "Restricted resources",
             "Abandoned workflows",
         ):
             self.assertIn(f"<h2>{heading}</h2>", html)
@@ -468,6 +471,65 @@ class LegalPagesTests(TestCase):
             self.assertIn(f'<h2 id="third-party-services">{heading}</h2>', html)
             for host in ("tiles.openfreemap.org", "vtiles.openhistoricalmap.org"):
                 self.assertIn(host, html)
+
+    def test_privacy_third_party_section_lists_the_known_hosts(self):
+        for lang in ("en", "fr"):
+            html = self.get("about-privacy", lang)
+            for host in (
+                "iiif.unicaen.fr",
+                "tiles.openfreemap.org",
+                "vtiles.openhistoricalmap.org",
+                "cke4.ckeditor.com",
+                "svc.webspellchecker.net",
+                "fonts.googleapis.com",
+            ):
+                self.assertIn(host, html, f"{lang}: {host}")
+            self.assertNotIn("No other page and no other Explorer view", html)
+            self.assertNotIn("Aucune autre page", html)
+
+    def test_privacy_access_log_is_listed_with_the_logrotate_retention(self):
+        rule = (
+            Path(settings.APP_ROOT).parent
+            / "deploy"
+            / "logrotate"
+            / "manuspectrum-nginx.in"
+        ).read_text()
+        days = re.search(r"^\s*maxage (\d+)", rule, re.M).group(1)
+        for lang, label, text in (
+            ("en", "Access log", f"{days} days, then deleted."),
+            ("fr", "Journal d", f"{days} jours"),
+        ):
+            html = self.get("about-privacy", lang)
+            self.assertIn(label, html)
+            self.assertIn(text, html)
+
+    def test_privacy_error_log_is_listed_with_the_same_retention_as_the_access_log(
+        self,
+    ):
+        rule = (
+            Path(settings.APP_ROOT).parent
+            / "deploy"
+            / "logrotate"
+            / "manuspectrum-nginx.in"
+        ).read_text()
+        self.assertRegex(rule, r"error\.log \{")
+        days = re.search(r"^\s*maxage (\d+)", rule, re.M).group(1)
+        for lang, kept, label, text in (
+            (
+                "en",
+                "web server's error log",
+                "Error log",
+                f"{days} days, then deleted.",
+            ),
+            ("fr", "journal d", "Journal d.erreurs", f"{days} jours"),
+        ):
+            html = self.get("about-privacy", lang)
+            self.assertIn(kept, html, lang)
+            self.assertRegex(
+                html,
+                rf"{label}</th>\s*<td>[^<]*{text}",
+                f"{lang}: {label}",
+            )
 
     def test_privacy_printed_durations_follow_the_settings(self):
         with override_settings(
@@ -624,6 +686,14 @@ class ContactAccessRequestTests(TestCase):
     def test_footer_links_to_the_access_request(self):
         html = self.client.get(reverse("about-team")).content.decode()
         self.assertIn(f'href="{reverse("about-contact")}?reason=access"', html)
+
+    def test_a_signed_in_user_is_not_offered_the_access_request(self):
+        from django.contrib.auth.models import User
+
+        member = User.objects.create_user("footer-member", "member@example.org", "x")
+        self.client.force_login(member)
+        html = self.client.get(reverse("about-team")).content.decode()
+        self.assertNotIn(f'href="{reverse("about-contact")}?reason=access"', html)
 
 
 class TermsDigestTests(SimpleTestCase):

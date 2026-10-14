@@ -266,3 +266,23 @@ class EdgeContractTests(SimpleTestCase):
         self.assertNamed(
             "snippets/iiifserver.conf", "/iiifserver/iiif/2/x", "iiifserver"
         )
+
+
+class ErrorLogTests(SimpleTestCase):
+    LEVELS = ["debug", "info", "notice", "warn", "error", "crit", "alert", "emerg"]
+
+    def directive(self, relative, name):
+        text = re.sub(r"(?m)^\s*#.*$", "", (NGINX_DIR / relative).read_text())
+        found = re.findall(rf"(?m)^\s*{name}\s+(?:\S+\s+)?(\w+)\s*;", text)
+        self.assertEqual(len(found), 1, f"{relative}: {name} must be set once")
+        return found[0]
+
+    def test_refused_requests_are_logged_below_the_error_log_level(self):
+        threshold = self.LEVELS.index(self.directive("nginx.conf", "error_log"))
+        for name in ("limit_req_log_level", "limit_conn_log_level"):
+            level = self.directive("snippets/ratelimit.conf", name)
+            self.assertLess(
+                self.LEVELS.index(level),
+                threshold,
+                f"{name} {level} would write the refused request line to error.log",
+            )

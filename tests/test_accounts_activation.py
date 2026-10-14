@@ -1,8 +1,10 @@
 """Invitation, account activation and acceptance of the terms (PP-4, decision 13)."""
 
 import re
+from html.parser import HTMLParser
 from unittest import mock
 
+import lxml.html
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
@@ -16,10 +18,15 @@ from django.utils.http import urlsafe_base64_encode
 from manuspectrum.accounts import activation
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
+from manuspectrum.password_validation import HasLowerCaseValidator
 
 PASSWORD = "Str0ng!Passphrase-for-tests"
 HTML = {"HTTP_ACCEPT": "text/html,application/xhtml+xml"}
 IP = "203.0.113.20"
+
+
+class LowerSubclass(HasLowerCaseValidator):
+    pass
 
 
 def invited(username="newbie", email="newbie@manuspectrum.test"):
@@ -48,6 +55,27 @@ def placeholder_path(user):
 
 def activate(client, path, **data):
     return client.post(path, data, HTTP_X_REAL_IP=IP, REMOTE_ADDR="10.0.0.1")
+
+
+class _ParagraphNesting(HTMLParser):
+    """Collect the block elements that a browser would pull out of an open `<p>`."""
+
+    BLOCKS = {"details", "div", "ul", "ol", "table", "form", "p"}
+
+    def __init__(self):
+        super().__init__()
+        self.open_p = 0
+        self.offenders = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.BLOCKS and self.open_p:
+            self.offenders.append(tag)
+        if tag == "p":
+            self.open_p += 1
+
+    def handle_endtag(self, tag):
+        if tag == "p" and self.open_p:
+            self.open_p -= 1
 
 
 class Base(TestCase):
@@ -121,6 +149,155 @@ class ActivationTests(Base):
         }
         data.update(overrides)
         return {k: v for k, v in data.items() if v is not None}
+
+    def test_the_page_carries_the_rules_the_server_enforces(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertIn('data-min-length="12"', html)
+        for rule in ("length", "upper", "lower", "digit", "symbol"):
+            self.assertIn(f'data-rule="{rule}"', html)
+        self.assertIn("data-ms-pw-match", html)
+        self.assertEqual(html.count("data-ms-pw-wrap"), 2)
+
+    def test_the_minimum_length_follows_the_settings(self):
+        validators = [
+            {
+                "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 20},
+            }
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            html = self.client.get(self.path).content.decode()
+        self.assertIn('data-min-length="20"', html)
+        self.assertNotIn('data-rule="upper"', html)
+        self.assertNotIn('data-rule="symbol"', html)
+
+    def info_items(self, html):
+        block = re.search(r'<ul class="ms-pw-info__list"[^>]*>(.*?)</ul>', html, re.S)
+        self.assertIsNotNone(block)
+        return re.findall(r"<li>(.*?)</li>", block.group(1))
+
+    def test_the_raw_validator_help_list_is_not_rendered(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertNotIn("ms-form-help", html)
+        self.assertNotIn("Be longer than", html)
+
+    def test_the_info_lists_each_configured_rule_once(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertIn('<summary aria-label="Password rules">', html)
+        self.assertEqual(
+            self.info_items(html),
+            [
+                "At least 12 characters",
+                "One upper-case letter",
+                "One lower-case letter",
+                "One digit",
+                "One symbol",
+                "Not a commonly used password",
+                "Not too close to your name, username or e-mail address",
+            ],
+        )
+        self.assertEqual(html.count("ms-pw-info__list"), 1)
+
+    def test_the_info_is_in_french_under_fr(self):
+        html = self.client.get("/fr" + self.path.removeprefix("/en")).content.decode()
+        self.assertIn('aria-label="Règles du mot de passe"', html)
+        items = self.info_items(html)
+        self.assertIn("Au moins 12 caractères", items)
+        self.assertIn("Un symbole", items)
+        self.assertEqual(len(items), len(set(items)))
+        self.assertFalse([i for i in items if i.startswith("Not ")])
+
+    def test_an_unconfigured_validator_has_no_rule_and_no_note(self):
+        validators = [
+            {
+                "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 20},
+            }
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            html = self.client.get(self.path).content.decode()
+        self.assertEqual(self.info_items(html), ["At least 20 characters"])
+        self.assertNotIn("ms-pw-note", html)
+
+    def test_no_block_element_sits_inside_a_paragraph(self):
+        html = self.client.get(self.path).content.decode()
+        parser = _ParagraphNesting()
+        parser.feed(html)
+        self.assertEqual(parser.offenders, [])
+
+    def page_tree(self):
+        return lxml.html.fromstring(self.client.get(self.path).content)
+
+    def test_the_lists_sit_in_the_meter_and_the_field_wrapper(self):
+        tree = self.page_tree()
+        fields = tree.xpath('//*[contains(concat(" ", @class, " "), " ms-pw-field ")]')
+        self.assertEqual({field.tag for field in fields}, {"div"})
+        self.assertTrue(
+            fields[0].xpath(
+                './/details[contains(@class, "ms-pw-info")]'
+                '//ul[contains(@class, "ms-pw-info__list")]'
+            )
+        )
+        (meter,) = tree.xpath("//*[@data-ms-pw-meter]")
+        self.assertIn("hidden", meter.attrib)
+        self.assertTrue(meter.xpath('.//ul[contains(@class, "ms-pw-rules")]'))
+        self.assertEqual(tree.xpath("//p//ul | //p//details | //p//div"), [])
+
+    def test_the_match_line_names_the_first_field_by_its_id(self):
+        tree = self.page_tree()
+        (first,) = tree.xpath('//input[@name="new_password1"]')
+        (line,) = tree.xpath("//*[@data-ms-pw-match]")
+        self.assertEqual(line.get("data-with"), first.get("id"))
+
+    def test_the_first_field_is_described_by_the_rules_and_the_meter_word(self):
+        tree = self.page_tree()
+        (first,) = tree.xpath('//input[@name="new_password1"]')
+        ids = first.get("aria-describedby").split()
+        self.assertEqual(ids, [f"{first.get('id')}-rules", f"{first.get('id')}-word"])
+        (rules,) = tree.xpath('//ul[contains(@class, "ms-pw-rules")]')
+        (word,) = tree.xpath("//*[@data-ms-pw-word]")
+        self.assertEqual([rules.get("id"), word.get("id")], ids)
+
+    def test_without_a_meter_the_first_field_is_described_by_the_rule_list(self):
+        validators = [
+            {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"}
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            tree = lxml.html.fromstring(self.client.get(self.path).content)
+        (first,) = tree.xpath('//input[@name="new_password1"]')
+        (info,) = tree.xpath('//ul[contains(@class, "ms-pw-info__list")]')
+        self.assertEqual(first.get("aria-describedby"), info.get("id"))
+
+    def test_without_a_checkable_rule_there_is_no_meter(self):
+        validators = [
+            {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+            {
+                "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+            },
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            html = self.client.get(self.path).content.decode()
+        self.assertNotIn("data-ms-pw-meter", html)
+        self.assertIn("ms-pw-info__list", html)
+
+    def test_a_subclass_of_the_lower_case_validator_is_detected(self):
+        from manuspectrum.accounts.password_rules import password_rules
+
+        validators = [{"NAME": "tests.test_accounts_activation.LowerSubclass"}]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            self.assertTrue(password_rules()["lower"])
+
+    def test_the_numeric_rule_is_listed_only_without_a_case_rule(self):
+        numeric = {
+            "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"
+        }
+        with override_settings(AUTH_PASSWORD_VALIDATORS=[numeric]):
+            html = self.client.get(self.path).content.decode()
+        self.assertEqual(self.info_items(html), ["Not only digits"])
+
+    def test_the_static_note_follows_the_common_and_similarity_validators(self):
+        html = self.client.get(self.path).content.decode()
+        self.assertEqual(html.count("ms-pw-note"), 1)
 
     def test_a_bad_token_is_refused_without_a_form(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
@@ -299,3 +476,19 @@ class MiddlewareTests(Base):
         response = Client().get("/en/account/terms")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response["Location"].startswith("/en/auth/"))
+
+
+class PasswordRulesConfigTests(TestCase):
+    def test_an_unknown_validator_is_skipped(self):
+        from manuspectrum.accounts.password_rules import password_rules
+
+        validators = [
+            {"NAME": "no.such.module.Validator"},
+            {
+                "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+                "OPTIONS": {"min_length": 14},
+            },
+        ]
+        with override_settings(AUTH_PASSWORD_VALIDATORS=validators):
+            rules = password_rules()
+        self.assertEqual(rules["min_length"], 14)

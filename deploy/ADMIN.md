@@ -28,6 +28,7 @@ because an administrator created it. People ask for one through the contact page
    or similar passwords are refused), then sets up two-factor authentication with an
    authenticator application at `/<lang>/account/two-factor`.
 4. An invitation never activated shows in the monthly report (below) after three months.
+5. Advise editors not to switch on the spell checker (SCAYT) of the rich-text editor: it sends the typed text to a third party (WebSpellChecker); the browser's own spell checker does not.
 
 ### Two-factor authentication
 
@@ -89,7 +90,66 @@ entries. Changing them:
    the acceptance page at the next sign-in. A typo fix: update `TERMS_DIGEST` only, nobody is
    asked again.
 
-The admin lists each acceptance (user, version, date) under "Terms acceptances".
+The admin lists each acceptance (user, version, date) under "Terms acceptances". No mail is
+sent when the terms change: acceptance at the next sign-in is the record, and someone who does
+not sign in again does not use the service under the new terms.
+
+### Privacy policy
+
+The privacy policy (`manuspectrum/templates/views/pages/privacy.htm`) is information, not
+something users accept: the processing rests on the public-interest mission, not on consent.
+Changing it:
+
+- Wording, a clarification, a corrected address: edit the page and its French entries, nothing
+  else.
+- A change of substance (a new purpose, a new recipient, a new third-party service, a transfer
+  outside the European Union, a longer retention): the people concerned are told actively
+  (GDPR art. 12-14, transparency). The application sends nothing itself: the administrator
+  writes one mail from the shared project mailbox, with every active account in blind copy.
+  Note the date and the change in the register below.
+
+To get the addresses (superusers only, nothing to install):
+
+1. Sign in, open the Django administration, then **Users**.
+2. Tick the box at the top of the list to select the users of the page, then click
+   **Select all N users** to take every page.
+3. In the **Action** menu choose **Copy the e-mail addresses**, then click **Go**.
+4. The page shows how many addresses it holds and, below, how many selected users were left
+   out (inactive, no e-mail address, anonymised). Click **Copy**.
+5. In the shared project mailbox, write a new message and paste the addresses in the **Bcc**
+   field, never in To or Cc (the recipients must not see one another). Put the project
+   address in To.
+6. Paste the message below, adapt it, send it.
+
+Message to adapt:
+
+```text
+Subject: ManuSpectrum: our privacy policy changes
+
+Hello,
+
+On <date>, the privacy policy of ManuSpectrum changes: <what changes, in one or two
+sentences>. This takes effect from <date>.
+
+The full text is at https://<site>/en/about/privacy. For any question, write to
+<contact address>.
+
+The ManuSpectrum team
+
+---
+
+Objet : ManuSpectrum : notre politique de confidentialité change
+
+Bonjour,
+
+Le <date>, la politique de confidentialité de ManuSpectrum change : <ce qui change, en une
+ou deux phrases>. Elle s'applique à partir du <date>.
+
+Le texte complet est sur https://<site>/fr/about/privacy. Pour toute question, écrivez à
+<adresse de contact>.
+
+L'équipe ManuSpectrum
+```
 
 ### Inactive accounts
 
