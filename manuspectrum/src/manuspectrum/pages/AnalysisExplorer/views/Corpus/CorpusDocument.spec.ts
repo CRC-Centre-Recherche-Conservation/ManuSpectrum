@@ -1242,6 +1242,17 @@ describe("CorpusDocument", () => {
         );
     });
 
+    it("says a term count of this document holds the narrower terms", async () => {
+        stubFetch();
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        const rail = wrapper.findComponent({ name: "FacetRail" });
+        expect(rail.props("countHint")).toBe("%{n} in this document");
+        expect(rail.props("termCountHint")).toBe(
+            "%{n} in this document, with this term or a narrower one",
+        );
+    });
+
     it("searches a facet of this document through the server under the filters it shows", async () => {
         const fetchMock = stubFetch({
             annotations: [annotation(1)],
@@ -1632,6 +1643,7 @@ describe("CorpusDocument", () => {
                             }),
                         ],
                         total: 1,
+                        found: null,
                     },
                 ],
             });

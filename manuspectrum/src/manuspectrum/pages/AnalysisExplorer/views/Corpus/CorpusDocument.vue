@@ -1151,6 +1151,11 @@ function goHome(): void {
                         :facets="currentMatch?.facets ?? []"
                         :selected="selectedFacets(store.filters)"
                         :count-hint="$gettext('%{n} in this document')"
+                        :term-count-hint="
+                            $gettext(
+                                '%{n} in this document, with this term or a narrower one',
+                            )
+                        "
                         :facet-query="facetQuery"
                         :document-group="false"
                         @change="onFacetChange"
@@ -1460,9 +1465,9 @@ function goHome(): void {
 
 .corpus-document .document-skeleton .columns {
     display: grid;
-    grid-template-columns: var(--explorer-rail) minmax(0, 1fr) var(
-            --explorer-side
-        );
+    grid-template-columns:
+        var(--explorer-rail-track-staged, var(--explorer-rail))
+        minmax(0, 1fr) var(--explorer-side);
     gap: 1rem;
 }
 
@@ -1477,9 +1482,9 @@ function goHome(): void {
 
 .corpus-document .workspace {
     display: grid;
-    grid-template-columns: var(--explorer-rail) minmax(0, 1fr) var(
-            --explorer-side
-        );
+    grid-template-columns:
+        var(--explorer-rail-track-staged, var(--explorer-rail))
+        minmax(0, 1fr) var(--explorer-side);
     grid-template-areas: "rail stage side";
     gap: 1rem;
     align-items: start;

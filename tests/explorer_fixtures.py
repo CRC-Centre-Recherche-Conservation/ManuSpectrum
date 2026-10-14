@@ -27,6 +27,7 @@ from arches.app.models.models import (
     TileModel,
 )
 from arches.app.utils.permission_backend import assign_perm
+from arches_controlled_lists.models import List, ListItem, ListItemValue
 from manuspectrum.views.explorer import memo as explorer_memo
 
 LIFECYCLE = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
@@ -420,6 +421,47 @@ class ExplorerCase(TestCase):
                 }
             )
         return [{"uri": uri, "list_id": list_id or str(uuid.uuid4()), "labels": labels}]
+
+    @staticmethod
+    def _item_id(uri, repeated):
+        item = uuid.uuid5(uuid.NAMESPACE_URL, uri)
+        if repeated or ListItem.objects.filter(pk=item).exists():
+            return uuid.uuid4()
+        return item
+
+    @classmethod
+    def term_list(cls, slug, alias, tree):
+        """A controlled list for the node *alias* of *slug*, set as its ``controlledList``.
+
+        *tree* is ``[(uri, parent uri or None, labels)]``, ``labels`` being
+        ``{"en": .., "fr": ..}`` plus an optional ``"alt"`` (English altLabel).
+        A uri listed again is another occurrence, under another parent. The
+        first occurrence of a uri takes the id ``reference_value`` stores in
+        its labels, unless another list already holds that id; the others a
+        random one.
+        """
+        vocab = List.objects.create(name=f"{slug}.{alias}")
+        first = {}
+        for order, (uri, parent, labels) in enumerate(tree):
+            item = ListItem.objects.create(
+                id=cls._item_id(uri, uri in first),
+                list=vocab,
+                uri=uri,
+                sortorder=order,
+                parent=first[parent] if parent else None,
+            )
+            first.setdefault(uri, item)
+            for key, text in labels.items():
+                ListItemValue.objects.create(
+                    list_item=item,
+                    valuetype_id="altLabel" if key == "alt" else "prefLabel",
+                    language_id="en" if key == "alt" else key,
+                    value=text,
+                )
+        Node.objects.filter(pk=cls.nodes[(slug, alias)].pk).update(
+            config={"controlledList": str(vocab.pk)}
+        )
+        return vocab
 
     @staticmethod
     def annotation_value(canvas, geometry):

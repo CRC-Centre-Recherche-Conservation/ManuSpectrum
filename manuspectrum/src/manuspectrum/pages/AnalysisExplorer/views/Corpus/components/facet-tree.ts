@@ -2,171 +2,290 @@ import type { InjectionKey } from "vue";
 
 import { foldText } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
-import type { FacetValue } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    FacetKey,
+    FacetValue,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 export interface TreeNode {
     value: FacetValue;
     children: TreeNode[];
+    /** The ids from the root to this occurrence, joined by `KEY_SEPARATOR`. */
+    key: string;
 }
 
 export type NodeState = "checked" | "implicit" | "mixed" | "none";
 
 export interface FlatEntry {
-    node: TreeNode;
-    /** The ancestors' labels, nearest first, joined by « — »; empty for a root. */
-    path: string;
+    value: FacetValue;
+    /**
+     * One per distinct chain above the value: the ancestors' labels from the
+     * root down to its parent, joined by « — »; `""` for a root.
+     */
+    paths: string[];
 }
 
 /** Facets with more values than this offer a search box. */
 export const SEARCH_THRESHOLD = 8;
 const PATH_SEPARATOR = " — ";
+/** U+001F (unit separator): a control character no uri or id holds. */
+export const KEY_SEPARATOR = "\u001f";
 
-function byLabel(a: TreeNode, b: TreeNode): number {
-    const left = foldText(a.value.label.value);
-    const right = foldText(b.value.label.value);
+/** The parents present and the children of each value of one `values` list. */
+export interface TreeIndex {
+    parents: Map<string, FacetValue[]>;
+    children: Map<string, FacetValue[]>;
+}
+
+function labelOf(value: FacetValue): string {
+    return foldText(value.label.value);
+}
+
+function byValueLabel(a: FacetValue, b: FacetValue): number {
+    const left = labelOf(a);
+    const right = labelOf(b);
     return left < right ? -1 : left > right ? 1 : 0;
 }
 
-/**
- * The forest of `values` by their `parent`: a value with no parent, or whose
- * parent is not among `values`, is a root; siblings are ordered by folded
- * label. A value caught in a cycle of parents is unreachable and dropped.
- */
-export function buildTree(values: readonly FacetValue[]): TreeNode[] {
-    const nodes = new Map<string, TreeNode>(
-        values.map((value) => [value.id, { value, children: [] }]),
+/** The parents of every value that are themselves among `values`. */
+function presentParents(
+    values: readonly FacetValue[],
+): Map<string, FacetValue[]> {
+    const byId = new Map(values.map((value) => [value.id, value]));
+    return new Map(
+        values.map((value) => [
+            value.id,
+            [...new Set(value.parents)]
+                .filter((id) => id !== value.id)
+                .flatMap((id) => byId.get(id) ?? []),
+        ]),
     );
-    const roots: TreeNode[] = [];
-    for (const node of nodes.values()) {
-        const parent = node.value.parent
-            ? nodes.get(node.value.parent)
-            : undefined;
-        if (parent && parent !== node) {
-            parent.children.push(node);
-        } else if (!parent || parent === node) {
-            roots.push(node);
+}
+
+/** The parent and child index of `values`, to build once per list and pass to the helpers below. */
+export function treeIndex(values: readonly FacetValue[]): TreeIndex {
+    const parents = presentParents(values);
+    return { parents, children: childrenIndex(values, parents) };
+}
+
+function childrenIndex(
+    values: readonly FacetValue[],
+    parents: Map<string, FacetValue[]>,
+): Map<string, FacetValue[]> {
+    const children = new Map<string, FacetValue[]>(
+        values.map((value) => [value.id, []]),
+    );
+    for (const value of values) {
+        for (const parent of parents.get(value.id) ?? []) {
+            children.get(parent.id)?.push(value);
         }
     }
-    for (const node of nodes.values()) node.children.sort(byLabel);
-    return roots.sort(byLabel);
+    for (const list of children.values()) list.sort(byValueLabel);
+    return children;
 }
 
-/** The nodes of `tree` by id, each with its parent node. */
-function indexOf(
-    tree: readonly TreeNode[],
-): Map<string, { node: TreeNode; parent: TreeNode | null }> {
-    const index = new Map<
-        string,
-        { node: TreeNode; parent: TreeNode | null }
-    >();
-    function visit(nodes: readonly TreeNode[], parent: TreeNode | null): void {
-        for (const node of nodes) {
-            index.set(node.value.id, { node, parent });
-            visit(node.children, node);
+/**
+ * The forest of `values` by their `parents`: a value is drawn under each
+ * parent present among `values`, and is a root when none is. Siblings are
+ * ordered by folded label. A path never repeats an id; a value reachable only
+ * through a cycle becomes a root (the first by label, then the rest).
+ */
+export function buildTree(
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
+): TreeNode[] {
+    const { parents, children } = index;
+    const reached = new Set<string>();
+
+    function grow(
+        value: FacetValue,
+        above: readonly string[],
+        prefix: string,
+    ): TreeNode {
+        reached.add(value.id);
+        const chain = [...above, value.id];
+        const key = prefix ? `${prefix}${KEY_SEPARATOR}${value.id}` : value.id;
+        return {
+            value,
+            key,
+            children: (children.get(value.id) ?? [])
+                .filter((child) => !chain.includes(child.id))
+                .map((child) => grow(child, chain, key)),
+        };
+    }
+
+    const roots: TreeNode[] = values
+        .filter((value) => !(parents.get(value.id) ?? []).length)
+        .sort(byValueLabel)
+        .map((value) => grow(value, [], ""));
+    for (const value of [...values].sort(byValueLabel)) {
+        if (!reached.has(value.id)) roots.push(grow(value, [], ""));
+    }
+    return roots.sort((a, b) => byValueLabel(a.value, b.value));
+}
+
+function closure(
+    id: string,
+    next: (id: string) => readonly FacetValue[],
+): Set<string> {
+    const seen = new Set<string>();
+    const stack = [id];
+    while (stack.length) {
+        for (const value of next(stack.pop() as string)) {
+            if (value.id !== id && !seen.has(value.id)) {
+                seen.add(value.id);
+                stack.push(value.id);
+            }
         }
     }
-    visit(tree, null);
-    return index;
+    return seen;
 }
 
-/** The ids above `id`, nearest first; none for a root or an unknown id. */
-export function ancestorsOf(id: string, tree: readonly TreeNode[]): string[] {
-    const index = indexOf(tree);
-    const found: string[] = [];
-    let parent = index.get(id)?.parent ?? null;
-    while (parent) {
-        found.push(parent.value.id);
-        parent = index.get(parent.value.id)?.parent ?? null;
-    }
-    return found;
+/** Every value above `id` over all its paths, never `id` itself. */
+export function ancestorIds(
+    id: string,
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
+): Set<string> {
+    return closure(id, (current) => index.parents.get(current) ?? []);
 }
 
-function descendantIds(node: TreeNode): string[] {
-    return node.children.flatMap((child) => [
-        child.value.id,
-        ...descendantIds(child),
-    ]);
+/** Every value below `id` over all its paths, never `id` itself. */
+export function descendantIds(
+    id: string,
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
+): Set<string> {
+    return closure(id, (current) => index.children.get(current) ?? []);
 }
 
-/** Ticked, under a ticked ancestor (implicit), above a ticked descendant (mixed), or none of these. */
-export function nodeState(
-    node: TreeNode,
+/** The ticked ancestors of `id`, by folded label. */
+export function coveringIds(
+    id: string,
     selected: readonly string[],
-    tree: readonly TreeNode[],
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
+): string[] {
+    const above = ancestorIds(id, values, index);
+    return values
+        .filter((value) => above.has(value.id) && selected.includes(value.id))
+        .sort(byValueLabel)
+        .map((value) => value.id);
+}
+
+/**
+ * Ticked, covered by a ticked ancestor on any path (implicit), above a ticked
+ * descendant on any path (mixed), or none of these. Every occurrence of a
+ * value has the same state; ticked wins over covered.
+ */
+export function nodeState(
+    id: string,
+    selected: readonly string[],
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): NodeState {
-    if (selected.includes(node.value.id)) return "checked";
-    if (ancestorsOf(node.value.id, tree).some((id) => selected.includes(id))) {
-        return "implicit";
+    if (selected.includes(id)) return "checked";
+    for (const above of ancestorIds(id, values, index)) {
+        if (selected.includes(above)) return "implicit";
     }
-    if (descendantIds(node).some((id) => selected.includes(id))) return "mixed";
+    for (const below of descendantIds(id, values, index)) {
+        if (selected.includes(below)) return "mixed";
+    }
     return "none";
 }
 
 /**
- * The ticked ids after a click on `node`. Ticking drops the ticked
- * descendants (the node already covers them); unticking a ticked node removes
- * it; unticking an implicit node removes its nearest ticked ancestor and ticks,
- * along the path down to the node, every sibling it did not cover through
- * the node.
+ * The ticked ids after a click on `id`. Ticking drops the ticked descendants
+ * over every path (the value already covers them); unticking a ticked value
+ * removes it; a covered value cannot be clicked: the selection comes back
+ * unchanged.
  */
 export function toggle(
-    node: TreeNode,
+    id: string,
     selected: readonly string[],
-    tree: readonly TreeNode[],
+    values: readonly FacetValue[],
+    index: TreeIndex = treeIndex(values),
 ): string[] {
-    const state = nodeState(node, selected, tree);
-    if (state === "checked") {
-        return selected.filter((id) => id !== node.value.id);
-    }
-    if (state === "implicit") {
-        const index = indexOf(tree);
-        const path: TreeNode[] = [node];
-        let parent = index.get(node.value.id)?.parent ?? null;
-        while (parent && !selected.includes(parent.value.id)) {
-            path.unshift(parent);
-            parent = index.get(parent.value.id)?.parent ?? null;
-        }
-        if (!parent) return [...selected];
-        const added: string[] = [];
-        let above: TreeNode = parent;
-        for (const step of path) {
-            for (const child of above.children) {
-                if (child !== step) added.push(child.value.id);
-            }
-            above = step;
-        }
-        return [...selected.filter((id) => id !== parent.value.id), ...added];
-    }
-    const covered = new Set(descendantIds(node));
-    return [...selected.filter((id) => !covered.has(id)), node.value.id];
+    const state = nodeState(id, selected, values, index);
+    if (state === "checked") return selected.filter((item) => item !== id);
+    if (state === "implicit") return [...selected];
+    const covered = descendantIds(id, values, index);
+    return [...selected.filter((item) => !covered.has(item)), id];
 }
 
-/** Every node of `tree` whose folded label holds the folded `query`, by label, each with its path. */
-export function flatten(tree: readonly TreeNode[], query: string): FlatEntry[] {
-    const index = indexOf(tree);
+/** The chains above each value: labels from the root to its parent. */
+function pathsOf(
+    values: readonly FacetValue[],
+    index: TreeIndex,
+): Map<string, Set<string>> {
+    const paths = new Map<string, Set<string>>();
+    function visit(nodes: readonly TreeNode[], labels: readonly string[]) {
+        for (const node of nodes) {
+            const found = paths.get(node.value.id) ?? new Set<string>();
+            found.add(labels.join(PATH_SEPARATOR));
+            paths.set(node.value.id, found);
+            visit(node.children, [...labels, node.value.label.value]);
+        }
+    }
+    visit(buildTree(values, index), []);
+    return paths;
+}
+
+/**
+ * The values to list as search results, by label, each with its paths. With
+ * `found` (the ids the server matched; null for none), those present in
+ * `values`; without, the values whose folded label holds the folded `query`.
+ */
+export function flatten(
+    values: readonly FacetValue[],
+    query: string,
+    found: readonly string[] | null = null,
+    index: TreeIndex = treeIndex(values),
+): FlatEntry[] {
     const needle = foldText(query.trim());
-    return [...index.values()]
-        .map(({ node }) => node)
-        .filter(
-            (node) =>
-                !needle || foldText(node.value.label.value).includes(needle),
+    const wanted = found ? new Set(found) : null;
+    const paths = pathsOf(values, index);
+    return values
+        .filter((value) =>
+            wanted
+                ? wanted.has(value.id)
+                : !needle || labelOf(value).includes(needle),
         )
-        .sort(byLabel)
-        .map((node) => ({
-            node,
-            path: ancestorsOf(node.value.id, tree)
-                .map((id) => index.get(id)?.node.value.label.value ?? id)
-                .join(PATH_SEPARATOR),
+        .sort(byValueLabel)
+        .map((value) => ({
+            value,
+            paths: [...(paths.get(value.id) ?? [""])],
         }));
 }
 
-/** What `FacetTree` gives the rows it draws (`FacetTreeNode`). */
+/**
+ * A DOM-safe token for a node `key` (ids joined by `KEY_SEPARATOR`):
+ * FNV-1a over its UTF-16 units, in base 36. Two occurrences of one value get
+ * two tokens, since their keys differ.
+ */
+export function domToken(key: string): string {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < key.length; index++) {
+        hash ^= key.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(36);
+}
+
+/**
+ * What `FacetTree` gives the rows it draws (`FacetTreeNode`). Folding and DOM
+ * ids go by occurrence (`TreeNode.key`), the state and the ticks by value id.
+ */
 export interface FacetTreeContext {
+    facetKey: FacetKey;
     isOpen: (node: TreeNode) => boolean;
     toggleOpen: (node: TreeNode) => void;
-    stateOf: (node: TreeNode) => NodeState;
-    change: (node: TreeNode) => void;
-    listId: (node: TreeNode) => string;
+    stateOf: (id: string) => NodeState;
+    /** « covered by X and Y » for a covered value, else "". */
+    coveredText: (id: string) => string;
+    change: (id: string) => void;
+    /** The DOM id prefix of one occurrence. */
+    nodeId: (node: TreeNode) => string;
     countTitle: (value: FacetValue) => string | undefined;
     expanderLabel: (node: TreeNode) => string;
 }

@@ -19,6 +19,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 
 import type { Pinia } from "pinia";
 import type {
+    Label,
     MapColour,
     MapEvent,
     MapMaterial,
@@ -47,6 +48,7 @@ function material(index: number, colours: string[]): MapMaterial {
         label: label(NAMES[index]),
         colours,
         swatch: null,
+        ancestors: [],
     };
 }
 
@@ -91,9 +93,10 @@ function events(): MapEvent[] {
 function mountControl(
     shown: MapEvent[] = events(),
     known: Record<string, MapMaterial> = materials,
+    coveringMaterials: Record<string, Label> = {},
 ) {
     return mount(MaterialsControl, {
-        props: { events: shown, materials: known, colours },
+        props: { events: shown, materials: known, colours, coveringMaterials },
         global: {
             plugins: [pinia, PrimeVue],
             provide: { [ANNOUNCE_KEY as symbol]: announce },
@@ -326,6 +329,176 @@ describe("MaterialsControl", () => {
         });
     });
 
+    describe("under a ticked broader material", () => {
+        const PIGMENT = "http://material.test/blue-pigment";
+        const covering = { [PIGMENT]: label("Blue pigment") };
+        const known = {
+            ...materials,
+            [URIS[0]]: { ...material(0, [BLUE, RED]), ancestors: [PIGMENT] },
+            [URIS[1]]: { ...material(1, [BLUE]), ancestors: [PIGMENT] },
+        };
+        /** Lapis lazuli is itself the broader term of Azurite. */
+        const nested = {
+            ...materials,
+            [URIS[1]]: { ...material(1, [BLUE]), ancestors: [URIS[0]] },
+        };
+
+        function heads(wrapper: ReturnType<typeof mountControl>) {
+            return wrapper.findAll(".covering-head");
+        }
+
+        it("a row under a ticked parent is covered and names the parent", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [PIGMENT]);
+            const wrapper = mountControl(events(), known, covering);
+            const box = rowOf(wrapper, "Azurite").get("input[type=checkbox]");
+            expect((box.element as HTMLInputElement).checked).toBe(true);
+            expect(box.attributes("aria-disabled")).toBe("true");
+            expect(box.attributes("disabled")).toBeUndefined();
+            const said = wrapper.get(
+                `[id="${box.attributes("aria-describedby")}"]`,
+            );
+            expect(said.text()).toBe("covered by Blue pigment");
+            expect(rowOf(wrapper, "Azurite").classes()).toContain("covered");
+            await box.trigger("click");
+            expect((box.element as HTMLInputElement).checked).toBe(true);
+            await box.trigger("change");
+            expect(store.filters.material).toEqual([PIGMENT]);
+            const free = rowOf(wrapper, "Vermilion").get(
+                "input[type=checkbox]",
+            );
+            expect(free.attributes("aria-disabled")).toBeUndefined();
+            expect((free.element as HTMLInputElement).checked).toBe(false);
+        });
+
+        it("Follow on a covered row follows the exact uri", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [PIGMENT]);
+            const wrapper = mountControl(events(), known, covering);
+            const follow = rowOf(wrapper, "Azurite").get("button.follow");
+            expect(follow.attributes("disabled")).toBeUndefined();
+            await follow.trigger("click");
+            expect(store.mapState.track).toEqual([URIS[1]]);
+            expect(store.filters.material).toEqual([PIGMENT]);
+        });
+
+        it("a covering head counts the rows it covers and unticks the parent", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [PIGMENT, URIS[2]]);
+            const wrapper = mountControl(events(), known, covering);
+            const [head] = heads(wrapper);
+            expect(heads(wrapper)).toHaveLength(1);
+            expect(head.get(".head-label").text()).toBe("Blue pigment");
+            expect(head.get(".head-covers").text()).toBe(
+                "covers 2 materials here",
+            );
+            const box = head.get("input[type=checkbox]");
+            expect(box.attributes("aria-label")).toBe("Filter: Blue pigment");
+            expect((box.element as HTMLInputElement).checked).toBe(true);
+            const list = wrapper.get(".covering").element;
+            const groups = wrapper.get(".groups").element;
+            expect(
+                list.compareDocumentPosition(groups) &
+                    Node.DOCUMENT_POSITION_FOLLOWING,
+            ).toBeTruthy();
+            await box.setValue(false);
+            expect(store.filters.material).toEqual([URIS[2]]);
+            expect(heads(wrapper)).toHaveLength(0);
+            const azurite = rowOf(wrapper, "Azurite").get(
+                "input[type=checkbox]",
+            );
+            expect(azurite.attributes("aria-disabled")).toBeUndefined();
+        });
+
+        it("a covering head has no Follow button", () => {
+            useExplorerStore().setFacet("material", [PIGMENT]);
+            const [head] = heads(mountControl(events(), known, covering));
+            expect(head.find("button").exists()).toBe(false);
+            expect(head.text()).not.toContain("Follow");
+        });
+
+        it("a covering material that is itself listed keeps its ticked row and its head says other materials", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [URIS[0]]);
+            const wrapper = mountControl(events(), nested, {
+                [URIS[0]]: label("Lapis lazuli"),
+            });
+            const [head] = heads(wrapper);
+            expect(head.get(".head-covers").text()).toBe(
+                "covers 1 other material here",
+            );
+            const own = rowOf(wrapper, "Lapis lazuli").get(
+                "input[type=checkbox]",
+            );
+            expect((own.element as HTMLInputElement).checked).toBe(true);
+            expect(own.attributes("aria-disabled")).toBeUndefined();
+            expect(
+                rowOf(wrapper, "Lapis lazuli").find(".covered-by").exists(),
+            ).toBe(false);
+            expect(rowOf(wrapper, "Azurite").get(".covered-by").text()).toBe(
+                "covered by Lapis lazuli",
+            );
+            await own.setValue(false);
+            expect(store.filters.material).toEqual([]);
+            expect(heads(wrapper)).toHaveLength(0);
+        });
+
+        it("the explainer and the Follow help say Follow never follows narrower terms", () => {
+            const wrapper = mountControl();
+            expect(wrapper.get(".explainer").text()).toContain(
+                "A ticked material also keeps its narrower terms; Follow follows that material only.",
+            );
+            const follow = rowOf(wrapper, "Azurite").get("button.follow");
+            expect(
+                wrapper
+                    .get(`[id="${follow.attributes("aria-describedby")}"]`)
+                    .text(),
+            ).toContain(
+                "Follow follows this material only, never its narrower terms.",
+            );
+        });
+
+        it("a search on a parent keeps the rows of its descendants", async () => {
+            fetchMock.mockResolvedValue(
+                jsonResponse({
+                    ...facet("material", 0),
+                    values: [facetValue(URIS[0], "Lapis lazuli")],
+                    total: 1,
+                    found: [URIS[0]],
+                }),
+            );
+            const wrapper = mountControl(events(), nested);
+            await wrapper.find("input[type=search]").setValue("lapis");
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll("li.row .label")
+                    .map((row) => row.text())
+                    .sort(),
+            ).toEqual(["Azurite", "Lapis lazuli"]);
+        });
+
+        it("a search on a narrower term leaves out its kept ancestors", async () => {
+            fetchMock.mockResolvedValue(
+                jsonResponse({
+                    ...facet("material", 0),
+                    values: [
+                        facetValue(URIS[0], "Lapis lazuli"),
+                        facetValue(URIS[1], "Azurite"),
+                    ],
+                    total: 2,
+                    found: [URIS[1]],
+                }),
+            );
+            const wrapper = mountControl(events(), nested);
+            await wrapper.find("input[type=search]").setValue("azur");
+            await flushPromises();
+            expect(
+                wrapper.findAll("li.row .label").map((row) => row.text()),
+            ).toEqual(["Azurite"]);
+        });
+    });
+
     it("lists a colourless material under a ticked colour its Component carries, « via its Component »", () => {
         const store = useExplorerStore();
         store.setFacet("colour", [BLUE]);
@@ -434,7 +607,7 @@ describe("MaterialsControl", () => {
             `[id="${follow.attributes("aria-describedby")}"]`,
         );
         expect(help.text()).toBe(
-            "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Show only shows or hides its events.",
+            "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Follow follows this material only, never its narrower terms. Show only shows or hides its events.",
         );
     });
 
@@ -506,6 +679,7 @@ describe("MaterialsControl", () => {
             label: label(`Blue ${n}`),
             colours: [BLUE],
             swatch: null,
+            ancestors: [],
         }));
         const shown = many.map((entry, n) =>
             mapEvent({
@@ -567,9 +741,7 @@ describe("MaterialsControl", () => {
             [...row.element.children].map((child) => child.classList[0]),
         ).toEqual(["value", "help-tip"]);
         expect(row.element.lastElementChild?.classList).toContain("follow-tip");
-        expect(row.get(".value .label").attributes("title")).toBe(
-            "Lapis lazuli",
-        );
+        expect(row.get(".value .label").attributes("title")).toBeUndefined();
     });
 
     it("isolates a followed chip's slot while it is hovered or focused", async () => {

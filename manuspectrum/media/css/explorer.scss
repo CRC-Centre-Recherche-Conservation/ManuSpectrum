@@ -18,7 +18,8 @@
 body.ms-page--app {
     // Application tokens, read by the Explorer components.
     --explorer-top: calc(#{$ms-header-stuck} + 0.5rem);
-    --explorer-rail: 15.5rem;
+    --explorer-rail: 18rem;
+    --explorer-rail-wide: 26rem;
     --explorer-side: 21rem;
     --explorer-radius: 0.625rem;
     --explorer-target: 2rem;
@@ -28,6 +29,34 @@ body.ms-page--app {
     @media (pointer: coarse) {
         --explorer-target: 2.75rem;
     }
+
+    @media (min-width: 100rem) {
+        --explorer-rail: 20rem;
+    }
+}
+
+// The filter column track of the Corpus results (`--explorer-rail-track`) and
+// of the views with a side column (`--explorer-rail-track-staged`): the
+// default width, or the wide one (« Widen the filters », `useRailWidth`)
+// shrunk to what leaves the content its minimum, never below the default.
+// `100%` resolves against the grid that uses the track.
+body.ms-page--app .analysis-explorer {
+    --explorer-rail-chosen: var(--explorer-rail);
+    --explorer-rail-track: max(
+        var(--explorer-rail),
+        min(var(--explorer-rail-chosen), 100% - 1.5rem - 36rem)
+    );
+    --explorer-rail-track-staged: max(
+        var(--explorer-rail),
+        min(
+            var(--explorer-rail-chosen),
+            100% - var(--explorer-side) - 2rem - 32rem
+        )
+    );
+}
+
+body.ms-page--app .analysis-explorer.is-rail-wide {
+    --explorer-rail-chosen: var(--explorer-rail-wide);
 }
 
 // The paper grain sits over the page at z-index 10000; over an application it
@@ -448,7 +477,7 @@ body.ms-page--app .ms-skeleton {
 }
 
 .p-drawer-mask.p-drawer-left .p-drawer.explorer-rail-drawer {
-    inline-size: min(22rem, calc(100% - 3rem));
+    inline-size: min(26rem, calc(100% - 3rem));
 }
 
 // RailPanel .rail-title voice

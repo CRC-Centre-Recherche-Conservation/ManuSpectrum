@@ -4,6 +4,8 @@ Usage:
     python manage.py test tests.test_explorer_events --settings="tests.test_settings"
 """
 
+from django.http import QueryDict
+
 from tests.explorer_events_fixtures import (
     LEAD_WHITE,
     LOW,
@@ -18,6 +20,8 @@ from tests.explorer_fixtures import ACTIVE, DRAFT
 from tests.test_explorer_service import AZURITE, GREEN, PART_BLUE, RED
 
 OCHRE = "http://vocab/ochre"
+PIGMENT = "http://vocab/pigment"
+RED_PIGMENT = "http://vocab/red-pigment"
 
 
 class EventsTests(EventsCase):
@@ -477,3 +481,88 @@ class OwnPlaceNameTests(EventsCase):
         place = self.place(self.far)
         self.assertEqual(place["name"]["value"], "Ms Far")
         self.assertEqual(place["parent"], str(self.places["paris"].pk))
+
+
+class TermHierarchyEventsTests(EventsCase):
+    """Materials: pigment above vermilion and lead white, red pigment above vermilion, vermilion above smalt."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.term_list(
+            "characterization",
+            "identified_material",
+            [
+                (PIGMENT, None, {"en": "Pigment"}),
+                (RED_PIGMENT, None, {"en": "Red pigment"}),
+                (VERMILION, PIGMENT, {"en": "Vermilion"}),
+                (VERMILION, RED_PIGMENT, {"en": "Vermilion"}),
+                (LEAD_WHITE, PIGMENT, {"en": "Lead white"}),
+                (SMALT, VERMILION, {"en": "Smalt"}),
+            ],
+        )
+
+    def kept(self, query):
+        from manuspectrum.views.explorer.events import kept_events
+
+        events, *_ = kept_events(self.bundle(), QueryDict(query))
+        return events
+
+    def payload(self, query):
+        from manuspectrum.views.explorer.events import events_payload
+
+        return events_payload(QueryDict(query), self.anonymous, "en")
+
+    def test_a_ticked_parent_keeps_the_events_of_its_descendants_and_marks_them_matching(
+        self,
+    ):
+        exact = {
+            e["id"]
+            for uri in (VERMILION, LEAD_WHITE, SMALT)
+            for e in self.kept(f"material={uri}")
+        }
+        events = self.kept(f"material={PIGMENT}")
+
+        self.assertTrue(exact)
+        self.assertNotEqual(len(events), len(self.kept("")))
+        self.assertEqual({e["id"] for e in events}, exact)
+        for event in events:
+            for material in event["materials"]:
+                self.assertEqual(
+                    material["matches"],
+                    material["id"] in (VERMILION, LEAD_WHITE, SMALT),
+                    material["id"],
+                )
+
+    def test_a_material_names_its_ancestors(self):
+        materials = self.bundle().event_materials
+
+        self.assertEqual(materials[VERMILION]["ancestors"], [PIGMENT, RED_PIGMENT])
+        self.assertEqual(materials[LEAD_WHITE]["ancestors"], [PIGMENT])
+        self.assertEqual(
+            materials[SMALT]["ancestors"], [PIGMENT, RED_PIGMENT, VERMILION]
+        )
+        self.assertEqual(materials[AZURITE]["ancestors"], [])
+
+    def test_the_payload_names_the_ticked_covering_materials(self):
+        payload = self.payload(f"material={PIGMENT}&material={SMALT}")
+
+        self.assertEqual(
+            payload["coveringMaterials"],
+            {PIGMENT: {"value": "Pigment", "lang": "en"}},
+        )
+        self.assertEqual(self.payload("")["coveringMaterials"], {})
+        self.assertEqual(self.payload(f"material={AZURITE}")["coveringMaterials"], {})
+
+    def test_a_covering_material_that_is_itself_listed_is_named_and_stays_listed(self):
+        payload = self.payload(f"material={VERMILION}")
+
+        self.assertEqual(list(payload["coveringMaterials"]), [VERMILION])
+        self.assertIn(VERMILION, payload["materials"])
+        self.assertIn(SMALT, payload["materials"])
+
+    def test_follow_is_not_a_server_filter(self):
+        self.assertEqual(
+            self.payload(f"material={PIGMENT}&track={VERMILION}"),
+            self.payload(f"material={PIGMENT}"),
+        )

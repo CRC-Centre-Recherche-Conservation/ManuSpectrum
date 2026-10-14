@@ -22,6 +22,12 @@ class EventsRouteTests(EventsCase):
     def types(self, payload):
         return {e["type"] for e in payload["events"]}
 
+    def test_a_ticked_material_the_corpus_does_not_know_is_not_covering(self):
+        payload = self.get("?material=http://vocab/unknown").json()
+
+        assert_shape(self, payload, "EventsResponse")
+        self.assertEqual(payload["coveringMaterials"], {})
+
     def test_the_visitor_gets_the_events_with_the_contract_shapes(self):
         response = self.get()
         self.assertEqual(response.status_code, 200)

@@ -64,8 +64,14 @@ export interface FacetValue {
     mark: TechniqueMark | null;
     /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
     swatch: string | null;
-    /** Place values only: the id of the parent shown; null elsewhere and for a root. */
-    parent: string | null;
+    /**
+     * The ids of the parents shown: a place has zero or one, a term facet
+     * every parent listed in the facet, the others none. On the homes, the
+     * nearest carried ancestors.
+     */
+    parents: string[];
+    /** The value has a narrower term in the facet universe; never for a place. */
+    narrower: boolean;
     /** Place values only: the place is a Draft; false elsewhere. */
     unpublished: boolean;
 }
@@ -96,6 +102,8 @@ export interface Facet {
     group: FacetGroup;
     values: FacetValue[];
     total: number;
+    /** With a `find` query: the ids of the values the query matches; null otherwise. */
+    found: string[] | null;
 }
 
 export interface DocumentHit {
@@ -269,6 +277,8 @@ export interface MapMaterial {
     label: Label;
     colours: string[];
     swatch: string | null;
+    /** The uris of the broader terms of the material. */
+    ancestors: string[];
 }
 
 export interface MapColour {
@@ -283,6 +293,8 @@ export interface EventsResponse {
     unplaced: number;
     period: RangeFacet | null;
     materials: Record<string, MapMaterial>;
+    /** The ticked `material` filter values that are an ancestor of a listed material, by uri. */
+    coveringMaterials: Record<string, Label>;
     /** The colours of `materials` and every ticked `colour` filter value, by uri. */
     colours: Record<string, MapColour>;
     analysisNames: Record<string, Label>;
@@ -719,6 +731,7 @@ export const SHAPE_KEYS = {
         unplaced: true,
         period: true,
         materials: true,
+        coveringMaterials: true,
         colours: true,
         analysisNames: true,
         analysisTechniques: true,
@@ -765,6 +778,7 @@ export const SHAPE_KEYS = {
         label: true,
         colours: true,
         swatch: true,
+        ancestors: true,
     } satisfies Record<keyof MapMaterial, true>,
     MapColour: {
         uri: true,
@@ -833,6 +847,7 @@ export const SHAPE_KEYS = {
         group: true,
         values: true,
         total: true,
+        found: true,
     } satisfies Record<keyof Facet, true>,
     FacetValue: {
         id: true,
@@ -840,7 +855,8 @@ export const SHAPE_KEYS = {
         count: true,
         mark: true,
         swatch: true,
-        parent: true,
+        parents: true,
+        narrower: true,
         unpublished: true,
     } satisfies Record<keyof FacetValue, true>,
     RangeFacet: {

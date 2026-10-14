@@ -23,6 +23,7 @@ function colourFacet(): Facet {
             }),
         ],
         total: 3,
+        found: null,
     };
 }
 
@@ -95,6 +96,7 @@ describe("FacetValues", () => {
                 }),
             ],
             total: 2,
+            found: null,
         };
         const rows = mountValues({ facet: technique }).findAll(".value");
         expect(rows[0].find(".dot").classes()).toContain("dot--tech-3");
@@ -177,15 +179,14 @@ describe("FacetValues", () => {
         expect(busy.find(".values").classes()).toContain("busy");
     });
 
-    it("keeps the whole label for a label cut on screen", () => {
+    it("shows the whole label on screen, with no hover-only title", () => {
         const wrapper = mountValues({
             facet: {
                 ...facet("project", 0),
                 values: [facetValue("p1", "ATRAMENTA — Encres")],
             },
         });
-        expect(wrapper.find(".label").attributes("title")).toBe(
-            "ATRAMENTA — Encres",
-        );
+        expect(wrapper.find(".label").text()).toBe("ATRAMENTA — Encres");
+        expect(wrapper.find(".label").attributes("title")).toBeUndefined();
     });
 });

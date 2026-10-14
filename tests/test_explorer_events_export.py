@@ -6,11 +6,12 @@ Usage:
 
 import csv
 import json
+from types import SimpleNamespace
 
-from tests.explorer_events_fixtures import VERMILION, EventsCase
+from tests.explorer_events_fixtures import LEAD_WHITE, SMALT, VERMILION, EventsCase
 from tests.test_explorer_service import RED
 
-from manuspectrum.views.explorer.events_export import HEADER
+from manuspectrum.views.explorer.events_export import HEADER, _labelled
 
 
 def streamed(response):
@@ -166,3 +167,76 @@ class EventsExportColourTests(EventsCase):
         for material in materials:
             self.assertNotIn("matches", material)
             self.assertNotIn("componentColours", material)
+
+
+class EventsExportHierarchyTests(EventsCase):
+    csv = EventsExportTests.csv
+    PIGMENT = "http://vocab/pigment"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.term_list(
+            "characterization",
+            "identified_material",
+            [
+                (cls.PIGMENT, None, {"en": "Pigment", "fr": "Pigment (fr)"}),
+                (VERMILION, cls.PIGMENT, {"en": "Vermilion"}),
+                (LEAD_WHITE, cls.PIGMENT, {"en": "Lead white"}),
+            ],
+        )
+
+    def test_the_events_export_applies_the_parent_rule(self):
+        _, rows = self.csv(f"&material={self.PIGMENT}")
+
+        self.assertEqual({r["material"] for r in rows}, {VERMILION, LEAD_WHITE})
+        self.assertNotIn(SMALT, {r["material"] for r in rows})
+
+    def test_the_csv_header_says_a_filter_term_keeps_its_narrower_terms_in_both_languages(
+        self,
+    ):
+        for lang, sentence in (
+            ("en", "A filter term also keeps its narrower terms."),
+            ("fr", "Un terme de filtre retient aussi ses termes plus précis."),
+        ):
+            response = self.client.get(f"/api/explorer/events.csv?lang={lang}")
+            comments = [
+                l for l in streamed(response).decode().splitlines() if l.startswith("#")
+            ]
+
+            self.assertIn(f"# {sentence}", comments, lang)
+
+    def test_the_filters_line_names_each_value_by_label_and_uri(self):
+        comments, _ = self.csv(f"&material={self.PIGMENT}&material=http://vocab/zzz")
+        [line] = [c for c in comments if c.startswith("# Filters:")]
+
+        self.assertIn(f"Pigment <{self.PIGMENT}>", line)
+        self.assertIn("http://vocab/zzz", line)
+        self.assertNotIn("<http://vocab/zzz>", line)
+
+    def test_the_filters_line_uses_the_export_language(self):
+        response = self.client.get(
+            f"/api/explorer/events.csv?lang=fr&material={self.PIGMENT}"
+        )
+        [line] = [
+            l
+            for l in streamed(response).decode().splitlines()
+            if l.startswith("# Filtres")
+        ]
+
+        self.assertIn(f"Pigment (fr) <{self.PIGMENT}>", line)
+
+    def test_the_filters_line_labels_reference_values_only_and_reads_the_colour_alias(
+        self,
+    ):
+        bundle = SimpleNamespace(
+            labels={
+                "year": {"1450": {"value": "1450"}},
+                "colour": {RED: {"value": "Red"}},
+            }
+        )
+
+        self.assertEqual(
+            _labelled(bundle, f"colour={RED}&partColour={RED}&year=1450"),
+            f"colour=Red <{RED}>&partColour=Red <{RED}>&year=1450",
+        )

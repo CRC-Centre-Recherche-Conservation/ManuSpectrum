@@ -11,7 +11,7 @@ and never gzipped.
 import datetime
 import csv
 import hashlib
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode
 
 import orjson
 from django.conf import settings
@@ -28,7 +28,11 @@ from manuspectrum.views.explorer.citations import Home, citation_entry
 from manuspectrum.views.explorer.events import kept_events
 from manuspectrum.views.explorer.scopes import ScopeError, export_language
 from manuspectrum.views.explorer.series import _comment, _Line, neutralise
-from manuspectrum.views.explorer.service import cited_analysis, corpus_bundle
+from manuspectrum.views.explorer.service import (
+    REF_FACETS,
+    cited_analysis,
+    corpus_bundle,
+)
 
 HEADER = (
     "event",
@@ -59,6 +63,10 @@ HEADER = (
 ROWS_PER_CHUNK = 500
 # Event-material keys that describe the query, not the material.
 QUERY_FIELDS = ("matches", "componentColours")
+LABEL_ALIASES = {"partColour": "colour"}
+LABELLED_KEYS = frozenset(
+    (*REF_FACETS, "technique", "place", "part", "project", "operator", *LABEL_ALIASES)
+)
 
 
 def _query_text(query):
@@ -66,6 +74,26 @@ def _query_text(query):
         sorted((k, v) for k in query for v in query.getlist(k) if k != "lang"),
         safe=":,",
     )
+
+
+def _labelled(bundle, query_text):
+    """*query_text* with each value of a reference facet written as its label and its uri (« label <uri> »).
+
+    Reference facets are those of ``LABELLED_KEYS``; ``partColour`` reads the
+    ``colour`` labels. The uri stands alone when no label is known; the other
+    parameters are kept as they are.
+    """
+    parts = []
+    for key, value in parse_qsl(query_text):
+        if key not in LABELLED_KEYS:
+            parts.append(f"{key}={value}")
+            continue
+        names = bundle.labels.get(LABEL_ALIASES.get(key, key), {})
+        shown = [
+            f"{names[v]['value']} <{v}>" if v in names else v for v in value.split(",")
+        ]
+        parts.append(f"{key}={', '.join(shown)}")
+    return "&".join(parts)
 
 
 def _digest(text):
@@ -141,7 +169,9 @@ def csv_lines(language, bundle, events, query_text):
             _("%(site)s: events of the map and timeline")
             % {"site": settings.APP_TITLE},
             _("Generated on %(date)s") % {"date": datetime.date.today().isoformat()},
-            _("Filters: %(filters)s") % {"filters": query_text or _("none")},
+            _("Filters: %(filters)s")
+            % {"filters": _labelled(bundle, query_text) or _("none")},
+            _("A filter term also keeps its narrower terms."),
         ]
         citation = _citation(bundle, events, language, query_text)
         if citation:

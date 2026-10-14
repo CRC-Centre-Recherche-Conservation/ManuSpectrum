@@ -5,12 +5,15 @@ import { useGettext } from "vue3-gettext";
 import FacetTreeNode from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTreeNode.vue";
 
 import {
-    ancestorsOf,
+    ancestorIds,
     buildTree,
+    coveringIds,
+    domToken,
     FACET_TREE_KEY,
     flatten,
     nodeState,
     toggle,
+    treeIndex,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 import type {
@@ -23,16 +26,24 @@ import type {
     TreeNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
+const FLAT_KEY_PREFIX = "flat:";
+
 /**
- * A facet whose values form a tree through their `parent` (the places), as
- * nested lists of native checkboxes, each parent with a button to unfold it
- * (no `role="tree"`). Counts are the server's. Ticking a parent covers its
- * descendants, drawn ticked in a pale tone (implicit); the ancestors of a
- * ticked place are mixed. Everything is folded but the ancestors of the ticked
- * places, unless `expandedByDefault`. A typed `query` replaces the tree by the
- * matching places in a flat list, each with its path. `values` are the places
- * to draw, `selected` the ticked ids (what the filters hold), `countHint`
- * says what a count counts.
+ * A facet whose values form a tree through their `parents` (places, terms of
+ * a controlled list), as nested lists of native checkboxes, each parent with
+ * a button to unfold it (no `role="tree"`). A value with several parents is
+ * drawn under each; every occurrence shows the one state of the value
+ * (`nodeState`), and folding and DOM ids go by occurrence (`TreeNode.key`).
+ * Counts are the server's. Ticking a value covers its narrower terms: they
+ * read ticked in a pale tone, `aria-disabled`, with « covered by X » under
+ * the label, and a click on them changes nothing. The ancestors of a ticked
+ * value are mixed. Only the roots are shown, with the ancestors of the
+ * ticked values opened on every path, unless `expandedByDefault`; a fold or
+ * unfold by hand wins. A typed `query` replaces the tree by a flat list, one
+ * entry per value with each of its paths: the `found` ids when the server
+ * gave them (synonyms included), else the values whose label holds the
+ * query. `values` are the values to draw, `selected` the ticked ids (what
+ * the filters hold), `countHint` says what a count counts.
  */
 const props = withDefaults(
     defineProps<{
@@ -42,46 +53,103 @@ const props = withDefaults(
         countHint?: string;
         expandedByDefault?: boolean;
         query?: string;
+        found?: readonly string[] | null;
         busy?: boolean;
     }>(),
-    { countHint: "", expandedByDefault: false, query: "", busy: false },
+    {
+        countHint: "",
+        expandedByDefault: false,
+        query: "",
+        found: null,
+        busy: false,
+    },
 );
 const emit = defineEmits<{ change: [ids: string[]] }>();
 
-const { $gettext, interpolate } = useGettext();
+const gettext = useGettext();
+const { $gettext, interpolate } = gettext;
 const baseId = useId();
 
-/** What the reader folded or unfolded by hand, by id; it wins over the default. */
+/** What the reader folded or unfolded by hand, by occurrence key; it wins over the default. */
 const manual = ref<Record<string, boolean>>({});
 
-const tree = computed(() => buildTree(props.values));
+const index = computed(() => treeIndex(props.values));
+const tree = computed(() => buildTree(props.values, index.value));
 const searching = computed(() => props.query.trim() !== "");
-const flatEntries = computed(() => flatten(tree.value, props.query));
+const flatEntries = computed(() =>
+    flatten(props.values, props.query, props.found, index.value).map(
+        (entry) => ({
+            node: {
+                value: entry.value,
+                children: [],
+                key: `${FLAT_KEY_PREFIX}${entry.value.id}`,
+            } satisfies TreeNode,
+            paths: entry.paths.filter((path) => path !== ""),
+        }),
+    ),
+);
 const openByTick = computed(
-    () => new Set(props.selected.flatMap((id) => ancestorsOf(id, tree.value))),
+    () =>
+        new Set(
+            props.selected.flatMap((id) => [
+                ...ancestorIds(id, props.values, index.value),
+            ]),
+        ),
+);
+const states = computed(
+    () =>
+        new Map(
+            props.values.map((value) => [
+                value.id,
+                nodeState(value.id, props.selected, props.values, index.value),
+            ]),
+        ),
+);
+const labels = computed(
+    () => new Map(props.values.map((value) => [value.id, value.label.value])),
 );
 
 function isOpen(node: TreeNode): boolean {
     return (
-        manual.value[node.value.id] ??
+        manual.value[node.key] ??
         (props.expandedByDefault || openByTick.value.has(node.value.id))
     );
 }
 
 function toggleOpen(node: TreeNode): void {
-    manual.value = { ...manual.value, [node.value.id]: !isOpen(node) };
+    manual.value = { ...manual.value, [node.key]: !isOpen(node) };
 }
 
-function stateOf(node: TreeNode): NodeState {
-    return nodeState(node, props.selected, tree.value);
+function stateOf(id: string): NodeState {
+    return states.value.get(id) ?? "none";
 }
 
-function change(node: TreeNode): void {
-    emit("change", toggle(node, props.selected, tree.value));
+function coveredText(id: string): string {
+    if (stateOf(id) !== "implicit") return "";
+    const terms = coveringIds(
+        id,
+        props.selected,
+        props.values,
+        index.value,
+    ).map((covering) => labels.value.get(covering) ?? covering);
+    return interpolate(
+        $gettext("covered by %{terms}"),
+        {
+            terms: new Intl.ListFormat(gettext.current, {
+                type: "conjunction",
+            }).format(terms),
+        },
+        true,
+    );
 }
 
-function listId(node: TreeNode): string {
-    return `${baseId}-${node.value.id}`;
+function change(id: string): void {
+    if (stateOf(id) === "implicit") return;
+    emit("change", toggle(id, props.selected, props.values, index.value));
+}
+
+function nodeId(node: TreeNode): string {
+    return `${baseId}-${domToken(node.key)}`;
 }
 
 function expanderLabel(node: TreeNode): string {
@@ -99,11 +167,13 @@ function countTitle(value: FacetValue): string | undefined {
 }
 
 const context: FacetTreeContext = {
+    facetKey: props.facet.key,
     isOpen,
     toggleOpen,
     stateOf,
+    coveredText,
     change,
-    listId,
+    nodeId,
     countTitle,
     expanderLabel,
 };
@@ -119,21 +189,24 @@ provide(FACET_TREE_KEY, context);
     >
         <FacetTreeNode
             v-for="entry in flatEntries"
-            :key="entry.node.value.id"
+            :key="entry.node.key"
             :node="entry.node"
-            :path="entry.path"
+            :paths="entry.paths"
             :flat="true"
         />
     </ul>
     <ul
         v-else
         class="tree"
-        :class="{ busy: props.busy }"
+        :class="{
+            busy: props.busy,
+            'has-branches': tree.some((root) => root.children.length > 0),
+        }"
         :aria-busy="props.busy ? 'true' : 'false'"
     >
         <FacetTreeNode
             v-for="root in tree"
-            :key="root.value.id"
+            :key="root.key"
             :node="root"
         />
     </ul>

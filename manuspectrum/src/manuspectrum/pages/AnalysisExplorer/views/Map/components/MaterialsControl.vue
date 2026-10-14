@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, inject, ref, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import InputText from "primevue/inputtext";
@@ -63,20 +63,32 @@ const ROWS_SHOWN = 5;
  * that reaches the colour only through a linked Component; a material whose
  * main colour is another keeps its usual row there too, and both rows are
  * the same `material` filter.
+ * A ticked material keeps its narrower terms (`MapMaterial.ancestors`): a
+ * row under a ticked broader material is covered, its checkbox ticked in a
+ * pale tone, `aria-disabled` and described by « covered by X »; its click
+ * changes nothing, and its « Follow » stays exact. Each ticked material of
+ * `coveringMaterials` is a ticked head above the colour groups, without
+ * « Follow », counting the listed rows it covers (« other » ones when it is
+ * itself listed, its own row staying ticked); unticking it removes it from
+ * the filter.
  * The search asks the material facet (synonyms included) and keeps the rows
- * it answers. Each colour group shows its ticked and followed rows, then
- * others up to five, and « Show more » for the rest; a search shows every
- * match. State lives in the store; hovering or focusing a followed chip
- * emits `isolate` with its slot, and null on leave.
+ * it found and their narrower terms, never the broader terms the answer
+ * also carries. Each colour group shows its ticked and followed rows, then
+ * the covered ones, then others, five at least, and « Show more » for the
+ * rest; a search shows every match. State lives in the store; hovering or
+ * focusing a followed chip emits `isolate` with its slot, and null on leave.
  */
 const props = defineProps<{
     events: MapEvent[];
     materials: Record<string, MapMaterial>;
     colours: Record<string, MapColour>;
+    /** The ticked materials broader than a listed one, by uri. */
+    coveringMaterials: Record<string, Label>;
 }>();
 const emit = defineEmits<{ isolate: [slot: number | null] }>();
 
 const announce = inject(ANNOUNCE_KEY, null);
+const baseId = useId();
 
 const store = useExplorerStore();
 const gettext = useGettext();
@@ -84,7 +96,7 @@ const { $gettext, $ngettext, interpolate } = gettext;
 
 const followHelp = computed(() =>
     $gettext(
-        "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Show only shows or hides its events.",
+        "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Follow follows this material only, never its narrower terms. Show only shows or hides its events.",
     ),
 );
 const refusedText = computed(() =>
@@ -107,8 +119,18 @@ const search = useFacetValues("material", () =>
 );
 
 const only = computed<Set<string> | undefined>(() => {
-    if (!query.value.trim() || !search.data.value) return undefined;
-    return new Set(search.data.value.values.map((value) => value.id));
+    const answer = search.data.value;
+    if (!query.value.trim() || !answer) return undefined;
+    const found = new Set(
+        answer.found ?? answer.values.map((value) => value.id),
+    );
+    const kept = new Set(found);
+    for (const [uri, material] of Object.entries(props.materials)) {
+        if (material.ancestors.some((ancestor) => found.has(ancestor))) {
+            kept.add(uri);
+        }
+    }
+    return kept;
 });
 const searching = computed(
     () => query.value.trim() !== "" && search.status.value === "loading",
@@ -132,6 +154,20 @@ const noMatch = computed(
 const counts = computed(() => materialCounts(props.events));
 const tracked = computed(() => trackedOf(store.mapState.track));
 const nextSlot = computed(() => nextFreeSlot(store.mapState.track));
+const coveringHeads = computed(() =>
+    store.filters.material
+        .filter((uri) => uri in props.coveringMaterials)
+        .map((uri) => ({
+            uri,
+            label: props.coveringMaterials[uri],
+            listed: counts.value.has(uri),
+            covers: [...counts.value.keys()].filter(
+                (listed) =>
+                    listed !== uri &&
+                    (props.materials[listed]?.ancestors ?? []).includes(uri),
+            ).length,
+        })),
+);
 const chips = computed(() =>
     tracked.value.map(({ uri, slot }) => {
         const found = counts.value.get(uri);
@@ -149,13 +185,15 @@ function groupKey(group: ColourGroup): string {
     return group.colour ?? "none";
 }
 
-/** The ticked and followed rows first, in group order, then the others. */
+/** The ticked and followed rows first, in group order, then the covered ones, then the others. */
 function orderedRows(group: ColourGroup): ColourGroup["rows"] {
     const pinned = (uri: string): boolean =>
         isTicked(uri) || slot(uri) !== null;
+    const covered = (uri: string): boolean => !pinned(uri) && isCovered(uri);
     return [
         ...group.rows.filter((row) => pinned(row.uri)),
-        ...group.rows.filter((row) => !pinned(row.uri)),
+        ...group.rows.filter((row) => covered(row.uri)),
+        ...group.rows.filter((row) => !pinned(row.uri) && !covered(row.uri)),
     ];
 }
 
@@ -266,6 +304,61 @@ function isTicked(uri: string): boolean {
     return store.filters.material.includes(uri);
 }
 
+/** The ticked broader materials of `uri`, by label; none when `uri` is ticked itself. */
+function coveringOf(uri: string): Label[] {
+    if (isTicked(uri)) return [];
+    return (props.materials[uri]?.ancestors ?? [])
+        .filter((ancestor) => isTicked(ancestor))
+        .map(
+            (ancestor) =>
+                props.coveringMaterials[ancestor] ?? labelOf(ancestor),
+        )
+        .sort((a, b) => a.value.localeCompare(b.value, gettext.current));
+}
+
+function isCovered(uri: string): boolean {
+    return coveringOf(uri).length > 0;
+}
+
+function coveredText(uri: string): string {
+    return interpolate(
+        $gettext("covered by %{terms}"),
+        {
+            terms: new Intl.ListFormat(gettext.current, {
+                type: "conjunction",
+            }).format(coveringOf(uri).map((covering) => covering.value)),
+        },
+        true,
+    );
+}
+
+function coveredId(groupIndex: number, rowIndex: number): string {
+    return `${baseId}-g${groupIndex}-r${rowIndex}-covered`;
+}
+
+function headId(uri: string): string {
+    return `${baseId}-head-${store.filters.material.indexOf(uri)}`;
+}
+
+function coversText(head: { listed: boolean; covers: number }): string {
+    const n = head.covers;
+    return interpolate(
+        head.listed
+            ? $ngettext(
+                  "covers %{n} other material here",
+                  "covers %{n} other materials here",
+                  n,
+              )
+            : $ngettext(
+                  "covers %{n} material here",
+                  "covers %{n} materials here",
+                  n,
+              ),
+        { n },
+        true,
+    );
+}
+
 function isColourTicked(group: ColourGroup): boolean {
     return group.colour !== null && store.filters.colour.includes(group.colour);
 }
@@ -327,7 +420,12 @@ function followStyle(uri: string): Record<string, string> {
     return nextSlot.value === null ? {} : { "--hn": focusHue(nextSlot.value) };
 }
 
+function onRowClick(uri: string, event: MouseEvent): void {
+    if (isCovered(uri)) event.preventDefault();
+}
+
 function onTick(uri: string, event: Event): void {
+    if (isCovered(uri)) return;
     const checked = (event.target as HTMLInputElement).checked;
     const others = store.filters.material.filter((entry) => entry !== uri);
     store.setFacet("material", checked ? [...others, uri] : others);
@@ -395,6 +493,11 @@ function onSearch(text: string | undefined): void {
                     $gettext("gives a colour on the map (four at most).")
                 }}</span>
             </span>
+            <span>{{
+                $gettext(
+                    "A ticked material also keeps its narrower terms; Follow follows that material only.",
+                )
+            }}</span>
         </p>
 
         <ul
@@ -422,7 +525,6 @@ function onSearch(text: string | undefined): void {
                         <span
                             class="chip-label"
                             :lang="chip.label.lang || undefined"
-                            :title="chip.label.value"
                             >{{ chip.label.value }}</span
                         >
                         <span
@@ -492,6 +594,39 @@ function onSearch(text: string | undefined): void {
             @update:model-value="onSearch"
         />
 
+        <ul
+            v-if="coveringHeads.length > 0"
+            class="covering"
+        >
+            <li
+                v-for="head in coveringHeads"
+                :key="head.uri"
+                class="covering-head"
+            >
+                <label class="value">
+                    <input
+                        type="checkbox"
+                        checked
+                        :aria-label="filterName(head.label)"
+                        :aria-describedby="headId(head.uri)"
+                        @change="onTick(head.uri, $event)"
+                    />
+                    <span class="head-text">
+                        <span
+                            class="head-label"
+                            :lang="head.label.lang || undefined"
+                            >{{ head.label.value }}</span
+                        >
+                        <span
+                            :id="headId(head.uri)"
+                            class="head-covers"
+                            >{{ coversText(head) }}</span
+                        >
+                    </span>
+                </label>
+            </li>
+        </ul>
+
         <p
             v-if="groups.length > 0"
             class="columns"
@@ -517,7 +652,7 @@ function onSearch(text: string | undefined): void {
             :aria-busy="searching ? 'true' : 'false'"
         >
             <section
-                v-for="group in groups"
+                v-for="(group, groupIndex) in groups"
                 :key="groupKey(group)"
                 class="colour-group"
             >
@@ -567,21 +702,32 @@ function onSearch(text: string | undefined): void {
                 </h4>
                 <ul class="rows">
                     <li
-                        v-for="row in shownRows(group)"
+                        v-for="(row, rowIndex) in shownRows(group)"
                         :key="row.uri"
                         class="row"
+                        :class="{ covered: isCovered(row.uri) }"
                     >
                         <label class="value">
                             <input
                                 type="checkbox"
-                                :checked="isTicked(row.uri)"
+                                :checked="
+                                    isTicked(row.uri) || isCovered(row.uri)
+                                "
                                 :aria-label="filterName(row.label)"
+                                :aria-disabled="
+                                    isCovered(row.uri) ? 'true' : undefined
+                                "
+                                :aria-describedby="
+                                    isCovered(row.uri)
+                                        ? coveredId(groupIndex, rowIndex)
+                                        : undefined
+                                "
+                                @click="onRowClick(row.uri, $event)"
                                 @change="onTick(row.uri, $event)"
                             />
                             <span
                                 class="label"
                                 :lang="row.label.lang || undefined"
-                                :title="row.label.value"
                                 >{{ row.label.value }}</span
                             >
                             <span class="meta">
@@ -635,6 +781,12 @@ function onSearch(text: string | undefined): void {
                                         }}</span
                                     >
                                 </span>
+                                <span
+                                    v-if="isCovered(row.uri)"
+                                    :id="coveredId(groupIndex, rowIndex)"
+                                    class="covered-by"
+                                    >{{ coveredText(row.uri) }}</span
+                                >
                             </span>
                         </label>
                         <HelpTip
@@ -755,20 +907,19 @@ function onSearch(text: string | undefined): void {
 }
 
 .materials-control .chip-label {
-    overflow: hidden;
     font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
 .materials-control .chip-counts,
 .materials-control .absent-note {
-    overflow: hidden;
     color: var(--ink-muted);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
 }
 
 .materials-control .unpin {
@@ -927,12 +1078,13 @@ function onSearch(text: string | undefined): void {
 
 .materials-control .counts,
 .materials-control .row-counts {
-    flex: none;
+    flex: 0 1 auto;
+    min-inline-size: 0;
     color: var(--ink-muted);
     font-family: var(--font-mono);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 /* MaterialsTable .swatch */
@@ -1001,23 +1153,23 @@ function onSearch(text: string | undefined): void {
 .materials-control .value input {
     grid-row: 1;
     grid-column: 1;
-    margin: 0;
+    align-self: start;
+    margin: 0.125rem 0 0;
     accent-color: var(--blue-text);
 }
 
 .materials-control .value .label {
-    display: -webkit-box;
     grid-row: 1;
     grid-column: 2;
     min-inline-size: 0;
-    overflow: hidden;
     line-height: 1.3;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
 }
 
-/* Counts first and unbroken; the other colours follow them or wrap below. */
+/* Counts first; the other colours follow them or wrap below, and a count shrinks and wraps before it is cut. */
 .materials-control .value .meta {
     display: flex;
     flex-wrap: wrap;
@@ -1032,8 +1184,73 @@ function onSearch(text: string | undefined): void {
 .materials-control .follow-tip {
     grid-row: 1;
     grid-column: 3;
-    align-self: center;
+    align-self: start;
     margin-block: -0.5rem;
+}
+
+/* FacetTreeNode .implicit: a pale tick that does not change. */
+.materials-control .row.covered .value {
+    cursor: default;
+}
+
+.materials-control .row.covered .value input {
+    opacity: 0.55;
+}
+
+.materials-control .covered-by {
+    flex-basis: 100%;
+    min-inline-size: 0;
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
+    font-style: italic;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
+}
+
+/* A ticked broader material: tick | name, what it covers. */
+.materials-control .covering {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.materials-control .covering-head .value {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.5rem;
+    align-items: start;
+    min-inline-size: 0;
+    padding-block: 0.25rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.materials-control .covering-head input {
+    margin: 0.125rem 0 0;
+    accent-color: var(--blue-text);
+}
+
+.materials-control .covering-head .head-text {
+    display: grid;
+    min-inline-size: 0;
+    line-height: 1.3;
+}
+
+.materials-control .covering-head .head-label {
+    font-weight: 600;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    text-wrap: pretty;
+}
+
+.materials-control .covering-head .head-covers {
+    color: var(--ink-muted);
+    font-size: 0.6875rem;
 }
 
 /* FacetRail .more */

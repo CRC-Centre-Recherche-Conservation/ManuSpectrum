@@ -5,6 +5,7 @@ import type {
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { RailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type { TableFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
@@ -27,6 +28,10 @@ export interface ResultsMemo {
 /** Labels of facet values seen in search payloads, keyed `${facetKey}:${valueId}`; filled by S1 and S0. */
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
     Symbol("facet-labels");
+
+/** The facet values seen with a narrower term in their facet (`FacetValue.narrower`), keyed as `FACET_LABELS_KEY`; filled with it. */
+export const FACET_NARROWER_KEY: InjectionKey<Ref<Set<string>>> =
+    Symbol("facet-narrower");
 
 /** Number of documents of the whole corpus, or null while it is unknown; provided by the shell from the home payload. */
 export const CORPUS_COUNT_KEY: InjectionKey<Ref<number | null>> =
@@ -123,3 +128,6 @@ export interface SelectionDrawerHandle {
 
 export const SELECTION_DRAWER_KEY: InjectionKey<SelectionDrawerHandle> =
     Symbol("selection-drawer");
+
+/** The width mode of the filter column (`useRailWidth`), shared by the Corpus, document and Map rails; provided by the shell. */
+export const RAIL_WIDTH_KEY: InjectionKey<RailWidth> = Symbol("rail-width");

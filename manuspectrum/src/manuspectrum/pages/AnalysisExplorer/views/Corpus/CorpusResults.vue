@@ -622,7 +622,10 @@ function goHome(): void {
 <style scoped>
 .corpus-results {
     display: grid;
-    grid-template-columns: var(--explorer-rail) minmax(0, 1fr);
+    grid-template-columns: var(--explorer-rail-track, var(--explorer-rail)) minmax(
+            0,
+            1fr
+        );
     align-items: start;
     gap: 1.5rem;
     padding-block: 0.5rem 1rem;

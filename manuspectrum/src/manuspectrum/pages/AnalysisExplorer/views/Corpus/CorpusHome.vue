@@ -5,6 +5,7 @@ import { useGettext } from "vue3-gettext";
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 import DocumentCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/DocumentCard.vue";
+import HomeChoices from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/HomeChoices.vue";
 
 import { useDocumentPrefetch } from "@/manuspectrum/pages/AnalysisExplorer/composables/useDocumentPrefetch.ts";
 import { useFacetLabels } from "@/manuspectrum/pages/AnalysisExplorer/composables/useFacetLabels.ts";
@@ -17,19 +18,26 @@ import {
     snapshotOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import { localDay } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
+import { buildTree } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
 
 import type {
     Facet,
     FacetValue,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { TreeNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/facet-tree.ts";
+
+const SEARCH_HELP_ID = "explorer-home-search-help";
 
 /**
  * The explorer home (S0): the doors by technique and by project and the
  * document of the day, from one request for the reader's local day. The
- * document of the day loads ahead once the reader rests on its card.
+ * techniques are nested by their `parents` (the nearest carried techniques),
+ * so a narrower technique sits under the one that holds it. The search box
+ * says what free text looks in. The document of the day loads ahead once
+ * the reader rests on its card.
  */
 const store = useExplorerStore();
-const { $gettext, interpolate } = useGettext();
+const { $gettext } = useGettext();
 const heading = useTemplateRef<HTMLElement>("heading");
 useScreenHeading(() => heading.value);
 
@@ -41,6 +49,10 @@ const techniques = computed<FacetValue[]>(
     () => home.data.value?.techniques ?? [],
 );
 const projects = computed<FacetValue[]>(() => home.data.value?.projects ?? []);
+const techniqueTree = computed<TreeNode[]>(() => buildTree(techniques.value));
+const projectNodes = computed<TreeNode[]>(() =>
+    projects.value.map((value) => ({ value, children: [], key: value.id })),
+);
 const featured = computed(() => home.data.value?.featured ?? null);
 const firstLoad = computed(
     () => home.status.value === "loading" && home.data.value === null,
@@ -57,25 +69,16 @@ useFacetLabels((): Facet[] => [
         group: "analysis",
         values: techniques.value,
         total: techniques.value.length,
+        found: null,
     },
     {
         key: "project",
         group: "analysis",
         values: projects.value,
         total: projects.value.length,
+        found: null,
     },
 ]);
-
-function countLabel(value: FacetValue): string {
-    return interpolate(
-        $gettext("%{label} (%{count})"),
-        {
-            label: value.label.value,
-            count: value.count,
-        },
-        true,
-    );
-}
 
 function submitSearch(): void {
     store.setFilter("q", text.value.trim());
@@ -137,6 +140,7 @@ function hrefFor(id: string): string {
                     type="search"
                     class="input"
                     autocomplete="off"
+                    :aria-describedby="SEARCH_HELP_ID"
                     :placeholder="$gettext('Material, technique, document…')"
                 />
                 <button
@@ -146,6 +150,16 @@ function hrefFor(id: string): string {
                     <span>{{ $gettext("Search") }}</span>
                 </button>
             </div>
+            <p
+                :id="SEARCH_HELP_ID"
+                class="help"
+            >
+                <span>{{
+                    $gettext(
+                        "Looks in names and notes. To browse families of materials, use the Material facet.",
+                    )
+                }}</span>
+            </p>
         </form>
         <p class="browse">
             <button
@@ -226,21 +240,10 @@ function hrefFor(id: string): string {
                 >
                     <span>{{ $gettext("By technique") }}</span>
                 </h2>
-                <ul class="choices">
-                    <li
-                        v-for="technique in techniques"
-                        :key="technique.id"
-                    >
-                        <button
-                            type="button"
-                            class="choice"
-                            :lang="technique.label.lang"
-                            @click="openTechnique(technique.id)"
-                        >
-                            <span>{{ countLabel(technique) }}</span>
-                        </button>
-                    </li>
-                </ul>
+                <HomeChoices
+                    :nodes="techniqueTree"
+                    @open="openTechnique"
+                />
             </section>
             <section
                 v-if="projects.length > 0"
@@ -253,21 +256,10 @@ function hrefFor(id: string): string {
                 >
                     <span>{{ $gettext("By project") }}</span>
                 </h2>
-                <ul class="choices">
-                    <li
-                        v-for="project in projects"
-                        :key="project.id"
-                    >
-                        <button
-                            type="button"
-                            class="choice"
-                            :lang="project.label.lang"
-                            @click="openProject(project.id)"
-                        >
-                            <span>{{ countLabel(project) }}</span>
-                        </button>
-                    </li>
-                </ul>
+                <HomeChoices
+                    :nodes="projectNodes"
+                    @open="openProject"
+                />
             </section>
         </div>
         <ol class="how-to">
@@ -282,6 +274,22 @@ function hrefFor(id: string): string {
                         "Narrow the results by technique, material, project or year.",
                     )
                 }}</span>
+                <ul class="how-to-notes">
+                    <li>
+                        <span>{{
+                            $gettext(
+                                "A ticked term also keeps its narrower terms (e.g. X-ray fluorescence includes portable and micro-XRF).",
+                            )
+                        }}</span>
+                    </li>
+                    <li>
+                        <span>{{
+                            $gettext(
+                                "Ticking a broader material (e.g. red pigment) now filters by every material under it.",
+                            )
+                        }}</span>
+                    </li>
+                </ul>
             </li>
             <li>
                 <span>{{
@@ -341,32 +349,20 @@ function hrefFor(id: string): string {
     font: inherit;
 }
 
-.corpus-home .submit,
-.corpus-home .choice {
-    min-block-size: var(--explorer-target);
-    padding-inline: 0.875rem;
-    border: 0.0625rem solid var(--border-hover);
+.corpus-home .submit {
+    min-block-size: 2.5rem;
+    padding-inline: 1.25rem;
+    border: 0.0625rem solid var(--ink);
     border-radius: 999rem;
-    background: var(--surface);
-    color: var(--ink);
+    background: var(--ink);
+    color: var(--surface);
     font: inherit;
     cursor: pointer;
 }
 
-.corpus-home .choice {
-    text-align: start;
-}
-
-.corpus-home .choice:hover {
-    border-color: var(--ink);
-}
-
-.corpus-home .submit {
-    min-block-size: 2.5rem;
-    padding-inline: 1.25rem;
-    border-color: var(--ink);
-    background: var(--ink);
-    color: var(--surface);
+.corpus-home .help {
+    color: var(--ink-muted);
+    font-size: 0.75rem;
 }
 
 .corpus-home .doors {
@@ -422,19 +418,21 @@ function hrefFor(id: string): string {
     text-transform: uppercase;
 }
 
-.corpus-home .choices {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-    list-style: none;
-}
-
 .corpus-home .how-to {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
     gap: 1rem;
     padding-inline-start: 1.25rem;
     color: var(--ink-muted);
+}
+
+.corpus-home .how-to-notes {
+    display: grid;
+    gap: 0.375rem;
+    margin-block-start: 0.5rem;
+    padding-inline-start: 1rem;
+    font-size: 0.8125rem;
+    list-style: disc;
 }
 
 .corpus-home .input:focus-visible,

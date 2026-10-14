@@ -118,6 +118,7 @@ class DiscoverEntryTests(TestCase):
                 "id": "http://example.org/technique/a",
                 "label": {"value": "Technique A", "lang": "fr"},
                 "count": 3,
+                "children": [],
             },
         ]
         with mock.patch(
@@ -133,6 +134,34 @@ class DiscoverEntryTests(TestCase):
         self.assertNotIn('data-term="Raman"', html)
         self.assertNotIn('data-term="XRF"', html)
 
+    def test_narrower_technique_chips_are_a_list_nested_in_their_parent_item(self):
+        chip = lambda uri, *children: {
+            "id": f"http://example.org/technique/{uri}",
+            "label": {"value": uri, "lang": "en"},
+            "count": 1,
+            "children": [*children],
+        }
+        with mock.patch(
+            "manuspectrum.templatetags.explorer_home.homepage_techniques",
+            return_value=[chip("xrf", chip("pxrf"), chip("micro")), chip("fors")],
+        ):
+            html = self.client.get("/en/").content.decode()
+        tree = html[
+            html.index('<ul class="ms-technique-chips"') : html.index(
+                '<div class="ms-search-cta">'
+            )
+        ]
+        compact = re.sub(r"\s+", " ", re.sub(r"<a [^>]*>([^<]*)</a>", r"\1", tree))
+        self.assertIn('aria-labelledby="ms-technique-label"', compact)
+        self.assertIn(
+            '<li class="ms-technique-item ms-technique-branch"> xrf '
+            '<ul class="ms-technique-narrower" role="list"> '
+            '<li class="ms-technique-item"> pxrf </li> '
+            '<li class="ms-technique-item"> micro </li> </ul> </li> '
+            '<li class="ms-technique-item"> fors </li>',
+            compact,
+        )
+
     def test_no_technique_chip_row_without_visible_techniques(self):
         with mock.patch(
             "manuspectrum.templatetags.explorer_home.homepage_techniques",
@@ -144,7 +173,7 @@ class DiscoverEntryTests(TestCase):
     def test_homepage_survives_a_failing_explorer_search(self):
         with (
             mock.patch(
-                "manuspectrum.views.explorer.home.search_payload",
+                "manuspectrum.views.explorer.home.home_techniques",
                 side_effect=RuntimeError("broken facet"),
             ) as search,
             self.assertLogs("manuspectrum.views.explorer.home", "ERROR"),
@@ -186,31 +215,27 @@ class HomepageTechniquesTests(ExplorerCase):
     def test_only_techniques_with_visible_analyses_are_listed(self):
         from manuspectrum.views.explorer.home import homepage_techniques
 
-        facet = {
-            "key": "technique",
-            "values": [
-                {
-                    "id": "http://example.org/technique/a",
-                    "label": {"value": "A", "lang": "en"},
-                    "count": 2,
-                    "selected": False,
-                },
-                {
-                    "id": "http://example.org/technique/b",
-                    "label": {"value": "B", "lang": "en"},
-                    "count": 0,
-                    "selected": False,
-                },
-            ],
-        }
+        values = [
+            {
+                "id": "http://example.org/technique/a",
+                "label": {"value": "A", "lang": "en"},
+                "count": 2,
+                "parents": [],
+            },
+            {
+                "id": "http://example.org/technique/b",
+                "label": {"value": "B", "lang": "en"},
+                "count": 0,
+                "parents": [],
+            },
+        ]
         with mock.patch(
-            "manuspectrum.views.explorer.home.search_payload",
-            return_value={"facets": [facet]},
+            "manuspectrum.views.explorer.home.home_techniques",
+            return_value=values,
         ) as search:
             listed = homepage_techniques("en")
         self.assertEqual([t["id"] for t in listed], ["http://example.org/technique/a"])
-        self.assertEqual(search.call_args.args[1].username, "anonymous")
-        self.assertEqual(search.call_args.args[0].get("grain"), "analyses")
+        self.assertEqual(search.call_args.args[0].username, "anonymous")
 
     def test_the_list_follows_the_real_facet_of_the_fixture(self):
         from manuspectrum.views.explorer.home import homepage_techniques
@@ -227,8 +252,8 @@ class HomepageTechniquesTests(ExplorerCase):
         from manuspectrum.views.explorer.home import homepage_techniques
 
         with mock.patch(
-            "manuspectrum.views.explorer.home.search_payload",
-            return_value={"facets": []},
+            "manuspectrum.views.explorer.home.home_techniques",
+            return_value=[],
         ) as search:
             homepage_techniques("en")
             homepage_techniques("en")
