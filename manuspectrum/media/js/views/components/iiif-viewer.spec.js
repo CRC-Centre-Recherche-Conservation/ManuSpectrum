@@ -27,8 +27,17 @@ vi.mock('utils/summary-popup', () => ({
 
 vi.mock('views/components/ms-summary-popup', () => ({}));
 
+vi.mock('utils/iiif-annotation-nodes', () => ({
+    createBuildAnnotationNodes: vi.fn((viewer) => {
+        const build = vi.fn();
+        build.viewer = viewer;
+        return build;
+    }),
+}));
+
 import CoreIIIFViewerViewmodel from 'arches/arches/app/media/js/views/components/iiif-viewer';
 import { bindLeafletSummaryPopup } from 'utils/summary-popup';
+import { createBuildAnnotationNodes } from 'utils/iiif-annotation-nodes';
 
 let IIIFViewerViewmodel;
 let registration;
@@ -86,6 +95,41 @@ describe('iiif-viewer wrapper', () => {
 
         expect(viewModel.received.onEachFeature).toBe(onEachFeature);
         expect(viewModel.received.onEachFeature).not.toBe(bindLeafletSummaryPopup);
+    });
+
+    it('hands the project annotation loader, bound to the instance, to the core', () => {
+        const viewModel = new IIIFViewerViewmodel({});
+
+        expect(viewModel.received.buildAnnotationNodes).toBeTypeOf('function');
+        expect(viewModel.received.buildAnnotationNodes.viewer).toBe(viewModel);
+    });
+
+    it('counts for the thumbnails while getAnnotationCount is the core one', () => {
+        CoreIIIFViewerViewmodel.mockImplementationOnce(function () {
+            this.getAnnotationCount = () => 1;
+        });
+        new IIIFViewerViewmodel({});
+
+        const isCountShown = createBuildAnnotationNodes.mock.calls.at(-1)[1];
+        expect(isCountShown()).toBe(true);
+    });
+
+    it('stops counting once the host replaces getAnnotationCount', () => {
+        CoreIIIFViewerViewmodel.mockImplementationOnce(function () {
+            this.getAnnotationCount = () => 1;
+        });
+        const viewModel = new IIIFViewerViewmodel({});
+        viewModel.getAnnotationCount = () => 2;
+
+        const isCountShown = createBuildAnnotationNodes.mock.calls.at(-1)[1];
+        expect(isCountShown()).toBe(false);
+    });
+
+    it("keeps the host's own buildAnnotationNodes", () => {
+        const buildAnnotationNodes = vi.fn();
+        const viewModel = new IIIFViewerViewmodel({ buildAnnotationNodes });
+
+        expect(viewModel.received.buildAnnotationNodes).toBe(buildAnnotationNodes);
     });
 
     it('applies the core viewmodel to its own instance', () => {
