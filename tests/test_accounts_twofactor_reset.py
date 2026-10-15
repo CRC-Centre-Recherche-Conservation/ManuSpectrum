@@ -18,6 +18,7 @@ from manuspectrum.accounts import twofactor
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
 from manuspectrum.accounts.twofactor import decrypt_secret, encrypt_secret
+from tests.test_accounts_activation import browser_post
 from tests.test_accounts_twofactor import PASSWORD, WRONG, enrol, stored
 
 HTML = {"HTTP_ACCEPT": "text/html,application/xhtml+xml"}
@@ -168,13 +169,23 @@ class ResetPageTests(TestCase):
 
     def test_the_link_moves_its_token_to_the_session(self):
         response = self.open()
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
         self.assertNotIn(self.path.rsplit("/", 1)[1], response["Location"])
         page = self.client.get(self.page)
         self.assertEqual(page.status_code, 200)
-        self.assertEqual(page["Referrer-Policy"], "no-referrer")
+        self.assertEqual(page["Referrer-Policy"], "same-origin")
         self.assertNotContains(page, self.path.rsplit("/", 1)[1])
         self.assertContains(page, 'name="password"')
+
+    def test_the_password_form_posts_from_the_browser_with_csrf_checks_on(self):
+        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
+        client.get(self.path)
+        page = client.get(self.page)
+        response = browser_post(
+            client, page, self.page, action="password", password=PASSWORD
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="code"')
 
     def test_a_user_with_stale_terms_is_not_sent_to_the_terms_with_the_token(self):
         self.client.force_login(self.alice)
@@ -188,7 +199,7 @@ class ResetPageTests(TestCase):
     def test_the_placeholder_without_a_session_token_is_refused(self):
         response = self.client.get(self.page)
         self.assertEqual(response.status_code, 410)
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
         self.assertEqual(
             post(
                 self.client, self.page, action="password", password=PASSWORD

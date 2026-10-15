@@ -178,7 +178,7 @@ class ActivateAccountView(_TermsPage):
 
     def dispatch(self, request, *args, **kwargs):
         response = self._dispatch(request, *args, **kwargs)
-        response["Referrer-Policy"] = "no-referrer"
+        response["Referrer-Policy"] = "same-origin"
         return response
 
     def _dispatch(self, request, *args, **kwargs):
