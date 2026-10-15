@@ -112,6 +112,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.stream_csv()
         if path == "/big.csv":
             return self.reply(200, b"a,b,c\n" * 400, "text/csv")
+        if path.endswith("/iiifannotations"):
+            time.sleep(0.5)  # in-flight requests overlap, as the viewer's batches do
         if path.startswith("/iiif/"):
             return self.echo([("Access-Control-Allow-Origin", "*")])
         return self.echo()

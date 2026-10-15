@@ -65,6 +65,8 @@ PREFIXED = [
         "two-factor-authentication-login",
     ),
     ("snippets/edge-rules.conf", "api/explorer/share", "explorer-share"),
+    ("snippets/edge-rules.conf", f"mvt/{UUID}/5/16/11.pbf", "mvt"),
+    ("snippets/edge-rules.conf", "iiifannotations", "iiifannotations"),
     ("snippets/media.conf", f"files/{UUID}", "file_access"),
 ]
 # Arches routes the edge answers with a bare 404: (path below the language
@@ -217,6 +219,76 @@ class EdgeContractTests(SimpleTestCase):
                 path = f"/{code}/{rest}"
                 self.assertView(path, view_name)
                 self.assertNamed(relative, path, token_for(rest))
+
+    def location_body(self, relative, path):
+        text = (NGINX_DIR / relative).read_text()
+        pattern = first_location(read_locations(relative), path)
+        self.assertIsNotNone(pattern, f"no location matches {path}")
+        body = re.search(
+            r"location\s+~\s+\"?" + re.escape(pattern) + r"\"?\s*\{(.*?)\n\}",
+            text,
+            re.S,
+        )
+        self.assertIsNotNone(body, f"{path}: location block not found")
+        return body.group(1)
+
+    def test_map_tiles_use_the_tiles_zone(self):
+        for code, _ in settings.LANGUAGES:
+            body = self.location_body(
+                "snippets/edge-rules.conf", f"/{code}/mvt/{UUID}/5/16/11.pbf"
+            )
+            self.assertIn("limit_req zone=tiles", body)
+            self.assertIn("limit_conn tiles_conn", body)
+            self.assertNotIn("perip", body)
+
+    def test_iiif_annotations_have_their_own_rate_and_connection_zones(self):
+        for code, _ in settings.LANGUAGES:
+            body = self.location_body(
+                "snippets/edge-rules.conf", f"/{code}/iiifannotations"
+            )
+            self.assertRegex(body, r"limit_req zone=annotations burst=\d{4}")
+            self.assertIn("limit_conn annotations_conn", body)
+            self.assertNotIn("perip", body)
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertIn("zone=annotations:", zones)
+        self.assertIn("zone=annotations_conn:", zones)
+
+    def test_geojson_barrier_reads_the_session_cookie_of_the_settings(self):
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertIn(f"$cookie_{settings.SESSION_COOKIE_NAME}", zones)
+        self.assertNotIn("$arg_format", zones.split("anonymous_geojson_export")[1])
+        for code, _ in settings.LANGUAGES:
+            for rest in ("api/search/export_results", "search/export_results"):
+                body = self.location_body("snippets/edge-rules.conf", f"/{code}/{rest}")
+                self.assertRegex(
+                    body,
+                    r"if \(\$anonymous_geojson_export\) \{\s*return 403;",
+                    rest,
+                )
+
+    def test_temp_file_without_an_id_is_refused_by_the_edge(self):
+        for code, _ in settings.LANGUAGES:
+            body = self.location_body("snippets/edge-rules.conf", f"/{code}/temp_file")
+            self.assertEqual(body.strip(), "return 404;")
+            self.assertView(f"/{code}/temp_file/{UUID}", "temp_file")
+            self.assertEqual(
+                self.location_body(
+                    "snippets/edge-rules.conf", f"/{code}/temp_file/abc"
+                ).strip(),
+                "return 404;",
+            )
+            self.assertEqual(
+                self.location_body(
+                    "snippets/edge-rules.conf", f"/{code}/temp_file/1-2-3-4-5"
+                ).strip(),
+                "return 404;",
+            )
+            self.assertIn(
+                "proxy_pass",
+                self.location_body(
+                    "snippets/edge-rules.conf", f"/{code}/temp_file/{UUID}"
+                ),
+            )
 
     def test_denied_routes_exist_and_are_refused_in_every_language(self):
         text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()

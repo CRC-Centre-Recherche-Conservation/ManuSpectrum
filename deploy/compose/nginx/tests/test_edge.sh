@@ -414,11 +414,11 @@ codes() { # codes COUNT PATH [curl args] : the status of COUNT requests in a row
   for ((i = 0; i < count; i++)); do out+="$(code "$@") "; done
   echo "$out"
 }
-get_many() { # get_many COUNT PATH : the statuses of COUNT concurrent requests
+get_many() { # get_many COUNT PATH [PARALLEL=40] : the statuses of COUNT requests, PARALLEL at a time
   local urls=() i
-  for ((i = 0; i < $1; i++)); do urls+=("https://$HOST:$HTTPS_PORT$2"); done
-  curl -sS -Z --parallel-max 40 --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
-    -o /dev/null -w '%{http_code}\n' "${urls[@]}"
+  for ((i = 0; i < $1; i++)); do urls+=(-o /dev/null "https://$HOST:$HTTPS_PORT$2"); done
+  curl -sS -Z --parallel-max "${3:-40}" --max-time 30 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
+    -w '%{http_code}\n' "${urls[@]}"
 }
 # location_block FILE-SECTION PATTERN < nginx -T : the text of one location
 location_block() {
@@ -527,10 +527,22 @@ group_search_export() {
   equals "api export format=geojson&format=tilecsv: 404" 404 "$(code "$base?format=geojson&format=tilecsv")"
   equals "api export format=geojson&form%61t=shp: 404" 404 "$(code "$base?format=geojson&form%61t=shp")"
   equals "api export format=tilecsv&format=geojson: 404" 404 "$(code "$base?format=tilecsv&format=geojson")"
-  equals "api export format=geojson: reaches Django" web "$(jget name <<<"$(get "$base?format=geojson")")"
+  equals "api export format=geojson without a session cookie: 403" 403 "$(code "$base?format=geojson")"
+  equals "api export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "$base?format=geojson" -H 'Cookie: manuspectrum=x')")"
+  equals "search export format=geojson without a session cookie: 403" 403 "$(code "/fr/search/export_results?format=geojson")"
+  equals "search export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "/fr/search/export_results?format=geojson" -H 'Cookie: manuspectrum=x')")"
+  local bypass
+  for bypass in 'format=tilecsv&format=geojson' 'format=geojs%6Fn' 'format=GEOJSON' 'f%6Frmat=geojson' 'format=%67eojson' 'total=1&format=tilecsv&format=geo%6Ason'; do
+    equals "search export ?$bypass without a cookie: 403" 403 "$(code "/fr/search/export_results?$bypass")"
+  done
+  equals "search export format=tilecsv without a cookie is unchanged" web "$(jget name <<<"$(get "/fr/search/export_results?format=tilecsv")")"
+  equals "a cookie of another name does not count" 403 "$(code "$base?format=geojson" -H 'Cookie: other=x')"
   equals "POST /fr/temp_file: 404" 404 "$(code /fr/temp_file -X POST)"
   equals "GET /fr/temp_file/<uuid> reaches Django" web "$(jget name <<<"$(get "/fr/temp_file/$FILE_A")")"
-  equals "GET /fr/temp_file reaches Django" web "$(jget name <<<"$(get /fr/temp_file)")"
+  equals "GET /fr/temp_file (no id): 404 from nginx" "404 -" "$(code /fr/temp_file) $(reaches /fr/temp_file)"
+  equals "DELETE /fr/temp_file: 404" 404 "$(code /fr/temp_file -X DELETE)"
+  equals "GET /fr/temp_file/<uuid-shaped, wrong lengths>: 404 from nginx" "404 -" "$(code /fr/temp_file/1-2-3-4-5) $(reaches /fr/temp_file/1-2-3-4-5)"
+  equals "GET /fr/temp_file/<not a uuid>: 404 from nginx" "404 -" "$(code /fr/temp_file/abc) $(reaches /fr/temp_file/abc)"
   local out
   out="$(codes 12 '/fr/search/export_results?format=tilecsv&total=1')"
   check "12 rapid search exports: some answer 429" grep -q 429 <<<"$out"
@@ -572,6 +584,22 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
   check "/healthz is limited too (burst 10, 80 requests at once)" grep -q 429 <<<"$out"
   sleep 3
   equals "/healthz answers again once the burst has drained" 200 "$(code /healthz)"
+  sleep 3
+  # The viewer's peak: 20 annotation fetches at a time per annotation node. A
+  # page load (300 here) passes while ordinary calls keep passing meanwhile.
+  local side="$TMP/side-codes"
+  (for _ in $(seq 25); do code /fr/; echo; sleep 0.2; done >"$side") &
+  out="$(get_many 300 '/fr/iiifannotations?canvas=https://iiif.example/c' 18)"
+  wait
+  check "300 annotation requests, 20 at a time: none is 429 (own zones)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  check "ordinary calls made during the burst are never refused (no shared connection quota)" bash -c '! grep -Eq "429|000" "$1" && grep -q 200 "$1"' _ "$side"
+  sleep 1
+  out="$(get_many 80 '/fr/iiifannotations?canvas=https://iiif.example/c' 40)"
+  check "40 concurrent annotation requests exceed the connection bound: some are 429" grep -q 429 <<<"$out"
+  sleep 3
+  out="$(get_many 100 "/fr/mvt/$FILE_A/5/16/11.pbf")"
+  check "100 concurrent map tiles: none is 429 (tiles zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 3
 }
 
 group_timeout_config() {
