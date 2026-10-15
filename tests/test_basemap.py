@@ -257,3 +257,19 @@ class MigrationOrderTests(SimpleTestCase):
 
         migration = import_module("manuspectrum.migrations.0013_openfreemap_basemap")
         self.assertIn(("models", "0010_4_1_0"), migration.Migration.dependencies)
+
+
+class ReferencesSourceTests(SimpleTestCase):
+    def test_a_list_with_a_layer_on_the_source_references_it(self):
+        layers = [{"source": "other"}, {"source": "openfreemap"}]
+        self.assertTrue(basemaps.references_source(layers, "openfreemap"))
+
+    def test_a_list_without_a_layer_on_the_source_does_not(self):
+        layers = [{"source": "other"}, {"id": "no-source"}]
+        self.assertFalse(basemaps.references_source(layers, "openfreemap"))
+
+    def test_values_that_are_not_a_list_of_layers_reference_nothing(self):
+        for value in (None, {}, {"source": "openfreemap"}, "openfreemap"):
+            with self.subTest(value=value):
+                self.assertFalse(basemaps.references_source(value, "openfreemap"))
+        self.assertFalse(basemaps.references_source([None, "x"], "openfreemap"))
