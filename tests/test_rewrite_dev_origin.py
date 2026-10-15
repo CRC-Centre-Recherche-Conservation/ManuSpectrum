@@ -383,3 +383,70 @@ class CommandTests(Base):
         output = run(*FROM, "--to", NEW)
         self.assertNotIn("http", output)
         self.assertNotIn("example", output)
+
+
+class ListOriginsTests(Base):
+    LOCAL = "http://localhost:8183"
+    PRIVATE = "http://192.168.1.20:8000"
+    INTERNAL = "https://vm.internal"
+
+    def seed(self):
+        Concept.objects.create(
+            legacyoid=f"{self.LOCAL}/{uuid.uuid4()}", nodetype_id="Concept"
+        )
+        self.manifest(manifest_json(canvas_id(self.LOCAL)))
+        self.tile(
+            {
+                "a": f"{self.PRIVATE}/x",
+                "b": [f"{self.PRIVATE}/y", f"{self.INTERNAL}/z"],
+                "c": EXTERNAL,
+                "d": "https://thesaurus.example.net:8443/x",
+                "e": f"see {self.LOCAL}/inside",
+            }
+        )
+
+    def test_local_origins_are_listed_with_counts_per_family(self):
+        self.seed()
+        output = run("--list")
+        self.assertIn(f"{self.PRIVATE}: 2 string(s) (tiles: 2)", output)
+        self.assertIn(f"{self.INTERNAL}: 1 string(s) (tiles: 1)", output)
+        self.assertRegex(
+            output, rf"{self.LOCAL}: \d+ string\(s\) \(concepts: 1, manifests: \d+\)"
+        )
+
+    def test_public_origins_and_embedded_urls_are_not_listed(self):
+        self.seed()
+        output = run("--list")
+        self.assertNotIn("thesaurus.example.net", output)
+        self.assertNotIn("example.org", output)
+
+    def test_family_limits_the_listing(self):
+        self.seed()
+        output = run("--list", families=("tiles",))
+        self.assertIn(self.PRIVATE, output)
+        self.assertNotIn(self.LOCAL, output)
+
+    def test_listing_writes_nothing_and_needs_no_from(self):
+        self.seed()
+        before = list(TileModel.objects.values_list("data", flat=True))
+        run("--list")
+        self.assertEqual(before, list(TileModel.objects.values_list("data", flat=True)))
+
+    def test_a_bare_origin_is_counted(self):
+        self.tile({"a": self.LOCAL, "b": f"{self.LOCAL}/x", "c": f"{self.LOCAL}?q=1"})
+        self.assertIn(f"{self.LOCAL}: 3 string(s) (tiles: 3)", run("--list"))
+
+    def test_userinfo_is_never_printed(self):
+        self.tile(
+            {
+                "a": "http://admin:s3cret@localhost:9000/x",
+                "b": "http://u@localhost:9000",
+            }
+        )
+        output = run("--list")
+        self.assertIn("http://localhost:9000: 2 string(s) (tiles: 2)", output)
+        self.assertNotIn("s3cret", output)
+        self.assertNotIn("admin", output)
+
+    def test_nothing_found(self):
+        self.assertEqual(run("--list").strip(), "No development origin found.")

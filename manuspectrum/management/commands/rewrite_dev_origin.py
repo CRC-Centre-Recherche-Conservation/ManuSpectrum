@@ -54,9 +54,17 @@ and writes nothing. A second run changes nothing. The output holds counts only.
 
 Elasticsearch keeps copies of tiles and concepts, and the command does not
 touch it: after a real run, ``python manage.py es reindex_database``.
+
+``--list`` writes nothing and needs no ``--from``: it names the distinct
+development origins found at the start of a string in the families above
+(``scheme://host[:port]`` judged local by the leak rules of ``export_pkg``:
+localhost, loopback and private addresses, ``.local``/``.internal``/``.lan``
+hosts), with their string counts per family, so that every one can be given
+to ``--from``.
 """
 
 import re
+from collections import Counter, defaultdict
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -67,10 +75,37 @@ from django.db.models.functions import Cast
 from arches.app.models.models import Concept, IIIFManifest, TileModel, Value
 from arches_controlled_lists.models import ListItem
 
+from manuspectrum.management.commands.export_pkg import LEAK_RULES
+
 ORIGIN = re.compile(r"^https?://[^/\s?#]+$")
+STRING_ORIGIN = re.compile(r"^(https?://)(?:[^/\s?#@]*@)?([^/\s?#@]+)(?:[/?#]|$)")
 FAMILIES = ("concepts", "lists", "manifests", "tiles")
 CANVAS_PATH = "iiif/manifest/"
 BATCH = 500
+
+
+def is_local_origin(origin):
+    """True when the leak rules of ``export_pkg`` flag the host of *origin*."""
+    host = origin.split("://", 1)[1]
+    for name, pattern, secret, accept in LEAK_RULES:
+        if secret or name == "e-mail address":
+            continue
+        for match in pattern.finditer(host):
+            if accept is None or accept(match):
+                return True
+    return False
+
+
+def walk_strings(value):
+    """Every string of a JSON value."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        for item in value:
+            yield from walk_strings(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from walk_strings(item)
 
 
 class OriginMap:
@@ -121,7 +156,7 @@ class Command(BaseCommand):
             "--from",
             dest="origins",
             action="append",
-            required=True,
+            default=[],
             help="Origin to replace, e.g. http://host:8000 (repeatable; no path, no trailing slash).",
         )
         parser.add_argument(
@@ -138,12 +173,22 @@ class Command(BaseCommand):
             help=f"Family to rewrite, one of {', '.join(FAMILIES)} (repeatable; default: all).",
         )
         parser.add_argument(
+            "--list",
+            dest="list_origins",
+            action="store_true",
+            help="List the development origins found, with counts, and write nothing.",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Report the counts and write nothing.",
         )
 
     def handle(self, *args, **options):
+        if options["list_origins"]:
+            return self.list_origins(options["families"] or list(FAMILIES))
+        if not options["origins"]:
+            raise CommandError("--from is required (or --list to find the origins)")
         origins = list(dict.fromkeys(options["origins"]))
         for origin in origins:
             if not ORIGIN.match(origin):
@@ -188,6 +233,59 @@ class Command(BaseCommand):
                 "Follow-up: python manage.py es reindex_database "
                 "(Elasticsearch still holds the old URLs)"
             )
+
+    def list_origins(self, families):
+        """Print each local origin starting a string, with counts per family."""
+        for family in families:
+            if family not in FAMILIES:
+                raise CommandError(f"--family must be one of: {', '.join(FAMILIES)}")
+        found = defaultdict(Counter)
+        for family in FAMILIES:
+            if family not in families:
+                continue
+            for text in getattr(self, f"strings_of_{family}")():
+                match = STRING_ORIGIN.match(text)
+                if not match:
+                    continue
+                origin = match.group(1) + match.group(2)
+                if is_local_origin(origin):
+                    found[origin][family] += 1
+        if not found:
+            self.stdout.write("No development origin found.")
+        for origin in sorted(found):
+            counts = found[origin]
+            detail = ", ".join(f"{family}: {n}" for family, n in sorted(counts.items()))
+            self.stdout.write(f"{origin}: {sum(counts.values())} string(s) ({detail})")
+
+    @staticmethod
+    def json_strings(model, field):
+        rows = (
+            model.objects.annotate(text=Cast(field, TextField()))
+            .filter(text__contains="://")
+            .values_list(field, flat=True)
+        )
+        for data in rows.iterator(chunk_size=BATCH):
+            yield from walk_strings(data)
+
+    def strings_of_concepts(self):
+        yield from Concept.objects.exclude(legacyoid__isnull=True).values_list(
+            "legacyoid", flat=True
+        )
+        yield from Value.objects.filter(valuetype_id="identifier").values_list(
+            "value", flat=True
+        )
+
+    def strings_of_lists(self):
+        yield from ListItem.objects.exclude(uri__isnull=True).values_list(
+            "uri", flat=True
+        )
+
+    def strings_of_manifests(self):
+        yield from self.json_strings(IIIFManifest, "manifest")
+
+    def strings_of_tiles(self):
+        yield from self.json_strings(TileModel, "data")
+        yield from self.json_strings(TileModel, "provisionaledits")
 
     def starts_with_origin(self, field):
         query = Q()
