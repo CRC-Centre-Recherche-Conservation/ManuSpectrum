@@ -6,7 +6,9 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.contrib.auth.tokens import default_token_generator
-from django.test import Client, TestCase
+from django.contrib.auth.password_validation import password_validators_help_texts
+from django.test import Client, SimpleTestCase, TestCase
+from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -122,3 +124,17 @@ class PasswordRulesTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(STRONG))
+
+
+class PasswordHelpTextTests(SimpleTestCase):
+    def texts(self, language):
+        with translation.override(language):
+            return password_validators_help_texts()
+
+    def test_the_length_rule_is_worded_in_french(self):
+        texts = self.texts("fr")
+        self.assertIn("Au moins 12 caractères", texts)
+        self.assertFalse([t for t in texts if "Be longer" in t])
+
+    def test_the_length_rule_is_worded_in_english(self):
+        self.assertIn("At least 12 characters", self.texts("en"))
