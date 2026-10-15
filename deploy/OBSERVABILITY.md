@@ -32,7 +32,7 @@ Make targets (`make -C deploy <target>`):
 
 | Target | Effect |
 | --- | --- |
-| `monitoring-init` | Once per host, with `postgres` up: create or update the `ms_monitor` role and `pg_stat_statements` |
+| `monitoring-init` | Once per host, before the first `up` of the monitoring (it starts `postgres` if needed): create or update the `ms_monitor` role and `pg_stat_statements` |
 | `observability-on`, `observability-off` | Start, or stop and remove, the monitoring containers (volumes kept) |
 | `alert-recipients` | After editing `ALERT_EMAILS`, the sender or the relay in `.env`: validate, recreate Alertmanager |
 | `alert-test` | Raise a critical `AlertTest` for five minutes: a mail must arrive |
@@ -357,7 +357,7 @@ severities), never an id, a user, a URL or a path. Textfile label values match
 | Command | Checks |
 | --- | --- |
 | `smoke.sh monitoring` | Every Prometheus target up, every rule evaluating, `Watchdog` firing, the series each rule and dashboard expression reads, Grafana healthy with its five dashboards. Run `make container-metrics disk-usage` (and a backup) first. `SMOKE_EXPECT_BACKUP=1` also requires the backup and restore-test gauges to exist and read 0 |
-| `smoke.sh mail alert` | After `make alert-test`: the `AlertTest` mail reached Mailpit with the `[ManuSpectrum][Alert]` prefix and its category header (CI and rehearsal, where `COMPOSE_PROFILES` includes `mailpit`) |
+| `smoke.sh mail alert` | After `make alert-test`: the `AlertTest` mail reached Mailpit, read from the `web` container (the `wget` of `prometheus` cannot resolve service names under a host `search .`), with the `[ManuSpectrum][Alert]` prefix and its category header (CI and rehearsal, where `COMPOSE_PROFILES` includes `mailpit`) |
 | `smoke.sh mail report` | The same after `make report-test`, for `[ManuSpectrum][Report] Rapport mensuel` |
 
 ## Installing and upgrading
@@ -372,7 +372,7 @@ each) **before pulling this version**: the settings refuse to start without the
 sender. Then:
 
 ```bash
-make -C deploy volumes secrets up monitoring-init observability-on
+make -C deploy volumes secrets monitoring-init up observability-on
 ```
 
 `secrets` creates the two new secrets (`grafana_admin_password`,

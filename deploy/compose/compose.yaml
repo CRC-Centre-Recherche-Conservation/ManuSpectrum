@@ -646,8 +646,10 @@ services:
     secrets: [pg_monitor_password]
     depends_on:
       postgres: {condition: service_healthy}
+    # pg_up is 0 while the exporter cannot log in as ms_monitor (before
+    # `make monitoring-init`): the service is then unhealthy, not "up".
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9187/"]
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:9187/metrics | grep -q '^pg_up 1'"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -314,7 +314,9 @@ grafana_has_dashboards() {
   [ "$(gf_get '/api/search?type=dash-db' | json_field '",".join(sorted(d["uid"] for d in r))')" \
     = "ms-activity,ms-application,ms-infrastructure,ms-overview,ms-storage" ]
 }
-mail_get() { compose exec -T prometheus wget -qO- "http://mailpit:8025$1"; } # Mailpit shares the monitoring network
+# Read from `web` (default network, glibc resolver): busybox wget in `prometheus` cannot resolve
+# service names when the host resolv.conf carries `search .`.
+mail_get() { compose exec -T web curl -fsS --max-time 20 "http://mailpit:8025$1"; }
 
 cmd_monitoring() {
   local queries query tmp missing line bucket_bounds metric le checked skipped

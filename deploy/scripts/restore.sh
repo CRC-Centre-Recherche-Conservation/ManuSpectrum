@@ -96,6 +96,7 @@ backup_config
 [ -d "$MEDIA_HOST_DIR" ] || die "MEDIA_HOST_DIR $MEDIA_HOST_DIR does not exist"
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: run make backup-init"
 require_backup_dirs
+[ -z "$RESTIC_SNAPSHOT" ] || require_restic_password
 check_identity
 take_lock 0
 

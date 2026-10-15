@@ -321,4 +321,11 @@ run_test -- --bogus && status=0 || status=$?
 [ "$status" -eq 2 ] && [ ! -s "$TMP/calls" ]
 assert "unknown option: exit 2, no docker call" $?
 
+reset
+mv "$TMP/secrets/restic_password" "$TMP/restic_password.kept"
+run_test -- && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "restic_password is missing" "$TMP/out" && ! grep -q ' restic --no-cache' "$TMP/calls"
+assert "restore test without the restic_password file: says it is missing, no restic call" $?
+mv "$TMP/restic_password.kept" "$TMP/secrets/restic_password"
+
 exit "$failed"

@@ -22,8 +22,8 @@ SECRETS_DIR ?= $(if $(ENV_SECRETS_DIR),$(if $(filter /%,$(ENV_SECRETS_DIR)),$(EN
 SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
 IMAGE ?= manuspectrum:local
 EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms_prometheus_data
-# A value of the env file, read the way the file is written (KEY=value, no quoting).
-envval = $$(sed -n 's/^$(1)=//p' $(ENV_FILE) | tail -n 1)
+# A value, read as Compose does: the environment first, then the env file (KEY=value, no quoting).
+envval = $${$(1):-$$(sed -n 's/^$(1)=//p' '$(ENV_FILE)' 2>/dev/null | tail -n 1)}
 
 .PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence silence-fresh-install monthly-report report-test
 
@@ -98,6 +98,10 @@ init: ## First installation only: Arches setup_db, then the pkg submodule (PKG_D
 			-|+|U) echo "refusing: pkg/ is not at the commit this checkout pins (git submodule status: '$$state'); run: git submodule update --init  (then make -C deploy init again)" >&2; exit 1 ;; \
 		esac; \
 	fi
+	@ca="$(call envval,LOCAL_CA_CERT)"; \
+	if [ -n "$$ca" ] && [ ! -f "$$ca" ]; then \
+		echo "refusing: LOCAL_CA_CERT=$$ca does not exist (the init service mounts it); run: make -C deploy certs-local  (then make -C deploy init again)" >&2; exit 1; \
+	fi
 	$(COMPOSE) up -d --wait postgres elasticsearch redis-broker redis-cache
 	$(COMPOSE) run --rm -T init
 
@@ -151,6 +155,8 @@ restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS
 # none on purpose: wait for every other service, then start beat (it depends
 # on a healthy web).
 up: ## Start or update the stack and wait until it is healthy
+	@d="$(call envval,METRICS_TEXTFILE_DIR)"; \
+	if [ -n "$$d" ] && [ ! -d "$$d" ]; then install -d -m 0755 "$$d" && echo "created $$d (node-exporter mounts it)"; fi
 	$(COMPOSE) up -d --wait --wait-timeout 900 $$($(COMPOSE) config --services | grep -vx beat)
 	$(COMPOSE) up -d beat
 
@@ -171,7 +177,8 @@ logs: ## Follow the last 200 lines of every service
 # enables it for these two targets even when it is empty.
 OBSERVABILITY_SERVICES := prometheus alertmanager grafana node-exporter postgres-exporter redis-exporter blackbox-exporter
 
-monitoring-init: ## Once per host, with postgres up: create or update the ms_monitor role and pg_stat_statements (password from pg_monitor_password)
+monitoring-init: ## Once per host, before the first up of the monitoring: start postgres if needed, create or update the ms_monitor role and pg_stat_statements (password from pg_monitor_password)
+	$(COMPOSE) up -d --wait postgres
 	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' SECRETS_DIR='$(SECRETS_DIR)' $(SCRIPTS_DIR)/monitoring-init.sh
 
 observability-on: ## Start the monitoring services and wait until they are healthy

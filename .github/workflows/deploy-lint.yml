@@ -189,13 +189,10 @@ jobs:
               -e "s#^PKG_DIR=.*#PKG_DIR=$GITHUB_WORKSPACE/pkg#" \
               deploy/compose/.env.example > "$ENV_FILE"
 
+      # The ms_monitor role and pg_stat_statements come before `up`: the
+      # postgres-exporter healthcheck fails until the role exists.
       - name: First installation
-        run: make -C deploy volumes init up
-
-      # The ms_monitor role and pg_stat_statements; postgres-exporter reconnects
-      # on its next scrape.
-      - name: Monitoring role
-        run: make -C deploy monitoring-init
+        run: make -C deploy volumes init monitoring-init up
 
       - name: Check the stack
         run: |

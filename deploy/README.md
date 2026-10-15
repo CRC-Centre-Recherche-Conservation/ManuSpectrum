@@ -68,7 +68,7 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `restore` | `RESTIC_SNAPSHOT=<id\|latest>` or `ASIDE=<dir>`, `CONFIRM=yes ERASURES_CHECKED=yes`: replace the database and the uploads from a backup |
 | `restore-files` | `INCLUDE=/backup/... TARGET=<dir> [RESTIC_SNAPSHOT=<id>]`: pull files from a backup into a separate directory |
 | `restic` | `ARGS="snapshots"`: run restic on the repository, interactive |
-| `monitoring-init` | Once per host, `postgres` up: create or update the `ms_monitor` role and `pg_stat_statements` |
+| `monitoring-init` | Once per host, before the first `up` of the monitoring (starts `postgres` if needed): create or update the `ms_monitor` role and `pg_stat_statements` |
 | `observability-on`, `observability-off` | Start, or stop and remove, the monitoring containers (volumes kept) |
 | `alert-recipients` | After editing `ALERT_EMAILS`, the sender or the relay in `.env`: validate, recreate Alertmanager |
 | `alert-test` | Raise a critical `AlertTest` for five minutes: an e-mail must reach `ALERT_EMAILS` |
@@ -154,7 +154,7 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   the host's own domain, never an institutional one. Upgrading a host that has a
   `.env`: add `COMPOSE_PROFILES`, `ALERT_EMAILS`, `ALERT_EMAIL_FROM` and
   `DEFAULT_FROM_EMAIL` before pulling, then
-  `make -C deploy volumes secrets up monitoring-init observability-on`.
+  `make -C deploy volumes secrets monitoring-init up observability-on`.
 - Accounts (PP-4, `ADMIN.md`): the upgrade applies migrations `0009_embargo_and_workflow_cleanup`,
   `0010_terms_acceptance` and `0011_account_retention` (`init` and `migrate` run them) and the django-axes tables.
   Sign-up is closed; accounts are created by an administrator and invited. Compulsory
@@ -223,7 +223,8 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   of nginx, so `PUBLIC_SERVER_ADDRESS` (https, trailing slash) and `PUBLIC_HOST`
   must name the same host; `CANTALOUPE_HTTP_ENDPOINT` is
   `<PUBLIC_SERVER_ADDRESS>iiifserver/`, so canvas and image ids are public.
-- After loading a snapshot taken on a development host, run
+- After loading a snapshot taken on a development host, list its origins with
+  `make -C deploy manage ARGS="rewrite_dev_origin --list"`, then run
   `make -C deploy manage ARGS="rewrite_dev_origin --dry-run --from <dev origin> …"`
   (one `--from` per origin), then without `--dry-run`, then
   `make -C deploy manage ARGS="es reindex_database"`. Steps and expected counts:

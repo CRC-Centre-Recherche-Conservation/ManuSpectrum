@@ -390,6 +390,8 @@ aside_dir="$(find "$TMP/media" -maxdepth 1 -name 'previous-*' -newer "$TMP/marke
 [ "$status" -eq 0 ] && [ -f "$aside_dir/.complete" ] && grep -q "aside directory created: $aside_dir" "$TMP/out" \
   && [ "$(grep -n 'aside directory created' "$TMP/out" | head -n 1 | cut -d: -f1)" -lt "$(grep -n 'previous database kept' "$TMP/out" | head -n 1 | cut -d: -f1)" ]
 assert "the aside path is logged when it is created and .complete is written at the end" $?
+grep -Eq "to undo this run: make -C deploy load-snapshot RESTORE_BEFORE=${aside_dir} CONFIRM=yes\$" "$TMP/out"
+assert "load: the printed undo command is complete (no stray brace)" $?
 
 reset_media
 run_load CONFIRM=yes STUB_RESTORE_FATAL=1 && status=0 || status=$?
@@ -514,7 +516,7 @@ find "$TMP/media" -path '*/previous-*/uploadedfiles/old.txt' | grep -q . && [ -f
 assert "restore: the replaced uploads are kept aside and the source aside stays intact" $?
 [ "$(stat -c %a "$TMP/media/uploadedfiles")" = 750 ] && [ "$(stat -c %a "$TMP/media/uploadedfiles/before.txt")" = 640 ]
 assert "restore: directories 0750 and files 0640" $?
-grep -q "RESTORE_BEFORE=" "$TMP/out" && grep -q "done: $ASIDE is restored" "$TMP/out"
+grep -Eq "to undo this run: make -C deploy load-snapshot RESTORE_BEFORE=[^ {}]+ CONFIRM=yes\$" "$TMP/out" && grep -q "done: $ASIDE is restored" "$TMP/out"
 assert "restore: reports how to undo it in turn and its end" $?
 
 exit "$failed"

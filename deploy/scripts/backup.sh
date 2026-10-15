@@ -83,9 +83,14 @@ case "$TAG" in nightly | manual | pre-update) ;; *) usage_die "unknown tag '$TAG
 if [ "$mode" = restic ]; then
   backup_config
   require_backup_dirs
+  require_restic_password
   RESTIC_INTERACTIVE=1 restic_run "$@"
   exit $?
 fi
+
+# `docker compose exec|run -T` still forwards stdin: a run started in the
+# background from a terminal would be stopped (SIGTTIN) at its first container call.
+exec </dev/null
 
 metrics_dir="${METRICS_TEXTFILE_DIR:-}"
 if [ "$mode" = backup ]; then
@@ -138,6 +143,7 @@ if [ "$mode" = init ]; then
   if ! [ -d "$RESTIC_REPOSITORY_DIR" ] || ! [ -w "$RESTIC_REPOSITORY_DIR" ]; then
     die "RESTIC_REPOSITORY_DIR $RESTIC_REPOSITORY_DIR does not exist or is not writable by $(id -un)"
   fi
+  require_restic_password
   take_lock "$BACKUP_LOCK_WAIT"
   # The restic service binds latest/ (the sources) and tmp/ (its temporary
   # packs) and refuses to create a missing host path.
@@ -159,6 +165,7 @@ backup_config
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: create it (0700) as the service account"
 [ -d "$MEDIA_HOST_DIR" ] || die "MEDIA_HOST_DIR $MEDIA_HOST_DIR does not exist"
 require_backup_dirs
+require_restic_password
 take_lock "$BACKUP_LOCK_WAIT"
 wait_for_postgres "$POSTGRES_WAIT"
 
