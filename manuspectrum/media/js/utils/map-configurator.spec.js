@@ -115,6 +115,8 @@ describe("map-configurator", () => {
             expect(labelField("fr", undefined)).toBe(undefined);
         });
 
+        const FONT = ["Noto Sans Regular"];
+
         const fakeMapOf = (layers) => {
             const map = new FakeMap();
             map.layers = layers;
@@ -128,13 +130,16 @@ describe("map-configurator", () => {
                     id: "a",
                     type: "symbol",
                     source: "openfreemap",
-                    layout: { "text-field": english },
+                    layout: { "text-field": english, "text-font": FONT },
                 },
                 {
                     id: "ref",
                     type: "symbol",
                     source: "openfreemap",
-                    layout: { "text-field": ["to-string", ["get", "ref"]] },
+                    layout: {
+                        "text-field": ["to-string", ["get", "ref"]],
+                        "text-font": FONT,
+                    },
                 },
                 {
                     id: "icon",
@@ -146,7 +151,7 @@ describe("map-configurator", () => {
                     id: "other",
                     type: "symbol",
                     source: "resources",
-                    layout: { "text-field": english },
+                    layout: { "text-field": english, "text-font": FONT },
                 },
                 { id: "fill", type: "fill", source: "openfreemap", paint: {} },
             ]);
@@ -192,25 +197,91 @@ describe("map-configurator", () => {
             archesStub.activeLanguage = "en";
             const enMap = fakeMapOf([]);
             mapConfigurator.postConfig(enMap);
-            expect(
-                Object.prototype.hasOwnProperty.call(enMap, "setStyle"),
-            ).toBe(false);
             const style = { version: 8, layers: positron };
             enMap.setStyle(style);
-            expect(enMap.styled[0]).toBe(style);
+            expect(enMap.styled[0].layers).toEqual(positron);
         });
 
-        it("postConfig sets nothing on an English page", () => {
+        it("postConfig sets no label on an English page", () => {
             const map = fakeMapOf([
                 {
                     id: "a",
                     type: "symbol",
                     source: "openfreemap",
-                    layout: { "text-field": english },
+                    layout: { "text-field": english, "text-font": FONT },
                 },
             ]);
             mapConfigurator.postConfig(map);
             expect(map.set).toEqual([]);
+        });
+
+        describe("symbol layers without a text-font", () => {
+            const clusterCount = {
+                id: "resources-cluster-count-1",
+                type: "symbol",
+                source: "resources",
+                layout: { "text-field": "{total}", "text-size": 10 },
+            };
+            const withFont = {
+                id: "kept",
+                type: "symbol",
+                source: "openfreemap",
+                layout: {
+                    "text-field": english,
+                    "text-font": ["Noto Sans Bold"],
+                },
+            };
+            const icon = {
+                id: "icon",
+                type: "symbol",
+                source: "resources",
+                layout: { "icon-image": "pin" },
+            };
+            const fonts = new Set(
+                positron.flatMap((layer) =>
+                    layer.layout && layer.layout["text-font"]
+                        ? [layer.layout["text-font"][0]]
+                        : [],
+                ),
+            );
+
+            it("the fallback is a font the basemap style uses", () => {
+                const map = fakeMapOf([clusterCount]);
+                mapConfigurator.postConfig(map);
+                expect(fonts.has(map.set[0][2][0])).toBe(true);
+            });
+
+            it.each(["en", "fr"])(
+                "postConfig sets it on the layers that lack one, on a %s page",
+                (language) => {
+                    archesStub.activeLanguage = language;
+                    const map = fakeMapOf([clusterCount, withFont, icon]);
+                    mapConfigurator.postConfig(map);
+                    expect(
+                        map.set.filter(([, name]) => name === "text-font"),
+                    ).toEqual([
+                        ["resources-cluster-count-1", "text-font", FONT],
+                    ]);
+                },
+            );
+
+            it.each(["en", "fr"])(
+                "a setStyle gives it to the layers that lack one, on a %s page",
+                (language) => {
+                    archesStub.activeLanguage = language;
+                    const map = fakeMapOf([]);
+                    mapConfigurator.postConfig(map);
+                    const layers = [clusterCount, withFont, icon];
+                    map.setStyle({ version: 8, layers });
+                    const [counted, kept, pin] = map.styled[0].layers;
+                    expect(counted.layout["text-font"]).toEqual(FONT);
+                    expect(kept.layout["text-font"]).toEqual([
+                        "Noto Sans Bold",
+                    ]);
+                    expect(pin.layout["text-font"]).toBeUndefined();
+                    expect(clusterCount.layout["text-font"]).toBeUndefined();
+                },
+            );
         });
 
         it("the rewritten vendored layers are a valid mapbox-gl 1.13 style", () => {
