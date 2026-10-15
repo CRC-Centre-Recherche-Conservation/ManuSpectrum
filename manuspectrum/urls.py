@@ -70,6 +70,7 @@ from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.observability.views import MetricsView
 from manuspectrum.views.health import HealthzView, ReadyzView
+from manuspectrum.views.iiif_annotation_counts import IIIFAnnotationCountsView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
@@ -460,6 +461,19 @@ urlpatterns.append(
         r"^api/spectrum-preview/(?P<file_id>%s)$" % settings.UUID_REGEX,
         SpectrumPreviewView.as_view(),
         name="api-spectrum-preview",
+    )
+)
+
+### Annotation counts of one node, read by the IIIF viewer (project shadow of
+### the core viewer).
+###
+### Language-neutral: the payload is canvas identifiers and numbers. It depends
+### on the reader and is never shared (`private, no-store`).
+urlpatterns.append(
+    path(
+        "api/iiif-annotation-counts",
+        IIIFAnnotationCountsView.as_view(),
+        name="api-iiif-annotation-counts",
     )
 )
 

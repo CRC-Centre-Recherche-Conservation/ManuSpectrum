@@ -68,6 +68,7 @@ IGNORED = {
     "explorer-home": "UI plumbing of the Explorer",
     "explorer-items": "UI plumbing of the Explorer Selection",
     "api-spectrum-preview": "counted by manuspectrum_spectrum_previews_total",
+    "api-iiif-annotation-counts": "UI plumbing of the IIIF viewer",
     "iiif-xy-reading-context": "static context document",
     "iiif-xy-reading-doc": "static documentation",
     "iiif-xy-reading-schema": "static schema",
