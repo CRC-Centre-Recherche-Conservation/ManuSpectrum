@@ -2092,8 +2092,8 @@ function chooseView(event: Event): void {
             </summary>
             <ul>
                 <li
-                    v-for="name in emptyFiles"
-                    :key="name"
+                    v-for="(name, index) in emptyFiles"
+                    :key="index"
                 >
                     <span>{{ name }}</span>
                 </li>

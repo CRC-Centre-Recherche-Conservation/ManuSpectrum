@@ -107,7 +107,10 @@ export function withoutLevels(
     return kept;
 }
 
-/** The events whose date is not approximate (« circa »); twin of the export's `apply_display_switches`, pinned by `tests/fixtures/explorer/map-switches.json`. */
+/**
+ * The events whose date is not approximate (« circa »). Twin of the export's
+ * `apply_display_switches`, pinned by `tests/fixtures/explorer/map-switches.json`.
+ */
 export function withoutApproximate(events: readonly MapEvent[]): MapEvent[] {
     return events.filter((event) => !event.date.approximate);
 }
