@@ -1,5 +1,7 @@
 """Two-factor enrolment and the second-factor sign-in step (PP-4, T4)."""
 
+from unittest import mock
+
 import pyotp
 from arches.app.models.models import UserProfile
 from django.conf import settings
@@ -177,12 +179,13 @@ class EnrolmentTests(SetupBase):
 
     def test_attempts_are_rate_limited_per_user(self):
         secret = self.start()
-        codes = [
-            post(
-                self.client, PAGE, action="confirm", code=wrong_code(secret)
-            ).status_code
-            for _ in range(7)
-        ]
+        with mock.patch("django_ratelimit.core._get_window", return_value=1_000_000):
+            codes = [
+                post(
+                    self.client, PAGE, action="confirm", code=wrong_code(secret)
+                ).status_code
+                for _ in range(7)
+            ]
         self.assertEqual(codes[-1], 429)
         self.assertIsNone(stored(self.alice))
 

@@ -638,7 +638,8 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   `X-Request-ID`), `/en/api/relatable-resources/<g>/<n>` too.
 - [ ] Search exports: `/fr/api/search/export_results?format=tilecsv` → `404`, without `format` → `404`,
   `?format=geojson&format=tilecsv` → `404`, `?format=geojson&form%61t=shp` → `404`,
-  `?format=tilecsv&format=geojson` → `404`; `?format=geojson` → answered by Django.
+  `?format=tilecsv&format=geojson` → `404`; `?format=geojson` without a session cookie → `403` with the
+  site's 403 page, with one → answered by Django.
   `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://manuspectrum.test/fr/temp_file` → `404`
   (a GET reaches Django).
 - [ ] `/files/uploadedfiles/<any stored name>` direct → `404` (bytes only follow `FileView`, 4.5).
@@ -654,6 +655,16 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   `grep -c '"status":429' $LOG/access.log` → `0` before and after it (spec §4.2).
   One `create-all` of 5 items completes: its `request_time` in the access log may exceed 90 s only
   when the upstream was slow, and there is no `504`.
+- [ ] *(service account)* Annotation pacing, measured on the loaded snapshot: open a large manuscript
+  in the resource editor and let the annotation counts fill in. From the nginx JSON access log, record
+  the `upstream_time` p50 and p95 of `/iiifannotations` (the service time; `request_time` also
+  counts the wait in the queue; the field is a string, a comma list when nginx retried). Meanwhile,
+  sample the busy threads several times:
+  `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep '^manuspectrum_inflight_requests '`.
+  - Expected: about 9 in flight plus the scrape, well under 20; the `annotations_site` rate is about
+    `9 / p95` per second, which keeps ~11 of the 20 threads free. When it differs from the current
+    `20r/s` in `snippets/ratelimit.conf`, change it there and the « rate x service time » line of the
+    `iiifannotations` comment in `snippets/edge-rules.conf`, then run `test_edge.sh` again.
 - [ ] Mirador on one large manuscript (4.5): `grep -c '"status":429' $LOG/access.log` → `0` after the visit.
 
 ### 4.4 Error pages

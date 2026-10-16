@@ -422,10 +422,13 @@ class ActivationTests(Base):
         self.assertEqual(self.client.get(self.path).status_code, 410)
 
     def test_the_post_is_rate_limited(self):
-        statuses = [
-            activate(self.client, self.path, **self.good(accept_terms=None)).status_code
-            for _ in range(7)
-        ]
+        with mock.patch("django_ratelimit.core._get_window", return_value=1_000_000):
+            statuses = [
+                activate(
+                    self.client, self.path, **self.good(accept_terms=None)
+                ).status_code
+                for _ in range(7)
+            ]
         self.assertIn(429, statuses)
 
 

@@ -35,7 +35,14 @@ case "$1" in
     cat "$STUB_INSPECT"
     ;;
   stats) cat "$STUB_STATS" ;;
-  events) cat "${STUB_EVENTS:-/dev/null}" ;;
+  events)
+    # Docker 29 removed the deprecated top-level fields of events.Message:
+    # `{{.Status}}` prints a template error per event and nothing on stdout.
+    case "$*" in
+      *".Status"*) sed 's/.*/Error parsing format: template: :1:2: executing "" at <.Status>: can'"'"'t evaluate field Status in type *events.Message/' "${STUB_EVENTS:-/dev/null}" >&2 ;;
+      *) cat "${STUB_EVENTS:-/dev/null}" ;;
+    esac
+    ;;
   system)
     cat "${STUB_DF_VERBOSE:-/dev/null}"
     ;;

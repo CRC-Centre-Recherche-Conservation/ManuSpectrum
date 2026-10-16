@@ -15,13 +15,19 @@ Special routes:
   paths under /iiif/        add Access-Control-Allow-Origin: *
   X-Request-ID              echoed on every web answer, as Django does
   /big.csv                  2 KB of text/csv
+  .../iiifannotations       answered after 0.5 s; the highest number of them in
+                            flight at once is read, and reset, at /__peak_annotations
 """
 
 import json
 import re
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+_annotations = {"now": 0, "peak": 0}
+_annotations_lock = threading.Lock()
 
 FILE_A = "00000000-0000-4000-8000-00000000000a"
 FILE_B = "00000000-0000-4000-8000-00000000000b"
@@ -112,8 +118,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.stream_csv()
         if path == "/big.csv":
             return self.reply(200, b"a,b,c\n" * 400, "text/csv")
+        if path == "/__peak_annotations":
+            with _annotations_lock:
+                peak, _annotations["peak"] = _annotations["peak"], 0
+            return self.reply(200, str(peak).encode(), "text/plain")
         if path.endswith("/iiifannotations"):
+            with _annotations_lock:
+                _annotations["now"] += 1
+                _annotations["peak"] = max(_annotations["peak"], _annotations["now"])
             time.sleep(0.5)  # in-flight requests overlap, as the viewer's batches do
+            with _annotations_lock:
+                _annotations["now"] -= 1
         if path.startswith("/iiif/"):
             return self.echo([("Access-Control-Allow-Origin", "*")])
         return self.echo()

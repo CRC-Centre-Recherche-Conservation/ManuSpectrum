@@ -46,6 +46,7 @@ server {
 
     include snippets/security-headers.conf;
 
+    error_page 403 /_errors/403.html;
     error_page 404 /_errors/404.html;
     error_page 429 /_errors/429.html;
     error_page 500 502 503 504 /_errors/50x.html;

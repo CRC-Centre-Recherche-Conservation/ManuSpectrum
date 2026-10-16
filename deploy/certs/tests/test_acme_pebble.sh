@@ -139,7 +139,7 @@ out="$(certbot renew --non-interactive 2>&1)"
 [ "$(cksum <"$CERTS/live/fullchain.pem")" = "$issued_sum" ] && [[ "$out" != *"installed /certs/letsencrypt"* ]]
 assert "certbot renew leaves a certificate that is not due alone, hook not run" $?
 
-out="$(certbot renew --non-interactive --force-renewal 2>&1)"
+out="$(certbot renew --non-interactive --force-renewal --no-random-sleep-on-renew 2>&1)"
 rc=$?
 [ "$rc" -eq 0 ] || echo "$out" >&2
 [[ "$out" == *"installed /certs/letsencrypt/live/manuspectrum into /certs/live"* ]] && [ "$(cksum <"$CERTS/live/fullchain.pem")" != "$issued_sum" ]

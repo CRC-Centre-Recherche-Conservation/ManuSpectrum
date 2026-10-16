@@ -414,10 +414,10 @@ codes() { # codes COUNT PATH [curl args] : the status of COUNT requests in a row
   for ((i = 0; i < count; i++)); do out+="$(code "$@") "; done
   echo "$out"
 }
-get_many() { # get_many COUNT PATH [PARALLEL=40] : the statuses of COUNT requests, PARALLEL at a time
+get_many() { # get_many COUNT PATH [PARALLEL=40] [MAX-TIME=30] : the statuses of COUNT requests, PARALLEL at a time
   local urls=() i
   for ((i = 0; i < $1; i++)); do urls+=(-o /dev/null "https://$HOST:$HTTPS_PORT$2"); done
-  curl -sS -Z --parallel-max "${3:-40}" --max-time 30 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
+  curl -sS -Z --parallel-max "${3:-40}" --max-time "${4:-30}" --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
     -w '%{http_code}\n' "${urls[@]}"
 }
 # location_block FILE-SECTION PATTERN < nginx -T : the text of one location
@@ -531,6 +531,17 @@ group_search_export() {
   equals "api export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "$base?format=geojson" -H 'Cookie: manuspectrum=x')")"
   equals "search export format=geojson without a session cookie: 403" 403 "$(code "/fr/search/export_results?format=geojson")"
   equals "search export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "/fr/search/export_results?format=geojson" -H 'Cookie: manuspectrum=x')")"
+  local page
+  for page in "/fr/api/search/export_results?format=geojson" "/en/api/search/export_results?format=geojson" "/fr/search/export_results?format=geojson" "/en/search/export_results?format=geojson"; do
+    check "geojson barrier $page: the site's 403 page, both languages, sign-in links" \
+      bash -c 'grep -q "<title>Access restricted / " <<<"$1" && grep -q "<html lang=\"en\"" <<<"$1" && grep -q "<section class=\"ms-error\" lang=\"fr\"" <<<"$1" && grep -q "href=\"/en/auth/?next=/en/\"" <<<"$1" && grep -q "href=\"/fr/auth/?next=/fr/\"" <<<"$1" && ! grep -qi "<center>nginx" <<<"$1"' _ "$(get "$page")"
+  done
+  local refusal
+  refusal="$(headers "/en/api/search/export_results?format=geojson")"
+  equals "geojson barrier page: status 403" "403" "$(head -1 <<<"$refusal" | cut -d" " -f2)"
+  check "geojson barrier page: never publicly cached, nginx headers kept" \
+    bash -c '! grep -qi "public" <<<"$1" && grep -qi "^strict-transport-security:" <<<"$1" && grep -qi "^x-content-type-options:" <<<"$1"' _ "$refusal"
+  equals "the internal 403 page is not reachable directly: 404" 404 "$(code /_errors/403.html)"
   local bypass
   for bypass in 'format=tilecsv&format=geojson' 'format=geojs%6Fn' 'format=GEOJSON' 'f%6Frmat=geojson' 'format=%67eojson' 'total=1&format=tilecsv&format=geo%6Ason'; do
     equals "search export ?$bypass without a cookie: 403" 403 "$(code "/fr/search/export_results?$bypass")"
@@ -585,18 +596,39 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
   sleep 3
   equals "/healthz answers again once the burst has drained" 200 "$(code /healthz)"
   sleep 3
-  # The viewer's peak: 20 annotation fetches at a time per annotation node. A
-  # page load (300 here) passes while ordinary calls keep passing meanwhile.
-  local side="$TMP/side-codes"
-  (for _ in $(seq 25); do code /fr/; echo; sleep 0.2; done >"$side") &
-  out="$(get_many 300 '/fr/iiifannotations?canvas=https://iiif.example/c' 18)"
+  # The viewer fires its annotation fetches far above the pace the pool can
+  # carry: they are queued by nginx (10 r/s per address), never refused, and
+  # reach the upstream a few at a time while ordinary calls keep passing.
+  local side="$TMP/side-codes" began elapsed peak block
+  docker exec "$RUN-web" python -c 'import urllib.request as u; u.urlopen("http://127.0.0.1:8000/__peak_annotations").read()'
+  (for _ in $(seq 25); do get /fr/ -o /dev/null -w '%{http_code} %{time_total}\n'; sleep 0.2; done >"$side") &
+  began="$(date +%s.%N)"
+  out="$(get_many 60 '/fr/iiifannotations?canvas=https://iiif.example/c' 40)"
+  elapsed="$(python3 -I -c 'import sys; print(float(sys.argv[1]) - float(sys.argv[2]))' "$(date +%s.%N)" "$began")"
   wait
-  check "300 annotation requests, 20 at a time: none is 429 (own zones)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
-  check "ordinary calls made during the burst are never refused (no shared connection quota)" bash -c '! grep -Eq "429|000" "$1" && grep -q 200 "$1"' _ "$side"
-  sleep 1
-  out="$(get_many 80 '/fr/iiifannotations?canvas=https://iiif.example/c' 40)"
-  check "40 concurrent annotation requests exceed the connection bound: some are 429" grep -q 429 <<<"$out"
-  sleep 3
+  peak="$(docker exec "$RUN-web" python -c 'import urllib.request as u; print(u.urlopen("http://127.0.0.1:8000/__peak_annotations").read().decode())')"
+  equals "60 annotation requests, 40 at a time (above the old bound of 20): all answer 200" "60" "$(grep -c '^200$' <<<"$out")"
+  check "the annotation requests are paced (60 at 10 r/s take at least 4 s)" \
+    python3 -I -c 'import sys; sys.exit(0 if float(sys.argv[1]) >= 4 else 1)' "$elapsed"
+  check "no more than 8 annotation requests reach the upstream at once (peak $peak)" \
+    python3 -I -c 'import sys; sys.exit(0 if 1 <= int(sys.argv[1]) <= 8 else 1)' "$peak"
+  check "ordinary calls made during the queue are 200 and under 1.5 s" \
+    bash -c '[ "$(wc -l <"$1")" -ge 20 ] && ! awk "\$1 != 200 || \$2 > 1.5 {bad=1} END {exit !bad}" "$1"' _ "$side"
+  # limit_req runs before limit_conn: 160 at once (above the bound of 150) are queued, not refused.
+  sleep 8
+  docker exec "$RUN-web" python -c 'import urllib.request as u; u.urlopen("http://127.0.0.1:8000/__peak_annotations").read()'
+  out="$(get_many 160 '/fr/iiifannotations?canvas=https://iiif.example/c' 160 60)"
+  peak="$(docker exec "$RUN-web" python -c 'import urllib.request as u; print(u.urlopen("http://127.0.0.1:8000/__peak_annotations").read().decode())')"
+  equals "160 concurrent annotation requests (above the connection bound of 150): all answer 200" "160" "$(grep -c '^200$' <<<"$out")"
+  check "160 concurrent annotation requests: at most 8 reach the upstream at once (peak $peak)" \
+    python3 -I -c 'import sys; sys.exit(0 if 1 <= int(sys.argv[1]) <= 8 else 1)' "$peak"
+  # annotations_site is checked as configuration only: one test address never exceeds it.
+  block="$(location_block 'iiifannotations' < <(docker exec "$NGINX" nginx -T 2>&1))"
+  check "annotations: both rate zones are delayed (no nodelay)" \
+    bash -c 'grep -q "limit_req zone=annotations burst=600;" <<<"$1" && grep -q "limit_req zone=annotations_site burst=1200;" <<<"$1" && ! grep -q nodelay <<<"$1"' _ "$block"
+  check "annotations: the safety connection bound stays above the viewer's peak of 120" \
+    bash -c 'n="$(sed -n "s/.*limit_conn annotations_conn \([0-9]*\);.*/\1/p" <<<"$1")"; [ "${n:-0}" -ge 150 ]' _ "$block"
+  sleep 8
   out="$(get_many 100 "/fr/mvt/$FILE_A/5/16/11.pbf")"
   check "100 concurrent map tiles: none is 429 (tiles zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
   sleep 3

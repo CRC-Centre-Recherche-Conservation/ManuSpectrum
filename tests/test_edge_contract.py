@@ -14,7 +14,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.test import SimpleTestCase
-from django.urls import Resolver404, resolve
+from django.urls import Resolver404, resolve, reverse
 from django.utils import translation
 
 NGINX_DIR = Path(
@@ -246,11 +246,14 @@ class EdgeContractTests(SimpleTestCase):
             body = self.location_body(
                 "snippets/edge-rules.conf", f"/{code}/iiifannotations"
             )
-            self.assertRegex(body, r"limit_req zone=annotations burst=\d{4}")
+            self.assertRegex(body, r"limit_req zone=annotations burst=\d+;")
+            self.assertRegex(body, r"limit_req zone=annotations_site burst=\d+;")
+            self.assertNotIn("nodelay", body)
             self.assertIn("limit_conn annotations_conn", body)
             self.assertNotIn("perip", body)
         zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
         self.assertIn("zone=annotations:", zones)
+        self.assertIn("zone=annotations_site:", zones)
         self.assertIn("zone=annotations_conn:", zones)
 
     def test_geojson_barrier_reads_the_session_cookie_of_the_settings(self):
@@ -262,9 +265,32 @@ class EdgeContractTests(SimpleTestCase):
                 body = self.location_body("snippets/edge-rules.conf", f"/{code}/{rest}")
                 self.assertRegex(
                     body,
-                    r"if \(\$anonymous_geojson_export\) \{\s*return 403;",
+                    r"if \(\$anonymous_geojson_export\) \{\s*" r"return 403;",
                     rest,
                 )
+
+    def test_geojson_refusal_is_the_site_403_page(self):
+        template = (
+            NGINX_DIR / "templates/conf.d/manuspectrum.conf.template"
+        ).read_text()
+        edge = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+        self.assertIn("error_page 403 /_errors/403.html;", template)
+        self.assertNotIn("geojson-export", template + edge)
+        self.assertNotIn("_denied", edge)
+        page = (NGINX_DIR / "errors/403.html").read_text()
+        for code, _ in settings.LANGUAGES:
+            with translation.override(code):
+                auth = reverse("auth")
+                root = reverse("root")
+                contact = reverse("about-contact")
+            self.assertEqual(root, f"/{code}/")
+            self.assertIn(f'href="{auth}?next={root}"', page)
+            self.assertIn(f'href="{root}"', page)
+            self.assertIn(f'href="{contact}"', page)
+            self.assertView(auth, "auth")
+            self.assertView(contact, "about-contact")
+        self.assertIn('<html lang="en">', page)
+        self.assertIn('lang="fr"', page)
 
     def test_temp_file_without_an_id_is_refused_by_the_edge(self):
         for code, _ in settings.LANGUAGES:
