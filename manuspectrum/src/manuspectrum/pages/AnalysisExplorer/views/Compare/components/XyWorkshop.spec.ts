@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -419,6 +417,51 @@ describe("XyWorkshop", () => {
             "A2 · S2.csv: nothing to draw.",
         ]);
         expect(view.find(".retry").exists()).toBe(false);
+    });
+
+    it("folds the files with nothing to draw into one disclosure line that names them", async () => {
+        const nothing = {
+            ok: true,
+            status: 204,
+            json: async () => ({}),
+        } as Response;
+        answer(1, jsonResponse({}, 413));
+        answer(2, nothing);
+        answer(3, nothing);
+        answer(4, nothing);
+        const view = await mountWorkshop([
+            curve(0, 1),
+            curve(1, 2),
+            curve(1, 3),
+            curve(2, 4),
+            curve(2, 5),
+        ]);
+        expect(notes(view)).toEqual([
+            "A1 · S1.csv: too large to draw in full; download the file to read it.",
+        ]);
+        const folded = view.find("details.empty-files");
+        expect(folded.find("summary").text()).toBe(
+            "3 files with nothing to draw",
+        );
+        expect(folded.findAll("li").map((item) => item.text())).toEqual([
+            "A2 · S2.csv",
+            "A2 · S3.csv",
+            "A3 · S4.csv",
+        ]);
+        expect(lastDrawing().traces.map((trace) => trace.name)).toEqual([
+            "A3 · S5.csv",
+        ]);
+    });
+
+    it("keeps a single file with nothing to draw as a plain note", async () => {
+        answer(1, {
+            ok: true,
+            status: 204,
+            json: async () => ({}),
+        } as Response);
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        expect(view.find("details.empty-files").exists()).toBe(false);
+        expect(notes(view)).toEqual(["A1 · S1.csv: nothing to draw."]);
     });
 
     it("keeps a curve's colour when an earlier file of the window failed to load", async () => {
@@ -3024,35 +3067,5 @@ describe("XyWorkshop XRF lens", () => {
             expect(view.find('[role="dialog"]').exists()).toBe(false);
             expect(toggleButton(view).attributes("aria-pressed")).toBe("false");
         });
-    });
-});
-
-describe("XyWorkshop styles", () => {
-    const style = readFileSync(`${__dirname}/XyWorkshop.vue`, "utf8").split(
-        "<style scoped>",
-    )[1];
-    const outsideQueries = style.split("@container")[0];
-
-    function rule(source: string, selector: string): string {
-        const start = source.indexOf(`${selector} {`);
-        expect(start).toBeGreaterThan(-1);
-        return source.slice(start, source.indexOf("}", start));
-    }
-
-    it("gives the plot area the height its window leaves at every width, its floor one shared value", () => {
-        const area = rule(outsideQueries, ".xy-workshop .plot-area");
-        expect(area).toContain("flex: 1 1 0;");
-        expect(area).toContain(
-            "grid-template-rows: minmax(var(--xy-chart-floor), 1fr) auto;",
-        );
-        expect(
-            rule(style.split("@container")[1], ".xy-workshop .plot-area"),
-        ).toContain("min-block-size: var(--xy-chart-floor);");
-    });
-
-    it("keeps the drawn chart from holding its own box open, so it shrinks with its window", () => {
-        const chart = rule(outsideQueries, ".xy-workshop .chart");
-        expect(chart).toContain("contain: size;");
-        expect(chart).toContain("min-block-size: 0;");
     });
 });

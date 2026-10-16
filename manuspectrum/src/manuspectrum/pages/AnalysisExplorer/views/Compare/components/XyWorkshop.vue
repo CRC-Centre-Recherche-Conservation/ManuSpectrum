@@ -182,6 +182,8 @@ const REM = 16;
 /** Left and right margins of the plot inside the chart, in px (`workshop-figure` margins). */
 const PLOT_MARGIN_X = 80;
 const DEFAULT_POINTER = "mouse";
+/** From this many files with nothing to draw, they fold into one disclosure line under the chart. */
+const EMPTY_FILES_FOLDED = 2;
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
@@ -662,14 +664,42 @@ const legendGroups = computed<LegendGroup[]>(() =>
         };
     }),
 );
-const notes = computed(() => {
-    const found: string[] = [];
-    for (const line of props.curves) {
-        const name = `${slotLabel(line.slot)} · ${line.file.name}`;
+/** Each answered file of the window, named by its slot and file name. */
+const answered = computed(() =>
+    props.curves.flatMap((line) => {
         const answer = line.file.previewUrl
             ? answers.value.get(line.file.previewUrl)
             : { series: null, failed: false, tooLarge: false };
-        if (!answer) continue;
+        return answer
+            ? [{ name: `${slotLabel(line.slot)} · ${line.file.name}`, answer }]
+            : [];
+    }),
+);
+/** The files that answered with nothing to draw. */
+const emptyFiles = computed(() =>
+    answered.value
+        .filter(
+            ({ answer }) =>
+                !answer.tooLarge && !answer.failed && !answer.series,
+        )
+        .map(({ name }) => name),
+);
+const emptyFilesFolded = computed(
+    () => emptyFiles.value.length >= EMPTY_FILES_FOLDED,
+);
+const emptyFilesSummary = computed(() =>
+    interpolate(
+        $ngettext(
+            "%{n} file with nothing to draw",
+            "%{n} files with nothing to draw",
+            emptyFiles.value.length,
+        ),
+        { n: emptyFiles.value.length },
+    ),
+);
+const notes = computed(() => {
+    const found: string[] = [];
+    for (const { name, answer } of answered.value) {
         if (answer.tooLarge) {
             found.push(
                 interpolate(
@@ -688,7 +718,7 @@ const notes = computed(() => {
                     true,
                 ),
             );
-        } else if (!answer.series) {
+        } else if (!answer.series && !emptyFilesFolded.value) {
             found.push(
                 interpolate(
                     $gettext("%{name}: nothing to draw."),
@@ -2053,6 +2083,22 @@ function chooseView(event: Event): void {
                 <span>{{ note }}</span>
             </li>
         </ul>
+        <details
+            v-if="emptyFilesFolded"
+            class="empty-files"
+        >
+            <summary>
+                <span>{{ emptyFilesSummary }}</span>
+            </summary>
+            <ul>
+                <li
+                    v-for="name in emptyFiles"
+                    :key="name"
+                >
+                    <span>{{ name }}</span>
+                </li>
+            </ul>
+        </details>
         <button
             v-if="canRetry"
             type="button"
@@ -2236,7 +2282,8 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .note,
-.xy-workshop .notes {
+.xy-workshop .notes,
+.xy-workshop .empty-files {
     margin: 0;
     color: var(--ink-muted);
     font-size: 0.8125rem;
@@ -2267,6 +2314,28 @@ function chooseView(event: Event): void {
 
 .xy-workshop .notes {
     padding-inline-start: 1.25rem;
+}
+
+.xy-workshop .empty-files {
+    flex: none;
+}
+
+.xy-workshop .empty-files summary {
+    inline-size: fit-content;
+    cursor: pointer;
+}
+
+.xy-workshop .empty-files summary:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.xy-workshop .empty-files ul {
+    max-block-size: 4.5rem;
+    margin: 0;
+    padding-inline-start: 1.25rem;
+    overflow: auto;
+    overscroll-behavior: contain;
 }
 
 .xy-workshop .retry {
