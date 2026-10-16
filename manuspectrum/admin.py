@@ -18,21 +18,32 @@ terms each user accepted.
 """
 
 import logging
+from datetime import timedelta
 
 from arches.app.models.models import UserProfile
 from dateutil.relativedelta import relativedelta
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
+from django.urls import reverse
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
 from manuspectrum.accounts import activation, audience, notices, twofactor
 from manuspectrum.accounts.creation import resource_label
-from manuspectrum.models import Embargo, EmbargoEvent, TermsAcceptance, WorkflowCleanup
+from manuspectrum.models import (
+    Embargo,
+    EmbargoEvent,
+    SiteNotice,
+    TermsAcceptance,
+    WorkflowCleanup,
+    site_now,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -321,8 +332,132 @@ class WorkflowCleanupAdmin(admin.ModelAdmin):
         return False
 
 
+def _paris_time_widget():
+    """Native date and time inputs.
+
+    The admin's own widget compares the browser clock with ``TIME_ZONE`` (Arches'
+    America/Chicago) and prints a misleading offset note; its « Now » shortcut
+    would also fill a Chicago time. These fields hold Paris times.
+    """
+    return forms.SplitDateTimeWidget(
+        date_attrs={"type": "date"},
+        time_attrs={"type": "time"},
+        date_format="%Y-%m-%d",
+        time_format="%H:%M",
+    )
+
+
+class SiteNoticeForm(forms.ModelForm):
+    """Validates through ``SiteNotice.clean`` (dates, reminders, link labels)."""
+
+    starts_at = forms.SplitDateTimeField(
+        label=SiteNotice._meta.get_field("starts_at").verbose_name,
+        help_text=SiteNotice._meta.get_field("starts_at").help_text,
+        widget=_paris_time_widget(),
+    )
+    ends_at = forms.SplitDateTimeField(
+        label=SiteNotice._meta.get_field("ends_at").verbose_name,
+        help_text=SiteNotice._meta.get_field("ends_at").help_text,
+        widget=_paris_time_widget(),
+    )
+
+    class Meta:
+        model = SiteNotice
+        fields = "__all__"
+        widgets = {
+            "text_en": forms.Textarea(attrs={"rows": 3, "cols": 80}),
+            "text_fr": forms.Textarea(attrs={"rows": 3, "cols": 80}),
+        }
+
+
+class SiteNoticeAdmin(admin.ModelAdmin):
+    form = SiteNoticeForm
+    list_display = (
+        "__str__",
+        "kind",
+        "display",
+        "starts_at",
+        "ends_at",
+        "is_active",
+        "state",
+    )
+    list_filter = ("kind", "display", "is_active")
+    readonly_fields = ("schedule",)
+    fieldsets = (
+        (_("Text"), {"fields": ("kind", "display", "text_en", "text_fr")}),
+        (
+            _("Details link"),
+            {"fields": ("link_url", "link_label_en", "link_label_fr")},
+        ),
+        (_("Schedule"), {"fields": ("starts_at", "ends_at", "reminders", "schedule")}),
+        (_("Publication"), {"fields": ("is_active",)}),
+    )
+
+    def view_on_site(self, obj):
+        return f"{reverse('root')}?ms-notice-preview={obj.pk}"
+
+    @staticmethod
+    def _moments(notice):
+        """(first appearance, other reminders, start, end), naive site times."""
+        reminders = notice.reminder_seconds()
+        shown = [notice.starts_at - timedelta(seconds=r) for r in reminders]
+        return shown[:1], shown[1:], notice.starts_at, notice.ends_at
+
+    @admin.display(description=_("State"))
+    def state(self, notice):
+        if not notice.is_active:
+            return _("unpublished")
+        now = site_now()
+        first = self._moments(notice)[0]
+        if now >= notice.ends_at:
+            return _("over")
+        if now >= notice.starts_at:
+            return _("shown") if notice.display == SiteNotice.ONCE else _("in progress")
+        if first and now >= first[0]:
+            return _("shown")
+        return _("scheduled")
+
+    @admin.display(description=_("Schedule"))
+    def schedule(self, notice):
+        if not notice.starts_at or not notice.ends_at:
+            return "-"
+        day = "D j M H:i"
+        zone = " (%s)" % settings.SITE_NOTICE_TIME_ZONE
+        if notice.display == SiteNotice.ONCE:
+            return (
+                _("Shown from %(start)s until %(end)s")
+                % {
+                    "start": date_format(notice.starts_at, day),
+                    "end": date_format(notice.ends_at, day),
+                }
+            ) + zone
+        if not notice.reminder_seconds():
+            return "-"
+        first, later, start, end = self._moments(notice)
+        parts = [
+            _("Shown from %(when)s") % {"when": date_format(first[0], day)},
+        ]
+        if later:
+            parts.append(
+                _("reminders %(when)s")
+                % {"when": ", ".join(date_format(m, day) for m in later)}
+            )
+        ends_later = end.date() != start.date()
+        parts.append(
+            _("in progress %(start)s–%(end)s")
+            % {
+                "start": date_format(start, day),
+                "end": date_format(end, day if ends_later else "H:i"),
+            }
+        )
+        if not ends_later:
+            parts.append(_("gone at %(when)s") % {"when": date_format(end, "H:i")})
+        return " · ".join(str(p) for p in parts) + zone
+
+
 admin.site.register(Embargo, EmbargoAdmin)
 admin.site.register(WorkflowCleanup, WorkflowCleanupAdmin)
+admin.site.register(SiteNotice, SiteNoticeAdmin)
 
 
 def _user_admin_class():

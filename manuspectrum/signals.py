@@ -22,7 +22,9 @@ from manuspectrum.accounts.lockout import current_request
 from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_config
 from manuspectrum.accounts.retention import send_deactivation_notice
 from manuspectrum.iiif.tokens import revoke
+from manuspectrum.models import SiteNotice
 from manuspectrum.utils.public_visibility import ANONYMOUS_USERNAME, forget_visibility
+from manuspectrum.views import site_notice
 from manuspectrum.views.spectrum_preview import file_record_key
 from manuspectrum.views.summary_service import SLUG_CACHE_KEY, graph_index_key
 
@@ -32,6 +34,12 @@ def drop_summary_graph_slugs(sender, instance, **kwargs):
     """Drop the memoised slug map and the graph's index when a publication is written or removed."""
     keys = [SLUG_CACHE_KEY, graph_index_key(instance.graph_id)]
     transaction.on_commit(lambda: cache.delete_many(keys))
+
+
+@receiver([post_save, post_delete], sender=SiteNotice)
+def refresh_site_notice(sender, instance, **kwargs):
+    """Store the fresh announcement payload and rewrite its snapshot once the write commits."""
+    transaction.on_commit(site_notice.refresh)
 
 
 @receiver([post_save, post_delete], sender=UserObjectPermission)

@@ -950,6 +950,13 @@ EXPLORER_MANIFEST_MAX_CANVASES = 1000
 # ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
 EXPLORER_MIRADOR_URL = ""
 
+# Site announcement (views/site_notice.py). Memo lifetime of the payload, in
+# seconds; the zone its start and end are typed in; the directory nginx reads
+# the last payload from while Django is down (empty: no snapshot).
+SITE_NOTICE_TTL = 300
+SITE_NOTICE_TIME_ZONE = "Europe/Paris"
+SITE_NOTICE_SNAPSHOT_DIR = ""
+
 # IIIF documents (manuspectrum/iiif/). Radius, in canvas pixels, of the circle
 # a point zone is drawn as (SvgSelector next to its PointSelector).
 IIIF_POINT_RADIUS = 12

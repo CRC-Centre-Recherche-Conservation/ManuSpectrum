@@ -251,3 +251,22 @@ def check_oauth_password_grant(app_configs, databases, **kwargs):
             id="manuspectrum.W004",
         )
     ]
+
+
+@checks.register()
+def check_site_notice_snapshot_dir(app_configs, databases, **kwargs):
+    """W005: ``SITE_NOTICE_SNAPSHOT_DIR`` is set but not a writable directory.
+
+    nginx serves the snapshot in that directory while Django is down; saving
+    an announcement still works without it, but the 50x page then shows none.
+    """
+    directory = settings.SITE_NOTICE_SNAPSHOT_DIR
+    if not directory or (os.path.isdir(directory) and os.access(directory, os.W_OK)):
+        return []
+    return [
+        checks.Warning(
+            f"SITE_NOTICE_SNAPSHOT_DIR ({directory}) is not a writable directory: "
+            "the site announcement cannot be served while Django is down.",
+            id="manuspectrum.W005",
+        )
+    ]

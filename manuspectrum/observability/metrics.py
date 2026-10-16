@@ -72,6 +72,7 @@ MEMO_NAMES = (
     "iiif",
     "model-graph",
     "public-visibility",
+    "site-notice",
     "spectrum-preview",
     "spectrum-preview-config",
     "spectrum-preview-file",
