@@ -27,6 +27,10 @@ export interface MapState {
     brush: [number, number] | null;
     /** The OpenHistoricalMap borders layer (`layers=borders`). */
     borders: boolean;
+    /** Unticked (`false`, `approximate=hide`), the events dated « circa » leave the map and its exports. */
+    approximate: boolean;
+    /** The reliability level ids the reader unticked (`hideLevel=`), sorted: their materials leave the map and its exports. */
+    hiddenLevels: string[];
     /** The stage legend is open: the reader's choice, kept across modes, never in the address. */
     legend: boolean;
 }
@@ -46,6 +50,8 @@ const MODES: readonly MapMode[] = ["places", "territories", "multiples"];
 const BORDERS = "borders";
 const RANGE = /^(-?\d{1,4}),(-?\d{1,4})$/;
 const WHOLE = /^\d{1,5}$/;
+const LEVEL_ID = /^[\w-]{1,64}$/;
+const MAX_LEVELS = 20;
 const DECIMAL = /^\d{1,2}(\.\d{1,4})?$/;
 
 /** The types the reader sees ticked: `selected`, or the defaults when none is. */
@@ -63,6 +69,8 @@ export function defaultMapState(): MapState {
         track: [],
         brush: null,
         borders: false,
+        approximate: true,
+        hiddenLevels: [],
         legend: false,
     };
 }
@@ -103,6 +111,18 @@ export function mapStateFromQuery(query: URLSearchParams): MapState {
         .getAll("layers")
         .flatMap((raw) => raw.split(","))
         .includes(BORDERS);
+    state.approximate = query.get("approximate") !== "hide";
+    state.hiddenLevels = [
+        ...new Set(
+            query
+                .getAll("hideLevel")
+                .flatMap((raw) => raw.split(","))
+                .map((id) => id.trim())
+                .filter((id) => LEVEL_ID.test(id)),
+        ),
+    ]
+        .sort()
+        .slice(0, MAX_LEVELS);
     return state;
 }
 
@@ -124,4 +144,6 @@ export function writeMapState(state: MapState, query: URLSearchParams): void {
     }
     if (state.brush) query.set("brush", `${state.brush[0]},${state.brush[1]}`);
     if (state.borders) query.set("layers", BORDERS);
+    if (!state.approximate) query.set("approximate", "hide");
+    for (const id of state.hiddenLevels) query.append("hideLevel", id);
 }

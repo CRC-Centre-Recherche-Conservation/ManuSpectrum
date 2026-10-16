@@ -54,13 +54,23 @@ export function useEvents(
     );
 }
 
-/** The download address of an export of the kept events in `language`. */
+/** The map's display switches the exports apply server side; the events route never reads them. */
+export interface ExportSwitches {
+    approximate: boolean;
+    hiddenLevels: readonly string[];
+}
+
+/** The download address of an export of the kept events in `language`; the switches add `approximate=hide` and `hideLevel=` only when set. */
 export function exportHref(
     route: EventsExportRoute,
     filters: Filters,
     language: string,
+    switches: ExportSwitches = { approximate: true, hiddenLevels: [] },
 ): string {
     const query = eventsQuery(filters);
+    if (!switches.approximate) query.set("approximate", "hide");
+    for (const id of [...switches.hiddenLevels].sort())
+        query.append("hideLevel", id);
     query.set("lang", language);
     return `${generateArchesURL(route)}?${query.toString()}`;
 }

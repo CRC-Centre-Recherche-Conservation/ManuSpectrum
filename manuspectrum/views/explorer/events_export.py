@@ -1,8 +1,12 @@
 """``GET /api/explorer/events.csv`` and ``events.geojson``: the map's kept events as files (spec 2026-10-09 §3.4).
 
 Below the language boundary; the language is ``lang`` (``export_language``).
-Same filters and event types as the events route (``kept_events``), the
-visitor's view (D59), one row per (event, material) in the CSV, one feature per
+Same filters and event types as the events route (``kept_events``), plus the
+two display switches of the map, applied here and nowhere else on the server:
+``approximate=hide`` drops the events dated « circa » and ``hideLevel=<id>``
+(repeated or comma-separated, ids of the certainty scale; an id no material carries drops nothing)
+drops the materials of that reliability level, an event whose materials were
+all dropped with them. Absent, both keep everything. The visitor's view (D59), one row per (event, material) in the CSV, one feature per
 event in the GeoJSON, both streamed (no geometry when the place is unmapped). The territories
 grid is a client model and is never exported. Answers are ``private, no-store``
 and never gzipped.
@@ -76,15 +80,55 @@ def _query_text(query):
     )
 
 
+def display_switches(query):
+    """``(hide_approximate, hidden_levels)`` of the map's display switches in *query*; anything but ``approximate=hide`` keeps the approximate dates."""
+    asked = {
+        v.strip()
+        for raw in query.getlist("hideLevel")
+        for v in raw.split(",")
+        if v.strip()
+    }
+    return query.get("approximate") == "hide", asked
+
+
+def apply_display_switches(events, hide_approximate, hidden_levels):
+    """*events* without the « circa » ones when *hide_approximate*, then without the materials of *hidden_levels*.
+
+    A material of no recorded reliability stays; an event whose materials were
+    all dropped leaves, one that never had a material stays.
+    """
+    kept = []
+    for event in events:
+        if hide_approximate and event["date"]["approximate"]:
+            continue
+        if hidden_levels:
+            materials = [
+                m for m in event["materials"] if m["reliability"] not in hidden_levels
+            ]
+            if not materials and event["materials"]:
+                continue
+            event = {**event, "materials": materials}
+        kept.append(event)
+    return kept
+
+
 def _labelled(bundle, query_text):
     """*query_text* with each value of a reference facet written as its label and its uri (« label <uri> »).
 
     Reference facets are those of ``LABELLED_KEYS``; ``partColour`` reads the
     ``colour`` labels. The uri stands alone when no label is known; the other
-    parameters are kept as they are.
+    parameters are kept as they are. ``hideLevel`` values read the reliability
+    labels.
     """
     parts = []
+    levels = _levels(bundle) if "hideLevel=" in query_text else {}
     for key, value in parse_qsl(query_text):
+        if key == "hideLevel":
+            shown = [
+                f"{levels[v]} <{v}>" if v in levels else v for v in value.split(",")
+            ]
+            parts.append(f"{key}={', '.join(shown)}")
+            continue
         if key not in LABELLED_KEYS:
             parts.append(f"{key}={value}")
             continue
@@ -106,6 +150,7 @@ def _resolve(request):
     with translation.override(language):
         bundle = corpus_bundle(reader, language, explorer_memo.ticket(reader, language))
         events, _keep, _filters = kept_events(bundle, request.GET)
+    events = apply_display_switches(events, *display_switches(request.GET))
     return language, bundle, [_matching(event) for event in events]
 
 

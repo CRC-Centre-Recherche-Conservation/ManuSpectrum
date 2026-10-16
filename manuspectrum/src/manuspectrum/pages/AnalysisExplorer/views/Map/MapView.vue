@@ -164,10 +164,13 @@ const subject = ref<PanelSubject | null>(null);
 const hovered = ref<Hovered | null>(null);
 const listHovered = ref<string | null>(null);
 const page = ref(0);
-/** The reliability levels the reader unticked: their materials leave the map. */
-const hiddenLevels = ref(new Set<string>());
-/** Unticked, the events dated « circa » leave the map, the lists, the territories and the timeline. */
-const approximateShown = ref(true);
+/** The reliability levels the reader unticked (in the address): their materials leave the map and its exports. */
+const hiddenLevels = computed(() => new Set(store.mapState.hiddenLevels));
+/** Unticked (in the address), the events dated « circa » leave the map, the lists, the territories, the timeline and the exports. */
+const approximateShown = computed({
+    get: () => store.mapState.approximate,
+    set: (value: boolean) => store.setMapState({ approximate: value }),
+});
 const background = ref<MapSnapshot | null>(null);
 /** The snapshot of an enlarged map of the series, at the dialog's size. */
 const largeBackground = ref<MapSnapshot | null>(null);
@@ -371,16 +374,22 @@ const credits = computed<{ href: string; text: string }[]>(() => [
         : []),
 ]);
 const language = computed(() => gettext.current);
+const switches = computed(() => ({
+    approximate: store.mapState.approximate,
+    hiddenLevels: store.mapState.hiddenLevels,
+}));
 const exports = computed(() => ({
     csv: exportHref(
         "manuspectrum:explorer-events-csv",
         store.filters,
         language.value,
+        switches.value,
     ),
     geojson: exportHref(
         "manuspectrum:explorer-events-geojson",
         store.filters,
         language.value,
+        switches.value,
     ),
 }));
 const unplaced = computed(
@@ -725,7 +734,7 @@ function setLevel(id: string, event: Event): void {
     const next = new Set(hiddenLevels.value);
     if ((event.target as HTMLInputElement).checked) next.delete(id);
     else next.add(id);
-    hiddenLevels.value = next;
+    store.setMapState({ hiddenLevels: [...next].sort() });
 }
 
 function isFolded(group: RailGroup): boolean {

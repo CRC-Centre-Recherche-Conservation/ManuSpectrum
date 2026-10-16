@@ -8,7 +8,12 @@ import csv
 import json
 from types import SimpleNamespace
 
-from tests.explorer_events_fixtures import LEAD_WHITE, SMALT, VERMILION, EventsCase
+from tests.explorer_events_fixtures import (
+    LEAD_WHITE,
+    SMALT,
+    VERMILION,
+    EventsCase,
+)
 from tests.test_explorer_service import RED
 
 from manuspectrum.views.explorer.events_export import HEADER, _labelled
@@ -62,6 +67,62 @@ class EventsExportTests(EventsCase):
         self.assertEqual(
             {r["type"] for r in rows}, {"production", "modification", "alteration"}
         )
+
+    def low_level(self):
+        events = self.client.get("/en/api/explorer/events").json()["events"]
+        return next(
+            m["reliability"]
+            for e in events
+            for m in e["materials"]
+            if m["id"] == VERMILION
+        )
+
+    def test_approximate_hide_drops_the_circa_events_and_absent_keeps_all(self):
+        _, every = self.csv()
+        self.assertIn("true", {r["approximate"] for r in every})
+        comments, rows = self.csv("&approximate=hide")
+        self.assertEqual({r["approximate"] for r in rows}, {"false"})
+        self.assertLess(len(rows), len(every))
+        self.assertTrue(any("approximate=hide" in c for c in comments))
+        _, other = self.csv("&approximate=show")
+        self.assertEqual(len(other), len(every))
+
+    def test_hide_level_drops_those_materials_and_the_events_left_without(self):
+        _, every = self.csv()
+        low = self.low_level()
+        comments, rows = self.csv(f"&hideLevel={low}")
+        self.assertIn(VERMILION, {r["material"] for r in every})
+        self.assertNotIn(VERMILION, {r["material"] for r in rows})
+        self.assertIn(LEAD_WHITE, {r["material"] for r in rows})
+        self.assertLess(len(rows), len(every))
+        self.assertTrue(any(f"hideLevel={low}" in c for c in comments))
+        self.assertEqual(self.csv("&hideLevel=not-a-level")[1], every)
+
+    def test_the_geojson_follows_both_switches(self):
+        low = self.low_level()
+        plain = json.loads(
+            streamed(self.client.get("/api/explorer/events.geojson?lang=en"))
+        )
+        cut = json.loads(
+            streamed(
+                self.client.get(
+                    f"/api/explorer/events.geojson?lang=en&approximate=hide&hideLevel={low}"
+                )
+            )
+        )
+        self.assertLess(len(cut["features"]), len(plain["features"]))
+        self.assertFalse(
+            any(f["properties"]["date"]["approximate"] for f in cut["features"])
+        )
+        self.assertNotIn(
+            low,
+            {
+                m["reliability"]
+                for f in cut["features"]
+                for m in f["properties"]["materials"]
+            },
+        )
+        self.assertIn("approximate=hide", cut["filters"])
 
     def test_curator_text_is_neutralised(self):
         formula = self.new_resource("place", "=HYPERLINK(1)")

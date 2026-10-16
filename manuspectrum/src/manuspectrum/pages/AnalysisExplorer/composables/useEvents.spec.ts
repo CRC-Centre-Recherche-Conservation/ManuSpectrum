@@ -71,6 +71,34 @@ describe("exportHref", () => {
     });
 });
 
+describe("exportHref display switches", () => {
+    const csv = "manuspectrum:explorer-events-csv";
+
+    it("adds nothing at their default", () => {
+        expect(
+            exportHref(csv, emptyFilters(), "fr", {
+                approximate: true,
+                hiddenLevels: [],
+            }),
+        ).toBe(exportHref(csv, emptyFilters(), "fr"));
+    });
+
+    it("names the hidden approximate dates and the unticked levels", () => {
+        expect(
+            exportHref(csv, { ...emptyFilters(), q: "lead" }, "fr", {
+                approximate: false,
+                hiddenLevels: ["b", "a"],
+            }),
+        ).toBe(
+            "/en/manuspectrum:explorer-events-csv?q=lead&approximate=hide&hideLevel=a&hideLevel=b&lang=fr",
+        );
+    });
+
+    it("never reaches the events request", () => {
+        expect(eventsQuery(emptyFilters()).toString()).toBe("");
+    });
+});
+
 describe("useEvents", () => {
     it("is idle on null", async () => {
         const events = scope.run(() => useEvents(() => null))!;

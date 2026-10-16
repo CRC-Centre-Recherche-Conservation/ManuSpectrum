@@ -32,8 +32,36 @@ describe("map state in the address", () => {
             track: ["a", null, "b"],
             brush: [1300, 1400],
             borders: true,
+            approximate: true,
+            hiddenLevels: [],
             legend: false,
         });
+    });
+
+    it("carries the display switches in the address, none while at their default", () => {
+        const query = new URLSearchParams();
+        writeMapState(
+            {
+                ...defaultMapState(),
+                approximate: false,
+                hiddenLevels: ["b", "a"],
+            },
+            query,
+        );
+        expect(query.toString()).toBe(
+            "approximate=hide&hideLevel=b&hideLevel=a",
+        );
+        const state = mapStateFromQuery(
+            new URLSearchParams(
+                "approximate=hide&hideLevel=b,a&hideLevel=a&hideLevel=%3Cx%3E",
+            ),
+        );
+        expect(state.approximate).toBe(false);
+        expect(state.hiddenLevels).toEqual(["a", "b"]);
+        expect(
+            mapStateFromQuery(new URLSearchParams("approximate=show"))
+                .approximate,
+        ).toBe(true);
     });
 
     it("keeps the legend out of the address, folded by default", () => {
