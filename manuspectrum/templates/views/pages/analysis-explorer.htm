@@ -51,4 +51,4 @@
     </div>
 </noscript>
 {% endblock %}
-{% block js_bundle %}{% render_bundle 'views/pages/analysis-explorer' 'js' attrs=' defer' %}{% endblock %}
+{% block js_bundle %}{% include 'includes/ms_site_notice.htm' %}{% render_bundle 'views/pages/analysis-explorer' 'js' attrs=' defer' %}{% endblock %}

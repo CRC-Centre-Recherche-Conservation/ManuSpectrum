@@ -1,0 +1,217 @@
+// ============================================================
+// SITE NOTICE — announcement banner
+// ============================================================
+// Rendered by media/js/utils/site-notice/banner.js as the first child of
+// <body>. Shared by the public bundles (`_ms-chrome.scss`, root font 16px) and
+// the Arches core bundle (`ms_components/_site-notice.scss`, root font 10px):
+// sizes are in px so both read the same. Imports tokens only.
+// ============================================================
+@import 'ms-tokens';
+
+$ms-notice-kinds: (
+    info:        (accent: $ms-blue-text,     tint: rgba(59, 130, 246, 0.10),  solid: $ms-blue-solid),
+    maintenance: (accent: $ms-orange-solid,  tint: rgba(230, 126, 34, 0.12),  solid: $ms-orange-solid),
+    important:   (accent: $ms-red-text,      tint: rgba(220, 53, 69, 0.10),   solid: $ms-red-text),
+);
+
+.ms-notice {
+    position: sticky;
+    top: 0;
+    z-index: 1100;
+    background: #fff;
+    border-top: 3px solid transparent;
+    border-bottom: 1px solid rgba(26, 26, 46, 0.08);
+    box-shadow: 0 1px 3px rgba(26, 26, 46, 0.04);
+    color: $ms-ink;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+
+    &__inner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: $ms-maxw;
+        margin: 0 auto;
+        padding: 9px var(--ms-gutter, 20px);
+    }
+
+    &__icon {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+    }
+
+    &__body {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        font-size: inherit;
+        line-height: inherit;
+        color: inherit;
+    }
+
+    &__kind {
+        margin-right: 4px;
+        font-family: var(--font-mono, #{$ms-font-mono});
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    &__when {
+        font-weight: 600;
+    }
+
+    &__text {
+        color: $ms-ink;
+    }
+
+    &__link {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+
+        &:hover {
+            text-decoration-thickness: 2px;
+        }
+    }
+
+    &__dismiss {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: $ms-ink-soft;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    &__pulse {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #fff;
+        animation: ms-notice-pulse 1.8s ease-in-out infinite;
+    }
+
+    @each $kind, $c in $ms-notice-kinds {
+        &--#{$kind} {
+            border-top-color: map-get($c, accent);
+
+            .ms-notice__icon {
+                background: map-get($c, tint);
+                color: map-get($c, accent);
+            }
+
+            .ms-notice__kind,
+            .ms-notice__link {
+                color: map-get($c, accent);
+            }
+
+            .ms-notice__dismiss {
+                &:hover {
+                    background: map-get($c, tint);
+                    color: map-get($c, accent);
+                }
+
+                &:focus-visible {
+                    outline: 2px solid map-get($c, accent);
+                    outline-offset: 2px;
+                }
+            }
+
+            &.ms-notice--live {
+                background: map-get($c, solid);
+            }
+        }
+    }
+
+    // Live: the event is happening; the banner stays dismissible.
+    &--live {
+        border-top-color: transparent;
+        color: #fff;
+
+        &::before {
+            content: "";
+            position: absolute;
+            top: -3px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            @include ms-spectral-gradient;
+        }
+
+        .ms-notice__icon {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .ms-notice__kind,
+        .ms-notice__link,
+        .ms-notice__text,
+        .ms-notice__when {
+            color: #fff;
+        }
+
+        .ms-notice__dismiss {
+            color: #fff;
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.18);
+            }
+
+            &:focus-visible {
+                outline-color: #fff;
+            }
+        }
+    }
+
+    @media (max-width: 768px) {
+        &__inner {
+            display: block;
+            position: relative;
+            padding: 9px 44px 9px var(--ms-gutter, 16px);
+        }
+
+        &__icon {
+            display: none;
+        }
+
+        &__when {
+            display: block;
+        }
+
+        &__dismiss {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        &__pulse {
+            animation: none;
+        }
+
+        &__dismiss {
+            transition: none;
+        }
+    }
+}
+
+@keyframes ms-notice-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.7); }
+}
