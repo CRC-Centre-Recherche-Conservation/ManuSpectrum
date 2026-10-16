@@ -214,9 +214,11 @@ class ComposeStackTests(unittest.TestCase):
                     "/var/www/acme",
                     "/srv/media",
                     "/srv/static",
+                    "/srv/site-notice",
                 ):
                     self.assertTrue(mounts[target]["read_only"], target)
                 self.assertEqual(mounts["/srv/static"]["source"], "static")
+                self.assertEqual(mounts["/srv/site-notice"]["source"], "site_notice")
                 self.assertTrue(mounts["/srv/media"]["source"].endswith("/media"))
                 certs = mounts["/etc/nginx/certs"]["source"]
                 self.assertTrue(certs.endswith("/certs/live"), certs)
@@ -335,6 +337,31 @@ class ComposeStackTests(unittest.TestCase):
     def test_worker_healthcheck_pings_celery_not_the_web_probe(self):
         test = " ".join(self.base["services"]["worker"]["healthcheck"]["test"])
         self.assertIn("inspect ping", test)
+
+    def test_only_web_names_the_site_notice_snapshot_directory(self):
+        for label, stack in self.stacks.items():
+            services = stack["services"]
+            with self.subTest(stack=label):
+                self.assertEqual(
+                    services["web"]["environment"]["SITE_NOTICE_SNAPSHOT_DIR"],
+                    "/srv/site-notice",
+                )
+                mounted = [
+                    name
+                    for name, service in services.items()
+                    if any(
+                        str(v if isinstance(v, str) else v.get("target")).startswith(
+                            ("site_notice:", "/srv/site-notice")
+                        )
+                        for v in service.get("volumes", [])
+                    )
+                ]
+                self.assertEqual(sorted(mounted), ["nginx", "web"])
+                for name in ("init", "worker", "beat"):
+                    self.assertNotIn(
+                        "SITE_NOTICE_SNAPSHOT_DIR",
+                        services.get(name, {}).get("environment", {}),
+                    )
 
     def test_web_and_worker_keep_metrics_on_a_tmpfs_beat_does_not(self):
         for label, stack in self.stacks.items():

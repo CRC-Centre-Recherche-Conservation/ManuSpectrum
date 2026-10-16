@@ -30,7 +30,7 @@ FILE_E="00000000-0000-4000-8000-00000000000e"
 FILE_F="00000000-0000-4000-8000-00000000000f"
 STATIC_SWAP_WAIT="${STATIC_SWAP_WAIT:-32}"
 
-GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate upstream_down)
+GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate site_notice upstream_down)
 
 RUN="msedge-$$"
 NET="$RUN-net"
@@ -39,6 +39,7 @@ TMP="$(mktemp -d)"
 CERTS="$TMP/certs"
 MEDIA="$TMP/media"
 STATIC="$TMP/static"
+SITE_NOTICE="$TMP/site-notice"
 LOGS="$TMP/logs"
 WEBROOT="$TMP/acme"
 USER_SPEC="$(id -u):$(id -g)"
@@ -122,6 +123,7 @@ nginx_run_args() {
     -v "$WEBROOT:/var/www/acme:ro" \
     -v "$MEDIA:/srv/media:ro" \
     -v "$STATIC:/srv/static:ro" \
+    -v "$SITE_NOTICE:/srv/site-notice:ro" \
     -v "$LOGS:/var/log/manuspectrum" \
     -e NGINX_ENVSUBST_OUTPUT_DIR=/tmp \
     -e 'NGINX_ENVSUBST_FILTER=^(DOMAIN_NAMES|HSTS_MAX_AGE)$' \
@@ -145,12 +147,20 @@ wait_for() { # wait_for SECONDS CMD... : true as soon as CMD succeeds
   done
 }
 
+# The snapshot web writes at each save of an announcement (a maintenance event
+# in progress).
+write_notice_snapshot() {
+  printf '%s' '{"timeZone":"Europe/Paris","notices":[{"id":1,"version":1,"kind":"maintenance","start":"2026-01-01T00:00:00Z","end":"2099-01-01T00:00:00Z","reminders":[600],"text":{"en":"Down for maintenance.","fr":"En maintenance."},"link":null}],"labels":{}}' \
+    >"$SITE_NOTICE/notice.json"
+  chmod 0644 "$SITE_NOTICE/notice.json"
+}
+
 stub_answers() { [ "$(code /ping)" = 200 ]; }
 
 setup() {
   mkdir -p "$CERTS/ca" "$CERTS/live" "$LOGS" "$WEBROOT/.well-known/acme-challenge" \
     "$MEDIA/uploadedfiles" "$MEDIA/export_deliverables" "$MEDIA/archestemp" \
-    "$STATIC/releases/aaaaaaaaaaaaaaaa" "$STATIC/releases/bbbbbbbbbbbbbbbb"
+    "$STATIC/releases/aaaaaaaaaaaaaaaa" "$STATIC/releases/bbbbbbbbbbbbbbbb" "$SITE_NOTICE"
   chmod 0777 "$LOGS"
   CA_DIR="$CERTS/ca" bash "$REPO/deploy/certs/make-local-ca.sh" "$CERTS/live" "$HOST" >/dev/null || return 1
   chmod 0755 "$CERTS/live"
@@ -170,6 +180,7 @@ setup() {
     printf 'done\n' >"$STATIC/releases/$release/.complete"
   done
   ln -s releases/aaaaaaaaaaaaaaaa "$STATIC/current"
+  write_notice_snapshot
 
   docker network create "$NET" >/dev/null || return 1
   # nginx first, with no upstream yet: it must start and follow them when they appear.
@@ -660,6 +671,26 @@ group_stream() {
   equals "series.csv: not gzipped" "" "$(header_value content-encoding <<<"$(headers /api/explorer/series.csv -H 'Accept-Encoding: gzip')")"
 }
 
+group_site_notice() {
+  local out
+  out="$(get /api/site-notice)"
+  equals "site-notice: web answers while it is up" web "$(jget name <<<"$out")"
+  equals "site-notice: the path reaches web unchanged" /api/site-notice "$(jget path <<<"$out")"
+  out="$(headers /api/site-notice -H 'X-Stub-Status: 503')"
+  equals "site-notice: a 503 of web is answered by the snapshot" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "site-notice: the snapshot is JSON" "application/json" "$(header_value content-type <<<"$out")"
+  equals "site-notice: the snapshot is cacheable for a minute" "public, max-age=60" "$(header_value cache-control <<<"$out")"
+  assert_one_of_each "site-notice snapshot" "$out"
+  equals "site-notice: the snapshot carries the announcement" maintenance \
+    "$(get /api/site-notice -H 'X-Stub-Status: 500' | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["notices"][0]["kind"])')"
+  equals "site-notice: a 403 of web (refused preview) passes through" 403 \
+    "$(code '/api/site-notice?preview=1' -H 'X-Stub-Status: 403')"
+  equals "site-notice: a 304 of web passes through" 304 "$(code /api/site-notice -H 'X-Stub-Status: 304')"
+  rm -f "$SITE_NOTICE/notice.json"
+  equals "site-notice: no snapshot file is a 404" 404 "$(code /api/site-notice -H 'X-Stub-Status: 503')"
+  write_notice_snapshot
+}
+
 # Stops the web stub: keep this group last, it restores the stub when it is done.
 group_upstream_down() {
   local out
@@ -670,6 +701,21 @@ group_upstream_down() {
     grep -Eq '^HTTP/[0-9.]+ 50[24]' <<<"$out"
   check "the 50x is the bilingual error page" grep -q 'Instrument malfunction' <<<"$(get /page)"
   assert_one_of_each "the 50x page" "$out"
+  check "the 50x page holds the announcement block" grep -q 'id="ms-notice"' <<<"$(get /page)"
+  out="$(get /page -D - | tr -d '\r')"
+  equals "the 50x page shows the status it is served for" "$(head -1 <<<"$out" | cut -d' ' -f2)" \
+    "$(grep -o 'id="ms-code"[^>]*>[0-9]*' <<<"$out" | grep -o '[0-9]*$')"
+  check "the 50x page keeps the error text" grep -q 'Instrument malfunction' <<<"$out"
+  check "the SSI directive does not reach the browser" bash -c '! grep -q "<!--#" <<<"$1"' _ "$out"
+  out="$(headers /api/site-notice)"
+  equals "web down: the announcement endpoint answers from the snapshot" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "web down: the snapshot is JSON" "application/json" "$(header_value content-type <<<"$out")"
+  equals "web down: the snapshot is a maintenance announcement" maintenance \
+    "$(get /api/site-notice | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["notices"][0]["kind"])')"
+  check "web down: the snapshot has a Cache-Control header" bash -c 'grep -qi "^cache-control: public, max-age=60" <<<"$1"' _ "$out"
+  rm -f "$SITE_NOTICE/notice.json"
+  equals "web down, no snapshot file: 404" 404 "$(code /api/site-notice)"
+  write_notice_snapshot
   start_stub web 8000
   check "web back: nginx follows the recreated upstream" wait_for 40 stub_answers
 }

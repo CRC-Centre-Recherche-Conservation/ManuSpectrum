@@ -87,6 +87,10 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   an `uploadedfiles/` subdirectory owned by `APP_UID`; Docker never creates it.
 - Static files are not persistent: each `web` start republishes them from the
   image into `/srv/static/current`.
+- The site announcement snapshot (`site_notice` volume, `/srv/site-notice`) is
+  written by `web` at each save and at each start; nginx serves it on
+  `/api/site-notice` and the 50x page reads it while `web` is down. It is
+  derived data and never backed up.
 - `web`, `worker` and `beat` run as `APP_UID:APP_GID` on a read-only root
   filesystem; the image works under any uid.
 - The data package (graphs, controlled lists, System Settings) is the `pkg`

@@ -97,7 +97,7 @@ RUN apt-get update \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent \
        --shell /usr/sbin/nologin app \
-    && install -d -m 1777 /srv/static /var/lib/celery \
+    && install -d -m 1777 /srv/static /srv/site-notice /var/lib/celery \
     && install -d -m 0755 /srv/media
 COPY --from=collect /opt/venv /opt/venv
 COPY --from=collect /app/manage.py /app/manage.py
