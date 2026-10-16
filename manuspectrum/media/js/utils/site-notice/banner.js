@@ -157,8 +157,12 @@ export function init(script, options = {}) {
 
         const body = element("p", "ms-notice__body");
         const kindName = (labels.kind && labels.kind[kind]) || "";
-        const kindLabel =
-            live && labels.live ? `${kindName} · ${labels.live}` : kindName;
+        const phaseName = live
+            ? labels.live
+            : stage.phase === "upcoming"
+              ? labels.upcoming
+              : "";
+        const kindLabel = phaseName ? `${kindName} · ${phaseName}` : kindName;
         body.appendChild(element("span", "ms-notice__kind", kindLabel));
         body.appendChild(document.createTextNode(" "));
         if (notice.display !== "once") {

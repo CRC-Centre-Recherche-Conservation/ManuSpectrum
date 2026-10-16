@@ -7,6 +7,7 @@ const LABELS = {
     region: "Site announcement",
     dismiss: "Dismiss this announcement",
     until: "until {time}",
+    upcoming: "Upcoming",
     live: "In progress",
     kind: {
         info: "Information",
@@ -95,7 +96,7 @@ describe("site notice banner", () => {
         expect(banner.getAttribute("aria-label")).toBe("Site announcement");
         expect(banner.classList.contains("ms-notice--maintenance")).toBe(true);
         expect(banner.querySelector(".ms-notice__kind").textContent).toBe(
-            "Maintenance",
+            "Maintenance · Upcoming",
         );
         expect(banner.querySelector(".ms-notice__text").textContent).toBe(
             "The site will be unavailable.",

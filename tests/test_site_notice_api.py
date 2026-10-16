@@ -94,7 +94,7 @@ class SiteNoticeApiTests(TestCase):
         for code in labels:
             self.assertEqual(
                 set(labels[code]),
-                {"region", "dismiss", "live", "until", "kind"},
+                {"region", "dismiss", "upcoming", "live", "until", "kind"},
             )
             self.assertEqual(
                 set(labels[code]["kind"]), {"info", "maintenance", "important"}

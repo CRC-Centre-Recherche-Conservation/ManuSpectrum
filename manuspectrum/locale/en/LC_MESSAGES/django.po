@@ -7201,6 +7201,11 @@ msgstr ""
 "This configuration was changed by someone else since it was loaded. Reload "
 "it before saving."
 
+#: views/site_notice.py:54
+msgctxt "site notice"
+msgid "Upcoming"
+msgstr ""
+
 #~ msgid "met"
 #~ msgstr "met"
 

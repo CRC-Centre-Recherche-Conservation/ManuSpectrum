@@ -24,7 +24,7 @@ from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotFoun
 from django.http import HttpResponseNotModified
 from django.utils import translation
 from django.utils.cache import patch_cache_control
-from django.utils.translation import gettext
+from django.utils.translation import gettext, pgettext
 from django.views import View
 
 from manuspectrum.models import SiteNotice, site_now
@@ -51,6 +51,7 @@ def _labels():
             labels[code] = {
                 "region": gettext("Site announcement"),
                 "dismiss": gettext("Dismiss this announcement"),
+                "upcoming": pgettext("site notice", "Upcoming"),
                 "live": gettext("In progress"),
                 "until": gettext("until {time}"),
                 "kind": {
