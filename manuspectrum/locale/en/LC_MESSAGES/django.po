@@ -3,12 +3,11 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 09:31-0500\n"
+"POT-Creation-Date: 2026-10-16 10:04-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -155,7 +154,7 @@ msgstr "Document"
 
 #: iiif/annotations.py:28
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
-#: templates/views/pages/conceptual-model.htm:191
+#: templates/views/pages/conceptual-model.htm:189
 msgid "Component"
 msgstr "Component"
 
@@ -487,8 +486,8 @@ msgid "Licences per file"
 msgstr ""
 
 #: templates/explorer/export_readme.md:35
-#: templates/includes/ms_i18n_graph_explorer.htm:71
-#: templates/includes/ms_i18n_graph_explorer.htm:78
+#: templates/includes/ms_i18n_graph_explorer.htm:73
+#: templates/includes/ms_i18n_graph_explorer.htm:80
 msgid "Path"
 msgstr "Path"
 
@@ -1099,14 +1098,20 @@ msgstr "Please write a message."
 
 #: templates/includes/ms_i18n_contact.htm:17
 #, python-brace-format
+msgid "{n} character left"
+msgstr "{n} character left"
+
+
+#: templates/includes/ms_i18n_contact.htm:18
+#, python-brace-format
 msgid "{n} characters left"
 msgstr "{n} characters left"
 
-#: templates/includes/ms_i18n_contact.htm:18
+#: templates/includes/ms_i18n_contact.htm:19
 msgid "Copied."
 msgstr "Copied."
 
-#: templates/includes/ms_i18n_contact.htm:19
+#: templates/includes/ms_i18n_contact.htm:20
 msgid "Copy failed — select the text and copy it manually."
 msgstr "Copy failed — select the text and copy it manually."
 
@@ -1299,14 +1304,26 @@ msgstr "{n} records published"
 
 #: templates/includes/ms_i18n_graph_explorer.htm:46
 #, python-brace-format
+msgid "{n} record published"
+msgstr "{n} record published"
+
+
+#: templates/includes/ms_i18n_graph_explorer.htm:47
+#, python-brace-format
+msgid "{n} model defined and open for deposit"
+msgstr "{n} model defined and open for deposit"
+
+
+#: templates/includes/ms_i18n_graph_explorer.htm:48
+#, python-brace-format
 msgid "{n} models defined and open for deposit"
 msgstr "{n} models defined and open for deposit"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:47
+#: templates/includes/ms_i18n_graph_explorer.htm:49
 msgid "No records published yet — model defined and open for deposit."
 msgstr "No records published yet — model defined and open for deposit."
 
-#: templates/includes/ms_i18n_graph_explorer.htm:48
+#: templates/includes/ms_i18n_graph_explorer.htm:50
 #, python-format, python-brace-format
 msgid ""
 "Every field in ManuSpectrum and every link between models: {fields} fields "
@@ -1317,151 +1334,151 @@ msgstr ""
 "across {models} models, {pct}%% of them bound to a published thesaurus "
 "rather than free text. Click any model to read its schema."
 
-#: templates/includes/ms_i18n_graph_explorer.htm:51
+#: templates/includes/ms_i18n_graph_explorer.htm:53
 #, python-brace-format
 msgid "No field, class or property matches “{q}”."
 msgstr "No field, class or property matches “{q}”."
 
-#: templates/includes/ms_i18n_graph_explorer.htm:52
+#: templates/includes/ms_i18n_graph_explorer.htm:54
 #, python-brace-format
 msgid "{n} of {total} fields"
 msgstr "{n} of {total} fields"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:53
+#: templates/includes/ms_i18n_graph_explorer.htm:55
 #, python-brace-format
 msgid "{n} fields"
 msgstr "{n} fields"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:54
+#: templates/includes/ms_i18n_graph_explorer.htm:56
 #, python-brace-format
 msgid "{n} field"
 msgstr "{n} field"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:55
+#: templates/includes/ms_i18n_graph_explorer.htm:57
 #, python-brace-format
 msgid "{n} fields · {m} group"
 msgstr "{n} fields · {m} group"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:56
+#: templates/includes/ms_i18n_graph_explorer.htm:58
 #, python-brace-format
 msgid "{n} fields · {m} groups"
 msgstr "{n} fields · {m} groups"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:57
+#: templates/includes/ms_i18n_graph_explorer.htm:59
 msgid "Repeatable"
 msgstr "Repeatable"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:58
+#: templates/includes/ms_i18n_graph_explorer.htm:60
 msgid "Once"
 msgstr "Once"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:59
+#: templates/includes/ms_i18n_graph_explorer.htm:61
 msgid "Structural node — carries no data"
 msgstr "Structural node — carries no data"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:60
+#: templates/includes/ms_i18n_graph_explorer.htm:62
 #, python-brace-format
 msgid "Links to {model}"
 msgstr "Links to {model}"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:61
+#: templates/includes/ms_i18n_graph_explorer.htm:63
 #, python-brace-format
 msgid "View {model} →"
 msgstr "View {model} →"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:62
+#: templates/includes/ms_i18n_graph_explorer.htm:64
 msgid "From parent"
 msgstr "From parent"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:63
+#: templates/includes/ms_i18n_graph_explorer.htm:65
 msgid "View structure →"
 msgstr "View structure →"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:64
+#: templates/includes/ms_i18n_graph_explorer.htm:66
 #, python-brace-format
 msgid "Showing {node} and below"
 msgstr "Showing {node} and below"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:65
+#: templates/includes/ms_i18n_graph_explorer.htm:67
 #, python-brace-format
 msgid "← {model}"
 msgstr "← {model}"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:66
+#: templates/includes/ms_i18n_graph_explorer.htm:68
 #, python-brace-format
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 
-#: templates/includes/ms_i18n_graph_explorer.htm:67
+#: templates/includes/ms_i18n_graph_explorer.htm:69
 msgid "Common properties (P1, P2) are dimmed."
 msgstr "Common properties (P1, P2) are dimmed."
 
-#: templates/includes/ms_i18n_graph_explorer.htm:68
+#: templates/includes/ms_i18n_graph_explorer.htm:70
 msgid "Ring = field group · double ring = repeatable"
 msgstr "Ring = field group · double ring = repeatable"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:69
+#: templates/includes/ms_i18n_graph_explorer.htm:71
 msgid "∗ = required"
 msgstr "∗ = required"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:70
+#: templates/includes/ms_i18n_graph_explorer.htm:72
 msgid "CIDOC-CRM class"
 msgstr "CIDOC-CRM class"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:72
-#: templates/includes/ms_i18n_graph_explorer.htm:84
+#: templates/includes/ms_i18n_graph_explorer.htm:74
+#: templates/includes/ms_i18n_graph_explorer.htm:86
 msgid "Cardinality"
 msgstr "Cardinality"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:73
-#: templates/includes/ms_i18n_graph_explorer.htm:83
+#: templates/includes/ms_i18n_graph_explorer.htm:75
+#: templates/includes/ms_i18n_graph_explorer.htm:85
 msgid "Required"
 msgstr "Required"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:74
+#: templates/includes/ms_i18n_graph_explorer.htm:76
 msgid "Optional"
 msgstr "Optional"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:75
+#: templates/includes/ms_i18n_graph_explorer.htm:77
 msgid "Controlled vocabulary"
 msgstr "Controlled vocabulary"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:76
+#: templates/includes/ms_i18n_graph_explorer.htm:78
 msgid "See this relationship in the Network view"
 msgstr "See this relationship in the Network view"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:77
+#: templates/includes/ms_i18n_graph_explorer.htm:79
 #: templates/views/pages/conceptual-model.htm:89
 msgid "Field group"
 msgstr "Field group"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:79
+#: templates/includes/ms_i18n_graph_explorer.htm:81
 msgid "Field"
 msgstr "Field"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:80
+#: templates/includes/ms_i18n_graph_explorer.htm:82
 #: templates/views/pages/conceptual-model.htm:87
 msgid "Datatype"
 msgstr "Datatype"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:81
+#: templates/includes/ms_i18n_graph_explorer.htm:83
 msgid "CIDOC class"
 msgstr "CIDOC class"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:82
+#: templates/includes/ms_i18n_graph_explorer.htm:84
 msgid "Property"
 msgstr "Property"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:85
+#: templates/includes/ms_i18n_graph_explorer.htm:87
 msgid "Target"
 msgstr "Target"
 
-#: templates/includes/ms_i18n_graph_explorer.htm:86
+#: templates/includes/ms_i18n_graph_explorer.htm:88
 #, python-brace-format
 msgid "Every field of every model: {n} rows across {m} models."
 msgstr "Every field of every model: {n} rows across {m} models."
 
-#: templates/includes/ms_i18n_graph_explorer.htm:87
+#: templates/includes/ms_i18n_graph_explorer.htm:89
 msgid "Yes"
 msgstr "Yes"
 
@@ -3897,13 +3914,11 @@ msgstr "Models"
 
 #: templates/views/pages/conceptual-model.htm:65
 msgid ""
-"12 independent models linked by 70 typed CIDOC relationships — so a person "
+"12 independent models linked by 73 typed CIDOC relationships — so a person "
 "recorded once as an analyst is the same record when they reappear as a "
 "volume's owner."
-msgstr ""
-"12 independent models linked by 70 typed CIDOC relationships — so a person "
-"recorded once as an analyst is the same record when they reappear as a "
-"volume's owner."
+msgstr "12 independent models linked by 73 typed CIDOC relationships — so a person recorded once as an analyst is the same record when they reappear as a volume's owner."
+
 
 #: templates/views/pages/conceptual-model.htm:69
 msgid "Vocabularies"
@@ -4016,8 +4031,9 @@ msgid "Granularity of the model"
 msgstr "Granularity of the model"
 
 #: templates/views/pages/conceptual-model.htm:133
-msgid "of fields draw on a published thesaurus, not free text — 187 of 452"
-msgstr "of fields draw on a published thesaurus, not free text — 187 of 452"
+msgid "of fields draw on a published thesaurus, not free text — 193 of 465"
+msgstr "of fields draw on a published thesaurus, not free text — 193 of 465"
+
 
 #: templates/views/pages/conceptual-model.htm:137
 msgid "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
@@ -4035,23 +4051,22 @@ msgstr "concepts from Getty AAT, Pactols, AGORHA and LOTERRE"
 msgid "Technical detail"
 msgstr "Technical detail"
 
-#: templates/views/pages/conceptual-model.htm:156
+#: templates/views/pages/conceptual-model.htm:154
 msgid ""
-"169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
-"12 thesauri."
-msgstr ""
-"169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
-"12 thesauri."
+"170 field groups · 600 nodes (465 of them data) · 80 ontology properties · "
+"38 thesauri."
+msgstr "170 field groups · 600 nodes (465 of them data) · 80 ontology properties · 38 thesauri."
 
-#: templates/views/pages/conceptual-model.htm:164
+
+#: templates/views/pages/conceptual-model.htm:162
 msgid "04 · Thought schema"
 msgstr "04 · Thought schema"
 
-#: templates/views/pages/conceptual-model.htm:165
+#: templates/views/pages/conceptual-model.htm:163
 msgid "Two timelines, one pivot"
 msgstr "Two timelines, one pivot"
 
-#: templates/views/pages/conceptual-model.htm:174
+#: templates/views/pages/conceptual-model.htm:172
 msgid ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
 "timelines run at different speeds and meet on a single object."
@@ -4059,43 +4074,43 @@ msgstr ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
 "timelines run at different speeds and meet on a single object."
 
-#: templates/views/pages/conceptual-model.htm:179
+#: templates/views/pages/conceptual-model.htm:177
 msgid "The object's life"
 msgstr "The object's life"
 
-#: templates/views/pages/conceptual-model.htm:180
+#: templates/views/pages/conceptual-model.htm:178
 msgid "centuries"
 msgstr "centuries"
 
-#: templates/views/pages/conceptual-model.htm:183
+#: templates/views/pages/conceptual-model.htm:181
 msgid "Production"
 msgstr "Production"
 
-#: templates/views/pages/conceptual-model.htm:183
+#: templates/views/pages/conceptual-model.htm:181
 msgid "made: parchment, ink, binding"
 msgstr "made: parchment, ink, binding"
 
-#: templates/views/pages/conceptual-model.htm:184
+#: templates/views/pages/conceptual-model.htm:182
 msgid "Modification"
 msgstr "Modification"
 
-#: templates/views/pages/conceptual-model.htm:184
+#: templates/views/pages/conceptual-model.htm:182
 msgid "deliberate: rebinding, restoration"
 msgstr "deliberate: rebinding, restoration"
 
-#: templates/views/pages/conceptual-model.htm:185
+#: templates/views/pages/conceptual-model.htm:183
 msgid "Alteration"
 msgstr "Alteration"
 
-#: templates/views/pages/conceptual-model.htm:185
+#: templates/views/pages/conceptual-model.htm:183
 msgid "undergone: corrosion, fading, damp"
 msgstr "undergone: corrosion, fading, damp"
 
-#: templates/views/pages/conceptual-model.htm:190
+#: templates/views/pages/conceptual-model.htm:188
 msgid "Pivot"
 msgstr "Pivot"
 
-#: templates/views/pages/conceptual-model.htm:192
+#: templates/views/pages/conceptual-model.htm:190
 msgid ""
 "The material component is what both timelines describe: the thing that was "
 "made and altered, and the thing that was sampled and measured."
@@ -4103,43 +4118,43 @@ msgstr ""
 "The material component is what both timelines describe: the thing that was "
 "made and altered, and the thing that was sampled and measured."
 
-#: templates/views/pages/conceptual-model.htm:197
+#: templates/views/pages/conceptual-model.htm:195
 msgid "The research act"
 msgstr "The research act"
 
-#: templates/views/pages/conceptual-model.htm:198
+#: templates/views/pages/conceptual-model.htm:196
 msgid "days — present day"
 msgstr "days — present day"
 
-#: templates/views/pages/conceptual-model.htm:201
+#: templates/views/pages/conceptual-model.htm:199
 msgid "Sampling"
 msgstr "Sampling"
 
-#: templates/views/pages/conceptual-model.htm:201
+#: templates/views/pages/conceptual-model.htm:199
 msgid "what was examined, and where on the object"
 msgstr "what was examined, and where on the object"
 
-#: templates/views/pages/conceptual-model.htm:202
+#: templates/views/pages/conceptual-model.htm:200
 msgid "Analysis"
 msgstr "Analysis"
 
-#: templates/views/pages/conceptual-model.htm:202
+#: templates/views/pages/conceptual-model.htm:200
 msgid "the measurement: instrument, operator, date"
 msgstr "the measurement: instrument, operator, date"
 
-#: templates/views/pages/conceptual-model.htm:203
+#: templates/views/pages/conceptual-model.htm:201
 msgid "Characterization"
 msgstr "Characterization"
 
-#: templates/views/pages/conceptual-model.htm:203
+#: templates/views/pages/conceptual-model.htm:201
 msgid "the interpretation — stored apart from the measurement"
 msgstr "the interpretation — stored apart from the measurement"
 
-#: templates/views/pages/conceptual-model.htm:212
+#: templates/views/pages/conceptual-model.htm:210
 msgid "05 · Vocabularies"
 msgstr "05 · Vocabularies"
 
-#: templates/views/pages/conceptual-model.htm:213
+#: templates/views/pages/conceptual-model.htm:211
 msgid "Thesauri mobilised"
 msgstr "Thesauri mobilised"
 
@@ -4252,13 +4267,11 @@ msgstr "The model as a living graph"
 #: templates/views/pages/graph-explorer.htm:35
 #, python-format
 msgid ""
-"Every field in ManuSpectrum and every link between models: 452 fields across "
-"12 models, 41%% of them bound to a published thesaurus rather than free "
+"Every field in ManuSpectrum and every link between models: 465 fields across "
+"12 models, 42%% of them bound to a published thesaurus rather than free "
 "text. Click any model to read its schema."
-msgstr ""
-"Every field in ManuSpectrum and every link between models: 452 fields across "
-"12 models, 41%% of them bound to a published thesaurus rather than free "
-"text. Click any model to read its schema."
+msgstr "Every field in ManuSpectrum and every link between models: 465 fields across 12 models, 42%% of them bound to a published thesaurus rather than free text. Click any model to read its schema."
+
 
 #: templates/views/pages/graph-explorer.htm:53
 msgid "Explorer"
@@ -5161,7 +5174,6 @@ msgstr ""
 #~ msgid "Spectral Range"
 #~ msgstr "Spectral Range"
 
-#, fuzzy
 #~ msgid ""
 #~ "Limit the displayed X range. Leave empty to show the whole acquired range."
 #~ msgstr "Limit the displayed X range. Leave empty for no limit."
@@ -5178,7 +5190,6 @@ msgstr ""
 #~ msgid "e.g. 4000"
 #~ msgstr "e.g. 4000"
 
-#, fuzzy
 #~ msgid ""
 #~ "If your file has multiple Y columns, they are displayed as separate "
 #~ "series. Use “mean” to average them into a single series instead."
@@ -5186,15 +5197,12 @@ msgstr ""
 #~ "If your file has multiple Y columns, they are displayed as separate "
 #~ "series. Use \\"
 
-#, fuzzy
 #~ msgid "Remove"
 #~ msgstr "Remove all"
 
-#, fuzzy
 #~ msgid "e.g. 9"
 #~ msgstr "e.g. 500"
 
-#, fuzzy
 #~ msgid "e.g. 2"
 #~ msgstr "e.g. 500"
 

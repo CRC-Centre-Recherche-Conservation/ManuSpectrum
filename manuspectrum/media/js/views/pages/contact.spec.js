@@ -110,6 +110,15 @@ describe("character counter", () => {
         expect(count.textContent).toContain("50");
         expect(count.classList.contains("is-low")).toBe(true);
     });
+
+    it("uses the singular form for one character left", async () => {
+        await boot();
+        const msg = document.getElementById("cf-message");
+        const count = document.getElementById("ms-contact-count");
+        msg.value = "x".repeat(1599);
+        msg.dispatchEvent(new Event("input"));
+        expect(count.textContent).toBe("1 character left");
+    });
 });
 
 describe("copy escape hatch", () => {

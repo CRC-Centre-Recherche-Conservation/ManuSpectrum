@@ -135,9 +135,10 @@ function wireCounter(message) {
     if (!counter || !max) return;
     const update = () => {
         const left = max - message.value.length;
-        counter.textContent = tv("msContactCharsLeft", "{n} characters left", {
-            n: left,
-        });
+        counter.textContent =
+            left === 1
+                ? tv("msContactCharsLeftOne", "{n} character left", { n: left })
+                : tv("msContactCharsLeft", "{n} characters left", { n: left });
         counter.classList.toggle("is-low", left <= 100);
     };
     message.addEventListener("input", update);

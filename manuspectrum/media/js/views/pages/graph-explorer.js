@@ -376,13 +376,23 @@ function renderVolume(data) {
     const records = models.reduce((n, m) => n + (Number(m.instances) || 0), 0);
     const empty = models.filter((m) => !Number(m.instances)).length;
     const parts = [
-        tv("msGeVolumeRecords", "{n} records published", { n: records }),
+        records === 1
+            ? tv("msGeVolumeRecordOne", "{n} record published", { n: records })
+            : tv("msGeVolumeRecords", "{n} records published", { n: records }),
     ];
     if (empty) {
         parts.push(
-            tv("msGeVolumeOpen", "{n} models defined and open for deposit", {
-                n: empty,
-            }),
+            empty === 1
+                ? tv(
+                      "msGeVolumeOpenOne",
+                      "{n} model defined and open for deposit",
+                      { n: empty },
+                  )
+                : tv(
+                      "msGeVolumeOpen",
+                      "{n} models defined and open for deposit",
+                      { n: empty },
+                  ),
         );
     }
     // Freshness marker — the payload is cached, so say when it was built.
