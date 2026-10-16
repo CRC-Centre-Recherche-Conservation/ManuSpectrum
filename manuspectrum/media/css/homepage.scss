@@ -1372,68 +1372,6 @@ a.ms-search-chip {
     text-decoration: none;
 }
 
-.ms-technique-label {
-    margin: 0 0 0.75rem;
-    font-size: 0.7rem;
-    font-weight: 500;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--ink-dim);
-}
-
-.ms-technique-chips,
-.ms-technique-narrower {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 0.6rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.ms-technique-chips {
-    margin-bottom: 2rem;
-}
-
-.ms-technique-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 100%;
-}
-
-/* A technique with narrower ones takes its own line; they sit under it. */
-.ms-technique-branch {
-    flex-basis: 100%;
-}
-
-/* The narrower ones sit together in a soft band hung under their parent. */
-.ms-technique-narrower {
-    position: relative;
-    gap: 0.5rem;
-    margin-top: 0.6rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: 1.5rem;
-    background: var(--bg-alt);
-}
-
-.ms-technique-narrower::before {
-    content: "";
-    position: absolute;
-    top: -0.6rem;
-    left: 50%;
-    width: 1px;
-    height: 0.6rem;
-    background: var(--border-hover);
-}
-
-.ms-technique-narrower .ms-technique-chip {
-    font-size: 0.75rem;
-    padding: 0.4rem 1rem;
-}
-
 .ms-search-input {
     width: 100%;
     padding: 1.1rem 1.5rem 1.1rem 3.5rem;

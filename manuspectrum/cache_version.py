@@ -27,11 +27,9 @@ CACHE_SHAPE_MODULES = (
     "utils/xy_transforms.py",
     # The per-reader visibility memos: hidden resources, readable nodegroups.
     "utils/public_visibility.py",
-    # The homepage technique memo (the Explorer search it reads, and its build).
-    "views/explorer/service.py",
-    "views/explorer/home.py",
     # The Explorer's corpus bundle: its keys and what each layer keeps, the
     # values of its rows (names, labels, references) and its link maps.
+    "views/explorer/service.py",
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "views/explorer/swatches.py",

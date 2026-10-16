@@ -2088,20 +2088,11 @@ def nearest_carried(tree, carried):
     return nearest
 
 
-def home_techniques(user, language, ticket=None):
-    """``carried_techniques`` of the unfiltered corpus of the reader."""
-    bundle = corpus_bundle(user, language, ticket)
-    _, active, *_, counted = row_filter(
-        bundle.rows, QueryDict(""), universe=bundle.universe
-    )
-    return carried_techniques(bundle, active, counted)
-
-
 def carried_techniques(bundle, active, counted):
     """The ``FacetValue`` list of the techniques the analyses carry themselves, with closed counts.
 
     A value's ``parents`` are its nearest carried ancestors (implied ones are
-    skipped); both homes draw a value under each of them. The values are in
+    skipped); the home draws a value under each of them. The values are in
     tree order: depth first, siblings in facet order, a value under several
     carried parents listed once, under the first reached.
     """

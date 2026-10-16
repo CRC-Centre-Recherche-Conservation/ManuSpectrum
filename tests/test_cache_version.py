@@ -63,7 +63,6 @@ class CacheCodeVersionTests(SimpleTestCase):
 
 BUNDLE_BUILDERS = (
     "views/explorer/service.py",
-    "views/explorer/home.py",
     "views/explorer/memo.py",
     "views/explorer/values.py",
     "views/explorer/events.py",

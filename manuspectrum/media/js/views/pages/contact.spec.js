@@ -110,6 +110,34 @@ describe("character counter", () => {
         expect(count.textContent).toContain("50");
         expect(count.classList.contains("is-low")).toBe(true);
     });
+
+    it("uses the singular form for one character left", async () => {
+        await boot();
+        const msg = document.getElementById("cf-message");
+        const count = document.getElementById("ms-contact-count");
+        msg.value = "x".repeat(1599);
+        msg.dispatchEvent(new Event("input"));
+        expect(count.textContent).toBe("1 character left");
+    });
+});
+
+describe("character counter in French", () => {
+    it("takes the singular form for zero", async () => {
+        document.documentElement.lang = "fr";
+        try {
+            await boot();
+            const msg = document.getElementById("cf-message");
+            const count = document.getElementById("ms-contact-count");
+            msg.value = "x".repeat(1600);
+            msg.dispatchEvent(new Event("input"));
+            expect(count.textContent).toBe("0 character left");
+            msg.value = "x".repeat(1598);
+            msg.dispatchEvent(new Event("input"));
+            expect(count.textContent).toBe("2 characters left");
+        } finally {
+            document.documentElement.lang = "";
+        }
+    });
 });
 
 describe("copy escape hatch", () => {
