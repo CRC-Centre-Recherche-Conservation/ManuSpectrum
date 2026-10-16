@@ -193,7 +193,8 @@ class ReconcileTests(PassCase):
         self.assertEqual(row.set_by, self.setter)
         self.assertEqual(
             row.ends_on,
-            date.today() + relativedelta(months=settings.EMBARGO_MAX_MONTHS),
+            datetime.now(LOCAL_TZ).date()
+            + relativedelta(months=settings.EMBARGO_MAX_MONTHS),
         )
         detected, dated = row.events.order_by("pk")
         self.assertEqual(
