@@ -147,6 +147,11 @@ def property_code(prettified):
     return m.group(0) if m else ""
 
 
+THESAURUS_CONCEPT = ("concept", "concept-list")
+THESAURUS_REFERENCE = "reference"
+THESAURUS_DATATYPES = THESAURUS_CONCEPT + (THESAURUS_REFERENCE,)
+
+
 def skip_from_counts(datatype, istopnode):
     """The ONE rule that keeps `stats.nodes` at 452 and `stats.nodegroups` at 169.
 
@@ -222,10 +227,14 @@ def trim_node_config(datatype, config):
             for g in graphs
             if isinstance(g, dict) and g.get("graphid")
         ]
-    elif datatype in ("concept", "concept-list"):
+    elif datatype in THESAURUS_CONCEPT:
         coll = cfg.get("rdmCollection")
         if coll:
             out["collection"] = str(coll)
+    elif datatype == THESAURUS_REFERENCE:
+        controlled_list = cfg.get("controlledList")
+        if controlled_list:
+            out["collection"] = str(controlled_list)
     return out
 
 
@@ -393,6 +402,7 @@ def build_model_graph(language="en"):
         models, datatype_hist = [], {}
         cidoc_classes = set()
         thesaurus_nodes = 0
+        thesaurus_lists = set()  # controlled lists bound by `reference` fields
         relations_by_key = (
             {}
         )  # (gid, tgt, prop) -> relation dict, preserves first-seen order
@@ -444,8 +454,10 @@ def build_model_graph(language="en"):
                 datatype_hist[dt] = datatype_hist.get(dt, 0) + 1
                 if dt != "semantic":
                     data_nodes += 1
-                if dt in ("concept", "concept-list"):
+                if dt in THESAURUS_DATATYPES:
                     thesaurus_nodes += 1
+                    if dt == THESAURUS_REFERENCE and node_cfg.get("collection"):
+                        thesaurus_lists.add(node_cfg["collection"])
                 ngid = str(n.nodegroup_id) if n.nodegroup_id else "ungrouped"
                 bucket = ng_map.setdefault(ngid, {"id": ngid, "name": "", "nodes": []})
                 bucket["nodes"].append(
@@ -521,12 +533,21 @@ def build_model_graph(language="en"):
             if dt != "semantic"
         ]
 
-        # Two cheap COUNTs. The pages quote "12 thesauri · ~20,000 concepts";
-        # both drift as the RDM grows, so neither may live in a template.
+        # The pages quote "N thesauri · ~M concepts": the controlled lists the
+        # `reference` fields are bound to and their items. Both drift as the
+        # lists grow, so neither may live in a template.
         try:
-            concepts = Concept.objects.filter(nodetype_id="Concept").count()
-            thesauri = Concept.objects.filter(nodetype_id="ConceptScheme").count()
-        except Exception:  # noqa: BLE001 — a missing RDM must not 500 the explorer
+            from arches_controlled_lists.models import ListItem
+
+            thesauri = len(thesaurus_lists)
+            concepts = (
+                ListItem.objects.filter(list_id__in=thesaurus_lists).count()
+                if thesaurus_lists
+                else 0
+            )
+        except (
+            Exception
+        ):  # noqa: BLE001 — a missing lists table must not 500 the explorer
             concepts, thesauri = 0, 0
 
         data_nodes_total = sum(m["counts"]["nodes"] for m in models)
@@ -568,7 +589,7 @@ def build_model_graph(language="en"):
         for m in models:
             for nd in m["structure"]["nodes"]:
                 c = (nd.get("config") or {}).get("collection")
-                if c:
+                if c and nd["datatype"] != THESAURUS_REFERENCE:
                     coll_ids.add(c)
         if coll_ids:
             try:
@@ -594,7 +615,7 @@ def build_model_graph(language="en"):
                     for nd in m["structure"]["nodes"]:
                         cfg = nd.get("config") or {}
                         c = cfg.get("collection")
-                        if not c:
+                        if not c or nd["datatype"] == THESAURUS_REFERENCE:
                             continue
                         lbls = labels.get(c) or {}
                         lbl = (
@@ -606,6 +627,36 @@ def build_model_graph(language="en"):
                             cfg["collection_label"] = str(lbl)
                         if c in sizes:
                             cfg["collection_size"] = sizes[c]
+            except Exception:  # noqa: BLE001
+                pass
+
+        if thesaurus_lists:
+            try:
+                from arches_controlled_lists.models import List, ListItem
+
+                list_names = {
+                    str(r["id"]): r["name"]
+                    for r in List.objects.filter(id__in=thesaurus_lists).values(
+                        "id", "name"
+                    )
+                }
+                list_sizes = {
+                    str(r["list_id"]): r["n"]
+                    for r in ListItem.objects.filter(list_id__in=thesaurus_lists)
+                    .values("list_id")
+                    .order_by()
+                    .annotate(n=Count("id"))
+                }
+                for m in models:
+                    for nd in m["structure"]["nodes"]:
+                        cfg = nd.get("config") or {}
+                        c = cfg.get("collection")
+                        if nd["datatype"] != THESAURUS_REFERENCE or not c:
+                            continue
+                        if list_names.get(c):
+                            cfg["collection_label"] = str(list_names[c])
+                        if c in list_sizes:
+                            cfg["collection_size"] = list_sizes[c]
             except Exception:  # noqa: BLE001
                 pass
 

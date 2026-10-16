@@ -121,6 +121,10 @@ def patched_orm(
     thesauri=0,
     values=(),
     relations=(),
+    lists=(),
+    list_items=(),
+    list_item_count=0,
+    list_overrides=None,
     **overrides,
 ):
     targets = {
@@ -136,8 +140,14 @@ def patched_orm(
         "Relation": _manager(relations),
     }
     targets.update(overrides)
+    list_targets = {
+        "List": _manager(lists),
+        "ListItem": _manager(list_items, list_item_count),
+    }
+    list_targets.update(list_overrides or {})
     with mock.patch.multiple("arches.app.models.models", **targets):
-        yield
+        with mock.patch.multiple("arches_controlled_lists.models", **list_targets):
+            yield
 
 
 # --- a two-graph fixture exercising the whole assembly loop -------------------
@@ -321,9 +331,9 @@ class BuildModelGraphStatsTests(SimpleTestCase):
         self.assertEqual(self.stats["cidoc_classes"], 4)
         self.assertEqual(self.stats["properties"], 3)
 
-    def test_rdm_totals_come_from_the_concept_table(self):
-        self.assertEqual(self.stats["concepts"], 20000)
-        self.assertEqual(self.stats["thesauri"], 12)
+    def test_totals_are_zero_when_no_field_is_bound_to_a_controlled_list(self):
+        self.assertEqual(self.stats["concepts"], 0)
+        self.assertEqual(self.stats["thesauri"], 0)
 
     def test_draft_resources_are_absent_from_the_owning_model(self):
         models = build_fixture()["models"]
@@ -681,12 +691,103 @@ class BuildModelGraphRdmEnrichmentTests(SimpleTestCase):
         payload = build_fixture(Value=_raising_manager(RuntimeError("no rdm")))
         self.assertEqual(self._concept_config(payload), {"collection": "coll-1"})
 
-    def test_a_missing_concept_table_degrades_the_totals_to_zero(self):
-        payload = build_fixture(
-            Concept=_raising_manager(RuntimeError("relation does not exist"))
+
+REFERENCE_NODES = NODES + [
+    _node(
+        "r1",
+        "g2",
+        "reference",
+        name="Material",
+        nodegroup="ng2",
+        ontologyclass=CIDOC + "E55_Type",
+        config={"controlledList": "list-1", "multiValue": True},
+    ),
+    _node(
+        "r2",
+        "g2",
+        "reference",
+        name="Technique",
+        nodegroup="ng2",
+        ontologyclass=CIDOC + "E55_Type",
+        config={"controlledList": "list-1"},
+    ),
+    _node(
+        "r3",
+        "g2",
+        "reference",
+        name="Colour",
+        nodegroup="ng2",
+        ontologyclass=CIDOC + "E55_Type",
+        config={"controlledList": "list-2"},
+    ),
+]
+REFERENCE_EDGES = EDGES + [
+    _edge("r1", "ng2", CIDOC + "P2_has_type"),
+    _edge("r2", "ng2", CIDOC + "P2_has_type"),
+    _edge("r3", "ng2", CIDOC + "P2_has_type"),
+]
+LISTS = [
+    {"id": "list-1", "name": "Materials"},
+    {"id": "list-2", "name": "Colours"},
+]
+LIST_ITEMS = [
+    {"list_id": "list-1", "n": 40},
+    {"list_id": "list-2", "n": 15},
+]
+
+
+def build_reference_fixture(**overrides):
+    kwargs = dict(
+        nodes=REFERENCE_NODES,
+        edges=REFERENCE_EDGES,
+        lists=LISTS,
+        list_items=LIST_ITEMS,
+        list_item_count=55,
+    )
+    kwargs.update(overrides)
+    return build_fixture(**kwargs)
+
+
+class BuildModelGraphReferenceTests(SimpleTestCase):
+    def test_reference_fields_count_as_thesaurus_backed(self):
+        stats = build_reference_fixture()["stats"]
+        self.assertEqual(stats["nodes"], 7)
+        self.assertEqual(stats["thesaurus_nodes"], 4)
+        self.assertEqual(stats["thesaurus_pct"], 57)
+
+    def test_thesauri_are_the_distinct_lists_and_concepts_their_items(self):
+        stats = build_reference_fixture()["stats"]
+        self.assertEqual(stats["thesauri"], 2)
+        self.assertEqual(stats["concepts"], 55)
+
+    def test_reference_field_names_its_list_and_size(self):
+        payload = build_reference_fixture()
+        by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
+        self.assertEqual(
+            by_id["r1"]["config"],
+            {
+                "collection": "list-1",
+                "collection_label": "Materials",
+                "collection_size": 40,
+            },
         )
+        self.assertEqual(by_id["r3"]["config"]["collection_label"], "Colours")
+
+    def test_a_list_failure_degrades_to_the_bare_uuid_and_zero_totals(self):
+        payload = build_reference_fixture(
+            list_overrides={"ListItem": _raising_manager(RuntimeError("no lists"))}
+        )
+        by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
+        self.assertEqual(by_id["r1"]["config"], {"collection": "list-1"})
         self.assertEqual(payload["stats"]["concepts"], 0)
         self.assertEqual(payload["stats"]["thesauri"], 0)
+        self.assertEqual(payload["stats"]["thesaurus_nodes"], 4)
+
+    def test_a_list_id_is_not_looked_up_in_the_rdm(self):
+        values = [{"concept_id": "list-1", "value": "RDM clash", "language_id": "en"}]
+        payload = build_reference_fixture(values=values)
+        by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
+        self.assertEqual(by_id["r1"]["config"]["collection_label"], "Materials")
 
 
 class ExcludedGraphIdsTests(SimpleTestCase):
