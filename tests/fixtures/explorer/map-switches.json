@@ -1,0 +1,74 @@
+{
+    "about": "The map's display switches and material filter, read by tests/test_explorer_events_export.py (shown_events) and views/Map/map-switches.spec.ts (withoutApproximate, withoutLevels, matchingEvents). `matches` is the material filter's verdict.",
+    "events": [
+        {"id": "plain", "date": {"approximate": false}, "materials": [{"id": "lead", "reliability": "high", "matches": true}]},
+        {"id": "circa", "date": {"approximate": true}, "materials": [{"id": "lead", "reliability": "high", "matches": true}]},
+        {"id": "mixed", "date": {"approximate": false}, "materials": [{"id": "vermilion", "reliability": "low", "matches": true}, {"id": "lead", "reliability": "high", "matches": true}]},
+        {"id": "low-only", "date": {"approximate": false}, "materials": [{"id": "vermilion", "reliability": "low", "matches": true}]},
+        {"id": "no-material", "date": {"approximate": false}, "materials": []},
+        {"id": "unrated", "date": {"approximate": false}, "materials": [{"id": "smalt", "reliability": null, "matches": true}]},
+        {"id": "filtered", "date": {"approximate": false}, "materials": [{"id": "vermilion", "reliability": "low", "matches": true}, {"id": "lead", "reliability": "high", "matches": false}]}
+    ],
+    "cases": [
+        {
+            "name": "no switch: every event, its matching materials only",
+            "hideApproximate": false,
+            "hiddenLevels": [],
+            "expected": [
+                {"id": "plain", "materials": ["lead"]},
+                {"id": "circa", "materials": ["lead"]},
+                {"id": "mixed", "materials": ["vermilion", "lead"]},
+                {"id": "low-only", "materials": ["vermilion"]},
+                {"id": "no-material", "materials": []},
+                {"id": "unrated", "materials": ["smalt"]},
+                {"id": "filtered", "materials": ["vermilion"]}
+            ]
+        },
+        {
+            "name": "approximate hidden: the circa event leaves",
+            "hideApproximate": true,
+            "hiddenLevels": [],
+            "expected": [
+                {"id": "plain", "materials": ["lead"]},
+                {"id": "mixed", "materials": ["vermilion", "lead"]},
+                {"id": "low-only", "materials": ["vermilion"]},
+                {"id": "no-material", "materials": []},
+                {"id": "unrated", "materials": ["smalt"]},
+                {"id": "filtered", "materials": ["vermilion"]}
+            ]
+        },
+        {
+            "name": "low hidden: an event left without material, or without a matching one, leaves; no material and no reliability stay",
+            "hideApproximate": false,
+            "hiddenLevels": ["low"],
+            "expected": [
+                {"id": "plain", "materials": ["lead"]},
+                {"id": "circa", "materials": ["lead"]},
+                {"id": "mixed", "materials": ["lead"]},
+                {"id": "no-material", "materials": []},
+                {"id": "unrated", "materials": ["smalt"]}
+            ]
+        },
+        {
+            "name": "high hidden: the non-matching high material goes, the matching low one stays",
+            "hideApproximate": false,
+            "hiddenLevels": ["high"],
+            "expected": [
+                {"id": "mixed", "materials": ["vermilion"]},
+                {"id": "low-only", "materials": ["vermilion"]},
+                {"id": "no-material", "materials": []},
+                {"id": "unrated", "materials": ["smalt"]},
+                {"id": "filtered", "materials": ["vermilion"]}
+            ]
+        },
+        {
+            "name": "both switches",
+            "hideApproximate": true,
+            "hiddenLevels": ["low", "high"],
+            "expected": [
+                {"id": "no-material", "materials": []},
+                {"id": "unrated", "materials": ["smalt"]}
+            ]
+        }
+    ]
+}

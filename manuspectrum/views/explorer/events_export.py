@@ -4,9 +4,10 @@ Below the language boundary; the language is ``lang`` (``export_language``).
 Same filters and event types as the events route (``kept_events``), plus the
 two display switches of the map, applied here and nowhere else on the server:
 ``approximate=hide`` drops the events dated « circa » and ``hideLevel=<id>``
-(repeated or comma-separated, ids of the certainty scale; an id no material carries drops nothing)
-drops the materials of that reliability level, an event whose materials were
-all dropped with them. Absent, both keep everything. The visitor's view (D59), one row per (event, material) in the CSV, one feature per
+(repeated or comma-separated; an id outside the certainty scale is ignored, and
+neither the files nor their name echo it) drops the materials of that
+reliability level, an event left without a matching material with them.
+Absent, both keep everything. The visitor's view (D59), one row per (event, material) in the CSV, one feature per
 event in the GeoJSON, both streamed (no geometry when the place is unmapped). The territories
 grid is a client model and is never exported. Answers are ``private, no-store``
 and never gzipped.
@@ -73,20 +74,35 @@ LABELLED_KEYS = frozenset(
 )
 
 
-def _query_text(query):
-    return urlencode(
-        sorted((k, v) for k in query for v in query.getlist(k) if k != "lang"),
-        safe=":,",
-    )
+SWITCH_KEYS = frozenset(("approximate", "hideLevel"))
 
 
-def display_switches(query):
-    """``(hide_approximate, hidden_levels)`` of the map's display switches in *query*; anything but ``approximate=hide`` keeps the approximate dates."""
+def _query_text(query, hide_approximate, hidden_levels):
+    """*query* as sorted text without ``lang``, its display switches written only as they act: ``approximate=hide``, one ``hideLevel`` per known level."""
+    pairs = [
+        (k, v)
+        for k in query
+        if k != "lang" and k not in SWITCH_KEYS
+        for v in query.getlist(k)
+    ]
+    if hide_approximate:
+        pairs.append(("approximate", "hide"))
+    pairs.extend(("hideLevel", level) for level in hidden_levels)
+    return urlencode(sorted(pairs), safe=":,")
+
+
+def display_switches(query, levels):
+    """``(hide_approximate, hidden_levels)`` of the map's display switches in *query*.
+
+    Anything but ``approximate=hide`` keeps the approximate dates; a
+    ``hideLevel`` id outside *levels* (the ids of the certainty scale) is
+    ignored.
+    """
     asked = {
         v.strip()
         for raw in query.getlist("hideLevel")
         for v in raw.split(",")
-        if v.strip()
+        if v.strip() in levels
     }
     return query.get("approximate") == "hide", asked
 
@@ -95,7 +111,9 @@ def apply_display_switches(events, hide_approximate, hidden_levels):
     """*events* without the « circa » ones when *hide_approximate*, then without the materials of *hidden_levels*.
 
     A material of no recorded reliability stays; an event whose materials were
-    all dropped leaves, one that never had a material stays.
+    all dropped leaves, one that never had a material stays. Twin of the map's
+    ``withoutApproximate`` and ``withoutLevels`` (``views/Map/place-symbols.ts``),
+    pinned by ``tests/fixtures/explorer/map-switches.json``.
     """
     kept = []
     for event in events:
@@ -124,9 +142,8 @@ def _labelled(bundle, query_text):
     levels = _levels(bundle) if "hideLevel=" in query_text else {}
     for key, value in parse_qsl(query_text):
         if key == "hideLevel":
-            shown = [
-                f"{levels[v]} <{v}>" if v in levels else v for v in value.split(",")
-            ]
+            ids = [v.strip() for v in value.split(",")]
+            shown = [f"{levels[v]} <{v}>" if v in levels else v for v in ids]
             parts.append(f"{key}={', '.join(shown)}")
             continue
         if key not in LABELLED_KEYS:
@@ -145,25 +162,44 @@ def _digest(text):
 
 
 def _resolve(request):
+    """``(language, bundle, events, query_text)`` of an export request: the map's events, switches applied, and the query as the files echo it."""
     language = export_language(request.GET)
     reader = anonymous_user()
     with translation.override(language):
         bundle = corpus_bundle(reader, language, explorer_memo.ticket(reader, language))
         events, _keep, _filters = kept_events(bundle, request.GET)
-    events = apply_display_switches(events, *display_switches(request.GET))
-    return language, bundle, [_matching(event) for event in events]
+    switches = display_switches(request.GET, _levels(bundle))
+    return (
+        language,
+        bundle,
+        shown_events(events, *switches),
+        _query_text(request.GET, *switches),
+    )
+
+
+def shown_events(events, hide_approximate, hidden_levels):
+    """The events the map shows under its display switches, each with its matching materials only."""
+    shown = (
+        _matching(event)
+        for event in apply_display_switches(events, hide_approximate, hidden_levels)
+    )
+    return [event for event in shown if event is not None]
 
 
 def _matching(event):
-    """*event* with only its materials that meet the filters, without their ``matches`` and ``componentColours``."""
-    return {
-        **event,
-        "materials": [
-            {key: value for key, value in m.items() if key not in QUERY_FIELDS}
-            for m in event["materials"]
-            if m["matches"]
-        ],
-    }
+    """*event* with only its materials that meet the filters, without their ``matches`` and ``componentColours``; None when it has materials and none meets them.
+
+    Twin of the map's ``matchingEvents`` (``views/Map/matching.ts``), pinned
+    by ``tests/fixtures/explorer/map-switches.json``.
+    """
+    materials = [
+        {key: value for key, value in m.items() if key not in QUERY_FIELDS}
+        for m in event["materials"]
+        if m["matches"]
+    ]
+    if event["materials"] and not materials:
+        return None
+    return {**event, "materials": materials}
 
 
 def _citation(bundle, events, language, query_text):
@@ -358,10 +394,9 @@ class ExplorerEventsCsvView(View):
 
     def get(self, request):
         try:
-            language, bundle, events = _resolve(request)
+            language, bundle, events, query_text = _resolve(request)
         except ScopeError:
             return HttpResponseBadRequest()
-        query_text = _query_text(request.GET)
         response = StreamingHttpResponse(
             csv_lines(language, bundle, events, query_text),
             content_type="text/csv; charset=utf-8",
@@ -378,10 +413,9 @@ class ExplorerEventsGeoJsonView(View):
 
     def get(self, request):
         try:
-            language, bundle, events = _resolve(request)
+            language, bundle, events, query_text = _resolve(request)
         except ScopeError:
             return HttpResponseBadRequest()
-        query_text = _query_text(request.GET)
         response = StreamingHttpResponse(
             geojson_chunks(language, bundle, events, query_text),
             content_type="application/geo+json",

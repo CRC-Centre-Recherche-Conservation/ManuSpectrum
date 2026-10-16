@@ -12,6 +12,8 @@ export function matchingMaterials(event: MapEvent): EventMaterial[] {
  * The events as the results show them: each with its matching materials
  * only. An event whose materials all fail the filters (its matching ones
  * hidden by a reliability level) is left out; one without materials stays.
+ * Twin of the export's `_matching` (`views/explorer/events_export.py`),
+ * pinned by `tests/fixtures/explorer/map-switches.json`.
  */
 export function matchingEvents(events: readonly MapEvent[]): MapEvent[] {
     const shown: MapEvent[] = [];

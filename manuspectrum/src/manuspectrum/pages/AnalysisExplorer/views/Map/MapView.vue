@@ -131,10 +131,10 @@ const PRESSED_MODE_SELECTOR = ".mode-switch button[aria-pressed='true']";
  * timeline, the filters of the map in a rail, and the panel of the place,
  * period, document or material opened. The mode, the followed materials,
  * the kernel radius and influence threshold of Territories,
- * the brushed period and the borders live in the store (`mapState`, in the
- * address), with the legend's open state (folded by default, not in the
- * address); the reliability and approximate-date switches, the hovered
- * place, the isolated territory and the opened subject live here. The stage stays laid out,
+ * the brushed period, the borders and the reliability and approximate-date
+ * switches live in the store (`mapState`, in the address), with the legend's
+ * open state (folded by default, not in the address); the hovered place, the
+ * isolated territory and the opened subject live here. The stage stays laid out,
  * hidden, while the small multiples show, so its snapshot can be taken and
  * the map comes back as it was; a snapshot is asked again only when the
  * bounds change (`boundsKey`), and only the newest answer is kept. A place

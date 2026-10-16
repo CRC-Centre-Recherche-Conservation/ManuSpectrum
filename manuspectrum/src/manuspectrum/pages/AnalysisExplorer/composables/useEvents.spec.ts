@@ -93,10 +93,6 @@ describe("exportHref display switches", () => {
             "/en/manuspectrum:explorer-events-csv?q=lead&approximate=hide&hideLevel=a&hideLevel=b&lang=fr",
         );
     });
-
-    it("never reaches the events request", () => {
-        expect(eventsQuery(emptyFilters()).toString()).toBe("");
-    });
 });
 
 describe("useEvents", () => {
