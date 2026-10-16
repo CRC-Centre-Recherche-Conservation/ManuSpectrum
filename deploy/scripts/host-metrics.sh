@@ -131,7 +131,7 @@ oom_events_since() {
   lines="$(timeout "$DOCKER_TIMEOUT" docker events --since "$2" --until "$3" \
     --filter type=container --filter event=oom \
     --filter "label=com.docker.compose.project=$PROJECT" \
-    --filter "label=com.docker.compose.service=$1" --format '{{.Status}}')" || return 0
+    --filter "label=com.docker.compose.service=$1" --format '{{.Action}}')" || return 0
   printf '%s\n' "$lines" | grep -c . || true
 }
 
