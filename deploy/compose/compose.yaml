@@ -205,6 +205,8 @@ services:
       PG_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${PG_IDLE_IN_TRANSACTION_TIMEOUT_MS:-60000}
       ADMIN_PASSWORD_FILE: /run/secrets/admin_password
       PROMETHEUS_MULTIPROC_DIR: /run/prometheus
+      # Only web mounts the volume: the other containers keep the snapshot off.
+      SITE_NOTICE_SNAPSHOT_DIR: /srv/site-notice
     secrets: [pg_password, elastic_password, django_secret_key, email_password, admin_password]
     tmpfs:
       - "/tmp:rw,noexec,nosuid,nodev,size=1g"
@@ -214,6 +216,7 @@ services:
     volumes:
       - *media
       - static:/srv/static
+      - site_notice:/srv/site-notice
       - type: bind
         source: ${LOCAL_CA_CERT:-/dev/null}
         target: /run/ms-ca/ca.crt
@@ -371,6 +374,11 @@ services:
       - type: volume
         source: static
         target: /srv/static
+        read_only: true
+      # The announcement snapshot web writes: nginx serves it while web is down.
+      - type: volume
+        source: site_notice
+        target: /srv/site-notice
         read_only: true
       - type: bind
         source: ${NGINX_LOG_HOST_DIR:?set NGINX_LOG_HOST_DIR in .env}
@@ -744,6 +752,8 @@ volumes:
     name: ms_cantaloupe_cache
   # Refilled from the image at every web start (publish-static).
   static: {}
+  # Snapshot of the site announcement (derived data, never backed up).
+  site_notice: {}
   # Celery beat schedule: only the time of the last runs.
   beat: {}
   # Monitoring state, all derived data: never backed up. The Prometheus

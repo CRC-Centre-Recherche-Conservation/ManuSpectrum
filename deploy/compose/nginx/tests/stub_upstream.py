@@ -15,6 +15,7 @@ Special routes:
   paths under /iiif/        add Access-Control-Allow-Origin: *
   X-Request-ID              echoed on every web answer, as Django does
   /big.csv                  2 KB of text/csv
+  /api/site-notice          answers with the status of X-Stub-Status when it is sent
   .../iiifannotations       answered after 0.5 s; the highest number of them in
                             flight at once is read, and reset, at /__peak_annotations
 """
@@ -116,6 +117,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(status, b"", "text/plain", extra)
         if path == "/api/explorer/series.csv":
             return self.stream_csv()
+        if path == "/api/site-notice" and self.headers.get("X-Stub-Status"):
+            return self.reply(int(self.headers["X-Stub-Status"]), b"", "text/plain")
         if path == "/big.csv":
             return self.reply(200, b"a,b,c\n" * 400, "text/csv")
         if path == "/__peak_annotations":

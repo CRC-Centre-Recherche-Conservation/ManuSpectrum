@@ -1,5 +1,7 @@
+import re
 import uuid
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from arches.app.models.models import ResourceInstance
 from dateutil.relativedelta import relativedelta
@@ -7,6 +9,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import JSONField
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -309,3 +312,176 @@ class AccountRetention(models.Model):
 
     def __str__(self):
         return f"{self.user_id}"
+
+
+REMINDER_TOKEN = re.compile(r"^(\d+)([dhm])$")
+REMINDER_UNITS = {"d": 86400, "h": 3600, "m": 60}
+REMINDER_MAX_SECONDS = 90 * 86400
+
+
+def parse_reminders(text):
+    """Seconds of a reminder list (``"7d 1d 1h 10m"``), largest first, no duplicate.
+
+    Tokens are separated by spaces or commas. Raises ``ValueError`` on a token
+    that is not a positive count of days, hours or minutes.
+    """
+    seconds = set()
+    for token in re.split(r"[\s,]+", (text or "").strip().lower()):
+        if not token:
+            continue
+        match = REMINDER_TOKEN.match(token)
+        if not match or int(match[1]) == 0:
+            raise ValueError(token)
+        seconds.add(int(match[1]) * REMINDER_UNITS[match[2]])
+    return sorted(seconds, reverse=True)
+
+
+def format_reminders(seconds):
+    """The canonical text of a reminder list: the largest unit that divides evenly."""
+    parts = []
+    for value in seconds:
+        for unit in ("d", "h", "m"):
+            if value % REMINDER_UNITS[unit] == 0:
+                parts.append(f"{value // REMINDER_UNITS[unit]}{unit}")
+                break
+    return " ".join(parts)
+
+
+def site_now():
+    """Now as a naive datetime in site time, as the announcement columns store it."""
+    return datetime.now(ZoneInfo(settings.SITE_NOTICE_TIME_ZONE)).replace(tzinfo=None)
+
+
+class SiteNotice(models.Model):
+    """An announcement shown as a banner on every page of the site.
+
+    ``starts_at`` and ``ends_at`` are typed as Paris time
+    (``settings.SITE_NOTICE_TIME_ZONE``): the project runs with ``USE_TZ``
+    off, so they are stored naive. ``display`` says what they mean: for an
+    ``event`` they are the event itself, ``reminders`` are durations before
+    the start (the first is when the banner first appears) and the banner is
+    marked in progress during the event; for ``once`` they bound the period
+    the banner is shown, reminders are ignored and a visitor who closes it
+    does not see it again. Either way a close lasts until the announcement is
+    edited or ends.
+    """
+
+    INFO, MAINTENANCE, IMPORTANT = "info", "maintenance", "important"
+    KINDS = [
+        (INFO, _("Information")),
+        (MAINTENANCE, _("Maintenance")),
+        (IMPORTANT, _("Important")),
+    ]
+
+    EVENT, ONCE = "event", "once"
+    DISPLAYS = [
+        (EVENT, _("Event with reminders")),
+        (ONCE, _("Shown once until a date")),
+    ]
+
+    kind = models.CharField(
+        max_length=12, choices=KINDS, default=MAINTENANCE, verbose_name=_("Kind")
+    )
+    display = models.CharField(
+        max_length=8,
+        choices=DISPLAYS,
+        default=EVENT,
+        verbose_name=_("Display"),
+        help_text=_(
+            "Event with reminders: the dates are those of an event; the banner "
+            "appears at each reminder before the start and is marked in "
+            "progress during the event. Shown once: the banner is shown from "
+            "the start date until the end date, and a visitor who closes it "
+            "does not see it again."
+        ),
+    )
+    text_en = models.CharField(max_length=300, verbose_name=_("Text (English)"))
+    text_fr = models.CharField(max_length=300, verbose_name=_("Text (French)"))
+    link_url = models.URLField(
+        blank=True,
+        verbose_name=_("Details link"),
+        help_text=_("Optional page with more details."),
+    )
+    link_label_en = models.CharField(
+        max_length=80, blank=True, verbose_name=_("Link label (English)")
+    )
+    link_label_fr = models.CharField(
+        max_length=80, blank=True, verbose_name=_("Link label (French)")
+    )
+    starts_at = models.DateTimeField(
+        verbose_name=_("Start"),
+        help_text=_(
+            "Paris time. Event: when the event starts. Shown once: when the "
+            "banner starts to show."
+        ),
+    )
+    ends_at = models.DateTimeField(
+        verbose_name=_("End"),
+        help_text=_(
+            "Paris time. Event: when the event ends. Shown once: when the "
+            "banner disappears. The announcement is gone at this time; to "
+            "withdraw it earlier, move this date or delete the announcement."
+        ),
+    )
+    reminders = models.CharField(
+        max_length=120,
+        blank=True,
+        default="7d 1d 1h 10m",
+        verbose_name=_("Reminders"),
+        help_text=_(
+            "Event only. Durations before the start, largest first: the first "
+            "one is when the banner first appears; each following one shows it "
+            "again after a visitor dismissed it. Units: d, h, m. Saving the "
+            "announcement shows it again to everyone who dismissed it."
+        ),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ms_site_notice"
+        ordering = ("starts_at",)
+        verbose_name = _("site announcement")
+        verbose_name_plural = _("site announcements")
+
+    def __str__(self):
+        return self.text_en[:60]
+
+    def reminder_seconds(self):
+        if self.display == self.ONCE:
+            return []
+        try:
+            return parse_reminders(self.reminders)
+        except ValueError:
+            return []
+
+    @property
+    def version(self):
+        """Seconds since the epoch of the last save: a new save is a new version."""
+        stamp = self.updated_at or self.created_at or timezone.now()
+        return int(stamp.replace(tzinfo=timezone.get_default_timezone()).timestamp())
+
+    def clean(self):
+        errors = {}
+        if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
+            errors["ends_at"] = _("The end must be after the start.")
+        if self.display == self.EVENT:
+            try:
+                seconds = parse_reminders(self.reminders)
+            except ValueError as error:
+                errors["reminders"] = _(
+                    "%(token)s is not a duration: write a number followed by d, h or m."
+                ) % {"token": error}
+            else:
+                if not seconds:
+                    errors["reminders"] = _("Give at least one reminder.")
+                elif seconds[0] > REMINDER_MAX_SECONDS:
+                    errors["reminders"] = _("A reminder cannot exceed 90 days.")
+                else:
+                    self.reminders = format_reminders(seconds)
+        if self.link_url:
+            for field in ("link_label_en", "link_label_fr"):
+                if not getattr(self, field):
+                    errors[field] = _("Give the link label in both languages.")
+        if errors:
+            raise ValidationError(errors)

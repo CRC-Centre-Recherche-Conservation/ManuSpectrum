@@ -74,6 +74,7 @@ from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
 from manuspectrum.views.plugin import PluginView
+from manuspectrum.views.site_notice import SiteNoticeView
 from manuspectrum.views.spectrum_preview import SpectrumPreviewView
 from manuspectrum.views.summary import SummaryBatchView, SummaryView
 from manuspectrum.views.summary_config import SummaryConfigView
@@ -449,6 +450,14 @@ urlpatterns.append(
         BiblissimaLinkToProjectView.as_view(),
         name="biblissima-link-to-project",
     )
+)
+
+### Manuspectrum URL - Site announcement
+###
+### Language-neutral: the payload carries every language, and nginx serves the
+### last snapshot of it while Django cannot answer.
+urlpatterns.append(
+    path("api/site-notice", SiteNoticeView.as_view(), name="site-notice")
 )
 
 ### Manuspectrum URL - Spectrum preview

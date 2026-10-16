@@ -70,6 +70,8 @@ server {
     location = /_errors/50x.html {
         internal;
         alias /etc/nginx/site-errors/500.htm;
+        # The page shows the status it is served for (<!--# echo var="status" -->).
+        ssi on;
         include snippets/security-headers.conf;
         include snippets/local-headers.conf;
     }

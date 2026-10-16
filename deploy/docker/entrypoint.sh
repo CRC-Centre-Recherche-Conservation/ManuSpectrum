@@ -2,7 +2,7 @@
 # Entrypoint of the ManuSpectrum image. Commands:
 #   web            Django's deployment checks (any warning stops the start),
 #                  wait for PostgreSQL and Elasticsearch, migrate, publish the
-#                  static files, then run gunicorn
+#                  static files, rewrite the site announcement snapshot, then run gunicorn
 #   worker         wait for PostgreSQL and Elasticsearch, then the Celery worker
 #   beat           wait for PostgreSQL, then Celery beat
 #   init           deployment checks as for web; first installation: Arches
@@ -245,6 +245,9 @@ case "$command" in
     # Migrations run without the timeouts web's requests carry.
     PG_STATEMENT_TIMEOUT_MS=0 PG_IDLE_IN_TRANSACTION_TIMEOUT_MS=0 oneoff python manage.py migrate --noinput
     publish-static /app/static /srv/static
+    # The announcement snapshot nginx serves while web is down; the start does not wait on it.
+    oneoff python manage.py site_notice_snapshot \
+      || log "the site announcement snapshot could not be written; continuing"
     reset_metrics_dir
     trust_local_ca
     exec gunicorn --config /app/gunicorn.conf.py

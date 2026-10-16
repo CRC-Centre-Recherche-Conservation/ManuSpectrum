@@ -224,6 +224,7 @@ CANTALOUPE_INTERNAL_ENDPOINT = "http://{}:{}/".format(
 CANTALOUPE_HTTP_ENDPOINT = PUBLIC_SERVER_ADDRESS + "iiifserver/"
 
 MEDIA_ROOT = "/srv/media"
+SITE_NOTICE_SNAPSHOT_DIR = get_optional_env_variable("SITE_NOTICE_SNAPSHOT_DIR", "")
 CANTALOUPE_DIR = os.path.join(MEDIA_ROOT, UPLOADED_FILES_DIR)
 STATIC_ROOT = "/app/static"
 RESOURCE_IMPORT_LOG = "/tmp/resource_import.log"

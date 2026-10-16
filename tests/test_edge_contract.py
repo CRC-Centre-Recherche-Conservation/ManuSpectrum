@@ -101,6 +101,7 @@ BARE = [
         "api-spectrum-preview",
     ),
     ("snippets/edge-rules.conf", f"/iiif/data/{UUID}/raw", "iiif-data-raw"),
+    ("snippets/edge-rules.conf", "/api/site-notice", "site-notice"),
 ]
 
 
@@ -348,6 +349,25 @@ class EdgeContractTests(SimpleTestCase):
             for code, _ in settings.LANGUAGES:
                 with translation.override(code), self.assertRaises(Resolver404):
                     resolve(f"/{code}{path}")
+
+    def test_site_notice_falls_back_to_the_snapshot_django_writes(self):
+        text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+        self.assertIn("error_page 500 502 503 504 = @site_notice_snapshot;", text)
+        snapshot = re.search(
+            r"location @site_notice_snapshot\s*\{(.*?)\n\}", text, re.S
+        )
+        self.assertIsNotNone(snapshot)
+        compose = Path(
+            settings.APP_ROOT, "..", "deploy/compose/compose.yaml"
+        ).read_text()
+        web = re.search(r"(?ms)^  web:\n(.*?)^  \w[\w-]*:\n", compose)[1]
+        directory = re.search(r"(?m)^\s+SITE_NOTICE_SNAPSHOT_DIR: (\S+)$", web)[1]
+        self.assertIn(f"site_notice:{directory}", web)
+        self.assertIn(f"root {directory};", snapshot[1])
+        self.assertIn("try_files /notice.json =404;", snapshot[1])
+        from manuspectrum.views.site_notice import SNAPSHOT_NAME
+
+        self.assertEqual(SNAPSHOT_NAME, "notice.json")
 
     def test_metrics_is_not_served_under_a_language(self):
         for code, _ in settings.LANGUAGES:
