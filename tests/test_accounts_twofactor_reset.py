@@ -287,9 +287,11 @@ class ResetPageTests(TestCase):
 
     def test_the_post_is_rate_limited(self):
         self.open()
-        statuses = [
-            post(self.client, self.page, action="cancel").status_code for _ in range(7)
-        ]
+        with mock.patch("django_ratelimit.core._get_window", return_value=1_000_000):
+            statuses = [
+                post(self.client, self.page, action="cancel").status_code
+                for _ in range(7)
+            ]
         self.assertIn(429, statuses)
 
 
