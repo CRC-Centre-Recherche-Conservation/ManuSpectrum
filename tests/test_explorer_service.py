@@ -2078,3 +2078,19 @@ class PeriodFilterTests(ServiceCase):
         self.assertEqual(
             [r["id"] for r in payload["results"]], [str(self.documents["open"].pk)]
         )
+
+
+class LettersCodeTests(SimpleTestCase):
+    def test_the_first_free_prefix_of_one_to_three_letters_is_taken(self):
+        self.assertEqual(explorer_service._letters_code("Raman", set()), "R")
+        self.assertEqual(explorer_service._letters_code("Raman", {"R"}), "RA")
+        self.assertEqual(explorer_service._letters_code("Raman", {"R", "RA"}), "RAM")
+
+    def test_a_numbered_initial_follows_when_every_prefix_is_taken(self):
+        taken = {"R", "RA", "RAM"}
+        self.assertEqual(explorer_service._letters_code("Raman", taken), "R2")
+        self.assertEqual(explorer_service._letters_code("Raman", taken | {"R2"}), "R3")
+
+    def test_punctuation_is_dropped_and_an_empty_label_gets_a_question_mark(self):
+        self.assertEqual(explorer_service._letters_code("-x_rf", set()), "X")
+        self.assertEqual(explorer_service._letters_code("", set()), "?")
