@@ -71,11 +71,11 @@ class AnalysisExplorerPageTests(TestCase):
         self.assertIn("private", cache_control)
         self.assertIn("no-store", cache_control)
 
-    def test_page_drops_the_arches_payload_other_pages_keep_it(self):
+    def test_page_carries_no_arches_payload_a_scripted_page_keeps_its_own_strings(self):
         explorer = self.client.get(reverse("analysis-explorer")).content.decode()
-        team = self.client.get(reverse("about-team")).content.decode()
+        contact = self.client.get(reverse("about-contact")).content.decode()
         self.assertNotIn("arches-translations", explorer)
-        self.assertIn("arches-translations", team)
+        self.assertIn("arches-translations", contact)
 
     def test_body_class_marks_the_app_and_stays_default_elsewhere(self):
         explorer = self.client.get(reverse("analysis-explorer")).content.decode()

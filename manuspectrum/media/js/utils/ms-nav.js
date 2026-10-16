@@ -1,8 +1,12 @@
 // Shared nav behaviour for the homepage + About pages:
 // glass-scroll header, mobile drawer, and the About dropdown (hover + click + keyboard).
+/** Class on the header once this script runs: `_ms-chrome.scss` keys the About dropdown's CSS hover/focus default on its absence. */
+export const NAV_JS_CLASS = 'ms-nav--js';
+
 export default function initMsNav() {
     const header = document.getElementById('ms-header');
     if (header) {
+        header.classList.add(NAV_JS_CLASS);
         const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 80);
         window.addEventListener('scroll', onScroll, { passive: true });
         onScroll();
