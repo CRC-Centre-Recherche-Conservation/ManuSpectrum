@@ -14,13 +14,14 @@ import contextlib
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from manuspectrum.views.model_graph_service import (
     GROUPS,
     _excluded_graph_ids,
     _top_ontologyclass,
     build_model_graph,
+    controlled_list_figures,
 )
 
 CIDOC = "http://www.cidoc-crm.org/cidoc-crm/"
@@ -50,16 +51,6 @@ class _Rows:
 
     def __iter__(self):
         return iter(self._rows)
-
-
-class _ConceptManager:
-    """Concept.objects, whose two COUNTs differ only by `nodetype_id`."""
-
-    def __init__(self, concepts, schemes):
-        self._by_type = {"Concept": concepts, "ConceptScheme": schemes}
-
-    def filter(self, nodetype_id=None, **kwargs):
-        return _Rows(count=self._by_type.get(nodetype_id, 0))
 
 
 def _manager(rows=(), count=0):
@@ -117,13 +108,10 @@ def patched_orm(
     lifecycle_states=(),
     nodegroups=(),
     labels=(),
-    concepts=0,
-    thesauri=0,
     values=(),
     relations=(),
-    lists=(),
-    list_items=(),
-    list_item_count=0,
+    list_figures=None,
+    list_figures_asked=None,
     list_overrides=None,
     **overrides,
 ):
@@ -135,19 +123,32 @@ def patched_orm(
         "CardXNodeXWidget": _manager(labels),
         "ResourceInstance": _manager(instances),
         "ResourceInstanceLifecycleState": _manager(lifecycle_states),
-        "Concept": SimpleNamespace(objects=_ConceptManager(concepts, thesauri)),
         "Value": _manager(values),
         "Relation": _manager(relations),
     }
     targets.update(overrides)
-    list_targets = {
-        "List": _manager(lists),
-        "ListItem": _manager(list_items, list_item_count),
-    }
-    list_targets.update(list_overrides or {})
-    with mock.patch.multiple("arches.app.models.models", **targets):
-        with mock.patch.multiple("arches_controlled_lists.models", **list_targets):
-            yield
+    figures = list_figures or {}
+
+    def figures_of(list_ids):
+        if list_figures_asked is not None:
+            list_figures_asked.append(set(list_ids))
+        return {str(i): figures[str(i)] for i in list_ids if str(i) in figures}
+
+    stack = contextlib.ExitStack()
+    stack.enter_context(mock.patch.multiple("arches.app.models.models", **targets))
+    if list_overrides:
+        stack.enter_context(
+            mock.patch.multiple("arches_controlled_lists.models", **list_overrides)
+        )
+    else:
+        stack.enter_context(
+            mock.patch(
+                "manuspectrum.views.model_graph_service.controlled_list_figures",
+                side_effect=figures_of,
+            )
+        )
+    with stack:
+        yield
 
 
 # --- a two-graph fixture exercising the whole assembly loop -------------------
@@ -257,8 +258,6 @@ def build_fixture(**overrides):
         lifecycle_states=LIFECYCLE_STATES,
         nodegroups=NODEGROUPS,
         labels=LABELS,
-        concepts=20000,
-        thesauri=12,
         values=VALUES,
         relations=RELATIONS,
     )
@@ -726,23 +725,14 @@ REFERENCE_EDGES = EDGES + [
     _edge("r2", "ng2", CIDOC + "P2_has_type"),
     _edge("r3", "ng2", CIDOC + "P2_has_type"),
 ]
-LISTS = [
-    {"id": "list-1", "name": "Materials"},
-    {"id": "list-2", "name": "Colours"},
-]
-LIST_ITEMS = [
-    {"list_id": "list-1", "n": 40},
-    {"list_id": "list-2", "n": 15},
-]
+LIST_FIGURES = {"list-1": ("Materials", 40), "list-2": ("Colours", 15)}
 
 
 def build_reference_fixture(**overrides):
     kwargs = dict(
         nodes=REFERENCE_NODES,
         edges=REFERENCE_EDGES,
-        lists=LISTS,
-        list_items=LIST_ITEMS,
-        list_item_count=55,
+        list_figures=LIST_FIGURES,
     )
     kwargs.update(overrides)
     return build_fixture(**kwargs)
@@ -760,6 +750,17 @@ class BuildModelGraphReferenceTests(SimpleTestCase):
         self.assertEqual(stats["thesauri"], 2)
         self.assertEqual(stats["concepts"], 55)
 
+    def test_the_figures_are_asked_for_the_bound_lists_only(self):
+        asked = []
+        build_reference_fixture(list_figures_asked=asked)
+        self.assertEqual(asked, [{"list-1", "list-2"}])
+
+    def test_a_deleted_list_is_not_counted_as_a_thesaurus(self):
+        stats = build_reference_fixture(list_figures={"list-1": ("Materials", 40)})[
+            "stats"
+        ]
+        self.assertEqual((stats["thesauri"], stats["concepts"]), (1, 40))
+
     def test_reference_field_names_its_list_and_size(self):
         payload = build_reference_fixture()
         by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
@@ -775,7 +776,7 @@ class BuildModelGraphReferenceTests(SimpleTestCase):
 
     def test_a_list_failure_degrades_to_the_bare_uuid_and_zero_totals(self):
         payload = build_reference_fixture(
-            list_overrides={"ListItem": _raising_manager(RuntimeError("no lists"))}
+            list_overrides={"List": _raising_manager(RuntimeError("no lists"))}
         )
         by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
         self.assertEqual(by_id["r1"]["config"], {"collection": "list-1"})
@@ -788,6 +789,62 @@ class BuildModelGraphReferenceTests(SimpleTestCase):
         payload = build_reference_fixture(values=values)
         by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
         self.assertEqual(by_id["r1"]["config"]["collection_label"], "Materials")
+
+
+class ControlledListFiguresTests(TestCase):
+    """The #124 rule against real rows: bound lists only, guide items excluded."""
+
+    def setUp(self):
+        from arches_controlled_lists.models import List, ListItem
+
+        self.bound = List.objects.create(name="Materials")
+        self.other = List.objects.create(name="Unbound")
+        for order in (1, 2, 3):
+            ListItem.objects.create(
+                list=self.bound, sortorder=order, uri=f"http://a.test/{order}"
+            )
+        ListItem.objects.create(
+            list=self.bound, sortorder=4, guide=True, uri="http://a.test/guide"
+        )
+        for order in (1, 2):
+            ListItem.objects.create(
+                list=self.other, sortorder=order, uri=f"http://b.test/{order}"
+            )
+
+    def test_counts_only_the_requested_lists_and_no_guide_item(self):
+        figures = controlled_list_figures({str(self.bound.id)})
+        self.assertEqual(figures, {str(self.bound.id): ("Materials", 3)})
+
+    def test_each_list_has_its_own_size(self):
+        figures = controlled_list_figures({str(self.bound.id), str(self.other.id)})
+        self.assertEqual(
+            figures,
+            {
+                str(self.bound.id): ("Materials", 3),
+                str(self.other.id): ("Unbound", 2),
+            },
+        )
+
+    def test_a_list_that_no_longer_exists_is_absent(self):
+        gone = "00000000-0000-4000-8000-000000000000"
+        figures = controlled_list_figures({str(self.bound.id), gone})
+        self.assertEqual(set(figures), {str(self.bound.id)})
+
+    def test_a_list_with_no_item_counts_zero(self):
+        from arches_controlled_lists.models import List
+
+        empty = List.objects.create(name="Empty")
+        self.assertEqual(
+            controlled_list_figures({str(empty.id)}), {str(empty.id): ("Empty", 0)}
+        )
+
+    def test_no_list_asks_no_question(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(controlled_list_figures(set()), {})
+
+    def test_one_query_for_any_number_of_lists(self):
+        with self.assertNumQueries(1):
+            controlled_list_figures({str(self.bound.id), str(self.other.id)})
 
 
 class ExcludedGraphIdsTests(SimpleTestCase):

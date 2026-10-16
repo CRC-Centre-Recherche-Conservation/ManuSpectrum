@@ -7,7 +7,7 @@ verified against the dev database. Keep it lean — this feeds a cached endpoint
 import re
 
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone, translation
 from django.utils.translation import gettext_lazy as _
 
@@ -282,11 +282,33 @@ def _excluded_graph_ids():
     return ids
 
 
+def controlled_list_figures(list_ids):
+    """``{list id: (name, concept count)}`` of the controlled lists that exist.
+
+    One grouped query. A list that no longer exists is absent; guide items
+    (headings, not selectable values) are not concepts. ``List.name`` is not
+    localized, so a label reads the same in every language. Any database
+    error yields ``{}``: the explorer shows bare ids and zero totals.
+    """
+    if not list_ids:
+        return {}
+    try:
+        from arches_controlled_lists.models import List
+
+        rows = (
+            List.objects.filter(id__in=list_ids)
+            .annotate(n=Count("list_items", filter=Q(list_items__guide=False)))
+            .values_list("id", "name", "n")
+        )
+        return {str(i): (name, n) for i, name, n in rows}
+    except Exception:  # noqa: BLE001 — no lists table must not 500 the explorer
+        return {}
+
+
 def build_model_graph(language="en"):
     """Introspect resource graphs into the explorer payload (see spec)."""
     from arches.app.models.models import (
         CardXNodeXWidget,
-        Concept,
         GraphModel,
         Node,
         NodeGroup,
@@ -536,19 +558,9 @@ def build_model_graph(language="en"):
         # The pages quote "N thesauri · ~M concepts": the controlled lists the
         # `reference` fields are bound to and their items. Both drift as the
         # lists grow, so neither may live in a template.
-        try:
-            from arches_controlled_lists.models import ListItem
-
-            thesauri = len(thesaurus_lists)
-            concepts = (
-                ListItem.objects.filter(list_id__in=thesaurus_lists).count()
-                if thesaurus_lists
-                else 0
-            )
-        except (
-            Exception
-        ):  # noqa: BLE001 — a missing lists table must not 500 the explorer
-            concepts, thesauri = 0, 0
+        list_figures = controlled_list_figures(thesaurus_lists)
+        thesauri = len(list_figures)
+        concepts = sum(size for _name, size in list_figures.values())
 
         data_nodes_total = sum(m["counts"]["nodes"] for m in models)
         stats = {
@@ -630,35 +642,17 @@ def build_model_graph(language="en"):
             except Exception:  # noqa: BLE001
                 pass
 
-        if thesaurus_lists:
-            try:
-                from arches_controlled_lists.models import List, ListItem
-
-                list_names = {
-                    str(r["id"]): r["name"]
-                    for r in List.objects.filter(id__in=thesaurus_lists).values(
-                        "id", "name"
-                    )
-                }
-                list_sizes = {
-                    str(r["list_id"]): r["n"]
-                    for r in ListItem.objects.filter(list_id__in=thesaurus_lists)
-                    .values("list_id")
-                    .order_by()
-                    .annotate(n=Count("id"))
-                }
-                for m in models:
-                    for nd in m["structure"]["nodes"]:
-                        cfg = nd.get("config") or {}
-                        c = cfg.get("collection")
-                        if nd["datatype"] != THESAURUS_REFERENCE or not c:
-                            continue
-                        if list_names.get(c):
-                            cfg["collection_label"] = str(list_names[c])
-                        if c in list_sizes:
-                            cfg["collection_size"] = list_sizes[c]
-            except Exception:  # noqa: BLE001
-                pass
+        if list_figures:
+            for m in models:
+                for nd in m["structure"]["nodes"]:
+                    cfg = nd.get("config") or {}
+                    c = cfg.get("collection")
+                    if nd["datatype"] != THESAURUS_REFERENCE or c not in list_figures:
+                        continue
+                    name, size = list_figures[c]
+                    if name:
+                        cfg["collection_label"] = str(name)
+                    cfg["collection_size"] = size
 
         return {
             "language": language,
