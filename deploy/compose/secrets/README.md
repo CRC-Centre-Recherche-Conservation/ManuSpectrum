@@ -1,6 +1,6 @@
 # Secret files
 
-Compose reads six files from `SECRETS_DIR` of `.env` (this directory when it is
+Compose reads eight files from `SECRETS_DIR` of `.env` (this directory when it is
 unset; on the production host a directory outside `/home`, see `SECRETS.md`):
 
 - `pg_password`: password of the PostgreSQL superuser.
@@ -15,6 +15,11 @@ unset; on the production host a directory outside `/home`, see `SECRETS.md`):
 - `restic_password`: password of the backup repository, mounted on the `restic`
   service only (profile `backup`). At least 32 characters. Keep it in the vault
   before the first backup: without it no backup can be read (`deploy/BACKUP.md`).
+- `grafana_admin_password`: password of the Grafana `admin` user, mounted on
+  `grafana` only (profile `observability`). At least 16 characters.
+- `pg_monitor_password`: password of the `ms_monitor` PostgreSQL role, mounted
+  on `postgres-exporter` only (profile `observability`); `make -C deploy
+  monitoring-init` sets it on the role. At least 32 characters.
 
 One value per file, without a trailing newline. `make -C deploy secrets`
 creates the directory (`0700`) and every missing file (the generated ones as

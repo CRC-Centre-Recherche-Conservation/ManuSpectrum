@@ -69,9 +69,10 @@ done
 # shellcheck disable=SC2319 # $? is the status of the test above
 assert "the new log is created 0640 for the service account" "$?"
 
-[ "$(grep -c '^docker kill' "$TMP/calls" 2>/dev/null)" = 1 ] \
-  && grep -qx 'docker kill --signal USR1 abc123' "$TMP/calls"
-assert "postrotate runs once and sends USR1 to the selected container" "$?"
+[ "$(grep -c '^docker exec' "$TMP/calls" 2>/dev/null)" = 1 ] \
+  && grep -qx 'docker exec abc123 nginx -s reopen' "$TMP/calls" \
+  && ! grep -q '^docker kill' "$TMP/calls"
+assert "postrotate reopens the logs inside the selected container, without docker kill" "$?"
 
 grep -q 'label=com.docker.compose.project=manuspectrum' "$TMP/calls" \
   && grep -q 'label=com.docker.compose.service=nginx' "$TMP/calls"

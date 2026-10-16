@@ -1008,7 +1008,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "arches.app.utils.password_validation.HasUpperAndLowerCaseValidator"},
     {"NAME": "manuspectrum.password_validation.HasLowerCaseValidator"},
     {
-        "NAME": "arches.app.utils.password_validation.MinLengthValidator",
+        "NAME": "manuspectrum.password_validation.MinLengthValidator",
         "OPTIONS": {"min_length": 12},
     },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},

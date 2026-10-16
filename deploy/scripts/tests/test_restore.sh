@@ -290,7 +290,7 @@ no_staging
 assert "ok-snapshot: the staging directories are gone" $?
 untouched_secrets
 assert "ok-snapshot: SECRETS_DIR and .env are byte-identical before and after" $?
-grep -q "make -C deploy restore ASIDE=$before CONFIRM=yes ERASURES_CHECKED=yes" "$TMP/out" \
+grep -Eq "to undo this run: make -C deploy restore ASIDE=$before CONFIRM=yes ERASURES_CHECKED=yes\$" "$TMP/out" \
   && ! grep -q "load-snapshot" "$TMP/out" \
   && grep -qi "SECRETS_DIR and .env were not touched" "$TMP/out"
 assert "ok-snapshot: the final lines name the undo command and say the secrets were not touched" $?
@@ -446,5 +446,17 @@ for missing in tmp latest; do
     && no_restic && [ ! -e "$TMP/out-missing" ]
   assert "files-refusals: missing $missing/: exit 1 with the backup-init hint, no restic call, no target created" $?
 done
+
+# --- restic_password missing
+write_fixture
+mkdir -p "$TMP/media/uploadedfiles" "$TMP/dump/latest" "$TMP/dump/tmp"
+mv "$TMP/secrets/restic_password" "$TMP/restic_password.kept"
+run_restore "${OK_ENV[@]}" RESTIC_SNAPSHOT=latest && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "restic_password is missing" "$TMP/out" && no_restic && no_mutation
+assert "restore from a snapshot without the restic_password file: says it is missing, nothing runs" $?
+run_files "${FILES_OK[@]}" TARGET="$TMP/out-missing" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "restic_password is missing" "$TMP/out" && no_restic
+assert "restore-files without the restic_password file: says it is missing, no restic call" $?
+mv "$TMP/restic_password.kept" "$TMP/secrets/restic_password"
 
 exit "$failed"

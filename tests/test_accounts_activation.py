@@ -53,6 +53,28 @@ def placeholder_path(user):
     )
 
 
+def browser_origin(response, own="http://testserver"):
+    """The `Origin` a browser sends when posting a form from *response*'s page.
+
+    Fetch: a `no-referrer` page posts `Origin: null`; `same-origin` and the
+    permissive policies send the page's own origin on a same-origin post.
+    """
+    policy = response.get("Referrer-Policy", "")
+    return "null" if policy == "no-referrer" else own
+
+
+def browser_post(client, page, path, **data):
+    """POST *data* the way a browser does from *page*, CSRF checks enforced."""
+    data["csrfmiddlewaretoken"] = client.cookies["csrftoken"].value
+    return client.post(
+        path,
+        data,
+        HTTP_ORIGIN=browser_origin(page),
+        HTTP_X_REAL_IP=IP,
+        REMOTE_ADDR="10.0.0.1",
+    )
+
+
 def activate(client, path, **data):
     return client.post(path, data, HTTP_X_REAL_IP=IP, REMOTE_ADDR="10.0.0.1")
 
@@ -321,17 +343,37 @@ class ActivationTests(Base):
         response = client.get(self.link)
         self.assertRedirects(response, self.path, fetch_redirect_response=False)
         self.assertNotIn(self.link.rsplit("/", 1)[1], response["Location"])
-        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
         page = client.get(self.path)
         self.assertEqual(page.status_code, 200)
-        self.assertEqual(page["Referrer-Policy"], "no-referrer")
+        self.assertEqual(page["Referrer-Policy"], "same-origin")
         self.assertNotContains(page, self.link.rsplit("/", 1)[1])
+
+    def test_the_form_posts_from_the_browser_with_csrf_checks_on(self):
+        client = Client(enforce_csrf_checks=True)
+        client.get(self.link)
+        page = client.get(self.path)
+        self.assertEqual(page.status_code, 200)
+        response = browser_post(client, page, self.path, **self.good())
+        self.assertRedirects(
+            response, "/en/account/two-factor", fetch_redirect_response=False
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.has_usable_password())
+
+    def test_a_no_referrer_page_would_post_a_null_origin_that_csrf_refuses(self):
+        client = Client(enforce_csrf_checks=True)
+        client.get(self.link)
+        page = client.get(self.path)
+        page["Referrer-Policy"] = "no-referrer"
+        response = browser_post(client, page, self.path, **self.good())
+        self.assertEqual(response.status_code, 403)
 
     def test_the_token_less_page_needs_the_session_token(self):
         for client in (Client(), Client(raise_request_exception=False)):
             response = client.get(self.path)
             self.assertEqual(response.status_code, 410)
-            self.assertEqual(response["Referrer-Policy"], "no-referrer")
+            self.assertEqual(response["Referrer-Policy"], "same-origin")
             self.assertNotContains(response, "<form", status_code=410)
             self.assertEqual(
                 activate(client, self.path, **self.good()).status_code, 410

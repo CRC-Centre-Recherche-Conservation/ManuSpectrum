@@ -7,7 +7,10 @@
 # Enforces the 30-day retention of access and error logs (spec §6.2): both
 # carry client IP addresses. `su` is required because the directory is owned
 # by the service account, not by root, and logrotate refuses to rotate in it
-# otherwise. After rotation nginx reopens its files on USR1, without restart.
+# otherwise. After rotation nginx reopens its files (`nginx -s reopen` run inside
+# the container, without restart). Never `docker kill --signal`: Docker records
+# it as a manual stop and `unless-stopped` no longer restarts the container
+# at the next boot.
 @NGINX_LOG_HOST_DIR@/access.log @NGINX_LOG_HOST_DIR@/error.log {
     su @APP_USER@ @APP_GROUP@
     daily
@@ -25,8 +28,9 @@
             --filter label=com.docker.compose.project=manuspectrum \
             --filter label=com.docker.compose.service=nginx)"
         if [ -n "$ids" ]; then
-            # shellcheck disable=SC2086 # one id per line, word splitting intended
-            docker kill --signal USR1 $ids
+            for id in $ids; do
+                docker exec "$id" nginx -s reopen
+            done
         fi
     endscript
 }

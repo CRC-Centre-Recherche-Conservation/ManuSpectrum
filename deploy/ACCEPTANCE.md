@@ -215,8 +215,9 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   Also set the nginx values (4.1): `CERT_MODE=local`, `CERTS_DIR`, `NGINX_LOG_HOST_DIR`,
   `PUBLIC_HOST` (the host name of `PUBLIC_SERVER_ADDRESS`, no port) and
   `LOCAL_CA_CERT=<CERTS_DIR>/ca/ca.crt` as a literal path. Create the log directory as the
-  service account (`install -d -m 0750 <NGINX_LOG_HOST_DIR>`); `make -C deploy certs-local`
-  (4.1) creates the certificates.
+  service account (`install -d -m 0750 <NGINX_LOG_HOST_DIR>`). `make -C deploy certs-local`
+  (4.1) creates the certificates and the CA file that `init` mounts: run it before `init` (2.4). `make up`
+  creates `METRICS_TEXTFILE_DIR` (node-exporter mounts it) when it is missing.
 - [ ] *(service account, rehearsal VM only)* the template ships `DEPLOY_ENVIRONMENT=production`;
   the rehearsal VM sets it explicitly: `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`.
   Check: `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
@@ -228,7 +229,8 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   files; the commands by hand are in `deploy/compose/secrets/README.md`). From here on,
   `SECRETS_DIR=$(make -s -C deploy secrets-dir)` is set in the shell;
   `ls -l "$SECRETS_DIR"` → `pg_password`, `elastic_password`, `django_secret_key`,
-  `email_password` (empty), `admin_password` as `-r--r--r--`; `ls -ld "$SECRETS_DIR"` →
+  `email_password` (empty), `admin_password`, `restic_password`, `grafana_admin_password`, `pg_monitor_password`
+  (eight files in all) as `-r--r--r--`; `ls -ld "$SECRETS_DIR"` →
   `drwx------`.
 - [ ] *(service account)* `git status --short deploy/compose` → empty (neither `.env` nor
   the secrets are tracked or untracked-visible).
@@ -249,14 +251,15 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 
 ### 2.4 First installation
 
-- [ ] *(service account)* `make -C deploy volumes` → four lines `ms_pg_data`, `ms_es_data`,
-  `ms_redis_broker`, `ms_cantaloupe_cache` (the output of `docker volume create`); run it
-  again → four `… exists`.
+- [ ] *(service account)* `make -C deploy volumes` → five lines `ms_pg_data`, `ms_es_data`,
+  `ms_redis_broker`, `ms_cantaloupe_cache`, `ms_prometheus_data` (the output of `docker volume create`); run it
+  again → five `… exists`.
 - [ ] *(service account)* `make -C deploy config` → `compose files valid`.
   - On failure: the message names the unset variable of `.env`.
 - [ ] *(service account)* The package is present: `ls pkg/graphs/resource_models | head -3` and
   `test -f pkg/expected-inventory.json` (`git submodule update --init` otherwise).
-- [ ] *(service account)* `make -C deploy init` → Arches `setup_db` output, then the lines
+- [ ] *(service account)* `make -C deploy certs-local` (4.1; `init` mounts `LOCAL_CA_CERT` and refuses with this very
+  command when the file is missing), then `make -C deploy init` → Arches `setup_db` output, then the lines
   `entrypoint: admin password set from the admin_password secret`,
   `entrypoint: loading the data package /srv/pkg (several minutes)`, the `load_package`
   output, `Inventory check passed: the database matches expected-inventory.json` and
@@ -293,9 +296,12 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   `manage packages ... -db`, `manage packages -o setup`). Without the package directory,
   Compose fails on the bind mount before the entrypoint can refuse, and the script says
   `init-guard needs the data package` (`git submodule update --init`). **(CI too)**
-- [ ] *(service account)* `make -C deploy certs-local` (4.1), then `make -C deploy up` → returns without error (it waits for every
+- [ ] *(service account, observability profile)* `make -C deploy monitoring-init` (starts `postgres` if needed and creates the
+  `ms_monitor` role: until then `postgres-exporter` is `unhealthy`, `pg_up 0`, and `up` refuses to call the stack healthy).
+- [ ] *(service account)* `make -C deploy up` → returns without error (it waits for every
   service but `beat`, then starts `beat`); up to 15 minutes on a first start.
-  The `nginx` service needs `CERTS_DIR` and `NGINX_LOG_HOST_DIR` to exist: `up` fails otherwise.
+  The `nginx` service needs `CERTS_DIR` and `NGINX_LOG_HOST_DIR` to exist: `up` fails otherwise (`up` itself
+  creates `METRICS_TEXTFILE_DIR`).
   - On failure: `make -C deploy status`, then `dc logs --tail=100 <service>` of the one
     that is not healthy.
 - [ ] *(service account)* `make -C deploy status` → nine services: `postgres`,
@@ -319,13 +325,14 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 
 - [ ] *(service account)* `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
   elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
-  redis-broker 256MiB, redis-cache 768MiB, beat 256MiB, nginx without a limit of its own. Record the idle usage of each.
+  redis-broker 256MiB, redis-cache 768MiB, beat 256MiB, nginx 512MiB. Record the idle usage of each.
   Expected idle: elasticsearch about 2.7 GiB on an empty database, about 3.4 GiB with data
   loaded (heap 2 GiB; the rest is direct memory, metaspace, threads and page cache). The
   postgres, web and worker figures depend on the load: measured 0.1 / 0.9 / 0.3 GiB on an empty
   database and 0.36 / 0.62 / 0.29 GiB with data loaded and no traffic; cantaloupe 0.3 (1.3 warm).
 - [ ] *(service account)* `docker inspect -f '{{.Name}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}' $(dc ps -q)`
-  → nine lines where the two figures are equal (a container never swaps).
+  → nine lines (one per container; 17 with the observability and mailpit profiles) where the two figures are equal
+  (a container never swaps).
   - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
     applied: the `-f` list or `make` was bypassed.
 - [ ] *(service account)* `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
@@ -352,10 +359,11 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 - [ ] *(service account)* `for c in $(dc ps -q); do docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $c; done`
   → nine lines ending `{json-file map[max-file:5 max-size:10m]}`.
   - On failure: `logging` is missing for that service in `compose.yaml`.
-- [ ] *(admin)* `sudo ls -lh $(sudo docker inspect -f '{{.LogPath}}' manuspectrum-web-1)*` → `*-json.log`,
+- [ ] *(admin)* `L=$(sudo docker inspect -f '{{.LogPath}}' manuspectrum-web-1); sudo sh -c "ls -lh $L*"` (the glob must be
+  expanded by root's shell: the admin cannot read `/var/lib/docker/containers`) → `*-json.log`,
   no file above 10 MB. To see rotation itself, write about 12 MB:
   `docker exec manuspectrum-web-1 sh -c 'yes ms-log-test | head -c 12000000 >/proc/1/fd/1'`,
-  then the same `ls` → a second file `*-json.log.1`, none larger than 10 MB, at most five.
+  then the same `sudo sh -c "ls -lh $L*"` → a second file `*-json.log.1`, none larger than 10 MB, at most five.
 - [ ] *(service account)* `docker logs --tail=5 manuspectrum-web-1` still answers (rotation does not break it).
 
 ### 2.7 Data survives (rehearsal VM only)
@@ -504,14 +512,15 @@ stack and adds what a runner cannot show: five gunicorn workers aggregated, a wo
   - On failure: the failing line names the piece (readyz, metrics, request id, JSON log,
     access log, worker metrics, task propagation).
 - [ ] *(service account)* Five workers are summed: `for i in $(seq 50); do dc exec -T web curl -s -o /dev/null -H 'Host: web' http://127.0.0.1:8000/healthz; done; dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep 'view="healthz"' | grep requests_total_by_view`
-  - Expected: one line, value ≥ 50 (not five lines, not a value near 10).
+  - Expected: two lines, one per `transport` label (`http` for the internal calls made here, `https` for the ones that
+    came through nginx); the `http` value is ≥ 50 (not five lines per transport, not a value near 10).
   - On failure: `PROMETHEUS_MULTIPROC_DIR` is not set in the web container
     (`dc exec web env | grep PROMETHEUS`).
 - [ ] *(service account)* `dc exec web sh -c 'stat -f -c %T /run/prometheus; ls /run/prometheus | head'`
   - Expected: `tmpfs`, then files `counter_<pid>.db`, `histogram_<pid>.db`, `gauge_livesum_<pid>.db`.
   - On failure: the tmpfs is missing in `compose.yaml`.
-- [ ] *(service account)* Replaced workers leave no live gauge: `dc kill -s HUP web` (gunicorn replaces every
-  worker gracefully), wait 20 s, then
+- [ ] *(service account)* Replaced workers leave no live gauge: `dc exec -T web sh -c 'kill -HUP 1'` (PID 1 is gunicorn; it replaces every
+  worker gracefully; never `dc kill -s`, which Docker records as a manual stop), wait 20 s, then
   `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep '^manuspectrum_inflight_requests '`.
   - Expected: `manuspectrum_inflight_requests 1.0` (the scrape itself), not more.
   - On failure: `child_exit` is not called (`dc exec web grep -A3 child_exit /app/gunicorn.conf.py`).
@@ -727,12 +736,14 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   → each list holds `bytes`, `host`, `method`, `protocol`, `referer`, `remote_addr`, `request_id`,
   `request_time`, `status`, `time`, `tls`, `upstream_status`, `upstream_time`, `uri`, `user_agent`;
   `remote_addr` is the workstation's address, not the bridge.
-- [ ] No query string, no personal data: `grep -cE '\?|password|token=|@[A-Za-z0-9.-]+\.[a-z]{2,}' $LOG/access.log` → `0`.
+- [ ] No query string, no personal data: `grep -cE '\?|password=|token=|@[A-Za-z0-9.-]+\.[a-z]{2,}' $LOG/access.log` → `0`
+  (`password=` and not `password`: static files such as `password_reset.js` legitimately carry the word).
   - On failure: `$uri` and `$log_uri` in `logging.conf`; a log line must never carry `$request` or `$args`.
 - [ ] Reset token redacted: visit one password-reset link, then
   `grep -c '/reset/\[redacted\]' $LOG/access.log` → at least `1` and the token appears nowhere
   in the file.
-- [ ] The request id joins the logs: take the `X-Request-ID` of `curl -sI https://manuspectrum.test/en/`, then
+- [ ] The request id joins the logs: take the `X-Request-ID` of `curl -sI https://manuspectrum.test/en/no-such-page`
+  (a 404: the application logs only the requests that have something to say, an error or a 404), then
   `grep <id> $LOG/access.log` → one line, and `dc logs --no-log-prefix web | grep <id>` → the
   application line of that request.
 - [ ] Deferred check 3.3: after one login and one Biblissima import,
@@ -750,13 +761,17 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
 ### 4.9 Rotation
 
 - [ ] (admin) Render the host file by hand until PP-8 installs it: replace `@NGINX_LOG_HOST_DIR@`,
-  `@APP_USER@`, `@APP_GROUP@` in `deploy/logrotate/manuspectrum-nginx.in`, then
+  `@APP_USER@`, `@APP_GROUP@` in `deploy/logrotate/manuspectrum-nginx.in`, make the file `root:root` mode `0644`
+  (`sudo chown root:root <file>; sudo chmod 0644 <file>`: logrotate ignores a file writable by group or others), then
   `sudo logrotate -f -s /tmp/state <rendered file>`.
   - Expected: dated, then compressed (next run) files appear in `$LOG`, a new `access.log` is
     created `0640` for the service account, and nginx keeps writing to it with no restart
     (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 30`: thirty days.
   - On failure: `su` line missing (logrotate refuses a directory not owned by root), or the
-    `USR1` signal did not reach the container (`docker ps --filter label=com.docker.compose.service=nginx`).
+    `nginx -s reopen` did not reach the container (`docker ps --filter label=com.docker.compose.service=nginx`).
+    The rule never uses `docker kill --signal`: Docker would record a manual stop and `unless-stopped` would no
+    longer restart nginx at the next boot. After a rotation, `docker inspect -f '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}' $(dc ps -q nginx)`
+    stays `running unless-stopped` and nginx comes back after a reboot of the VM.
 - [ ] *(service account)* `docker inspect -f '{{.HostConfig.LogConfig}}' $(dc ps -q nginx)`
   → `{json-file map[max-file:5 max-size:10m]}` (nginx's own stdout stays bounded).
 
@@ -766,7 +781,10 @@ The snapshot holds the origins of the development hosts in concept identifiers, 
 URIs, IIIF manifests and the tiles that reference them. Run once, before the site is shown.
 Commands run as the service account (no admin account runs `docker`).
 
-- [ ] *(service account)* Dry run, one `--from` per origin the snapshot was made under (up to four
+- [ ] *(service account)* List the development origins the snapshot carries:
+  `make -C deploy manage ARGS="rewrite_dev_origin --list"` (writes nothing; one line per origin with its counts per
+  family. The manifests hold one more than the concept identifiers: the Cantaloupe port of the development host).
+- [ ] *(service account)* Dry run, one `--from` per origin listed above (up to four
   development origins):
   `make -C deploy manage ARGS="rewrite_dev_origin --dry-run --from <dev origin 1> --from <dev origin 2> --from <dev origin 3> --from <dev origin 4>"`
   - Expected: a count per family (concepts, lists, manifests, tiles), nothing written, a
@@ -774,6 +792,9 @@ Commands run as the service account (no admin account runs `docker`).
     rewritten: record N, it is not an error.
   - On failure: all counts `0` = the origins are mistyped (scheme, port, trailing slash).
 - [ ] *(service account)* The same command without `--dry-run`, then again with `--dry-run` → every count `0`.
+- [ ] *(service account)* File entries written outside the upload widget (package, CSV or ETL import, snapshot) lack their
+  metadata and licence: `make -C deploy manage ARGS="repair_file_metadata"` (dry run, counts), then
+  `make -C deploy manage ARGS="repair_file_metadata --apply"`, then the same dry run → nothing left to fix.
 - [ ] *(service account)* Elasticsearch holds copies: `make -C deploy manage ARGS="es reindex_database"`
   (duration and memory: 2.10), then `make -C deploy smoke` → only `ok:`.
 - [ ] *(service account)* No origin of development is left: `dc exec -T postgres sh -c 'psql -U "$POSTGRES_USER" <PGDBNAME> -Atc "select count(*) from iiif_manifests where manifest::text like '"'"'%<dev origin 1>%'"'"'"'` → `0` (repeat per origin).
@@ -852,7 +873,7 @@ production-shaped VM, and the rotations, which CI does not run.
 - [ ] *(service account)* `for f in pg_password elastic_password django_secret_key email_password admin_password; do cmp "$SECRETS_DIR/$f" "$SECRETS_DIR/aside/$f" && echo "$f identical"; done`
   → five `identical`.
 - [ ] *(service account)* `make -C deploy down up`, then `deploy/compose/smoke.sh check` → only `ok:` lines.
-- [ ] *(service account)* `rm -r "${SECRETS_DIR:?}/aside"`; `git status --short deploy/compose` → empty.
+- [ ] *(service account)* `rm -rf "${SECRETS_DIR:?}/aside"` (the files are `0444`: plain `rm -r` asks once per file); `git status --short deploy/compose` → empty.
   - On failure: `cmp` differs = the vault holds a different value, fix the vault or the file before going on.
 
 ### 5.4 Rotation drills
@@ -918,7 +939,7 @@ timings and the systemd timers, which CI does not run.
 - [ ] *(service account)* Create the three directories, owned by the service account:
   `install -d -m 0700 "$(grep ^BACKUP_DUMP_DIR= deploy/compose/.env | cut -d= -f2)" "$(grep ^RESTIC_REPOSITORY_DIR= deploy/compose/.env | cut -d= -f2)"`
   (`make -C deploy backup-init`, below, adds `latest/` and `tmp/` under the first one)
-  and `install -d -m 0755 "$(grep ^METRICS_TEXTFILE_DIR= deploy/compose/.env | cut -d= -f2)"`, then
+  and, when `make up` has not created it already, `install -d -m 0755 "$(grep ^METRICS_TEXTFILE_DIR= deploy/compose/.env | cut -d= -f2)"`, then
   `stat -c '%a %U' <each directory>` → `700 <account>`, `700 <account>`, `755 <account>`
   (`<account>` is the output of `id -un`).
   - On failure: the repository directory is on the network filesystem: a mount that squashes the owner
@@ -1153,8 +1174,9 @@ Prometheus, Alertmanager, Grafana and the exporters, the alert e-mails and the m
 rehearsal VM with the stack of step 2, the secrets of step 5 and the backups of step 6. Same conventions:
 *(service account)* commands run after `sudo -iu manuspectrum` and `cd ~/manuspectrum`; `dc` is the Compose alias
 of step 2. A rehearsal has no mail relay: it uses the Mailpit profile (`COMPOSE_PROFILES=observability,mailpit`,
-`EMAIL_HOST=mailpit`, `EMAIL_PORT=1025`), whose API is read from the `prometheus` container (same network):
-`dc exec -T prometheus wget -qO- http://mailpit:8025/api/v1/messages`.
+`EMAIL_HOST=mailpit`, `EMAIL_PORT=1025`), whose API is read from the `web` container (same network; the
+busybox `wget` of `prometheus` fails with `bad address` when the host `resolv.conf` has `search .`):
+`dc exec -T web curl -fsS http://mailpit:8025/api/v1/messages`.
 
 **What CI already proves.** `check-stack.sh` validates the configuration (`compose/observability/check.sh`: promtool
 and amtool checks, the rule unit tests, the dashboards), the host-metrics, monitoring-init and monthly-report
@@ -1170,7 +1192,7 @@ reboot.
   - On failure: without `DEFAULT_FROM_EMAIL`, `web` refuses to start (`Set the DEFAULT_FROM_EMAIL environment variable`).
 - [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test and timer runs:
   `make -C deploy silence-fresh-install` (48 h), or install the timers and take a backup before `observability-on`.
-- [ ] `make -C deploy volumes secrets up monitoring-init observability-on` → `grafana_admin_password: created`,
+- [ ] `make -C deploy volumes secrets monitoring-init up observability-on` → `grafana_admin_password: created`,
   `pg_monitor_password: created`, the others `kept`; `monitoring-init` ends without error; then
   `make -C deploy status` → the seven monitoring containers `healthy`.
   - On failure: `monitoring-init` needs `postgres` up; read `docker compose logs <service>` of the unhealthy one.

@@ -107,6 +107,7 @@ scratch="$(scratch_database_name "$PGDBNAME")" \
   || usage_die "no safe scratch database name for '$PGDBNAME' (it must not end in _restoretest, and <name>_restoretest must fit 63 characters)"
 [ -d "$BACKUP_DUMP_DIR" ] || die "BACKUP_DUMP_DIR $BACKUP_DUMP_DIR does not exist: run make backup-init"
 require_backup_dirs
+require_restic_password
 take_lock "$BACKUP_LOCK_WAIT"
 wait_for_postgres "$POSTGRES_WAIT"
 

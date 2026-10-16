@@ -6,7 +6,7 @@
 #
 # Constants: the retention of the restic repository and the paths restic does
 # not back up, in one place for the script, its tests and deploy/BACKUP.md.
-# Functions: usage_die, backup_config, require_backup_dirs, scratch_database_name, restic_run,
+# Functions: usage_die, backup_config, require_backup_dirs, require_restic_password, scratch_database_name, restic_run,
 # restic_run_with, take_lock, wait_for_postgres, verify_backup_files,
 # write_metrics.
 # shellcheck disable=SC2154,SC2034  # inputs assigned by the sourcing script; constants it reads
@@ -93,6 +93,13 @@ require_backup_dirs() {
   for dir in "$BACKUP_DUMP_DIR/latest" "$BACKUP_DUMP_DIR/tmp"; do
     [ -d "$dir" ] || die "$dir is missing (the restic service binds it): run make -C deploy backup-init"
   done
+}
+
+# The restic service reads SECRETS_DIR/restic_password; without the file restic
+# reports an unreadable repository, which reads as a wrong password.
+require_restic_password() {
+  [ -s "$SECRETS_DIR/restic_password" ] \
+    || die "$SECRETS_DIR/restic_password is missing or empty: restore it from the vault (deploy/SECRETS.md), or run make -C deploy secrets on a new host"
 }
 
 # Prints the name of the scratch database of the restore test for the live

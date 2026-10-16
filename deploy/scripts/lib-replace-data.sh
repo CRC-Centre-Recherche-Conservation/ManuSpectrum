@@ -362,7 +362,8 @@ finish() {
   if [ -n "$aside" ]; then as_app touch "$aside/.complete"; fi
   prune_asides
   if [ -n "$aside" ]; then
-    local undo="${UNDO_COMMAND:-make -C deploy load-snapshot RESTORE_BEFORE={aside} CONFIRM=yes}"
+    local default_undo="make -C deploy load-snapshot RESTORE_BEFORE={aside} CONFIRM=yes"
+    local undo="${UNDO_COMMAND:-$default_undo}" # a literal inside the expansion would end at the first `}`
     log "this run's aside: $aside ($(as_app du -sh "$aside" | cut -f1)); to undo this run: ${undo//\{aside\}/$aside}"
   fi
 }

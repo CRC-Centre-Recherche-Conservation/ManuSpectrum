@@ -563,7 +563,16 @@ class ComposeStackTests(unittest.TestCase):
         self.assertIn("monitoring-init.sh", recipe)
         self.assertIn("$(SECRETS_DIR)", recipe)
         self.assertIn("$(COMPOSE)", recipe)
+        self.assertIn("up -d --wait postgres", recipe)
         self.assertTrue((DEPLOY_DIR / "scripts" / "monitoring-init.sh").is_file())
+
+    def test_postgres_exporter_is_unhealthy_while_it_cannot_reach_the_database(self):
+        test = self.observability["services"]["postgres-exporter"]["healthcheck"][
+            "test"
+        ]
+        self.assertEqual(test[0], "CMD-SHELL")
+        self.assertIn(":9187/metrics", test[1])
+        self.assertIn("pg_up 1", test[1])
 
     def test_secrets_doc_covers_the_monitoring_secrets(self):
         text = (DEPLOY_DIR / "SECRETS.md").read_text(encoding="utf-8")
@@ -1207,6 +1216,70 @@ class MakeInitSubmoduleTests(unittest.TestCase):
         result = self.init(self.app)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("run --rm -T init", self.docker_calls())
+
+    def test_a_missing_local_ca_is_refused_with_the_command_to_run(self):
+        missing = self.base / "ca" / "ca.crt"
+        result = self.init(self.app, LOCAL_CA_CERT=str(missing))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("make -C deploy certs-local", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
+    def test_a_missing_local_ca_in_the_env_file_is_refused(self):
+        (self.app / "deploy" / "compose" / ".env").write_text(
+            f"LOCAL_CA_CERT={self.base}/ca/ca.crt\n"
+        )
+        result = self.init(self.app)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("make -C deploy certs-local", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
+    def test_an_existing_local_ca_goes_on_to_compose(self):
+        ca = self.base / "ca.crt"
+        ca.write_text("x\n")
+        result = self.init(self.app, LOCAL_CA_CERT=str(ca))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("run --rm -T init", self.docker_calls())
+
+    def test_up_creates_the_metrics_directory_node_exporter_mounts(self):
+        metrics = self.base / "host" / "metrics"
+        (self.app / "deploy" / "compose" / ".env").write_text(
+            f"METRICS_TEXTFILE_DIR={metrics}\n"
+        )
+        environment = {
+            k: v for k, v in os.environ.items() if k not in ("PKG_DIR", "MAKEFLAGS")
+        }
+        environment["PATH"] = f"{self.bin}:{environment['PATH']}"
+        result = subprocess.run(
+            ["make", "-C", str(self.app / "deploy"), "up"],
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(metrics.is_dir())
+        self.assertEqual(metrics.stat().st_mode & 0o777, 0o755)
+
+    def test_up_reads_the_metrics_directory_from_the_environment_first(self):
+        from_env = self.base / "host" / "from-env"
+        from_file = self.base / "host" / "from-file"
+        (self.app / "deploy" / "compose" / ".env").write_text(
+            f"METRICS_TEXTFILE_DIR={from_file}\n"
+        )
+        environment = {
+            k: v for k, v in os.environ.items() if k not in ("PKG_DIR", "MAKEFLAGS")
+        }
+        environment.update(
+            PATH=f"{self.bin}:{environment['PATH']}", METRICS_TEXTFILE_DIR=str(from_env)
+        )
+        result = subprocess.run(
+            ["make", "-C", str(self.app / "deploy"), "up"],
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(from_env.is_dir())
+        self.assertFalse(from_file.exists())
 
     def test_a_submodule_that_was_never_initialised_is_refused(self):
         clone = self.base / "clone"

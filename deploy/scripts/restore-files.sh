@@ -51,6 +51,7 @@ if [[ "$TARGET" =~ (^|/)\.\.(/|$) ]]; then die "TARGET must not hold a '..' segm
 
 backup_config
 require_backup_dirs
+require_restic_password
 check_identity
 
 # A path is inside PROTECTED when, once normalised, it equals it or starts with it.

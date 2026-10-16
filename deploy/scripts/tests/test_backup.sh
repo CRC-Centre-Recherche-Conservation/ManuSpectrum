@@ -76,6 +76,7 @@ case "$*" in
     done ;;
   *"pg_dump --version"*) echo "pg_dump (PostgreSQL) 17.2" ;;
   *"exec -T postgres pg_dump "*)
+    readlink /proc/self/fd/0 >>"$TMP/stdin"
     [ -z "$STUB_DUMP_FAIL" ] || { echo "pg_dump: error: stub failure" >&2; exit 1; }
     [ -z "$STUB_DUMP_BLOCK" ] || { touch "$TMP/blocked"; exec sleep 30; }
     [ -z "$STUB_DUMP_EMPTY" ] || exit 0
@@ -380,6 +381,23 @@ write_fixture "$TMP/no-such-repo"
 run_backup -- --init && status=0 || status=$?
 [ "$status" -eq 1 ] && ! grep -q ' restic ' "$TMP/calls"
 assert "init refused when the repository directory does not exist, restic not run" $?
+
+write_fixture
+rm "$TMP/secrets/restic_password"
+run_backup -- --init && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "restic_password is missing" "$TMP/out" && ! grep -q "wrong restic_password" "$TMP/out" \
+  && ! grep -q ' restic ' "$TMP/calls"
+assert "init without the restic_password file says it is missing (not a wrong password), restic not run" $?
+run_backup -- --tag manual && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q "restic_password is missing" "$TMP/out"
+assert "backup without the restic_password file says it is missing" $?
+printf '%s' "$PW_RESTIC" >"$TMP/secrets/restic_password"
+
+reset
+rm -f "$TMP/stdin"
+printf 'typed\n' | run_backup -- --tag manual && status=0 || status=$?
+[ "$status" -eq 0 ] && [ "$(cat "$TMP/stdin")" = /dev/null ]
+assert "backup: containers get /dev/null as stdin, so a background run from a terminal is not stopped" $?
 
 # --- make restic
 reset
