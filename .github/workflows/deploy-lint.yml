@@ -5,12 +5,19 @@ name: deploy-lint
 # whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
 # job decides which jobs have work to do, the others are skipped, and the
 # `conclusion` job always concludes so it can be a required check.
+# The image build reads the buildkit cache of the pull request and of its base
+# branch (written on every push there by build-image.yml) and writes its own
+# under refs/pull/<n>/merge, deleted by cache-cleanup.yml when the pull
+# request closes.
 on:
   pull_request:
   workflow_dispatch:
 
+# actions: read lets buildkit's cache exporter list the existing cache
+# entries instead of logging an error and probing each blob one by one.
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: deploy-lint-${{ github.ref }}
@@ -47,11 +54,13 @@ jobs:
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/deploy-lint\.yml$'
+          # check-stack.sh lints every project workflow but main.yml (actionlint).
+          workflows='\.github/workflows/'
           stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
           build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_positron_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
-            echo "stack=$(matches "^($stack|$workflow)")"
+            echo "stack=$(matches "^($stack|$workflows)")"
             echo "image=$(matches "^($stack|$build|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
@@ -118,10 +127,21 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      - name: Free runner disk
+      # The toolchains the job never uses are removed only when the runner has
+      # less than MIN_FREE_GB available. What the job itself uses (image layers,
+      # service images, volumes, backups) is printed by its last step.
+      - name: Runner disk
+        env:
+          MIN_FREE_GB: "40"
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
+          docker system df
+          avail_gb="$(df --output=avail -BG / | tail -n1 | tr -dc '0-9')"
+          if [ "$avail_gb" -lt "$MIN_FREE_GB" ]; then
+            echo "$avail_gb GB available, under $MIN_FREE_GB GB: removing the unused toolchains"
+            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+            df -h /
+          fi
 
       - name: Kernel setting for Elasticsearch
         run: sudo sysctl -w vm.max_map_count=262144
@@ -138,8 +158,9 @@ jobs:
           tags: ${{ env.IMAGE }}
           provenance: false
           sbom: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=image
+          # A failed cache export never fails the pull request: the export is not a test.
+          cache-to: type=gha,scope=image,mode=max,ignore-error=true
 
       - name: Probe the image
         run: bash deploy/docker/probe-image.sh "$IMAGE"
@@ -253,6 +274,7 @@ jobs:
           grep -q '^manuspectrum_backup_failed 0$' "$RUNNER_TEMP/metrics/manuspectrum_backup.prom"
           grep -q '^manuspectrum_restore_test_failed 0$' "$RUNNER_TEMP/metrics/manuspectrum_restore_test.prom"
           deploy/compose/smoke.sh lose
+          echo "Expected below: FAIL lines from smoke.sh survived, the markers are gone until the restore."
           if deploy/compose/smoke.sh survived; then
             echo "::error::the markers were not lost"
             exit 1
@@ -321,6 +343,13 @@ jobs:
       - name: Trivy report
         if: always() && steps.trivy.outcome == 'success'
         run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json"
+
+      # Nothing is pruned during the job: the usage here is what the job needs.
+      - name: Runner disk after the job
+        if: always()
+        run: |
+          df -h /
+          docker system df
 
   conclusion:
     needs: [changes, rehearsal-kit, stack, image]
