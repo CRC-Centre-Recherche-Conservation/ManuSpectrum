@@ -1,0 +1,7 @@
+# gitleaks configuration: the default rules, plus one allowlist.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Credentials read at run time from a Docker secret file, never written in the repository"
+regexes = ['''\$\$?\(cat /run/secrets/[a-z_]+\)''']

@@ -67,7 +67,7 @@ from manuspectrum.utils.public_visibility import (  # noqa: F401  (re-exported)
     readable_nodegroup_ids,
     resource_grant_count,
 )
-from manuspectrum.utils.spectrum_preview import is_supported
+from manuspectrum.utils.spectrum_preview import is_readable
 from manuspectrum.views.graph_nodes import (
     RELATION_DATATYPES,
     localized,
@@ -78,6 +78,12 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 3600
 SLUG_CACHE_KEY = "summary-graph-slugs"
+
+
+def graph_index_key(graph_id):
+    """Cache key of the memoised ``GraphIndex`` of a graph."""
+    return f"summary-graph:{graph_id}"
+
 
 # A degraded payload states that the cluster answered nothing, which is a
 # symptom and not a fact about the resource: it expires in seconds.
@@ -133,7 +139,7 @@ class GraphIndex(NamedTuple):
         """Index of a graph, memoised for an hour; None when the graph is unknown."""
         graph_id = str(graph_id)
         return get_or_build(
-            f"summary-graph:{graph_id}", lambda: cls._build(graph_id), CACHE_TTL
+            graph_index_key(graph_id), lambda: cls._build(graph_id), CACHE_TTL
         )
 
     @classmethod
@@ -444,15 +450,15 @@ def _field_label(entry, node, index, language):
 def find_preview(doc, node):
     """First file of a file-list node the spectrum preview can plot, or None.
 
-    Which extensions those are is ``settings.XY_TEXT_FILE_FORMATS``, read
-    through the endpoint's own test so the popup never offers a file the
-    preview answers 204 for.
+    Which formats those are is the endpoint's own test (``is_readable``: the
+    text formats of ``settings.XY_TEXT_FILE_FORMATS``), so the popup never
+    offers a format the preview answers 204 for.
     """
     for value in _tile_values(doc, node):
         if not isinstance(value, dict) or not value.get("file_id"):
             continue
         name = value.get("name") or ""
-        if is_supported(name):
+        if is_readable(name):
             return {"file_id": str(value["file_id"]), "name": name}
     return None
 

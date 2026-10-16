@@ -1,5 +1,5 @@
 import initMsNav from "utils/ms-nav";
-import { t, tv } from "utils/i18n";
+import { isSingular, t, tv } from "utils/i18n";
 import revealOnScroll from "utils/reveal-on-scroll";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -135,9 +135,10 @@ function wireCounter(message) {
     if (!counter || !max) return;
     const update = () => {
         const left = max - message.value.length;
-        counter.textContent = tv("msContactCharsLeft", "{n} characters left", {
-            n: left,
-        });
+        counter.textContent =
+            isSingular(left)
+                ? tv("msContactCharsLeftOne", "{n} character left", { n: left })
+                : tv("msContactCharsLeft", "{n} characters left", { n: left });
         counter.classList.toggle("is-low", left <= 100);
     };
     message.addEventListener("input", update);

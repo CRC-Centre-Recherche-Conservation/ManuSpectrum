@@ -1,0 +1,9 @@
+{% load i18n %}
+{# Strings of media/js/views/pages/conceptual-model.js, read through utils/i18n. #}
+{# An .arches-translations element, parsed by arches.js like the one in javascript.htm. #}
+<div class='arches-translations'
+    ms-cm-thesaurus-label='{% trans "of fields draw on a published thesaurus, not free text — {n} of {total}" as t42 %}"{{ t42|escapejs }}"'
+    ms-cm-relations-label='{% trans "typed relationships across {models} interconnected models" as t44 %}"{{ t44|escapejs }}"'
+    ms-cm-technical='{% trans "{nodegroups} field groups · {total} nodes ({data} of them data) · {properties} ontology properties · {thesauri} thesauri." as t46 %}"{{ t46|escapejs }}"'
+    ms-cm-models-line='{% trans "{models} independent models linked by {relations} typed CIDOC relationships — so a person recorded once as an analyst is the same record when they reappear as a manuscript's owner." as t47 %}"{{ t47|escapejs }}"'
+></div>
