@@ -131,10 +131,10 @@ const PRESSED_MODE_SELECTOR = ".mode-switch button[aria-pressed='true']";
  * timeline, the filters of the map in a rail, and the panel of the place,
  * period, document or material opened. The mode, the followed materials,
  * the kernel radius and influence threshold of Territories,
- * the brushed period and the borders live in the store (`mapState`, in the
- * address), with the legend's open state (folded by default, not in the
- * address); the reliability and approximate-date switches, the hovered
- * place, the isolated territory and the opened subject live here. The stage stays laid out,
+ * the brushed period, the borders and the reliability and approximate-date
+ * switches live in the store (`mapState`, in the address), with the legend's
+ * open state (folded by default, not in the address); the hovered place, the
+ * isolated territory and the opened subject live here. The stage stays laid out,
  * hidden, while the small multiples show, so its snapshot can be taken and
  * the map comes back as it was; a snapshot is asked again only when the
  * bounds change (`boundsKey`), and only the newest answer is kept. A place
@@ -164,10 +164,13 @@ const subject = ref<PanelSubject | null>(null);
 const hovered = ref<Hovered | null>(null);
 const listHovered = ref<string | null>(null);
 const page = ref(0);
-/** The reliability levels the reader unticked: their materials leave the map. */
-const hiddenLevels = ref(new Set<string>());
-/** Unticked, the events dated « circa » leave the map, the lists, the territories and the timeline. */
-const approximateShown = ref(true);
+/** The reliability levels the reader unticked (in the address): their materials leave the map and its exports. */
+const hiddenLevels = computed(() => new Set(store.mapState.hiddenLevels));
+/** Unticked (in the address), the events dated « circa » leave the map, the lists, the territories, the timeline and the exports. */
+const approximateShown = computed({
+    get: () => store.mapState.approximate,
+    set: (value: boolean) => store.setMapState({ approximate: value }),
+});
 const background = ref<MapSnapshot | null>(null);
 /** The snapshot of an enlarged map of the series, at the dialog's size. */
 const largeBackground = ref<MapSnapshot | null>(null);
@@ -371,16 +374,22 @@ const credits = computed<{ href: string; text: string }[]>(() => [
         : []),
 ]);
 const language = computed(() => gettext.current);
+const switches = computed(() => ({
+    approximate: store.mapState.approximate,
+    hiddenLevels: store.mapState.hiddenLevels,
+}));
 const exports = computed(() => ({
     csv: exportHref(
         "manuspectrum:explorer-events-csv",
         store.filters,
         language.value,
+        switches.value,
     ),
     geojson: exportHref(
         "manuspectrum:explorer-events-geojson",
         store.filters,
         language.value,
+        switches.value,
     ),
 }));
 const unplaced = computed(
@@ -725,7 +734,7 @@ function setLevel(id: string, event: Event): void {
     const next = new Set(hiddenLevels.value);
     if ((event.target as HTMLInputElement).checked) next.delete(id);
     else next.add(id);
-    hiddenLevels.value = next;
+    store.setMapState({ hiddenLevels: [...next].sort() });
 }
 
 function isFolded(group: RailGroup): boolean {

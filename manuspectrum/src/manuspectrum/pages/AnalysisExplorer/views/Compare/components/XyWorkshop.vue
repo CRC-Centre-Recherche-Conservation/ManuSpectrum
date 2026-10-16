@@ -182,6 +182,8 @@ const REM = 16;
 /** Left and right margins of the plot inside the chart, in px (`workshop-figure` margins). */
 const PLOT_MARGIN_X = 80;
 const DEFAULT_POINTER = "mouse";
+/** From this many files with nothing to draw, they fold into one disclosure line under the chart. */
+const EMPTY_FILES_FOLDED = 2;
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
@@ -237,7 +239,11 @@ const DEFAULT_POINTER = "mouse";
  * counts, and nothing is toggled in the focus.
  *
  * A file over the server's ceiling, missing or empty is named and left
- * out. A chart Plotly cannot draw says so in the window. The chart follows
+ * out. A chart Plotly cannot draw says so in the window. The chart takes
+ * the height its window leaves below the toolbar, down to a floor
+ * (`--xy-chart-floor`), and is size-contained so that a drawing never holds
+ * its box open; under 40rem the legend below it scrolls past
+ * `--xy-legend-stacked-max`. The chart follows
  * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
  * and is then drawn again for the size (labels, panels); small multiples
  * that no longer need a height of their own are drawn once more at the
@@ -658,14 +664,42 @@ const legendGroups = computed<LegendGroup[]>(() =>
         };
     }),
 );
-const notes = computed(() => {
-    const found: string[] = [];
-    for (const line of props.curves) {
-        const name = `${slotLabel(line.slot)} · ${line.file.name}`;
+/** Each answered file of the window, named by its slot and file name. */
+const answered = computed(() =>
+    props.curves.flatMap((line) => {
         const answer = line.file.previewUrl
             ? answers.value.get(line.file.previewUrl)
             : { series: null, failed: false, tooLarge: false };
-        if (!answer) continue;
+        return answer
+            ? [{ name: `${slotLabel(line.slot)} · ${line.file.name}`, answer }]
+            : [];
+    }),
+);
+/** The files that answered with nothing to draw. */
+const emptyFiles = computed(() =>
+    answered.value
+        .filter(
+            ({ answer }) =>
+                !answer.tooLarge && !answer.failed && !answer.series,
+        )
+        .map(({ name }) => name),
+);
+const emptyFilesFolded = computed(
+    () => emptyFiles.value.length >= EMPTY_FILES_FOLDED,
+);
+const emptyFilesSummary = computed(() =>
+    interpolate(
+        $ngettext(
+            "%{n} file with nothing to draw",
+            "%{n} files with nothing to draw",
+            emptyFiles.value.length,
+        ),
+        { n: emptyFiles.value.length },
+    ),
+);
+const notes = computed(() => {
+    const found: string[] = [];
+    for (const { name, answer } of answered.value) {
         if (answer.tooLarge) {
             found.push(
                 interpolate(
@@ -684,7 +718,7 @@ const notes = computed(() => {
                     true,
                 ),
             );
-        } else if (!answer.series) {
+        } else if (!answer.series && !emptyFilesFolded.value) {
             found.push(
                 interpolate(
                     $gettext("%{name}: nothing to draw."),
@@ -2049,6 +2083,22 @@ function chooseView(event: Event): void {
                 <span>{{ note }}</span>
             </li>
         </ul>
+        <details
+            v-if="emptyFilesFolded"
+            class="empty-files"
+        >
+            <summary>
+                <span>{{ emptyFilesSummary }}</span>
+            </summary>
+            <ul>
+                <li
+                    v-for="(name, index) in emptyFiles"
+                    :key="index"
+                >
+                    <span>{{ name }}</span>
+                </li>
+            </ul>
+        </details>
         <button
             v-if="canRetry"
             type="button"
@@ -2062,6 +2112,9 @@ function chooseView(event: Event): void {
 
 <style scoped>
 .xy-workshop {
+    --xy-chart-floor: 9rem;
+    --xy-legend-stacked-max: 7.5rem;
+
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -2173,7 +2226,13 @@ function chooseView(event: Event): void {
 .xy-workshop .plot-area {
     position: relative;
     display: grid;
+    flex: 1 1 0;
+    grid-template-rows: minmax(var(--xy-chart-floor), 1fr) auto;
     gap: 0.5rem;
+}
+
+.xy-workshop .plot-area.tall {
+    flex: none;
 }
 
 .xy-workshop .plot-area .isolated {
@@ -2188,29 +2247,25 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .chart {
-    min-block-size: 18rem;
+    min-block-size: 0;
+    contain: size;
+}
+
+.xy-workshop .plot-area .xy-legend {
+    max-block-size: var(--xy-legend-stacked-max);
+    overflow: auto;
 }
 
 @container (min-width: 40rem) {
     .xy-workshop .plot-area {
-        flex: 1 1 0;
         grid-template-rows: minmax(0, 1fr);
         grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem);
-        min-block-size: 18rem;
-    }
-
-    .xy-workshop .plot-area.tall {
-        flex: none;
-    }
-
-    .xy-workshop .plot-area .chart {
-        min-block-size: 0;
+        min-block-size: var(--xy-chart-floor);
     }
 
     .xy-workshop .plot-area .xy-legend {
         align-self: start;
         max-block-size: 100%;
-        overflow: auto;
     }
 
     .xy-workshop .lens-region {
@@ -2222,16 +2277,13 @@ function chooseView(event: Event): void {
     }
 }
 
-.xy-workshop .chart[data-failed] {
-    min-block-size: 0;
-}
-
 .xy-workshop .chart[data-identifying] :deep(.nsewdrag) {
     cursor: crosshair !important;
 }
 
 .xy-workshop .note,
-.xy-workshop .notes {
+.xy-workshop .notes,
+.xy-workshop .empty-files {
     margin: 0;
     color: var(--ink-muted);
     font-size: 0.8125rem;
@@ -2262,6 +2314,28 @@ function chooseView(event: Event): void {
 
 .xy-workshop .notes {
     padding-inline-start: 1.25rem;
+}
+
+.xy-workshop .empty-files {
+    flex: none;
+}
+
+.xy-workshop .empty-files summary {
+    inline-size: fit-content;
+    cursor: pointer;
+}
+
+.xy-workshop .empty-files summary:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.xy-workshop .empty-files ul {
+    max-block-size: 4.5rem;
+    margin: 0;
+    padding-inline-start: 1.25rem;
+    overflow: auto;
+    overscroll-behavior: contain;
 }
 
 .xy-workshop .retry {

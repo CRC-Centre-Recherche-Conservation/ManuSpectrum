@@ -87,7 +87,9 @@ export function inBrush(
 /**
  * `events` without the materials whose reliability is one of `hidden`; a
  * material of no recorded reliability stays. An event whose materials were
- * all hidden leaves too; an event that never had a material stays.
+ * all hidden leaves too; an event that never had a material stays. Twin of
+ * the export's `apply_display_switches` (`views/explorer/events_export.py`),
+ * pinned by `tests/fixtures/explorer/map-switches.json`.
  */
 export function withoutLevels(
     events: readonly MapEvent[],
@@ -105,7 +107,10 @@ export function withoutLevels(
     return kept;
 }
 
-/** The events whose date is not approximate (« circa »). */
+/**
+ * The events whose date is not approximate (« circa »). Twin of the export's
+ * `apply_display_switches`, pinned by `tests/fixtures/explorer/map-switches.json`.
+ */
 export function withoutApproximate(events: readonly MapEvent[]): MapEvent[] {
     return events.filter((event) => !event.date.approximate);
 }

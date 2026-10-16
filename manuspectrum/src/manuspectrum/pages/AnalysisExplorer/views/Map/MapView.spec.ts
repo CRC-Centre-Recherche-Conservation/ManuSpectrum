@@ -914,6 +914,43 @@ describe("MapView", () => {
         );
     });
 
+    it("carries the approximate-dates switch and the unticked levels into the address and the export links", async () => {
+        const base = response();
+        base.events[0].materials[0].reliability = "sure";
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({
+                ...base,
+                certaintyScale: {
+                    levels: [
+                        {
+                            id: "sure",
+                            uri: "sure",
+                            label: label("Certain"),
+                            rank: 0,
+                        },
+                    ],
+                },
+            }),
+        );
+        const view = await mountView();
+        await view
+            .get(".map-timeline .approximate input[type='checkbox']")
+            .setValue(false);
+        await view.get(".levels .value input").setValue(false);
+        await flushPromises();
+        expect(useExplorerStore().mapState.approximate).toBe(false);
+        expect(useExplorerStore().mapState.hiddenLevels).toEqual(["sure"]);
+        for (const format of ["csv", "geojson"]) {
+            expect(
+                view
+                    .get(`a.export[data-format='${format}']`)
+                    .attributes("href"),
+            ).toBe(
+                `/en/manuspectrum:explorer-events-${format}?approximate=hide&hideLevel=sure&lang=en`,
+            );
+        }
+    });
+
     it("eases the map to a place picked in the list when it is off screen", async () => {
         const view = await mountView();
         const map = FakeMap.last();

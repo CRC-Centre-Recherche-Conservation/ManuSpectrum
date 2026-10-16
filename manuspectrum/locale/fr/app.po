@@ -14,7 +14,7 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:435
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:628
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:699
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1672
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1681
 msgid "(new tab)"
 msgstr "(nouvel onglet)"
 
@@ -74,7 +74,7 @@ msgid "%{documents} · %{components}"
 msgstr "%{documents} · %{components}"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:295
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:640
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:649
 msgid "%{documents} · %{components} · %{analyses}"
 msgstr "%{documents} · %{components} · %{analyses}"
 
@@ -124,7 +124,7 @@ msgid_plural "%{from}–%{to}: %{n} events"
 msgstr[0] "%{from}–%{to} : %{n} événement"
 msgstr[1] "%{from}–%{to} : %{n} événements"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:553
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:559
 msgid "%{kV} kV"
 msgstr "%{kV} kV"
 
@@ -229,7 +229,7 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/ComponentCard.vue:132
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:316
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:596
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:650
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:659
 msgid "%{n} analysis"
 msgid_plural "%{n} analyses"
 msgstr[0] "%{n} analyse"
@@ -303,7 +303,7 @@ msgstr[1] "%{n} comp."
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:591
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/SmallMultiples.vue:151
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/count-labels.ts:62
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:646
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:655
 msgid "%{n} Component"
 msgid_plural "%{n} Components"
 msgstr[0] "%{n} composant"
@@ -318,7 +318,7 @@ msgstr[1] "%{n} doc."
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:298
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/SmallMultiples.vue:129
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/count-labels.ts:57
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:642
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:651
 msgid "%{n} document"
 msgid_plural "%{n} documents"
 msgstr[0] "%{n} document"
@@ -337,11 +337,17 @@ msgid_plural "%{n} drafts in this document; they are marked “Draft”."
 msgstr[0] "%{n} brouillon dans ce document ; il est signalé « Brouillon »."
 msgstr[1] "%{n} brouillons dans ce document ; ils sont signalés « Brouillon »."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:394
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:403
 msgid "%{n} event without a mapped place"
 msgid_plural "%{n} events without a mapped place"
 msgstr[0] "%{n} événement sans lieu cartographié"
 msgstr[1] "%{n} événements sans lieu cartographié"
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:692
+msgid "%{n} file with nothing to draw"
+msgid_plural "%{n} files with nothing to draw"
+msgstr[0] "%{n} fichier sans rien à tracer"
+msgstr[1] "%{n} fichiers sans rien à tracer"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:374
 msgid "%{n} folio"
@@ -470,7 +476,7 @@ msgid_plural "%{n} items to add"
 msgstr[0] "%{n} élément à ajouter"
 msgstr[1] "%{n} éléments à ajouter"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:535
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:544
 msgid "%{n} km"
 msgstr "%{n} km"
 
@@ -628,7 +634,7 @@ msgid "%{name} appears on %{folios}."
 msgstr "%{name} apparaît sur %{folios}."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:100
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:682
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:716
 msgid "%{name} could not be drawn."
 msgstr "%{name} n'a pas pu être tracé."
 
@@ -654,11 +660,11 @@ msgstr "%{name} : %{n} points de %{from} à %{to}."
 msgid "%{name}: no preview available."
 msgstr "%{name} : aucun aperçu disponible."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:690
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:724
 msgid "%{name}: nothing to draw."
 msgstr "%{name} : rien à tracer."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:701
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:735
 msgid "%{name}: out of the shared X range."
 msgstr "%{name} : hors de la plage X commune."
 
@@ -670,7 +676,7 @@ msgstr ""
 "%{name} : vue rapide tracée à partir de %{shown} des %{total} points du "
 "fichier ; l'atelier travaille sur tous les points."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:672
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:706
 msgid "%{name}: too large to draw in full; download the file to read it."
 msgstr ""
 "%{name} : trop volumineux pour être tracé en entier ; téléchargez le fichier "
@@ -692,7 +698,7 @@ msgstr "%{start} – %{end}"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:202
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue:458
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/event-format.ts:21
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:472
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:481
 msgid "%{start}–%{end}"
 msgstr "%{start}–%{end}"
 
@@ -705,11 +711,11 @@ msgstr "%{summary}. %{message}"
 msgid "%{tag} also in %{analysis} →"
 msgstr "%{tag} aussi dans %{analysis} →"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:468
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:477
 msgid "%{title} · %{period}"
 msgstr "%{title} · %{period}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:480
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:486
 msgid "%{title} (offset)"
 msgstr "%{title} (décalé)"
 
@@ -755,7 +761,7 @@ msgid "%{width} × %{height} px against %{otherWidth} × %{otherHeight} px"
 msgstr "%{width} × %{height} px contre %{otherWidth} × %{otherHeight} px"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:333
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1644
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1678
 msgid "%{y} against %{x}"
 msgstr "%{y} en fonction de %{x}"
 
@@ -771,11 +777,11 @@ msgstr "%{year}, %{century}"
 msgid "%{zones} on %{pages}"
 msgstr "%{zones} sur %{pages}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:721
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:730
 msgid "© %{name} contributors"
 msgstr "© contributeurs d’%{name}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:370
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:376
 msgid ""
 "← / → move the energy by one channel; « Show the lines » draws every line of "
 "an element."
@@ -813,7 +819,7 @@ msgstr "+ Outil"
 msgid "+%{n} more"
 msgstr "+%{n} de plus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:546
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:555
 msgid "≥ %{n}"
 msgstr "≥ %{n}"
 
@@ -885,8 +891,8 @@ msgstr "À propos des familles de matériaux"
 msgid "About the certainty"
 msgstr "À propos de la certitude"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1471
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1693
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1480
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1702
 msgid "About the influence model"
 msgstr "À propos du modèle d’influence"
 
@@ -1110,11 +1116,11 @@ msgstr "l'un d'eux"
 msgid "Apply to every pane"
 msgstr "Appliquer à tous les volets"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1417
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1426
 msgid "area of a followed material"
 msgstr "zone d’un matériau suivi"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:463
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:472
 msgid "Areas by material"
 msgstr "Zones par matériau"
 
@@ -1136,17 +1142,17 @@ msgstr "Les flèches déplacent, plus et moins redimensionnent, Échap termine."
 msgid "As measured"
 msgstr "Tel que mesuré"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:550
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:559
 msgid "at least %{n} attestation"
 msgid_plural "at least %{n} attestations"
 msgstr[0] "au moins %{n} attestation"
 msgstr[1] "au moins %{n} attestations"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:567
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:573
 msgid "At most %{n} anode choices can be kept"
 msgstr "Au plus %{n} choix d’anode peuvent être conservés"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:498
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:507
 msgid ""
 "Attestation: each document and each Component of the kept events that "
 "carries a followed material at a place. It weighs 1, or 0.5 when every "
@@ -1157,12 +1163,12 @@ msgstr ""
 "identifications de ce matériau ont une fiabilité moindre."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/SeriesMapDialog.vue:247
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1397
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1406
 msgid "attested"
 msgstr "attesté"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:237
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1593
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1602
 msgid "Attributed place"
 msgstr "Lieu attribué"
 
@@ -1171,7 +1177,7 @@ msgid "Attributed place (broader place)"
 msgstr "Lieu attribué (lieu plus large)"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/SeriesMapDialog.vue:269
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1385
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1394
 msgid "attributed place: region or parent place"
 msgstr "lieu attribué : région ou lieu parent"
 
@@ -1249,7 +1255,7 @@ msgstr "Capture enregistrée dans ce navigateur."
 msgid "Capture the folio under the layer"
 msgstr "Capturer le folio sous la couche"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:433
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:442
 msgid "Century"
 msgstr "Siècle"
 
@@ -1257,7 +1263,7 @@ msgstr "Siècle"
 msgid "Certainty"
 msgstr "Certitude"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:718
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:752
 msgid "Chart of %{n} spectrum; the Table layout lists its range."
 msgid_plural "Chart of %{n} spectra; the Table layout lists their ranges."
 msgstr[0] ""
@@ -1265,7 +1271,7 @@ msgstr[0] ""
 msgstr[1] ""
 "Graphique de %{n} spectres ; la disposition Tableau en donne les plages."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1783
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1817
 msgid "Chart tools"
 msgstr "Outils du graphique"
 
@@ -1305,7 +1311,7 @@ msgstr ""
 "de couverture ou un spectre pour voir ce qui lui est lié dans chaque "
 "fenêtre. Chaque clic l'ajoute au focus ou l'en retire."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:357
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:363
 msgid ""
 "Click the top of a peak: the elements with a line at that energy show under "
 "the chart."
@@ -1355,8 +1361,8 @@ msgstr "Fermer l'outil"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:532
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:162
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:288
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1147
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1152
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1156
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1161
 msgid "Colour"
 msgstr "Couleur"
 
@@ -1421,7 +1427,7 @@ msgstr "Composants sur cette page"
 msgid "Components outlined on this folio"
 msgstr "Composants délimités sur ce folio"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:548
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:554
 msgid "Compton"
 msgstr "Compton"
 
@@ -1505,7 +1511,7 @@ msgstr[1] "couvre %{n} autres matériaux ici"
 msgid "Cream"
 msgstr "Crème"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1227
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1236
 msgid "CSV"
 msgstr "CSV"
 
@@ -1623,9 +1629,9 @@ msgstr "dérivée"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1270
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1328
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1798
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1830
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1832
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1807
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1839
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1841
 msgid "Details"
 msgstr "Détails"
 
@@ -1637,7 +1643,7 @@ msgstr "Résolution du détecteur"
 msgid "Different scale"
 msgstr "Échelle différente"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:456
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:462
 msgid "Dim"
 msgstr "Estomper"
 
@@ -1653,7 +1659,7 @@ msgstr "Fermer"
 msgid "Display style"
 msgstr "Style d’affichage"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:531
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:540
 msgid ""
 "Distance at which a place's weight falls to about 37% (or the place's own "
 "extent if larger)"
@@ -1686,7 +1692,7 @@ msgstr "Documents"
 msgid "Documents (%{n})"
 msgstr "Documents (%{n})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1374
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1383
 msgid "documents analysed here"
 msgstr "documents analysés ici"
 
@@ -1698,15 +1704,15 @@ msgstr "Documents de la période (%{n})"
 msgid "DOI"
 msgstr "DOI"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:429
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:438
 msgid "Dominant"
 msgstr "Dominant"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:462
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:471
 msgid "Dominant material"
 msgstr "Matériau dominant"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:510
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:519
 msgid ""
 "Dominant: each cell takes the colour of the most influential material, its "
 "opacity that material's share of the total; it is hatched when the leader "
@@ -1725,11 +1731,11 @@ msgstr "Télécharger"
 msgid "Download %{name}"
 msgstr "Télécharger %{name}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:781
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:815
 msgid "Download CSV"
 msgstr "Télécharger en CSV"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:773
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:807
 msgid "Download PNG"
 msgstr "Télécharger en PNG"
 
@@ -1741,11 +1747,11 @@ msgstr "Télécharger le fichier"
 msgid "Download the image"
 msgstr "Télécharger l'image"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1212
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1221
 msgid "Download the kept events (CSV)"
 msgstr "Télécharger les événements retenus (CSV)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1234
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1243
 msgid "Download the kept events (GeoJSON)"
 msgstr "Télécharger les événements retenus (GeoJSON)"
 
@@ -1781,7 +1787,7 @@ msgstr "Tracer"
 msgid "Draw « %{title} »"
 msgstr "Tracer « %{title} »"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:367
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:373
 msgid ""
 "Each candidate shows the line that falls there and its confirmation lines, "
 "present or absent in the spectrum."
@@ -1793,7 +1799,7 @@ msgstr ""
 msgid "Each map keeps its own contrast."
 msgstr "Contraste propre à chaque carte."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:428
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:437
 msgid "Each material"
 msgstr "Chaque matériau"
 
@@ -1884,7 +1890,7 @@ msgstr "entièrement inclus"
 msgid "Entirely within the period"
 msgstr "Entièrement dans la période"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:549
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:555
 msgid "esc"
 msgstr "éch."
 
@@ -1904,7 +1910,7 @@ msgstr "Échappement de %{energy} keV"
 msgid "Event"
 msgstr "Événement"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1036
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1045
 msgid "Events"
 msgstr "Événements"
 
@@ -1916,7 +1922,7 @@ msgstr "Événements au fil du temps"
 msgid "Events without a mapped place"
 msgstr "Événements sans lieu cartographié"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:747
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:781
 msgid "Every curve is hidden; « Show all spectra » brings them back."
 msgstr ""
 "Toutes les courbes sont masquées ; « Afficher tous les spectres » les "
@@ -2099,7 +2105,7 @@ msgstr "Suivre"
 msgid "Follow %{material}"
 msgstr "Suivre %{material}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:259
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:262
 msgid "Follow at least one material to draw territories."
 msgstr "Suivez au moins un matériau pour tracer des territoires."
 
@@ -2182,7 +2188,7 @@ msgstr "Galerie masquée"
 msgid "Gallery shown"
 msgstr "Galerie affichée"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:488
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:497
 msgid ""
 "Gaussian kernel estimate from the attesting places, each cell in the colour "
 "of the most influential material: see ⓘ for the method."
@@ -2190,7 +2196,7 @@ msgstr ""
 "Estimation par noyau gaussien depuis les lieux d’attestation, chaque cellule "
 "à la couleur du matériau le plus influent : voir ⓘ pour la méthode."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:491
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:500
 msgid ""
 "Gaussian kernel estimate from the attesting places, one area per material: "
 "see ⓘ for the method."
@@ -2198,7 +2204,7 @@ msgstr ""
 "Estimation par noyau gaussien depuis les lieux d’attestation, une zone par "
 "matériau : voir ⓘ pour la méthode."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1251
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1260
 msgid "GeoJSON"
 msgstr "GeoJSON"
 
@@ -2230,11 +2236,11 @@ msgstr "Vert"
 msgid "Greyscale"
 msgstr "Niveaux de gris"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:940
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:974
 msgid "Grid"
 msgstr "Mosaïque"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:504
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:513
 msgid ""
 "Grid: the influences of every place are summed at the centre of each cell of "
 "a hexagonal grid laid over the visible map."
@@ -2264,7 +2270,7 @@ msgstr ""
 msgid "Hidden windows (%{n})"
 msgstr "Fenêtres masquées (%{n})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:455
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:461
 msgid "Hide"
 msgstr "Masquer"
 
@@ -2294,7 +2300,7 @@ msgstr "Masquer la fenêtre"
 msgid "Hints only: the analyst decides."
 msgstr "Simples indices : l'analyste décide."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:373
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:379
 msgid ""
 "Hints only: the analyst decides. Escape closes the candidates; « Identify a "
 "peak » again leaves the mode."
@@ -2302,16 +2308,16 @@ msgstr ""
 "Simples indices : l'analyste décide. Échap ferme les candidats ; « "
 "Identifier un pic » une seconde fois quitte le mode."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:349
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:352
 msgid "Historical borders"
 msgstr "Frontières historiques"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:351
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:354
 msgid "Historical borders (%{year})"
 msgstr "Frontières historiques (%{year})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1507
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1722
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1516
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1731
 msgid "Hover a material in the legend to see its zone alone."
 msgstr "Survolez un matériau dans la légende pour voir sa zone seule."
 
@@ -2327,7 +2333,7 @@ msgstr ""
 "Fiabilité de l'identification. Une ligne de groupe montre la certitude la "
 "plus haute de ses matériaux."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:361
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:367
 msgid "How to identify a peak"
 msgstr "Comment identifier un pic"
 
@@ -2356,7 +2362,7 @@ msgstr "matériau identifié du composant %{name}"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/CharacterizationCard.vue:236
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue:20
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/OnThisPage.vue:344
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:931
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:940
 msgid "Identified materials"
 msgstr "Matériaux identifiés"
 
@@ -2372,7 +2378,7 @@ msgstr "Matériaux identifiés de %{name}"
 msgid "Identified materials that name the element"
 msgstr "Matériaux identifiés qui citent l'élément"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1905
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1939
 msgid "Identify a peak"
 msgstr "Identifier un pic"
 
@@ -2458,13 +2464,13 @@ msgstr "Entrant — c’est l’autre modèle qui porte le lien"
 msgid "Indicative positioning, not registered."
 msgstr "Positionnement indicatif, non recalé."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1534
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1749
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1543
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1758
 msgid "Influence threshold"
 msgstr "Seuil d’influence"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1461
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1684
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1470
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1693
 msgid "Influence zones: a spatial model, not observed data"
 msgstr "Zones d’influence : modèle spatial, non une donnée observée"
 
@@ -2484,13 +2490,13 @@ msgstr "Pics d'instrument"
 msgid "Instrument peaks: %{peaks}"
 msgstr "Pics d'instrument : %{peaks}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2035
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2069
 msgid "Intensities are not comparable in absolute value across instruments."
 msgstr ""
 "Les intensités ne sont pas comparables en valeur absolue d'un instrument à "
 "l'autre."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:484
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:490
 msgid "Intensity (offset)"
 msgstr "Intensité (décalée)"
 
@@ -2529,12 +2535,12 @@ msgstr "Conservée dans ce navigateur"
 msgid "Kept on this browser"
 msgstr "Gardée sur ce navigateur"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1514
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1729
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1523
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1738
 msgid "Kernel radius"
 msgstr "Rayon du noyau"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:501
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:510
 msgid ""
 "Kernel: an attestation of weight w spreads w × exp(−(d/r)²) at distance d, "
 "where r is the kernel radius, or the place's own extent if larger; at d = r "
@@ -2602,7 +2608,7 @@ msgid "Layers, in order"
 msgstr "Couches, dans l'ordre"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue:603
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1788
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1822
 msgid "Layout"
 msgstr "Disposition"
 
@@ -2641,7 +2647,7 @@ msgid "Linear"
 msgstr "Linéaire"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:93
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1671
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1705
 msgid "Lines: XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"
 msgstr "Raies : XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"
 
@@ -2678,7 +2684,7 @@ msgid "Loading the map…"
 msgstr "Chargement de la carte…"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:254
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1777
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1811
 msgid "Loading the spectra…"
 msgstr "Chargement des spectres…"
 
@@ -2704,11 +2710,11 @@ msgstr ""
 "matériaux, utilisez la facette Matériau."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/SeriesMapDialog.vue:261
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1407
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1416
 msgid "lower reliability"
 msgstr "fiabilité moindre"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1013
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1022
 msgid "Lower reliability levels are drawn hollow on the map."
 msgstr "Les niveaux de fiabilité inférieurs sont dessinés creux sur la carte."
 
@@ -2716,8 +2722,8 @@ msgstr "Les niveaux de fiabilité inférieurs sont dessinés creux sur la carte.
 msgid "Lower the energy by one channel"
 msgstr "Baisser l'énergie d'un canal"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1497
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1712
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1506
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1721
 msgid ""
 "Lower-reliability attestations count half. The zones extrapolate between "
 "attested places; they do not attest a use outside them."
@@ -2734,7 +2740,7 @@ msgstr "Magenta"
 msgid "map"
 msgstr "carte"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1089
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1098
 msgid "Map"
 msgstr "Carte"
 
@@ -2754,11 +2760,11 @@ msgstr "couche cartographique"
 msgid "Map layer"
 msgstr "Couche cartographique"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1096
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1105
 msgid "Map mode"
 msgstr "Mode de la carte"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:661
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:670
 msgid "Map mode: %{mode}."
 msgstr "Mode de la carte : %{mode}."
 
@@ -2766,7 +2772,7 @@ msgstr "Mode de la carte : %{mode}."
 msgid "Map of the places of the kept events"
 msgstr "Carte des lieux des événements retenus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:425
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:434
 msgid "Map series"
 msgstr "Série de cartes"
 
@@ -2779,7 +2785,7 @@ msgid "Map unavailable (image server)"
 msgstr "Carte indisponible (serveur d'images)"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapStage.vue:682
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1606
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1615
 msgid ""
 "Map unavailable in this browser: the place list and the timeline still work."
 msgstr ""
@@ -2789,7 +2795,7 @@ msgstr ""
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts:39
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/SelectionIndicator.vue:160
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapPanel.vue:244
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:432
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:441
 msgid "Material"
 msgstr "Matériau"
 
@@ -2884,7 +2890,7 @@ msgstr "Monter"
 msgid "My Selection (%{n})"
 msgstr "Ma Sélection (%{n})"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1269
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1278
 msgid "Narrow the period on the timeline to see its borders."
 msgstr "Resserrez la période sur la chronologie pour voir ses frontières."
 
@@ -2892,7 +2898,7 @@ msgstr "Resserrez la période sur la chronologie pour voir ses frontières."
 msgid "Narrow the results by technique, material, project or year."
 msgstr "Affinez les résultats par technique, matériau, projet ou année."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1433
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1442
 msgid "nearly tied"
 msgstr "presque à égalité"
 
@@ -2945,7 +2951,7 @@ msgstr "Aucun candidat dans la tolérance"
 msgid "No colour recorded"
 msgstr "Aucune couleur enregistrée"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:744
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:778
 msgid ""
 "No curve here is linked to the selection; press a legend entry to add it."
 msgstr ""
@@ -2973,7 +2979,7 @@ msgstr "Aucun événement daté"
 msgid "No dated event among the kept events."
 msgstr "Aucun événement daté parmi les événements retenus."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1633
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1642
 msgid "No event matches these filters."
 msgstr "Aucun événement ne correspond à ces filtres."
 
@@ -3091,7 +3097,7 @@ msgstr "non attesté ici"
 msgid "not attested in the kept events"
 msgstr "non attesté dans les événements retenus"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1840
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1874
 msgid ""
 "Not available while only elements are in the focus: the lens draws them on "
 "every spectrum"
@@ -3147,7 +3153,7 @@ msgstr "Note"
 msgid "Nothing in the Selection is available any more."
 msgstr "Plus rien dans la Sélection n'est disponible."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:483
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:492
 msgid ""
 "Nothing to draw: the followed materials are not attested in the kept events."
 msgstr ""
@@ -3166,7 +3172,7 @@ msgstr "Nombre"
 msgid "observed %{colour}"
 msgstr "observé %{colour}"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:938
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:972
 msgid "Offset"
 msgstr "Décaler"
 
@@ -3174,8 +3180,8 @@ msgstr "Décaler"
 msgid "On this page"
 msgstr "Sur cette page"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1176
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1181
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1185
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1190
 msgid "One map per"
 msgstr "Une carte par"
 
@@ -3305,7 +3311,7 @@ msgstr "Recouvrements"
 msgid "Overlaps the period"
 msgstr "Chevauche la période"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:936
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:970
 msgid "Overlay"
 msgstr "Superposer"
 
@@ -3417,8 +3423,8 @@ msgstr "Lieu de production"
 msgid "placed on the production (no modification cites it)"
 msgstr "placé sur la production (aucune modification ne le cite)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:423
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:464
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:432
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:473
 msgid "Places"
 msgstr "Lieux"
 
@@ -3548,7 +3554,7 @@ msgstr "Agrégats"
 msgid "Relation alias"
 msgstr "Alias de la relation"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:969
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:978
 msgid "Reliability"
 msgstr "Fiabilité"
 
@@ -3615,7 +3621,7 @@ msgid "Remove this related count"
 msgstr "Supprimer cet agrégat"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue:520
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1645
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1654
 msgid "Remove: %{label}"
 msgstr "Retirer : %{label}"
 
@@ -3638,7 +3644,7 @@ msgstr "Réinitialiser la position"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:269
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:270
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:765
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:799
 msgid "Reset the zoom"
 msgstr "Réinitialiser le zoom"
 
@@ -3673,7 +3679,7 @@ msgstr "Résultats par page"
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:298
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:822
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:437
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2058
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2108
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1187
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1201
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapStage.vue:754
@@ -3752,7 +3758,7 @@ msgid_plural "See %{n} analyses"
 msgstr[0] "Voir %{n} analyse"
 msgstr[1] "Voir %{n} analyses"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:418
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:427
 msgid "See %{n} event"
 msgid_plural "See %{n} events"
 msgstr[0] "Voir %{n} événement"
@@ -3778,7 +3784,7 @@ msgid_plural "See the whole corpus (%{n} documents)"
 msgstr[0] "Voir tout le corpus (%{n} document)"
 msgstr[1] "Voir tout le corpus (%{n} documents)"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1819
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1828
 msgid ""
 "Select a place on the map, a period on the timeline or a document to see its "
 "analyses."
@@ -3981,15 +3987,15 @@ msgid "Size of « %{title} »"
 msgstr "Taille de « %{title} »"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1043
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:869
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:878
 msgid "Skip links"
 msgstr "Liens d'évitement"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:876
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:885
 msgid "Skip to the place list"
 msgstr "Aller à la liste des lieux"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:883
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:892
 msgid "Skip to the timeline"
 msgstr "Aller à la chronologie"
 
@@ -4014,7 +4020,7 @@ msgstr ""
 "ouverte. Vos modifications ne sont pas enregistrées : rechargez-la pour voir "
 "la version enregistrée."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1656
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1690
 msgid "Source: ManuSpectrum, %{url}, %{date}"
 msgstr "Source : ManuSpectrum, %{url}, %{date}"
 
@@ -4089,7 +4095,7 @@ msgstr "%{material} n’est plus suivi."
 msgid "Studied component"
 msgstr "Composant étudié"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:550
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:556
 msgid "sum"
 msgstr "somme"
 
@@ -4097,7 +4103,7 @@ msgstr "somme"
 msgid "Sum %{a} + %{b} keV"
 msgstr "Somme %{a} + %{b} keV"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:537
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:546
 msgid ""
 "Summed influence a cell must reach to be drawn; one full attestation weighs "
 "1 at its place"
@@ -4121,8 +4127,8 @@ msgstr "Échanger A/B"
 msgid "Sync zoom and pan across panes"
 msgstr "Synchroniser le zoom et le déplacement des volets"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:788
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:942
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:822
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:976
 msgid "Table"
 msgstr "Tableau"
 
@@ -4151,7 +4157,7 @@ msgstr "Technique"
 msgid "Techniques on this page"
 msgstr "Techniques de cette page"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:424
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:433
 msgid "Territories"
 msgstr "Territoires"
 
@@ -4180,15 +4186,15 @@ msgid "The capture could not be taken: the image server did not answer."
 msgstr ""
 "La capture n’a pas pu être prise : le serveur d’images n’a pas répondu."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1935
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1969
 msgid "The chart could not be drawn."
 msgstr "Le graphique n'a pas pu être tracé."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:366
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:372
 msgid "The click snaps to the nearest peak top."
 msgstr "Le clic se cale sur le sommet le plus proche."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:752
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:786
 msgid ""
 "The CSV holds the values drawn, treatment included and offset left out: two "
 "columns per curve."
@@ -4225,7 +4231,7 @@ msgstr ""
 msgid "The layouts need a window larger than S"
 msgstr "Les dispositions demandent une fenêtre plus grande que S"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:562
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:568
 msgid "The lens holds at most %{n} elements"
 msgstr "La loupe contient au plus %{n} éléments"
 
@@ -4263,7 +4269,7 @@ msgid_plural "The tools read %{n} drafts, not published yet."
 msgstr[0] "Les outils lisent %{n} brouillon, pas encore publié."
 msgstr[1] "Les outils lisent %{n} brouillons, pas encore publiés."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:513
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:522
 msgid ""
 "The zones are a model that extrapolates between attested places, not "
 "observed data."
@@ -4275,7 +4281,7 @@ msgstr ""
 msgid "These data are no longer available."
 msgstr "Ces données ne sont plus disponibles."
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1919
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1953
 msgid ""
 "These spectra come from different configurations: only the treatments they "
 "share are offered."
@@ -4365,7 +4371,7 @@ msgstr ""
 msgid "This project"
 msgstr "Ce projet"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:507
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:516
 msgid ""
 "Threshold t: a cell is drawn when its summed influence reaches t, and a "
 "place always colours its own cell. One attestation alone reaches t out to d "
@@ -4384,7 +4390,7 @@ msgstr ""
 "tous les matériaux qu'il couvre."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapTimeline.vue:525
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1773
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1782
 msgid "Timeline"
 msgstr "Chronologie"
 
@@ -4421,7 +4427,7 @@ msgstr "Outil"
 msgid "Tools of « %{title} »"
 msgstr "Outils de « %{title} »"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1806
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1840
 msgid "Treatment"
 msgstr "Traitement"
 
@@ -4479,8 +4485,8 @@ msgstr "Inconnue"
 msgid "Unknown place"
 msgstr "Lieu inconnu"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1825
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1829
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1859
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1863
 msgid "Unlinked spectra"
 msgstr "Spectres non liés"
 
@@ -4502,7 +4508,7 @@ msgstr "jusqu'à environ %{year}"
 msgid "Updating…"
 msgstr "Mise à jour…"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1586
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1595
 msgid "use with caution"
 msgstr "à utiliser avec prudence"
 
@@ -4613,7 +4619,7 @@ msgstr "Réglages de la loupe XRF"
 msgid "XRF lines"
 msgstr "Raies XRF"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:729
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:763
 msgid "XRF lines drawn: %{elements}; listed below the chart."
 msgstr "Raies XRF tracées : %{elements} ; liste sous le graphique."
 
@@ -4667,7 +4673,7 @@ msgstr "Zoom et déplacement des volets synchronisés"
 msgid "Zoom in"
 msgstr "Zoom avant"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:518
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:527
 msgid ""
 "Zoom in to see the influence zones: at this scale the grid is coarser than "
 "the kernel radius."
