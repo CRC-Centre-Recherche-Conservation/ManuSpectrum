@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 18:03-0500\n"
+"POT-Creation-Date: 2026-10-16 09:31-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -382,7 +382,7 @@ msgid ""
 msgstr ""
 
 #: templates/errors/403.htm:18 templates/includes/ms_footer.htm:20
-#: templates/includes/ms_header.htm:64 templates/includes/ms_header.htm:121
+#: templates/includes/ms_header.htm:60 templates/includes/ms_header.htm:117
 msgid "Sign In"
 msgstr "Sign In"
 
@@ -468,7 +468,7 @@ msgstr ""
 msgid "How to cite"
 msgstr "How to cite"
 
-#: templates/explorer/export_readme.md:23 views/explorer/events_export.py:165
+#: templates/explorer/export_readme.md:23 views/explorer/events_export.py:174
 msgid "A filter term also keeps its narrower terms."
 msgstr ""
 
@@ -486,8 +486,9 @@ msgstr ""
 msgid "Licences per file"
 msgstr ""
 
-#: templates/explorer/export_readme.md:35 templates/javascript.htm:161
-#: templates/javascript.htm:168
+#: templates/explorer/export_readme.md:35
+#: templates/includes/ms_i18n_graph_explorer.htm:71
+#: templates/includes/ms_i18n_graph_explorer.htm:78
 msgid "Path"
 msgstr "Path"
 
@@ -859,9 +860,9 @@ msgstr ""
 msgid "Platform"
 msgstr "Platform"
 
-#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:18
-#: templates/includes/ms_header.htm:94 templates/index.htm:589
-#: templates/index.htm:610
+#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:14
+#: templates/includes/ms_header.htm:90 templates/index.htm:588
+#: templates/index.htm:609
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
 msgid "Search"
 msgstr "Search"
@@ -870,13 +871,13 @@ msgstr "Search"
 msgid "My Profile"
 msgstr "My Profile"
 
-#: templates/includes/ms_footer.htm:27 templates/includes/ms_header.htm:23
-#: templates/includes/ms_header.htm:98
+#: templates/includes/ms_footer.htm:27 templates/includes/ms_header.htm:19
+#: templates/includes/ms_header.htm:94
 msgid "About"
 msgstr "About"
 
-#: templates/includes/ms_footer.htm:29 templates/includes/ms_header.htm:33
-#: templates/includes/ms_header.htm:101
+#: templates/includes/ms_footer.htm:29 templates/includes/ms_header.htm:29
+#: templates/includes/ms_header.htm:97
 #: templates/views/pages/conceptual-model.htm:4
 #: templates/views/pages/conceptual-model.htm:6
 #: templates/views/pages/conceptual-model.htm:15
@@ -884,8 +885,8 @@ msgstr "About"
 msgid "Conceptual Model"
 msgstr "Conceptual Model"
 
-#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:37
-#: templates/includes/ms_header.htm:102
+#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:33
+#: templates/includes/ms_header.htm:98
 #: templates/views/pages/graph-explorer.htm:4
 #: templates/views/pages/graph-explorer.htm:6
 #: templates/views/pages/graph-explorer.htm:15
@@ -893,15 +894,15 @@ msgstr "Conceptual Model"
 msgid "Graph Explorer"
 msgstr "Graph Explorer"
 
-#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:41
-#: templates/includes/ms_header.htm:103 templates/views/pages/team.htm:4
+#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:37
+#: templates/includes/ms_header.htm:99 templates/views/pages/team.htm:4
 #: templates/views/pages/team.htm:6 templates/views/pages/team.htm:15
 #: templates/views/pages/team.htm:36
 msgid "About & Team"
 msgstr "About & Team"
 
-#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:45
-#: templates/includes/ms_header.htm:104 templates/views/pages/contact.htm:4
+#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:41
+#: templates/includes/ms_header.htm:100 templates/views/pages/contact.htm:4
 #: templates/views/pages/contact.htm:6 templates/views/pages/contact.htm:15
 #: templates/views/pages/contact.htm:27
 msgid "Contact"
@@ -925,10 +926,6 @@ msgstr ""
 "Recherche under the Investissements d'avenir programme, reference ANR-21-"
 "ESRE-0005 (Biblissima+)."
 
-#: templates/includes/ms_footer.htm:59
-msgid "All rights reserved"
-msgstr "All rights reserved"
-
 #: templates/includes/ms_footer.htm:62 templates/views/pages/contact.htm:147
 msgid "Source code"
 msgstr "Source code"
@@ -945,120 +942,566 @@ msgstr ""
 "Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
 "rel=\"noopener\">Arches</a>"
 
-#: templates/includes/ms_header.htm:8
+#: templates/includes/ms_header.htm:4
 msgid "ManuSpectrum — Home"
 msgstr "ManuSpectrum — Home"
 
-#: templates/includes/ms_header.htm:13
+#: templates/includes/ms_header.htm:9
 msgid "Main Navigation"
 msgstr "Main Navigation"
 
-#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:91
-#: templates/index.htm:262
+#: templates/includes/ms_header.htm:11 templates/includes/ms_header.htm:87
+#: templates/index.htm:261
 msgid "The Project"
 msgstr "The Project"
 
-#: templates/includes/ms_header.htm:16 templates/includes/ms_header.htm:92
-#: templates/index.htm:405
+#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:88
+#: templates/index.htm:404
 msgid "Explore"
 msgstr "Explore"
 
-#: templates/includes/ms_header.htm:17 templates/includes/ms_header.htm:93
-#: templates/index.htm:471
+#: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:89
+#: templates/index.htm:470
 msgid "Analyses"
 msgstr "Analyses"
 
-#: templates/includes/ms_header.htm:19 templates/includes/ms_header.htm:95
-#: templates/index.htm:611 templates/views/pages/analysis-explorer.htm:4
+#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:91
+#: templates/index.htm:610 templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
 #: templates/views/pages/analysis-explorer.htm:15
 #: templates/views/pages/analysis-explorer.htm:31
 msgid "Discover the data"
 msgstr "Discover the data"
 
-#: templates/includes/ms_header.htm:33
+#: templates/includes/ms_header.htm:29
 msgid "The data model behind ManuSpectrum"
 msgstr "The data model behind ManuSpectrum"
 
-#: templates/includes/ms_header.htm:37
+#: templates/includes/ms_header.htm:33
 msgid "Explore models and relationships interactively"
 msgstr "Explore models and relationships interactively"
 
-#: templates/includes/ms_header.htm:41
+#: templates/includes/ms_header.htm:37
 msgid "The project and the people behind it"
 msgstr "The project and the people behind it"
 
-#: templates/includes/ms_header.htm:45
+#: templates/includes/ms_header.htm:41
 msgid "Submit a project or ask a question"
 msgstr "Submit a project or ask a question"
 
-#: templates/includes/ms_header.htm:52 templates/includes/ms_header.htm:108
+#: templates/includes/ms_header.htm:48 templates/includes/ms_header.htm:104
 msgid "Management"
 msgstr "Management"
 
-#: templates/includes/ms_header.htm:57 templates/views/pages/team.htm:179
+#: templates/includes/ms_header.htm:53 templates/views/pages/team.htm:179
 msgid "Source code on GitHub"
 msgstr "Source code on GitHub"
 
-#: templates/includes/ms_header.htm:66
+#: templates/includes/ms_header.htm:62
 msgid "User Profile"
 msgstr "User Profile"
 
-#: templates/includes/ms_header.htm:66
+#: templates/includes/ms_header.htm:62
 #, python-format
 msgid "Welcome, %(name)s"
 msgstr "Welcome, %(name)s"
 
-#: templates/includes/ms_header.htm:67 templates/includes/ms_header.htm:124
+#: templates/includes/ms_header.htm:63 templates/includes/ms_header.htm:120
 msgid "Sign Out"
 msgstr "Sign Out"
 
-#: templates/includes/ms_header.htm:78 templates/includes/ms_header.htm:113
+#: templates/includes/ms_header.htm:74 templates/includes/ms_header.htm:109
 #: views/model_graph_service.py:121
 msgid "Language"
 msgstr ""
 
-#: templates/includes/ms_header.htm:86
+#: templates/includes/ms_header.htm:82
 msgid "Open Menu"
 msgstr "Open Menu"
 
-#: templates/index.htm:14
+#: templates/includes/ms_i18n_conceptual_model.htm:6
+#, python-brace-format
+msgid "of fields draw on a published thesaurus, not free text — {n} of {total}"
+msgstr ""
+"of fields draw on a published thesaurus, not free text — {n} of {total}"
+
+#: templates/includes/ms_i18n_conceptual_model.htm:7
+#, python-brace-format
+msgid "typed relationships across {models} interconnected models"
+msgstr "typed relationships across {models} interconnected models"
+
+#: templates/includes/ms_i18n_conceptual_model.htm:8
+#, python-brace-format
+msgid ""
+"{nodegroups} field groups · {total} nodes ({data} of them data) · "
+"{properties} ontology properties · {thesauri} thesauri."
+msgstr ""
+"{nodegroups} field groups · {total} nodes ({data} of them data) · "
+"{properties} ontology properties · {thesauri} thesauri."
+
+#: templates/includes/ms_i18n_conceptual_model.htm:9
+#, python-brace-format
+msgid ""
+"{models} independent models linked by {relations} typed CIDOC relationships "
+"— so a person recorded once as an analyst is the same record when they "
+"reappear as a manuscript's owner."
+msgstr ""
+"{models} independent models linked by {relations} typed CIDOC relationships "
+"— so a person recorded once as an analyst is the same record when they "
+"reappear as a manuscript's owner."
+
+#: templates/includes/ms_i18n_contact.htm:6
+msgid "Please fill in all fields with a valid email."
+msgstr "Please fill in all fields with a valid email."
+
+#: templates/includes/ms_i18n_contact.htm:7
+msgid "Project submission"
+msgstr "Project submission"
+
+#: templates/includes/ms_i18n_contact.htm:8
+msgid "Access request"
+msgstr "Access request"
+
+#: templates/includes/ms_i18n_contact.htm:9
+#: templates/views/pages/contact.htm:92
+msgid "Question"
+msgstr "Question"
+
+#: templates/includes/ms_i18n_contact.htm:10
+#: templates/views/pages/contact.htm:103
+msgid "Message"
+msgstr "Message"
+
+#: templates/includes/ms_i18n_contact.htm:11
+msgid "Name"
+msgstr "Name"
+
+#: templates/includes/ms_i18n_contact.htm:12
+msgid "Email"
+msgstr "Email"
+
+#: templates/includes/ms_i18n_contact.htm:13
+#: templates/views/pages/contact.htm:88
+msgid "Reason"
+msgstr "Reason"
+
+#: templates/includes/ms_i18n_contact.htm:14
+msgid "Please enter your name."
+msgstr "Please enter your name."
+
+#: templates/includes/ms_i18n_contact.htm:15
+msgid "Please enter a valid email address."
+msgstr "Please enter a valid email address."
+
+#: templates/includes/ms_i18n_contact.htm:16
+msgid "Please write a message."
+msgstr "Please write a message."
+
+#: templates/includes/ms_i18n_contact.htm:17
+#, python-brace-format
+msgid "{n} characters left"
+msgstr "{n} characters left"
+
+#: templates/includes/ms_i18n_contact.htm:18
+msgid "Copied."
+msgstr "Copied."
+
+#: templates/includes/ms_i18n_contact.htm:19
+msgid "Copy failed — select the text and copy it manually."
+msgstr "Copy failed — select the text and copy it manually."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:6
+#: templates/includes/ms_i18n_graph_explorer.htm:21
+#: templates/views/pages/graph-explorer.htm:198
+msgid "Fields"
+msgstr "Fields"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:7
+#: templates/views/pages/graph-explorer.htm:83
+msgid "Relations"
+msgstr "Relations"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:8
+msgid "records"
+msgstr "records"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:9
+msgid "field groups"
+msgstr "field groups"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:10
+msgid "required"
+msgstr "required"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:11
+msgid "→ target · ← source"
+msgstr "→ target · ← source"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:12
+msgid "No relations"
+msgstr "No relations"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:13
+msgid "The chart could not be loaded — reopen this tab to retry."
+msgstr ""
+
+#: templates/includes/ms_i18n_graph_explorer.htm:14
+#, python-brace-format
+msgid "data as of {date}"
+msgstr ""
+
+#: templates/includes/ms_i18n_graph_explorer.htm:15
+msgid "models"
+msgstr "models"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:16
+msgid "relations"
+msgstr "relations"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:17
+msgid "fields"
+msgstr "fields"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:18
+msgid "datatypes"
+msgstr "datatypes"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:19
+msgid "Fields by datatype"
+msgstr "Fields by datatype"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:20
+msgid "Datatype (sorted by field count, descending)"
+msgstr "Datatype (sorted by field count, descending)"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:22
+#, python-brace-format
+msgid ""
+"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
+"sources, columns are targets."
+msgstr ""
+"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
+"sources, columns are targets."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:23
+msgid "Source model, down; target model, across"
+msgstr "Source model, down; target model, across"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:24
+msgid ""
+"Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
+"open the model."
+msgstr ""
+"Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
+"open the model."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:25
+msgid "same model"
+msgstr "same model"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:26
+msgid "no relation"
+msgstr "no relation"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:27
+msgid "1 relation"
+msgstr "1 relation"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:28
+#, python-brace-format
+msgid "{n} relations"
+msgstr "{n} relations"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:29
+msgid "No family selected — turn one back on to see the matrix."
+msgstr "No family selected — turn one back on to see the matrix."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:30
+#, python-brace-format
+msgid ""
+"{model} and its {n} directly connected models, joined by {r} typed "
+"relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
+"property."
+msgstr ""
+"{model} and its {n} directly connected models, joined by {r} typed "
+"relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
+"property."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:31
+#: templates/views/pages/graph-explorer.htm:159
+msgid "Select a model to see it with its directly connected models."
+msgstr "Select a model to see it with its directly connected models."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:32
+msgid "Circle size = published records"
+msgstr "Circle size = published records"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:33
+msgid "Dashed outline = no records published yet"
+msgstr "Dashed outline = no records published yet"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:34
+#: templates/views/components/ms-summary-popup.htm:40
+#: templates/views/pages/graph-explorer.htm:113
+msgid "Model"
+msgstr "Model"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:35
+msgid "Family"
+msgstr "Family"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:36
+msgid "Links"
+msgstr "Links"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:37
+msgid "Outgoing"
+msgstr "Outgoing"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:38
+msgid "Incoming"
+msgstr "Incoming"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:39
+#, python-brace-format
+msgid ""
+"Every model with its outgoing and incoming typed relationships. {n} models, "
+"{r} relationships."
+msgstr ""
+"Every model with its outgoing and incoming typed relationships. {n} models, "
+"{r} relationships."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:40
+msgid "Filter fields…"
+msgstr "Filter fields…"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:41
+msgid "Relation fields only"
+msgstr "Relation fields only"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:42
+msgid "No field matches."
+msgstr "No field matches."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:43
+#, python-brace-format
+msgid "{n} of {total}"
+msgstr "{n} of {total}"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:44
+msgid "No model matches"
+msgstr "No model matches"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:45
+#, python-brace-format
+msgid "{n} records published"
+msgstr "{n} records published"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:46
+#, python-brace-format
+msgid "{n} models defined and open for deposit"
+msgstr "{n} models defined and open for deposit"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:47
+msgid "No records published yet — model defined and open for deposit."
+msgstr "No records published yet — model defined and open for deposit."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:48
+#, python-format, python-brace-format
+msgid ""
+"Every field in ManuSpectrum and every link between models: {fields} fields "
+"across {models} models, {pct}%% of them bound to a published thesaurus "
+"rather than free text. Click any model to read its schema."
+msgstr ""
+"Every field in ManuSpectrum and every link between models: {fields} fields "
+"across {models} models, {pct}%% of them bound to a published thesaurus "
+"rather than free text. Click any model to read its schema."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:51
+#, python-brace-format
+msgid "No field, class or property matches “{q}”."
+msgstr "No field, class or property matches “{q}”."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:52
+#, python-brace-format
+msgid "{n} of {total} fields"
+msgstr "{n} of {total} fields"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:53
+#, python-brace-format
+msgid "{n} fields"
+msgstr "{n} fields"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:54
+#, python-brace-format
+msgid "{n} field"
+msgstr "{n} field"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:55
+#, python-brace-format
+msgid "{n} fields · {m} group"
+msgstr "{n} fields · {m} group"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:56
+#, python-brace-format
+msgid "{n} fields · {m} groups"
+msgstr "{n} fields · {m} groups"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:57
+msgid "Repeatable"
+msgstr "Repeatable"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:58
+msgid "Once"
+msgstr "Once"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:59
+msgid "Structural node — carries no data"
+msgstr "Structural node — carries no data"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:60
+#, python-brace-format
+msgid "Links to {model}"
+msgstr "Links to {model}"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:61
+#, python-brace-format
+msgid "View {model} →"
+msgstr "View {model} →"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:62
+msgid "From parent"
+msgstr "From parent"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:63
+msgid "View structure →"
+msgstr "View structure →"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:64
+#, python-brace-format
+msgid "Showing {node} and below"
+msgstr "Showing {node} and below"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:65
+#, python-brace-format
+msgid "← {model}"
+msgstr "← {model}"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:66
+#, python-brace-format
+msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
+msgstr "{model}: {n} fields in {g} field groups, nested {d} levels deep."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:67
+msgid "Common properties (P1, P2) are dimmed."
+msgstr "Common properties (P1, P2) are dimmed."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:68
+msgid "Ring = field group · double ring = repeatable"
+msgstr "Ring = field group · double ring = repeatable"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:69
+msgid "∗ = required"
+msgstr "∗ = required"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:70
+msgid "CIDOC-CRM class"
+msgstr "CIDOC-CRM class"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:72
+#: templates/includes/ms_i18n_graph_explorer.htm:84
+msgid "Cardinality"
+msgstr "Cardinality"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:73
+#: templates/includes/ms_i18n_graph_explorer.htm:83
+msgid "Required"
+msgstr "Required"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:74
+msgid "Optional"
+msgstr "Optional"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:75
+msgid "Controlled vocabulary"
+msgstr "Controlled vocabulary"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:76
+msgid "See this relationship in the Network view"
+msgstr "See this relationship in the Network view"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:77
+#: templates/views/pages/conceptual-model.htm:89
+msgid "Field group"
+msgstr "Field group"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:79
+msgid "Field"
+msgstr "Field"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:80
+#: templates/views/pages/conceptual-model.htm:87
+msgid "Datatype"
+msgstr "Datatype"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:81
+msgid "CIDOC class"
+msgstr "CIDOC class"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:82
+msgid "Property"
+msgstr "Property"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:85
+msgid "Target"
+msgstr "Target"
+
+#: templates/includes/ms_i18n_graph_explorer.htm:86
+#, python-brace-format
+msgid "Every field of every model: {n} rows across {m} models."
+msgstr "Every field of every model: {n} rows across {m} models."
+
+#: templates/includes/ms_i18n_graph_explorer.htm:87
+msgid "Yes"
+msgstr "Yes"
+
+#: templates/index.htm:13
 msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgstr "ManuSpectrum — Physicochemical Analysis of Heritage"
 
-#: templates/index.htm:15
+#: templates/index.htm:14
 msgid ""
 "Open heritage science database of physicochemical analyses — XRF, Raman, "
 "FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks, "
 "supports."
 msgstr ""
 
-#: templates/index.htm:206
+#: templates/index.htm:205
 msgid "Enlarge the spectral plot"
 msgstr ""
 
-#: templates/index.htm:213 templates/javascript.htm:231
+#: templates/index.htm:212 templates/javascript.htm:131
 #: templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Close"
 
-#: templates/index.htm:217
+#: templates/index.htm:216
 msgid "ManuSpectrum — Spectral Analysis Plot"
 msgstr "ManuSpectrum — Spectral Analysis Plot"
 
-#: templates/index.htm:218
+#: templates/index.htm:217
 msgid "interactive"
 msgstr ""
 
-#: templates/index.htm:222
+#: templates/index.htm:221
 msgid "Channel 1 (XRF)"
 msgstr ""
 
-#: templates/index.htm:223
+#: templates/index.htm:222
 msgid "Channel 2 (FORS)"
 msgstr ""
 
-#: templates/index.htm:230
+#: templates/index.htm:229
 msgid ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
@@ -1066,7 +1509,7 @@ msgstr ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
 
-#: templates/index.htm:234
+#: templates/index.htm:233
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
@@ -1074,23 +1517,23 @@ msgstr ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
 
-#: templates/index.htm:239 templates/index.htm:590
+#: templates/index.htm:238 templates/index.htm:589
 msgid "Explore the database"
 msgstr "Explore the database"
 
-#: templates/index.htm:242
+#: templates/index.htm:241
 msgid "Learn more"
 msgstr "Learn more"
 
-#: templates/index.htm:249
+#: templates/index.htm:248
 msgid "scroll"
 msgstr "scroll"
 
-#: templates/index.htm:263
+#: templates/index.htm:262
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Thinking and modeling written cultural heritage materials"
 
-#: templates/index.htm:269
+#: templates/index.htm:268
 msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
@@ -1104,7 +1547,7 @@ msgstr ""
 "physicochemical analysis data for manuscripts, inscriptions, seals and other "
 "heritage objects, in partnership with Huma-Num."
 
-#: templates/index.htm:272
+#: templates/index.htm:271
 msgid ""
 "Through structuring and standardizing data according to shared models, the "
 "project provides reliable, easy-to-use tools accessible to non-specialists. "
@@ -1118,7 +1561,7 @@ msgstr ""
 "ManuSpectrum facilitates data access and collaboration between researchers "
 "from different disciplines."
 
-#: templates/index.htm:275
+#: templates/index.htm:274
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
 "object, its context, the analyses, and their interpretations, using thesauri "
@@ -1130,12 +1573,12 @@ msgstr ""
 "and authority databases to contextualize information on heterogeneous "
 "documents."
 
-#: templates/index.htm:283 templates/views/pages/contact.htm:146
+#: templates/index.htm:282 templates/views/pages/contact.htm:146
 #: templates/views/pages/team.htm:173
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
-#: templates/index.htm:285
+#: templates/index.htm:284
 msgid ""
 "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient "
 "written cultures. Within Cluster 2, the objective is to archive, share and "
@@ -1149,88 +1592,88 @@ msgstr ""
 "interoperability with the Biblissima portal and written cultural heritage "
 "standards."
 
-#: templates/index.htm:302 templates/index.htm:486
+#: templates/index.htm:301 templates/index.htm:485
 msgid "X-ray Fluorescence"
 msgstr "X-ray Fluorescence"
 
-#: templates/index.htm:307
+#: templates/index.htm:306
 msgid "X-ray Micro-Fluorescence"
 msgstr "X-ray Micro-Fluorescence"
 
-#: templates/index.htm:312
+#: templates/index.htm:311
 msgid "Fiber Optic Reflectance"
 msgstr "Fiber Optic Reflectance"
 
-#: templates/index.htm:317
+#: templates/index.htm:316
 msgid "Raman Spectroscopy"
 msgstr "Raman Spectroscopy"
 
-#: templates/index.htm:322
+#: templates/index.htm:321
 msgid "IR Spectroscopy"
 msgstr "IR Spectroscopy"
 
-#: templates/index.htm:327
+#: templates/index.htm:326
 msgid "Hyperspectral Imaging"
 msgstr "Hyperspectral Imaging"
 
-#: templates/index.htm:332 templates/index.htm:560
+#: templates/index.htm:331 templates/index.htm:559
 msgid "Multispectral Imaging"
 msgstr "Multispectral Imaging"
 
-#: templates/index.htm:337
+#: templates/index.htm:336
 msgid "Proteomics (MALDI-TOF)"
 msgstr "Proteomics (MALDI-TOF)"
 
-#: templates/index.htm:342
+#: templates/index.htm:341
 msgid "And many more"
 msgstr "And many more"
 
-#: templates/index.htm:347
+#: templates/index.htm:346
 msgctxt "aria-roledescription"
 msgid "carousel"
 msgstr ""
 
-#: templates/index.htm:347
+#: templates/index.htm:346
 msgid "Analysis techniques in pictures"
 msgstr ""
 
-#: templates/index.htm:349 templates/index.htm:357 templates/index.htm:365
+#: templates/index.htm:348 templates/index.htm:356 templates/index.htm:364
 msgctxt "aria-roledescription"
 msgid "slide"
 msgstr ""
 
-#: templates/index.htm:349 templates/index.htm:357 templates/index.htm:365
+#: templates/index.htm:348 templates/index.htm:356 templates/index.htm:364
 #, python-format
 msgid "%(n)s of %(total)s"
 msgstr ""
 
-#: templates/index.htm:350
+#: templates/index.htm:349
 msgid ""
 "A manuscript on the motorised stage of a macro-XRF scanner, which maps "
 "chemical elements across the page without touching it"
 msgstr ""
 
-#: templates/index.htm:352
+#: templates/index.htm:351
 msgid "Macro-XRF scanning of a manuscript"
 msgstr "Macro-XRF scanning of a manuscript"
 
-#: templates/index.htm:353
+#: templates/index.htm:352
 msgid ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 
-#: templates/index.htm:358
+#: templates/index.htm:357
 msgid ""
 "An optical fibre held over a manuscript for FORS analysis — the reflected "
 "light carries the spectral signature of the pigments"
 msgstr ""
 
-#: templates/index.htm:360
+#: templates/index.htm:359
 msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr "Fiber optic reflectance spectroscopy (FORS)"
 
-#: templates/index.htm:361
+#: templates/index.htm:360
 msgid ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
@@ -1238,7 +1681,7 @@ msgstr ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
 
-#: templates/index.htm:366
+#: templates/index.htm:365
 msgid ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing "
 "inks and retouches invisible to the naked eye"
@@ -1246,11 +1689,11 @@ msgstr ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing "
 "inks and retouches invisible to the naked eye"
 
-#: templates/index.htm:368
+#: templates/index.htm:367
 msgid "UV hyperspectral imaging"
 msgstr "UV hyperspectral imaging"
 
-#: templates/index.htm:369
+#: templates/index.htm:368
 msgid ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
@@ -1258,35 +1701,35 @@ msgstr ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
 
-#: templates/index.htm:377
+#: templates/index.htm:376
 msgid "Previous"
 msgstr "Previous"
 
-#: templates/index.htm:380
+#: templates/index.htm:379
 msgid "Next"
 msgstr "Next"
 
-#: templates/index.htm:386
+#: templates/index.htm:385
 msgid "Choose a slide"
 msgstr ""
 
-#: templates/index.htm:387
+#: templates/index.htm:386
 msgid "Slide 1 of 3 — Macro-XRF scanning"
 msgstr ""
 
-#: templates/index.htm:388
+#: templates/index.htm:387
 msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 msgstr "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 
-#: templates/index.htm:389
+#: templates/index.htm:388
 msgid "Slide 3 of 3 — UV hyperspectral imaging"
 msgstr "Slide 3 of 3 — UV hyperspectral imaging"
 
-#: templates/index.htm:406
+#: templates/index.htm:405
 msgid "What you can discover"
 msgstr "What you can discover"
 
-#: templates/index.htm:408
+#: templates/index.htm:407
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
@@ -1294,11 +1737,11 @@ msgstr ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
 
-#: templates/index.htm:415
+#: templates/index.htm:414
 msgid "Spectra and analysis data"
 msgstr "Spectra and analysis data"
 
-#: templates/index.htm:416
+#: templates/index.htm:415
 msgid ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
@@ -1306,11 +1749,11 @@ msgstr ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
 
-#: templates/index.htm:427
+#: templates/index.htm:426
 msgid "IIIF Annotations"
 msgstr "IIIF Annotations"
 
-#: templates/index.htm:428
+#: templates/index.htm:427
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -1322,11 +1765,11 @@ msgstr ""
 "allows any external site to visualize ManuSpectrum's spectral data (XRF, "
 "Raman, FTIR, UV-Vis) directly overlaid on high-resolution document images."
 
-#: templates/index.htm:439
+#: templates/index.htm:438
 msgid "Interoperability and Standards"
 msgstr "Interoperability and Standards"
 
-#: templates/index.htm:440
+#: templates/index.htm:439
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -1338,15 +1781,15 @@ msgstr ""
 "interoperability with international heritage systems and the Biblissima "
 "portal."
 
-#: templates/index.htm:444
+#: templates/index.htm:443
 msgid "AGORHA thesaurus"
 msgstr "AGORHA thesaurus"
 
-#: templates/index.htm:451
+#: templates/index.htm:450
 msgid "Material Characterization"
 msgstr "Material Characterization"
 
-#: templates/index.htm:452
+#: templates/index.htm:451
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
@@ -1358,27 +1801,27 @@ msgstr ""
 "binders, parchment and paper supports — with different levels of reliability "
 "and characterization."
 
-#: templates/index.htm:454
+#: templates/index.htm:453
 msgid "Pigments"
 msgstr "Pigments"
 
-#: templates/index.htm:455
+#: templates/index.htm:454
 msgid "Layers"
 msgstr "Layers"
 
-#: templates/index.htm:456
+#: templates/index.htm:455
 msgid "Binders"
 msgstr "Binders"
 
-#: templates/index.htm:457
+#: templates/index.htm:456
 msgid "Substrates"
 msgstr "Substrates"
 
-#: templates/index.htm:472
+#: templates/index.htm:471
 msgid "Visualize physicochemical analyses"
 msgstr "Visualize physicochemical analyses"
 
-#: templates/index.htm:474
+#: templates/index.htm:473
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
@@ -1386,27 +1829,27 @@ msgstr ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
 
-#: templates/index.htm:480
+#: templates/index.htm:479
 msgid ""
 "Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark "
 "calcium-rich zones"
 msgstr ""
 
-#: templates/index.htm:481
+#: templates/index.htm:480
 msgid ""
 "Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas "
 "reveal vermilion, a mercury pigment"
 msgstr ""
 
-#: templates/index.htm:484
+#: templates/index.htm:483
 msgid "Position of the divide between the mercury map and the calcium map"
 msgstr ""
 
-#: templates/index.htm:487
+#: templates/index.htm:486
 msgid "Macro-XRF mapping"
 msgstr "Macro-XRF mapping"
 
-#: templates/index.htm:488
+#: templates/index.htm:487
 msgid ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
@@ -1414,88 +1857,88 @@ msgstr ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
 
-#: templates/index.htm:493
+#: templates/index.htm:492
 msgid "Manuscript analysis"
 msgstr "Manuscript analysis"
 
-#: templates/index.htm:495 templates/index.htm:496 templates/index.htm:497
-#: templates/index.htm:498
+#: templates/index.htm:494 templates/index.htm:495 templates/index.htm:496
+#: templates/index.htm:497
 #, python-format
 msgid "Analysis point %(n)s"
 msgstr ""
 
-#: templates/index.htm:507 templates/index.htm:520 templates/index.htm:533
-#: templates/index.htm:546
+#: templates/index.htm:506 templates/index.htm:519 templates/index.htm:532
+#: templates/index.htm:545
 msgid "Material"
 msgstr "Material"
 
-#: templates/index.htm:507
+#: templates/index.htm:506
 msgid "Lapis lazuli"
 msgstr "Lapis lazuli"
 
-#: templates/index.htm:508 templates/index.htm:521 templates/index.htm:534
-#: templates/index.htm:547
+#: templates/index.htm:507 templates/index.htm:520 templates/index.htm:533
+#: templates/index.htm:546
 msgid "Layer"
 msgstr "Layer"
 
-#: templates/index.htm:508
+#: templates/index.htm:507
 msgid "Pigment"
 msgstr "Pigment"
 
-#: templates/index.htm:509 templates/index.htm:522 templates/index.htm:535
-#: templates/index.htm:548
+#: templates/index.htm:508 templates/index.htm:521 templates/index.htm:534
+#: templates/index.htm:547
 msgid "Range"
 msgstr "Range"
 
-#: templates/index.htm:520
+#: templates/index.htm:519
 msgid "Vermilion (HgS)"
 msgstr "Vermilion (HgS)"
 
-#: templates/index.htm:521
+#: templates/index.htm:520
 msgid "Paint"
 msgstr "Paint"
 
-#: templates/index.htm:533
+#: templates/index.htm:532
 msgid "Gold leaf"
 msgstr "Gold leaf"
 
-#: templates/index.htm:534
+#: templates/index.htm:533
 msgid "Gilding"
 msgstr "Gilding"
 
-#: templates/index.htm:546
+#: templates/index.htm:545
 msgid "Iron gall ink"
 msgstr "Iron gall ink"
 
-#: templates/index.htm:547
+#: templates/index.htm:546
 msgid "Text"
 msgstr "Text"
 
-#: templates/index.htm:553
+#: templates/index.htm:552
 msgid "Spectroscopy"
 msgstr "Spectroscopy"
 
-#: templates/index.htm:554
+#: templates/index.htm:553
 msgid "Point Analysis"
 msgstr "Point Analysis"
 
-#: templates/index.htm:555
+#: templates/index.htm:554
 msgid "Click on analysis points to explore spectral data"
 msgstr "Click on analysis points to explore spectral data"
 
-#: templates/index.htm:570
+#: templates/index.htm:569
 msgid "Imaging"
 msgstr "Imaging"
 
-#: templates/index.htm:571
+#: templates/index.htm:570
 msgid "Multispectral"
 msgstr "Multispectral"
 
-#: templates/index.htm:572
+#: templates/index.htm:571
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
-#: templates/index.htm:592
+#: templates/index.htm:591
 msgid ""
 "Search by material — a pigment, an ink, a support —, analysis technique, "
 "written cultural heritage object, or chemical element. Advanced filters "
@@ -1505,11 +1948,11 @@ msgstr ""
 "written cultural heritage object, or chemical element. Advanced filters "
 "available in the search interface."
 
-#: templates/index.htm:605
+#: templates/index.htm:604
 msgid "Search materials, techniques, objects..."
 msgstr "Search materials, techniques, objects..."
 
-#: templates/index.htm:616
+#: templates/index.htm:615
 msgid "Vermilion"
 msgstr "Vermilion"
 
@@ -1538,18 +1981,14 @@ msgid "Illuminations"
 msgstr "Illuminations"
 
 #: templates/index.htm:624
-msgid "Explore by technique"
-msgstr "Explore by technique"
-
-#: templates/index.htm:634
 msgid "Access advanced search"
 msgstr "Access advanced search"
 
-#: templates/index.htm:647 templates/views/pages/team.htm:190
+#: templates/index.htm:637 templates/views/pages/team.htm:190
 msgid "Our Partners"
 msgstr "Our Partners"
 
-#: templates/index.htm:651 templates/views/pages/team.htm:193
+#: templates/index.htm:641 templates/views/pages/team.htm:193
 msgid "Ministry of Culture"
 msgstr "Ministry of Culture"
 
@@ -1822,464 +2261,28 @@ msgstr "Query too long ({n} characters max)"
 msgid "EN: "
 msgstr "EN: "
 
-#: templates/javascript.htm:77
-msgid "Please fill in all fields with a valid email."
-msgstr "Please fill in all fields with a valid email."
-
 #: templates/javascript.htm:78
-msgid "Project submission"
-msgstr "Project submission"
-
-#: templates/javascript.htm:79
-msgid "Access request"
-msgstr "Access request"
-
-#: templates/javascript.htm:80 templates/views/pages/contact.htm:92
-msgid "Question"
-msgstr "Question"
-
-#: templates/javascript.htm:81 templates/views/pages/contact.htm:103
-msgid "Message"
-msgstr "Message"
-
-#: templates/javascript.htm:82
-msgid "Name"
-msgstr "Name"
-
-#: templates/javascript.htm:83
-msgid "Email"
-msgstr "Email"
-
-#: templates/javascript.htm:84 templates/views/pages/contact.htm:88
-msgid "Reason"
-msgstr "Reason"
-
-#: templates/javascript.htm:85
-msgid "Please enter your name."
-msgstr "Please enter your name."
-
-#: templates/javascript.htm:86
-msgid "Please enter a valid email address."
-msgstr "Please enter a valid email address."
-
-#: templates/javascript.htm:87
-msgid "Please write a message."
-msgstr "Please write a message."
-
-#: templates/javascript.htm:88
-#, python-brace-format
-msgid "{n} characters left"
-msgstr "{n} characters left"
-
-#: templates/javascript.htm:89
-msgid "Copied."
-msgstr "Copied."
-
-#: templates/javascript.htm:90
-msgid "Copy failed — select the text and copy it manually."
-msgstr "Copy failed — select the text and copy it manually."
-
-#: templates/javascript.htm:91 templates/javascript.htm:106
-#: templates/views/pages/graph-explorer.htm:198
-msgid "Fields"
-msgstr "Fields"
-
-#: templates/javascript.htm:92 templates/views/pages/graph-explorer.htm:83
-msgid "Relations"
-msgstr "Relations"
-
-#: templates/javascript.htm:93
-msgid "records"
-msgstr "records"
-
-#: templates/javascript.htm:94
-msgid "field groups"
-msgstr "field groups"
-
-#: templates/javascript.htm:95
-msgid "required"
-msgstr "required"
-
-#: templates/javascript.htm:96
-msgid "→ target · ← source"
-msgstr "→ target · ← source"
-
-#: templates/javascript.htm:97
-msgid "No relations"
-msgstr "No relations"
-
-#: templates/javascript.htm:98
-msgid "The chart could not be loaded — reopen this tab to retry."
-msgstr ""
-
-#: templates/javascript.htm:99
-#, python-brace-format
-msgid "data as of {date}"
-msgstr ""
-
-#: templates/javascript.htm:100
-msgid "models"
-msgstr "models"
-
-#: templates/javascript.htm:101
-msgid "relations"
-msgstr "relations"
-
-#: templates/javascript.htm:102
-msgid "fields"
-msgstr "fields"
-
-#: templates/javascript.htm:103
-msgid "datatypes"
-msgstr "datatypes"
-
-#: templates/javascript.htm:104
-msgid "Fields by datatype"
-msgstr "Fields by datatype"
-
-#: templates/javascript.htm:105
-msgid "Datatype (sorted by field count, descending)"
-msgstr "Datatype (sorted by field count, descending)"
-
-#: templates/javascript.htm:107
-#, python-brace-format
-msgid ""
-"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
-"sources, columns are targets."
-msgstr ""
-"Adjacency matrix: {models} models, {relations} typed relationships. Rows are "
-"sources, columns are targets."
-
-#: templates/javascript.htm:108
-msgid "Source model, down; target model, across"
-msgstr "Source model, down; target model, across"
-
-#: templates/javascript.htm:109
-msgid ""
-"Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
-"open the model."
-msgstr ""
-"Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
-"open the model."
-
-#: templates/javascript.htm:110
-msgid "same model"
-msgstr "same model"
-
-#: templates/javascript.htm:111
-msgid "no relation"
-msgstr "no relation"
-
-#: templates/javascript.htm:112
-msgid "1 relation"
-msgstr "1 relation"
-
-#: templates/javascript.htm:113
-#, python-brace-format
-msgid "{n} relations"
-msgstr "{n} relations"
-
-#: templates/javascript.htm:114
-msgid "No family selected — turn one back on to see the matrix."
-msgstr "No family selected — turn one back on to see the matrix."
-
-#: templates/javascript.htm:115
-#, python-brace-format
-msgid ""
-"{model} and its {n} directly connected models, joined by {r} typed "
-"relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
-"property."
-msgstr ""
-"{model} and its {n} directly connected models, joined by {r} typed "
-"relationships. Each curve is one relationship, labelled with its CIDOC-CRM "
-"property."
-
-#: templates/javascript.htm:116 templates/views/pages/graph-explorer.htm:159
-msgid "Select a model to see it with its directly connected models."
-msgstr "Select a model to see it with its directly connected models."
-
-#: templates/javascript.htm:117
-msgid "Circle size = published records"
-msgstr "Circle size = published records"
-
-#: templates/javascript.htm:118
-msgid "Dashed outline = no records published yet"
-msgstr "Dashed outline = no records published yet"
-
-#: templates/javascript.htm:119
-#: templates/views/components/ms-summary-popup.htm:40
-#: templates/views/pages/graph-explorer.htm:113
-msgid "Model"
-msgstr "Model"
-
-#: templates/javascript.htm:120
-msgid "Family"
-msgstr "Family"
-
-#: templates/javascript.htm:121
-msgid "Links"
-msgstr "Links"
-
-#: templates/javascript.htm:122
-msgid "Outgoing"
-msgstr "Outgoing"
-
-#: templates/javascript.htm:123
-msgid "Incoming"
-msgstr "Incoming"
-
-#: templates/javascript.htm:124
-#, python-brace-format
-msgid ""
-"Every model with its outgoing and incoming typed relationships. {n} models, "
-"{r} relationships."
-msgstr ""
-"Every model with its outgoing and incoming typed relationships. {n} models, "
-"{r} relationships."
-
-#: templates/javascript.htm:125
-msgid "Filter fields…"
-msgstr "Filter fields…"
-
-#: templates/javascript.htm:126
-msgid "Relation fields only"
-msgstr "Relation fields only"
-
-#: templates/javascript.htm:127
-msgid "No field matches."
-msgstr "No field matches."
-
-#: templates/javascript.htm:128
-#, python-brace-format
-msgid "{n} of {total}"
-msgstr "{n} of {total}"
-
-#: templates/javascript.htm:129
-msgid "No model matches"
-msgstr "No model matches"
-
-#: templates/javascript.htm:130
-#, python-brace-format
-msgid "{n} records published"
-msgstr "{n} records published"
-
-#: templates/javascript.htm:131
-#, python-brace-format
-msgid "{n} models defined and open for deposit"
-msgstr "{n} models defined and open for deposit"
-
-#: templates/javascript.htm:132
-msgid "No records published yet — model defined and open for deposit."
-msgstr "No records published yet — model defined and open for deposit."
-
-#: templates/javascript.htm:133
-#, python-format, python-brace-format
-msgid ""
-"Every field in ManuSpectrum and every link between models: {fields} fields "
-"across {models} models, {pct}%% of them bound to a published thesaurus "
-"rather than free text. Click any model to read its schema."
-msgstr ""
-"Every field in ManuSpectrum and every link between models: {fields} fields "
-"across {models} models, {pct}%% of them bound to a published thesaurus "
-"rather than free text. Click any model to read its schema."
-
-#: templates/javascript.htm:134
-#, python-brace-format
-msgid "of fields draw on a published thesaurus, not free text — {n} of {total}"
-msgstr ""
-"of fields draw on a published thesaurus, not free text — {n} of {total}"
-
-#: templates/javascript.htm:135
-#, python-brace-format
-msgid "typed relationships across {models} interconnected models"
-msgstr "typed relationships across {models} interconnected models"
-
-#: templates/javascript.htm:136
-#, python-brace-format
-msgid ""
-"{nodegroups} field groups · {total} nodes ({data} of them data) · "
-"{properties} ontology properties · {thesauri} thesauri."
-msgstr ""
-"{nodegroups} field groups · {total} nodes ({data} of them data) · "
-"{properties} ontology properties · {thesauri} thesauri."
-
-#: templates/javascript.htm:137
-#, python-brace-format
-msgid ""
-"{models} independent models linked by {relations} typed CIDOC relationships "
-"— so a person recorded once as an analyst is the same record when they "
-"reappear as a manuscript's owner."
-msgstr ""
-"{models} independent models linked by {relations} typed CIDOC relationships "
-"— so a person recorded once as an analyst is the same record when they "
-"reappear as a manuscript's owner."
-
-#: templates/javascript.htm:141
-#, python-brace-format
-msgid "No field, class or property matches “{q}”."
-msgstr "No field, class or property matches “{q}”."
-
-#: templates/javascript.htm:142
-#, python-brace-format
-msgid "{n} of {total} fields"
-msgstr "{n} of {total} fields"
-
-#: templates/javascript.htm:143
-#, python-brace-format
-msgid "{n} fields"
-msgstr "{n} fields"
-
-#: templates/javascript.htm:144
-#, python-brace-format
-msgid "{n} field"
-msgstr "{n} field"
-
-#: templates/javascript.htm:145
-#, python-brace-format
-msgid "{n} fields · {m} group"
-msgstr "{n} fields · {m} group"
-
-#: templates/javascript.htm:146
-#, python-brace-format
-msgid "{n} fields · {m} groups"
-msgstr "{n} fields · {m} groups"
-
-#: templates/javascript.htm:147
-msgid "Repeatable"
-msgstr "Repeatable"
-
-#: templates/javascript.htm:148
-msgid "Once"
-msgstr "Once"
-
-#: templates/javascript.htm:149
-msgid "Structural node — carries no data"
-msgstr "Structural node — carries no data"
-
-#: templates/javascript.htm:150
-#, python-brace-format
-msgid "Links to {model}"
-msgstr "Links to {model}"
-
-#: templates/javascript.htm:151
-#, python-brace-format
-msgid "View {model} →"
-msgstr "View {model} →"
-
-#: templates/javascript.htm:152
-msgid "From parent"
-msgstr "From parent"
-
-#: templates/javascript.htm:153
-msgid "View structure →"
-msgstr "View structure →"
-
-#: templates/javascript.htm:154
-#, python-brace-format
-msgid "Showing {node} and below"
-msgstr "Showing {node} and below"
-
-#: templates/javascript.htm:155
-#, python-brace-format
-msgid "← {model}"
-msgstr "← {model}"
-
-#: templates/javascript.htm:156
-#, python-brace-format
-msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
-msgstr "{model}: {n} fields in {g} field groups, nested {d} levels deep."
-
-#: templates/javascript.htm:157
-msgid "Common properties (P1, P2) are dimmed."
-msgstr "Common properties (P1, P2) are dimmed."
-
-#: templates/javascript.htm:158
-msgid "Ring = field group · double ring = repeatable"
-msgstr "Ring = field group · double ring = repeatable"
-
-#: templates/javascript.htm:159
-msgid "∗ = required"
-msgstr "∗ = required"
-
-#: templates/javascript.htm:160
-msgid "CIDOC-CRM class"
-msgstr "CIDOC-CRM class"
-
-#: templates/javascript.htm:162 templates/javascript.htm:174
-msgid "Cardinality"
-msgstr "Cardinality"
-
-#: templates/javascript.htm:163 templates/javascript.htm:173
-msgid "Required"
-msgstr "Required"
-
-#: templates/javascript.htm:164
-msgid "Optional"
-msgstr "Optional"
-
-#: templates/javascript.htm:165
-msgid "Controlled vocabulary"
-msgstr "Controlled vocabulary"
-
-#: templates/javascript.htm:166
-msgid "See this relationship in the Network view"
-msgstr "See this relationship in the Network view"
-
-#: templates/javascript.htm:167 templates/views/pages/conceptual-model.htm:89
-msgid "Field group"
-msgstr "Field group"
-
-#: templates/javascript.htm:169
-msgid "Field"
-msgstr "Field"
-
-#: templates/javascript.htm:170 templates/views/pages/conceptual-model.htm:87
-msgid "Datatype"
-msgstr "Datatype"
-
-#: templates/javascript.htm:171
-msgid "CIDOC class"
-msgstr "CIDOC class"
-
-#: templates/javascript.htm:172
-msgid "Property"
-msgstr "Property"
-
-#: templates/javascript.htm:175
-msgid "Target"
-msgstr "Target"
-
-#: templates/javascript.htm:176
-#, python-brace-format
-msgid "Every field of every model: {n} rows across {m} models."
-msgstr "Every field of every model: {n} rows across {m} models."
-
-#: templates/javascript.htm:177
-msgid "Yes"
-msgstr "Yes"
-
-#: templates/javascript.htm:178
 msgid "How to combine them"
 msgstr "How to combine them"
 
-#: templates/javascript.htm:179
+#: templates/javascript.htm:79
 msgid "Delete this configuration?"
 msgstr "Delete this configuration?"
 
-#: templates/javascript.htm:180
+#: templates/javascript.htm:80
 #, python-brace-format
 msgid "“{name}” will be removed for everyone. This cannot be undone."
 msgstr ""
 
-#: templates/javascript.htm:181
+#: templates/javascript.htm:81
 msgid "Protected configuration"
 msgstr "Protected configuration"
 
-#: templates/javascript.htm:182
+#: templates/javascript.htm:82
 msgid "Configuration not saved"
 msgstr "Configuration not saved"
 
-#: templates/javascript.htm:183
+#: templates/javascript.htm:83
 msgid ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
@@ -2287,59 +2290,59 @@ msgstr ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
 
-#: templates/javascript.htm:184
+#: templates/javascript.htm:84
 msgid "Viz"
 msgstr ""
 
-#: templates/javascript.htm:185
+#: templates/javascript.htm:85
 msgid "As measured"
 msgstr ""
 
-#: templates/javascript.htm:186 templates/javascript.htm:208
+#: templates/javascript.htm:86 templates/javascript.htm:108
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr ""
 
-#: templates/javascript.htm:187
+#: templates/javascript.htm:87
 msgid "Kubelka-Munk"
 msgstr ""
 
-#: templates/javascript.htm:188
+#: templates/javascript.htm:88
 msgid "Normalised to maximum"
 msgstr ""
 
-#: templates/javascript.htm:189
+#: templates/javascript.htm:89
 msgid "Normalised to total (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:190
+#: templates/javascript.htm:90
 msgid "First derivative"
 msgstr ""
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:91
 msgid "Second derivative"
 msgstr ""
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:92
 msgid "Divided by the white reference"
 msgstr ""
 
-#: templates/javascript.htm:193
+#: templates/javascript.htm:93
 msgid "Smoothed"
 msgstr ""
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:94
 msgid "Derivative"
 msgstr ""
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:95
 msgid "Averaged into a single series"
 msgstr "Averaged into a single series"
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:96
 msgid "window"
 msgstr "window"
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:97
 msgid ""
 "These files use different configurations — the axes describe only one of "
 "them, and no view is offered."
@@ -2347,128 +2350,128 @@ msgstr ""
 "These files use different configurations — the axes describe only one of "
 "them, and no view is offered."
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:98
 msgid "normalised to max"
 msgstr "normalised to max"
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:99
 msgid "normalised to area"
 msgstr "normalised to area"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:100
 msgid "smoothed"
 msgstr "smoothed"
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:101
 msgid "derivative"
 msgstr "derivative"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:102
 #: templates/views/components/plugins/importer-configuration.htm:178
 msgid "Reverse the X axis"
 msgstr ""
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:103
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
 msgstr ""
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:104
 #: templates/views/components/plugins/importer-configuration.htm:252
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:105
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never modified."
 msgstr ""
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:106
 msgid "Add a transformation"
 msgstr "Add a transformation"
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:107
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr ""
 
-#: templates/javascript.htm:209
+#: templates/javascript.htm:109
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr ""
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:110
 msgid "Normalise to maximum"
 msgstr ""
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:111
 msgid "Normalise to total area (TIC)"
 msgstr ""
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:112
 msgid "Smoothing (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:113
 msgid "Derivative (Savitzky-Golay)"
 msgstr ""
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:114
 msgid "Window"
 msgstr ""
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:115
 msgid "Polynomial order"
 msgstr ""
 
-#: templates/javascript.htm:216
+#: templates/javascript.htm:116
 msgid "Derivative order"
 msgstr ""
 
-#: templates/javascript.htm:217
+#: templates/javascript.htm:117
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
 msgstr ""
 
-#: templates/javascript.htm:218
+#: templates/javascript.htm:118
 msgid "White reference"
 msgstr ""
 
-#: templates/javascript.htm:219
+#: templates/javascript.htm:119
 msgid "Dark current"
 msgstr ""
 
-#: templates/javascript.htm:220
+#: templates/javascript.htm:120
 msgid "Configuration deduced from the analysis technique"
 msgstr ""
 
-#: templates/javascript.htm:224
+#: templates/javascript.htm:124
 msgid "The summary could not be loaded."
 msgstr "The summary could not be loaded."
 
-#: templates/javascript.htm:225
+#: templates/javascript.htm:125
 msgid "You do not have permission to view this resource."
 msgstr "You do not have permission to view this resource."
 
-#: templates/javascript.htm:226
+#: templates/javascript.htm:126
 msgid "This resource no longer exists."
 msgstr "This resource no longer exists."
 
-#: templates/javascript.htm:227
+#: templates/javascript.htm:127
 msgid "Details are unavailable right now."
 msgstr "Details are unavailable right now."
 
-#: templates/javascript.htm:228
+#: templates/javascript.htm:128
 msgid "No details to show."
 msgstr "No details to show."
 
-#: templates/javascript.htm:229
+#: templates/javascript.htm:129
 #, python-brace-format
 msgid "+{n}"
 msgstr "+{n}"
 
-#: templates/javascript.htm:230
+#: templates/javascript.htm:130
 msgid "Spectrum"
 msgstr "Spectrum"
 
@@ -2617,7 +2620,7 @@ msgid "Has custom parsing"
 msgstr "Has custom parsing"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:159
-#: views/explorer/events_export.py:164
+#: views/explorer/events_export.py:173
 msgid "none"
 msgstr "none"
 
@@ -4736,32 +4739,32 @@ msgstr ""
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr ""
 
-#: views/explorer/events_export.py:123
+#: views/explorer/events_export.py:132
 #, python-format
 msgid "%(site)s, map and timeline of the analyses"
 msgstr ""
 
-#: views/explorer/events_export.py:160
+#: views/explorer/events_export.py:169
 #, python-format
 msgid "%(site)s: events of the map and timeline"
 msgstr ""
 
-#: views/explorer/events_export.py:162 views/explorer/series.py:123
+#: views/explorer/events_export.py:171 views/explorer/series.py:123
 #, python-format
 msgid "Generated on %(date)s"
 msgstr ""
 
-#: views/explorer/events_export.py:163
+#: views/explorer/events_export.py:172
 #, python-format
 msgid "Filters: %(filters)s"
 msgstr ""
 
-#: views/explorer/events_export.py:169
+#: views/explorer/events_export.py:178
 #, python-format
 msgid "Cite as: %(citation)s"
 msgstr ""
 
-#: views/explorer/events_export.py:172
+#: views/explorer/events_export.py:181
 msgid ""
 "Dates are intervals in years; approximate = dated « circa »; place_source: "
 "own = the record's own location, place = the linked place, parent = a "

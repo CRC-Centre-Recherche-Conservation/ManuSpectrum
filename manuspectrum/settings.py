@@ -846,8 +846,6 @@ RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
 # A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
 EXPLORER_LEGACY_HOSTS = ()
 EXPLORER_ITEMS_MAX = 30
-# Seconds the homepage technique list is kept per language.
-EXPLORER_TECHNIQUES_TTL = 600
 # Seconds a compressed corpus bundle of the Explorer stays in the default cache
 # (~3 MB each). Entries stored under a previous code prefix are never read again
 # and expire by this TTL.
