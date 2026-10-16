@@ -8,7 +8,7 @@
 // anonymous visitors, so the escaping assertion at the bottom is the one that
 // must never be deleted.
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { columnX } from "utils/tree-layout";
 
 vi.mock("utils/ms-nav", () => ({ default: () => {} }));
@@ -269,6 +269,23 @@ describe("volume line", () => {
         await boot(withInstances(counts));
         expect(document.getElementById("ms-ge-volume").textContent).toContain(
             expected,
+        );
+    });
+});
+
+describe("volume line in French", () => {
+    afterEach(() => {
+        document.documentElement.lang = "";
+    });
+
+    it("takes the singular form for zero records", async () => {
+        document.documentElement.lang = "fr";
+        await boot({
+            ...PAYLOAD,
+            models: PAYLOAD.models.map((m) => ({ ...m, instances: 0 })),
+        });
+        expect(document.getElementById("ms-ge-volume").textContent).toContain(
+            "0 record published",
         );
     });
 });

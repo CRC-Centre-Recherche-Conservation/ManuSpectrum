@@ -1,3 +1,10 @@
+"""The homepage search form's redirect to the Arches search page.
+
+``term_filter_url`` writes the ``term-filter`` parameter the Arches search page
+reads; its percent-encoding keeps ``! ' ( ) *`` literal, as JavaScript's
+``encodeURIComponent`` does.
+"""
+
 import json
 from urllib.parse import quote
 
@@ -33,7 +40,8 @@ def term_filter_url(search_url, term):
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    return f"{search_url}?paging-filter=1&term-filter={quote(term_filter, safe='!' + chr(39) + '()*')}"
+    encoded = quote(term_filter, safe="!'()*")
+    return f"{search_url}?paging-filter=1&term-filter={encoded}"
 
 
 @method_decorator(never_cache, name="dispatch")

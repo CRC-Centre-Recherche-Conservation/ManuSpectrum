@@ -1049,8 +1049,8 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 @media (max-width: 480px) {
-    // Header at 320px: 16px gutter, the menu button whole and a 44px target.
-    .ms-header-inner { padding: 0 16px; }
+    // Header at 320px: the page gutter, the menu button whole and a 44px target.
+    .ms-header-inner { padding: 0 var(--ms-gutter); }
     .ms-header-logo { gap: 0.5rem; min-width: 0; }
     .ms-header-logo-mark { width: 20px; flex-shrink: 0; }
     .ms-header-logo-text {
@@ -1060,7 +1060,7 @@ img { max-width: 100%; height: auto; display: block; }
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .ms-nav { margin-right: 0.25rem; flex-shrink: 0; }
+    .ms-header .ms-nav { margin-right: 0.25rem; flex-shrink: 0; }
     .ms-lang-switch { font-size: 11px; }
     .ms-lang-switch a { padding: 0.3rem 0.35rem; }
     .ms-hamburger {

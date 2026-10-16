@@ -24,7 +24,6 @@
 {% block extra_head %}{% render_bundle 'css/explorer' 'css' %}{% endblock %}
 {% block body_class %}ms-page ms-page--app{% endblock %}
 {% block body_attrs %}{% if initial_screen != "home" %} data-explorer-screen="{{ initial_screen }}"{% endif %}{% endblock %}
-{% block arches_js_data %}{% endblock %}
 {% block content %}
 <section class="ms-explorer-intro">
     <p class="ms-explorer-intro__kicker">{% trans "Analysis explorer" %}</p>

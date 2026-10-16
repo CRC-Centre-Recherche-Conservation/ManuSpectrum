@@ -121,6 +121,25 @@ describe("character counter", () => {
     });
 });
 
+describe("character counter in French", () => {
+    it("takes the singular form for zero", async () => {
+        document.documentElement.lang = "fr";
+        try {
+            await boot();
+            const msg = document.getElementById("cf-message");
+            const count = document.getElementById("ms-contact-count");
+            msg.value = "x".repeat(1600);
+            msg.dispatchEvent(new Event("input"));
+            expect(count.textContent).toBe("0 character left");
+            msg.value = "x".repeat(1598);
+            msg.dispatchEvent(new Event("input"));
+            expect(count.textContent).toBe("2 characters left");
+        } finally {
+            document.documentElement.lang = "";
+        }
+    });
+});
+
 describe("copy escape hatch", () => {
     it("copies the address and announces it", async () => {
         const writeText = vi.fn().mockResolvedValue(undefined);

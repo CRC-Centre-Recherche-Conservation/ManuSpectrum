@@ -71,7 +71,7 @@ class AnalysisExplorerPageTests(TestCase):
         self.assertIn("private", cache_control)
         self.assertIn("no-store", cache_control)
 
-    def test_page_carries_no_arches_payload_a_scripted_page_keeps_its_own_strings(self):
+    def test_scripted_pages_carry_their_strings_and_the_explorer_none(self):
         explorer = self.client.get(reverse("analysis-explorer")).content.decode()
         contact = self.client.get(reverse("about-contact")).content.decode()
         self.assertNotIn("arches-translations", explorer)
