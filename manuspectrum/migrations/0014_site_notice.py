@@ -86,7 +86,7 @@ class Migration(migrations.Migration):
                 (
                     "ends_at",
                     models.DateTimeField(
-                        help_text="Paris time. Event: when the event ends. Shown once: when the banner disappears. The announcement is gone at this time.",
+                        help_text="Paris time. Event: when the event ends. Shown once: when the banner disappears. The announcement is gone at this time; to withdraw it earlier, move this date or delete the announcement.",
                         verbose_name="End",
                     ),
                 ),
@@ -99,10 +99,6 @@ class Migration(migrations.Migration):
                         max_length=120,
                         verbose_name="Reminders",
                     ),
-                ),
-                (
-                    "is_active",
-                    models.BooleanField(default=True, verbose_name="Published"),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),

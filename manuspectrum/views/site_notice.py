@@ -95,10 +95,10 @@ def payload_for(notices, *, preview=False):
 
 
 def build_payload():
-    """The payload of the announcements that are published and not over."""
-    notices = SiteNotice.objects.filter(
-        is_active=True, ends_at__gt=site_now()
-    ).order_by("starts_at")[:LIMIT]
+    """The payload of the announcements that are not over."""
+    notices = SiteNotice.objects.filter(ends_at__gt=site_now()).order_by("starts_at")[
+        :LIMIT
+    ]
     return payload_for(notices)
 
 

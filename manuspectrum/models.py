@@ -419,7 +419,8 @@ class SiteNotice(models.Model):
         verbose_name=_("End"),
         help_text=_(
             "Paris time. Event: when the event ends. Shown once: when the "
-            "banner disappears. The announcement is gone at this time."
+            "banner disappears. The announcement is gone at this time; to "
+            "withdraw it earlier, move this date or delete the announcement."
         ),
     )
     reminders = models.CharField(
@@ -434,7 +435,6 @@ class SiteNotice(models.Model):
             "announcement shows it again to everyone who dismissed it."
         ),
     )
-    is_active = models.BooleanField(default=True, verbose_name=_("Published"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

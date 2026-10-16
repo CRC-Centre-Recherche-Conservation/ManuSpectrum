@@ -475,17 +475,9 @@ msgstr "Details link"
 msgid "Schedule"
 msgstr "Schedule"
 
-#: admin.py:389
-msgid "Publication"
-msgstr "Publication"
-
 #: admin.py:402 models.py:79
 msgid "State"
 msgstr "State"
-
-#: admin.py:405
-msgid "unpublished"
-msgstr "unpublished"
 
 #: admin.py:409
 msgid "over"
@@ -1091,10 +1083,12 @@ msgstr "End"
 #: models.py:421
 msgid ""
 "Paris time. Event: when the event ends. Shown once: when the banner "
-"disappears. The announcement is gone at this time."
+"disappears. The announcement is gone at this time; to withdraw it earlier, "
+"move this date or delete the announcement."
 msgstr ""
 "Paris time. Event: when the event ends. Shown once: when the banner "
-"disappears. The announcement is gone at this time."
+"disappears. The announcement is gone at this time; to withdraw it earlier, "
+"move this date or delete the announcement."
 
 #: models.py:429
 msgid "Reminders"
@@ -1111,10 +1105,6 @@ msgstr ""
 " the banner first appears; each following one shows it again after a visitor"
 " dismissed it. Units: d, h, m. Saving the announcement shows it again to "
 "everyone who dismissed it."
-
-#: models.py:437
-msgid "Published"
-msgstr "Published"
 
 #: models.py:444
 msgid "site announcement"
@@ -7414,3 +7404,12 @@ msgstr ""
 
 #~ msgid "Data Files"
 #~ msgstr "Data Files"
+
+#~ msgid "Publication"
+#~ msgstr "Publication"
+
+#~ msgid "unpublished"
+#~ msgstr "unpublished"
+
+#~ msgid "Published"
+#~ msgstr "Published"

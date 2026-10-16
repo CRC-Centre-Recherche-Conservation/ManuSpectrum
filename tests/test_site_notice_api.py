@@ -103,10 +103,9 @@ class SiteNoticeApiTests(TestCase):
         self.assertEqual(labels["fr"]["dismiss"], "Fermer cette annonce")
         self.assertIn("{time}", labels["fr"]["until"])
 
-    def test_inactive_and_ended_are_excluded_and_order_follows_start(self):
+    def test_ended_are_excluded_and_order_follows_start(self):
         late = make(offset_days=5, text_en="late")
         soon = make(offset_days=1, text_en="soon")
-        make(offset_days=2, is_active=False, text_en="draft")
         make(offset_days=-3, hours=1, text_en="over")
         texts = [n["text"]["en"] for n in json.loads(self.get().content)["notices"]]
         self.assertEqual(texts, [soon.text_en, late.text_en])
@@ -136,7 +135,7 @@ class SiteNoticeApiTests(TestCase):
         self.assertEqual(response.content, b"")
         self.assertEqual(response["ETag"], etag)
 
-    def test_empty_list_when_nothing_is_published(self):
+    def test_empty_list_when_nothing_is_current(self):
         self.assertEqual(json.loads(self.get().content)["notices"], [])
 
     def test_other_methods_are_refused(self):
@@ -208,7 +207,7 @@ class PreviewTests(TestCase):
         cache.delete(MEMO_KEY)
         self.staff = User.objects.create_user("editor", password="x", is_staff=True)
         self.plain = User.objects.create_user("reader", password="x")
-        self.notice = make(offset_days=-9, hours=1, is_active=False)
+        self.notice = make(offset_days=-9, hours=1)
 
     def test_anonymous_preview_is_refused_without_body(self):
         response = self.client.get(URL, {"preview": self.notice.pk})
@@ -221,7 +220,7 @@ class PreviewTests(TestCase):
             self.client.get(URL, {"preview": self.notice.pk}).status_code, 403
         )
 
-    def test_staff_sees_an_inactive_ended_notice_privately(self):
+    def test_staff_sees_an_ended_notice_privately(self):
         self.client.force_login(self.staff)
         response = self.client.get(URL, {"preview": self.notice.pk})
         self.assertEqual(response.status_code, 200)

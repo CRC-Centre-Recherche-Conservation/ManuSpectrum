@@ -378,10 +378,10 @@ class SiteNoticeAdmin(admin.ModelAdmin):
         "display",
         "starts_at",
         "ends_at",
-        "is_active",
         "state",
     )
-    list_filter = ("kind", "display", "is_active")
+    list_filter = ("kind", "display")
+    ordering = ("-starts_at",)
     readonly_fields = ("schedule",)
     fieldsets = (
         (_("Text"), {"fields": ("kind", "display", "text_en", "text_fr")}),
@@ -390,7 +390,6 @@ class SiteNoticeAdmin(admin.ModelAdmin):
             {"fields": ("link_url", "link_label_en", "link_label_fr")},
         ),
         (_("Schedule"), {"fields": ("starts_at", "ends_at", "reminders", "schedule")}),
-        (_("Publication"), {"fields": ("is_active",)}),
     )
 
     def view_on_site(self, obj):
@@ -405,8 +404,6 @@ class SiteNoticeAdmin(admin.ModelAdmin):
 
     @admin.display(description=_("State"))
     def state(self, notice):
-        if not notice.is_active:
-            return _("unpublished")
         now = site_now()
         first = self._moments(notice)[0]
         if now >= notice.ends_at:

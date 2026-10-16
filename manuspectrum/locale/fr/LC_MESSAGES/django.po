@@ -496,17 +496,9 @@ msgstr "Lien « Détails »"
 msgid "Schedule"
 msgstr "Calendrier"
 
-#: admin.py:389
-msgid "Publication"
-msgstr "Publication"
-
 #: admin.py:402 models.py:79
 msgid "State"
 msgstr "État"
-
-#: admin.py:405
-msgid "unpublished"
-msgstr "non publiée"
 
 #: admin.py:409
 msgid "over"
@@ -1113,10 +1105,12 @@ msgstr "Fin"
 #: models.py:421
 msgid ""
 "Paris time. Event: when the event ends. Shown once: when the banner "
-"disappears. The announcement is gone at this time."
+"disappears. The announcement is gone at this time; to withdraw it earlier, "
+"move this date or delete the announcement."
 msgstr ""
 "Heure de Paris. Événement : fin de l'événement. Affiché une fois : "
-"disparition de la bannière. L'annonce disparaît à cette heure."
+"disparition de la bannière. L'annonce disparaît à cette heure ; pour la "
+"retirer plus tôt, avancez cette date ou supprimez l'annonce."
 
 #: models.py:429
 msgid "Reminders"
@@ -1134,10 +1128,6 @@ msgstr ""
 "suivantes la montre à nouveau après qu'un visiteur l'a fermée. Unités : d "
 "(jours), h (heures), m (minutes). Enregistrer l'annonce la montre à nouveau "
 "à tous ceux qui l'avaient fermée."
-
-#: models.py:437
-msgid "Published"
-msgstr "Publiée"
 
 #: models.py:444
 msgid "site announcement"
@@ -7681,3 +7671,12 @@ msgstr "À venir"
 #~ "La normalisation par référence exige une colonne marquée « Référence blanche"
 #~ " » dans l'affectation des colonnes. Sans cela, cette étape ne fait rien et "
 #~ "les séries brutes sont tracées."
+
+#~ msgid "Publication"
+#~ msgstr "Publication"
+
+#~ msgid "unpublished"
+#~ msgstr "non publiée"
+
+#~ msgid "Published"
+#~ msgstr "Publiée"

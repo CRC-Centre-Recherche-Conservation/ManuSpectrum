@@ -123,16 +123,23 @@ class AdminTests(TestCase):
             "shown": (now + timedelta(days=3), 2),
             "in progress": (now - timedelta(hours=1), 3),
             "over": (now - timedelta(days=2), 1),
-            "unpublished": (now - timedelta(hours=1), 3),
         }
         for expected, (start, hours) in cases.items():
             with self.subTest(expected=expected):
                 notice = make(
                     starts_at=start,
                     ends_at=start + timedelta(hours=hours),
-                    is_active=expected != "unpublished",
                 )
                 self.assertEqual(str(model_admin.state(notice)), expected)
+
+    def test_admin_lists_newest_first_and_has_no_publication_switch(self):
+        from manuspectrum.admin import SiteNoticeAdmin
+        from django.contrib import admin
+
+        model_admin = SiteNoticeAdmin(SiteNotice, admin.site)
+        self.assertEqual(model_admin.ordering, ("-starts_at",))
+        self.assertNotIn("is_active", model_admin.list_display)
+        self.assertNotIn("is_active", model_admin.form().fields)
 
     def test_schedule_preview_names_the_moments(self):
         from manuspectrum.admin import SiteNoticeAdmin
@@ -213,7 +220,6 @@ class AdminTests(TestCase):
                 "ends_at_0": (start + timedelta(hours=1)).strftime("%Y-%m-%d"),
                 "ends_at_1": (start + timedelta(hours=1)).strftime("%H:%M"),
                 "reminders": "10m 1h",
-                "is_active": "on",
             }
         )
         self.assertTrue(form.is_valid(), form.errors)
