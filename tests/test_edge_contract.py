@@ -14,7 +14,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.test import SimpleTestCase
-from django.urls import Resolver404, resolve
+from django.urls import Resolver404, resolve, reverse
 from django.utils import translation
 
 NGINX_DIR = Path(
@@ -265,30 +265,32 @@ class EdgeContractTests(SimpleTestCase):
                 body = self.location_body("snippets/edge-rules.conf", f"/{code}/{rest}")
                 self.assertRegex(
                     body,
-                    r"if \(\$anonymous_geojson_export\) \{\s*"
-                    r"rewrite \^/\(en\|fr\)/ /_denied/geojson-export-\$1 last;",
+                    r"if \(\$anonymous_geojson_export\) \{\s*" r"return 403;",
                     rest,
                 )
 
-    def test_geojson_refusal_is_a_403_page_in_every_language(self):
-        text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+    def test_geojson_refusal_is_the_site_403_page(self):
         template = (
             NGINX_DIR / "templates/conf.d/manuspectrum.conf.template"
         ).read_text()
-        self.assertRegex(
-            text,
-            r"location ~ \^/_denied/geojson-export-\(en\|fr\)\$ \{\s*internal;\s*"
-            r"error_page 403 /_errors/geojson-export-\$1\.html;\s*"
-            r"error_page 404 /_errors/404\.html;\s*return 403;",
-        )
+        edge = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+        self.assertIn("error_page 403 /_errors/403.html;", template)
+        self.assertNotIn("geojson-export", template + edge)
+        self.assertNotIn("_denied", edge)
+        page = (NGINX_DIR / "errors/403.html").read_text()
         for code, _ in settings.LANGUAGES:
-            self.assertIn(f"location = /_errors/geojson-export-{code}.html", template)
-            page = (NGINX_DIR / f"errors/geojson-export-{code}.html").read_text()
-            self.assertIn(f'<html lang="{code}">', page)
-            self.assertIn(f'href="/{code}/discover"', page)
-            self.assertIn(f'href="/{code}/auth/', page)
-            self.assertView(f"/{code}/auth/", "auth")
-            self.assertView(f"/{code}/discover", "analysis-explorer")
+            with translation.override(code):
+                auth = reverse("auth")
+                root = reverse("root")
+                contact = reverse("about-contact")
+            self.assertEqual(root, f"/{code}/")
+            self.assertIn(f'href="{auth}?next={root}"', page)
+            self.assertIn(f'href="{root}"', page)
+            self.assertIn(f'href="{contact}"', page)
+            self.assertView(auth, "auth")
+            self.assertView(contact, "about-contact")
+        self.assertIn('<html lang="en">', page)
+        self.assertIn('lang="fr"', page)
 
     def test_temp_file_without_an_id_is_refused_by_the_edge(self):
         for code, _ in settings.LANGUAGES:

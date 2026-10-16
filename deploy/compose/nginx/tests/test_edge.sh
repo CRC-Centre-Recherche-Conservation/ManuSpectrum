@@ -532,20 +532,16 @@ group_search_export() {
   equals "search export format=geojson without a session cookie: 403" 403 "$(code "/fr/search/export_results?format=geojson")"
   equals "search export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "/fr/search/export_results?format=geojson" -H 'Cookie: manuspectrum=x')")"
   local page
-  for page in "/fr/api/search/export_results?format=geojson" "/fr/search/export_results?format=geojson"; do
-    check "geojson barrier $page: French page with the Discover and sign-in links" \
-      bash -c 'grep -q "<html lang=\"fr\"" <<<"$1" && grep -q "href=\"/fr/discover\"" <<<"$1" && grep -q "href=\"/fr/auth/" <<<"$1" && ! grep -qi "inscri\|signup" <<<"$1"' _ "$(get "$page")"
+  for page in "/fr/api/search/export_results?format=geojson" "/en/api/search/export_results?format=geojson" "/fr/search/export_results?format=geojson" "/en/search/export_results?format=geojson"; do
+    check "geojson barrier $page: the site's 403 page, both languages, sign-in links" \
+      bash -c 'grep -q "<title>Access restricted / " <<<"$1" && grep -q "<html lang=\"en\"" <<<"$1" && grep -q "<section class=\"ms-error\" lang=\"fr\"" <<<"$1" && grep -q "href=\"/en/auth/?next=/en/\"" <<<"$1" && grep -q "href=\"/fr/auth/?next=/fr/\"" <<<"$1" && ! grep -qi "<center>nginx" <<<"$1"' _ "$(get "$page")"
   done
-  check "geojson barrier /en/: English page with the Discover and sign-in links" \
-    bash -c 'grep -q "<html lang=\"en\"" <<<"$1" && grep -q "href=\"/en/discover\"" <<<"$1" && grep -q "href=\"/en/auth/" <<<"$1" && ! grep -qi "sign up\|signup\|register" <<<"$1"' _ "$(get "/en/search/export_results?format=geojson")"
   local refusal
   refusal="$(headers "/en/api/search/export_results?format=geojson")"
   equals "geojson barrier page: status 403" "403" "$(head -1 <<<"$refusal" | cut -d" " -f2)"
   check "geojson barrier page: never publicly cached, nginx headers kept" \
-    bash -c 'grep -qi "^cache-control: no-store" <<<"$1" && ! grep -qi "public" <<<"$1" && grep -qi "^strict-transport-security:" <<<"$1" && grep -qi "^x-content-type-options:" <<<"$1"' _ "$refusal"
-  equals "the internal refusal page is not reachable directly: 404" 404 "$(code /_denied/geojson-export-en)"
-  check "the internal refusal page answers with the site 404 page" \
-    bash -c 'grep -q "<html" <<<"$1" && grep -qi "404" <<<"$1" && ! grep -qi "<center>nginx" <<<"$1"' _ "$(get /_denied/geojson-export-en)"
+    bash -c '! grep -qi "public" <<<"$1" && grep -qi "^strict-transport-security:" <<<"$1" && grep -qi "^x-content-type-options:" <<<"$1"' _ "$refusal"
+  equals "the internal 403 page is not reachable directly: 404" 404 "$(code /_errors/403.html)"
   local bypass
   for bypass in 'format=tilecsv&format=geojson' 'format=geojs%6Fn' 'format=GEOJSON' 'f%6Frmat=geojson' 'format=%67eojson' 'total=1&format=tilecsv&format=geo%6Ason'; do
     equals "search export ?$bypass without a cookie: 403" 403 "$(code "/fr/search/export_results?$bypass")"

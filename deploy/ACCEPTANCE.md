@@ -639,7 +639,7 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
 - [ ] Search exports: `/fr/api/search/export_results?format=tilecsv` → `404`, without `format` → `404`,
   `?format=geojson&format=tilecsv` → `404`, `?format=geojson&form%61t=shp` → `404`,
   `?format=tilecsv&format=geojson` → `404`; `?format=geojson` without a session cookie → `403` with the
-  page in the request's language, with one → answered by Django.
+  site's 403 page, with one → answered by Django.
   `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://manuspectrum.test/fr/temp_file` → `404`
   (a GET reaches Django).
 - [ ] `/files/uploadedfiles/<any stored name>` direct → `404` (bytes only follow `FileView`, 4.5).

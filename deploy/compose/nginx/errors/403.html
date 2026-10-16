@@ -1,15 +1,22 @@
 <!DOCTYPE html>
-<!-- Edge page for the 403 of a GeoJSON export asked without a session (edge-rules.conf). -->
-<html lang="fr">
+<!-- Edge page of nginx, served when nginx itself refuses a request (403).
+     Static mirror of manuspectrum/templates/errors/403.htm (extends ms_base.htm):
+     same tokens, header, footer and layout, inlined so the page needs neither
+     the application nor its hashed assets. The site fonts are served under
+     hashed paths, so the font stacks fall back to Georgia and system sans.
+     Bilingual (EN then FR) because nginx cannot negotiate a language. No
+     JavaScript; the style block is the documented exception to the
+     no-inline-style rule for standalone error pages (as 500.htm). -->
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
-    <title>Cet export est r&#233;serv&#233; &#224; l&#8217;&#233;quipe &#8212; ManuSpectrum</title>
+    <title>Access restricted / Acc&#232;s restreint &#8212; ManuSpectrum</title>
     <style>
         :root {
             --bg: #faf9f7; --bg-alt: #f0ede8; --border: rgba(26, 26, 46, 0.07);
-            --ink: #1a1a2e; --ink-dim: #6b6b7c; --ink-soft: #4a4a63;
+            --ink: #1a1a2e; --ink-muted: #4a4a5e; --ink-dim: #6b6b7c; --ink-soft: #4a4a63;
             --blue-text: #1d4ed8; --spectral-5: #3b82f6;
             --font-display: 'Cormorant Garamond', Georgia, serif;
             --font-body: 'Sora', system-ui, -apple-system, sans-serif;
@@ -29,8 +36,13 @@
         .ms-header-logo-text { font-family: var(--font-display); font-size: 1.35rem; letter-spacing: 0.08em; color: var(--ink); }
         main { flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: 4rem 2rem 3rem; }
         .ms-error { text-align: center; padding: 2.5rem 0 3rem; }
+        .ms-error + .ms-error { border-top: 1px solid var(--border); }
         .ms-error-eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.18em;
                             text-transform: uppercase; color: var(--blue-text); }
+        .ms-error-code { font-family: var(--font-display); font-weight: 300; line-height: 1;
+                         font-size: clamp(5rem, 14vw, 8.5rem); color: transparent;
+                         background: linear-gradient(90deg, #dc3545, #e67e22, #f0b429, #10b981, #3b82f6, #8b5cf6);
+                         -webkit-background-clip: text; background-clip: text; }
         .ms-error-title { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.6rem, 3vw, 2.2rem);
                           line-height: 1.2; margin: 10px 0 14px; }
         .ms-error-lead { max-width: 560px; margin: 0 auto; color: var(--ink-soft); }
@@ -60,7 +72,7 @@
 <body>
     <header class="ms-header">
         <div class="ms-header-inner">
-            <a href="/fr/" class="ms-header-logo" aria-label="ManuSpectrum">
+            <a href="/" class="ms-header-logo" aria-label="ManuSpectrum">
                 <span class="ms-header-logo-mark"></span>
                 <span class="ms-header-logo-text">ManuSpectrum</span>
             </a>
@@ -68,13 +80,25 @@
     </header>
     <main>
     <section class="ms-error">
-        <div class="ms-error-eyebrow">Erreur 403 &#183; Export r&#233;serv&#233;</div>
-        <h1 class="ms-error-title">Cet export est r&#233;serv&#233; &#224; l&#8217;&#233;quipe</h1>
-        <p class="ms-error-lead">L&#8217;export GeoJSON des r&#233;sultats de recherche est r&#233;serv&#233; aux comptes de l&#8217;&#233;quipe ManuSpectrum.</p>
-        <p class="ms-error-lead">Les donn&#233;es publiques se t&#233;l&#233;chargent depuis &#171;&#160;D&#233;couvrir les donn&#233;es&#160;&#187; : le paquet de donn&#233;es (ZIP), les spectres (CSV) et le manifeste IIIF.</p>
+        <div class="ms-error-eyebrow">Error 403 &#183; Conservation lab</div>
+        <div class="ms-error-code" aria-hidden="true">403</div>
+        <h1 class="ms-error-title">This room needs a badge</h1>
+        <p class="ms-error-lead">Like a conservation lab, some rooms are badge-only. Reading published data never needs an account &#8212; but this page requires one, or higher permissions. If you believe you should have access, contact the team.</p>
         <div class="ms-error-actions">
-            <a class="ms-btn" href="/fr/discover">T&#233;l&#233;charger les donn&#233;es publiques</a>
-            <a class="ms-error-link" href="/fr/auth/?next=/fr/search">Se connecter (membres de l&#8217;&#233;quipe)</a>
+            <a class="ms-btn" href="/en/auth/?next=/en/">Sign In</a>
+            <a class="ms-error-link" href="/en/">Back to the homepage</a>
+            <a class="ms-error-link" href="/en/about/contact">Contact the team</a>
+        </div>
+    </section>
+    <section class="ms-error" lang="fr">
+        <div class="ms-error-eyebrow">Erreur 403 &#183; Laboratoire de conservation</div>
+        <div class="ms-error-code" aria-hidden="true">403</div>
+        <h1 class="ms-error-title">Cette salle est sur badge</h1>
+        <p class="ms-error-lead">Comme dans un laboratoire de conservation, certaines salles ne s&#8217;ouvrent qu&#8217;avec un badge. La lecture des donn&#233;es publi&#233;es ne n&#233;cessite jamais de compte &#8212; mais cette page en demande un, ou des permissions sup&#233;rieures. Si vous pensez devoir y avoir acc&#232;s, contactez l&#8217;&#233;quipe.</p>
+        <div class="ms-error-actions">
+            <a class="ms-btn" href="/fr/auth/?next=/fr/">Se connecter</a>
+            <a class="ms-error-link" href="/fr/">Retour &#224; l&#8217;accueil</a>
+            <a class="ms-error-link" href="/fr/about/contact">Contacter l&#8217;&#233;quipe</a>
         </div>
     </section>
     </main>
@@ -82,7 +106,8 @@
         <div class="ms-footer-inner">
             <div class="spectral-line"></div>
             <div class="ms-footer-brand-name">ManuSpectrum</div>
-            <p class="ms-footer-brand-desc">Base de donn&#233;es interop&#233;rable pour l&#8217;analyse physico-chimique des mat&#233;riaux du patrimoine culturel &#233;crit. Un projet du cluster Biblissima+.</p>
+            <p class="ms-footer-brand-desc">Interoperable database for physicochemical analysis of written cultural heritage materials. A Biblissima+ cluster project.</p>
+            <p class="ms-footer-brand-desc" lang="fr">Base de donn&#233;es interop&#233;rable pour l&#8217;analyse physico-chimique des mat&#233;riaux du patrimoine culturel &#233;crit. Un projet du cluster Biblissima+.</p>
         </div>
     </footer>
 </body>
