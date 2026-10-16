@@ -237,7 +237,11 @@ const DEFAULT_POINTER = "mouse";
  * counts, and nothing is toggled in the focus.
  *
  * A file over the server's ceiling, missing or empty is named and left
- * out. A chart Plotly cannot draw says so in the window. The chart follows
+ * out. A chart Plotly cannot draw says so in the window. The chart takes
+ * the height its window leaves below the toolbar, down to a floor
+ * (`--xy-chart-floor`), and is size-contained so that a drawing never holds
+ * its box open; under 40rem the legend below it scrolls past
+ * `--xy-legend-stacked-max`. The chart follows
  * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
  * and is then drawn again for the size (labels, panels); small multiples
  * that no longer need a height of their own are drawn once more at the
@@ -2062,6 +2066,9 @@ function chooseView(event: Event): void {
 
 <style scoped>
 .xy-workshop {
+    --xy-chart-floor: 9rem;
+    --xy-legend-stacked-max: 7.5rem;
+
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -2173,7 +2180,13 @@ function chooseView(event: Event): void {
 .xy-workshop .plot-area {
     position: relative;
     display: grid;
+    flex: 1 1 0;
+    grid-template-rows: minmax(var(--xy-chart-floor), 1fr) auto;
     gap: 0.5rem;
+}
+
+.xy-workshop .plot-area.tall {
+    flex: none;
 }
 
 .xy-workshop .plot-area .isolated {
@@ -2188,29 +2201,25 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .chart {
-    min-block-size: 18rem;
+    min-block-size: 0;
+    contain: size;
+}
+
+.xy-workshop .plot-area .xy-legend {
+    max-block-size: var(--xy-legend-stacked-max);
+    overflow: auto;
 }
 
 @container (min-width: 40rem) {
     .xy-workshop .plot-area {
-        flex: 1 1 0;
         grid-template-rows: minmax(0, 1fr);
         grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem);
-        min-block-size: 18rem;
-    }
-
-    .xy-workshop .plot-area.tall {
-        flex: none;
-    }
-
-    .xy-workshop .plot-area .chart {
-        min-block-size: 0;
+        min-block-size: var(--xy-chart-floor);
     }
 
     .xy-workshop .plot-area .xy-legend {
         align-self: start;
         max-block-size: 100%;
-        overflow: auto;
     }
 
     .xy-workshop .lens-region {
@@ -2220,10 +2229,6 @@ function chooseView(event: Event): void {
         overflow: auto;
         overscroll-behavior: contain;
     }
-}
-
-.xy-workshop .chart[data-failed] {
-    min-block-size: 0;
 }
 
 .xy-workshop .chart[data-identifying] :deep(.nsewdrag) {

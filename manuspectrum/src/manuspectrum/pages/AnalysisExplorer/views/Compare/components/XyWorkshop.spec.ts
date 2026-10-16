@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -3022,5 +3024,35 @@ describe("XyWorkshop XRF lens", () => {
             expect(view.find('[role="dialog"]').exists()).toBe(false);
             expect(toggleButton(view).attributes("aria-pressed")).toBe("false");
         });
+    });
+});
+
+describe("XyWorkshop styles", () => {
+    const style = readFileSync(`${__dirname}/XyWorkshop.vue`, "utf8").split(
+        "<style scoped>",
+    )[1];
+    const outsideQueries = style.split("@container")[0];
+
+    function rule(source: string, selector: string): string {
+        const start = source.indexOf(`${selector} {`);
+        expect(start).toBeGreaterThan(-1);
+        return source.slice(start, source.indexOf("}", start));
+    }
+
+    it("gives the plot area the height its window leaves at every width, its floor one shared value", () => {
+        const area = rule(outsideQueries, ".xy-workshop .plot-area");
+        expect(area).toContain("flex: 1 1 0;");
+        expect(area).toContain(
+            "grid-template-rows: minmax(var(--xy-chart-floor), 1fr) auto;",
+        );
+        expect(
+            rule(style.split("@container")[1], ".xy-workshop .plot-area"),
+        ).toContain("min-block-size: var(--xy-chart-floor);");
+    });
+
+    it("keeps the drawn chart from holding its own box open, so it shrinks with its window", () => {
+        const chart = rule(outsideQueries, ".xy-workshop .chart");
+        expect(chart).toContain("contain: size;");
+        expect(chart).toContain("min-block-size: 0;");
     });
 });
