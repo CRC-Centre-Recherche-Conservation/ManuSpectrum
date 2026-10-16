@@ -246,11 +246,14 @@ class EdgeContractTests(SimpleTestCase):
             body = self.location_body(
                 "snippets/edge-rules.conf", f"/{code}/iiifannotations"
             )
-            self.assertRegex(body, r"limit_req zone=annotations burst=\d{4}")
+            self.assertRegex(body, r"limit_req zone=annotations burst=\d+;")
+            self.assertRegex(body, r"limit_req zone=annotations_site burst=\d+;")
+            self.assertNotIn("nodelay", body)
             self.assertIn("limit_conn annotations_conn", body)
             self.assertNotIn("perip", body)
         zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
         self.assertIn("zone=annotations:", zones)
+        self.assertIn("zone=annotations_site:", zones)
         self.assertIn("zone=annotations_conn:", zones)
 
     def test_geojson_barrier_reads_the_session_cookie_of_the_settings(self):
@@ -262,9 +265,30 @@ class EdgeContractTests(SimpleTestCase):
                 body = self.location_body("snippets/edge-rules.conf", f"/{code}/{rest}")
                 self.assertRegex(
                     body,
-                    r"if \(\$anonymous_geojson_export\) \{\s*return 403;",
+                    r"if \(\$anonymous_geojson_export\) \{\s*"
+                    r"rewrite \^/\(en\|fr\)/ /_denied/geojson-export-\$1 last;",
                     rest,
                 )
+
+    def test_geojson_refusal_is_a_403_page_in_every_language(self):
+        text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+        template = (
+            NGINX_DIR / "templates/conf.d/manuspectrum.conf.template"
+        ).read_text()
+        self.assertRegex(
+            text,
+            r"location ~ \^/_denied/geojson-export-\(en\|fr\)\$ \{\s*internal;\s*"
+            r"error_page 403 /_errors/geojson-export-\$1\.html;\s*"
+            r"error_page 404 /_errors/404\.html;\s*return 403;",
+        )
+        for code, _ in settings.LANGUAGES:
+            self.assertIn(f"location = /_errors/geojson-export-{code}.html", template)
+            page = (NGINX_DIR / f"errors/geojson-export-{code}.html").read_text()
+            self.assertIn(f'<html lang="{code}">', page)
+            self.assertIn(f'href="/{code}/discover"', page)
+            self.assertIn(f'href="/{code}/auth/', page)
+            self.assertView(f"/{code}/auth/", "auth")
+            self.assertView(f"/{code}/discover", "analysis-explorer")
 
     def test_temp_file_without_an_id_is_refused_by_the_edge(self):
         for code, _ in settings.LANGUAGES:
