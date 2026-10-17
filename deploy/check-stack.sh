@@ -87,9 +87,12 @@ step "observability configuration"
 bash deploy/compose/observability/check.sh
 
 step "actionlint"
-docker run --rm -v "$ROOT:/repo:ro" -w /repo "$ACTIONLINT_IMAGE" \
-  .github/workflows/deploy-lint.yml .github/workflows/trivy-weekly.yml .github/workflows/pip-audit.yml \
-  .github/workflows/cache-cleanup.yml .github/workflows/secret-scan.yml
+# Every project workflow; main.yml is the Arches template, never patched.
+workflows=()
+for f in "$ROOT"/.github/workflows/*.yml; do
+  [ "${f##*/}" = main.yml ] || workflows+=(".github/workflows/${f##*/}")
+done
+docker run --rm -v "$ROOT:/repo:ro" -w /repo "$ACTIONLINT_IMAGE" "${workflows[@]}"
 echo "actionlint: no warning"
 
 step "uv.lock"

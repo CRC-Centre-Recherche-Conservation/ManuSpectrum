@@ -1,0 +1,81 @@
+name: build-image
+
+# Builds the image on every push to the integration branch and to main, and
+# probes it (deploy/docker/probe-image.sh). Nothing else runs here: the stack
+# was judged on the pull request (deploy-lint.yml), and a merge of two
+# pull requests that passed separately still shows red on the branch when its
+# tip no longer builds.
+#
+# Integration branch: the build reads and writes the buildkit cache under
+# `scope=image`. The cache is stored under the branch's own ref, and buildkit
+# reads one index per ref the run may read (its own, the base branch of a
+# pull request, the default branch) under the same scope name: every pull
+# request that targets the branch starts from this cache.
+#
+# main: no cache in, no cache out. The delivered image builds from scratch,
+# with the day's Debian security updates (PP-10's staging.yml takes this run
+# over on push to main and publishes the image).
+on:
+  push:
+    branches:
+      # The integration branch (one line to add when `dev` takes the role, PP-0).
+      - feat/production-platform
+      - main
+  workflow_dispatch:
+
+# actions: read lets buildkit's cache exporter list the existing cache
+# entries (GET /actions/caches) instead of logging an error and probing each
+# blob one by one.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      IMAGE: manuspectrum:ci
+    steps:
+      # No submodule: the build context never holds pkg (.dockerignore allowlist).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the image (integration cache)
+        if: github.ref == 'refs/heads/feat/production-platform'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
+
+      # main, and a manual run from any other branch: no cache is left behind.
+      - name: Build the image (from scratch)
+        if: github.ref != 'refs/heads/feat/production-platform'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}
+          provenance: false
+          sbom: false
+          no-cache: true
+
+      - name: Probe the image
+        run: bash deploy/docker/probe-image.sh "$IMAGE"

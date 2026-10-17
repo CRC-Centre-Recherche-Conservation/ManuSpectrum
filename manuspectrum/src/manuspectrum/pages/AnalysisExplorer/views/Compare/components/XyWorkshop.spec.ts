@@ -172,8 +172,31 @@ function fakeLinked(): FakeLinked {
     return { linked, selection, levels, previewLevels, toggle, preview };
 }
 
-function nextFrame(): Promise<void> {
-    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+/** The animation frames requested and not yet run; `nextFrame()` runs them. */
+let frames: Map<number, FrameRequestCallback> = new Map();
+let frameId = 0;
+
+/** Replaces the timed animation frames with ones the spec runs, so no restyle depends on timing. */
+function controlFrames(): void {
+    frames = new Map();
+    frameId = 0;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+        frameId += 1;
+        frames.set(frameId, callback);
+        return frameId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+        frames.delete(id);
+    });
+}
+
+/** Runs every frame requested once pending updates have settled, then the work they started. */
+async function nextFrame(): Promise<void> {
+    await flushPromises();
+    const due = [...frames.values()];
+    frames.clear();
+    due.forEach((callback) => callback(0));
+    await flushPromises();
 }
 
 let fake: FakeLinked;
@@ -253,6 +276,7 @@ beforeEach(() => {
         async (url: string) => answers.get(url) ?? jsonResponse(SERIES),
     );
     vi.stubGlobal("fetch", fetchMock);
+    controlFrames();
 });
 
 afterEach(() => {
@@ -821,6 +845,174 @@ describe("XyWorkshop", () => {
             (plotly.restyle.mock.calls[1][1] as Record<string, unknown[]>)
                 .opacity,
         ).toEqual([1, 1, 1]);
+    });
+
+    it("restyles nothing while a draw is in flight, and shows the new states once it ends", async () => {
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await nextFrame();
+        let finish: () => void = () => undefined;
+        plotly.react.mockImplementationOnce(
+            () =>
+                new Promise<undefined>(
+                    (resolve) => (finish = () => resolve(undefined)),
+                ),
+        );
+        await view.find('.layouts [data-layout="offset"]').trigger("click");
+        await flushPromises();
+        expect(plotly.react).toHaveBeenCalledTimes(2);
+        plotly.restyle.mockClear();
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await nextFrame();
+        expect(plotly.restyle).not.toHaveBeenCalled();
+        finish();
+        await flushPromises();
+        await nextFrame();
+        expect(plotly.restyle).toHaveBeenCalledTimes(1);
+        expect(
+            (plotly.restyle.mock.calls[0][1] as Record<string, unknown[]>)
+                .opacity,
+        ).toEqual([1, 0]);
+    });
+
+    it("restyles nothing once the drawn figure no longer holds the window's curves", async () => {
+        const curves = ref([curve(0, 1), curve(1, 2)]);
+        wrapper = mount(CompareWindow, {
+            attachTo: document.body,
+            props: {
+                title: "XRF",
+                position: 1,
+                total: 1,
+                size: "M",
+                folded: null,
+            },
+            slots: {
+                default: () =>
+                    h(XyWorkshop, {
+                        curves: curves.value,
+                        windowId: WINDOW_ID,
+                    }),
+            },
+            global: {
+                provide: {
+                    [WINDOW_RESIZE_KEY as symbol]: ref(0),
+                    [LINKED_SELECTION_KEY as symbol]: fake.linked,
+                },
+            },
+        });
+        await flushPromises();
+        await nextFrame();
+        plotly.react.mockClear();
+        plotly.restyle.mockClear();
+        curves.value = [];
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await flushPromises();
+        await nextFrame();
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(plotly.restyle).not.toHaveBeenCalled();
+    });
+
+    it("restyles nothing when the states are the ones already shown", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await nextFrame();
+        expect(plotly.restyle).not.toHaveBeenCalled();
+        fake.levels.value = new Map();
+        await nextFrame();
+        expect(plotly.restyle).not.toHaveBeenCalled();
+    });
+
+    it("restyles once however many state changes come before the frame", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await nextFrame();
+        fake.selection.value = [analysisNode(analysisHit(1).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(1).id), "self"],
+        ]);
+        await flushPromises();
+        fake.selection.value = [analysisNode(analysisHit(2).id)];
+        fake.levels.value = new Map([
+            [analysisNode(analysisHit(2).id), "self"],
+        ]);
+        await flushPromises();
+        await nextFrame();
+        expect(plotly.restyle).toHaveBeenCalledTimes(1);
+    });
+
+    it("draws outside Compare: no linked selection, no window id, an own title for the PNG", async () => {
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+            () => undefined,
+        );
+        wrapper = mount(XyWorkshop, {
+            attachTo: document.body,
+            props: { curves: [curve(0, 1), curve(1, 2)], title: "Own title" },
+        });
+        await flushPromises();
+        await nextFrame();
+        expect(plotly.react).toHaveBeenCalled();
+        expect(plotly.restyle).not.toHaveBeenCalled();
+    });
+
+    it("shows an empty window without drawing it", async () => {
+        const view = await mountWorkshop([]);
+        await nextFrame();
+        expect(plotly.react).not.toHaveBeenCalled();
+        expect(view.find(".chart").exists()).toBe(false);
+    });
+
+    it("keeps a curve unlinked when the selection links only other nodes", async () => {
+        await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await nextFrame();
+        fake.selection.value = [canvasNode(FOLIO_CANVAS)];
+        fake.levels.value = new Map([[canvasNode(FOLIO_CANVAS), "direct"]]);
+        await nextFrame();
+        const update = plotly.restyle.mock.calls.at(-1)?.[1] as Record<
+            string,
+            unknown[]
+        >;
+        expect(update.opacity).toEqual([0, 0]);
+    });
+
+    it("follows a resize without redrawing while the table is shown", async () => {
+        const resize = ref(0);
+        const view = await mountWorkshop([curve(0, 1)], resize);
+        await view.find('[data-action="table"]').trigger("click");
+        await flushPromises();
+        plotly.react.mockClear();
+        resize.value += 1;
+        await nextFrame();
+        expect(plotly.react).not.toHaveBeenCalled();
+    });
+
+    it("says nothing of a PNG that Plotly could not make", async () => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        const click = vi
+            .spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => undefined);
+        const view = await mountWorkshop([curve(0, 1)]);
+        plotly.toImage.mockRejectedValueOnce(new Error("no image"));
+        await view.find('[data-action="png"]').trigger("click");
+        await flushPromises();
+        expect(error).toHaveBeenCalled();
+        expect(click).not.toHaveBeenCalled();
+    });
+
+    it("ends quietly when the chart fails to draw after its window is gone", async () => {
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        let fail: (reason: Error) => void = () => undefined;
+        plotly.react.mockImplementationOnce(
+            () => new Promise<undefined>((_resolve, reject) => (fail = reject)),
+        );
+        const view = await mountWorkshop([curve(0, 1)]);
+        view.unmount();
+        wrapper = null;
+        fail(new Error("late"));
+        await flushPromises();
+        expect(error).not.toHaveBeenCalled();
     });
 
     it("restyles again to states it failed to show", async () => {
