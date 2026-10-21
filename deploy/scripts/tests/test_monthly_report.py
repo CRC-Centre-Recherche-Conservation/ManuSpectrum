@@ -181,6 +181,7 @@ ACTIVITY = {
         "never-used": {"started": 0, "completed": 0, "open": 0, "stale": 0},
     },
     "workflow_stale_after_days": 30,
+    "workflow_cleanup": {"warned": 9, "next_cleanup": "2026-10-23"},
     "accounts_anonymised": 2,
     "inactive_accounts": {
         "dormant": [["old.curator", "2025-09-04", "2024-04-22"]],
@@ -375,13 +376,13 @@ class MonthlyReport(unittest.TestCase):
             "Comptes actifs",
             "Consultations",
             "Contenus",
-            "Assistants",
+            "Workflows",
             "Imports et exports en masse",
             "Connexions",
             "Comptes inactifs",
             "Verrouillages de comptes",
             "Restrictions (embargos)",
-            "Assistants abandonnés nettoyés",
+            "Workflows abandonnés nettoyés",
             "Courriels de compte",
         ):
             self.assertIn(heading, text)
@@ -471,7 +472,7 @@ class MonthlyReport(unittest.TestCase):
         _, text = self.report()
         self.assertIn(
             "analysis : 12 créées (dont 2 supprimées dans le mois), 30 modifiées, "
-            "3 supprimées, 2 nettoyées (assistant abandonné) ; 10 082 au total",
+            "3 supprimées, 2 nettoyées (workflow abandonné) ; 10 082 au total",
             text,
         )
         self.assertIn("document : 1 créée, 1 modifiée, 0 supprimée ; 55 au total", text)
@@ -492,7 +493,8 @@ class MonthlyReport(unittest.TestCase):
         )
         self.assertIn("annulés par l'utilisateur : 2", text)
         self.assertIn(
-            "inachevés à la date du rapport : 17, dont 12 commencés il y a plus de 30 jours (délai du nettoyage)",
+            "inachevés à la date du rapport : 17, dont 12 commencés il y a plus de 30 jours (délai du nettoyage) ; 9 déjà prévenu(s), "
+            "prochain nettoyage le 23 octobre 2026",
             text,
         )
 
@@ -544,11 +546,11 @@ class MonthlyReport(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "assistants abandonnés : 6 nettoyé(s), 1 nettoyé(s) avec des ressources conservées",
+            "workflows abandonnés : 6 nettoyé(s), 1 nettoyé(s) avec des ressources conservées",
             text,
         )
         self.assertIn(
-            "ressources créées par ces assistants : 11 supprimée(s), 2 conservée(s)",
+            "ressources créées par ces workflows : 11 supprimée(s), 2 conservée(s)",
             text,
         )
         self.assertIn("courriels de compte envoyés : 23", text)
@@ -558,7 +560,7 @@ class MonthlyReport(unittest.TestCase):
         self.servers.prom.floor = 2**40
         _, text = self.report()
         self.assertIn("aucune levée", text)
-        self.assertIn("aucun assistant abandonné n'a été nettoyé", text)
+        self.assertIn("aucun workflow abandonné n'a été nettoyé", text)
         self.assertIn("courriels de compte envoyés : 0", text)
         self.assertIn("courriels de compte en échec : aucun", text)
 
@@ -677,7 +679,7 @@ class MonthlyReport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             command = activity_command(directory, quiet)
             _, text = self.report(extra=["--activity-command", command])
-        # The Biblissima items come from Prometheus, so Assistants still has a line.
+        # The Biblissima items come from Prometheus, so Workflows still has a line.
         self.assertEqual(text.count("aucune activité"), 2)
 
     def test_reboots_are_boot_time_moves_above_a_minute_not_any_change(self):

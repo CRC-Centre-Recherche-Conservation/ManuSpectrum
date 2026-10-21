@@ -99,7 +99,7 @@ for _name in (
     "stats",
     "link-to-project",
 ):
-    IGNORED[f"biblissima-{_name}"] = "back-office import assistant"
+    IGNORED[f"biblissima-{_name}"] = "back-office import workflow"
 
 
 def project_route_names():
