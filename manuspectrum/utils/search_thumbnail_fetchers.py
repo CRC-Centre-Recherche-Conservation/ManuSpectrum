@@ -4,6 +4,7 @@ from arches.app.utils.search_thumbnail_fetcher import SearchThumbnailFetcher
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
+from manuspectrum.iiif.sources import manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
     CanvasIIIF,
@@ -106,7 +107,7 @@ class DocumentThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+            manifest_data = manifest_json(manifest_url)
             if not manifest_data:
                 return None
 
@@ -176,7 +177,7 @@ class ComponentThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+            manifest_data = manifest_json(manifest_url)
             if not manifest_data:
                 return None
 
@@ -274,7 +275,7 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                         break
 
             if manifest_url:
-                manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+                manifest_data = manifest_json(manifest_url)
                 if manifest_data:
                     thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
                     if thumb_url:
@@ -302,7 +303,7 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            manifest_data = CanvasIIIF.fetch_manifest(manifest_url)
+            manifest_data = manifest_json(manifest_url)
             if not manifest_data:
                 return None
 
