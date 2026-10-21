@@ -124,7 +124,7 @@ cmd_check() {
   ok "Cantaloupe lists /imageroot"
 
   # The script is read from stdin and prints a verdict, never a hash or a password.
-  expect "admin keeps Arches' default password" no \
+  expect "admin does not use Arches' default password" no \
     "$(in_web env -u PROMETHEUS_MULTIPROC_DIR python manage.py shell -c "
 from django.contrib.auth import get_user_model
 user = get_user_model().objects.filter(username='admin').first()

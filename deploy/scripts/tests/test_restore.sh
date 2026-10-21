@@ -259,6 +259,7 @@ order = [
     first(r"CREATE DATABASE"),
     first(r"pg_restore"),
     first(r"FLUSHALL"),
+    first(r"DELETE FROM django_session"),
     first(r"--entrypoint sh cantaloupe"),
     first(r"manage migrate"),
     first(r"^make admin-password"),
