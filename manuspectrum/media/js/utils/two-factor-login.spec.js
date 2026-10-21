@@ -136,4 +136,29 @@ describe("two-factor-login", () => {
         vi.resetModules();
         await expect(import("./two-factor-login.js")).resolves.toBeDefined();
     });
+
+    it("falls back to submit() where requestSubmit is missing, once", async () => {
+        const form = await mount(true);
+        const input = form.elements["two-factor-authentication"];
+        form.requestSubmit = undefined;
+        type(input, "123456");
+        type(input, "123456");
+        expect(posts).toBe(1);
+        expect(form.dataset.msSubmitted).toBe("1");
+    });
+
+    it("leaves a page without the form alone", async () => {
+        document.body.innerHTML = "<p>no form</p>";
+        vi.resetModules();
+        await expect(import("./two-factor-login.js")).resolves.toBeDefined();
+    });
+
+    it("leaves a form without the code field alone", async () => {
+        document.body.innerHTML =
+            '<form name="two-factor-authentication-form"></form>';
+        vi.resetModules();
+        await import("./two-factor-login.js");
+        const form = document.forms["two-factor-authentication-form"];
+        expect(form.dataset.msSubmitted).toBeUndefined();
+    });
 });
