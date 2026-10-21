@@ -244,6 +244,37 @@ def workflow_runs(cursor, start, end, now):
     }
 
 
+def workflow_cleanup_state(now):
+    """``{"warned": n, "next_cleanup": ISO date or None}`` from the cleanup ledger.
+
+    *warned* counts the open runs the cleanup pass considers that already
+    received a notice for their current activity; *next_cleanup* is the
+    earliest day one of them may be cleaned. A completed run, a run resumed
+    after its notice or one whose history row is gone is not counted whatever
+    its ledger row says. Read-only.
+    """
+    from manuspectrum.accounts.embargo import LOCAL_TZ
+    from manuspectrum.accounts.workflows import _sent_of, cleanup_on, open_runs
+    from manuspectrum.models import WorkflowCleanup
+
+    runs = open_runs(now)
+    ledgers = {
+        ledger.workflowid: ledger
+        for ledger in WorkflowCleanup.objects.filter(
+            workflowid__in=[run.workflowid for run in runs], cleaned_at__isnull=True
+        )
+    }
+    days = []
+    for run in runs:
+        sent = _sent_of(ledgers.get(run.workflowid), run.last_activity)
+        if sent:
+            days.append(cleanup_on(run.last_activity.astimezone(LOCAL_TZ).date(), sent))
+    return {
+        "warned": len(days),
+        "next_cleanup": min(days).isoformat() if days else None,
+    }
+
+
 def etl_runs(cursor, start, end):
     cursor.execute(
         ETL_SQL,
@@ -337,6 +368,7 @@ def collect(start, end, now=None):
         etl = etl_runs(cursor, start, end)
         anonymised = accounts_anonymised(cursor, start, end)
         inactive = inactive_accounts(now)
+        cleanup = workflow_cleanup_state(now)
     models = {}
     for model in sorted(set(totals) | set(changes)):
         models[model] = {
@@ -349,6 +381,7 @@ def collect(start, end, now=None):
         "models": models,
         "workflows": workflows,
         "workflow_stale_after_days": settings.WORKFLOW_CLEANUP_AFTER_DAYS,
+        "workflow_cleanup": cleanup,
         "etl": etl,
         "inactive_accounts": inactive,
         "accounts_anonymised": anonymised,

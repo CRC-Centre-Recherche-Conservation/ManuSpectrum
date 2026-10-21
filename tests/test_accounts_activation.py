@@ -142,6 +142,17 @@ class InvitationTests(Base):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="accept_terms"')
 
+    def test_each_language_part_links_its_own_language_with_one_token(self):
+        user = invited()
+        self.run_action(user)
+        text_en, text_fr = mail.outbox[0].body.split("-" * 40)
+        pattern = r"/(en|fr)/account/activate/([^\s/]+)/([^\s/]+)"
+        en = re.search(pattern, text_en)
+        fr = re.search(pattern, text_fr)
+        self.assertEqual((en.group(1), fr.group(1)), ("en", "fr"))
+        self.assertEqual(en.group(2, 3), fr.group(2, 3))
+        self.assertFalse(re.search(r"/fr/account/activate/", text_en))
+
     def test_refused_for_a_usable_password_or_no_address(self):
         has_password = User.objects.create_user("p", "p@manuspectrum.test", PASSWORD)
         no_mail = invited("nomail", "")

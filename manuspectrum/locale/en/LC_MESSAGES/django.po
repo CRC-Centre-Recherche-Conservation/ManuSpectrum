@@ -122,11 +122,11 @@ msgstr "Your ManuSpectrum account"
 
 #: accounts/notices.py:169
 msgid ""
-"An account has been created for you on ManuSpectrum. Use the button below to"
+"An account has been created for you on ManuSpectrum. Use the link below to"
 " read the terms of use, accept them, choose your password and set up two-"
 "factor authentication."
 msgstr ""
-"An account has been created for you on ManuSpectrum. Use the button below to"
+"An account has been created for you on ManuSpectrum. Use the link below to"
 " read the terms of use, accept them, choose your password and set up two-"
 "factor authentication."
 
@@ -147,11 +147,11 @@ msgstr "Set up two-factor authentication again"
 
 #: accounts/notices.py:186
 msgid ""
-"Your two-factor authentication was reset by an administrator. Use the button"
+"Your two-factor authentication was reset by an administrator. Use the link"
 " below, type your password and scan the new QR code with your authenticator "
 "application. You will then be signed in."
 msgstr ""
-"Your two-factor authentication was reset by an administrator. Use the button"
+"Your two-factor authentication was reset by an administrator. Use the link"
 " below, type your password and scan the new QR code with your authenticator "
 "application. You will then be signed in."
 
@@ -167,10 +167,10 @@ msgstr "Set up two-factor authentication"
 #: accounts/notices.py:200
 msgid ""
 "The account is deactivated. To keep it, ask for its reactivation through the"
-" contact page (button below) before that date."
+" contact page (link below) before that date."
 msgstr ""
 "The account is deactivated. To keep it, ask for its reactivation through the"
-" contact page (button below) before that date."
+" contact page (link below) before that date."
 
 #: accounts/notices.py:209
 #, python-format
@@ -224,10 +224,10 @@ msgstr "Your ManuSpectrum account was deactivated on %(date)s."
 #: accounts/notices.py:257
 msgid ""
 "If you need it reactivated, contact the team through the contact page "
-"(button below)."
+"(link below)."
 msgstr ""
 "If you need it reactivated, contact the team through the contact page "
-"(button below)."
+"(link below)."
 
 #: accounts/notices.py:263
 #, python-format
@@ -1280,15 +1280,25 @@ msgstr "Error 429 · Conservation lab"
 msgid "Too many failed attempts"
 msgstr "Too many failed attempts"
 
-#: templates/accounts/lockout.htm:13
+#: templates/accounts/lockout.htm:14
+#, python-format
 msgid ""
-"This account is locked for a few minutes from this computer after repeated "
-"sign-in failures. Wait a little, then try again. If you have lost your "
+"This account is locked for %(minutes)s minute from this computer after "
+"repeated sign-in failures. Wait, then try again. If you have lost your "
 "password, use the reset link on the sign-in page."
+msgid_plural ""
+"This account is locked for %(minutes)s minutes from this computer after "
+"repeated sign-in failures. Wait, then try again. If you have lost your "
+"password, use the reset link on the sign-in page."
+msgstr[0] ""
+msgstr[1] ""
+
+#: templates/accounts/lockout.htm:16
+msgid ""
+"This account is locked from this computer after repeated sign-in "
+"failures. Contact the team to unlock it. If you have lost your password, "
+"use the reset link on the sign-in page."
 msgstr ""
-"This account is locked for a few minutes from this computer after repeated "
-"sign-in failures. Wait a little, then try again. If you have lost your "
-"password, use the reset link on the sign-in page."
 
 #: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:69
 #: templates/errors/400.htm:18 templates/errors/403.htm:19
@@ -7194,6 +7204,29 @@ msgstr ""
 #: views/site_notice.py:54
 msgctxt "site notice"
 msgid "Upcoming"
+msgstr ""
+
+#: templates/errors/csrf.htm:3
+msgid "Request expired"
+msgstr ""
+
+#: templates/errors/csrf.htm:4
+msgid "The page you used is out of date."
+msgstr ""
+
+#: templates/errors/csrf.htm:9
+msgid "Error 403"
+msgstr ""
+
+#: templates/errors/csrf.htm:11
+msgid "This page is out of date"
+msgstr ""
+
+#: templates/errors/csrf.htm:13
+msgid ""
+"Your session changed since this page was opened, for example because "
+"you signed in or out in another tab. Go back, reload the page and try "
+"again."
 msgstr ""
 
 #~ msgid "met"

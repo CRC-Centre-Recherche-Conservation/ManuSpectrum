@@ -249,7 +249,7 @@ restore_dump() { # restore_dump DBNAME DUMPFILE
 
 # ------------------------------------------------------------------- step 7
 flush_redis() {
-  step 7 "flushing the Redis caches and the Celery queues (user and resource ids now name other rows)"
+  step 7 "flushing the Redis caches and the Celery queues, clearing the sessions (user and resource ids now name other rows)"
   # redis-cache holds only derived data (default cache, Arches user_permission,
   # Explorer bundles): FLUSHALL. redis-broker: db 0 is the Celery queue (queued
   # tasks name old resource ids) and db 3 the IIIF sign-ins, which a rehearsal
@@ -259,6 +259,9 @@ flush_redis() {
   compose exec -T redis-cache redis-cli FLUSHALL
   compose exec -T redis-broker redis-cli -n 0 FLUSHDB
   compose exec -T redis-broker redis-cli -n 3 FLUSHDB
+  # Sessions signed with another SECRET_KEY (a development snapshot) cannot be
+  # decoded and each one logs « Session data corrupted » at every purge.
+  psql_admin -d "$PGDBNAME" -c "DELETE FROM django_session"
 }
 
 # ------------------------------------------------------------------- step 8

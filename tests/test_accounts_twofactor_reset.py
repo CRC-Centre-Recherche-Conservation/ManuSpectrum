@@ -347,6 +347,16 @@ class AdminActionTests(TestCase):
             fetch_redirect_response=False,
         )
 
+    def test_each_language_part_links_its_own_language_with_one_token(self):
+        enrol(self.alice)
+        self.run_action("reset_two_factor", self.alice)
+        text_en, text_fr = mail.outbox[0].body.split("-" * 40)
+        pattern = r"/(en|fr)/account/two-factor/reset/([^\s/]+)"
+        en = re.search(pattern, text_en)
+        fr = re.search(pattern, text_fr)
+        self.assertEqual((en.group(1), fr.group(1)), ("en", "fr"))
+        self.assertEqual(en.group(2), fr.group(2))
+
     def test_the_bulk_resend_reaches_only_accounts_without_a_secret(self):
         enrol(self.alice)
         self.run_action("send_enrolment_link", self.alice, self.bob, self.nomail)

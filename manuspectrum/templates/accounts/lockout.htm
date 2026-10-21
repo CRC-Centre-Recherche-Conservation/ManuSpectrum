@@ -1,5 +1,5 @@
 {% extends 'ms_base.htm' %}
-{% load i18n %}
+{% load i18n account_tags %}
 {% block page_title %}{% trans "Sign-in locked" %} — ManuSpectrum{% endblock %}
 {% block page_description %}{% trans "Too many failed sign-in attempts." %}{% endblock %}
 {% block extra_head %}<meta name="robots" content="noindex">{% endblock %}
@@ -10,7 +10,7 @@
     <div class="ms-error-code" aria-hidden="true">429</div>
     <h1 class="ms-error-title">{% trans "Too many failed attempts" %}</h1>
     <p class="ms-error-lead">
-        {% trans "This account is locked for a few minutes from this computer after repeated sign-in failures. Wait a little, then try again. If you have lost your password, use the reset link on the sign-in page." %}
+        {% with minutes=cooloff_timedelta|whole_minutes %}{% if minutes %}{% blocktrans count minutes=minutes %}This account is locked for {{ minutes }} minute from this computer after repeated sign-in failures. Wait, then try again. If you have lost your password, use the reset link on the sign-in page.{% plural %}This account is locked for {{ minutes }} minutes from this computer after repeated sign-in failures. Wait, then try again. If you have lost your password, use the reset link on the sign-in page.{% endblocktrans %}{% else %}{% trans "This account is locked from this computer after repeated sign-in failures. Contact the team to unlock it. If you have lost your password, use the reset link on the sign-in page." %}{% endif %}{% endwith %}
     </p>
     <div class="ms-error-actions">
         <a class="ms-error-link" href="{% url 'root' %}">{% trans "Back to the homepage" %}</a>

@@ -709,3 +709,16 @@ class ConcurrencyTests(Fixtures, TransactionTestCase):
                 outcomes = list(pool.map(lift, range(2)))
         self.assertEqual(sorted(o or "" for o in outcomes), ["", "lifted"])
         self.assertEqual(self.row.events.filter(kind=EmbargoEvent.LIFTED).count(), 1)
+
+
+class ReindexTests(TestCase):
+    def test_a_failed_reindex_is_logged_not_raised(self):
+        with (
+            mock.patch.object(
+                embargo.Resource.objects, "get", side_effect=RuntimeError("down")
+            ),
+            self.assertLogs("manuspectrum.accounts.embargo", "ERROR") as logs,
+        ):
+            embargo._reindex(uuid.uuid4())
+
+        self.assertIn("Reindexing a lifted resource failed", logs.output[0])

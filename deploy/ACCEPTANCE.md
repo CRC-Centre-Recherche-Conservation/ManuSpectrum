@@ -21,6 +21,14 @@ Those values (resources, accounts, NFS options, SSH settings...) go in
   A different result is recorded with the full output of the command.
 - All `virsh` commands target `qemu:///system`:
   `export LIBVIRT_DEFAULT_URI=qemu:///system` once per terminal.
+- **The VM clock.** Reverting to a snapshot taken while the VM ran, or taking one of a running VM,
+  leaves the guest clock wrong (days behind after a revert, minutes behind after a live snapshot),
+  and with it every check that reads the time: two-factor codes (TOTP), announcements, the
+  reminders and the `--as-of` passes. Take snapshots with the VM shut down (`virsh shutdown`, wait for
+  `shut off`, `virsh snapshot-create-as`, `virsh start`); after a revert of a running snapshot,
+  `virsh shutdown` and `virsh start` the VM. Before a time-sensitive step (8.3, 8.5, 4.4) run
+  `ssh <admin>@192.168.123.10 timedatectl` → `System clock synchronized: yes` and a time within a
+  few seconds of the host's `date`.
 - On failure, nothing is fixed by hand in the VM: note it, fix the kit, then
   go back to the snapshot and replay. An unwritten manual step is exactly what
   will be missing on moving day.
@@ -139,6 +147,8 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 
 - [ ] Break something on purpose: `ssh -t <admin>@192.168.123.10 'sudo ufw disable'`, then
   `virsh snapshot-revert ms-rehearsal baseline --running` → `sudo ufw status` says `active` again.
+  `baseline` was taken with the VM shut down (1.7), so the guest boots afresh with a right clock; check
+  with `timedatectl` (see « How to read and record »).
 - [ ] Host reboot: `ssh -t <admin>@192.168.123.10 'sudo reboot'`, wait
   2 min → SSH answers, `findmnt /data` still mounts, `sudo ./verify-baseline.sh` all `OK`.
 - [ ] If `UNATTENDED_REBOOT=true` in `rehearsal.env`:
@@ -205,7 +215,8 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   `group_add: APP_GID`. Files that web or worker write later get `0644` (umask 022).
   Over NFS the export must keep the uid and gid (no `root_squash` remapping of them).
 - [ ] *(service account)* the repository is at `~/manuspectrum` at the commit under test:
-  `git clone --recurse-submodules https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`,
+  `git clone --recurse-submodules https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`
+  (the target name is part of the command: the clone is `~/manuspectrum`, lowercase, as in every path of this page),
   `git -C manuspectrum checkout <commit>`, `git -C manuspectrum submodule update --init`,
   `git -C manuspectrum log -1 --format=%H` → `<commit>`.
 - [ ] *(service account)* `cp deploy/compose/.env.example deploy/compose/.env`, then set
@@ -312,7 +323,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   often on a new host:
   - `ok: database collation and encoding` (`en_US.utf8|UTF8`);
   - `ok: standard_conforming_strings` (the value is `off`: Arches needs it);
-  - `ok: admin keeps Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
+  - `ok: admin does not use Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
   - `ok: /healthz for the public name` (`200`) then
     `ok: /healthz for Host localhost (not allowed)` (`400`): gunicorn answers
     `Host: web` and the `DOMAIN_NAMES` only.
@@ -642,6 +653,9 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   site's 403 page, with one → answered by Django.
   `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://manuspectrum.test/fr/temp_file` → `404`
   (a GET reaches Django).
+  - From the browser, the GeoJSON export is offered only with a resource-type filter set and fewer than
+    2 000 results; without a filter, or above that count, the option is absent (not a fault). Filter on one
+    resource type first, signed in, to test it; the `curl` forms above do not depend on it.
 - [ ] `/files/uploadedfiles/<any stored name>` direct → `404` (bytes only follow `FileView`, 4.5).
 - [ ] 429 after a burst on the sign-in: `for i in $(seq 7); do curl -s -o /dev/null -w '%{http_code} ' -X POST https://manuspectrum.test/en/auth/; done`
   → the first six answered by Django (any code but 429, CSRF refusals included), the seventh `429`
@@ -661,6 +675,10 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   counts the wait in the queue; the field is a string, a comma list when nginx retried). Meanwhile,
   sample the busy threads several times:
   `dc exec -T web curl -s -H 'Host: web' http://127.0.0.1:8000/metrics | grep '^manuspectrum_inflight_requests '`.
+  No load script is versioned. To drive the annotation requests from a script, read the manifest from the copy
+  stored in the database (`/manifest/<uuid>`) or from a manifest the site serves: a script cannot fetch the
+  holding institution's manifest (Gallica answers `403` to every client that is not a browser), and the rehearsal's local CA
+  does not validate public hosts.
   - Expected: about 9 in flight plus the scrape, well under 20; the `annotations_site` rate is about
     `9 / p95` per second, which keeps ~11 of the 20 threads free. When it differs from the current
     `20r/s` in `snippets/ratelimit.conf`, change it there and the « rate x service time » line of the
@@ -676,6 +694,38 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   `503` with the site's 500 page (`manuspectrum/templates/errors/500.htm`, self-contained), then
   `dc start web` → the site answers again with no nginx restart.
   - On failure: the bind of `500.htm` in `compose.yaml` is missing (`nginx -t` fails to start nginx).
+
+### 4.4b Site announcements (`SiteNotice`, PR #206)
+
+Admin → **Site announcements**; times are Paris time and the server caches `/api/site-notice` for 60 seconds, so a
+change shows within a minute (reload after waiting). Browser in a private window as a visitor, plus the
+`curl` of the API. Saving is enough: there is no « published » box. The VM clock must be right (`timedatectl`,
+« How to read and record »). Delete the test announcements at the end.
+
+- [ ] *Event with reminders*: a Maintenance announcement, display « Event with reminders », start 30 minutes
+  ahead and end 30 minutes later, reminders `10m 2m`, a text in English and in French.
+  `curl -s https://manuspectrum.test/api/site-notice` lists it with its start and end (UTC) and the reminders in seconds.
+  - Expected: before the first reminder nothing shows; then the banner « Maintenance · Upcoming » with the date and time
+    on the homepage, About, `/fr/discover`, `/fr/search` and the sign-in page, in the page language; readable on scroll
+    and at 390 px width.
+- [ ] Close it with the cross: it does not return on another page or in a second private window. At the next reminder,
+  after a reload, it returns. At the start it reads « In progress » with the end time.
+- [ ] Edit the text while it is shown: a visitor who closed it sees it again with the new text (the version changes);
+  closing it again keeps it closed. Two announcements active together: the closed one stays closed and the other shows.
+- [ ] At the end time the banner disappears from a page left open, and the announcement stays listed in the admin as ended.
+- [ ] *Web stopped during an event*: *(service account)* `dc stop web` while an event is in progress, then
+  `curl -s -o /dev/null -w '%{http_code}\n' https://manuspectrum.test/fr/` → `502` (or `503`) with the site's error page
+  showing the real status code (`<div class="code" id="ms-code">502</div>`) and the announcement box above it, in the
+  language of the URL. `curl -s https://manuspectrum.test/api/site-notice` still answers the announcement (nginx serves the
+  snapshot of the `site_notice` volume). `dc start web` → the site answers within about a minute with no nginx restart.
+  - On failure: the box is missing = the volume snapshot is not written (`SITE_NOTICE_SNAPSHOT_DIR` on `web`, README) or the
+    `@site_notice_snapshot` location is missing.
+- [ ] *Shown once until a date*: an Information announcement, display « Shown once until a date », a start now, an end
+  later, a details link with its two labels (English and French, in the right order): a banner with no date and no
+  « Upcoming », shown at once; closed, it does not return after a reload or on other pages.
+- [ ] *Preview*: an announcement dated in the future is absent from the page; its **View on site** button in the admin opens
+  the homepage with it shown (`/?ms-notice-preview=<id>`).
+- [ ] Delete the announcements: `curl -s https://manuspectrum.test/api/site-notice` → no notice, within a minute the banners are gone.
 
 ### 4.5 Files and images
 
@@ -731,6 +781,15 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   `iiif.unicaen.fr` on the homepage; for signed-in editors `cke4.ckeditor.com`, and
   `svc.webspellchecker.net` only if the spell checker is switched on; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
   the CSP Report-Only violations: copy them into the issue for F5.
+- [ ] *Map tile load*: signed in or not, open `/fr/search`, switch on several resource layers on the map, then pan and zoom
+  quickly for one minute. Meanwhile, *(service account)* every 15 seconds read the open scroll contexts:
+  `dc exec -T elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/stats/indices/search?filter_path=**.open_contexts"'`.
+  - Expected: no `500` on `/mvt/` in the access log (`grep -c '/mvt/.*"status":500' $LOG/access.log` → `0`; `429` from the
+    edge `tiles` zone may appear under extreme panning, record the count), no « too many scroll contexts » in
+    `dc logs web --since 5m`, no « putting on 30 second timeout », the open contexts stay low (tens, far below the 500
+    allowed by `search.max_open_scroll_context`), the polygons are drawn whole and a text search still works right after.
+  - On failure: the permission framework in use is not the project's (`PERMISSION_FRAMEWORK`, E20): each tile opens a scroll
+    context that Arches' default framework never closes, and a map with several layers exhausts them within a minute.
 
 ### 4.7 Restart paths
 
@@ -1153,6 +1212,10 @@ as the only memory.
   fourteen steps, `done`; `smoke.sh check` → only `ok:` lines; `make -C deploy secrets-check` → all `ok`.
   `SECRETS_DIR` and `.env` are what the operator put there, **not** what the snapshot held
   (`restore` never writes them).
+- [ ] *(service account)* Before the beat schedule is enabled again after a restore or a long outage, run
+  `make -C deploy manage ARGS="prune_workflow_history"` (dry run) and read who would be warned and which workflows cleaned:
+  a run found already past its delay receives both notices (21 and 7 days) the same day and is cleaned a week later.
+  Warn those people, or delay the first pass, before the schedule starts (`ADMIN.md`, « Abandoned workflows »).
 - [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env "${SECRETS_DIR:?}/aside"`; then
   `make -C deploy backup` → `done` (the first backup on the restored stack).
 
@@ -1188,6 +1251,15 @@ of step 2. A rehearsal has no mail relay: it uses the Mailpit profile (`COMPOSE_
 `EMAIL_HOST=mailpit`, `EMAIL_PORT=1025`), whose API is read from the `web` container (same network; the
 busybox `wget` of `prometheus` fails with `bad address` when the host `resolv.conf` has `search .`):
 `dc exec -T web curl -fsS http://mailpit:8025/api/v1/messages`.
+
+**Reading a mail link.** Never copy a link from a terminal display or from the raw source of a mail: the text part
+is quoted-printable, which cuts long lines with `=` and a line break and writes `=` as `=3D`, and a link cut or
+altered that way is refused (an activation or reset link answers `410`). Print the decoded text through the API;
+its `Text` field is already decoded. List the messages, then print one:
+`dc exec -T web curl -fsS http://mailpit:8025/api/v1/messages | python3 -c 'import json,sys; [print(m["ID"], m["Subject"]) for m in json.load(sys.stdin)["messages"]]'`
+`dc exec -T web curl -fsS http://mailpit:8025/api/v1/message/<ID> | python3 -c 'import json,sys; print(json.load(sys.stdin)["Text"])'`
+Each link is on one line in that output (the `HTML` field holds the HTML part). Open it from there, or from the Mailpit
+web page, without retyping it.
 
 **What CI already proves.** `check-stack.sh` validates the configuration (`compose/observability/check.sh`: promtool
 and amtool checks, the rule unit tests, the dashboards), the host-metrics, monitoring-init and monthly-report
@@ -1268,6 +1340,8 @@ reboot.
   → a `RESOLVED` mail.
 - [ ] `chmod 000 "$RESTIC_REPOSITORY_DIR"`, `make -C deploy backup TAG=manual` fails, `BackupFailed` mails;
   `chmod 700` it back and run the backup again.
+- [ ] On a test host whose disk stays full, `DiskAlmostFull` (critical) is mailed again every 4 hours, also at night
+  (`repeat_interval: 4h` of the critical route in `alertmanager.yml.in`): expected, not a fault.
 - [ ] Fill a sparse file on `/` beyond 80 %: `fallocate -l <size> /var/tmp/fill` → after 30 minutes `DiskUsageHigh`
   (warning) is in `make -C deploy alerts`, mailed only on a weekday between 08:00 and 19:00; remove the file.
 - [ ] A certificate that expires within a few days (`make certs-local` with a short validity, or the renewal timer
@@ -1327,20 +1401,26 @@ Create the test accounts in the admin and delete them afterwards.
   included), then a right one: the answer is the lockout page, `429`, not a sign-in. The same user signs in from another
   address, and after 15 minutes from this one.
   - Expected: `manuspectrum_auth_lockouts_total` increases by one (`smoke.sh` metrics or Prometheus), the admin lists
-    the row in "Access attempts". Keep the five attempts inside one minute or the edge answers `429` first (rate limit
-    of the sign-in routes, 4.3).
+    the row in "Access attempts". Space the attempts by about 30 seconds: the edge `auth` zone
+    (`snippets/ratelimit.conf`: `rate=5r/m`, `burst=5 nodelay`, applied in `edge-rules.conf`) counts POSTs
+    and one sign-in attempt is two POSTs, so five attempts inside a minute exhaust it at the third or fourth and the
+    edge answers its own `429` before the lockout (4.3). The lockout page is the site's, with the Home and Contact links.
 - [ ] `make -C deploy manage ARGS="axes_reset_username <user>"` unlocks at once.
 
 ### 8.3 Invitation, activation, terms and two-factor
 
 - [ ] In the admin create a user with an e-mail and no password, run **Send invitation**: Mailpit holds one message
   with the subject prefix `[ManuSpectrum][Account]` and the header `X-ManuSpectrum-Category: Account`, English then French.
-- [ ] Open the link: the terms of use are shown with a required checkbox; submitting without it is refused; with it, set a
+- [ ] Open the link (read it as in « Reading a mail link » of step 7: a link cut at a line break answers `410`):
+  the terms of use are shown with a required checkbox; submitting without it is refused; with it, set a
   password (an 11-character or common one is refused), then enrol an authenticator at `/en/account/two-factor`.
   The admin lists the acceptance (version, date) under "Terms acceptances".
 - [ ] Sign out and in again with the code. A POST to `/en/account/two-factor` and `/en/account/terms` repeated 7 times in
   a minute gets `429` from the edge.
-- [ ] Bump `TERMS_VERSION` (rehearsal image only): the next page after sign-in is the acceptance page.
+- [ ] Bump `TERMS_VERSION` (rehearsal image only) and sign in with a test user of this step who accepted the previous
+  version, not the administrator who set the stack up: the next page after sign-in is the acceptance page. A person
+  who has not accepted yet sees the terms at activation instead, and the acceptance page does not appear
+  for an account that already accepted the current version.
 - [ ] The activation link redirects at once to a URL without the token (`.../set-password`), and the nginx access log
   shows `[redacted]` for the activation path in both `uri` and `referer`.
 - [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`. Invite and activate a second test user:
@@ -1348,7 +1428,8 @@ Create the test accounts in the admin and delete them afterwards.
   code is confirmed. Check in the browser that the enrolment page works fully (QR code, manual key, confirmation)
   for that not-yet-enrolled user. An enrolled user signs in with the code.
 - [ ] Lost phone, with forced two-factor still on: as a superuser, run **Reset two-factor authentication (superuser)**
-  on the user's profile. Mailpit holds the re-enrolment mail; the link asks for the password (a wrong one counts as a
+  in the admin under **User profiles** (the profile list, not the User page: tick the profile, choose the action).
+  Mailpit holds the re-enrolment mail; the link asks for the password (a wrong one counts as a
   failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
 - [ ] `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W004` (no OAuth application with the
   password grant). Put `FORCE_TWO_FACTOR_AUTHENTICATION` back to `false` if the rehearsal continues without it.
@@ -1361,8 +1442,12 @@ Create the test accounts in the admin and delete them afterwards.
 
 ### 8.5 Embargo and workflow cleanup
 
-- [ ] Restrict a test resource: within a day the pass (or `make -C deploy manage ARGS="release_expired_embargoes --apply"`)
-  gives it an Embargo dated 12 months out, with the events `detected` and `dated` in the admin. Shorten its "Ends on"
+- [ ] Restrict a test resource: in the resource's permission manager (Arches), set **No Access** for the user
+  `anonymous` or the group Guest (« No Access » for any other user or group is not a restriction here: the visitor still
+  gets `200` and `release_expired_embargoes` finds nothing). The visitor now gets `403`, and the Embargo row is created
+  as soon as the permissions are saved, listed in the admin under Embargoes with an end 12 months out
+  (the daily pass, or `make -C deploy manage ARGS="release_expired_embargoes --apply"`, only records a restriction that has no row yet).
+  Shorten its "Ends on"
   to tomorrow in the admin; `make -C deploy manage ARGS="release_expired_embargoes"` lists nothing to lift yet. Rehearse
   the lift with `release_expired_embargoes --as-of <the day after tomorrow, YYYY-MM-DD> --apply` (an end date cannot be set in
   the past; rehearsal only: `--as-of` with `--apply` is refused when `DEPLOY_ENVIRONMENT=production`): the resource is public, the creator got the "now public" mail in Mailpit, the history shows the lift,
@@ -1389,7 +1474,7 @@ Create the test accounts in the admin and delete them afterwards.
 ### 8.7 Report
 
 - [ ] `make -C deploy report-test`: the message has the sections "Comptes inactifs", "Verrouillages de comptes",
-  "Restrictions (embargos)", "Assistants abandonnés nettoyés" and "Courriels de compte", and lists the accounts created
+  "Restrictions (embargos)", "Workflows abandonnés nettoyés" and "Courriels de compte", and lists the accounts created
   in 8.3 under "jamais connectés" only once they are three months old.
 
 ### 8.8 What cannot be tested in rehearsal

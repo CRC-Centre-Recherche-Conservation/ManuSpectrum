@@ -122,6 +122,11 @@ class Activity:
                     raise TypeError(key)
             int(data["workflow_stale_after_days"])
             int(data["accounts_anonymised"])
+            cleanup = data.get("workflow_cleanup")
+            if cleanup:
+                int(cleanup["warned"])
+                if cleanup["next_cleanup"] is not None:
+                    str(cleanup["next_cleanup"])
             for rows in data["inactive_accounts"].values():
                 for username, last_login, joined in rows:
                     str(username), str(joined)
@@ -596,7 +601,7 @@ def contents(activity):
             f"{plural(row['modified'], 'modifiée')}, "
             f"{plural(row['deleted'], 'supprimée')}"
             + (
-                f", {plural(row['cleaned'], 'nettoyée')} (assistant abandonné)"
+                f", {plural(row['cleaned'], 'nettoyée')} (workflow abandonné)"
                 if row["cleaned"]
                 else ""
             )
@@ -661,10 +666,17 @@ def workflows(prom, activity, start, end):
         lines.append(f"annulés par l'utilisateur : {count(cancelled)}")
     if open_total:
         days = data["workflow_stale_after_days"]
-        lines.append(
+        line = (
             f"inachevés à la date du rapport : {open_total}, dont {stale_total} "
             f"commencés il y a plus de {days} jours (délai du nettoyage)"
         )
+        cleanup = data.get("workflow_cleanup") or {}
+        if cleanup.get("warned"):
+            line += (
+                f" ; {cleanup['warned']} déjà prévenu(s), prochain nettoyage le "
+                f"{french_date(cleanup['next_cleanup'])}"
+            )
+        lines.append(line)
     return lines or ["aucune activité"]
 
 
@@ -699,12 +711,12 @@ def workflow_cleanups(prom, start, end):
         if round(rows.get(key, 0)) > 0
     ]
     if not parts:
-        return ["aucun assistant abandonné n'a été nettoyé"]
-    lines = ["assistants abandonnés : " + ", ".join(parts)]
+        return ["aucun workflow abandonné n'a été nettoyé"]
+    lines = ["workflows abandonnés : " + ", ".join(parts)]
     deleted, conserved = round(kept.get("deleted", 0)), round(kept.get("kept", 0))
     if deleted or conserved:
         lines.append(
-            f"ressources créées par ces assistants : {deleted} supprimée(s), "
+            f"ressources créées par ces workflows : {deleted} supprimée(s), "
             f"{conserved} conservée(s)"
         )
     return lines
@@ -879,8 +891,8 @@ def build_body(prom, activity, label, start, end, now):
         ("Alertes du mois", alerts),
         ("Consultations", consultations),
         ("Contenus", lambda p, a, b: contents(activity)),
-        ("Assistants", lambda p, a, b: workflows(p, activity, a, b)),
-        ("Assistants abandonnés nettoyés", workflow_cleanups),
+        ("Workflows", lambda p, a, b: workflows(p, activity, a, b)),
+        ("Workflows abandonnés nettoyés", workflow_cleanups),
         ("Restrictions (embargos)", embargoes),
         ("Imports et exports en masse", lambda p, a, b: bulk_runs(activity)),
         ("Connexions", logins),

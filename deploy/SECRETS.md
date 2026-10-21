@@ -142,7 +142,13 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(64), end="")' |
   make -C deploy secret-set NAME=django_secret_key FORCE=yes
 make -C deploy down up
 deploy/compose/smoke.sh check
+make -C deploy manage ARGS='shell -c "from django.contrib.sessions.models import Session; Session.objects.all().delete()"'
 ```
+
+The last command clears the sessions signed with the old key: left in
+`django_session`, each one logs « Session data corrupted » whenever the
+anonymisation pass decodes it. (`load-snapshot` and `restore` clear them
+themselves.)
 
 Everyone is logged out; reset links, IIIF tokens and invitation links in
 flight become invalid, and every enrolled two-factor secret becomes unreadable

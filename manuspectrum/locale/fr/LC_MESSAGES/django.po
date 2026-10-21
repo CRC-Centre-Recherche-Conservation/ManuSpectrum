@@ -123,12 +123,12 @@ msgstr "Votre compte ManuSpectrum"
 
 #: accounts/notices.py:169
 msgid ""
-"An account has been created for you on ManuSpectrum. Use the button below to"
+"An account has been created for you on ManuSpectrum. Use the link below to"
 " read the terms of use, accept them, choose your password and set up two-"
 "factor authentication."
 msgstr ""
-"Un compte a été créé pour vous sur ManuSpectrum. Utilisez le bouton ci-"
-"dessous pour lire les conditions d'utilisation, les accepter, choisir votre "
+"Un compte a été créé pour vous sur ManuSpectrum. Utilisez le lien ci-dessous "
+"pour lire les conditions d'utilisation, les accepter, choisir votre "
 "mot de passe et configurer l'authentification à deux facteurs."
 
 #: accounts/notices.py:173
@@ -148,12 +148,12 @@ msgstr "Configurer à nouveau l'authentification à deux facteurs"
 
 #: accounts/notices.py:186
 msgid ""
-"Your two-factor authentication was reset by an administrator. Use the button"
+"Your two-factor authentication was reset by an administrator. Use the link"
 " below, type your password and scan the new QR code with your authenticator "
 "application. You will then be signed in."
 msgstr ""
 "Votre authentification à deux facteurs a été réinitialisée par un "
-"administrateur. Utilisez le bouton ci-dessous, saisissez votre mot de passe "
+"administrateur. Utilisez le lien ci-dessous, saisissez votre mot de passe "
 "et scannez le nouveau code QR avec votre application d'authentification. "
 "Vous serez ensuite connecté."
 
@@ -170,10 +170,10 @@ msgstr "Configurer l'authentification à deux facteurs"
 #: accounts/notices.py:200
 msgid ""
 "The account is deactivated. To keep it, ask for its reactivation through the"
-" contact page (button below) before that date."
+" contact page (link below) before that date."
 msgstr ""
 "Le compte est désactivé. Pour le conserver, demandez sa réactivation par la "
-"page de contact (bouton ci-dessous) avant cette date."
+"page de contact (lien ci-dessous) avant cette date."
 
 #: accounts/notices.py:209
 #, python-format
@@ -227,10 +227,10 @@ msgstr "Votre compte ManuSpectrum a été désactivé le %(date)s."
 #: accounts/notices.py:257
 msgid ""
 "If you need it reactivated, contact the team through the contact page "
-"(button below)."
+"(link below)."
 msgstr ""
 "Si vous souhaitez le réactiver, contactez l'équipe par la page de contact "
-"(bouton ci-dessous)."
+"(lien ci-dessous)."
 
 #: accounts/notices.py:263
 #, python-format
@@ -1308,16 +1308,37 @@ msgstr "Erreur 429 · Laboratoire de conservation"
 msgid "Too many failed attempts"
 msgstr "Trop d'échecs de connexion"
 
-#: templates/accounts/lockout.htm:13
+#: templates/accounts/lockout.htm:14
+#, python-format
 msgid ""
-"This account is locked for a few minutes from this computer after repeated "
-"sign-in failures. Wait a little, then try again. If you have lost your "
+"This account is locked for %(minutes)s minute from this computer after "
+"repeated sign-in failures. Wait, then try again. If you have lost your "
 "password, use the reset link on the sign-in page."
+msgid_plural ""
+"This account is locked for %(minutes)s minutes from this computer after "
+"repeated sign-in failures. Wait, then try again. If you have lost your "
+"password, use the reset link on the sign-in page."
+msgstr[0] ""
+"Ce compte est verrouillé pendant %(minutes)s minute depuis cet ordinateur "
+"après plusieurs échecs de connexion. Patientez, puis réessayez. Si vous avez "
+"perdu votre mot de passe, utilisez le lien de réinitialisation de la page de "
+"connexion."
+msgstr[1] ""
+"Ce compte est verrouillé pendant %(minutes)s minutes depuis cet ordinateur "
+"après plusieurs échecs de connexion. Patientez, puis réessayez. Si vous avez "
+"perdu votre mot de passe, utilisez le lien de réinitialisation de la page de "
+"connexion."
+
+#: templates/accounts/lockout.htm:16
+msgid ""
+"This account is locked from this computer after repeated sign-in "
+"failures. Contact the team to unlock it. If you have lost your password, "
+"use the reset link on the sign-in page."
 msgstr ""
-"Ce compte est verrouillé pour quelques minutes depuis cet ordinateur après "
-"plusieurs échecs de connexion. Patientez un peu, puis réessayez. Si vous "
-"avez perdu votre mot de passe, utilisez le lien de réinitialisation de la "
-"page de connexion."
+"Ce compte est verrouillé depuis cet ordinateur après plusieurs échecs de "
+"connexion. Contactez l'équipe pour le déverrouiller. Si vous avez perdu "
+"votre mot de passe, utilisez le lien de réinitialisation de la page de "
+"connexion."
 
 #: templates/accounts/lockout.htm:16 templates/accounts/two_factor.htm:69
 #: templates/errors/400.htm:18 templates/errors/403.htm:19
@@ -7337,6 +7358,32 @@ msgstr ""
 msgctxt "site notice"
 msgid "Upcoming"
 msgstr "À venir"
+
+#: templates/errors/csrf.htm:3
+msgid "Request expired"
+msgstr "Demande expirée"
+
+#: templates/errors/csrf.htm:4
+msgid "The page you used is out of date."
+msgstr "La page utilisée est périmée."
+
+#: templates/errors/csrf.htm:9
+msgid "Error 403"
+msgstr "Erreur 403"
+
+#: templates/errors/csrf.htm:11
+msgid "This page is out of date"
+msgstr "Cette page est périmée"
+
+#: templates/errors/csrf.htm:13
+msgid ""
+"Your session changed since this page was opened, for example because "
+"you signed in or out in another tab. Go back, reload the page and try "
+"again."
+msgstr ""
+"Votre session a changé depuis l'ouverture de cette page, par exemple "
+"parce que vous vous êtes connecté ou déconnecté dans un autre onglet. "
+"Revenez en arrière, rechargez la page et réessayez."
 
 #~ msgid "met"
 #~ msgstr "respectée"

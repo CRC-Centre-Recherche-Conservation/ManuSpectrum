@@ -33,6 +33,9 @@ FUNCTION_LOCATIONS.append("manuspectrum.functions")
 ETL_MODULE_LOCATIONS.append("manuspectrum.etl_modules")
 SEARCH_COMPONENT_LOCATIONS.append("manuspectrum.search_components")
 
+# Resolved under manuspectrum/permissions/ (see the module docstring).
+PERMISSION_FRAMEWORK = "default_allow.ManuSpectrumDefaultAllowPermissionFramework"
+
 LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, "locale"))
 
 FILE_TYPE_CHECKING = "lenient"
@@ -122,14 +125,17 @@ ELASTICSEARCH_PREFIX = "manuspectrum"
 
 # arches_controlled_lists indexes reference-datatype values in their own ES
 # index, separate from the resource index, so list items stay searchable as
-# terms. Adding an entry here requires a reindex.
+# terms. Adding an entry here requires a reindex. It is updated synchronously:
+# `Resource.index` queues the task inside the tile transaction, before the
+# COMMIT, so the worker fails to read the tile (and the index does nothing for
+# a resource anyway).
 REFERENCES_INDEX_NAME = "references"
 
 ELASTICSEARCH_CUSTOM_INDEXES = [
     {
         "module": "arches_controlled_lists.search_indexes.reference_index.ReferenceIndex",
         "name": REFERENCES_INDEX_NAME,
-        "should_update_asynchronously": True,
+        "should_update_asynchronously": False,
     }
 ]
 # [{
@@ -1032,6 +1038,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # once every account is enrolled (production: FORCE_TWO_FACTOR_AUTHENTICATION=true).
 ENABLE_TWO_FACTOR_AUTHENTICATION = True
 FORCE_TWO_FACTOR_AUTHENTICATION = False
+# A repeated post of the second-factor code is redirected, any other CSRF
+# failure gets a page of the site (manuspectrum/accounts/csrf_failure.py).
+CSRF_FAILURE_VIEW = "manuspectrum.accounts.csrf_failure.csrf_failure"
 
 ####### SIGN-IN LOCKOUT AND LOGIN RECORDS #######
 # Five failures lock one account for 15 minutes from one client address; the

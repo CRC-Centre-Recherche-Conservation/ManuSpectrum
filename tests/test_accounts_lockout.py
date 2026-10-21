@@ -61,6 +61,34 @@ class LockoutTests(TestCase):
         response = post(self.client, "/fr/auth/", username="alice", password=PASSWORD)
         self.assertContains(response, "Erreur 429", status_code=429)
 
+    def test_the_lockout_page_gives_the_duration(self):
+        self.fail(5)
+        response = post(self.client, "/en/auth/", username="alice", password=PASSWORD)
+        self.assertContains(response, "locked for 15 minutes", status_code=429)
+
+    def test_the_lockout_page_gives_the_duration_in_french(self):
+        self.fail(5, path="/fr/auth/")
+        response = post(self.client, "/fr/auth/", username="alice", password=PASSWORD)
+        self.assertContains(response, "pendant 15 minutes", status_code=429)
+
+    def test_without_a_cool_off_the_lockout_page_gives_no_duration(self):
+        with override_settings(AXES_COOLOFF_TIME=None):
+            self.fail(5)
+            response = post(
+                self.client, "/en/auth/", username="alice", password=PASSWORD
+            )
+        self.assertContains(response, "Too many failed attempts", status_code=429)
+        self.assertContains(response, "Contact the team to unlock it", status_code=429)
+        self.assertNotContains(response, "locked for", status_code=429)
+
+    def test_whole_minutes_is_none_for_anything_but_a_timedelta(self):
+        from manuspectrum.templatetags.account_tags import whole_minutes
+
+        self.assertIsNone(whole_minutes(""))
+        self.assertIsNone(whole_minutes(None))
+        self.assertEqual(whole_minutes(timedelta(seconds=10)), 1)
+        self.assertEqual(whole_minutes(timedelta(minutes=15)), 15)
+
     def test_four_failures_do_not_lock(self):
         self.fail(4)
         response = post(self.client, "/en/auth/", username="alice", password=PASSWORD)

@@ -11,7 +11,7 @@
 {% endfor %}{% for item in section.items_after %}
 - {{ item.name }}{% if item.url %} ({{ item.url }}){% endif %}{% endfor %}{% if section.items_after %}
 {% endif %}{% if section.link %}
-{{ section.button }}: {{ section.link }}
+{{ section.button }}{% if section.language == "fr" %} {% endif %}: {{ section.link }}
 {% endif %}
 {{ section.footnote }}{% if section.contact_email %} {{ section.contact_email }}{% endif %}
 {% endfor %}{% endautoescape %}

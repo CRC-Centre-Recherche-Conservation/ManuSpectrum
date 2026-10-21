@@ -122,6 +122,41 @@ class AccountMailTests(TestCase):
         self.assertIn("Activate my account", message.body)
         self.assertIn("Activer mon compte", message.body)
 
+    def test_each_language_part_carries_its_own_link(self):
+        links = {
+            "en": "https://manuspectrum.test/en/account/activate/u/t",
+            "fr": "https://manuspectrum.test/fr/account/activate/u/t",
+        }
+        context = {**CONTEXTS["invitation"], "link": links}
+        notices.send_account_mail(self.user, "invitation", context)
+        message = mail.outbox[0]
+        text_en, text_fr = message.body.split("-" * 40)
+        self.assertIn(links["en"], text_en)
+        self.assertNotIn("/fr/", text_en)
+        self.assertIn(links["fr"], text_fr)
+        self.assertNotIn("/en/", text_fr)
+        html = message.alternatives[0][0]
+        html_en, html_fr = html.split('lang="fr"', 1)
+        self.assertIn(f'href="{links["en"]}"', html_en)
+        self.assertNotIn(links["fr"], html_en.split("</div>")[0])
+        self.assertIn(f'href="{links["fr"]}"', html_fr)
+
+    def test_the_text_version_has_french_typography_and_no_button(self):
+        for kind in ("invitation", "deactivation_notice"):
+            with self.subTest(kind=kind):
+                mail.outbox.clear()
+                self.send(kind)
+                body = mail.outbox[0].body
+                self.assertNotIn("button", body)
+                self.assertNotIn("bouton", body)
+        mail.outbox.clear()
+        self.send("invitation")
+        self.assertIn("Activate my account: http", mail.outbox[0].body)
+        self.assertIn("Activer mon compte\u00a0: http", mail.outbox[0].body)
+        mail.outbox.clear()
+        self.send("deactivation_notice")
+        self.assertIn("Contacter l'équipe\u00a0: http", mail.outbox[0].body)
+
     def test_inactive_or_address_less_users_are_skipped(self):
         inactive = User.objects.create_user(
             "bob", "bob@manuspectrum.test", "x", is_active=False

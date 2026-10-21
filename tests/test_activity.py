@@ -210,6 +210,68 @@ class WorkflowAndEtlTests(ActivityCase):
         )
         self.assertEqual(self.figures()["workflows"][name]["stale"], 0)
 
+    def ledger_run(self, sent, completed=False, history=True, resumed=False, **extra):
+        """An open run idle for the delay + 5 days and its ledger row."""
+        from manuspectrum.models import WorkflowCleanup
+
+        idle_since = NOW - timedelta(days=settings.WORKFLOW_CLEANUP_AFTER_DAYS + 5)
+        workflowid = uuid.uuid4()
+        if history:
+            self.run_row_id(workflowid, idle_since, completed)
+        if resumed:
+            EditLog.objects.create(
+                transactionid=workflowid,
+                resourceinstanceid=str(uuid.uuid4()),
+                userid="1",
+                edittype="tile edit",
+                timestamp=local(NOW - timedelta(days=1)),
+            )
+        return WorkflowCleanup.objects.create(
+            workflowid=workflowid,
+            workflowname="create-project-workflow",
+            last_activity=idle_since,
+            notices_sent=sent,
+            **extra,
+        )
+
+    def run_row_id(self, workflowid, created, completed):
+        return WorkflowHistory.objects.create(
+            workflowid=workflowid,
+            workflowname="create-project-workflow",
+            created=local(created),
+            completed=completed,
+        )
+
+    def test_the_cleanup_ledger_gives_the_warned_runs_and_the_next_cleanup_day(self):
+        self.ledger_run(["21@2026-09-01", "7@2026-09-15"])
+        self.ledger_run(["7@2026-10-01"])
+        self.ledger_run(["7@2026-09-15"], cleaned_at=NOW)
+        self.ledger_run([])
+        state = self.figures()["workflow_cleanup"]
+        self.assertEqual(state["warned"], 2)
+        self.assertEqual(state["next_cleanup"], "2026-10-04")
+
+    def test_a_completed_run_is_not_counted_as_warned(self):
+        self.ledger_run(["7@2026-09-15"], completed=True)
+        self.assertEqual(self.figures()["workflow_cleanup"]["warned"], 0)
+
+    def test_a_run_resumed_after_its_notice_is_not_counted_as_warned(self):
+        self.ledger_run(["7@2026-09-15"], resumed=True)
+        self.assertEqual(
+            self.figures()["workflow_cleanup"], {"warned": 0, "next_cleanup": None}
+        )
+
+    def test_a_run_whose_history_row_is_gone_is_not_counted_as_warned(self):
+        self.ledger_run(["7@2026-09-15"], history=False)
+        self.assertEqual(
+            self.figures()["workflow_cleanup"], {"warned": 0, "next_cleanup": None}
+        )
+
+    def test_without_any_warned_run_there_is_no_cleanup_day(self):
+        self.assertEqual(
+            self.figures()["workflow_cleanup"], {"warned": 0, "next_cleanup": None}
+        )
+
     def load(self, slug, status, at, etl_type="import"):
         module = ETLModule.objects.filter(
             slug=slug
@@ -438,6 +500,7 @@ class MonthTests(ActivityCase):
                 "models",
                 "workflows",
                 "workflow_stale_after_days",
+                "workflow_cleanup",
                 "etl",
                 "inactive_accounts",
                 "accounts_anonymised",

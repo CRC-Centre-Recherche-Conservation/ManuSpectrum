@@ -12,6 +12,9 @@ waits, encrypted, in the session. An enrolled user must give a current code to
 replace or remove the secret. Removing is refused when
 `FORCE_TWO_FACTOR_AUTHENTICATION` is on.
 
+The page that confirms a first enrolment (the end of the account activation)
+offers a « Continue » button to the home page.
+
 With `FORCE_TWO_FACTOR_AUTHENTICATION` on, `RequireTwoFactorMiddleware` keeps a
 signed-in user without a secret on the enrolment page. A user whose secret was
 cleared by an administrator (lost device, new `SECRET_KEY`) cannot sign in to
@@ -165,11 +168,14 @@ class TwoFactorSetupView(View):
                 error=_("The code is not valid. Check the code and try again."),
                 status=400,
             )
+        first = not profile.encrypted_mfa_hash
         profile.encrypted_mfa_hash = encrypt_secret(secret)
         profile.save(update_fields=["encrypted_mfa_hash"])
         request.session.pop(PENDING_KEY, None)
         logger.info("Two-factor authenticator enrolled for user %s", request.user.pk)
-        return self.render(request, done=_("Two-factor authentication is on."))
+        return self.render(
+            request, done=_("Two-factor authentication is on."), first=first
+        )
 
     def remove(self, request, profile):
         if settings.FORCE_TWO_FACTOR_AUTHENTICATION:
@@ -186,7 +192,7 @@ class TwoFactorSetupView(View):
         logger.info("Two-factor authenticator removed for user %s", request.user.pk)
         return self.render(request, done=_("Two-factor authentication is off."))
 
-    def render(self, request, error=None, done=None, status=200):
+    def render(self, request, error=None, done=None, status=200, first=False):
         profile = UserProfile.objects.filter(user=request.user).first()
         pending = decrypt_secret(request.session.get(PENDING_KEY))
         context = {
@@ -201,6 +207,7 @@ class TwoFactorSetupView(View):
             "app_title": settings.APP_TITLE,
             "error": error,
             "done": done,
+            "first_enrolment": first,
         }
         return render(request, "accounts/two_factor.htm", context, status=status)
 
@@ -252,20 +259,28 @@ def user_for_reset(token):
     return user
 
 
-def reset_link(user):
-    """The absolute, personal re-enrolment URL of *user* (never logged)."""
-    with translation.override(settings.LANGUAGE_CODE):
-        path = reverse("account-two-factor-reset", kwargs={"token": reset_token(user)})
+def reset_link(user, language=None, token=None):
+    """The absolute, personal re-enrolment URL of *user* in *language* (never logged).
+
+    *language* defaults to `LANGUAGE_CODE`; *token* to a fresh `reset_token`.
+    """
+    token = token or reset_token(user)
+    with translation.override(language or settings.LANGUAGE_CODE):
+        path = reverse("account-two-factor-reset", kwargs={"token": token})
     return settings.PUBLIC_SERVER_ADDRESS.rstrip("/") + path
 
 
 def send_reset_link(user):
     """Mail *user* the re-enrolment link; returns the mail outcome."""
     expires_on = (timezone.now() + timedelta(seconds=RESET_MAX_AGE)).date()
+    token = reset_token(user)
     return notices.send_account_mail(
         user,
         "two_factor_reset",
-        {"link": reset_link(user), "expires_on": expires_on},
+        {
+            "link": {code: reset_link(user, code, token) for code in notices.LANGUAGES},
+            "expires_on": expires_on,
+        },
     )
 
 
