@@ -166,3 +166,17 @@ class RestrictedInstancesTests(TestCase):
                     self.framework.get_restricted_instances(self.user, self.se)
 
         clear.assert_called_once()
+
+    def test_a_failed_clear_is_logged_and_the_ids_still_come_back(self):
+        mine = {self.index_resource(self.user) for _ in range(4)}
+
+        with mock.patch.object(arches_settings, "SEARCH_RESULT_LIMIT", 2):
+            with (
+                mock.patch.object(
+                    self.se.es, "clear_scroll", side_effect=RuntimeError("gone")
+                ),
+                self.assertLogs("manuspectrum.permissions.default_allow", "WARNING"),
+            ):
+                ids = self.framework.get_restricted_instances(self.user, self.se)
+
+        self.assertEqual(sorted(ids), sorted(mine))
