@@ -272,6 +272,11 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
    `es reindex_database` (README, rule on snapshots from another host).
 6. Replay the erasure requests ("Personal data"), run `make -C deploy backup-init`, then
    `make -C deploy backup` once, then reopen.
+7. Before the beat schedule runs again on the new host, run
+   `make -C deploy manage ARGS="prune_workflow_history"` (dry run) and read who would be warned
+   and which workflows cleaned: runs already past their delay get both notices at once and are
+   cleaned a week later (`ADMIN.md`, « Abandoned workflows »). The same check follows any
+   restore or long outage.
 
 ## When things go wrong
 

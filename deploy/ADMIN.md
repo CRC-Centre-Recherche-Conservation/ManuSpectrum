@@ -44,7 +44,7 @@ because an administrator created it. People ask for one through the contact page
   enrolment link (superuser)** (below), which mails it the enrolment link (**Reset** skips
   accounts that hold no secret).
 - **Lost phone.** After checking the person's identity by another channel, a superuser
-  opens the admin, User profiles, ticks the profile and chooses **Reset two-factor
+  opens the admin, **User profiles** (the profile list, not the User page), ticks the profile and chooses **Reset two-factor
   authentication (superuser)** (only superusers can). The action clears the secret and mails
   the person a personal link (`account/two-factor/reset/...`, valid 24 hours, single use):
   they type their password, scan the new QR code, confirm one code and are signed in. A
@@ -194,6 +194,10 @@ A restriction is an Arches permission; the **Embargo** record in the admin carri
 date and its history. Restrictions are temporary by construction: 12 months at most (`EMBARGO_MAX_MONTHS`)
 unless an administrator records an exception (below).
 
+- **Restricting.** In the resource's permission manager (Arches), set **No Access** for the
+  user `anonymous` or the group Guest; the same setting for any other user or group is not a
+  restriction here. The Embargo row is created as soon as the permissions are saved; its date
+  is then set in the admin, under Embargoes.
 - **Date.** The daily pass (06:00 Europe/Paris) records every restriction it finds without an
   Embargo row and dates it at the detection day plus 12 months (events `detected`, then
   `dated` by nobody); open Embargoes in the admin and edit "Ends on" (the last day of the
@@ -232,6 +236,11 @@ completed workflows are never touched.
 - **Dry run.** `make -C deploy manage ARGS="prune_workflow_history"` lists the runs that would
   be noticed and cleaned and the resources it would delete and keep, and writes and sends
   nothing. `--apply` runs the pass; `--workflow <id>` restricts it to one run.
+- **After a long outage or a restore.** A run found already past its delay gets both notices
+  (21 and 7 days) the same day and is cleaned 7 days later. Before the beat schedule is enabled
+  again (after a restore, a move to a new host, or a stack stopped for weeks), run the dry run,
+  read who would be warned and what would be cleaned, and tell those people beforehand or delay
+  the first pass.
 - Alerts: `WorkflowCleanupFailures`, `WorkflowCleanupStale`.
 
 ## Draft register of processing
