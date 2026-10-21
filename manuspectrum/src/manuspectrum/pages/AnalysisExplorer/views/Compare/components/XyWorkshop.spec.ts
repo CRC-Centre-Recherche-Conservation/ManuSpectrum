@@ -1536,27 +1536,30 @@ describe("XyWorkshop", () => {
         expect(plotly.purge).toHaveBeenCalledWith(element);
     });
 
-    it("resizes the chart only when its size changed, and purges it on unmount", async () => {
+    it("draws the chart again at its box's size only when that size changed, and purges it on unmount", async () => {
         const resize = ref(0);
         const view = await mountWorkshop([curve(0, 1)], resize);
+        const drawings = plotly.react.mock.calls.length;
         resize.value += 1;
         await flushPromises();
-        expect(plotly.Plots.resize).not.toHaveBeenCalled();
+        expect(plotly.react.mock.calls.length).toBe(drawings);
         const element = view.find(".chart").element;
         Object.defineProperty(element, "clientWidth", { value: 640 });
         Object.defineProperty(element, "clientHeight", { value: 360 });
         resize.value += 1;
         await flushPromises();
-        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(lastDrawing().layout).toMatchObject({ width: 640, height: 360 });
         resize.value += 1;
         await flushPromises();
-        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(plotly.Plots.resize).not.toHaveBeenCalled();
         view.unmount();
         wrapper = null;
         expect(plotly.purge).toHaveBeenCalledWith(element);
     });
 
-    it("follows the chart's own box when what sits below it moves it, once per frame", async () => {
+    it("follows the chart's own box in the observer's callback, before the frame is painted, once per change", async () => {
         const observers: {
             callback: () => void;
             observed: Element[];
@@ -1582,25 +1585,30 @@ describe("XyWorkshop", () => {
         const element = view.find(".chart").element;
         const watcher = observers.find((o) => o.observed.includes(element));
         expect(watcher).toBeDefined();
-        const frame = () =>
-            new Promise((resolve) => requestAnimationFrame(resolve));
+        const requestFrame = vi.spyOn(window, "requestAnimationFrame");
+        const drawings = plotly.react.mock.calls.length;
         watcher!.callback();
-        await frame();
         await flushPromises();
-        expect(plotly.Plots.resize).not.toHaveBeenCalled();
+        expect(plotly.react.mock.calls.length).toBe(drawings);
         Object.defineProperty(element, "clientWidth", { value: 640 });
         Object.defineProperty(element, "clientHeight", { value: 210 });
+        requestFrame.mockClear();
         watcher!.callback();
         watcher!.callback();
-        await frame();
         await flushPromises();
-        expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(lastDrawing().layout).toMatchObject({ width: 640, height: 210 });
+        expect(
+            plotly.react.mock.invocationCallOrder.at(-1)! <
+                (requestFrame.mock.invocationCallOrder[0] ?? Infinity),
+        ).toBe(true);
+        requestFrame.mockRestore();
         view.unmount();
         wrapper = null;
         expect(watcher!.disconnect).toHaveBeenCalled();
     });
 
-    it("draws small multiples again at their new size once they no longer need a height of their own", async () => {
+    it("draws small multiples that no longer need a height of their own once, at the height their box shrinks to", async () => {
         const resize = ref(0);
         const view = await mountWorkshop(
             Array.from({ length: 9 }, (_, index) =>
@@ -1617,29 +1625,85 @@ describe("XyWorkshop", () => {
                     ? parseFloat(element.style.minBlockSize) * 16
                     : 300,
         });
-        const heldAtResize: string[] = [];
-        plotly.Plots.resize.mockImplementation(async (target: HTMLElement) => {
-            heldAtResize.push(target.style.minBlockSize);
-        });
         resize.value += 1;
         await flushPromises();
-        expect(element.style.minBlockSize).not.toBe("");
+        const held = parseFloat(element.style.minBlockSize) * 16;
+        expect(held).toBeGreaterThan(300);
+        expect(lastDrawing().layout).toMatchObject({
+            width: 300,
+            height: held,
+        });
         const drawings = plotly.react.mock.calls.length;
 
         width = 1200;
         resize.value += 1;
         await flushPromises();
         expect(element.style.minBlockSize).toBe("");
-        expect(plotly.Plots.resize.mock.calls.at(-1)?.[0]).toBe(element);
-        expect(heldAtResize.at(-1)).toBe("");
-        expect(plotly.react.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
-            plotly.Plots.resize.mock.invocationCallOrder.at(-1)!,
-        );
-        const settled = plotly.react.mock.calls.length;
-        expect(settled).toBeGreaterThan(drawings);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(lastDrawing().layout).toMatchObject({
+            width: 1200,
+            height: 300,
+        });
         resize.value += 1;
         await flushPromises();
-        expect(plotly.react.mock.calls.length).toBe(settled);
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(plotly.Plots.resize).not.toHaveBeenCalled();
+    });
+
+    it("lets held small multiples take the room of a window that grew, in the same callback, without waiting for the window's signal", async () => {
+        const observers: { callback: () => void; observed: Element[] }[] = [];
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                observed: Element[] = [];
+                callback: () => void;
+                constructor(callback: () => void) {
+                    this.callback = callback;
+                    observers.push(this);
+                }
+                observe(element: Element) {
+                    this.observed.push(element);
+                }
+                disconnect() {}
+                unobserve() {}
+            },
+        );
+        const view = await mountWorkshop(
+            Array.from({ length: 9 }, (_, index) =>
+                curve(index % 2, index + 1),
+            ),
+        );
+        const element = view.find<HTMLElement>(".chart").element;
+        const workshop = view.find<HTMLElement>(".xy-workshop").element;
+        let natural = 300;
+        Object.defineProperty(element, "clientWidth", { value: 300 });
+        Object.defineProperty(element, "clientHeight", {
+            get: () =>
+                element.style.minBlockSize
+                    ? parseFloat(element.style.minBlockSize) * 16
+                    : natural,
+        });
+        Object.defineProperty(workshop, "clientWidth", { value: 320 });
+        Object.defineProperty(workshop, "clientHeight", {
+            get: () => natural + 100,
+        });
+        const watcher = observers.find((o) => o.observed.includes(element))!;
+        expect(watcher.observed).toContain(workshop);
+        watcher.callback();
+        await flushPromises();
+        const held = parseFloat(element.style.minBlockSize) * 16;
+        expect(held).toBeGreaterThan(natural);
+        const drawings = plotly.react.mock.calls.length;
+
+        natural = held + 200;
+        watcher.callback();
+        await flushPromises();
+        expect(element.style.minBlockSize).toBe("");
+        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(lastDrawing().layout).toMatchObject({
+            width: 300,
+            height: natural,
+        });
     });
 
     it("keeps small multiples at the height they took, whatever the box they hold open echoes", async () => {
@@ -2594,14 +2658,16 @@ describe("XyWorkshop XRF lens", () => {
             });
             await flushPromises();
             expect(view.find('[role="dialog"]').exists()).toBe(true);
-            plotly.Plots.resize.mockClear();
             plotly.react.mockClear();
             plotly.relayout.mockClear();
             resizeTo(view, 300);
             await nextFrame();
             await flushPromises();
-            expect(plotly.Plots.resize).toHaveBeenCalledTimes(1);
             expect(plotly.react).toHaveBeenCalledTimes(1);
+            expect(lastDrawing().layout).toMatchObject({
+                width: 800,
+                height: 300,
+            });
             expect(plotly.relayout).toHaveBeenCalledWith(chart, {
                 "xaxis.range": [5, 15],
                 "yaxis.range": [0, 210],

@@ -243,11 +243,14 @@ const EMPTY_FILES_FOLDED = 2;
  * the height its window leaves below the toolbar, down to a floor
  * (`--xy-chart-floor`), and is size-contained so that a drawing never holds
  * its box open; under 40rem the legend below it scrolls past
- * `--xy-legend-stacked-max`. The chart follows
- * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
- * and is then drawn again for the size (labels, panels); small multiples
- * that no longer need a height of their own are drawn once more at the
- * size the chart shrinks to. The table layout and the unmount purge it,
+ * `--xy-legend-stacked-max`. Every drawing names its width and height to
+ * Plotly (the box's, or the height small multiples hold open): `react`
+ * otherwise keeps the size of the drawing before (plotly.js-cartesian-dist
+ * 4.0.0 `supplyDefaults`). The chart is drawn again for its size (labels,
+ * panels) when its box or its window's changes, in the ResizeObserver
+ * callback, so that the frame painted after a resize shows the drawing for
+ * it; `WINDOW_RESIZE_KEY` asks again once the window settles. The table
+ * layout and the unmount purge it,
  * and end a preview the chart or its legend started; a drawing that ends
  * after the unmount is purged too.
  */
@@ -273,6 +276,7 @@ const results = useSeriesSet(
     () => readable.value.map((curve) => curve.file.previewUrl ?? ""),
     "full",
 );
+const root = useTemplateRef<HTMLElement>("root");
 const chart = useTemplateRef<HTMLDivElement>("chart");
 const lang = document.documentElement.lang || "en";
 
@@ -292,14 +296,19 @@ let restyleFrame: number | null = null;
 /** The lens shapes the chart shows, serialised (`shapesKey`); a relayout is made only when they differ. */
 let shownShapesKey = "";
 let shapesFrame: number | null = null;
-/** Watches the chart element's own box: its height changes when the content below it does. */
+/**
+ * Watches the chart element's own box (its height changes when the content
+ * below it does) and the workshop's, which follows the window while small
+ * multiples hold the chart open.
+ */
 let sizeObserver: ResizeObserver | null = null;
-let sizeFrame: number | null = null;
 /** Set while the range select's own relayout runs, so its echo is not read as a zoom by hand. */
 let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
+/** The workshop's size when the chart was last drawn, « width×height ». */
+let drawnRootSize = "";
 /** What the chart was last drawn of (`figureIdentity`): the reader's zoom survives a drawing of the same figure. */
 let drawnIdentity = "";
 /**
@@ -860,8 +869,9 @@ watch(
     (element) => {
         sizeObserver?.disconnect();
         if (element && typeof ResizeObserver !== "undefined") {
-            sizeObserver ??= new ResizeObserver(scheduleFollowSize);
+            sizeObserver ??= new ResizeObserver(onBoxResized);
             sizeObserver.observe(element);
+            if (root.value) sizeObserver.observe(root.value);
         }
     },
     { flush: "post" },
@@ -875,7 +885,6 @@ onBeforeUnmount(() => {
     disposed = true;
     if (restyleFrame !== null) cancelAnimationFrame(restyleFrame);
     if (shapesFrame !== null) cancelAnimationFrame(shapesFrame);
-    if (sizeFrame !== null) cancelAnimationFrame(sizeFrame);
     sizeObserver?.disconnect();
     purgeChart();
 });
@@ -888,13 +897,14 @@ function widthOf(size: string): number {
     return Number(size.split("×")[0]);
 }
 
-/** One `followSize` per frame, whatever moved the chart's box (the lens strip opening, a window resize). */
-function scheduleFollowSize(): void {
-    if (sizeFrame !== null) return;
-    sizeFrame = requestAnimationFrame(() => {
-        sizeFrame = null;
-        followSize();
-    });
+/**
+ * Follows the chart's box before the frame is painted: the drawing runs
+ * in this callback and the microtasks it queues. A held chart measures
+ * its natural height again when the workshop's size changed.
+ */
+function onBoxResized(): void {
+    const element = root.value;
+    followSize(element !== null && sizeOf(element) !== drawnRootSize);
 }
 
 /** Draws the chart again for its size, when that size is not the one it was drawn at. */
@@ -911,7 +921,7 @@ function followSize(measureAgain = false): void {
     if (size === drawnSize && !(held && measureAgain)) return;
     drawnSize = size;
     remeasure = held;
-    void resizeChart(element);
+    void draw();
 }
 
 /** The strongest of the levels; null when none links. */
@@ -1073,8 +1083,6 @@ async function draw(): Promise<void> {
         return;
     }
     drawing = true;
-    /** Small multiples that needed a height of their own and no longer do: the chart shrinks once drawn. */
-    let released = false;
     try {
         plotly ??= await loadPlotly();
         if (disposed) return;
@@ -1082,8 +1090,7 @@ async function draw(): Promise<void> {
         if (disposed) return;
         if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
-        const held = chartHeight.value !== null;
-        if (remeasure && held) {
+        if (remeasure && chartHeight.value !== null) {
             chartHeight.value = null;
             await nextTick();
             if (disposed) return;
@@ -1099,7 +1106,6 @@ async function draw(): Promise<void> {
             layout.value === "multiples"
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
-        released = held && figure.height === null;
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, effectiveStates.value);
@@ -1115,7 +1121,6 @@ async function draw(): Promise<void> {
         lastFigure = figure;
         drawnOn = element;
         drawnTheme = theme;
-        drawnSize = sizeOf(element);
         shownStates = effectiveStates.value.join();
         shownHidden = hiddenKeyOf(effectiveStates.value);
         shownShapesKey = shapesKey(shapes);
@@ -1124,13 +1129,19 @@ async function draw(): Promise<void> {
         await plotly.react(
             element,
             figure.data,
-            figure.layout,
+            {
+                ...figure.layout,
+                width: element.clientWidth,
+                height: figure.height ?? naturalHeight,
+            },
             WORKSHOP_CONFIG,
         );
         if (disposed) {
             plotly.purge(element);
             return;
         }
+        drawnSize = sizeOf(element);
+        if (root.value) drawnRootSize = sizeOf(root.value);
         drawnIdentity = identity;
         if (kept === null) {
             zoomed.value = false;
@@ -1151,12 +1162,6 @@ async function draw(): Promise<void> {
             scheduleRestyle();
             scheduleShapes();
         }
-    }
-    if (released && !disposed) {
-        await nextTick();
-        // `react` without `layout.height` keeps Plotly's last one, the held height.
-        drawnSize = "";
-        followSize();
     }
 }
 
@@ -1246,13 +1251,6 @@ async function redrawKeepingRange(): Promise<void> {
     shownEnergy.value = energyWindow
         ? [energyWindow[0] as number, energyWindow[1] as number]
         : null;
-}
-
-/** Draws the chart again for its new size; the reader's zoom and range stay (same figure, `figureIdentity`). */
-async function resizeChart(element: HTMLElement): Promise<void> {
-    if (!plotly) return;
-    await plotly.Plots.resize(element);
-    if (!disposed) await draw();
 }
 
 function scheduleRestyle(): void {
@@ -1803,6 +1801,7 @@ function chooseView(event: Event): void {
 
 <template>
     <section
+        ref="root"
         class="xy-workshop"
         :aria-busy="results.status.value === 'loading' ? 'true' : 'false'"
     >
