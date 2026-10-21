@@ -33,6 +33,9 @@ FUNCTION_LOCATIONS.append("manuspectrum.functions")
 ETL_MODULE_LOCATIONS.append("manuspectrum.etl_modules")
 SEARCH_COMPONENT_LOCATIONS.append("manuspectrum.search_components")
 
+# Resolved under manuspectrum/permissions/ (see the module docstring).
+PERMISSION_FRAMEWORK = "default_allow.ManuSpectrumDefaultAllowPermissionFramework"
+
 LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, "locale"))
 
 FILE_TYPE_CHECKING = "lenient"

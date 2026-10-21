@@ -640,8 +640,8 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
   check "annotations: the safety connection bound stays above the viewer's peak of 120" \
     bash -c 'n="$(sed -n "s/.*limit_conn annotations_conn \([0-9]*\);.*/\1/p" <<<"$1")"; [ "${n:-0}" -ge 150 ]' _ "$block"
   sleep 8
-  out="$(get_many 100 "/fr/mvt/$FILE_A/5/16/11.pbf")"
-  check "100 concurrent map tiles: none is 429 (tiles zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  out="$(get_many 110 "/fr/mvt/$FILE_A/5/16/11.pbf" 110)"
+  check "110 concurrent map tiles (a zoom of a many-layer map): none is 429 (tiles zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
   sleep 3
 }
 

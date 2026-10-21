@@ -239,7 +239,9 @@ class EdgeContractTests(SimpleTestCase):
                 "snippets/edge-rules.conf", f"/{code}/mvt/{UUID}/5/16/11.pbf"
             )
             self.assertIn("limit_req zone=tiles", body)
-            self.assertIn("limit_conn tiles_conn", body)
+            bound = re.search(r"limit_conn tiles_conn (\d+);", body)
+            self.assertIsNotNone(bound)
+            self.assertGreaterEqual(int(bound.group(1)), 100)
             self.assertNotIn("perip", body)
 
     def test_iiif_annotations_have_their_own_rate_and_connection_zones(self):
