@@ -1035,6 +1035,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # once every account is enrolled (production: FORCE_TWO_FACTOR_AUTHENTICATION=true).
 ENABLE_TWO_FACTOR_AUTHENTICATION = True
 FORCE_TWO_FACTOR_AUTHENTICATION = False
+# A repeated post of the second-factor code is redirected, any other CSRF
+# failure gets a page of the site (manuspectrum/accounts/csrf_failure.py).
+CSRF_FAILURE_VIEW = "manuspectrum.accounts.csrf_failure.csrf_failure"
 
 ####### SIGN-IN LOCKOUT AND LOGIN RECORDS #######
 # Five failures lock one account for 15 minutes from one client address; the

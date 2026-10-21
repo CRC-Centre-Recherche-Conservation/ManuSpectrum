@@ -1,0 +1,20 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% block page_title %}{% trans "Request expired" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "The page you used is out of date." %}{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex">{% endblock %}
+
+{% block content %}
+<section class="ms-error">
+    <div class="ms-page-hero__eyebrow">{% trans "Error 403" %}</div>
+    <div class="ms-error-code" aria-hidden="true">403</div>
+    <h1 class="ms-error-title">{% trans "This page is out of date" %}</h1>
+    <p class="ms-error-lead">
+        {% trans "Your session changed since this page was opened, for example because you signed in or out in another tab. Go back, reload the page and try again." %}
+    </p>
+    <div class="ms-error-actions">
+        <a class="ms-btn ms-btn-primary" href="{% url 'root' %}">{% trans "Back to the homepage" %}</a>
+        <a class="ms-error-link" href="{% url 'auth' %}">{% trans "Sign In" %}</a>
+    </div>
+</section>
+{% endblock %}

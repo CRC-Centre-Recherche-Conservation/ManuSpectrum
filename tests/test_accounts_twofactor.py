@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import Client, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 
 from manuspectrum.accounts.twofactor import decrypt_secret, encrypt_secret
 from tests.observability_helpers import delta
@@ -115,6 +115,24 @@ class EnrolmentTests(SetupBase):
         self.assertNotIn(secret, value)
         self.assertEqual(decrypt_secret(value), secret)
         self.assertNotIn("ms_pending_mfa_secret", self.client.session)
+
+    def test_a_first_enrolment_offers_a_continue_button_to_the_home_page(self):
+        secret = self.start()
+        response = post(
+            self.client, PAGE, action="confirm", code=pyotp.TOTP(secret).now()
+        )
+        self.assertContains(response, 'href="/en/" class="btn btn-primary btn-block')
+        self.assertContains(response, "Continue")
+
+    def test_a_replacement_does_not_offer_the_continue_button(self):
+        old = enrol(self.alice)
+        post(self.client, PAGE, action="start", code=pyotp.TOTP(old).now())
+        secret = decrypt_secret(self.client.session["ms_pending_mfa_secret"])
+        response = post(
+            self.client, PAGE, action="confirm", code=pyotp.TOTP(secret).now()
+        )
+        self.assertContains(response, "Two-factor authentication is on.")
+        self.assertNotContains(response, "btn-primary")
 
     def test_a_wrong_code_stores_nothing(self):
         secret = self.start()
@@ -227,6 +245,11 @@ class SecondFactorSignInTests(TestCase):
         self.assertContains(response, "name='two-factor-authentication'")
         self.assertFalse(self.signed_in())
 
+    def test_the_code_page_loads_the_single_submission_script(self):
+        response = post(self.client, "/en/auth/", username="alice", password=PASSWORD)
+        self.assertContains(response, "js/utils/two-factor-login.js")
+        self.assertContains(response, "onkeyup")
+
     def test_a_valid_code_signs_in(self):
         response = self.second_step(pyotp.TOTP(self.secret).now())
         self.assertEqual(response.status_code, 302)
@@ -271,6 +294,96 @@ class SecondFactorSignInTests(TestCase):
                 self.second_step("123456", password=WRONG)
         self.assertEqual(plain.value, 1)
         self.assertEqual(mfa.value, 0)
+
+
+class CsrfFailureTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(
+            "alice", "alice@manuspectrum.test", PASSWORD, is_staff=True
+        )
+
+    def setUp(self):
+        cache.clear()
+        self.client = Client(raise_request_exception=False, enforce_csrf_checks=True)
+        self.secret = enrol(self.alice)
+
+    def token(self):
+        return self.client.cookies["csrftoken"].value
+
+    def code_step(self, token, next_url="/", code=None):
+        return post(
+            self.client,
+            LOGIN,
+            **{
+                "csrfmiddlewaretoken": token,
+                "username": "alice",
+                "password": PASSWORD,
+                "next": next_url,
+                "user-has-enabled-two-factor-authentication": "True",
+                "two-factor-authentication": code or pyotp.TOTP(self.secret).now(),
+            },
+        )
+
+    def signed_code_step(self, next_url="/"):
+        self.client.get("/en/auth/")
+        old = self.token()
+        post(
+            self.client,
+            "/en/auth/",
+            csrfmiddlewaretoken=old,
+            username="alice",
+            password=PASSWORD,
+        )
+        first = self.code_step(old, next_url)
+        self.assertEqual(first.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+        return old
+
+    def test_the_second_post_of_the_code_is_redirected_to_next(self):
+        old = self.signed_code_step(next_url="/en/search")
+        again = self.code_step(old, "/en/search")
+        self.assertEqual(again.status_code, 302)
+        self.assertEqual(again["Location"], "/en/search")
+
+    def test_the_second_post_is_a_403_without_the_failure_view(self):
+        with override_settings(CSRF_FAILURE_VIEW="django.views.csrf.csrf_failure"):
+            old = self.signed_code_step()
+            self.assertEqual(self.code_step(old).status_code, 403)
+
+    def test_an_unsafe_next_falls_back_to_the_home_page(self):
+        old = self.signed_code_step()
+        again = self.code_step(old, "https://evil.example/steal")
+        self.assertEqual(again.status_code, 302)
+        self.assertEqual(again["Location"], "/en/")
+
+    def test_a_next_that_is_a_bare_word_is_a_redirect_not_a_url_name_lookup(self):
+        old = self.signed_code_step()
+        again = self.code_step(old, "foo")
+        self.assertEqual(again.status_code, 302)
+        self.assertEqual(again["Location"], "foo")
+
+    def test_a_bad_token_without_a_session_is_still_refused(self):
+        response = self.code_step("x" * 64)
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertContains(response, "This page is out of date", status_code=403)
+        self.assertContains(response, "noindex", status_code=403)
+
+    def test_another_failure_gets_the_site_page(self):
+        self.client.force_login(self.alice)
+        response = post(self.client, PAGE, action="start", csrfmiddlewaretoken="x" * 64)
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "This page is out of date", status_code=403)
+
+    def test_an_api_path_gets_json(self):
+        from manuspectrum.accounts.csrf_failure import csrf_failure
+
+        request = RequestFactory().post("/en/api/anything")
+        request.user = self.alice
+        response = csrf_failure(request, "reason")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response["Content-Type"], "application/json")
 
 
 class AdminResetTests(TestCase):

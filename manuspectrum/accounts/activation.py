@@ -69,14 +69,17 @@ def can_be_invited(user):
     )
 
 
-def activation_link(user):
-    """The absolute, personal activation URL of *user* (never logged)."""
-    with translation.override(settings.LANGUAGE_CODE):
+def activation_link(user, language=None, token=None):
+    """The absolute, personal activation URL of *user* in *language* (never logged).
+
+    *language* defaults to `LANGUAGE_CODE`; *token* to a fresh one.
+    """
+    with translation.override(language or settings.LANGUAGE_CODE):
         path = reverse(
             "account-activate",
             kwargs={
                 "uidb64": urlsafe_base64_encode(force_bytes(user.pk)),
-                "token": default_token_generator.make_token(user),
+                "token": token or default_token_generator.make_token(user),
             },
         )
     return settings.PUBLIC_SERVER_ADDRESS.rstrip("/") + path
@@ -92,10 +95,16 @@ def send_invitation(user):
     expires_on = (
         timezone.now() + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT)
     ).date()
+    token = default_token_generator.make_token(user)
     return notices.send_account_mail(
         user,
         "invitation",
-        {"link": activation_link(user), "expires_on": expires_on},
+        {
+            "link": {
+                code: activation_link(user, code, token) for code in notices.LANGUAGES
+            },
+            "expires_on": expires_on,
+        },
     )
 
 

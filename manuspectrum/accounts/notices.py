@@ -33,6 +33,9 @@ Context per kind (`resources` and `kept` are lists of `{"name", "url"}`,
   whose account is not anonymised automatically). Each language section links
   to the contact page in that language.
 - `password_reset` is sent by `AccountPasswordResetForm`.
+
+A `link` is a URL, or a `{language: URL}` dict when each language section
+carries its own (the personal links of the invitation and the 2FA reset).
 """
 
 import logging
@@ -167,7 +170,7 @@ def _invitation(ctx):
         "paragraphs": [
             _(
                 "An account has been created for you on ManuSpectrum. Use the "
-                "button below to read the terms of use, accept them, choose your "
+                "link below to read the terms of use, accept them, choose your "
                 "password and set up two-factor authentication."
             ),
             _("The link is personal and works until %(date)s.")
@@ -184,7 +187,7 @@ def _two_factor_reset(ctx):
         "paragraphs": [
             _(
                 "Your two-factor authentication was reset by an administrator. "
-                "Use the button below, type your password and scan the new QR "
+                "Use the link below, type your password and scan the new QR "
                 "code with your authenticator application. You will then be "
                 "signed in."
             ),
@@ -198,7 +201,7 @@ def _two_factor_reset(ctx):
 
 REACTIVATE_FIRST = gettext_noop(
     "The account is deactivated. To keep it, ask for its reactivation "
-    "through the contact page (button below) before that date."
+    "through the contact page (link below) before that date."
 )
 
 
@@ -255,7 +258,7 @@ def _deactivation_notice(ctx):
         % {"date": _day(ctx["deactivated_on"])},
         _(
             "If you need it reactivated, contact the team through the contact page "
-            "(button below)."
+            "(link below)."
         ),
     ]
     if ctx.get("review"):
@@ -318,6 +321,10 @@ CONTENT = {
 }
 
 
+def _link_for(link, language):
+    return link[language] if isinstance(link, dict) else link
+
+
 def _sections(kind, context, name, summary):
     """The mail's body once per language, English first."""
     sections = []
@@ -344,7 +351,7 @@ def _sections(kind, context, name, summary):
                     "items": content.get("items", []),
                     "paragraphs_after": content.get("paragraphs_after", []),
                     "items_after": content.get("items_after", []),
-                    "link": content.get("link", ""),
+                    "link": _link_for(content.get("link", ""), language),
                     "button": content.get("button", ""),
                     "contact_email": getattr(settings, "CONTACT_EMAIL", "")
                     or settings.DEFAULT_FROM_EMAIL,

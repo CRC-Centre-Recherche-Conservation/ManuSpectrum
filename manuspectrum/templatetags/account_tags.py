@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django import template
 
 register = template.Library()
@@ -9,6 +11,14 @@ def group_key(value, size=4):
     text = str(value or "")
     size = int(size)
     return " ".join(text[i : i + size] for i in range(0, len(text), size))
+
+
+@register.filter
+def whole_minutes(value):
+    """The length of the timedelta *value* in minutes, at least 1; None for anything else."""
+    if not isinstance(value, timedelta):
+        return None
+    return max(1, round(value.total_seconds() / 60))
 
 
 @register.simple_tag
