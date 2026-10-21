@@ -1082,7 +1082,8 @@ async function draw(): Promise<void> {
         if (disposed) return;
         if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
-        if (remeasure && chartHeight.value !== null) {
+        const held = chartHeight.value !== null;
+        if (remeasure && held) {
             chartHeight.value = null;
             await nextTick();
             if (disposed) return;
@@ -1098,7 +1099,7 @@ async function draw(): Promise<void> {
             layout.value === "multiples"
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
-        released = chartHeight.value !== null && figure.height === null;
+        released = held && figure.height === null;
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, effectiveStates.value);
@@ -1153,6 +1154,8 @@ async function draw(): Promise<void> {
     }
     if (released && !disposed) {
         await nextTick();
+        // `react` without `layout.height` keeps Plotly's last one, the held height.
+        drawnSize = "";
         followSize();
     }
 }

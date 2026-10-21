@@ -1617,6 +1617,10 @@ describe("XyWorkshop", () => {
                     ? parseFloat(element.style.minBlockSize) * 16
                     : 300,
         });
+        const heldAtResize: string[] = [];
+        plotly.Plots.resize.mockImplementation(async (target: HTMLElement) => {
+            heldAtResize.push(target.style.minBlockSize);
+        });
         resize.value += 1;
         await flushPromises();
         expect(element.style.minBlockSize).not.toBe("");
@@ -1626,11 +1630,16 @@ describe("XyWorkshop", () => {
         resize.value += 1;
         await flushPromises();
         expect(element.style.minBlockSize).toBe("");
-        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
         expect(plotly.Plots.resize.mock.calls.at(-1)?.[0]).toBe(element);
+        expect(heldAtResize.at(-1)).toBe("");
+        expect(plotly.react.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+            plotly.Plots.resize.mock.invocationCallOrder.at(-1)!,
+        );
+        const settled = plotly.react.mock.calls.length;
+        expect(settled).toBeGreaterThan(drawings);
         resize.value += 1;
         await flushPromises();
-        expect(plotly.react.mock.calls.length).toBe(drawings + 1);
+        expect(plotly.react.mock.calls.length).toBe(settled);
     });
 
     it("keeps small multiples at the height they took, whatever the box they hold open echoes", async () => {
