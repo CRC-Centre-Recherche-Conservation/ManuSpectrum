@@ -455,11 +455,12 @@ function onKeydown(event: KeyboardEvent): void {
                 <span>{{ $gettext("Periodic table") }}</span>
             </button>
             <p
-                v-if="unknownSymbol !== null"
                 class="unknown"
                 role="status"
             >
-                <span>{{ missingText(unknownSymbol) }}</span>
+                <span v-if="unknownSymbol !== null">{{
+                    missingText(unknownSymbol)
+                }}</span>
             </p>
             <p class="key">
                 <span
@@ -833,6 +834,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 /* An empty live region stays in the accessibility tree, out of the grid's flow. */
+.xrf-strip .unknown:empty,
 .xrf-strip .left-out:empty {
     position: absolute;
     inline-size: 0.0625rem;

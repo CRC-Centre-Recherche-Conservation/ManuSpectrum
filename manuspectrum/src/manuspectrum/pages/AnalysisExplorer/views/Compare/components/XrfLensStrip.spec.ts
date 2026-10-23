@@ -287,13 +287,16 @@ describe("XrfLensStrip", () => {
 
     it("says so when the symbol typed is not in the line table, and adds nothing", async () => {
         const view = mountStrip();
+        const region = view.find("p.unknown");
+        expect(region.attributes("role")).toBe("status");
+        expect(region.text()).toBe("");
         const input = view.find("input");
         await input.setValue("Xx");
         await input.trigger("keydown", { key: "Enter" });
         expect(view.emitted("add-element")).toBeUndefined();
-        expect(view.find("p.unknown").text()).toBe(
-            "No line in the table for Xx (Z 11–92)",
-        );
+        const notice = view.find("p.unknown");
+        expect(notice.element).toBe(region.element);
+        expect(notice.text()).toBe("No line in the table for Xx (Z 11–92)");
     });
 
     it("toggles lens elements from a mini periodic table of the table's elements", async () => {
