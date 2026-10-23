@@ -7385,6 +7385,102 @@ msgstr ""
 "parce que vous vous êtes connecté ou déconnecté dans un autre onglet. "
 "Revenez en arrière, rechargez la page et réessayez."
 
+#: admin.py
+msgid "Account"
+msgstr "Compte"
+
+#: admin.py
+msgid "Full name"
+msgstr "Nom complet"
+
+#: admin.py
+msgid "Enrolled"
+msgstr "Activée"
+
+#: admin.py
+msgid "Not enrolled"
+msgstr "Non activée"
+
+#: admin.py
+msgid "two-factor authentication"
+msgstr "authentification à deux facteurs"
+
+#: admin.py
+msgid "Planned anonymisation"
+msgstr "Anonymisation prévue"
+
+#: admin.py
+msgid "Invitation"
+msgstr "Invitation"
+
+#: admin.py
+msgid "Terms of use accepted"
+msgstr "Conditions d'utilisation acceptées"
+
+#: admin.py
+msgid "Not yet"
+msgstr "Pas encore"
+
+#: admin.py
+msgid "Arches profile"
+msgstr "Profil Arches"
+
+#: admin.py
+msgid "Open the Arches profile"
+msgstr "Ouvrir le profil Arches"
+
+#: admin.py
+msgid "Never (superuser)"
+msgstr "Jamais (superutilisateur)"
+
+#: admin.py
+msgid "Anonymised on %(date)s"
+msgstr "Anonymisé le %(date)s"
+
+#: admin.py
+msgid "Can be invited: no password yet."
+msgstr "Peut être invité : pas encore de mot de passe."
+
+#: admin.py
+msgid "Cannot be invited: this is the system account for visitors."
+msgstr "Ne peut pas être invité : c'est le compte système des visiteurs."
+
+#: admin.py
+msgid "Cannot be invited: the account is inactive or has no e-mail address."
+msgstr ""
+"Ne peut pas être invité : le compte est inactif ou n'a pas d'adresse "
+"e-mail."
+
+#: admin.py
+msgid "Has a password."
+msgstr "A un mot de passe."
+
+#: admin.py
+msgid "Send the invitation now"
+msgstr "Envoyer l'invitation maintenant"
+
+#: admin.py
+msgid "The person receives a link to accept the terms and set a password."
+msgstr ""
+"La personne reçoit un lien pour accepter les conditions et choisir un "
+"mot de passe."
+
+#: admin.py
+msgid "A user with that username already exists."
+msgstr "Un utilisateur portant ce nom existe déjà."
+
+#: admin.py
+msgid "A user with that e-mail address already exists."
+msgstr "Un utilisateur avec cette adresse e-mail existe déjà."
+
+#: models.py
+msgid "terms acceptance"
+msgstr "acceptation des conditions"
+
+#: models.py
+msgid "terms acceptances"
+msgstr "acceptations des conditions"
+
 #~ msgid "met"
 #~ msgstr "respectée"
 
