@@ -229,6 +229,49 @@ unless an administrator records an exception (below).
   `--apply` (here and in `anonymise_inactive_accounts`) is refused when `DEPLOY_ENVIRONMENT` is
   `production`; the dry run stays allowed.
 
+## Search exports by visitors
+
+The search page offers an export of the results. Arches 8.1.5 (`views/search.py`,
+`export_results`) decides between the immediate export and the Celery export from the
+`total` query parameter sent by the client. A visitor without an account who sends
+`total=0`, or none, therefore gets an export of every resource they may read, built in
+the web worker: on the rehearsal VM a full `tilecsv` export ran about two minutes, nginx
+answered 504 at 120 s and the gunicorn thread worked on until the build ended. The
+project accepts this and does not override the Arches route. The setting
+`RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True` only refuses the Celery path to a
+visitor; it does not stop the immediate one.
+
+Who may call it. `export_results` is behind `@group_required("Resource Exporter")`
+(`views/search.py`), and the `anonymous` user is a member of that group (Arches
+migration `8010_export_permissions` added every user to it). The project keeps this on
+purpose: visitors may export small searches. If abuse ever requires it, removing
+`anonymous` from the « Resource Exporter » group in the Django admin closes the route
+for visitors (Arches' own mechanism, reversible by adding the user back). Signed-in
+curators are unaffected as long as they stay in the group.
+
+The API route `api_export_results` (`views/api/search.py`) has no group check, always
+builds in the request and answers GeoJSON only when the total is within the limit.
+nginx refuses it without a Django session cookie, but a forged cookie passes: that is a
+filter against robots, not a barrier.
+
+What bounds it:
+
+- nginx allows one export at a time per address (`limit_conn export_conn 1`) and six per
+  minute (`limit_req zone=search_export`) on `/{en,fr}/search/export_results` and
+  `/{en,fr}/api/search/export_results`.
+- PostgreSQL stops any statement of the web service after 60 s (`PG_STATEMENT_TIMEOUT_MS`).
+- The bound is per address, not global: N addresses hold N gunicorn threads for the
+  length of a build, and the service has 5 workers x 4 threads = 20. Beyond that the
+  other requests queue.
+
+The alert `SearchExportSlow` (warning, `runbooks/site.md`) fires when three or more
+exports took more than 60 seconds within 64 hours. The runbook shows how to find the
+addresses in the access log and how to block one at the host firewall.
+
+The real fix is a server-side count in Arches that routes large exports to Celery whatever
+the client sends. It is not done here: no upstream issue is opened and the core route is
+not overridden.
+
 ## Abandoned workflows
 
 An open workflow run with no activity for 90 days (`WORKFLOW_CLEANUP_AFTER_DAYS`) is cleaned
