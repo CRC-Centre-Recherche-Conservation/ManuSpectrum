@@ -12,6 +12,7 @@ from django.test import Client, RequestFactory, TestCase, override_settings
 
 from manuspectrum.accounts.twofactor import decrypt_secret, encrypt_secret
 from tests.observability_helpers import delta
+from tests.totp import current_code
 
 PASSWORD = "Str0ng!Passphrase-for-tests"
 WRONG = "not-the-password-Zq81"
@@ -37,7 +38,7 @@ def stored(user):
 
 
 def wrong_code(secret):
-    right = pyotp.TOTP(secret).now()
+    right = current_code(secret)
     return "000000" if right != "000000" else "111111"
 
 
@@ -107,9 +108,7 @@ class EnrolmentTests(SetupBase):
 
     def test_a_valid_code_stores_the_secret_the_way_arches_reads_it(self):
         secret = self.start()
-        response = post(
-            self.client, PAGE, action="confirm", code=pyotp.TOTP(secret).now()
-        )
+        response = post(self.client, PAGE, action="confirm", code=current_code(secret))
         self.assertContains(response, "Two-factor authentication is on.")
         value = stored(self.alice)
         self.assertNotIn(secret, value)
@@ -118,19 +117,15 @@ class EnrolmentTests(SetupBase):
 
     def test_a_first_enrolment_offers_a_continue_button_to_the_home_page(self):
         secret = self.start()
-        response = post(
-            self.client, PAGE, action="confirm", code=pyotp.TOTP(secret).now()
-        )
+        response = post(self.client, PAGE, action="confirm", code=current_code(secret))
         self.assertContains(response, 'href="/en/" class="btn btn-primary btn-block')
         self.assertContains(response, "Continue")
 
     def test_a_replacement_does_not_offer_the_continue_button(self):
         old = enrol(self.alice)
-        post(self.client, PAGE, action="start", code=pyotp.TOTP(old).now())
+        post(self.client, PAGE, action="start", code=current_code(old))
         secret = decrypt_secret(self.client.session["ms_pending_mfa_secret"])
-        response = post(
-            self.client, PAGE, action="confirm", code=pyotp.TOTP(secret).now()
-        )
+        response = post(self.client, PAGE, action="confirm", code=current_code(secret))
         self.assertContains(response, "Two-factor authentication is on.")
         self.assertNotContains(response, "btn-primary")
 
@@ -146,7 +141,7 @@ class EnrolmentTests(SetupBase):
             self.client,
             PAGE,
             action="confirm",
-            code=pyotp.TOTP(secret).now(),
+            code=current_code(secret),
             **{"user-id": self.bob.pk, "user": self.bob.pk},
         )
         self.assertIsNotNone(stored(self.alice))
@@ -162,9 +157,7 @@ class EnrolmentTests(SetupBase):
         refused = post(self.client, PAGE, action="start", code=wrong_code(secret))
         self.assertEqual(refused.status_code, 400)
         self.assertNotIn("ms_pending_mfa_secret", self.client.session)
-        accepted = post(
-            self.client, PAGE, action="start", code=pyotp.TOTP(secret).now()
-        )
+        accepted = post(self.client, PAGE, action="start", code=current_code(secret))
         self.assertContains(accepted, "data:image/png;base64,")
         self.assertEqual(stored(self.alice), before)
 
@@ -173,15 +166,13 @@ class EnrolmentTests(SetupBase):
         refused = post(self.client, PAGE, action="remove", code=wrong_code(secret))
         self.assertEqual(refused.status_code, 400)
         self.assertIsNotNone(stored(self.alice))
-        post(self.client, PAGE, action="remove", code=pyotp.TOTP(secret).now())
+        post(self.client, PAGE, action="remove", code=current_code(secret))
         self.assertIsNone(stored(self.alice))
 
     @override_settings(FORCE_TWO_FACTOR_AUTHENTICATION=True)
     def test_removing_is_refused_when_two_factor_is_compulsory(self):
         secret = enrol(self.alice)
-        response = post(
-            self.client, PAGE, action="remove", code=pyotp.TOTP(secret).now()
-        )
+        response = post(self.client, PAGE, action="remove", code=current_code(secret))
         self.assertEqual(response.status_code, 403)
         self.assertIsNotNone(stored(self.alice))
         self.assertNotContains(self.client.get(PAGE), 'value="remove"')
@@ -251,12 +242,12 @@ class SecondFactorSignInTests(TestCase):
         self.assertContains(response, "onkeyup")
 
     def test_a_valid_code_signs_in(self):
-        response = self.second_step(pyotp.TOTP(self.secret).now())
+        response = self.second_step(current_code(self.secret))
         self.assertEqual(response.status_code, 302)
         self.assertTrue(self.signed_in())
 
     def test_a_wrong_password_is_a_401_not_a_500(self):
-        response = self.second_step(pyotp.TOTP(self.secret).now(), password=WRONG)
+        response = self.second_step(current_code(self.secret), password=WRONG)
         self.assertEqual(response.status_code, 401)
         self.assertNotContains(response, WRONG, status_code=401)
         self.assertFalse(self.signed_in())
@@ -269,16 +260,14 @@ class SecondFactorSignInTests(TestCase):
     def test_five_wrong_codes_lock_the_account(self):
         for _ in range(5):
             self.second_step(wrong_code(self.secret))
-        response = self.second_step(pyotp.TOTP(self.secret).now())
+        response = self.second_step(current_code(self.secret))
         self.assertEqual(response.status_code, 429)
         self.assertFalse(self.signed_in())
 
     def test_four_wrong_codes_do_not_lock(self):
         for _ in range(4):
             self.second_step(wrong_code(self.secret))
-        self.assertEqual(
-            self.second_step(pyotp.TOTP(self.secret).now()).status_code, 302
-        )
+        self.assertEqual(self.second_step(current_code(self.secret)).status_code, 302)
 
     def test_wrong_codes_are_counted_as_mfa_failures_only(self):
         with delta("manuspectrum_auth_logins_total", outcome="mfa_failure") as mfa:
@@ -321,7 +310,7 @@ class CsrfFailureTests(TestCase):
                 "password": PASSWORD,
                 "next": next_url,
                 "user-has-enabled-two-factor-authentication": "True",
-                "two-factor-authentication": code or pyotp.TOTP(self.secret).now(),
+                "two-factor-authentication": code or current_code(self.secret),
             },
         )
 

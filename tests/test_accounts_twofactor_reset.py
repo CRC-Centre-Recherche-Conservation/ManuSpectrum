@@ -20,6 +20,7 @@ from manuspectrum.models import TermsAcceptance
 from manuspectrum.accounts.twofactor import decrypt_secret, encrypt_secret
 from tests.test_accounts_activation import browser_post
 from tests.test_accounts_twofactor import PASSWORD, WRONG, enrol, stored
+from tests.totp import current_code
 
 HTML = {"HTTP_ACCEPT": "text/html,application/xhtml+xml"}
 IP = "203.0.113.30"
@@ -93,7 +94,7 @@ class RequireTwoFactorMiddlewareTests(TestCase):
             self.client,
             "/en/account/two-factor",
             action="confirm",
-            code=pyotp.TOTP(secret).now(),
+            code=current_code(secret),
         )
         self.assertEqual(self.client.get("/en/about/team", **HTML).status_code, 200)
 
@@ -223,7 +224,7 @@ class ResetPageTests(TestCase):
         self.open()
         post(self.client, self.page, action="password", password=PASSWORD)
         secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
-        post(self.client, self.page, action="confirm", code=pyotp.TOTP(secret).now())
+        post(self.client, self.page, action="confirm", code=current_code(secret))
         UserProfile.objects.filter(user=self.alice).update(encrypted_mfa_hash=None)
         self.assertEqual(Client().get(self.path).status_code, 410)
 
@@ -258,12 +259,10 @@ class ResetPageTests(TestCase):
         self.assertContains(response, "data:image/png;base64")
         secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
         bad = post(self.client, self.page, action="confirm", code="000000")
-        if pyotp.TOTP(secret).now() != "000000":
+        if current_code(secret) != "000000":
             self.assertEqual(bad.status_code, 400)
         self.assertIsNone(stored(self.alice))
-        done = post(
-            self.client, self.page, action="confirm", code=pyotp.TOTP(secret).now()
-        )
+        done = post(self.client, self.page, action="confirm", code=current_code(secret))
         self.assertRedirects(
             done, "/en/account/two-factor", fetch_redirect_response=False
         )
@@ -279,7 +278,7 @@ class ResetPageTests(TestCase):
         session["ms_reset_pending_mfa_secret"] = encrypt_secret(secret)
         session.save()
         response = post(
-            self.client, self.page, action="confirm", code=pyotp.TOTP(secret).now()
+            self.client, self.page, action="confirm", code=current_code(secret)
         )
         self.assertEqual(response.status_code, 302)
         self.assertIsNone(stored(self.alice))
