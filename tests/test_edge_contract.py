@@ -102,6 +102,7 @@ BARE = [
     ),
     ("snippets/edge-rules.conf", f"/iiif/data/{UUID}/raw", "iiif-data-raw"),
     ("snippets/edge-rules.conf", "/api/site-notice", "site-notice"),
+    ("snippets/edge-rules.conf", "/api/csp-report", "csp-report"),
 ]
 
 
@@ -370,6 +371,27 @@ class EdgeContractTests(SimpleTestCase):
         from manuspectrum.views.site_notice import SNAPSHOT_NAME
 
         self.assertEqual(SNAPSHOT_NAME, "notice.json")
+
+    def test_csp_report_location_is_small_post_only_and_limited(self):
+        text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
+        block = re.search(r"location = /api/csp-report\s*\{(.*?)\n\}", text, re.S)
+        self.assertIsNotNone(block)
+        body = block.group(1)
+        self.assertIn("$request_method != POST", body)
+        self.assertIn("client_max_body_size 16k;", body)
+        self.assertIn("limit_req zone=csp_report burst=30 nodelay;", body)
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertRegex(zones, r"zone=csp_report:\w+\s+rate=30r/m;")
+
+    def test_csp_report_endpoint_is_named_by_the_policy_and_the_reporting_header(self):
+        text = (NGINX_DIR / "snippets/security-headers.conf").read_text()
+        self.assertIn("report-uri /api/csp-report;", text)
+        self.assertIn("report-to csp-endpoint", text)
+        self.assertIn("Reporting-Endpoints 'csp-endpoint=\"/api/csp-report\"'", text)
+
+    def test_reporting_endpoints_is_nginx_only(self):
+        text = (NGINX_DIR / "snippets/proxy-web-core.conf").read_text()
+        self.assertIn("proxy_hide_header Reporting-Endpoints;", text)
 
     def test_metrics_is_not_served_under_a_language(self):
         for code, _ in settings.LANGUAGES:

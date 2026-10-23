@@ -30,7 +30,7 @@ FILE_E="00000000-0000-4000-8000-00000000000e"
 FILE_F="00000000-0000-4000-8000-00000000000f"
 STATIC_SWAP_WAIT="${STATIC_SWAP_WAIT:-32}"
 
-GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate site_notice upstream_down)
+GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate csp_report site_notice upstream_down)
 
 RUN="msedge-$$"
 NET="$RUN-net"
@@ -292,7 +292,7 @@ group_forwarded() {
 assert_one_of_each() { # assert_one_of_each LABEL RESPONSE-HEADERS
   local label="$1" out="$2" header
   for header in Strict-Transport-Security Permissions-Policy Content-Security-Policy-Report-Only \
-    X-Content-Type-Options X-Frame-Options Referrer-Policy; do
+    X-Content-Type-Options X-Frame-Options Referrer-Policy Reporting-Endpoints; do
     equals "$label: exactly one $header" 1 "$(header_count "$header" <<<"$out")"
   done
   equals "$label: HSTS value" "max-age=3600" "$(header_value strict-transport-security <<<"$out")"
@@ -430,6 +430,12 @@ get_many() { # get_many COUNT PATH [PARALLEL=40] [MAX-TIME=30] : the statuses of
   for ((i = 0; i < $1; i++)); do urls+=(-o /dev/null "https://$HOST:$HTTPS_PORT$2"); done
   curl -sS -Z --parallel-max "${3:-40}" --max-time "${4:-30}" --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
     -w '%{http_code}\n' "${urls[@]}"
+}
+get_post_many() { # get_post_many COUNT PATH : the statuses of COUNT small POSTs sent in parallel
+  local urls=() i
+  for ((i = 0; i < $1; i++)); do urls+=(-o /dev/null "https://$HOST:$HTTPS_PORT$2"); done
+  curl -sS -Z --parallel-max 25 --max-time 30 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
+    -X POST -d '{}' -w '%{http_code}\n' "${urls[@]}"
 }
 # location_block FILE-SECTION PATTERN < nginx -T : the text of one location
 location_block() {
@@ -669,6 +675,25 @@ group_stream() {
     python3 -I -c 'import sys; start, first = map(float, sys.argv[1:]); sys.exit(0 if first - start < 1.5 else 1)' "$start" "$first"
   equals "series.csv: three chunks, in order" "chunk 0 chunk 1 chunk 2" "$(get /api/explorer/series.csv -N | tr '\n' ' ' | sed 's/ $//')"
   equals "series.csv: not gzipped" "" "$(header_value content-encoding <<<"$(headers /api/explorer/series.csv -H 'Accept-Encoding: gzip')")"
+}
+
+group_csp_report() {
+  local out
+  out="$(headers /page)"
+  equals "the policy names the report endpoint" 1 \
+    "$(grep -ic '^content-security-policy-report-only:.*report-uri /api/csp-report; report-to csp-endpoint' <<<"$out")"
+  equals "Reporting-Endpoints names the same endpoint" 'csp-endpoint="/api/csp-report"' \
+    "$(header_value reporting-endpoints <<<"$out")"
+  equals "csp-report: exactly one Reporting-Endpoints" 1 "$(header_count Reporting-Endpoints <<<"$out")"
+  equals "csp-report: a POST reaches web with its path unchanged" /api/csp-report \
+    "$(get /api/csp-report -X POST -H 'Content-Type: application/csp-report' -d '{}' | jget path)"
+  equals "csp-report: a GET is refused by the edge (405)" 405 "$(code /api/csp-report)"
+  equals "csp-report: a body over 16 KiB is refused (413)" 413 \
+    "$(code /api/csp-report -X POST -H 'Content-Type: application/reports+json' --data-binary "$(head -c 17000 /dev/zero | tr '\0' 'a')")"
+  out="$(get_post_many 50 /api/csp-report)"
+  check "csp-report: 50 posts at once, some are 429 (csp_report zone)" grep -q 429 <<<"$out"
+  check "csp-report: the burst lets some through" grep -q 200 <<<"$out"
+  sleep 3
 }
 
 group_site_notice() {
