@@ -188,7 +188,8 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   edits every alternation. `tests/test_edge_contract.py` fails otherwise, and
   `compose/nginx/tests/test_edge.sh` runs every rule against a real nginx and a
   stub upstream (also inside `check-stack.sh`).
-- nginx owns HSTS (`HSTS_MAX_AGE`), Permissions-Policy and the Report-Only CSP;
+- nginx owns HSTS (`HSTS_MAX_AGE`), Permissions-Policy and the Report-Only CSP and its report endpoint
+  (`/api/csp-report`: own location, rate zone `csp_report`, 16 KiB, POST only);
   Django owns X-Frame-Options, nosniff and Referrer-Policy. The querysets API,
   `/silk/`, `/metrics` and `/readyz` are refused at the edge. The 404, 429 and
   50x pages are nginx's own; the 50x page is the site's
