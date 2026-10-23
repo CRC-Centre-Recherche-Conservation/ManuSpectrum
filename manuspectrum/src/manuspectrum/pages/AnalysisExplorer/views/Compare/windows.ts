@@ -1,0 +1,419 @@
+import { materialRecords } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
+import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
+
+import type {
+    AnalysisHit,
+    CharacterizationSummary,
+    Excitation,
+    FileEntry,
+    Item,
+    SynthesisResponse,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    BasketItem,
+    ItemKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { MaterialRecord } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/materials.ts";
+
+export type AutoWindowKind =
+    | "xy"
+    | "chemical-imaging"
+    | "micro"
+    | "characterizations"
+    | "not-in-chart";
+
+/** XY windows shown unfolded; the next ones, and the chemical imaging window after as many, open folded to their header. */
+export const UNFOLDED_XY_WINDOWS = 3;
+
+/** The group of readable spectra whose configuration states no axis title. */
+const NO_AXIS_GROUP = "-";
+
+export const CHEMICAL_IMAGING_WINDOW_ID = "auto:chemical-imaging";
+export const MICRO_WINDOW_ID = "auto:micro";
+export const MATERIALS_WINDOW_ID = "auto:characterizations";
+export const NOT_IN_CHART_WINDOW_ID = "auto:not-in-chart";
+
+/** A file of a Selection item, under its item's label (A1…). */
+export interface FileLine {
+    key: ItemKey;
+    slot: number;
+    analysis: AnalysisHit;
+    file: FileEntry;
+    /** The X-ray tube of the item's analysis; null or absent for an item that carries none. */
+    excitation?: Excitation | null;
+}
+
+/** A layered map (`chemical-imaging` file) of a Selection item; `named` is the layer index a one-layer key (`im:`) names. */
+export interface MapLine extends FileLine {
+    named: number | null;
+}
+
+export interface MaterialRow {
+    key: ItemKey;
+    slot: number;
+    characterization: CharacterizationSummary;
+}
+
+/**
+ * Why an item is in no chart: a raw instrument file or another file is
+ * downloaded, an analysis may hold nothing to show, and an item may no
+ * longer be visible.
+ */
+export type NotInChartReason = "raw-file" | "file" | "no-data" | "missing";
+
+export interface NotInChartEntry {
+    key: ItemKey;
+    slot: number;
+    reason: NotInChartReason;
+    analysis: AnalysisHit | null;
+    file: FileEntry | null;
+}
+
+interface WindowBase {
+    /** Stable: the same content keeps the same id whatever else the Selection holds. */
+    id: string;
+    /** The Selection keys the window shows, in slot order. */
+    keys: ItemKey[];
+}
+
+export interface XyWindow extends WindowBase {
+    kind: "xy";
+    axisKey: string | null;
+    /** The first stored configuration name, in slot order. */
+    configName: string | null;
+    /** The first stored axis titles, in slot order. */
+    xLabel: string | null;
+    yLabel: string | null;
+    folded: boolean;
+    curves: FileLine[];
+}
+
+/** The layered maps (`chemical-imaging` files) of the Selection, side by side. */
+export interface ChemicalImagingWindow extends WindowBase {
+    kind: "chemical-imaging";
+    maps: MapLine[];
+    folded: boolean;
+}
+
+export interface MicroWindow extends WindowBase {
+    kind: "micro";
+    images: FileLine[];
+}
+
+/** Every identified material of the synthesis: the Selection's own (`rows`, its `keys`) and those citing one of its analyses. */
+export interface MaterialsWindow extends WindowBase {
+    kind: "characterizations";
+    rows: MaterialRow[];
+    records: MaterialRecord[];
+    /** The Selection's analyses, once each, in slot order. */
+    analyses: AnalysisHit[];
+    /** The synthesis the records come from; null before it answers. */
+    synthesis: SynthesisResponse | null;
+}
+
+export interface NotInChartWindow extends WindowBase {
+    kind: "not-in-chart";
+    entries: NotInChartEntry[];
+}
+
+/** A window arranged from the Selection. */
+export type AutoWindow =
+    | XyWindow
+    | ChemicalImagingWindow
+    | MicroWindow
+    | MaterialsWindow
+    | NotInChartWindow;
+
+export function xyWindowId(axisKey: string | null): string {
+    return `auto:xy:${axisKey ?? NO_AXIS_GROUP}`;
+}
+
+export function windowIdsOf(windows: readonly AutoWindow[]): string[] {
+    return windows.map((window) => window.id);
+}
+
+function isReadableSpectrum(file: FileEntry): boolean {
+    return file.dataKind === "xy" && file.role === "readable";
+}
+
+function isLayeredMap(file: FileEntry): boolean {
+    return file.dataKind === "chemical-imaging" && file.layers.length > 0;
+}
+
+function withKey(keys: ItemKey[], key: ItemKey): void {
+    if (!keys.includes(key)) keys.push(key);
+}
+
+/** What one file of an older one-file key (`af:`) is shown as. */
+function fileReason(file: FileEntry): NotInChartReason {
+    return file.role === "raw" ? "raw-file" : "file";
+}
+
+class Collector {
+    readonly curves = new Map<string, FileLine[]>();
+    readonly maps: MapLine[] = [];
+    readonly images: FileLine[] = [];
+    readonly rows: MaterialRow[] = [];
+    readonly analyses = new Map<string, AnalysisHit>();
+    readonly entries: NotInChartEntry[] = [];
+
+    constructor(
+        private readonly synthesis: SynthesisResponse | null,
+        private readonly previous: boolean,
+    ) {}
+
+    addFile(line: FileLine, named: number | null = null): boolean {
+        if (isLayeredMap(line.file)) {
+            this.maps.push({ ...line, named });
+            return true;
+        }
+        if (isReadableSpectrum(line.file)) {
+            const id = xyWindowId(line.file.viewer.axisKey);
+            this.curves.set(id, [...(this.curves.get(id) ?? []), line]);
+            return true;
+        }
+        if (line.file.dataKind === "micro-imaging") {
+            this.images.push(line);
+            return true;
+        }
+        return false;
+    }
+
+    addEntry(
+        { key, slot }: BasketItem,
+        reason: NotInChartReason,
+        analysis: AnalysisHit | null = null,
+        file: FileEntry | null = null,
+    ): void {
+        this.entries.push({ key, slot, reason, analysis, file });
+    }
+
+    add(item: BasketItem, read: Item): void {
+        const { key, slot } = item;
+        if (
+            read.kind !== "characterization" &&
+            !this.analyses.has(read.analysis.id)
+        ) {
+            this.analyses.set(read.analysis.id, read.analysis);
+        }
+        if (read.kind === "characterization") {
+            this.rows.push({
+                key,
+                slot,
+                characterization: read.characterization,
+            });
+        } else if (read.kind === "imaging") {
+            const named = Number(key.split(":")[2]);
+            const line = {
+                key,
+                slot,
+                analysis: read.analysis,
+                file: read.file,
+                excitation: null,
+            };
+            if (!this.addFile(line, Number.isInteger(named) ? named : null)) {
+                this.addEntry(item, "no-data", read.analysis, read.file);
+            }
+        } else if (read.kind === "analysis-file") {
+            const line = {
+                key,
+                slot,
+                analysis: read.analysis,
+                file: read.file,
+                excitation: read.excitation,
+            };
+            if (!this.addFile(line)) {
+                this.addEntry(
+                    item,
+                    fileReason(read.file),
+                    read.analysis,
+                    read.file,
+                );
+            }
+        } else {
+            let shown = false;
+            for (const file of read.files) {
+                shown =
+                    this.addFile({
+                        key,
+                        slot,
+                        analysis: read.analysis,
+                        file,
+                        excitation: read.excitation,
+                    }) || shown;
+            }
+            if (!shown) this.addEntry(item, "no-data", read.analysis);
+        }
+    }
+
+    windows(): AutoWindow[] {
+        const windows: AutoWindow[] = [...this.curves].map(
+            ([id, curves], index): XyWindow => ({
+                id,
+                kind: "xy",
+                keys: curves.reduce<ItemKey[]>((keys, curve) => {
+                    withKey(keys, curve.key);
+                    return keys;
+                }, []),
+                axisKey: curves[0].file.viewer.axisKey,
+                configName: firstStoredTitle(
+                    curves.map((curve) => curve.file.viewer.configName),
+                ),
+                xLabel: firstStoredTitle(
+                    curves.map((curve) => curve.file.viewer.xLabel),
+                ),
+                yLabel: firstStoredTitle(
+                    curves.map((curve) => curve.file.viewer.yLabel),
+                ),
+                folded: index >= UNFOLDED_XY_WINDOWS,
+                curves,
+            }),
+        );
+        if (this.maps.length > 0) {
+            const keys: ItemKey[] = [];
+            for (const line of this.maps) withKey(keys, line.key);
+            windows.push({
+                id: CHEMICAL_IMAGING_WINDOW_ID,
+                kind: "chemical-imaging",
+                keys,
+                maps: this.maps,
+                folded: this.curves.size >= UNFOLDED_XY_WINDOWS,
+            });
+        }
+        if (this.images.length > 0) {
+            const keys: ItemKey[] = [];
+            for (const image of this.images) withKey(keys, image.key);
+            windows.push({
+                id: MICRO_WINDOW_ID,
+                kind: "micro",
+                keys,
+                images: this.images,
+            });
+        }
+        const records = materialRecords(
+            this.rows,
+            this.synthesis,
+            this.previous ? new Set(this.analyses.keys()) : null,
+        );
+        if (records.length > 0) {
+            windows.push({
+                id: MATERIALS_WINDOW_ID,
+                kind: "characterizations",
+                keys: this.rows.map((row) => row.key),
+                rows: this.rows,
+                records,
+                analyses: [...this.analyses.values()],
+                synthesis: this.synthesis,
+            });
+        }
+        if (this.entries.length > 0) {
+            windows.push({
+                id: NOT_IN_CHART_WINDOW_ID,
+                kind: "not-in-chart",
+                keys: this.entries.map((entry) => entry.key),
+                entries: this.entries,
+            });
+        }
+        return windows;
+    }
+}
+
+/**
+ * The windows arranged from the Selection: one XY window per axis group
+ * (`FileEntry.viewer.axisKey`, every readable spectrum of an analysis in its
+ * slot), the chemical imaging maps (opened folded when the XY windows already fill
+ * the unfolded ones), the micro-images, the identified materials (the
+ * Selection's own and, once `synthesis` is given, those citing one of its
+ * analyses: `materialRecords`; with `previous`, `synthesis` answers a
+ * previous Selection and only what the Selection still justifies is kept
+ * of it), and what no window draws. Windows and their contents follow slot order; an XY window comes
+ * where its first slot does. An item not read yet waits outside the
+ * windows; a key the items API reports missing is listed as such. Older
+ * one-file (`af:`) and one-layer (`im:`) keys are read into the same windows.
+ */
+export function autoWindows(
+    basket: readonly BasketItem[],
+    byKey: ReadonlyMap<string, Item>,
+    missing: ReadonlySet<string>,
+    synthesis: SynthesisResponse | null = null,
+    previous = false,
+): AutoWindow[] {
+    const collector = new Collector(synthesis, previous);
+    for (const item of [...basket].sort((a, b) => a.slot - b.slot)) {
+        const read = byKey.get(item.key);
+        if (read) {
+            collector.add(item, read);
+        } else if (missing.has(item.key)) {
+            collector.addEntry(item, "missing");
+        }
+    }
+    return collector.windows();
+}
+
+function curveId(curve: FileLine): string {
+    return `${curve.key}|${curve.slot}|${curve.file.id}`;
+}
+
+function curvesOf(windows: readonly AutoWindow[]): Map<string, FileLine[]> {
+    return new Map(
+        windows.flatMap((window) =>
+            window.kind === "xy" ? [[window.id, window.curves]] : [],
+        ),
+    );
+}
+
+/**
+ * `next`, each XY window holding the curves array of `previous` when its
+ * curves are the same files in the same slots: a window whose spectra did
+ * not change keeps its curves' identity, and its chart is not drawn again.
+ */
+export function keepUnchangedCurves(
+    previous: readonly AutoWindow[],
+    next: AutoWindow[],
+): AutoWindow[] {
+    const kept = curvesOf(previous);
+    return next.map((window) => {
+        const curves = window.kind === "xy" ? kept.get(window.id) : undefined;
+        if (
+            window.kind !== "xy" ||
+            !curves ||
+            curves.map(curveId).join("\n") !==
+                window.curves.map(curveId).join("\n")
+        ) {
+            return window;
+        }
+        return { ...window, curves };
+    });
+}
+
+/**
+ * For each XY window of `next`, how many spectra (files in slots) it holds
+ * that its namesake in `previous` did not hold; windows that gained none are
+ * left out.
+ */
+export function xyCurvesGained(
+    previous: readonly AutoWindow[],
+    next: readonly AutoWindow[],
+): Map<string, number> {
+    const before = curvesOf(previous);
+    const gained = new Map<string, number>();
+    for (const [id, curves] of curvesOf(next)) {
+        const known = new Set((before.get(id) ?? []).map(curveId));
+        const count = curves.filter(
+            (curve) => !known.has(curveId(curve)),
+        ).length;
+        if (count > 0) gained.set(id, count);
+    }
+    return gained;
+}
+
+/** The spectra the XY windows draw together, a hidden window's included: every curve with a preview. */
+export function xySpectraCount(windows: readonly AutoWindow[]): number {
+    let count = 0;
+    for (const curves of curvesOf(windows).values()) {
+        count += curves.filter(
+            (curve) => curve.file.previewUrl !== null,
+        ).length;
+    }
+    return count;
+}

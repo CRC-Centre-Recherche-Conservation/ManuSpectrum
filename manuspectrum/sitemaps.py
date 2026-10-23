@@ -10,7 +10,7 @@ DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
 
 
 class StaticSitemap(Sitemap):
-    """Homepage and the public About pages.
+    """Homepage, the Analysis Explorer and the public About pages.
 
     `home` (/index.htm) is deliberately absent: it duplicates `root` and now
     301-redirects to it (see urls.py). i18n + alternates emit one <url> per
@@ -26,7 +26,14 @@ class StaticSitemap(Sitemap):
     x_default = False
 
     def items(self):
-        return ["root", "about-model", "about-explorer", "about-team", "about-contact"]
+        return [
+            "root",
+            "analysis-explorer",
+            "about-model",
+            "about-explorer",
+            "about-team",
+            "about-contact",
+        ]
 
     def location(self, item):
         return reverse(item)

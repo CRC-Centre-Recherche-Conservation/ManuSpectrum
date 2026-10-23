@@ -1,0 +1,786 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
+import PrimeVue from "primevue/config";
+
+import MaterialsControl from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue";
+
+import { forgetPayloads } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
+import { ANNOUNCE_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import {
+    facet,
+    facetValue,
+    label,
+    mapEvent,
+    uuid,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
+
+import type { Pinia } from "pinia";
+import type {
+    Label,
+    MapColour,
+    MapEvent,
+    MapMaterial,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+    generateArchesURL: (name: string) => `/en/${name}`,
+}));
+
+const BLUE = "http://colour.test/blue";
+const RED = "http://colour.test/red";
+const GREEN = "http://colour.test/green";
+const YELLOW = "http://colour.test/yellow";
+const PURPLE = "http://colour.test/purple";
+const OCHRE = "http://colour.test/ochre";
+const NAMES = ["Lapis lazuli", "Azurite", "Vermilion", "Lead white", "Minium"];
+const URIS = NAMES.map((_, index) => `http://material.test/m${index + 1}`);
+
+const fetchMock = vi.fn();
+const announce = vi.fn();
+let pinia: Pinia;
+
+function material(index: number, colours: string[]): MapMaterial {
+    return {
+        uri: URIS[index],
+        label: label(NAMES[index]),
+        colours,
+        swatch: null,
+        ancestors: [],
+    };
+}
+
+const materials: Record<string, MapMaterial> = {
+    [URIS[0]]: material(0, [BLUE, RED]),
+    [URIS[1]]: material(1, [BLUE]),
+    [URIS[2]]: material(2, [RED]),
+    [URIS[3]]: material(3, []),
+    [URIS[4]]: material(4, [RED]),
+};
+
+const colours: Record<string, MapColour> = {
+    [BLUE]: { uri: BLUE, label: label("Blue"), swatch: "#2244aa" },
+    [RED]: { uri: RED, label: label("Red"), swatch: "#aa2222" },
+    [GREEN]: { uri: GREEN, label: label("Green"), swatch: "#22aa44" },
+    [YELLOW]: { uri: YELLOW, label: label("Yellow"), swatch: "#ddcc22" },
+    [PURPLE]: { uri: PURPLE, label: label("Purple"), swatch: "#7722aa" },
+    [OCHRE]: { uri: OCHRE, label: label("Ochre"), swatch: "#cc8833" },
+};
+
+function events(): MapEvent[] {
+    return URIS.map((uri, index) =>
+        mapEvent({
+            id: `production:${index}`,
+            document: { id: uuid(index + 1), name: label(`Ms ${index}`) },
+            component: { id: uuid(50 + index), name: label(`f. ${index}`) },
+            materials: [
+                {
+                    id: uri,
+                    name: label(NAMES[index]),
+                    reliability: null,
+                    characterization: uuid(200 + index),
+                    colours: [],
+                    matches: true,
+                    componentColours: [],
+                },
+            ],
+        }),
+    );
+}
+
+function mountControl(
+    shown: MapEvent[] = events(),
+    known: Record<string, MapMaterial> = materials,
+    coveringMaterials: Record<string, Label> = {},
+) {
+    return mount(MaterialsControl, {
+        props: { events: shown, materials: known, colours, coveringMaterials },
+        global: {
+            plugins: [pinia, PrimeVue],
+            provide: { [ANNOUNCE_KEY as symbol]: announce },
+        },
+    });
+}
+
+function rowOf(wrapper: ReturnType<typeof mountControl>, name: string) {
+    const row = wrapper
+        .findAll("li.row")
+        .find((item) => item.find(".label").text() === name);
+    if (!row) throw new Error(`no row ${name}`);
+    return row;
+}
+
+beforeEach(() => {
+    forgetPayloads();
+    pinia = createPinia();
+    setActivePinia(pinia);
+    fetchMock.mockReset();
+    announce.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
+
+describe("MaterialsControl", () => {
+    it("groups the materials by observed colour, the uncoloured last", () => {
+        const wrapper = mountControl();
+        const headings = wrapper.findAll(".colour-group h4 .name");
+        expect(headings.map((heading) => heading.text())).toEqual([
+            "Blue",
+            "Red",
+            "No colour recorded",
+        ]);
+        expect(wrapper.find(".colour-group .counts").text()).toBe(
+            "2 docs · 2 Comp.",
+        );
+    });
+
+    it("heads a group with its whole colour name, the counts after it in the same wrapping line", () => {
+        const head = mountControl().get(".colour-group h4 .head");
+        const text = head.get(".head-text");
+        expect(
+            [...text.element.children].map((child) => child.className),
+        ).toEqual(["name", "counts"]);
+        expect(text.get(".name").attributes("title")).toBeUndefined();
+        expect(
+            [...head.element.children].map((child) => child.classList[0]),
+        ).toEqual([undefined, "swatch", "head-text"]);
+        expect(head.element.firstElementChild?.tagName).toBe("INPUT");
+    });
+
+    it("ticks a colour head into the Corpus colour filter and unticks it", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountControl();
+        const head = () => wrapper.findAll(".colour-group .head")[1];
+        const box = head().get("input[type=checkbox]");
+        expect(head().element.tagName).toBe("LABEL");
+        expect(box.attributes("aria-label")).toBe("Filter: colour Red");
+        await box.setValue(true);
+        expect(store.filters.colour).toEqual([RED]);
+        expect(store.filters.material).toEqual([]);
+        expect(head().classes()).toContain("ticked");
+        await head().get("input[type=checkbox]").setValue(false);
+        expect(store.filters.colour).toEqual([]);
+        expect(head().classes()).not.toContain("ticked");
+    });
+
+    it("shows a colour ticked in the Corpus as a ticked head", async () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", [BLUE]);
+        const wrapper = mountControl();
+        const [blue, red] = wrapper.findAll(".colour-group .head");
+        expect((blue.get("input").element as HTMLInputElement).checked).toBe(
+            true,
+        );
+        expect(blue.classes()).toContain("ticked");
+        expect((red.get("input").element as HTMLInputElement).checked).toBe(
+            false,
+        );
+        store.setFacet("colour", []);
+        await flushPromises();
+        expect((blue.get("input").element as HTMLInputElement).checked).toBe(
+            false,
+        );
+    });
+
+    it("keeps the head of a ticked colour no row falls under, without counts", async () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", [GREEN]);
+        const wrapper = mountControl();
+        const green = wrapper
+            .findAll(".colour-group")
+            .find((group) => group.get(".name").text() === "Green");
+        expect(green).toBeDefined();
+        expect(green?.findAll("li.row")).toHaveLength(0);
+        expect(green?.find(".counts").exists()).toBe(false);
+        await green?.get(".head input").setValue(false);
+        expect(store.filters.colour).toEqual([]);
+        expect(
+            wrapper.findAll(".colour-group .name").map((name) => name.text()),
+        ).not.toContain("Green");
+    });
+
+    describe("a material observed in a ticked colour other than its main one", () => {
+        const LEAD_WHITE = URIS[3];
+        const known = {
+            ...materials,
+            [LEAD_WHITE]: material(3, [RED, BLUE]),
+        };
+
+        function observed(): MapEvent[] {
+            const leadWhite = [RED, RED, BLUE].map((colour, n) =>
+                mapEvent({
+                    id: `production:lead${n}`,
+                    document: { id: uuid(600 + n), name: label(`Ms L${n}`) },
+                    component: { id: uuid(650 + n), name: label(`f. L${n}`) },
+                    materials: [
+                        {
+                            id: LEAD_WHITE,
+                            name: label("Lead white"),
+                            reliability: null,
+                            characterization: uuid(700 + n),
+                            colours: [colour],
+                            matches: true,
+                            componentColours: [],
+                        },
+                    ],
+                }),
+            );
+            return [
+                ...events().filter((event) =>
+                    event.materials.every((m) => m.id !== LEAD_WHITE),
+                ),
+                ...leadWhite,
+            ];
+        }
+
+        function rowsIn(
+            wrapper: ReturnType<typeof mountControl>,
+            colour: string,
+        ) {
+            const group = wrapper
+                .findAll(".colour-group")
+                .find((found) => found.get(".name").text() === colour);
+            if (!group) throw new Error(`no group ${colour}`);
+            return group
+                .findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Lead white");
+        }
+
+        it("sits under the ticked colour with that colour's counts and a hint, and under its main colour", () => {
+            const store = useExplorerStore();
+            store.setFacet("colour", [BLUE]);
+            const wrapper = mountControl(observed(), known);
+            const [underBlue] = rowsIn(wrapper, "Blue");
+            const [underRed] = rowsIn(wrapper, "Red");
+            expect(underBlue.get(".row-counts").text()).toBe("1 doc · 1 Comp.");
+            expect(underBlue.get(".observed").text()).toBe("observed blue");
+            expect(underBlue.find(".others").exists()).toBe(false);
+            expect(underRed.get(".row-counts").text()).toBe("3 docs · 3 Comp.");
+            expect(underRed.find(".observed").exists()).toBe(false);
+        });
+
+        it("counts a material of the ticked colour itself on that colour only, with the hint", () => {
+            const store = useExplorerStore();
+            store.setFacet("colour", [BLUE]);
+            const azurite = (colours: string[], n: number): MapEvent =>
+                mapEvent({
+                    id: `production:azurite${n}`,
+                    document: { id: uuid(800 + n), name: label(`Ms A${n}`) },
+                    component: { id: uuid(850 + n), name: label(`f. A${n}`) },
+                    materials: [
+                        {
+                            id: URIS[1],
+                            name: label("Azurite"),
+                            reliability: null,
+                            characterization: uuid(900 + n),
+                            colours,
+                            matches: true,
+                            componentColours: [],
+                        },
+                    ],
+                });
+            const shown = [
+                ...observed().filter((event) =>
+                    event.materials.every((m) => m.id !== URIS[1]),
+                ),
+                azurite([BLUE], 0),
+                azurite([], 1),
+            ];
+            const wrapper = mountControl(shown, known);
+            const group = wrapper
+                .findAll(".colour-group")
+                .find((found) => found.get(".name").text() === "Blue");
+            const rows = group
+                ?.findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Azurite");
+            expect(rows).toHaveLength(1);
+            expect(rows?.[0].get(".row-counts").text()).toBe("1 doc · 1 Comp.");
+            expect(rows?.[0].get(".observed").text()).toBe("observed blue");
+        });
+
+        it("ticks both of its rows from either", async () => {
+            const store = useExplorerStore();
+            store.setFacet("colour", [BLUE]);
+            const wrapper = mountControl(observed(), known);
+            await rowsIn(wrapper, "Blue")[0]
+                .get("input[type=checkbox]")
+                .setValue(true);
+            expect(store.filters.material).toEqual([LEAD_WHITE]);
+            for (const colour of ["Blue", "Red"]) {
+                const box = rowsIn(wrapper, colour)[0].get(
+                    "input[type=checkbox]",
+                ).element as HTMLInputElement;
+                expect(box.checked).toBe(true);
+            }
+        });
+
+        it("sits once when no colour is ticked", () => {
+            const wrapper = mountControl(observed(), known);
+            const rows = wrapper
+                .findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Lead white");
+            expect(rows).toHaveLength(1);
+            expect(wrapper.find(".observed").exists()).toBe(false);
+        });
+    });
+
+    describe("under a ticked broader material", () => {
+        const PIGMENT = "http://material.test/blue-pigment";
+        const covering = { [PIGMENT]: label("Blue pigment") };
+        const known = {
+            ...materials,
+            [URIS[0]]: { ...material(0, [BLUE, RED]), ancestors: [PIGMENT] },
+            [URIS[1]]: { ...material(1, [BLUE]), ancestors: [PIGMENT] },
+        };
+        /** Lapis lazuli is itself the broader term of Azurite. */
+        const nested = {
+            ...materials,
+            [URIS[1]]: { ...material(1, [BLUE]), ancestors: [URIS[0]] },
+        };
+
+        function heads(wrapper: ReturnType<typeof mountControl>) {
+            return wrapper.findAll(".covering-head");
+        }
+
+        it("a row under a ticked parent is covered and names the parent", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [PIGMENT]);
+            const wrapper = mountControl(events(), known, covering);
+            const box = rowOf(wrapper, "Azurite").get("input[type=checkbox]");
+            expect((box.element as HTMLInputElement).checked).toBe(true);
+            expect(box.attributes("aria-disabled")).toBe("true");
+            expect(box.attributes("disabled")).toBeUndefined();
+            const said = wrapper.get(
+                `[id="${box.attributes("aria-describedby")}"]`,
+            );
+            expect(said.text()).toBe("covered by Blue pigment");
+            expect(rowOf(wrapper, "Azurite").classes()).toContain("covered");
+            await box.trigger("click");
+            expect((box.element as HTMLInputElement).checked).toBe(true);
+            await box.trigger("change");
+            expect(store.filters.material).toEqual([PIGMENT]);
+            const free = rowOf(wrapper, "Vermilion").get(
+                "input[type=checkbox]",
+            );
+            expect(free.attributes("aria-disabled")).toBeUndefined();
+            expect((free.element as HTMLInputElement).checked).toBe(false);
+        });
+
+        it("Follow on a covered row follows the exact uri", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [PIGMENT]);
+            const wrapper = mountControl(events(), known, covering);
+            const follow = rowOf(wrapper, "Azurite").get("button.follow");
+            expect(follow.attributes("disabled")).toBeUndefined();
+            await follow.trigger("click");
+            expect(store.mapState.track).toEqual([URIS[1]]);
+            expect(store.filters.material).toEqual([PIGMENT]);
+        });
+
+        it("a covering head counts the rows it covers and unticks the parent", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [PIGMENT, URIS[2]]);
+            const wrapper = mountControl(events(), known, covering);
+            const [head] = heads(wrapper);
+            expect(heads(wrapper)).toHaveLength(1);
+            expect(head.get(".head-label").text()).toBe("Blue pigment");
+            expect(head.get(".head-covers").text()).toBe(
+                "covers 2 materials here",
+            );
+            const box = head.get("input[type=checkbox]");
+            expect(box.attributes("aria-label")).toBe("Filter: Blue pigment");
+            expect((box.element as HTMLInputElement).checked).toBe(true);
+            const list = wrapper.get(".covering").element;
+            const groups = wrapper.get(".groups").element;
+            expect(
+                list.compareDocumentPosition(groups) &
+                    Node.DOCUMENT_POSITION_FOLLOWING,
+            ).toBeTruthy();
+            await box.setValue(false);
+            expect(store.filters.material).toEqual([URIS[2]]);
+            expect(heads(wrapper)).toHaveLength(0);
+            const azurite = rowOf(wrapper, "Azurite").get(
+                "input[type=checkbox]",
+            );
+            expect(azurite.attributes("aria-disabled")).toBeUndefined();
+        });
+
+        it("a covering head has no Follow button", () => {
+            useExplorerStore().setFacet("material", [PIGMENT]);
+            const [head] = heads(mountControl(events(), known, covering));
+            expect(head.find("button").exists()).toBe(false);
+            expect(head.text()).not.toContain("Follow");
+        });
+
+        it("a covering material that is itself listed keeps its ticked row and its head says other materials", async () => {
+            const store = useExplorerStore();
+            store.setFacet("material", [URIS[0]]);
+            const wrapper = mountControl(events(), nested, {
+                [URIS[0]]: label("Lapis lazuli"),
+            });
+            const [head] = heads(wrapper);
+            expect(head.get(".head-covers").text()).toBe(
+                "covers 1 other material here",
+            );
+            const own = rowOf(wrapper, "Lapis lazuli").get(
+                "input[type=checkbox]",
+            );
+            expect((own.element as HTMLInputElement).checked).toBe(true);
+            expect(own.attributes("aria-disabled")).toBeUndefined();
+            expect(
+                rowOf(wrapper, "Lapis lazuli").find(".covered-by").exists(),
+            ).toBe(false);
+            expect(rowOf(wrapper, "Azurite").get(".covered-by").text()).toBe(
+                "covered by Lapis lazuli",
+            );
+            await own.setValue(false);
+            expect(store.filters.material).toEqual([]);
+            expect(heads(wrapper)).toHaveLength(0);
+        });
+
+        it("the explainer and the Follow help say Follow never follows narrower terms", () => {
+            const wrapper = mountControl();
+            expect(wrapper.get(".explainer").text()).toContain(
+                "A ticked material also keeps its narrower terms; Follow follows that material only.",
+            );
+            const follow = rowOf(wrapper, "Azurite").get("button.follow");
+            expect(
+                wrapper
+                    .get(`[id="${follow.attributes("aria-describedby")}"]`)
+                    .text(),
+            ).toContain(
+                "Follow follows this material only, never its narrower terms.",
+            );
+        });
+
+        it("a search on a parent keeps the rows of its descendants", async () => {
+            fetchMock.mockResolvedValue(
+                jsonResponse({
+                    ...facet("material", 0),
+                    values: [facetValue(URIS[0], "Lapis lazuli")],
+                    total: 1,
+                    found: [URIS[0]],
+                }),
+            );
+            const wrapper = mountControl(events(), nested);
+            await wrapper.find("input[type=search]").setValue("lapis");
+            await flushPromises();
+            expect(
+                wrapper
+                    .findAll("li.row .label")
+                    .map((row) => row.text())
+                    .sort(),
+            ).toEqual(["Azurite", "Lapis lazuli"]);
+        });
+
+        it("a search on a narrower term leaves out its kept ancestors", async () => {
+            fetchMock.mockResolvedValue(
+                jsonResponse({
+                    ...facet("material", 0),
+                    values: [
+                        facetValue(URIS[0], "Lapis lazuli"),
+                        facetValue(URIS[1], "Azurite"),
+                    ],
+                    total: 2,
+                    found: [URIS[1]],
+                }),
+            );
+            const wrapper = mountControl(events(), nested);
+            await wrapper.find("input[type=search]").setValue("azur");
+            await flushPromises();
+            expect(
+                wrapper.findAll("li.row .label").map((row) => row.text()),
+            ).toEqual(["Azurite"]);
+        });
+    });
+
+    it("lists a colourless material under a ticked colour its Component carries, « via its Component »", () => {
+        const store = useExplorerStore();
+        store.setFacet("colour", [BLUE]);
+        const throughComponent = (n: number, reached: string[]): MapEvent =>
+            mapEvent({
+                id: `production:white${n}`,
+                document: { id: uuid(400 + n), name: label(`Ms W${n}`) },
+                component: { id: uuid(450 + n), name: label(`f. W${n}`) },
+                materials: [
+                    {
+                        id: URIS[3],
+                        name: label("Lead white"),
+                        reliability: null,
+                        characterization: uuid(500 + n),
+                        colours: [],
+                        matches: true,
+                        componentColours: reached,
+                    },
+                ],
+            });
+        const shown = [
+            ...events().filter((event) =>
+                event.materials.every((m) => m.id !== URIS[3]),
+            ),
+            throughComponent(0, [BLUE]),
+            throughComponent(1, []),
+        ];
+        const wrapper = mountControl(shown);
+        const rowsUnder = (name: string) =>
+            wrapper
+                .findAll(".colour-group")
+                .find((found) => found.get(".name").text() === name)
+                ?.findAll("li.row")
+                .filter((row) => row.get(".label").text() === "Lead white") ??
+            [];
+        const [underBlue] = rowsUnder("Blue");
+        expect(underBlue.get(".row-counts").text()).toBe("1 doc · 1 Comp.");
+        expect(underBlue.get(".observed").text()).toBe("via its Component");
+        const [uncoloured] = rowsUnder("No colour recorded");
+        expect(uncoloured.get(".row-counts").text()).toBe("2 docs · 2 Comp.");
+        expect(uncoloured.find(".observed").exists()).toBe(false);
+    });
+
+    it("gives the group without a recorded colour no checkbox", () => {
+        const heads = mountControl().findAll(".colour-group .head");
+        const none = heads[heads.length - 1];
+        expect(none.get(".name").text()).toBe("No colour recorded");
+        expect(none.element.tagName).toBe("SPAN");
+        expect(none.find("input").exists()).toBe(false);
+    });
+
+    it("ticks a material into the material filter and unticks it", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountControl();
+        const box = rowOf(wrapper, "Azurite").find("input[type=checkbox]");
+        expect(box.attributes("aria-label")).toBe("Filter: Azurite");
+        await box.setValue(true);
+        expect(store.filters.material).toEqual([URIS[1]]);
+        await rowOf(wrapper, "Azurite")
+            .find("input[type=checkbox]")
+            .setValue(false);
+        expect(store.filters.material).toEqual([]);
+    });
+
+    it("follows into slots 1 to 4 and refuses a fifth with a notice", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountControl();
+        for (const name of NAMES.slice(0, 4)) {
+            await rowOf(wrapper, name).find("button.follow").trigger("click");
+        }
+        expect(store.mapState.track).toEqual(URIS.slice(0, 4));
+        const followed = rowOf(wrapper, "Vermilion").find("button.follow");
+        expect(followed.attributes("aria-pressed")).toBe("true");
+        expect(followed.attributes("aria-label")).toBe(
+            "Stop following Vermilion (colour 3)",
+        );
+        expect(followed.text()).toBe("3");
+        expect(followed.attributes("data-bloom")).toBe("odd");
+        expect(wrapper.find(".refused").exists()).toBe(false);
+
+        await rowOf(wrapper, "Minium").find("button.follow").trigger("click");
+        expect(store.mapState.track).toEqual(URIS.slice(0, 4));
+        expect(wrapper.find(".refused").text()).toBe(
+            "Four materials are followed already: stop following one first.",
+        );
+        expect(wrapper.find(".refused").attributes("role")).toBeUndefined();
+        expect(announce).toHaveBeenLastCalledWith(
+            "Four materials are followed already: stop following one first.",
+        );
+
+        await wrapper.find(".chip-row .unpin").trigger("click");
+        expect(store.mapState.track).toEqual([null, ...URIS.slice(1, 4)]);
+        await rowOf(wrapper, "Minium").find("button.follow").trigger("click");
+        expect(store.mapState.track).toEqual([URIS[4], ...URIS.slice(1, 4)]);
+        expect(wrapper.find(".refused").exists()).toBe(false);
+        expect(announce).toHaveBeenCalledWith("Following Minium (colour 1).");
+    });
+
+    it("heads the two controls « Show » and « Follow », and explains Follow on each button", () => {
+        const wrapper = mountControl();
+        expect(
+            wrapper.findAll(".columns span").map((entry) => entry.text()),
+        ).toEqual(["Show", "Follow"]);
+        const follow = rowOf(wrapper, "Vermilion").get("button.follow");
+        const help = wrapper.get(
+            `[id="${follow.attributes("aria-describedby")}"]`,
+        );
+        expect(help.text()).toBe(
+            "Follow gives the material its own colour on the map, its territory and its line in the timeline (four at most). Follow follows this material only, never its narrower terms. Show only shows or hides its events.",
+        );
+    });
+
+    it("shows a followed chip per slot, and the any / all toggle from two", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountControl();
+        store.toggleTrack(URIS[0]);
+        await flushPromises();
+        expect(wrapper.findAll(".chip-row")).toHaveLength(1);
+        expect(wrapper.find(".track-mode").exists()).toBe(false);
+        store.toggleTrack(URIS[2]);
+        await flushPromises();
+        expect(
+            wrapper.findAll(".chip-row .chip-label").map((c) => c.text()),
+        ).toEqual(["Lapis lazuli", "Vermilion"]);
+        const all = wrapper.find(".track-mode button[data-mode=all]");
+        expect(all.attributes("aria-pressed")).toBe("false");
+        await all.trigger("click");
+        expect(store.trackMode).toBe("all");
+        expect(all.attributes("aria-pressed")).toBe("true");
+    });
+
+    it("says when a followed material is not attested in the kept events", async () => {
+        const store = useExplorerStore();
+        const wrapper = mountControl(events().slice(1));
+        store.toggleTrack(URIS[0]);
+        await flushPromises();
+        const chip = wrapper.find(".chip-row");
+        expect(chip.classes()).toContain("absent");
+        expect(chip.find(".absent-note").text()).toBe(
+            "not attested in the kept events",
+        );
+        expect(chip.find(".chip-label").text()).toBe("Lapis lazuli");
+    });
+
+    it("narrows the rows to the facet search answer", async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse({
+                ...facet("material", 0),
+                values: [facetValue(URIS[1], "Azurite")],
+                total: 1,
+            }),
+        );
+        const wrapper = mountControl();
+        await wrapper.find("input[type=search]").setValue("azur");
+        await flushPromises();
+        const url = String(fetchMock.mock.calls[0][0]);
+        expect(url).toContain("/en/manuspectrum:explorer-facet?");
+        expect(new URLSearchParams(url.split("?")[1]).get("find")).toBe("azur");
+        expect(
+            wrapper.findAll("li.row .label").map((row) => row.text()),
+        ).toEqual(["Azurite"]);
+    });
+
+    it("says « No match » when the search answers nothing", async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse({ ...facet("material", 0), values: [], total: 0 }),
+        );
+        const wrapper = mountControl();
+        await wrapper.find("input[type=search]").setValue("zzz");
+        await flushPromises();
+        expect(wrapper.findAll("li.row")).toHaveLength(0);
+        expect(wrapper.find(".no-match").text()).toBe("No match");
+    });
+
+    it("shows five rows per colour, ticked and followed ones above the cut", async () => {
+        const many = Array.from({ length: 8 }, (_, n) => ({
+            uri: `http://material.test/blue${n}`,
+            label: label(`Blue ${n}`),
+            colours: [BLUE],
+            swatch: null,
+            ancestors: [],
+        }));
+        const shown = many.map((entry, n) =>
+            mapEvent({
+                id: `production:blue${n}`,
+                document: { id: uuid(300 + n), name: label(`Ms ${n}`) },
+                component: { id: uuid(400 + n), name: label(`f. ${n}`) },
+                materials: [
+                    {
+                        id: entry.uri,
+                        name: entry.label,
+                        reliability: null,
+                        characterization: uuid(500 + n),
+                        colours: [],
+                        matches: true,
+                        componentColours: [],
+                    },
+                ],
+            }),
+        );
+        const known = Object.fromEntries(many.map((m) => [m.uri, m]));
+        const store = useExplorerStore();
+        store.setFacet("material", [many[7].uri]);
+        store.toggleTrack(many[6].uri);
+        const wrapper = mountControl(shown, known);
+        const labels = () =>
+            wrapper.findAll("li.row .label").map((row) => row.text());
+        expect(labels()).toHaveLength(5);
+        expect(labels().slice(0, 2).sort()).toEqual(["Blue 6", "Blue 7"]);
+        const more = wrapper.get(".colour-group .more");
+        expect(more.text()).toBe("Show 3 more");
+        await more.trigger("click");
+        expect(labels()).toHaveLength(8);
+        expect(wrapper.find(".colour-group .more").exists()).toBe(false);
+        fetchMock.mockResolvedValue(
+            jsonResponse({
+                ...facet("material", 0),
+                values: many.map((m) => facetValue(m.uri, m.label.value)),
+                total: 8,
+            }),
+        );
+        const searched = mountControl(shown, known);
+        await searched.find("input[type=search]").setValue("blue");
+        await flushPromises();
+        expect(searched.findAll("li.row")).toHaveLength(8);
+    });
+
+    it("keeps the counts and the other colours on the label's second line", () => {
+        const row = rowOf(mountControl(), "Lapis lazuli");
+        const meta = row.get(".value .meta");
+        expect(meta.find(".others").exists()).toBe(true);
+        const counts = meta.get(".row-counts");
+        expect(counts.text()).toBe("1 doc · 1 Comp.");
+        expect(counts.attributes("title")).toBe("1 document, 1 Component");
+        expect(meta.element.firstElementChild).toBe(counts.element);
+        expect(meta.element.previousElementSibling).toBe(
+            row.get(".value .label").element,
+        );
+        expect(
+            [...row.element.children].map((child) => child.classList[0]),
+        ).toEqual(["value", "help-tip"]);
+        expect(row.element.lastElementChild?.classList).toContain("follow-tip");
+        expect(row.get(".value .label").attributes("title")).toBeUndefined();
+    });
+
+    it("isolates a followed chip's slot while it is hovered or focused", async () => {
+        useExplorerStore().toggleTrack(URIS[1]);
+        const wrapper = mountControl();
+        const chip = wrapper.get(".chip-row");
+        await chip.trigger("mouseenter");
+        await chip.trigger("mouseleave");
+        await chip.get(".unpin").trigger("focusin");
+        await chip.get(".unpin").trigger("focusout");
+        expect(wrapper.emitted("isolate")).toEqual([[1], [null], [1], [null]]);
+    });
+
+    it("names the other observed colours of a row, and how many are not drawn", () => {
+        const known = {
+            ...materials,
+            [URIS[0]]: material(0, [BLUE, RED, GREEN, YELLOW, PURPLE, OCHRE]),
+        };
+        const others = rowOf(mountControl(events(), known), "Lapis lazuli").get(
+            ".others",
+        );
+        const name = "Also observed in: Red, Green, Yellow, Purple, and Ochre";
+        expect(others.attributes("role")).toBe("img");
+        expect(others.attributes("aria-label")).toBe(name);
+        expect(others.attributes("title")).toBe(name);
+        expect(others.findAll(".swatch")).toHaveLength(3);
+        const more = others.get(".more-colours");
+        expect(more.text()).toBe("+2");
+        expect(more.attributes("title")).toBe("and 2 more colours");
+    });
+
+    it("says how the materials are grouped, with no separate counts legend", () => {
+        const wrapper = mountControl();
+        expect(wrapper.get(".grouping-hint").text()).toBe(
+            "Grouped by the colour most often observed on each material; tick a colour to filter by it.",
+        );
+        expect(wrapper.get(".columns").element.nextElementSibling).toBe(
+            wrapper.get(".grouping-hint").element,
+        );
+        expect(wrapper.find(".legend").exists()).toBe(false);
+    });
+});

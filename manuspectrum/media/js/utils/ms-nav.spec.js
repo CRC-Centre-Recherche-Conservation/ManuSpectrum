@@ -1,8 +1,10 @@
 // Shared nav behaviours: glass-scroll header, mobile drawer disclosure state,
 // and the About dropdown's click/keyboard/outside-click contract.
 
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import initMsNav from "./ms-nav";
+import initMsNav, { NAV_JS_CLASS } from "./ms-nav";
 
 const NAV = `
 <header id="ms-header"></header>
@@ -148,5 +150,29 @@ describe("glass-scroll header", () => {
         });
         window.dispatchEvent(new Event("scroll"));
         expect(header.classList.contains("scrolled")).toBe(false);
+    });
+});
+
+describe("CSS default hand-over", () => {
+    it("marks the header with the class the stylesheet's hover/focus default is keyed on", () => {
+        const scss = fs.readFileSync(
+            path.join(
+                path.dirname(new URL(import.meta.url).pathname),
+                "../../css/_ms-chrome.scss",
+            ),
+            "utf-8",
+        );
+        expect(scss).toContain(
+            `.ms-header:not(.${NAV_JS_CLASS}) .ms-nav-dropdown:hover`,
+        );
+        expect(scss).toContain(
+            `.ms-header:not(.${NAV_JS_CLASS}) .ms-nav-dropdown:focus-within`,
+        );
+
+        document.body.innerHTML = NAV;
+        const header = document.getElementById("ms-header");
+        window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+        initMsNav();
+        expect(header.classList.contains(NAV_JS_CLASS)).toBe(true);
     });
 });

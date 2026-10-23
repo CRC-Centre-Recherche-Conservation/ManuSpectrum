@@ -1,0 +1,85 @@
+name: trivy-weekly
+
+# The blocking vulnerability scan of the production image. Pull requests only
+# report Trivy findings (deploy-lint.yml); this weekly run on the default
+# branch fails on any HIGH or CRITICAL finding with a fix that .trivyignore
+# does not accept (an expired entry counts again), and opens or updates one
+# issue so the finding is not lost in the Actions tab.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trivy-weekly
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      IMAGE: manuspectrum:weekly
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free runner disk
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # No cache: the scan is of what a fresh build ships today, Debian
+      # security updates included.
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}
+          provenance: false
+          sbom: false
+          no-cache: true
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          version: v0.74.0
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          format: json
+          output: ${{ runner.temp }}/trivy.json
+          exit-code: "0"
+
+      - name: Trivy report
+        run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json" --fail
+
+      - name: Open or update the issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly Trivy scan: findings in the production image"
+          body="The weekly Trivy scan failed: $RUN_URL (the job summary lists the findings). Fix each one or accept it in .trivyignore with its reason and an expiry."
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" \
+            --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n1)"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

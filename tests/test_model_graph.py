@@ -292,7 +292,7 @@ from django.core.cache import cache
 from django.urls import reverse
 from django.utils import translation
 
-from manuspectrum.views.model_graph import _cards_hash, graph_fingerprint
+from manuspectrum.views.model_graph import _cards_hash, _lists_hash, graph_fingerprint
 
 # TestCase is already imported at the top of the file (Task 1).
 
@@ -555,7 +555,7 @@ class PayloadEnrichmentTests(TestCase):
             self.assertEqual(str(DATATYPE_LABELS["string"]), "String")
 
 
-def _fingerprint_tables(graph_rows, resource_count, concept_count, cards="h0"):
+def _fingerprint_tables(graph_rows, resource_count, lists="l0", cards="h0"):
     """Stand-ins for what ``graph_fingerprint`` reads.
 
     The managers are imported inside its body, so their patch lands on
@@ -567,20 +567,19 @@ def _fingerprint_tables(graph_rows, resource_count, concept_count, cards="h0"):
     resource_instance = mock.Mock()
     resource_instance.objects.count.return_value = resource_count
 
-    concept = mock.Mock()
-    concept.objects.count.return_value = concept_count
-
     stack = contextlib.ExitStack()
     stack.enter_context(
         mock.patch.multiple(
             "arches.app.models.models",
             GraphModel=graph_model,
             ResourceInstance=resource_instance,
-            Concept=concept,
         )
     )
     stack.enter_context(
         mock.patch("manuspectrum.views.model_graph._cards_hash", return_value=cards)
+    )
+    stack.enter_context(
+        mock.patch("manuspectrum.views.model_graph._lists_hash", return_value=lists)
     )
     return stack
 
@@ -644,20 +643,65 @@ class CardsHashTests(TestCase):
         self.assertEqual(_cards_hash(), _cards_hash())
 
 
+class ListsHashTests(TestCase):
+    """The SQL digest behind the fingerprint, against real list rows."""
+
+    def make_list(self, name="Materials"):
+        from arches_controlled_lists.models import List
+
+        return List.objects.create(name=name)
+
+    def make_item(self, controlled_list, sortorder=1, guide=False):
+        from arches_controlled_lists.models import ListItem
+
+        return ListItem.objects.create(
+            list=controlled_list, sortorder=sortorder, guide=guide
+        )
+
+    def test_moves_when_a_list_item_is_added(self):
+        lst = self.make_list()
+        before = _lists_hash()
+        self.make_item(lst)
+        self.assertNotEqual(before, _lists_hash())
+
+    def test_moves_when_a_list_is_renamed(self):
+        lst = self.make_list()
+        before = _lists_hash()
+        lst.name = "Pigments"
+        lst.save()
+        self.assertNotEqual(before, _lists_hash())
+
+    def test_moves_when_an_item_becomes_a_guide_item(self):
+        item = self.make_item(self.make_list())
+        before = _lists_hash()
+        item.guide = True
+        item.save()
+        self.assertNotEqual(before, _lists_hash())
+
+    def test_is_stable_for_unchanged_data(self):
+        self.make_item(self.make_list())
+        self.assertEqual(_lists_hash(), _lists_hash())
+
+    def test_the_fingerprint_carries_it(self):
+        before = graph_fingerprint()
+        self.make_item(self.make_list())
+        self.assertNotEqual(before, graph_fingerprint())
+
+
 class GraphFingerprintTests(SimpleTestCase):
     """What the cache key is allowed to notice.
 
     The fingerprint is the only thing standing between a republished graph and
     a stale public payload, and it is recomputed on every request — so it must
-    move for a republish, a record and a concept, and must not move for
+    move for a republish, a record and a controlled-list change, and must not move for
     anything else.
     """
 
     ROWS = [("g1", "p1"), ("g2", "p2")]
 
-    def fingerprint(self, rows=None, resources=3, concepts=7, cards="h0"):
+    def fingerprint(self, rows=None, resources=3, lists="l0", cards="h0"):
         with _fingerprint_tables(
-            self.ROWS if rows is None else rows, resources, concepts, cards
+            self.ROWS if rows is None else rows, resources, lists, cards
         ):
             return graph_fingerprint()
 
@@ -690,8 +734,8 @@ class GraphFingerprintTests(SimpleTestCase):
             self.fingerprint(resources=3), self.fingerprint(resources=4)
         )
 
-    def test_moves_when_a_concept_is_created_or_deleted(self):
-        self.assertNotEqual(self.fingerprint(concepts=7), self.fingerprint(concepts=8))
+    def test_moves_when_the_controlled_lists_change(self):
+        self.assertNotEqual(self.fingerprint(lists="l0"), self.fingerprint(lists="l1"))
 
     def test_is_a_hex_digest(self):
         digest = self.fingerprint()

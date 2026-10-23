@@ -2,3 +2,93 @@
 // Module homepage on npmjs.com uses logos "TS" or "DT" to indicate if typed
 
 import("@/arches/declarations.d.ts");
+
+declare module "plotly.js-cartesian-dist" {
+    import * as Plotly from "plotly.js";
+    export default Plotly;
+}
+
+declare module "utils/leaflet-stack" {
+    import type { Layer, Map } from "leaflet";
+    export function stackSmallestOnTop(
+        map: Map,
+        schedule?: (callback: () => void) => void,
+        isPinned?: (layer: Layer) => boolean,
+    ): void;
+}
+
+declare module "utils/iiif-image" {
+    export function infoJsonUrl(service: string): string;
+    export function imageUrl(
+        service: string,
+        options?: { region?: string; size?: string },
+    ): string;
+}
+
+declare module "utils/xy-transforms" {
+    export interface TransformStep {
+        type: string;
+        order?: number;
+        window?: number;
+        polyOrder?: number;
+    }
+    export interface TransformChain {
+        transforms?: (TransformStep | string)[];
+    }
+    export function applyTransforms<T extends { x: number[]; y: number[] }>(
+        parsed: T,
+        config: TransformChain | null,
+    ): T;
+    export function deriveAxisLabel(
+        baseLabel: string | null,
+        config: TransformChain | null,
+        labels?: Record<string, string>,
+    ): string;
+}
+
+declare module "utils/xy-scale" {
+    export const SCALE_LINEAR: string;
+    export const SCALE_LOG: string;
+    export function smallestPositive(
+        values: ArrayLike<number> | null | undefined,
+    ): number | null;
+    export function canUseLogScale(
+        traces: readonly { y?: ArrayLike<number>; yaxis?: string }[] | null,
+    ): boolean;
+    export function annotationLogY(y: number): number | null;
+    export function logScaleFigure<
+        T extends { y?: ArrayLike<number>; yaxis?: string },
+    >(
+        traces: readonly T[] | null,
+    ): {
+        traces: (T & { customdata?: number[]; hovertemplate?: string })[];
+        yaxis: { type: string };
+    };
+}
+
+declare module "utils/xy-views" {
+    import type { TransformStep } from "utils/xy-transforms";
+    export interface XyView {
+        key: string;
+        transforms: TransformStep[];
+    }
+    export const BASE_VIEW: string;
+    export function viewsFor(
+        config: { presetKey?: string | null } | null,
+    ): XyView[];
+}
+
+// The generated `paths` entry "*" sends `leaflet` to its untyped JavaScript
+// build before `@types/leaflet` is looked up. `tsconfig.json` loads
+// `@types/leaflet` (global `L`) and `@types/leaflet.markercluster` through
+// `types`; the module is bound to them here.
+declare module "leaflet" {
+    export = L;
+}
+
+// Arches' `nodeModulesPaths` sends the bare `uuid` specifier to `uuidjs`, a
+// different library; the `uuid` package is reached through the project alias
+// `uuid-esm` (package.json), with the `uuid` package's own types.
+declare module "uuid-esm" {
+    export * from "uuid";
+}

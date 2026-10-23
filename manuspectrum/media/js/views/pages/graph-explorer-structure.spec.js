@@ -8,7 +8,7 @@
 // anonymous visitors, so the escaping assertion at the bottom is the one that
 // must never be deleted.
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { columnX } from "utils/tree-layout";
 
 vi.mock("utils/ms-nav", () => ({ default: () => {} }));
@@ -233,7 +233,7 @@ const outline = () => document.getElementById("ms-ge-struct-outline");
 const showStructure = () =>
     document.querySelector('.ms-ge-view[data-view="structure"]').click();
 
-async function boot() {
+async function boot(payload = PAYLOAD) {
     document.body.innerHTML = DOM;
     location.hash = "";
     window.matchMedia = vi.fn().mockImplementation((q) => ({
@@ -245,7 +245,7 @@ async function boot() {
     window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
     globalThis.fetch = vi
         .fn()
-        .mockResolvedValue({ ok: true, json: async () => PAYLOAD });
+        .mockResolvedValue({ ok: true, json: async () => payload });
     vi.resetModules();
     await import("./graph-explorer");
     document.dispatchEvent(new Event("DOMContentLoaded"));
@@ -253,6 +253,42 @@ async function boot() {
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
 }
+
+describe("volume line", () => {
+    const withInstances = (counts) => ({
+        ...PAYLOAD,
+        models: PAYLOAD.models.map((m, i) => ({ ...m, instances: counts[i] })),
+    });
+
+    it.each([
+        [[1, 0], "1 record published"],
+        [[5, 2], "7 records published"],
+        [[3, 0], "1 model defined and open for deposit"],
+        [[0, 0], "2 models defined and open for deposit"],
+    ])("instances %j reads %s", async (counts, expected) => {
+        await boot(withInstances(counts));
+        expect(document.getElementById("ms-ge-volume").textContent).toContain(
+            expected,
+        );
+    });
+});
+
+describe("volume line in French", () => {
+    afterEach(() => {
+        document.documentElement.lang = "";
+    });
+
+    it("takes the singular form for zero records", async () => {
+        document.documentElement.lang = "fr";
+        await boot({
+            ...PAYLOAD,
+            models: PAYLOAD.models.map((m) => ({ ...m, instances: 0 })),
+        });
+        expect(document.getElementById("ms-ge-volume").textContent).toContain(
+            "0 record published",
+        );
+    });
+});
 
 describe("Structure view", () => {
     beforeEach(async () => {

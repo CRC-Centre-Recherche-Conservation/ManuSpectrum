@@ -16,3 +16,4 @@ app.autodiscover_tasks()
 # signal, which nothing but a Celery worker emits. Every other process needs the
 # module imported explicitly to have the project tasks in its registry.
 from manuspectrum import tasks  # noqa: E402,F401
+from manuspectrum.observability import celery_signals  # noqa: E402,F401

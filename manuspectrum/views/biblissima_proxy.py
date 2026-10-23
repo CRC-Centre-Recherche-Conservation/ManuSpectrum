@@ -100,6 +100,7 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
+from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import (
     BudgetSpent,
     UpstreamBudget,
@@ -353,9 +354,64 @@ _biblissima_stats = {
 _biblissima_stats_lock = threading.Lock()
 
 
+_STAT_METRICS = {
+    "slot_timeouts": lambda delta: metrics.BIBLISSIMA_SLOT_TIMEOUTS.inc(delta),
+    "requests_in_flight": lambda delta: metrics.BIBLISSIMA_INFLIGHT.inc(delta),
+    "cache_hits": lambda delta: metrics.BIBLISSIMA_CACHE.labels(outcome="hit").inc(
+        delta
+    ),
+    "cache_misses": lambda delta: metrics.BIBLISSIMA_CACHE.labels(outcome="miss").inc(
+        delta
+    ),
+}
+
+
 def _incr_stat(key, delta=1):
+    """Count *key* in the per-process stats of /api/biblissima/stats and in its Prometheus metric."""
     with _biblissima_stats_lock:
         _biblissima_stats[key] = _biblissima_stats.get(key, 0) + delta
+    mirror = _STAT_METRICS.get(key)
+    if mirror is not None:
+        mirror(delta)
+
+
+_ENDPOINT_HOSTS = (
+    ("wikibase", urlsplit(BIBLISSIMA_WIKIBASE).hostname),
+    ("portal", urlsplit(BIBLISSIMA_PORTAL).hostname),
+    ("portal", urlsplit(BIBLISSIMA_PORTAL_EN).hostname),
+    ("iiif", urlsplit(BIBLISSIMA_IIIF_MANIFEST).hostname),
+)
+
+
+def _endpoint_family(url):
+    """The metric label of *url*'s host: wikibase, portal, iiif, or other (a third party)."""
+    host = urlsplit(url).hostname
+    for family, known in _ENDPOINT_HOSTS:
+        if host == known:
+            return family
+    return "other"
+
+
+def _status_outcome(status):
+    if status < 400:
+        return "ok"
+    if status == 404:
+        return "not_found"
+    if status == 429:
+        return "rate_limited"
+    if status < 500:
+        return "client_error"
+    return "server_error"
+
+
+def _record_upstream(endpoint, started, outcome):
+    metrics.BIBLISSIMA_UPSTREAM_REQUESTS.labels(
+        endpoint=endpoint, outcome=outcome
+    ).inc()
+    if outcome not in ("busy", "budget"):
+        metrics.BIBLISSIMA_UPSTREAM_LATENCY.labels(endpoint=endpoint).observe(
+            time.monotonic() - started
+        )
 
 
 @contextmanager
@@ -374,8 +430,10 @@ def _biblissima_slot(timeout=None):
         _incr_stat("requests_in_flight", 1)
         yield
     finally:
-        _incr_stat("requests_in_flight", -1)
-        _biblissima_semaphore.release()
+        try:
+            _incr_stat("requests_in_flight", -1)
+        finally:
+            _biblissima_semaphore.release()
 
 
 def _bib_request(
@@ -407,7 +465,11 @@ def _bib_request(
     ``IIIF_CONNECT_TIMEOUT``, a Biblissima host found down earlier in the
     request raises ``BiblissimaHostDown`` without being called, and failures
     are recorded on the budget.
+
+    Each call is counted with its endpoint family and outcome, and timed when
+    it reached the network.
     """
+    endpoint, started = _endpoint_family(url), time.monotonic()
     budget = _upstream_budget_var.get()
     host = _biblissima_host(url) if budget is not None else None
     if host is not None and host in budget.down:
@@ -432,21 +494,38 @@ def _bib_request(
             _incr_stat("requests_total", 1)
             try:
                 if guarded:
-                    resp = safe_fetch(url, session=session, throttle=False, **kwargs)
+                    resp = safe_fetch(
+                        url,
+                        session=session,
+                        throttle=False,
+                        purpose="biblissima",
+                        **kwargs,
+                    )
                 else:
                     resp = session.get(url, **kwargs)
             except Exception:
                 _incr_stat("errors_total", 1)
                 raise
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        _record_upstream(endpoint, started, "timeout" if _is_timeout(exc) else "error")
         if host is not None:
             budget.record(exc, host)
         raise
     except Exception as exc:
+        _record_upstream(
+            endpoint,
+            started,
+            (
+                "busy"
+                if isinstance(exc, BiblissimaBusy)
+                else "budget" if isinstance(exc, BudgetSpent) else "error"
+            ),
+        )
         if host is not None:
             budget.record(exc)
         raise
     status = resp.status_code
+    _record_upstream(endpoint, started, _status_outcome(status))
     if status == 429:
         _incr_stat("responses_429", 1)
     elif 500 <= status < 600:
@@ -1497,16 +1576,19 @@ def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
     """
     entry, needle = _suggest_cached_entry(folded, lang)
     hits = None
+    source = "own" if needle is None else "ancestor"
     if entry is not None:
         hits = _suggest_typed_hits(entry, type_qid, needle)
         if needle is not None and hits is not None and len(hits) > limit:
             hits = None
     if hits is None:
+        source = "upstream"
         entry = _suggest_prefix_entry(folded, lang, deadline)
         if entry["complete"]:
             ttl = _BIBLISSIMA_CACHE_TTL if entry["items"] else SUGGEST_ANSWER_TTL
             cache.set(_suggest_prefix_key(folded, lang), entry, ttl)
         hits = _suggest_typed_hits(entry, type_qid)
+    metrics.BIBLISSIMA_SUGGEST_PREFIX.labels(source=source).inc()
     return [
         _suggest_result(item["id"], item, entity, lang) for item, entity in hits[:limit]
     ]
@@ -2307,6 +2389,23 @@ _MAX_CHECK_DUPLICATES_ITEMS = 200
 _MAX_CREATE_ALL_ITEMS = 5
 
 
+def _count_created_items(resource_type, results, out_of_budget):
+    """Count the items of one create-all answer: created, failed, and failed for lack of budget."""
+    resource_type = metrics.bounded(resource_type, metrics.RESOURCE_TYPES)
+    created = sum(1 for result in results if result.get("status") == "created")
+    failed = sum(1 for result in results if result.get("status") == "failed")
+    counts = {
+        "created": created,
+        "failed": failed - out_of_budget,
+        "deadline": out_of_budget,
+    }
+    for outcome, count in counts.items():
+        if count:
+            metrics.BIBLISSIMA_CREATED_ITEMS.labels(
+                resource_type=resource_type, outcome=outcome
+            ).inc(count)
+
+
 class WriteDeadlineExceeded(Exception):
     """A create ran out of its write budget; the message is shown to the user."""
 
@@ -2317,7 +2416,9 @@ def _item_write_budget():
     ``WriteDeadlineExceeded``, any other exception is left untouched."""
     budget = None
     try:
-        with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE) as budget:
+        with upstream_budget(
+            settings.BIBLISSIMA_WRITE_ITEM_DEADLINE, kind="write"
+        ) as budget:
             yield budget
     except Exception as exc:
         message = _write_deadline_error(budget, exc)
@@ -3607,7 +3708,7 @@ class BiblissimaCreateResourceView(View):
             serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
             nodes_by_id = self._nodes_by_id(serialized_graph)
             factory = DataTypeFactory()
-            with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE):
+            with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE, kind="write"):
                 self._stage_tiles(self._tile_buffer, nodes_by_id, factory)
                 if resource_type == "Place":
                     self._stage_place_geo(
@@ -5464,6 +5565,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
 
         self._tile_buffer = []
         results = []
+        out_of_budget = 0
         # survivors: list of (client_id, rid, item_tiles, project_id)
         survivors = []
 
@@ -5487,7 +5589,9 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             start = len(self._tile_buffer)
             budget = None
             try:
-                with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE) as budget:
+                with upstream_budget(
+                    settings.BIBLISSIMA_WRITE_ITEM_DEADLINE, kind="write"
+                ) as budget:
                     # BEFORE building anything: dangling dep -> failed.
                     self._assert_deps_exist(deps, valid_dep_ids)
                     # A dangling OR malformed project id would make
@@ -5522,11 +5626,14 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 # report it failed. No DB rollback needed — nothing was written
                 # to the resource tables for this item.
                 del self._tile_buffer[start:]
+                deadline_error = _write_deadline_error(budget, exc)
+                if deadline_error:
+                    out_of_budget += 1
                 results.append(
                     {
                         "clientId": client_id,
                         "status": "failed",
-                        "error": _write_deadline_error(budget, exc) or str(exc),
+                        "error": deadline_error or str(exc),
                     }
                 )
                 continue
@@ -5589,6 +5696,18 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 # committed -> unattributed 500. Manifests imported in
                 # Pass 1 remain (benign/dedupable).
                 logger.exception("Biblissima batch creation failed")
+                _count_created_items(
+                    resource_type,
+                    [
+                        (
+                            {**result, "status": "failed"}
+                            if result.get("status") == "created"
+                            else result
+                        )
+                        for result in results
+                    ],
+                    out_of_budget,
+                )
                 return JsonResponse({"error": "Batch creation failed"}, status=500)
 
         # Schedule ES indexing for the committed batch via the on_commit seam.
@@ -5598,6 +5717,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         if survivors:
             self._defer_indexing(tx_id=batch_tx)
 
+        _count_created_items(resource_type, results, out_of_budget)
         return JsonResponse({"results": results})
 
 

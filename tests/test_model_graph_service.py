@@ -14,13 +14,14 @@ import contextlib
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from manuspectrum.views.model_graph_service import (
     GROUPS,
     _excluded_graph_ids,
     _top_ontologyclass,
     build_model_graph,
+    controlled_list_figures,
 )
 
 CIDOC = "http://www.cidoc-crm.org/cidoc-crm/"
@@ -50,16 +51,6 @@ class _Rows:
 
     def __iter__(self):
         return iter(self._rows)
-
-
-class _ConceptManager:
-    """Concept.objects, whose two COUNTs differ only by `nodetype_id`."""
-
-    def __init__(self, concepts, schemes):
-        self._by_type = {"Concept": concepts, "ConceptScheme": schemes}
-
-    def filter(self, nodetype_id=None, **kwargs):
-        return _Rows(count=self._by_type.get(nodetype_id, 0))
 
 
 def _manager(rows=(), count=0):
@@ -117,10 +108,11 @@ def patched_orm(
     lifecycle_states=(),
     nodegroups=(),
     labels=(),
-    concepts=0,
-    thesauri=0,
     values=(),
     relations=(),
+    list_figures=None,
+    list_figures_asked=None,
+    list_overrides=None,
     **overrides,
 ):
     targets = {
@@ -131,12 +123,31 @@ def patched_orm(
         "CardXNodeXWidget": _manager(labels),
         "ResourceInstance": _manager(instances),
         "ResourceInstanceLifecycleState": _manager(lifecycle_states),
-        "Concept": SimpleNamespace(objects=_ConceptManager(concepts, thesauri)),
         "Value": _manager(values),
         "Relation": _manager(relations),
     }
     targets.update(overrides)
-    with mock.patch.multiple("arches.app.models.models", **targets):
+    figures = list_figures or {}
+
+    def figures_of(list_ids):
+        if list_figures_asked is not None:
+            list_figures_asked.append(set(list_ids))
+        return {str(i): figures[str(i)] for i in list_ids if str(i) in figures}
+
+    stack = contextlib.ExitStack()
+    stack.enter_context(mock.patch.multiple("arches.app.models.models", **targets))
+    if list_overrides:
+        stack.enter_context(
+            mock.patch.multiple("arches_controlled_lists.models", **list_overrides)
+        )
+    else:
+        stack.enter_context(
+            mock.patch(
+                "manuspectrum.views.model_graph_service.controlled_list_figures",
+                side_effect=figures_of,
+            )
+        )
+    with stack:
         yield
 
 
@@ -247,8 +258,6 @@ def build_fixture(**overrides):
         lifecycle_states=LIFECYCLE_STATES,
         nodegroups=NODEGROUPS,
         labels=LABELS,
-        concepts=20000,
-        thesauri=12,
         values=VALUES,
         relations=RELATIONS,
     )
@@ -321,9 +330,9 @@ class BuildModelGraphStatsTests(SimpleTestCase):
         self.assertEqual(self.stats["cidoc_classes"], 4)
         self.assertEqual(self.stats["properties"], 3)
 
-    def test_rdm_totals_come_from_the_concept_table(self):
-        self.assertEqual(self.stats["concepts"], 20000)
-        self.assertEqual(self.stats["thesauri"], 12)
+    def test_totals_are_zero_when_no_field_is_bound_to_a_controlled_list(self):
+        self.assertEqual(self.stats["concepts"], 0)
+        self.assertEqual(self.stats["thesauri"], 0)
 
     def test_draft_resources_are_absent_from_the_owning_model(self):
         models = build_fixture()["models"]
@@ -681,12 +690,161 @@ class BuildModelGraphRdmEnrichmentTests(SimpleTestCase):
         payload = build_fixture(Value=_raising_manager(RuntimeError("no rdm")))
         self.assertEqual(self._concept_config(payload), {"collection": "coll-1"})
 
-    def test_a_missing_concept_table_degrades_the_totals_to_zero(self):
-        payload = build_fixture(
-            Concept=_raising_manager(RuntimeError("relation does not exist"))
+
+REFERENCE_NODES = NODES + [
+    _node(
+        "r1",
+        "g2",
+        "reference",
+        name="Material",
+        nodegroup="ng2",
+        ontologyclass=CIDOC + "E55_Type",
+        config={"controlledList": "list-1", "multiValue": True},
+    ),
+    _node(
+        "r2",
+        "g2",
+        "reference",
+        name="Technique",
+        nodegroup="ng2",
+        ontologyclass=CIDOC + "E55_Type",
+        config={"controlledList": "list-1"},
+    ),
+    _node(
+        "r3",
+        "g2",
+        "reference",
+        name="Colour",
+        nodegroup="ng2",
+        ontologyclass=CIDOC + "E55_Type",
+        config={"controlledList": "list-2"},
+    ),
+]
+REFERENCE_EDGES = EDGES + [
+    _edge("r1", "ng2", CIDOC + "P2_has_type"),
+    _edge("r2", "ng2", CIDOC + "P2_has_type"),
+    _edge("r3", "ng2", CIDOC + "P2_has_type"),
+]
+LIST_FIGURES = {"list-1": ("Materials", 40), "list-2": ("Colours", 15)}
+
+
+def build_reference_fixture(**overrides):
+    kwargs = dict(
+        nodes=REFERENCE_NODES,
+        edges=REFERENCE_EDGES,
+        list_figures=LIST_FIGURES,
+    )
+    kwargs.update(overrides)
+    return build_fixture(**kwargs)
+
+
+class BuildModelGraphReferenceTests(SimpleTestCase):
+    def test_reference_fields_count_as_thesaurus_backed(self):
+        stats = build_reference_fixture()["stats"]
+        self.assertEqual(stats["nodes"], 7)
+        self.assertEqual(stats["thesaurus_nodes"], 4)
+        self.assertEqual(stats["thesaurus_pct"], 57)
+
+    def test_thesauri_are_the_distinct_lists_and_concepts_their_items(self):
+        stats = build_reference_fixture()["stats"]
+        self.assertEqual(stats["thesauri"], 2)
+        self.assertEqual(stats["concepts"], 55)
+
+    def test_the_figures_are_asked_for_the_bound_lists_only(self):
+        asked = []
+        build_reference_fixture(list_figures_asked=asked)
+        self.assertEqual(asked, [{"list-1", "list-2"}])
+
+    def test_a_deleted_list_is_not_counted_as_a_thesaurus(self):
+        stats = build_reference_fixture(list_figures={"list-1": ("Materials", 40)})[
+            "stats"
+        ]
+        self.assertEqual((stats["thesauri"], stats["concepts"]), (1, 40))
+
+    def test_reference_field_names_its_list_and_size(self):
+        payload = build_reference_fixture()
+        by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
+        self.assertEqual(
+            by_id["r1"]["config"],
+            {
+                "collection": "list-1",
+                "collection_label": "Materials",
+                "collection_size": 40,
+            },
         )
+        self.assertEqual(by_id["r3"]["config"]["collection_label"], "Colours")
+
+    def test_a_list_failure_degrades_to_the_bare_uuid_and_zero_totals(self):
+        payload = build_reference_fixture(
+            list_overrides={"List": _raising_manager(RuntimeError("no lists"))}
+        )
+        by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
+        self.assertEqual(by_id["r1"]["config"], {"collection": "list-1"})
         self.assertEqual(payload["stats"]["concepts"], 0)
         self.assertEqual(payload["stats"]["thesauri"], 0)
+        self.assertEqual(payload["stats"]["thesaurus_nodes"], 4)
+
+    def test_a_list_id_is_not_looked_up_in_the_rdm(self):
+        values = [{"concept_id": "list-1", "value": "RDM clash", "language_id": "en"}]
+        payload = build_reference_fixture(values=values)
+        by_id = {n["id"]: n for n in payload["models"][1]["structure"]["nodes"]}
+        self.assertEqual(by_id["r1"]["config"]["collection_label"], "Materials")
+
+
+class ControlledListFiguresTests(TestCase):
+    """The #124 rule against real rows: bound lists only, guide items excluded."""
+
+    def setUp(self):
+        from arches_controlled_lists.models import List, ListItem
+
+        self.bound = List.objects.create(name="Materials")
+        self.other = List.objects.create(name="Unbound")
+        for order in (1, 2, 3):
+            ListItem.objects.create(
+                list=self.bound, sortorder=order, uri=f"http://a.test/{order}"
+            )
+        ListItem.objects.create(
+            list=self.bound, sortorder=4, guide=True, uri="http://a.test/guide"
+        )
+        for order in (1, 2):
+            ListItem.objects.create(
+                list=self.other, sortorder=order, uri=f"http://b.test/{order}"
+            )
+
+    def test_counts_only_the_requested_lists_and_no_guide_item(self):
+        figures = controlled_list_figures({str(self.bound.id)})
+        self.assertEqual(figures, {str(self.bound.id): ("Materials", 3)})
+
+    def test_each_list_has_its_own_size(self):
+        figures = controlled_list_figures({str(self.bound.id), str(self.other.id)})
+        self.assertEqual(
+            figures,
+            {
+                str(self.bound.id): ("Materials", 3),
+                str(self.other.id): ("Unbound", 2),
+            },
+        )
+
+    def test_a_list_that_no_longer_exists_is_absent(self):
+        gone = "00000000-0000-4000-8000-000000000000"
+        figures = controlled_list_figures({str(self.bound.id), gone})
+        self.assertEqual(set(figures), {str(self.bound.id)})
+
+    def test_a_list_with_no_item_counts_zero(self):
+        from arches_controlled_lists.models import List
+
+        empty = List.objects.create(name="Empty")
+        self.assertEqual(
+            controlled_list_figures({str(empty.id)}), {str(empty.id): ("Empty", 0)}
+        )
+
+    def test_no_list_asks_no_question(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(controlled_list_figures(set()), {})
+
+    def test_one_query_for_any_number_of_lists(self):
+        with self.assertNumQueries(1):
+            controlled_list_figures({str(self.bound.id), str(self.other.id)})
 
 
 class ExcludedGraphIdsTests(SimpleTestCase):

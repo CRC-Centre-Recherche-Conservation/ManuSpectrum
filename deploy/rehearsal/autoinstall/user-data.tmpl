@@ -1,0 +1,35 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: @@LOCALE@@
+  keyboard: {layout: @@KEYBOARD@@}
+  timezone: Europe/Paris
+  refresh-installer: {update: false}
+  identity:
+    hostname: @@HOSTNAME@@
+    username: @@ADMIN_USER@@
+    realname: Administrateur
+    password: "@@PASSWORD_HASH@@"
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys:
+      - "@@SSH_PUBKEY@@"
+  packages: [nfs-common, curl, ca-certificates]
+  updates: security
+  storage:
+    swap: {size: 0}
+    config:
+      - {type: disk, id: disk0, match: {size: largest}, ptable: msdos, wipe: superblock-recursive, preserve: false, grub_device: true}
+      - {type: partition, id: part-boot, device: disk0, number: 1, size: 2G, flag: boot, preserve: false}
+      - {type: partition, id: part-lvm, device: disk0, number: 2, size: -1, preserve: false}
+      - {type: format, id: fmt-boot, volume: part-boot, fstype: ext4, preserve: false}
+      - {type: lvm_volgroup, id: vg0, name: vg0, devices: [part-lvm], preserve: false}
+      - {type: lvm_partition, id: lv-root, volgroup: vg0, name: root, size: @@ROOT_SIZE@@, preserve: false}
+      - {type: lvm_partition, id: lv-swap, volgroup: vg0, name: swap, preserve: false}
+      - {type: format, id: fmt-root, volume: lv-root, fstype: ext4, preserve: false}
+      - {type: format, id: fmt-swap, volume: lv-swap, fstype: swap, preserve: false}
+      - {type: mount, id: mnt-root, device: fmt-root, path: /}
+      - {type: mount, id: mnt-boot, device: fmt-boot, path: /boot}
+      - {type: mount, id: mnt-swap, device: fmt-swap, path: none}
+  shutdown: poweroff
