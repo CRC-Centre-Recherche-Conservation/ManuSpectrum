@@ -118,8 +118,11 @@ class CspReportTests(TestCase):
             with self.subTest(data):
                 self.assertEqual(self.post(data).status_code, 400)
 
-    def test_deeply_nested_json_is_400(self):
-        self.assertEqual(self.post("[" * 3000 + "]" * 3000).status_code, 400)
+    def test_deeply_nested_json_is_refused_or_ignored(self):
+        # Python 3.11's decoder raises RecursionError (400); 3.12+ parses it (204).
+        with self.assertNoLogs("django.request", level="ERROR"):
+            response = self.post("[" * 3000 + "]" * 3000)
+        self.assertIn(response.status_code, (204, 400))
 
     def test_a_single_reporting_api_report_as_a_dict_counts(self):
         report = {"type": "csp-violation", "body": {"effectiveDirective": "img-src"}}
