@@ -1,17 +1,17 @@
 """The OpenFreeMap basemap of the Arches maps.
 
-The `streets` basemap row of Arches' `map_layers` carries the Positron style of
+The `streets` basemap row of Arches' `map_layers` carries the Bright style of
 OpenFreeMap, drawn from the vector tiles of one `openfreemap` row of
-`map_sources`. Positron is the only basemap: there is no satellite layer.
+`map_sources`. Bright is the only basemap: there is no satellite layer.
 
-`openfreemap_positron_layers.json` (in `constants/`) is the `layers` array of
-https://tiles.openfreemap.org/styles/positron as served on 2026-10-13, with the
+`openfreemap_bright_layers.json` (in `constants/`) is the `layers` array of
+https://tiles.openfreemap.org/styles/bright as served on 2026-10-23, with the
 layers' `source` renamed from `openmaptiles` to `openfreemap`. The style's other
 source (`ne2_shaded`, a raster no layer uses) is not carried. The style is a fork
-of openmaptiles/positron-gl-style (code BSD-3-Clause, design CC BY 4.0, derived
-from CartoDB Basemaps, CC BY 3.0); the credit is in `NOTICE`, the attribution
+of openmaptiles/osm-bright-gl-style (code BSD-3-Clause, design CC BY 4.0,
+derived from Mapbox Open Styles); the credit is in `NOTICE`, the attribution
 shown on the map is `OPENFREEMAP_SOURCE["attribution"]`. A later change of the
-style is a new data migration: the rows are written from this module.
+style is a new data migration.
 
 `SPRITES_URL` and `GLYPHS_URL` are the style's own `sprite` and `glyphs`. The
 sprite path is versioned by OpenFreeMap (`ofm_f384`); the System Settings tile
@@ -30,7 +30,7 @@ from pathlib import Path
 import arches
 
 CORE_DATA_SQL = Path(arches.__file__).parent / "db" / "dml" / "db_data.sql"
-LAYERS_FILE = Path(__file__).parent / "constants" / "openfreemap_positron_layers.json"
+LAYERS_FILE = Path(__file__).parent / "constants" / "openfreemap_bright_layers.json"
 
 SPRITES_NODE_ID = "0e900254-4148-11e7-9902-c4b301baab9f"
 GLYPHS_NODE_ID = "0e90031e-4148-11e7-a176-c4b301baab9f"
@@ -57,9 +57,29 @@ OPENFREEMAP_SOURCE = {
 }
 
 
-def positron_layers():
-    """A fresh copy of the vendored Positron layer definitions."""
+def bright_layers():
+    """A fresh copy of the vendored Bright layer definitions."""
     return json.loads(LAYERS_FILE.read_text(encoding="utf-8"))
+
+
+def apply_bright(MapLayer):
+    """Give the `streets` row the vendored Bright layers when it still draws from
+    the `openfreemap` source; True when the row was rewritten.
+
+    Brings a database migrated before 0013 installed Bright up to date; a row
+    replaced in the designer, or already on Bright, is left alone.
+    """
+    streets = MapLayer.objects.filter(name=STREETS_LAYER_NAME).first()
+    layers = bright_layers()
+    if (
+        streets is None
+        or streets.layerdefinitions == layers
+        or not references_source(streets.layerdefinitions, OPENFREEMAP_SOURCE_NAME)
+    ):
+        return False
+    streets.layerdefinitions = layers
+    streets.save()
+    return True
 
 
 def references_source(layerdefinitions, source_name):

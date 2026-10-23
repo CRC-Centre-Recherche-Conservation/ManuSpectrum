@@ -10,8 +10,9 @@
  * `map.addControl` ignore a MapboxGeocoder, `postConfig` puts it back.
  *
  * `postConfig` also follows the page language on the OpenFreeMap labels: on a
- * French page every symbol layer whose `text-field` reads a name falls back
- * from `name:fr` to the style's own expression (English name, then local name).
+ * French page every symbol layer whose `text-field` reads a name tries `name:fr`
+ * first; when a feature has no `name:fr`, the style's own expression is the
+ * fallback.
  * The style stays as the vendored JSON; nothing is fetched again. The core view
  * models call `map.setStyle(style)` again when the layers change, which brings
  * the vendored labels back: `postConfig` also installs an own `setStyle` that

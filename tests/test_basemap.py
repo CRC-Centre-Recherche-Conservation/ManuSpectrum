@@ -1,7 +1,7 @@
-"""The OpenFreeMap basemap: vendored style, settings, and data migration 0013.
+"""The OpenFreeMap basemap: vendored style, settings and data migration 0013.
 
 The test database has already been through 0013, so each migration test first
-runs `reverse` to get the rows Arches installs, then `forward` on them.
+runs its `reverse` to get the rows Arches installs, then its `forward` on them.
 """
 
 import importlib
@@ -33,7 +33,7 @@ def source_names():
 
 class VendoredStyleTests(SimpleTestCase):
     def test_every_layer_draws_from_the_openfreemap_source_or_none(self):
-        layers = basemaps.positron_layers()
+        layers = basemaps.bright_layers()
         self.assertGreater(len(layers), 40)
         self.assertEqual(
             {layer.get("source") for layer in layers} - {None},
@@ -41,7 +41,7 @@ class VendoredStyleTests(SimpleTestCase):
         )
 
     def test_layer_ids_are_unique_and_no_layer_needs_mapbox(self):
-        layers = basemaps.positron_layers()
+        layers = basemaps.bright_layers()
         ids = [layer["id"] for layer in layers]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertNotIn("mapbox://", json.dumps(layers))
@@ -66,8 +66,10 @@ class FrozenSnapshotTests(SimpleTestCase):
 
     frozen = migration.FROZEN
 
+    def test_its_layers_equal_the_vendored_bright_layers(self):
+        self.assertEqual(self.frozen["bright_layers"], basemaps.bright_layers())
+
     def test_it_equals_the_live_openfreemap_values(self):
-        self.assertEqual(self.frozen["positron_layers"], basemaps.positron_layers())
         self.assertEqual(self.frozen["openfreemap_source"], basemaps.OPENFREEMAP_SOURCE)
         self.assertEqual(self.frozen["sprites"], basemaps.SPRITES_URL)
         self.assertEqual(self.frozen["glyphs"], basemaps.GLYPHS_URL)
@@ -139,6 +141,10 @@ class MigrationTests(TestCase):
     def test_the_migrated_database_has_only_the_openfreemap_basemap(self):
         self.assertEqual(layer_names(), {"streets"})
         self.assertEqual(
+            models.MapLayer.objects.get(name="streets").layerdefinitions,
+            basemaps.bright_layers(),
+        )
+        self.assertEqual(
             source_names(), {"openfreemap", "geocode-point", "search-query"}
         )
         self.assertNotIn("mapzen", layer_names() | source_names())
@@ -150,7 +156,7 @@ class MigrationTests(TestCase):
         self.assertEqual(layer_names(), {"streets"})
         self.assertEqual(
             models.MapLayer.objects.get(name="streets").layerdefinitions,
-            basemaps.positron_layers(),
+            migration.FROZEN["bright_layers"],
         )
         openfreemap = models.MapSource.objects.get(name="openfreemap")
         self.assertEqual(openfreemap.source, basemaps.OPENFREEMAP_SOURCE)
@@ -249,6 +255,47 @@ class MigrationTests(TestCase):
         self.assertEqual(self.value(sprites), basemaps.MAPBOX_SPRITES_URL)
         self.assertEqual(self.value(glyphs), basemaps.MAPBOX_GLYPHS_URL)
         self.assertEqual(self.value(custom), "https://fonts.example/{range}")
+
+
+class ApplyBrightTests(TestCase):
+    def streets(self):
+        return models.MapLayer.objects.get(name="streets")
+
+    def set_streets(self, layers):
+        models.MapLayer.objects.filter(name="streets").update(layerdefinitions=layers)
+
+    def test_a_row_on_other_openfreemap_layers_takes_bright(self):
+        older = [{"id": "old", "type": "fill", "source": "openfreemap"}]
+        self.set_streets(older)
+        self.assertTrue(basemaps.apply_bright(models.MapLayer))
+        self.assertEqual(self.streets().layerdefinitions, basemaps.bright_layers())
+
+    def test_a_row_already_on_bright_is_left_alone(self):
+        self.assertFalse(basemaps.apply_bright(models.MapLayer))
+        self.assertEqual(self.streets().layerdefinitions, basemaps.bright_layers())
+
+    def test_a_row_not_drawn_from_openfreemap_is_left_alone(self):
+        for mine in (
+            [{"id": "mine", "type": "background"}],
+            [{"id": "m", "type": "raster", "source": "mapbox-streets"}],
+        ):
+            with self.subTest(mine=mine):
+                self.set_streets(mine)
+                self.assertFalse(basemaps.apply_bright(models.MapLayer))
+                self.assertEqual(self.streets().layerdefinitions, mine)
+
+    def test_only_the_streets_row_is_touched(self):
+        other = [{"id": "o", "type": "fill", "source": "openfreemap"}]
+        models.MapLayer.objects.create(name="mine", layerdefinitions=other, icon="")
+        self.set_streets(other)
+        basemaps.apply_bright(models.MapLayer)
+        self.assertEqual(
+            models.MapLayer.objects.get(name="mine").layerdefinitions, other
+        )
+
+    def test_without_a_streets_row_nothing_happens(self):
+        models.MapLayer.objects.filter(name="streets").delete()
+        self.assertFalse(basemaps.apply_bright(models.MapLayer))
 
 
 class MigrationOrderTests(SimpleTestCase):
