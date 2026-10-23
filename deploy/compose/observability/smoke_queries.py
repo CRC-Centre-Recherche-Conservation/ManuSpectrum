@@ -45,6 +45,7 @@ LABELLED_APP_METRICS = frozenset(
         "manuspectrum_celery_task_seconds_count",
         "manuspectrum_celery_task_seconds_sum",
         "manuspectrum_celery_tasks_total",
+        "manuspectrum_csp_violations_total",
         "manuspectrum_embargo_lifts_total",
         "manuspectrum_explorer_bundle_build_seconds_bucket",
         "manuspectrum_explorer_bundle_build_seconds_count",

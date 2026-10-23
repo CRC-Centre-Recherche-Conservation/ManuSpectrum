@@ -69,6 +69,7 @@ IGNORED = {
     "explorer-items": "UI plumbing of the Explorer Selection",
     "api-spectrum-preview": "counted by manuspectrum_spectrum_previews_total",
     "site-notice": "UI plumbing of the announcement banner",
+    "csp-report": "machine endpoint, counted by manuspectrum_csp_violations_total",
     "iiif-xy-reading-context": "static context document",
     "iiif-xy-reading-doc": "static documentation",
     "iiif-xy-reading-schema": "static schema",

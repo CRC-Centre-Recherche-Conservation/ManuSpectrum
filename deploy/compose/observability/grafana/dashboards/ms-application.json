@@ -1284,13 +1284,71 @@
       }
     },
     {
+      "id": 29,
+      "type": "timeseries",
+      "title": "CSP violations by directive",
+      "description": "Content-Security-Policy-Report-Only violations reported by browsers (per hour), by effective directive. Blocked targets are in the web log (logger manuspectrum.csp).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 77,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (directive) (increase(manuspectrum_csp_violations_total[1h]))",
+          "legendFormat": "{{directive}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "id": 26,
       "type": "row",
       "title": "Accounts",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 77,
+        "y": 85,
         "w": 24,
         "h": 1
       },
@@ -1307,7 +1365,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 78,
+        "y": 86,
         "w": 6,
         "h": 8
       },
@@ -1361,7 +1419,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 78,
+        "y": 86,
         "w": 18,
         "h": 8
       },

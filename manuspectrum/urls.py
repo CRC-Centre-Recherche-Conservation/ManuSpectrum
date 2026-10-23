@@ -9,6 +9,8 @@ from arches.app.views.auth import PasswordResetView
 from manuspectrum.accounts.notices import AccountPasswordResetForm
 from manuspectrum.accounts.activation import AcceptTermsView, ActivateAccountView
 from manuspectrum.accounts.twofactor import TwoFactorResetView, TwoFactorSetupView
+from manuspectrum.observability.csp import CspReportView
+from manuspectrum.observability.views import MetricsView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
 from manuspectrum.views.legal_pages import LegalPageView
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
@@ -68,7 +70,6 @@ from manuspectrum.views.explorer.api import (
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
-from manuspectrum.observability.views import MetricsView
 from manuspectrum.views.health import HealthzView, ReadyzView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.model_graph import ModelGraphView
@@ -668,3 +669,4 @@ urlpatterns.append(
 urlpatterns.append(path("healthz", HealthzView.as_view(), name="healthz"))
 urlpatterns.append(path("readyz", ReadyzView.as_view(), name="readyz"))
 urlpatterns.append(path("metrics", MetricsView.as_view(), name="metrics"))
+urlpatterns.append(path("api/csp-report", CspReportView.as_view(), name="csp-report"))
