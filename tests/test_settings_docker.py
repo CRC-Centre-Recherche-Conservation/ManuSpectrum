@@ -53,6 +53,7 @@ NAMES = [
     "ENABLE_USER_SIGNUP",
     "ENABLE_TWO_FACTOR_AUTHENTICATION",
     "FORCE_TWO_FACTOR_AUTHENTICATION",
+    "RELATED_RESOURCES_EXPORT_LIMIT",
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
     "SESSION_COOKIE_HTTPONLY",
@@ -173,6 +174,17 @@ class SettingsDockerTests(SimpleTestCase):
         for text in ("ture", "enforce"):
             with self.subTest(value=text):
                 values = load(dict(BASE_ENV, FORCE_TWO_FACTOR_AUTHENTICATION=text))
+                self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
+
+    def test_the_related_resources_cap_comes_from_the_environment(self):
+        self.assertEqual(load(BASE_ENV)["RELATED_RESOURCES_EXPORT_LIMIT"], 1000)
+        values = load(dict(BASE_ENV, RELATED_RESOURCES_EXPORT_LIMIT="300"))
+        self.assertEqual(values["RELATED_RESOURCES_EXPORT_LIMIT"], 300)
+
+    def test_a_cap_that_is_not_a_positive_number_refuses_to_start(self):
+        for text in ("0", "-5", "mille", "1e3"):
+            with self.subTest(value=text):
+                values = load(dict(BASE_ENV, RELATED_RESOURCES_EXPORT_LIMIT=text))
                 self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
 
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):

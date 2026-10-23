@@ -630,6 +630,11 @@ RESTRICT_MEDIA_ACCESS = False
 # value and is not signed in with a user account then the request will not be allowed.
 RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 
+# Upper bound of the relations Arches loads at once (paginate=false): the related
+# resources graph, « load all » on a report and the report API's summary. Arches'
+# default (10000) freezes the graph's browser tab on a resource with ~1650 relations.
+RELATED_RESOURCES_EXPORT_LIMIT = 1000
+
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
     "salutation": _("Hi"),
