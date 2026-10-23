@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
     annotationOpacities,
+    autorangeX,
+    endLabelsFor,
     exportFigure,
     hoverTemplatesFor,
     multiplesFigure,
@@ -455,48 +457,62 @@ describe("workshop figure", () => {
     });
 
     describe("XRF lens", () => {
-        it("labels a log axis on its decades only, with unlabelled minor ticks between them", () => {
+        it("ticks a log axis explicitly, by the decades its data spans, its minor ticks short and unlabelled", () => {
             const stacked = stackedFigure(
                 input([curve(0, [1, 500, 20])], { yLog: true }),
                 false,
             );
-            expect(stacked.layout.yaxis).toMatchObject({
+            const yaxis = stacked.layout.yaxis as Record<string, unknown>;
+            expect(yaxis).toMatchObject({
                 type: "log",
-                tickmode: "linear",
-                dtick: 1,
-                minor: { ticks: "outside", showgrid: false },
+                tickmode: "array",
+                minor: {
+                    tickmode: "array",
+                    ticks: "outside",
+                    showgrid: false,
+                },
             });
-            const grid = multiplesFigure(
-                input([curve(0, [1, 500]), curve(1, [1, 500])], {
-                    yLog: true,
-                }),
+            expect(yaxis).not.toHaveProperty("dtick");
+            expect(yaxis.ticktext).toEqual(
+                expect.arrayContaining(["1", "10", "100"]),
             );
-            const layout = grid.layout as Record<string, unknown>;
-            expect(layout.yaxis2).toMatchObject({ type: "log", dtick: 1 });
+            expect(yaxis.tickvals).not.toContain(2);
+            expect((yaxis.minor as { tickvals: number[] }).tickvals).toContain(
+                200,
+            );
             expect(
                 stackedFigure(input([curve(0, [1, 5, 2])]), false).layout.yaxis,
-            ).not.toHaveProperty("dtick");
+            ).not.toHaveProperty("tickmode");
         });
 
-        it("leaves the ticks of a log axis spanning less than two decades to Plotly, so labelled ticks remain", () => {
-            const stacked = stackedFigure(
-                input([curve(0, [1500, 9000, 4000])], { yLog: true }),
-                false,
-            );
-            expect(stacked.layout.yaxis).toMatchObject({
-                type: "log",
-                tickmode: "auto",
-            });
-            expect(stacked.layout.yaxis).not.toHaveProperty("dtick");
+        it("ticks each panel of the grid by its own curves: decades, then round steps inside one decade", () => {
             const grid = multiplesFigure(
                 input([curve(0, [1, 50000]), curve(1, [1500, 9000])], {
                     yLog: true,
                 }),
             );
-            const layout = grid.layout as Record<string, unknown>;
-            expect(layout.yaxis).toMatchObject({ dtick: 1 });
-            expect(layout.yaxis2).toMatchObject({ tickmode: "auto" });
-            expect(layout.yaxis2).not.toHaveProperty("dtick");
+            const layout = grid.layout as Record<
+                string,
+                { tickvals: number[]; ticktext: string[] }
+            >;
+            expect(layout.yaxis.ticktext).toEqual(
+                expect.arrayContaining(["1", "10", "100", "1000", "10k"]),
+            );
+            expect(layout.yaxis.tickvals).not.toContain(2000);
+            expect(layout.yaxis2.ticktext).toEqual(
+                expect.arrayContaining(["2000", "4000", "6000", "8000"]),
+            );
+            expect(layout.yaxis2.ticktext).not.toContain("10");
+        });
+
+        it("writes the tick labels of a log axis with the page's decimal mark", () => {
+            const figure = stackedFigure(
+                input([curve(0, [12000, 14000])], { yLog: true, lang: "fr" }),
+                false,
+            );
+            expect(
+                (figure.layout.yaxis as { ticktext: string[] }).ticktext,
+            ).toContain("12,5k");
         });
 
         it("lifts a panel's title one row above its plot for the label band, with the lens only", () => {
@@ -526,7 +542,15 @@ describe("workshop figure", () => {
                 input([low, high], {
                     height: 400,
                     lens: true,
-                    instrumentBand: true,
+                    instrumentBandPx: 53,
+                }),
+                false,
+            );
+            const oneRow = stackedFigure(
+                input([low, high], {
+                    height: 400,
+                    lens: true,
+                    instrumentBandPx: 39,
                 }),
                 false,
             );
@@ -536,7 +560,29 @@ describe("workshop figure", () => {
             );
             expect(lowest(plain)).toBe(0);
             expect(lowest(lens)).toBeLessThan(-40);
+            expect(lowest(oneRow)).toBeCloseTo(lowest(lens) + 14);
             expect(lowest(bare)).toBe(0);
+        });
+
+        it("lays the end labels out again for a new foot band, as a figure built with it has them", () => {
+            const curves = [curve(0, [10, 0]), curve(1, [10, 10])];
+            for (const offset of [false, true]) {
+                const kind = offset ? "offset" : "overlay";
+                const bare = stackedFigure(
+                    input(curves, { height: 400, lens: true }),
+                    offset,
+                );
+                const banded = input(curves, {
+                    height: 400,
+                    lens: true,
+                    instrumentBandPx: 53,
+                });
+                expect(endLabelsFor(banded, bare, kind)).toEqual(
+                    stackedFigure(banded, offset).layout.annotations,
+                );
+            }
+            const grid = multiplesFigure(input(curves, { lens: true }));
+            expect(endLabelsFor(input(curves), grid, "multiples")).toBeNull();
         });
 
         it("keeps a linear counts axis at zero and a stacked chart's top margin for the declared labels", () => {
@@ -605,6 +651,25 @@ describe("workshop figure", () => {
                 panelWidths(figure, 900)[""],
             );
         });
+
+        it("takes the margins Plotly drew when given, which the Y labels widened", () => {
+            const figure = stackedFigure(input([curve(0, [0, 5])]), false);
+            expect(panelWidths(figure, 640, { l: 61, r: 56 })).toEqual({
+                "": 640 - 61 - 56,
+            });
+        });
+    });
+
+    describe("autorangeX", () => {
+        it("spans every panel's curves, as the matched X axes of a grid show them, high to low on a reversed axis", () => {
+            const wide = { ...curve(0, [1, 2, 3]), x: [0, 20, 40] };
+            const narrow = { ...curve(1, [1, 2, 3]), x: [0, 10, 20] };
+            const figure = multiplesFigure(input([wide, narrow]));
+            expect(autorangeX(figure, false)).toEqual([0, 40]);
+            expect(autorangeX(figure, true)).toEqual([40, 0]);
+            const empty = multiplesFigure(input([{ ...wide, x: [], y: [] }]));
+            expect(autorangeX(empty, false)).toBeNull();
+        });
     });
 
     describe("yFitUpdate", () => {
@@ -653,17 +718,22 @@ describe("workshop figure", () => {
             expect(to).toBeCloseTo(3 + 0.1);
         });
 
-        it("lets Plotly tick a log window inside one decade, and labels the decades again on a wider one", () => {
+        it("ticks a fitted log window inside one decade by round steps, and a wider one by its decades", () => {
             const given = input([curve(0, [10, 1500, 9000, 2000, 100000])], {
                 yLog: true,
             });
             const narrow = yFitUpdate(given, "overlay", [1, 3]);
-            expect(narrow["yaxis.tickmode"]).toBe("auto");
-            expect(narrow).not.toHaveProperty("yaxis.dtick");
-            expect(yFitUpdate(given, "overlay", [0, 4])).toMatchObject({
-                "yaxis.tickmode": "linear",
-                "yaxis.dtick": 1,
-            });
+            expect(narrow["yaxis.tickmode"]).toBe("array");
+            expect(narrow["yaxis.ticktext"]).toEqual(
+                expect.arrayContaining(["2000", "4000", "6000", "8000"]),
+            );
+            expect(narrow["yaxis.minor.tickvals"]).toEqual([]);
+            const wide = yFitUpdate(given, "overlay", [0, 4]);
+            expect(wide["yaxis.ticktext"]).toEqual(
+                expect.arrayContaining(["10", "100", "1000", "10k", "100k"]),
+            );
+            expect(wide["yaxis.tickvals"]).not.toContain(2000);
+            expect(wide).not.toHaveProperty("yaxis.dtick");
         });
 
         it("gives an autorange log axis the ticks of its whole data", () => {
@@ -671,13 +741,19 @@ describe("workshop figure", () => {
                 [curve(0, [1, 50000]), curve(1, [1500, 9000])],
                 { yLog: true },
             );
-            expect(yFitUpdate(given, "multiples", null)).toMatchObject({
+            const update = yFitUpdate(given, "multiples", null);
+            expect(update).toMatchObject({
                 "yaxis.autorange": true,
-                "yaxis.tickmode": "linear",
-                "yaxis.dtick": 1,
+                "yaxis.tickmode": "array",
                 "yaxis2.autorange": true,
-                "yaxis2.tickmode": "auto",
+                "yaxis2.tickmode": "array",
             });
+            expect(update["yaxis.ticktext"]).toContain("10k");
+            expect(update["yaxis.tickvals"]).not.toContain(2000);
+            expect(update["yaxis2.ticktext"]).toContain("4000");
+            expect(
+                yFitUpdate(input([curve(0, [1, 50])]), "overlay", [0, 1]),
+            ).not.toHaveProperty("yaxis.tickmode");
         });
 
         it("fits each panel of the grid to its own curves", () => {

@@ -35,7 +35,11 @@ import {
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { loadLineTable } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/line-table.ts";
-import { panelWidths } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
+import { writeXrfSettings } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
+import {
+    logTickUpdate,
+    panelWidths,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 
 import type { DOMWrapper, VueWrapper } from "@vue/test-utils";
 import type {
@@ -2098,11 +2102,14 @@ describe("XyWorkshop XRF lens", () => {
         await view.find('[data-scale="log"]').trigger("click");
         await flushPromises();
         expect(plotly.react).toHaveBeenCalledTimes(1);
-        expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
-            "xaxis.range": [5, 15],
-            "yaxis.autorange": true,
-            "yaxis.tickmode": "auto",
-        });
+        expect(plotly.relayout).toHaveBeenCalledWith(
+            expect.any(HTMLElement),
+            expect.objectContaining({
+                "xaxis.range": [5, 15],
+                "yaxis.autorange": true,
+                "yaxis.tickmode": "array",
+            }),
+        );
         expect(
             view.find('[data-range="5-15"]').attributes("aria-pressed"),
         ).toBe("true");
@@ -2441,14 +2448,14 @@ describe("XyWorkshop XRF lens", () => {
             await nextFrame();
             await view.find('[data-range="5-15"]').trigger("click");
             await flushPromises();
-            expect(plotly.relayout).toHaveBeenLastCalledWith(
-                expect.any(HTMLElement),
-                expect.objectContaining({ "yaxis.tickmode": "auto" }),
-            );
             const narrow = plotly.relayout.mock.calls.at(-1)![1] as Record<
                 string,
                 number[]
             >;
+            expect(narrow["yaxis.tickmode"]).toBe("array");
+            expect(narrow["yaxis.ticktext"]).toEqual(
+                expect.arrayContaining(["50", "100", "150", "200"]),
+            );
             const chart = view.find(".chart").element;
             Object.assign(chart, {
                 _fullLayout: {
@@ -2464,13 +2471,14 @@ describe("XyWorkshop XRF lens", () => {
             await eyeButton(view, curveId(1, 2)).trigger("click");
             await nextFrame();
             await flushPromises();
-            expect(plotly.relayout).toHaveBeenCalledWith(
-                chart,
-                expect.objectContaining({
-                    "yaxis.tickmode": "linear",
-                    "yaxis.dtick": 1,
-                }),
+            const wide = plotly.relayout.mock.calls.find(
+                ([element, update]) =>
+                    element === chart && "yaxis.range" in update,
+            )![1] as Record<string, unknown>;
+            expect(wide["yaxis.ticktext"]).toEqual(
+                expect.arrayContaining(["10", "100", "1000"]),
             );
+            expect(wide["yaxis.tickvals"]).not.toContain(200);
         });
 
         it("keeps the ticks of a fitted log counts axis through a redraw for a new size", async () => {
@@ -2486,7 +2494,7 @@ describe("XyWorkshop XRF lens", () => {
                 string,
                 unknown
             >;
-            expect(fitted).toMatchObject({ "yaxis.tickmode": "auto" });
+            expect(fitted).toMatchObject({ "yaxis.tickmode": "array" });
             const chart = view.find(".chart").element;
             Object.assign(chart, {
                 _fullLayout: {
@@ -2509,7 +2517,8 @@ describe("XyWorkshop XRF lens", () => {
                 chart,
                 expect.objectContaining({
                     "yaxis.range": fitted["yaxis.range"],
-                    "yaxis.tickmode": "auto",
+                    "yaxis.tickmode": "array",
+                    "yaxis.ticktext": fitted["yaxis.ticktext"],
                 }),
             );
         });
@@ -2720,6 +2729,435 @@ describe("XyWorkshop XRF lens", () => {
         await view.find('[data-range="full"]').trigger("click");
         await flushPromises();
         expect(listed().text()).toContain("Rh Kα1 20.22 keV");
+    });
+
+    describe("log ticks follow the range shown", () => {
+        const COUNTS = series(
+            Array.from({ length: 201 }, (_, i) => i / 10),
+            Array.from({ length: 201 }, (_, i) => 2 + i * 50),
+        );
+
+        async function mountLog(
+            curves = [curve(0, 1)],
+        ): Promise<{ view: VueWrapper; chart: Element }> {
+            answer(1, jsonResponse(COUNTS));
+            answer(2, jsonResponse(COUNTS));
+            const view = await mountWorkshop(curves);
+            await settle();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            return { view, chart: view.find(".chart").element };
+        }
+
+        /** The tick relayouts made on `chart`, by axis name. */
+        function tickCalls(chart: Element): Record<string, unknown>[] {
+            return plotly.relayout.mock.calls
+                .filter(
+                    ([element, update]) =>
+                        element === chart &&
+                        Object.keys(update).some((key) =>
+                            key.endsWith(".tickvals"),
+                        ),
+                )
+                .map(([, update]) => update);
+        }
+
+        it("ticks a box zoom by hand inside one decade by round steps, labelled", async () => {
+            const { chart } = await mountLog();
+            const range: [number, number] = [
+                Math.log10(1500),
+                Math.log10(9000),
+            ];
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [3, 9], autorange: false, _length: 400 },
+                    yaxis: {
+                        type: "log",
+                        range,
+                        autorange: false,
+                        _length: 300,
+                        tickvals: [1, 10, 100, 1000, 10000],
+                        ticktext: ["1", "10", "100", "1000", "10k"],
+                    },
+                },
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.range[0]": 3,
+                "xaxis.range[1]": 9,
+                "yaxis.range[0]": range[0],
+                "yaxis.range[1]": range[1],
+            });
+            await flushPromises();
+            const [update] = tickCalls(chart);
+            expect(update).toEqual(logTickUpdate("yaxis", range, "en"));
+            expect(update["yaxis.ticktext"]).toEqual(
+                expect.arrayContaining(["2000", "4000", "6000", "8000"]),
+            );
+            expect(update).not.toHaveProperty("yaxis.range");
+        });
+
+        it("ticks a double-click back to the whole range by its decades, never a bare mantissa", async () => {
+            const { chart } = await mountLog();
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [0, 20], autorange: true, _length: 400 },
+                    yaxis: {
+                        type: "log",
+                        range: [0.2, 4.1],
+                        autorange: true,
+                        _length: 300,
+                        tickvals: [2000, 4000, 6000, 8000],
+                        ticktext: ["2000", "4000", "6000", "8000"],
+                    },
+                },
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "xaxis.autorange": true,
+                "yaxis.autorange": true,
+            });
+            await flushPromises();
+            const [update] = tickCalls(chart);
+            expect(update["yaxis.ticktext"]).toEqual(
+                expect.arrayContaining(["10", "100", "1000", "10k"]),
+            );
+            expect(update["yaxis.tickvals"]).not.toContain(2);
+            expect(update["yaxis.tickvals"]).not.toContain(2000);
+            expect(update["yaxis.minor.tickvals"]).toContain(2000);
+        });
+
+        it("ticks only the panel of the grid whose counts range changed", async () => {
+            const { view, chart } = await mountLog([curve(0, 1), curve(1, 2)]);
+            await view.find('[data-layout="multiples"]').trigger("click");
+            await flushPromises();
+            const log = (range: number[]) => ({
+                type: "log",
+                range,
+                autorange: false,
+                _length: 120,
+            });
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [0, 20], autorange: true, _length: 300 },
+                    xaxis2: { range: [0, 20], autorange: true, _length: 300 },
+                    yaxis: log([0.3, 4]),
+                    yaxis2: log([3.2, 3.9]),
+                },
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "yaxis2.range[0]": 3.2,
+                "yaxis2.range[1]": 3.9,
+            });
+            await flushPromises();
+            const calls = tickCalls(chart);
+            expect(calls).toHaveLength(1);
+            expect(
+                Object.keys(calls[0]).every((key) => key.startsWith("yaxis2.")),
+            ).toBe(true);
+        });
+
+        it("leaves a linear counts axis and ticks already shown alone", async () => {
+            const { view, chart } = await mountLog();
+            const range: [number, number] = [
+                Math.log10(1500),
+                Math.log10(9000),
+            ];
+            const shown = logTickUpdate("yaxis", range, "en");
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [3, 9], autorange: false, _length: 400 },
+                    yaxis: {
+                        type: "log",
+                        range,
+                        autorange: false,
+                        _length: 300,
+                        tickvals: shown["yaxis.tickvals"],
+                        ticktext: shown["yaxis.ticktext"],
+                        minor: { tickvals: shown["yaxis.minor.tickvals"] },
+                    },
+                },
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "yaxis.range[0]": range[0],
+                "yaxis.range[1]": range[1],
+            });
+            await flushPromises();
+            expect(tickCalls(chart)).toEqual([]);
+
+            await view.find('[data-scale="linear"]').trigger("click");
+            await flushPromises();
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [3, 9], autorange: false, _length: 400 },
+                    yaxis: {
+                        type: "linear",
+                        range: [1500, 9000],
+                        autorange: false,
+                        _length: 300,
+                    },
+                },
+            });
+            plotly.relayout.mockClear();
+            emitPlotly(chart, "plotly_relayout", {
+                "yaxis.range[0]": 1500,
+                "yaxis.range[1]": 9000,
+            });
+            await flushPromises();
+            expect(tickCalls(chart)).toEqual([]);
+            const drawn = lastDrawing().layout.yaxis as Record<string, unknown>;
+            expect(drawn).not.toHaveProperty("tickvals");
+            expect(drawn).not.toHaveProperty("tickmode");
+        });
+    });
+
+    describe("planned and live lens drawings", () => {
+        it("lays out small multiples of unequal extents on the range their matched X axes share, so no shapes update follows", async () => {
+            const over = (to: number) =>
+                series(
+                    Array.from({ length: to * 10 + 1 }, (_, i) => i / 10),
+                    Array.from({ length: to * 10 + 1 }, () => 10),
+                );
+            answer(1, jsonResponse(over(40)));
+            answer(2, jsonResponse(over(20)));
+            writeXrfSettings({
+                detector: "sdd",
+                anodes: {},
+                elements: ["Pb", "Fe", "Cu", "Zn", "Ca", "Hg", "Sn", "Ag"],
+            });
+            reloadXrfSettings();
+            const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+            await settle();
+            const element = view.find(".chart").element as HTMLElement;
+            Object.defineProperty(element, "clientWidth", {
+                value: 500,
+                configurable: true,
+            });
+            Object.defineProperty(element, "_fullLayout", {
+                configurable: true,
+                get: () => {
+                    const layout = plotly.react.mock.calls.at(-1)?.[2];
+                    const widths = panelWidths(
+                        { layout } as unknown as Figure,
+                        element.clientWidth,
+                    );
+                    return Object.fromEntries(
+                        Object.entries(widths).map(([suffix, width]) => [
+                            `xaxis${suffix}`,
+                            { range: [0, 40], autorange: true, _length: width },
+                        ]),
+                    );
+                },
+            });
+            plotly.update.mockClear();
+            await view.find('[data-layout="multiples"]').trigger("click");
+            await flushPromises();
+            await nextFrame();
+            await flushPromises();
+            const drawnShapes = lastDrawing().layout as unknown as {
+                shapes?: unknown[];
+            };
+            expect(drawnShapes.shapes?.length ?? 0).toBeGreaterThan(0);
+            expect(shapeCalls()).toEqual([]);
+        });
+
+        it("lays out a stacked chart for the margins Plotly drew, the Y labels' included", async () => {
+            const resize = ref(0);
+            answer(
+                1,
+                jsonResponse(
+                    series(
+                        Array.from({ length: 201 }, (_, i) => i / 10),
+                        Array.from({ length: 201 }, () => 10),
+                    ),
+                ),
+            );
+            writeXrfSettings({
+                detector: "sdd",
+                anodes: {},
+                elements: ["Pb", "Fe", "Cu", "Zn", "Ca", "Hg", "Sn", "Ag"],
+            });
+            reloadXrfSettings();
+            const view = await mountWorkshop([curve(0, 1)], resize);
+            await settle();
+            const element = view.find(".chart").element as HTMLElement;
+            const margins = { l: 61, r: 56 };
+            let width = 360;
+            Object.defineProperty(element, "clientWidth", {
+                configurable: true,
+                get: () => width,
+            });
+            Object.defineProperty(element, "clientHeight", {
+                configurable: true,
+                value: 300,
+            });
+            Object.defineProperty(element, "_fullLayout", {
+                configurable: true,
+                get: () => ({
+                    _size: margins,
+                    xaxis: {
+                        range: [0, 20],
+                        autorange: true,
+                        _length: width - margins.l - margins.r,
+                    },
+                }),
+            });
+            resize.value += 1;
+            await flushPromises();
+            await nextFrame();
+            await flushPromises();
+            width = 640;
+            plotly.update.mockClear();
+            plotly.react.mockClear();
+            resize.value += 1;
+            await flushPromises();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).toHaveBeenCalledTimes(1);
+            expect(shapeCalls()).toEqual([]);
+        });
+
+        it("announces marks left out from the drawing shown only, never from the planned one", async () => {
+            const wide = series(
+                Array.from({ length: 401 }, (_, i) => i / 20),
+                Array.from({ length: 401 }, () => 10),
+            );
+            const slots = [0, 1, 2, 3];
+            slots.forEach((slot) => answer(slot + 1, jsonResponse(wide)));
+            writeXrfSettings({
+                detector: "sdd",
+                anodes: {},
+                elements: [
+                    [
+                        "Pb",
+                        "Fe",
+                        "Cu",
+                        "Zn",
+                        "Ca",
+                        "Hg",
+                        "Sn",
+                        "Ag",
+                        "Au",
+                        "Ti",
+                    ],
+                    ["Mn", "Cr", "Co", "Ni", "As", "Sr", "Ba", "K", "S", "Cl"],
+                    ["Bi", "Sb", "Se", "Br", "Rb", "Zr", "Mo", "Cd", "W", "Pt"],
+                ].flat(),
+            });
+            reloadXrfSettings();
+            const view = await mountWorkshop(
+                slots.map((slot) => curve(slot, slot + 1)),
+            );
+            await settle();
+            const region = view.find("p.left-out").element;
+            const element = view.find(".chart").element as HTMLElement;
+            const said: string[] = [];
+            const observer = new MutationObserver(() => {
+                said.push(region.textContent ?? "");
+            });
+            observer.observe(region, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+            });
+            const shown = (range: [number, number], autorange: boolean) =>
+                Object.fromEntries(
+                    ["", "2", "3", "4"].map((suffix) => [
+                        `xaxis${suffix}`,
+                        { range, autorange, _length: 300 },
+                    ]),
+                );
+            Object.defineProperty(element, "_fullLayout", {
+                configurable: true,
+                get: () => shown([6.3, 6.5], false),
+            });
+            await view.find('[data-layout="multiples"]').trigger("click");
+            await flushPromises();
+            await nextFrame();
+            await flushPromises();
+            observer.disconnect();
+            expect(said.filter((text) => text.trim() !== "")).toEqual([]);
+            expect(region.textContent?.trim()).toBe("");
+            Object.defineProperty(element, "_fullLayout", {
+                configurable: true,
+                get: () => shown([0, 20], true),
+            });
+            pinElement("Pb", [1]);
+            await nextFrame();
+            await flushPromises();
+            expect(region.textContent?.trim()).not.toBe("");
+        });
+    });
+
+    describe("end labels and the instrument band", () => {
+        const peakAt = (centre: number) =>
+            series(
+                Array.from({ length: 2001 }, (_, i) => i / 100),
+                Array.from({ length: 2001 }, (_, i) =>
+                    Math.round(
+                        10 +
+                            5000 *
+                                Math.exp(
+                                    -(((i / 100 - centre) / 0.05) ** 2) / 2,
+                                ),
+                    ),
+                ),
+            );
+        const flat = series(
+            Array.from({ length: 2001 }, (_, i) => i / 100),
+            Array.from({ length: 2001 }, () => 3000),
+        );
+
+        function lowestLabel(annotations: { text: string; ay?: number }[]) {
+            return (
+                annotations.find((note) => note.text.includes("A1"))?.ay ?? 0
+            );
+        }
+
+        it("lays the end labels above the instrument ticks, and again without them once their curve is hidden, with no redraw", async () => {
+            answer(1, jsonResponse(peakAt(6.4)));
+            answer(2, jsonResponse(flat));
+            const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+            await settle();
+            const element = view.find(".chart").element as HTMLElement;
+            Object.defineProperty(element, "clientHeight", {
+                configurable: true,
+                value: 400,
+            });
+            Object.defineProperty(element, "clientWidth", {
+                configurable: true,
+                value: 640,
+            });
+            await view.find('[data-layout="offset"]').trigger("click");
+            await flushPromises();
+            await view.find('[data-layout="overlay"]').trigger("click");
+            await flushPromises();
+            await nextFrame();
+            await flushPromises();
+            const drawn = lastDrawing().layout.annotations;
+            expect(lowestLabel(drawn)).toBeLessThan(-30);
+            plotly.react.mockClear();
+            plotly.update.mockClear();
+            await eyeButton(view, curveId(0, 1)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.react).not.toHaveBeenCalled();
+            const relaid = plotly.update.mock.calls
+                .map(([, , layout]) => layout)
+                .find((layout) => "annotations" in layout);
+            expect(relaid).toBeDefined();
+            const notes = relaid!.annotations as {
+                text: string;
+                ay?: number;
+            }[];
+            expect(notes).toHaveLength(drawn.length);
+            expect(lowestLabel(notes)).toBeGreaterThan(lowestLabel(drawn));
+            expect(notes.every((note) => "opacity" in note)).toBe(true);
+        });
     });
 
     describe("the chart's own box", () => {

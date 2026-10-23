@@ -764,7 +764,8 @@ export function useXrfLens(sources: LensSources) {
         views?: PanelViews,
     ): LensDrawing {
         const current = model.value;
-        if (current.panels.length === 0) return { shapes: [], dropped: 0 };
+        if (current.panels.length === 0)
+            return { shapes: [], dropped: 0, footPx: 0 };
         const colourOf = (order: number) => theme.series[itemHue(order)];
         const panels: LensPanel[] = current.panels.map((panel) => ({
             suffix: panel.suffix,

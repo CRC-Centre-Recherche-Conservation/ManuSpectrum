@@ -46,6 +46,8 @@ import {
 import {
     EXPORT_TITLE_ROOM,
     annotationOpacities,
+    autorangeX,
+    endLabelsFor,
     exportFigure,
     hoverTemplatesFor,
     hoverValueFor,
@@ -115,6 +117,7 @@ import type {
     LensLabels,
     PanelViews,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
+import type { LensDrawing } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
     Figure,
@@ -151,12 +154,24 @@ interface DrawnAxis {
     range?: unknown[];
     autorange?: boolean | string;
     _length?: number;
+    type?: string;
+    tickvals?: unknown;
+    ticktext?: unknown;
+    minor?: { tickvals?: unknown };
+}
+
+/** The margins Plotly drew with, `automargin` included, as `_fullLayout._size` holds them. */
+interface DrawnSize {
+    l?: number;
+    r?: number;
 }
 
 const AXIS_NAME = /^[xy]axis\d*$/;
 /** An update that sets or releases the range of an X axis. */
 const TOUCHES_X_AXIS = /xaxis\d*\.(range|autorange)/;
 const Y_AXIS_RANGE = /yaxis\d*\.(range|autorange)/;
+/** The Y axis whose range or autorange a relayout key sets. */
+const Y_AXIS_RANGE_KEY = /^(yaxis\d*)\.(?:range|autorange)/;
 
 /** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
 const CHART_LAYOUTS: Readonly<
@@ -297,6 +312,8 @@ let drawing = false;
 let restyleFrame: number | null = null;
 /** The lens shapes the chart shows, serialised (`shapesKey`); an update is made only when they differ. */
 let shownShapesKey = "";
+/** The foot band of the last lens drawing (`LensDrawing.footPx`), which the end labels shown stay above. */
+let footPx = 0;
 let shapesFrame: number | null = null;
 /**
  * Watches the chart element's own box (its height changes when the content
@@ -1011,9 +1028,7 @@ function figureInput(
         height,
         yLog: logShown.value,
         lens: lens.active.value,
-        instrumentBand: lens.model.value.panels.some(
-            (panel) => panel.ticks.length > 0 || panel.bands.length > 0,
-        ),
+        instrumentBandPx: footPx,
     };
 }
 
@@ -1050,20 +1065,34 @@ function liveViews(): PanelViews | undefined {
 }
 
 /**
- * What each panel of `figure` shows once drawn `width` px wide: its plot
- * width (`panelWidths`) and the energy range `kept` puts back, the data
- * extent when it puts none.
+ * What each panel of `figure` shows once drawn `width` px wide on `element`:
+ * its plot width (`panelWidths`, with the margins Plotly drew when the
+ * element shows the same figure) and the energy range `kept` puts back,
+ * else the one every panel shows under the autorange (`autorangeX`).
  */
 function plannedViews(
     figure: Figure,
-    width: number,
+    element: HTMLElement,
     kept: Record<string, unknown> | null,
+    sameFigure: boolean,
 ): PanelViews {
+    const size = sameFigure
+        ? (element as { _fullLayout?: { _size?: DrawnSize } })._fullLayout
+              ?._size
+        : undefined;
+    const margins =
+        size && Number.isFinite(size.l) && Number.isFinite(size.r)
+            ? { l: size.l as number, r: size.r as number }
+            : undefined;
+    const autorange = autorangeX(figure, xReversed.value);
     const views: Record<string, NonNullable<PanelViews[string]>> = {};
-    for (const [suffix, plot] of Object.entries(panelWidths(figure, width))) {
-        const range = kept?.[`xaxis${suffix}.range`] as
-            | [number, number]
-            | undefined;
+    for (const [suffix, plot] of Object.entries(
+        panelWidths(figure, element.clientWidth, margins),
+    )) {
+        const range =
+            (kept?.[`xaxis${suffix}.range`] as [number, number] | undefined) ??
+            (kept?.["xaxis.range"] as [number, number] | undefined) ??
+            autorange;
         views[suffix] = {
             width: plot,
             ...(range ? { range: [range[0], range[1]] } : {}),
@@ -1084,7 +1113,7 @@ function keptLogTicks(
         if (name && layout[name]?.type === "log") {
             Object.assign(
                 ticks,
-                logTickUpdate(name, value as [number, number]),
+                logTickUpdate(name, value as [number, number], lang),
             );
         }
     }
@@ -1099,22 +1128,17 @@ interface ShapeOptions {
 }
 
 /**
- * The lens shapes for `theme`; none outside an XRF window. Without `views`
- * the labels are laid out on the data extent and the chart's width. The
- * drawing with the marker is the chart's: whether it left marks out reaches
- * the strip (`marksLeftOut`).
+ * The lens drawing for `theme`; empty outside an XRF window. Without
+ * `views` the labels are laid out on the data extent and the chart's width.
  */
 function lensShapesFor(
     theme: PlotTheme,
     { marker = true, views }: ShapeOptions = {},
-): Partial<Shape>[] {
-    if (!lens.active.value) {
-        marksLeftOut.value = false;
-        return [];
-    }
+): LensDrawing {
+    if (!lens.active.value) return { shapes: [], dropped: 0, footPx: 0 };
     const width = chart.value?.clientWidth;
     const held = marker ? identification.value : null;
-    const drawn = lens.drawing(
+    return lens.drawing(
         theme,
         width ? width - PLOT_MARGIN_X : undefined,
         held
@@ -1128,8 +1152,6 @@ function lensShapesFor(
             : undefined,
         views,
     );
-    if (marker) marksLeftOut.value = drawn.dropped > 0;
-    return drawn.shapes;
 }
 
 async function draw(): Promise<void> {
@@ -1163,10 +1185,25 @@ async function draw(): Promise<void> {
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
         if (kept) Object.assign(kept, keptLogTicks(figure, kept));
-        const shapes = lensShapesFor(theme, {
-            views: plannedViews(figure, element.clientWidth, kept),
+        const planned = lensShapesFor(theme, {
+            views: plannedViews(
+                figure,
+                element,
+                kept,
+                drawnOn === element && identity === drawnIdentity,
+            ),
         });
+        const shapes = planned.shapes;
         if (shapes.length > 0) figure.layout.shapes = [...shapes];
+        if (planned.footPx !== footPx) {
+            footPx = planned.footPx;
+            const labels = endLabelsFor(
+                { ...input, instrumentBandPx: footPx },
+                figure,
+                layout.value,
+            );
+            if (labels) figure.layout.annotations = labels;
+        }
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, effectiveStates.value);
@@ -1206,6 +1243,7 @@ async function draw(): Promise<void> {
         } else {
             await setRanges(element, kept);
         }
+        await retickLogAxes(element);
         bindEvents(element);
         drawFailed.value = false;
     } catch (error: unknown) {
@@ -1336,13 +1374,40 @@ function scheduleShapes(): void {
 async function updateShapes(): Promise<void> {
     const element = drawnOn;
     const theme = drawnTheme;
-    if (drawing || !plotly || !element || !lastFigure || !theme) return;
-    const shapes = lensShapesFor(theme, { views: liveViews() });
-    const key = shapesKey(shapes);
-    if (key === shownShapesKey) return;
+    const figure = lastFigure;
+    if (drawing || !plotly || !element || !figure || !theme) return;
+    const live = lensShapesFor(theme, { views: liveViews() });
+    marksLeftOut.value = live.dropped > 0;
+    const key = shapesKey(live.shapes);
+    const labels =
+        live.footPx === footPx
+            ? null
+            : endLabelsFor(
+                  {
+                      ...figureInput(theme, element, naturalHeight),
+                      instrumentBandPx: live.footPx,
+                  },
+                  figure,
+                  layout.value === "table" ? "overlay" : layout.value,
+              );
+    labels?.forEach((note, index) => {
+        note.opacity = shownOpacities[index];
+    });
+    if (key === shownShapesKey && !labels) {
+        footPx = live.footPx;
+        return;
+    }
     try {
-        await plotly.update(element, {}, { shapes });
+        await plotly.update(
+            element,
+            {},
+            labels
+                ? { shapes: live.shapes, annotations: labels }
+                : { shapes: live.shapes },
+        );
         shownShapesKey = key;
+        footPx = live.footPx;
+        if (labels && lastFigure === figure) figure.layout.annotations = labels;
     } catch (error: unknown) {
         console.error("The XRF lines could not be drawn", error);
     }
@@ -1458,6 +1523,69 @@ async function refitCounts(element: HTMLElement): Promise<void> {
     yFitted = true;
 }
 
+/** The ticks of `values` (labelled by `texts`) that a log axis showing `range` (log10) draws, as a key; empty when none is an array. */
+function ticksInside(
+    range: readonly [number, number],
+    values: unknown,
+    texts?: unknown,
+): string {
+    if (!Array.isArray(values)) return "";
+    const [low, high] = [Math.min(...range), Math.max(...range)];
+    const labels = Array.isArray(texts) ? texts : [];
+    return JSON.stringify(
+        values.flatMap((value: unknown, index) => {
+            const at = Math.log10(Number(value));
+            return at >= low && at <= high
+                ? [[value, labels[index] ?? null]]
+                : [];
+        }),
+    );
+}
+
+/**
+ * Gives each log Y axis of `element` the ticks (`logTickUpdate`) of the range
+ * Plotly shows now, read from its full layout after a relayout or a drawing:
+ * a box zoom, an axis-end drag, a double-click or a fit. `keys` limits it to
+ * the axes a relayout's keys set the range or autorange of; without them,
+ * every log Y axis. An axis already showing those ticks is left alone, so a
+ * relayout of ticks never follows its own.
+ */
+async function retickLogAxes(
+    element: HTMLElement,
+    keys?: readonly string[],
+): Promise<void> {
+    const full = (element as { _fullLayout?: Record<string, unknown> })
+        ._fullLayout;
+    if (!full) return;
+    const names = keys
+        ? new Set(
+              keys.flatMap((key) => {
+                  const name = Y_AXIS_RANGE_KEY.exec(key)?.[1];
+                  return name ? [name] : [];
+              }),
+          )
+        : new Set(Object.keys(full).filter((name) => /^yaxis\d*$/.test(name)));
+    const update: Record<string, unknown> = {};
+    for (const name of names) {
+        const axis = full[name] as DrawnAxis | undefined;
+        if (axis?.type !== "log" || !Array.isArray(axis.range)) continue;
+        const range: [number, number] = [
+            Number(axis.range[0]),
+            Number(axis.range[1]),
+        ];
+        const ticks = logTickUpdate(name, range, lang);
+        const seen = (values: unknown, texts?: unknown) =>
+            ticksInside(range, values, texts);
+        const same =
+            seen(axis.tickvals, axis.ticktext) ===
+                seen(ticks[`${name}.tickvals`], ticks[`${name}.ticktext`]) &&
+            seen(axis.minor?.tickvals) ===
+                seen(ticks[`${name}.minor.tickvals`]);
+        if (!same) Object.assign(update, ticks);
+    }
+    await setRanges(element, update);
+}
+
 function bindEvents(element: HTMLElement): void {
     const target = element as PlotlyTarget;
     if (boundCharts.has(element) || typeof target.on !== "function") return;
@@ -1490,6 +1618,7 @@ function bindEvents(element: HTMLElement): void {
             return;
         }
         const keys = Object.keys(update).join();
+        void retickLogAxes(element, Object.keys(update));
         if (!applyingRange && Y_AXIS_RANGE.test(keys)) yFitted = false;
         const touchesX = TOUCHES_X_AXIS.test(keys);
         if (!applyingRange) zoomed.value = zoomedAfter(update, zoomed.value);
@@ -1803,7 +1932,7 @@ async function downloadPng(): Promise<void> {
     for (const [suffix, width] of Object.entries(widths)) {
         views[suffix] = { width };
     }
-    const shapes = lensShapesFor(theme, { marker: false, views });
+    const { shapes } = lensShapesFor(theme, { marker: false, views });
     try {
         const url = await plotly.toImage(
             exportFigure(

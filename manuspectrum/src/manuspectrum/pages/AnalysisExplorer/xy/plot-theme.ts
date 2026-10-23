@@ -105,6 +105,47 @@ export function seriesColour(
         : theme.ink;
 }
 
+/** The number format of every tick label: SI suffixes past 10³ (« 10k »), as Plotly's `exponentformat`/`minexponent`. */
+const TICK_EXPONENT_FORMAT = "SI" as const;
+const TICK_MIN_EXPONENT = 3;
+/** Plotly's SI suffixes, from 10⁻¹⁵ to 10¹². */
+const SI_PREFIXES = ["f", "p", "n", "\u03BC", "m", "", "k", "M", "G", "T"];
+const MINUS_SIGN = "\u2212";
+
+/**
+ * The tick label Plotly gives `value` on an axis of `plotLayout` when it
+ * formats that value alone, as on a log axis: plain under 10⁴, then an SI
+ * suffix (« 10k », « 2.5M »), trailing zeros dropped, decimal and
+ * thousands marks from `separators` (`separatorsFor`). The rule of
+ * `numFormat` in plotly.js-cartesian-dist 4.0.0 under `TICK_EXPONENT_FORMAT`
+ * and `TICK_MIN_EXPONENT`; a linear axis shares one suffix across its ticks,
+ * the one of its largest end.
+ */
+export function tickNumber(value: number, separators: string): string {
+    if (!Number.isFinite(value)) return "";
+    if (value === 0) return "0";
+    const magnitude = Math.floor(Math.log10(Math.abs(value)) + 0.01);
+    const exponent =
+        Math.abs(magnitude) > TICK_MIN_EXPONENT
+            ? Math.min(12, Math.max(-15, 3 * Math.round((magnitude - 1) / 3)))
+            : 0;
+    const digits = Math.min(20, Math.max(0, 6 - magnitude + exponent));
+    let text = (Math.abs(value) / 10 ** exponent).toFixed(digits);
+    if (text.includes(".")) text = text.replace(/\.?0+$/, "");
+    const [whole, fraction] = text.split(".");
+    const [decimalMark, thousandsMark] = separators;
+    const grouped =
+        thousandsMark && (fraction !== undefined || whole.length > 4)
+            ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsMark)
+            : whole;
+    const number =
+        fraction === undefined
+            ? grouped
+            : `${grouped}${decimalMark}${fraction}`;
+    const sign = value < 0 ? MINUS_SIGN : "";
+    return `${sign}${number}${SI_PREFIXES[exponent / 3 + 5]}`;
+}
+
 /** Plotly `separators`: decimal mark then thousands mark. */
 export function separatorsFor(lang: string): string {
     return lang.toLowerCase().startsWith("fr") ? ", " : ".,";
@@ -211,8 +252,8 @@ export function plotLayout(
         showline: true,
         linecolor: theme.inkMuted,
         zeroline: false,
-        exponentformat: "SI" as const,
-        minexponent: 3,
+        exponentformat: TICK_EXPONENT_FORMAT,
+        minexponent: TICK_MIN_EXPONENT,
         showspikes: true,
         spikemode: "across" as const,
         spikedash: "dot",

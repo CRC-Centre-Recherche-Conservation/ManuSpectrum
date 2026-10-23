@@ -34,9 +34,10 @@ export const TOP_BAND_PX = TOP_BAND_ROWS * ROW_STEP_PX + 4;
 /** Rows the instrument labels are staggered on at the foot of a panel; one on a panel narrower than `NARROW_PANEL_PX`. */
 const INSTRUMENT_ROWS = 2;
 const NARROW_PANEL_PX = 250;
-/** The room the instrument ticks and their labels take at the foot of the plot area. */
-export const INSTRUMENT_BAND_PX =
-    TICK_PX + INSTRUMENT_ROWS * ROW_STEP_PX + LABEL_SIZE;
+/** The room the instrument ticks take at the foot of the plot area with `rows` rows of labels over them. */
+function footBandPx(rows: number): number {
+    return rows > 0 ? TICK_PX + rows * ROW_STEP_PX + LABEL_SIZE : TICK_PX;
+}
 /** Width of one glyph of a label, and the gap kept between two labels on a row. */
 const GLYPH_PX = monoGlyphWidth(LABEL_SIZE);
 const LABEL_GAP_PX = 4;
@@ -159,6 +160,8 @@ export interface LensShapesInput {
 export interface LensDrawing {
     shapes: LensShape[];
     dropped: number;
+    /** The height (px) the instrument ticks and band labels take at the foot of the tallest panel; 0 when there are none. */
+    footPx: number;
 }
 
 /** What the cap sheds between: it never empties a family, and never touches the instrument ticks or the marker. */
@@ -598,7 +601,7 @@ function panelEntries(
     input: LensShapesInput,
     panel: LensPanel,
     position: number,
-): { entries: Entry[]; marker: Entry | null } {
+): { entries: Entry[]; marker: Entry | null; footPx: number } {
     const { theme } = input;
     const { shown, mapped } = panelRanges(panel);
     const span = mapped[1] - mapped[0];
@@ -849,7 +852,12 @@ function panelEntries(
             shapes: [shape],
         };
     }
-    return { entries, marker: markerEntry };
+    const rows = bottomPlaced.reduce(
+        (most, placed) => (placed ? Math.max(most, placed.row + 1) : most),
+        0,
+    );
+    const footPx = ticks.length + bands.length > 0 ? footBandPx(rows) : 0;
+    return { entries, marker: markerEntry, footPx };
 }
 
 /**
@@ -928,19 +936,22 @@ function shed(
  * principal line takes that line's label), then the element lines, solid
  * before dashed; a line label falls back to the line alone, then to none.
  * At the foot, on `INSTRUMENT_ROWS` rows (one under `NARROW_PANEL_PX`):
- * the instrument labels by kind and the Compton band's label. The marker
- * is drawn last, in front of every other shape.
+ * the instrument labels by kind and the Compton band's label; `footPx`
+ * is the room they take, with the rows actually used. The marker is drawn
+ * last, in front of every other shape.
  */
 export function lensDrawing(input: LensShapesInput): LensDrawing {
     const entries: Entry[] = [];
     const markers: Entry[] = [];
+    let footPx = 0;
     input.panels.forEach((panel, position) => {
         const built = panelEntries(input, panel, position);
         entries.push(...built.entries);
         if (built.marker) markers.push(built.marker);
+        footPx = Math.max(footPx, built.footPx);
     });
     const { kept, dropped } = shed([...entries, ...markers], MAX_LENS_SHAPES);
-    return { shapes: kept.flatMap((entry) => entry.shapes), dropped };
+    return { shapes: kept.flatMap((entry) => entry.shapes), dropped, footPx };
 }
 
 /** A stable string of `shapes`: equal keys mean the same drawing. */

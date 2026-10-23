@@ -610,7 +610,9 @@ describe("useXrfLens", () => {
         expect(lens.drawing(THEME)).toEqual({
             shapes: shapesOf(lens),
             dropped: 0,
+            footPx: expect.any(Number),
         });
+        expect(lens.drawing(THEME).footPx).toBeGreaterThan(0);
     });
 
     describe("instrument ticks", () => {

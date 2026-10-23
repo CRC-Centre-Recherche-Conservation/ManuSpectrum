@@ -687,6 +687,33 @@ describe("lensShapes", () => {
             expect(texts(ticks(pair, 240))).toEqual(["éch."]);
         });
 
+        it("reports the foot band its labels take, with the rows actually used: none without a tick", () => {
+            const foot = (labels: [string, number][], plotWidth = 400) =>
+                lensDrawing(
+                    input({
+                        plotWidth,
+                        panels: [
+                            panel("", {
+                                extent: [0, 40],
+                                instrument: labels.map(([label, energy]) => ({
+                                    label,
+                                    energy,
+                                })),
+                            }),
+                        ],
+                    }),
+                ).footPx;
+            const pair: [string, number][] = [
+                ["éch.", 10],
+                ["somme", 10.5],
+            ];
+            expect(foot([])).toBe(0);
+            expect(foot([["Σ", 10]])).toBe(14 + 14 + 11);
+            expect(foot(pair)).toBe(14 + 2 * 14 + 11);
+            expect(foot(pair, 240)).toBe(14 + 14 + 11);
+            expect(foot([["Σ", 50]])).toBe(0);
+        });
+
         it("does not place the same word again within 60 px, the tick staying", () => {
             const near = ticks([
                 ["somme", 10],
