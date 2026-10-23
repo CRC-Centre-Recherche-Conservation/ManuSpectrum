@@ -84,6 +84,22 @@ def env_bool(name, default):
     raise ImproperlyConfigured(f"{name} must be true or false, not {value!r}")
 
 
+def env_positive_int(name, default):
+    """Return the variable `name` as an integer above 0, `default` when unset or empty."""
+    value = get_optional_env_variable(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        number = int(value.strip())
+    except ValueError:
+        number = 0
+    if number < 1:
+        raise ImproperlyConfigured(
+            f"{name} must be a whole number above 0, not {value!r}"
+        )
+    return number
+
+
 DEBUG = False
 
 SECRET_KEY = read_secret("MANUSPECTRUM_SECRET_KEY")
@@ -128,6 +144,9 @@ EXTRA_EMAIL_CONTEXT = {
 ENABLE_USER_SIGNUP = False
 # Compulsory two-factor sign-in, switched on once every account is enrolled.
 FORCE_TWO_FACTOR_AUTHENTICATION = env_bool("FORCE_TWO_FACTOR_AUTHENTICATION", False)
+RELATED_RESOURCES_EXPORT_LIMIT = env_positive_int(
+    "RELATED_RESOURCES_EXPORT_LIMIT", RELATED_RESOURCES_EXPORT_LIMIT
+)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
