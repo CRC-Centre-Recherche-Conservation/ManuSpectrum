@@ -272,6 +272,21 @@ The real fix is a server-side count in Arches that routes large exports to Celer
 the client sends. It is not done here: no upstream issue is opened and the core route is
 not overridden.
 
+## Very linked resources
+
+Arches loads every relation of a resource at once in three places: the related resources
+graph of the search, « load all » in a report's related resources, and the related
+resources summary of the report API (new-style reports, the workflow summary step). With
+Arches' default of 10,000, a resource with about 1,650 relations froze the browser tab on
+the graph: its layout and search grow with the square of the number of relations.
+
+`RELATED_RESOURCES_EXPORT_LIMIT` in `.env` caps those three lists (1000 by default). Beyond
+the cap Arches keeps that many relations, in no guaranteed order, and says nothing. The
+paginated related resources of a report (15 per page) still show every relation; search
+exports and ETL modules never read this value. To change it, edit `.env` and run
+`make -C deploy up` (web reads it at start); a value that is not a whole number above 0
+stops web from starting.
+
 ## Abandoned workflows
 
 An open workflow run with no activity for 90 days (`WORKFLOW_CLEANUP_AFTER_DAYS`) is cleaned
