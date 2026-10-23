@@ -22,6 +22,8 @@ const MAX_LINEAR_LABELS = 7;
 const LINEAR_STEPS = [1, 2, 2.5, 5];
 /** The decades kept on each side of a range of no height. */
 const FLAT_PAD = 0.5;
+/** A range narrower than this (decades) has no height: its ends round to the same tick value. */
+const FLAT_SPAN = 1e-6;
 /** The decades ticked when the range is not known: Plotly draws only the ticks inside the range it shows. */
 const UNKNOWN_RANGE: [number, number] = [-6, 12];
 /** Significant digits a tick value is rounded to, so that 3 × 0.1 is 0.3. */
@@ -38,7 +40,9 @@ function ordered(
     if (!range || !range.every(Number.isFinite)) return null;
     const low = Math.min(range[0], range[1]);
     const high = Math.max(range[0], range[1]);
-    return low === high ? [low - FLAT_PAD, high + FLAT_PAD] : [low, high];
+    return high - low < FLAT_SPAN
+        ? [low - FLAT_PAD, high + FLAT_PAD]
+        : [low, high];
 }
 
 /** Powers of ten (every `step`-th labelled) with `minor` multiples of each between `from` and `to` (exponents). */
@@ -80,6 +84,7 @@ function oneTwoFiveTicks(
 
 /** The smallest round step (1, 2, 2.5 or 5 × 10^k) that puts at most `MAX_LINEAR_LABELS` ticks between `low` and `high`. */
 function linearStep(low: number, high: number): number {
+    if (!(high > low)) return 10 ** Math.floor(Math.log10(Math.abs(low) || 1));
     let power = Math.floor(Math.log10((high - low) / MAX_LINEAR_LABELS)) - 1;
     for (;;) {
         for (const factor of LINEAR_STEPS) {
@@ -117,7 +122,7 @@ function linearTicks(low: number, high: number): number[] {
  *   `MAX_LINEAR_LABELS`), labelled, no minor tick.
  * Every label is the whole value (`tickNumber`: « 200 », « 1000 »,
  * « 10k »), never a bare mantissa. The ticks reach past the range, which
- * Plotly crops. A range of no height takes `FLAT_PAD` decades on each side;
+ * Plotly crops. A range under `FLAT_SPAN` decades takes `FLAT_PAD` decades on each side;
  * an unknown one (null, NaN, infinite) takes the powers of ten.
  */
 export function logTicks(

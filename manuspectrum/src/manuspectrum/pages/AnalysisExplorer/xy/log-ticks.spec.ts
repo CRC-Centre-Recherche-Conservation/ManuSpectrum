@@ -135,6 +135,12 @@ describe("logTicks", () => {
         }
     });
 
+    it("pads a range whose ends round to the same value like one of no height", () => {
+        for (const width of [1e-9, 1e-13, 4e-16]) {
+            expect(logTicks([3, 3 + width], EN)).toEqual(logTicks([3, 3], EN));
+        }
+    });
+
     it("gives every tick value its label, in the same order", () => {
         const ticks = logTicks([0.5, 6.5], EN);
         expect(ticks.ticktext).toHaveLength(ticks.tickvals.length);
