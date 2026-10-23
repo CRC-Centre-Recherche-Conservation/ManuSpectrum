@@ -16,14 +16,20 @@ import {
     spreadLabels,
     visibleCurveCount,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
+import { logTicks } from "@/manuspectrum/pages/AnalysisExplorer/xy/log-ticks.ts";
 import {
     closestHoverLine,
     escapePlotlyText,
+    monoGlyphWidth,
     plotLayout,
+    separatorsFor,
     unifiedHoverLine,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
-import { DECLARED_STRIP_PX } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
+import {
+    BAND_ROW_PX,
+    TOP_BAND_PX,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 
 import type { Layout, PlotData, Shape } from "plotly.js";
 import type {
@@ -72,10 +78,13 @@ export interface FigureInput {
     shapes?: readonly Partial<Shape>[];
     /**
      * The chart carries the XRF lens: its counts axis never goes below zero
-     * (linear Y, not Offset) and a stacked chart keeps `DECLARED_STRIP_PX`
-     * more above its plot area for the declared labels.
+     * (linear Y, not Offset), a stacked chart keeps `TOP_BAND_PX` more above
+     * its plot area for the label band, and a panel's title sits above its
+     * one-row band.
      */
     lens?: boolean;
+    /** The height (px) the lens's instrument ticks and band labels take at the foot of the plot (`LensDrawing.footPx`): a stacked chart's end labels stay above it. */
+    instrumentBandPx?: number;
 }
 
 export interface Figure {
@@ -96,8 +105,8 @@ const PANEL_FONT_SIZE = 10;
 /** The characters a panel title keeps when the chart's width is unknown. */
 const PANEL_TITLE_CHARS = 32;
 const PANEL_TITLE_MIN_CHARS = 6;
-/** The width of one character of the mono font at 11 px. */
-const MONO_CHAR_PX = 6.6;
+/** The width of one character of a panel title. */
+const MONO_CHAR_PX = monoGlyphWidth(LABEL_FONT_SIZE);
 /** Room on the right of a stacked chart for the end-of-curve labels. */
 const LABEL_ROOM = 56;
 /** How far a label that moved sits from the end of its curve, in pixels, its leader line between them. */
@@ -108,11 +117,15 @@ const LABEL_MOVED = 1;
 /** The top and bottom room a stacked chart keeps around its plotting area, as estimated before Plotly measures it. */
 const STACKED_ROOM = 56;
 const PANEL_MARGIN = { l: 64, r: 16, t: 28, b: 52 };
+/** The room a panel's title takes above its plot; with the lens, the label band sits between the two. */
+const PANEL_TITLE_PX = 14;
 const PANEL_X_TITLE_SHIFT = -30;
 const PANEL_Y_TITLE_SHIFT = -44;
 const PANEL_TITLE_DIMMED = 0.35;
 const X_TICKS = 4;
 const Y_TICKS = 3;
+/** Minor ticks of a log axis: short, unlabelled, no grid. */
+const LOG_MINOR_TICK_PX = 2;
 const TITLE_SIZE = 12;
 const EXPORT_TITLE_SIZE = 14;
 /** Room above the exported figure for its title and source line. */
@@ -240,6 +253,42 @@ function logTrace(trace: Trace): Trace {
     return { ...trace, y: laid.y, customdata: laid.customdata } as Trace;
 }
 
+/** The log10 extent of the positive values of `curves`; null when none is. */
+function logExtent(
+    curves: readonly { y: readonly number[] }[],
+): [number, number] | null {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const curve of curves) {
+        for (const value of curve.y) {
+            if (!(value > 0) || !Number.isFinite(value)) continue;
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+    }
+    return max === -Infinity ? null : [Math.log10(min), Math.log10(max)];
+}
+
+/** A logarithmic Y axis ticked by `logTicks` over `range` (log10), its minor ticks short and unlabelled. */
+function logAxis(
+    input: FigureInput,
+    range: readonly [number, number] | null,
+): Record<string, unknown> {
+    const { minor, ...ticks } = logTicks(range, separatorsFor(input.lang));
+    const { theme } = input;
+    return {
+        type: "log",
+        ...ticks,
+        minor: {
+            ...minor,
+            ticks: "outside",
+            ticklen: LOG_MINOR_TICK_PX,
+            tickcolor: theme.inkMuted,
+            showgrid: false,
+        },
+    };
+}
+
 function shapesOf(input: FigureInput): { shapes?: Partial<Shape>[] } {
     return input.shapes ? { shapes: [...input.shapes] } : {};
 }
@@ -274,16 +323,25 @@ function endLabels(
     const heightOf = (value: number) =>
         log ? annotationLogY(value) ?? 0 : value;
     const span = extent(ys.flat().map(heightOf));
-    const plotHeight = Math.max(0, input.height - STACKED_ROOM);
+    const plotHeight = Math.max(
+        0,
+        input.height - STACKED_ROOM - (input.lens ? TOP_BAND_PX : 0),
+    );
     const wanted = ends.map(({ point }) =>
         span && span.max > span.min
             ? plotHeight *
               (1 - (heightOf(point.y) - span.min) / (span.max - span.min))
             : plotHeight / 2,
     );
+    const band = input.lens ? input.instrumentBandPx ?? 0 : 0;
+    const floor =
+        band > 0 ? plotHeight - band - LABEL_FONT_SIZE / 2 : plotHeight;
     const placed =
         plotHeight > 0
-            ? spreadLabels(wanted, LABEL_GAP, { min: 0, max: plotHeight })
+            ? spreadLabels(wanted, LABEL_GAP, {
+                  min: 0,
+                  max: Math.max(0, floor),
+              })
             : wanted;
     const annotations = ends.map(({ index, point }, rank): Annotation => {
         const { slot, order } = input.curves[index];
@@ -342,7 +400,7 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     const base = baseLayout(input);
     const yaxis: Record<string, unknown> = {
         ...(base.yaxis as Record<string, unknown>),
-        ...(log ? { type: "log" } : {}),
+        ...(log ? logAxis(input, logExtent(input.curves)) : {}),
         ...(input.lens && !log && !offset ? { rangemode: "tozero" } : {}),
     };
     const margin = base.margin as { t: number };
@@ -353,7 +411,7 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
             margin: {
                 ...margin,
                 r: LABEL_ROOM,
-                ...(input.lens ? { t: margin.t + DECLARED_STRIP_PX } : {}),
+                ...(input.lens ? { t: margin.t + TOP_BAND_PX } : {}),
             },
             yaxis: offset
                 ? {
@@ -378,6 +436,24 @@ export function stackedFigure(input: FigureInput, offset: boolean): Figure {
     };
 }
 
+/**
+ * The end labels of the stacked `figure` built from `input` again, for a new
+ * `instrumentBandPx`: the annotations to put in place of the figure's, laid
+ * out on the curves it draws. None for small multiples, which carry none.
+ */
+export function endLabelsFor(
+    input: FigureInput,
+    figure: Figure,
+    kind: "overlay" | "offset" | "multiples",
+): Annotation[] | null {
+    if (kind === "multiples") return null;
+    const laid = input.curves.map(
+        (_, index) =>
+            (figure.data[figure.order.indexOf(index)]?.y ?? []) as number[],
+    );
+    return endLabels(input, laid, logY(input, kind === "offset")).annotations;
+}
+
 /** « ━ A5 · analysis », the analysis cut to `chars` characters, in the hue of its first curve. */
 function panelTitle(input: FigureInput, slot: number, chars: number): string {
     const index = input.curves.findIndex((curve) => curve.slot === slot);
@@ -390,7 +466,8 @@ function panelTitle(input: FigureInput, slot: number, chars: number): string {
 
 /**
  * One panel per slot, in slot order, 44 px apart across and 46 px down,
- * each at least 110 px high, its title cut to its width; the X axes zoom
+ * each at least 110 px high, its title cut to its width and, with the lens,
+ * lifted one row above the plot for the label band; the X axes zoom
  * together; one X title and one Y title for the whole grid.
  */
 export function multiplesFigure(input: FigureInput): Figure {
@@ -400,7 +477,9 @@ export function multiplesFigure(input: FigureInput): Figure {
         (one, other) => one - other,
     );
     const grid = panelGrid(slots.length, input.width);
-    const margin = PANEL_MARGIN;
+    const margin = input.lens
+        ? { ...PANEL_MARGIN, t: PANEL_TITLE_PX + BAND_ROW_PX }
+        : PANEL_MARGIN;
     const spacing = panelSpacing(
         grid,
         Math.max(0, input.width - margin.l - margin.r),
@@ -443,7 +522,6 @@ export function multiplesFigure(input: FigureInput): Figure {
     const baseX = base.xaxis as Record<string, unknown>;
     const baseY: Record<string, unknown> = {
         ...(base.yaxis as Record<string, unknown>),
-        ...(logY(input, false) ? { type: "log" } : {}),
         ...(input.lens && !logY(input, false) ? { rangemode: "tozero" } : {}),
     };
     const annotations: Annotation[] = [];
@@ -461,6 +539,14 @@ export function multiplesFigure(input: FigureInput): Figure {
         };
         layout[`yaxis${suffix}`] = {
             ...baseY,
+            ...(logY(input, false)
+                ? logAxis(
+                      input,
+                      logExtent(
+                          input.curves.filter((curve) => curve.slot === slot),
+                      ),
+                  )
+                : {}),
             title: { text: "" },
             automargin: false,
             nticks: Y_TICKS,
@@ -473,6 +559,7 @@ export function multiplesFigure(input: FigureInput): Figure {
             y: 1,
             xanchor: "left",
             yanchor: "bottom",
+            ...(input.lens ? { yshift: BAND_ROW_PX } : {}),
             showarrow: false,
             text: panelTitle(input, slot, titleChars),
             font: {
@@ -548,6 +635,22 @@ export function multiplesFigure(input: FigureInput): Figure {
     };
 }
 
+/** The `logTicks` of the log axis `name` showing `range` (log10) on a page in `lang`, as relayout keys. */
+export function logTickUpdate(
+    name: string,
+    range: readonly [number, number] | null,
+    lang: string,
+): Record<string, unknown> {
+    const ticks = logTicks(range, separatorsFor(lang));
+    return {
+        [`${name}.tickmode`]: ticks.tickmode,
+        [`${name}.tickvals`]: ticks.tickvals,
+        [`${name}.ticktext`]: ticks.ticktext,
+        [`${name}.minor.tickmode`]: ticks.minor.tickmode,
+        [`${name}.minor.tickvals`]: ticks.minor.tickvals,
+    };
+}
+
 /** How far above the highest value the fitted Y range goes, as a share of its height. */
 const FIT_HEADROOM = 0.05;
 /** The decades kept on each side of a log axis whose window holds one value. */
@@ -560,8 +663,9 @@ const LOG_FLAT_PAD = 0.5;
  * on a log axis from the smallest positive value to the highest, in log10, with
  * the same share on both ends. Offset adds each curve's lift first. A curve
  * hidden by its state is ignored. `null` or a window holding no value gives
- * every axis back its autorange. A relayout of `yaxis*.range` only: no data
- * is redrawn.
+ * every axis back its autorange. A log axis also takes the `logTicks` of its
+ * range, of its whole data on an autorange. A relayout of the Y axes' range
+ * and ticks only: no data is redrawn.
  */
 export function yFitUpdate(
     input: FigureInput,
@@ -602,12 +706,22 @@ export function yFitUpdate(
         });
         if (max === -Infinity || (!log && !(max > 0 || min < 0))) {
             update[`${name}.autorange`] = true;
+            if (log) {
+                const extent = logExtent(
+                    input.curves.filter(
+                        (curve) => slot === null || curve.slot === slot,
+                    ),
+                );
+                Object.assign(update, logTickUpdate(name, extent, input.lang));
+            }
             return;
         }
         if (log) {
             const [from, to] = [Math.log10(min), Math.log10(max)];
             const pad = to > from ? (to - from) * FIT_HEADROOM : LOG_FLAT_PAD;
-            update[`${name}.range`] = [from - pad, to + pad];
+            const range: [number, number] = [from - pad, to + pad];
+            update[`${name}.range`] = range;
+            Object.assign(update, logTickUpdate(name, range, input.lang));
             return;
         }
         const span = max > min ? max - min : Math.abs(max) || 1;
@@ -654,14 +768,20 @@ function gridCell(plot: number, columns: number, gap: number): number {
 /**
  * The plot width (px) of each panel of `figure` drawn `width` px wide, by axis
  * suffix (`""`, `"2"`…): the width less the margins, shared by the grid's
- * columns as Plotly does (`gridCell`).
+ * columns as Plotly does (`gridCell`). `margins` replaces the figure's left
+ * and right margins: those Plotly drew, which `automargin` widens for the
+ * Y tick labels and title.
  */
 export function panelWidths(
     figure: Figure,
     width: number,
+    margins?: { l: number; r: number },
 ): Record<string, number> {
     const layout = figure.layout as Record<string, unknown>;
-    const margin = (layout.margin ?? {}) as { l?: number; r?: number };
+    const margin =
+        margins ??
+        (layout.margin as { l?: number; r?: number } | undefined) ??
+        {};
     const plot = width - (margin.l ?? 0) - (margin.r ?? 0);
     const grid = layout.grid as { columns?: number; xgap?: number } | undefined;
     const cell = gridCell(plot, grid?.columns ?? 1, grid?.xgap ?? 0);
@@ -671,6 +791,31 @@ export function panelWidths(
         if (match) widths[match[1]] = cell;
     }
     return widths;
+}
+
+/**
+ * The energy range the X axes of `figure` show under their autorange: the
+ * extent of every trace, since the panels of small multiples `matches` the
+ * first and Plotly pads no X of a line-only trace; high to low when the axis
+ * is reversed. Null without a finite value.
+ */
+export function autorangeX(
+    figure: Figure,
+    reversed: boolean,
+): [number, number] | null {
+    let low = Infinity;
+    let high = -Infinity;
+    for (const trace of figure.data) {
+        const xs = (trace.x ?? []) as ArrayLike<unknown>;
+        for (let index = 0; index < xs.length; index += 1) {
+            const value = xs[index];
+            if (typeof value !== "number" || !Number.isFinite(value)) continue;
+            if (value < low) low = value;
+            if (value > high) high = value;
+        }
+    }
+    if (low === Infinity) return null;
+    return reversed ? [high, low] : [low, high];
 }
 
 /**

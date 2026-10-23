@@ -12,6 +12,7 @@ import { useGettext } from "vue3-gettext";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 
 import { useAnchoredPopover } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnchoredPopover.ts";
+import { SUM_GLYPH } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { elementHue } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/element-colour.ts";
 import { declaredText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
@@ -28,12 +29,28 @@ import type {
     StripOverlap,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 
+/** One entry of the key: a glyph (read aloud only when `spoken`: a word of the chart), its meaning, and the sub-kinds it comes in. */
+interface KeyItem {
+    glyph: string;
+    spoken?: boolean;
+    text: string;
+    parts?: { glyph: string; text: string }[];
+}
+
 const MAX_SUGGESTIONS = 8;
 /** The rows above Na's (H to Ne) are left out of the grid. */
 const SKIPPED_ROWS = 2;
 const ENERGY_DIGITS = 2;
 /** Instrument peaks the strip lists before it says how many more there are. */
 const MAX_INSTRUMENT_LISTED = 12;
+/** The strokes of the key, as the chart draws them: solid, dashed, a declared tick, a trace tick, an instrument tick. */
+const KEY_GLYPHS = {
+    solid: "━",
+    dashed: "╍",
+    declared: "┃",
+    trace: "┈",
+    instrument: "┆",
+} as const;
 
 /**
  * The text equivalent of what the XRF lens draws, under the chart: one line
@@ -49,7 +66,11 @@ const MAX_INSTRUMENT_LISTED = 12;
  * the button and the table together closes it too. When the anchor leaves
  * the visible area (`onLost`) the popover closes without taking the focus
  * back: the button it would return to is out of sight. The instrument list
- * stops at `MAX_INSTRUMENT_LISTED` peaks and counts the rest.
+ * stops at `MAX_INSTRUMENT_LISTED` peaks and counts the rest. A one-line
+ * key on the picker's row, under the chart, names every kind of mark the
+ * chart draws, its stroke glyphs hidden from assistive technology and its
+ * words read; the chart's own words (« Σ », « esc ») are read as they are.
+ * A status line says when the chart's cap left marks out.
  */
 const props = defineProps<{
     elements: readonly StripElement[];
@@ -61,6 +82,8 @@ const props = defineProps<{
     symbols: readonly string[];
     /** The reader's lens elements. */
     lensSymbols: readonly string[];
+    /** Whether the chart left marks out at its cap (`lensDrawing`). */
+    marksLeftOut?: boolean;
     lang: string;
 }>();
 
@@ -137,6 +160,22 @@ const hasContent = computed(
         props.overlaps.length > 0 ||
         props.instrument.length > 0,
 );
+const keyItems = computed<KeyItem[]>(() => [
+    { glyph: KEY_GLYPHS.solid, text: $gettext("principal line") },
+    { glyph: KEY_GLYPHS.dashed, text: $gettext("secondary line") },
+    {
+        glyph: KEY_GLYPHS.declared,
+        text: $gettext("declared element"),
+        parts: [
+            { glyph: KEY_GLYPHS.solid, text: $gettext("major") },
+            { glyph: KEY_GLYPHS.dashed, text: $gettext("minor") },
+            { glyph: KEY_GLYPHS.trace, text: $gettext("trace") },
+        ],
+    },
+    { glyph: KEY_GLYPHS.instrument, text: $gettext("instrument peak") },
+    { glyph: SUM_GLYPH, spoken: true, text: $gettext("sum peak") },
+    { glyph: $gettext("esc"), spoken: true, text: $gettext("escape peak") },
+]);
 
 watch(tableOpen, (isOpen) => {
     if (isOpen) {
@@ -416,11 +455,43 @@ function onKeydown(event: KeyboardEvent): void {
                 <span>{{ $gettext("Periodic table") }}</span>
             </button>
             <p
-                v-if="unknownSymbol !== null"
                 class="unknown"
                 role="status"
             >
-                <span>{{ missingText(unknownSymbol) }}</span>
+                <span v-if="unknownSymbol !== null">{{
+                    missingText(unknownSymbol)
+                }}</span>
+            </p>
+            <p class="key">
+                <span
+                    v-for="item in keyItems"
+                    :key="item.text"
+                    class="item"
+                >
+                    <span
+                        class="glyph"
+                        :aria-hidden="item.spoken ? undefined : 'true'"
+                        >{{ item.glyph }}</span
+                    >
+                    <span>{{ item.text }}</span>
+                    <span
+                        v-if="item.parts"
+                        class="parts"
+                    >
+                        <span
+                            v-for="part in item.parts"
+                            :key="part.text"
+                            class="part"
+                        >
+                            <span
+                                class="glyph"
+                                aria-hidden="true"
+                                >{{ part.glyph }}</span
+                            >
+                            <span>{{ part.text }}</span>
+                        </span>
+                    </span>
+                </span>
             </p>
         </div>
         <div
@@ -527,6 +598,16 @@ function onKeydown(event: KeyboardEvent): void {
                 <span>{{ overlapText(overlap) }}</span>
             </li>
         </ul>
+        <p
+            class="left-out"
+            role="status"
+        >
+            <span v-if="marksLeftOut">{{
+                $gettext(
+                    "Some marks are left out at this zoom: narrow the energy range to see them all.",
+                )
+            }}</span>
+        </p>
     </section>
 </template>
 
@@ -745,6 +826,54 @@ function onKeydown(event: KeyboardEvent): void {
 .xrf-strip .instrument,
 .xrf-strip .overlap {
     color: var(--ink-muted);
+}
+
+.xrf-strip .left-out {
+    margin: 0;
+    color: var(--ink-muted);
+}
+
+/* An empty live region stays in the accessibility tree, out of the grid's flow. */
+.xrf-strip .unknown:empty,
+.xrf-strip .left-out:empty {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+
+.xrf-strip .key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.125rem 1rem;
+    margin: 0;
+    margin-inline-start: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+}
+
+.xrf-strip .key .item,
+.xrf-strip .key .part {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.xrf-strip .key .part + .part {
+    margin-inline-start: 0.375rem;
+}
+
+.xrf-strip .key .glyph {
+    font-family: var(--font-mono);
+    color: var(--ink);
+}
+
+.xrf-strip .key .parts::before {
+    content: "(";
+}
+
+.xrf-strip .key .parts::after {
+    content: ")";
 }
 
 .xrf-strip .remove {

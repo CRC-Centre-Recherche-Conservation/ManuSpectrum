@@ -46,9 +46,12 @@ import {
 import {
     EXPORT_TITLE_ROOM,
     annotationOpacities,
+    autorangeX,
+    endLabelsFor,
     exportFigure,
     hoverTemplatesFor,
     hoverValueFor,
+    logTickUpdate,
     multiplesFigure,
     paintOf,
     panelWidths,
@@ -114,6 +117,7 @@ import type {
     LensLabels,
     PanelViews,
 } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
+import type { LensDrawing } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
     Figure,
@@ -150,12 +154,24 @@ interface DrawnAxis {
     range?: unknown[];
     autorange?: boolean | string;
     _length?: number;
+    type?: string;
+    tickvals?: unknown;
+    ticktext?: unknown;
+    minor?: { tickvals?: unknown };
+}
+
+/** The margins Plotly drew with, `automargin` included, as `_fullLayout._size` holds them. */
+interface DrawnSize {
+    l?: number;
+    r?: number;
 }
 
 const AXIS_NAME = /^[xy]axis\d*$/;
 /** An update that sets or releases the range of an X axis. */
 const TOUCHES_X_AXIS = /xaxis\d*\.(range|autorange)/;
 const Y_AXIS_RANGE = /yaxis\d*\.(range|autorange)/;
+/** The Y axis whose range or autorange a relayout key sets. */
+const Y_AXIS_RANGE_KEY = /^(yaxis\d*)\.(?:range|autorange)/;
 
 /** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
 const CHART_LAYOUTS: Readonly<
@@ -243,13 +259,17 @@ const EMPTY_FILES_FOLDED = 2;
  * the height its window leaves below the toolbar, down to a floor
  * (`--xy-chart-floor`), and is size-contained so that a drawing never holds
  * its box open; under 40rem the legend below it scrolls past
- * `--xy-legend-stacked-max`. The chart follows
- * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
- * and is then drawn again for the size (labels, panels); small multiples
- * that no longer need a height of their own are drawn once more at the
- * size the chart shrinks to. The table layout and the unmount purge it,
- * and end a preview the chart or its legend started; a drawing that ends
- * after the unmount is purged too.
+ * `--xy-legend-stacked-max`. Every drawing names its width and height to
+ * Plotly (the box's, or the height small multiples hold open), as `react`
+ * keeps the previous drawing's size for any it is not given
+ * (plotly.js-cartesian-dist 4.0.0 `supplyDefaults`). The chart is drawn
+ * again for its size (labels, panels) when its box or its window's
+ * changes, in the ResizeObserver callback, so that the frame painted after
+ * a resize shows the drawing for it; `WINDOW_RESIZE_KEY` asks again once
+ * the window settles. A drawing carries the lens shapes laid out for the
+ * panels it draws (`plannedViews`). The table layout and the unmount purge
+ * it, and end a preview the chart or its legend started; a drawing that
+ * ends after the unmount is purged too.
  */
 const props = defineProps<{
     curves: readonly FileLine[];
@@ -273,6 +293,7 @@ const results = useSeriesSet(
     () => readable.value.map((curve) => curve.file.previewUrl ?? ""),
     "full",
 );
+const root = useTemplateRef<HTMLElement>("root");
 const chart = useTemplateRef<HTMLDivElement>("chart");
 const lang = document.documentElement.lang || "en";
 
@@ -289,17 +310,24 @@ let shownOpacities: number[] = [];
 let shownHoverMode: "x unified" | "closest" = "x unified";
 let drawing = false;
 let restyleFrame: number | null = null;
-/** The lens shapes the chart shows, serialised (`shapesKey`); a relayout is made only when they differ. */
+/** The lens shapes the chart shows, serialised (`shapesKey`); an update is made only when they differ. */
 let shownShapesKey = "";
+/** The foot band of the last lens drawing (`LensDrawing.footPx`), which the end labels shown stay above. */
+let footPx = 0;
 let shapesFrame: number | null = null;
-/** Watches the chart element's own box: its height changes when the content below it does. */
+/**
+ * Watches the chart element's own box (its height changes when the content
+ * below it does) and the workshop's, which follows the window while small
+ * multiples hold the chart open.
+ */
 let sizeObserver: ResizeObserver | null = null;
-let sizeFrame: number | null = null;
 /** Set while the range select's own relayout runs, so its echo is not read as a zoom by hand. */
 let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
+/** The workshop's size when the chart was last drawn, « width×height ». */
+let drawnRootSize = "";
 /** What the chart was last drawn of (`figureIdentity`): the reader's zoom survives a drawing of the same figure. */
 let drawnIdentity = "";
 /**
@@ -358,6 +386,8 @@ const shownEnergy = ref<[number, number] | null>(null);
 const identifying = ref(false);
 /** The peak being identified: the curve it was read on (`curveId`) and its energy (keV). */
 const identified = ref<{ id: string; energy: number } | null>(null);
+/** Whether the drawn chart's lens left marks out at its cap (`lensDrawing`). */
+const marksLeftOut = ref(false);
 /** The cue shown above the chart while the mode is on and no peak is chosen; also announced once when the mode turns on. */
 const identifyHint = computed(() =>
     $gettext(
@@ -553,7 +583,6 @@ const lensCurves = computed<LensCurve[]>(() =>
 const lensLabels = computed<LensLabels>(() => ({
     compton: $gettext("Compton"),
     escape: $gettext("esc"),
-    sum: $gettext("sum"),
     voltage: (kV) =>
         interpolate(
             $gettext("%{kV} kV"),
@@ -860,8 +889,9 @@ watch(
     (element) => {
         sizeObserver?.disconnect();
         if (element && typeof ResizeObserver !== "undefined") {
-            sizeObserver ??= new ResizeObserver(scheduleFollowSize);
+            sizeObserver ??= new ResizeObserver(onBoxResized);
             sizeObserver.observe(element);
+            if (root.value) sizeObserver.observe(root.value);
         }
     },
     { flush: "post" },
@@ -875,7 +905,6 @@ onBeforeUnmount(() => {
     disposed = true;
     if (restyleFrame !== null) cancelAnimationFrame(restyleFrame);
     if (shapesFrame !== null) cancelAnimationFrame(shapesFrame);
-    if (sizeFrame !== null) cancelAnimationFrame(sizeFrame);
     sizeObserver?.disconnect();
     purgeChart();
 });
@@ -888,13 +917,14 @@ function widthOf(size: string): number {
     return Number(size.split("×")[0]);
 }
 
-/** One `followSize` per frame, whatever moved the chart's box (the lens strip opening, a window resize). */
-function scheduleFollowSize(): void {
-    if (sizeFrame !== null) return;
-    sizeFrame = requestAnimationFrame(() => {
-        sizeFrame = null;
-        followSize();
-    });
+/**
+ * Follows the chart's box before the frame is painted: the drawing runs
+ * in this callback and the microtasks it queues. A held chart measures
+ * its natural height again when the workshop's size changed.
+ */
+function onBoxResized(): void {
+    const element = root.value;
+    followSize(element !== null && sizeOf(element) !== drawnRootSize);
 }
 
 /** Draws the chart again for its size, when that size is not the one it was drawn at. */
@@ -911,7 +941,7 @@ function followSize(measureAgain = false): void {
     if (size === drawnSize && !(held && measureAgain)) return;
     drawnSize = size;
     remeasure = held;
-    void resizeChart(element);
+    void draw();
 }
 
 /** The strongest of the levels; null when none links. */
@@ -998,6 +1028,7 @@ function figureInput(
         height,
         yLog: logShown.value,
         lens: lens.active.value,
+        instrumentBandPx: footPx,
     };
 }
 
@@ -1033,6 +1064,62 @@ function liveViews(): PanelViews | undefined {
     return views;
 }
 
+/**
+ * What each panel of `figure` shows once drawn `width` px wide on `element`:
+ * its plot width (`panelWidths`, with the margins Plotly drew when the
+ * element shows the same figure) and the energy range `kept` puts back,
+ * else the one every panel shows under the autorange (`autorangeX`).
+ */
+function plannedViews(
+    figure: Figure,
+    element: HTMLElement,
+    kept: Record<string, unknown> | null,
+    sameFigure: boolean,
+): PanelViews {
+    const size = sameFigure
+        ? (element as { _fullLayout?: { _size?: DrawnSize } })._fullLayout
+              ?._size
+        : undefined;
+    const margins =
+        size && Number.isFinite(size.l) && Number.isFinite(size.r)
+            ? { l: size.l as number, r: size.r as number }
+            : undefined;
+    const autorange = autorangeX(figure, xReversed.value);
+    const views: Record<string, NonNullable<PanelViews[string]>> = {};
+    for (const [suffix, plot] of Object.entries(
+        panelWidths(figure, element.clientWidth, margins),
+    )) {
+        const range =
+            (kept?.[`xaxis${suffix}.range`] as [number, number] | undefined) ??
+            (kept?.["xaxis.range"] as [number, number] | undefined) ??
+            autorange;
+        views[suffix] = {
+            width: plot,
+            ...(range ? { range: [range[0], range[1]] } : {}),
+        };
+    }
+    return views;
+}
+
+/** The ticks (`logTickUpdate`) of each log axis of `figure` whose range `kept` puts back. */
+function keptLogTicks(
+    figure: Figure,
+    kept: Record<string, unknown>,
+): Record<string, unknown> {
+    const layout = figure.layout as Record<string, { type?: string }>;
+    const ticks: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(kept)) {
+        const name = /^(yaxis\d*)\.range$/.exec(key)?.[1];
+        if (name && layout[name]?.type === "log") {
+            Object.assign(
+                ticks,
+                logTickUpdate(name, value as [number, number], lang),
+            );
+        }
+    }
+    return ticks;
+}
+
 interface ShapeOptions {
     /** Adds the dashed line at the energy being identified. */
     marker?: boolean;
@@ -1041,17 +1128,17 @@ interface ShapeOptions {
 }
 
 /**
- * The lens shapes for `theme`; none outside an XRF window. Without `views`
- * the labels are laid out on the data extent and the chart's width.
+ * The lens drawing for `theme`; empty outside an XRF window. Without
+ * `views` the labels are laid out on the data extent and the chart's width.
  */
 function lensShapesFor(
     theme: PlotTheme,
     { marker = true, views }: ShapeOptions = {},
-): Partial<Shape>[] {
-    if (!lens.active.value) return [];
+): LensDrawing {
+    if (!lens.active.value) return { shapes: [], dropped: 0, footPx: 0 };
     const width = chart.value?.clientWidth;
     const held = marker ? identification.value : null;
-    return lens.shapes(
+    return lens.drawing(
         theme,
         width ? width - PLOT_MARGIN_X : undefined,
         held
@@ -1073,8 +1160,6 @@ async function draw(): Promise<void> {
         return;
     }
     drawing = true;
-    /** Small multiples that needed a height of their own and no longer do: the chart shrinks once drawn. */
-    let released = false;
     try {
         plotly ??= await loadPlotly();
         if (disposed) return;
@@ -1082,24 +1167,43 @@ async function draw(): Promise<void> {
         if (disposed) return;
         if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
-        const held = chartHeight.value !== null;
-        if (remeasure && held) {
+        if (remeasure && chartHeight.value !== null) {
             chartHeight.value = null;
             await nextTick();
             if (disposed) return;
         }
         remeasure = false;
         if (chartHeight.value === null) naturalHeight = element.clientHeight;
-        const shapes = lensShapesFor(theme);
-        const input = {
-            ...figureInput(theme, element, naturalHeight),
-            ...(shapes.length > 0 ? { shapes } : {}),
-        };
+        const identity = figureIdentity();
+        const kept =
+            drawnOn === element && identity === drawnIdentity
+                ? keptRanges(element)
+                : null;
+        const input = figureInput(theme, element, naturalHeight);
         const figure =
             layout.value === "multiples"
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
-        released = held && figure.height === null;
+        if (kept) Object.assign(kept, keptLogTicks(figure, kept));
+        const planned = lensShapesFor(theme, {
+            views: plannedViews(
+                figure,
+                element,
+                kept,
+                drawnOn === element && identity === drawnIdentity,
+            ),
+        });
+        const shapes = planned.shapes;
+        if (shapes.length > 0) figure.layout.shapes = [...shapes];
+        if (planned.footPx !== footPx) {
+            footPx = planned.footPx;
+            const labels = endLabelsFor(
+                { ...input, instrumentBandPx: footPx },
+                figure,
+                layout.value,
+            );
+            if (labels) figure.layout.annotations = labels;
+        }
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, effectiveStates.value);
@@ -1107,15 +1211,9 @@ async function draw(): Promise<void> {
             note.opacity = opacities[index];
         });
         if (identifying.value) figure.layout.dragmode = false;
-        const identity = figureIdentity();
-        const kept =
-            drawnOn === element && identity === drawnIdentity
-                ? keptRanges(element)
-                : null;
         lastFigure = figure;
         drawnOn = element;
         drawnTheme = theme;
-        drawnSize = sizeOf(element);
         shownStates = effectiveStates.value.join();
         shownHidden = hiddenKeyOf(effectiveStates.value);
         shownShapesKey = shapesKey(shapes);
@@ -1124,13 +1222,19 @@ async function draw(): Promise<void> {
         await plotly.react(
             element,
             figure.data,
-            figure.layout,
+            {
+                ...figure.layout,
+                width: element.clientWidth,
+                height: figure.height ?? naturalHeight,
+            },
             WORKSHOP_CONFIG,
         );
         if (disposed) {
             plotly.purge(element);
             return;
         }
+        drawnSize = sizeOf(element);
+        if (root.value) drawnRootSize = sizeOf(root.value);
         drawnIdentity = identity;
         if (kept === null) {
             zoomed.value = false;
@@ -1139,6 +1243,7 @@ async function draw(): Promise<void> {
         } else {
             await setRanges(element, kept);
         }
+        await retickLogAxes(element);
         bindEvents(element);
         drawFailed.value = false;
     } catch (error: unknown) {
@@ -1151,12 +1256,6 @@ async function draw(): Promise<void> {
             scheduleRestyle();
             scheduleShapes();
         }
-    }
-    if (released && !disposed) {
-        await nextTick();
-        // `react` without `layout.height` keeps Plotly's last one, the held height.
-        drawnSize = "";
-        followSize();
     }
 }
 
@@ -1248,13 +1347,6 @@ async function redrawKeepingRange(): Promise<void> {
         : null;
 }
 
-/** Draws the chart again for its new size; the reader's zoom and range stay (same figure, `figureIdentity`). */
-async function resizeChart(element: HTMLElement): Promise<void> {
-    if (!plotly) return;
-    await plotly.Plots.resize(element);
-    if (!disposed) await draw();
-}
-
 function scheduleRestyle(): void {
     if (restyleFrame !== null) return;
     restyleFrame = requestAnimationFrame(() => {
@@ -1267,26 +1359,55 @@ function scheduleShapes(): void {
     if (shapesFrame !== null) return;
     shapesFrame = requestAnimationFrame(() => {
         shapesFrame = null;
-        void relayoutShapes();
+        void updateShapes();
     });
 }
 
 /**
  * Shows the lens shapes now due on the drawn chart by replacing the layout's
- * `shapes` (`editType: "arraydraw"` in plotly.js-cartesian-dist 4.0.0: the
- * shapes layer alone is drawn again, no calc, no trace), only when they are
- * not the ones shown. A focus change that moves no line makes no call.
+ * `shapes`, only when they are not the ones shown: a focus change that
+ * moves no line makes no call. Through `Plotly.update` with no trace
+ * change, never `Plotly.relayout`: a relayout of `shapes` alone skips
+ * `Plots.supplyDefaults`, the only pass that resets the axes'
+ * `_shapeIndices` (plotly.js-cartesian-dist 4.0.0 `src/plot_api/plot_api.js`).
  */
-async function relayoutShapes(): Promise<void> {
+async function updateShapes(): Promise<void> {
     const element = drawnOn;
     const theme = drawnTheme;
-    if (drawing || !plotly || !element || !lastFigure || !theme) return;
-    const shapes = lensShapesFor(theme, { views: liveViews() });
-    const key = shapesKey(shapes);
-    if (key === shownShapesKey) return;
+    const figure = lastFigure;
+    if (drawing || !plotly || !element || !figure || !theme) return;
+    const live = lensShapesFor(theme, { views: liveViews() });
+    marksLeftOut.value = live.dropped > 0;
+    const key = shapesKey(live.shapes);
+    const labels =
+        live.footPx === footPx
+            ? null
+            : endLabelsFor(
+                  {
+                      ...figureInput(theme, element, naturalHeight),
+                      instrumentBandPx: live.footPx,
+                  },
+                  figure,
+                  layout.value === "table" ? "overlay" : layout.value,
+              );
+    labels?.forEach((note, index) => {
+        note.opacity = shownOpacities[index];
+    });
+    if (key === shownShapesKey && !labels) {
+        footPx = live.footPx;
+        return;
+    }
     try {
-        await plotly.relayout(element, { shapes });
+        await plotly.update(
+            element,
+            {},
+            labels
+                ? { shapes: live.shapes, annotations: labels }
+                : { shapes: live.shapes },
+        );
         shownShapesKey = key;
+        footPx = live.footPx;
+        if (labels && lastFigure === figure) figure.layout.annotations = labels;
     } catch (error: unknown) {
         console.error("The XRF lines could not be drawn", error);
     }
@@ -1363,8 +1484,9 @@ function hiddenKeyOf(states: readonly string[]): string {
 /**
  * Fits the counts axes again to the energy window shown when the curves
  * hidden changed (a curve that came back may be higher than the fit): a
- * relayout of the ranges that differ, none when the window is the full range
- * or when the reader set a counts range since the last fit (`yFitted`).
+ * relayout of the axes whose range differs, their ticks with them; none
+ * when the window is the full range or when the reader set a counts range
+ * since the last fit (`yFitted`).
  */
 async function refitCounts(element: HTMLElement): Promise<void> {
     if (!lens.active.value || rangeKey.value === "full" || !yFitted) return;
@@ -1372,19 +1494,96 @@ async function refitCounts(element: HTMLElement): Promise<void> {
     const energy = axes.xaxis;
     if (!energy || energy.autorange) return;
     const fit = yFit([energy.range[0], energy.range[1]]);
-    const changed = Object.entries(fit).filter(([key, value]) => {
-        const axis = axes[key.slice(0, key.indexOf("."))];
-        if (key.endsWith(".autorange")) return !axis?.autorange;
-        const [low, high] = value as number[];
-        return (
-            !axis ||
-            axis.autorange ||
-            Math.abs(axis.range[0] - low) > 1e-9 ||
-            Math.abs(axis.range[1] - high) > 1e-9
-        );
-    });
-    await setRanges(element, Object.fromEntries(changed));
+    const moved = new Set<string>();
+    for (const [key, value] of Object.entries(fit)) {
+        const name = key.slice(0, key.indexOf("."));
+        const axis = axes[name];
+        if (key.endsWith(".autorange")) {
+            if (!axis?.autorange) moved.add(name);
+        } else if (key.endsWith(".range")) {
+            const [low, high] = value as number[];
+            if (
+                !axis ||
+                axis.autorange ||
+                Math.abs(axis.range[0] - low) > 1e-9 ||
+                Math.abs(axis.range[1] - high) > 1e-9
+            ) {
+                moved.add(name);
+            }
+        }
+    }
+    await setRanges(
+        element,
+        Object.fromEntries(
+            Object.entries(fit).filter(([key]) =>
+                moved.has(key.slice(0, key.indexOf("."))),
+            ),
+        ),
+    );
     yFitted = true;
+}
+
+/** The ticks of `values` (labelled by `texts`) that a log axis showing `range` (log10) draws, as a key; empty when none is an array. */
+function ticksInside(
+    range: readonly [number, number],
+    values: unknown,
+    texts?: unknown,
+): string {
+    if (!Array.isArray(values)) return "";
+    const [low, high] = [Math.min(...range), Math.max(...range)];
+    const labels = Array.isArray(texts) ? texts : [];
+    return JSON.stringify(
+        values.flatMap((value: unknown, index) => {
+            const at = Math.log10(Number(value));
+            return at >= low && at <= high
+                ? [[value, labels[index] ?? null]]
+                : [];
+        }),
+    );
+}
+
+/**
+ * Gives each log Y axis of `element` the ticks (`logTickUpdate`) of the range
+ * Plotly shows now, read from its full layout after a relayout or a drawing:
+ * a box zoom, an axis-end drag, a double-click or a fit. `keys` limits it to
+ * the axes a relayout's keys set the range or autorange of; without them,
+ * every log Y axis. An axis already showing those ticks is left alone, so a
+ * relayout of ticks never follows its own.
+ */
+async function retickLogAxes(
+    element: HTMLElement,
+    keys?: readonly string[],
+): Promise<void> {
+    const full = (element as { _fullLayout?: Record<string, unknown> })
+        ._fullLayout;
+    if (!full) return;
+    const names = keys
+        ? new Set(
+              keys.flatMap((key) => {
+                  const name = Y_AXIS_RANGE_KEY.exec(key)?.[1];
+                  return name ? [name] : [];
+              }),
+          )
+        : new Set(Object.keys(full).filter((name) => /^yaxis\d*$/.test(name)));
+    const update: Record<string, unknown> = {};
+    for (const name of names) {
+        const axis = full[name] as DrawnAxis | undefined;
+        if (axis?.type !== "log" || !Array.isArray(axis.range)) continue;
+        const range: [number, number] = [
+            Number(axis.range[0]),
+            Number(axis.range[1]),
+        ];
+        const ticks = logTickUpdate(name, range, lang);
+        const seen = (values: unknown, texts?: unknown) =>
+            ticksInside(range, values, texts);
+        const same =
+            seen(axis.tickvals, axis.ticktext) ===
+                seen(ticks[`${name}.tickvals`], ticks[`${name}.ticktext`]) &&
+            seen(axis.minor?.tickvals) ===
+                seen(ticks[`${name}.minor.tickvals`]);
+        if (!same) Object.assign(update, ticks);
+    }
+    await setRanges(element, update);
 }
 
 function bindEvents(element: HTMLElement): void {
@@ -1419,6 +1618,7 @@ function bindEvents(element: HTMLElement): void {
             return;
         }
         const keys = Object.keys(update).join();
+        void retickLogAxes(element, Object.keys(update));
         if (!applyingRange && Y_AXIS_RANGE.test(keys)) yFitted = false;
         const touchesX = TOUCHES_X_AXIS.test(keys);
         if (!applyingRange) zoomed.value = zoomedAfter(update, zoomed.value);
@@ -1732,7 +1932,7 @@ async function downloadPng(): Promise<void> {
     for (const [suffix, width] of Object.entries(widths)) {
         views[suffix] = { width };
     }
-    const shapes = lensShapesFor(theme, { marker: false, views });
+    const { shapes } = lensShapesFor(theme, { marker: false, views });
     try {
         const url = await plotly.toImage(
             exportFigure(
@@ -1803,6 +2003,7 @@ function chooseView(event: Event): void {
 
 <template>
     <section
+        ref="root"
         class="xy-workshop"
         :aria-busy="results.status.value === 'loading' ? 'true' : 'false'"
     >
@@ -2061,6 +2262,7 @@ function chooseView(event: Event): void {
                     :instrument="listedInstrument"
                     :symbols="lens.symbols.value"
                     :lens-symbols="lens.settings.value.elements"
+                    :marks-left-out="marksLeftOut"
                     :lang="lang"
                     @add-element="lens.addElement($event.symbol)"
                     @remove-element="lens.removeElement($event.symbol)"

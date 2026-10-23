@@ -3,6 +3,7 @@ import { mount } from "@vue/test-utils";
 
 import XrfLensStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue";
 
+import type { DOMWrapper } from "@vue/test-utils";
 import type {
     StripDeclaredSlot,
     StripElement,
@@ -286,13 +287,16 @@ describe("XrfLensStrip", () => {
 
     it("says so when the symbol typed is not in the line table, and adds nothing", async () => {
         const view = mountStrip();
+        const region = view.find("p.unknown");
+        expect(region.attributes("role")).toBe("status");
+        expect(region.text()).toBe("");
         const input = view.find("input");
         await input.setValue("Xx");
         await input.trigger("keydown", { key: "Enter" });
         expect(view.emitted("add-element")).toBeUndefined();
-        expect(view.find("p.unknown").text()).toBe(
-            "No line in the table for Xx (Z 11–92)",
-        );
+        const notice = view.find("p.unknown");
+        expect(notice.element).toBe(region.element);
+        expect(notice.text()).toBe("No line in the table for Xx (Z 11–92)");
     });
 
     it("toggles lens elements from a mini periodic table of the table's elements", async () => {
@@ -433,6 +437,47 @@ describe("XrfLensStrip", () => {
         });
         view.find('[role="listbox"]').element.dispatchEvent(mouse);
         expect(mouse.defaultPrevented).toBe(true);
+    });
+
+    it("shows a one-line key whose words are read and whose stroke glyphs are not, the chart's own words read as they are", () => {
+        const view = mountStrip();
+        const key = view.find("p.key");
+        expect(key.exists()).toBe(true);
+        const words = (item: DOMWrapper<Element>) =>
+            item
+                .findAll("span")
+                .filter((span) => span.element.children.length === 0)
+                .map((span) => span.text());
+        expect(key.findAll(".item").map(words)).toEqual([
+            ["━", "principal line"],
+            ["╍", "secondary line"],
+            ["┃", "declared element", "━", "major", "╍", "minor", "┈", "trace"],
+            ["┆", "instrument peak"],
+            ["Σ", "sum peak"],
+            ["esc", "escape peak"],
+        ]);
+        const hidden = key
+            .findAll('[aria-hidden="true"]')
+            .map((glyph) => glyph.text());
+        expect(hidden).toEqual(["━", "╍", "┃", "━", "╍", "┈", "┆"]);
+        expect(
+            key.findAll(".glyph:not([aria-hidden])").map((g) => g.text()),
+        ).toEqual(["Σ", "esc"]);
+    });
+
+    it("says when the chart left marks out in a status region mounted before its text, and nothing otherwise", async () => {
+        const view = mountStrip();
+        const region = view.find("p.left-out");
+        expect(region.attributes("role")).toBe("status");
+        expect(region.text()).toBe("");
+        await view.setProps({ marksLeftOut: true });
+        const notice = view.find("p.left-out");
+        expect(notice.element).toBe(region.element);
+        expect(notice.text()).toBe(
+            "Some marks are left out at this zoom: narrow the energy range to see them all.",
+        );
+        await view.setProps({ marksLeftOut: false });
+        expect(view.find("p.left-out").text()).toBe("");
     });
 
     it("keeps one popover open at a time, and leaves the table to the Escape of the options", async () => {
