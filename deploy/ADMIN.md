@@ -14,14 +14,17 @@ because an administrator created it. People ask for one through the contact page
 
 ### Create an account and invite the person
 
-1. In the admin, Users, "Add user": a user name and the **e-mail address**, no password
-   (leave the password fields empty or unusable). Save. Give the groups the person needs.
-2. In the Users list, tick the account, choose the action **Send invitation (account with
-   no password)**. The person receives a mail `[ManuSpectrum][Account] Your ManuSpectrum
-   account` (English, then French) with a personal link, valid for a limited time.
-   An account that is inactive, has no e-mail or already has a password is skipped with a
-   message. A failed send is reported and counted (`AccountMailFailures`): fix the relay
-   (`runbooks/application.md`), then send a new invitation.
+1. In the admin, Users, "Add user": user name, **e-mail address** (required, unique), first and
+   last name and the groups the person needs. There is no password field: the account is
+   created with an unusable password. Leave **Send the invitation now** ticked (the default)
+   and save: the person receives a mail `[ManuSpectrum][Account] Your ManuSpectrum
+   account` (English, then French) with a personal link, valid for a limited time. Staff and
+   superuser rights are set on the change page afterwards.
+2. To send the invitation again (lost mail, expired link), or when the box was unticked: in
+   the Users list, tick the account and choose **Send invitation (account with no
+   password)**. An account that is inactive, has no e-mail or already has a password is
+   skipped with a message. A failed send is reported and counted (`AccountMailFailures`):
+   fix the relay (`runbooks/application.md`), then send a new invitation.
 3. The person opens the link, reads and accepts the terms of use (a required checkbox;
    the acceptance is stored with its date and the version of the terms), chooses a
    password (12 characters or more, upper and lower case, a digit and a symbol; common
@@ -44,16 +47,18 @@ because an administrator created it. People ask for one through the contact page
   enrolment link (superuser)** (below), which mails it the enrolment link (**Reset** skips
   accounts that hold no secret).
 - **Lost phone.** After checking the person's identity by another channel, a superuser
-  opens the admin, **User profiles** (the profile list, not the User page), ticks the profile and chooses **Reset two-factor
-  authentication (superuser)** (only superusers can). The action clears the secret and mails
+  opens the admin, Users, ticks the account and chooses **Reset two-factor
+  authentication (superuser)** (only superusers can; the same actions are on the Arches profile
+  pages, reached from the link on the User page). The list shows the **Two-factor
+  authentication** column and filter, the User page an « Account » section. The action clears the secret and mails
   the person a personal link (`account/two-factor/reset/...`, valid 24 hours, single use):
   they type their password, scan the new QR code, confirm one code and are signed in. A
   wrong password counts as a failed sign-in (lockout). **Send the two-factor enrolment link
-  (superuser)** mails the link again to the selected profiles that hold no secret (lost
+  (superuser)** mails the link again to the selected accounts that hold no secret (lost
   mail, expired link). An account without an address or inactive gets no mail: the action
   says so.
-- **New `SECRET_KEY`.** Every stored secret becomes unreadable (`SECRETS.md`). In User
-  profiles, select all profiles with a secret and run **Reset two-factor authentication
+- **New `SECRET_KEY`.** Every stored secret becomes unreadable (`SECRETS.md`). In the Users
+  list, use the filter **By two-factor authentication** → **Enrolled**, select all and run **Reset two-factor authentication
   (superuser)**: every person gets their link. Rotate when the working hours allow, since
   those who do not follow their link stay locked out until they do (re-send it as needed).
 - An OAuth2 application with the password grant signs a user in at `o/token/` with a password

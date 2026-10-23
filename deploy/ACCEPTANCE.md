@@ -1409,7 +1409,8 @@ Create the test accounts in the admin and delete them afterwards.
 
 ### 8.3 Invitation, activation, terms and two-factor
 
-- [ ] In the admin create a user with an e-mail and no password, run **Send invitation**: Mailpit holds one message
+- [ ] In the admin, Users, "Add user" with an e-mail (no password field) and **Send the invitation now** ticked: the
+  save lands on the change page, and Mailpit holds one message
   with the subject prefix `[ManuSpectrum][Account]` and the header `X-ManuSpectrum-Category: Account`, English then French.
 - [ ] Open the link (read it as in « Reading a mail link » of step 7: a link cut at a line break answers `410`):
   the terms of use are shown with a required checkbox; submitting without it is refused; with it, set a
@@ -1428,7 +1429,7 @@ Create the test accounts in the admin and delete them afterwards.
   code is confirmed. Check in the browser that the enrolment page works fully (QR code, manual key, confirmation)
   for that not-yet-enrolled user. An enrolled user signs in with the code.
 - [ ] Lost phone, with forced two-factor still on: as a superuser, run **Reset two-factor authentication (superuser)**
-  in the admin under **User profiles** (the profile list, not the User page: tick the profile, choose the action).
+  in the admin Users list (tick the account, choose the action; the User page shows the « Account » section).
   Mailpit holds the re-enrolment mail; the link asks for the password (a wrong one counts as a
   failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
 - [ ] `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W004` (no OAuth application with the
