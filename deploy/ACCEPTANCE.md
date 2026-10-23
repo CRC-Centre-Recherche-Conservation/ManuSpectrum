@@ -781,6 +781,16 @@ change shows within a minute (reload after waiting). Browser in a private window
   `iiif.unicaen.fr` on the homepage; for signed-in editors `cke4.ckeditor.com`, and
   `svc.webspellchecker.net` only if the spell checker is switched on; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
   the CSP Report-Only violations: copy them into the issue for F5.
+- [ ] *CSP reports reach the server*: on any page, force a violation of `object-src 'none'` from the console:
+  `document.body.append(Object.assign(document.createElement('object'), {data: 'https://csp-test.invalid/x?k=1'}))`.
+  Run it in Chromium AND in Firefox: Chromium sends the Reporting API body to `report-to`, Firefox the legacy body to
+  `report-uri`. In Chromium also open DevTools → Application → Reporting API: the endpoint `csp-endpoint` is listed
+  (the relative URL was accepted) and the report's status is `Success` (batched: allow up to a minute). In each
+  browser, within a minute `dc logs --since 5m web | grep manuspectrum.csp` shows one line with `directive` `object-src`,
+  `blocked` `https://csp-test.invalid` (no path, no query) and `document` the route name of the page (never its path),
+  the « CSP violations by directive » panel of the Application dashboard counts it (two in all), and the access log
+  shows `POST /api/csp-report` with status `204`. `curl -s -o /dev/null -w '%{http_code}'
+  https://manuspectrum.test/api/csp-report` answers `405`.
 - [ ] *Map tile load*: signed in or not, open `/fr/search`, switch on several resource layers on the map, then pan and zoom
   quickly for one minute. Meanwhile, *(service account)* every 15 seconds read the open scroll contexts:
   `dc exec -T elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/stats/indices/search?filter_path=**.open_contexts"'`.

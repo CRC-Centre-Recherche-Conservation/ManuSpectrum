@@ -66,7 +66,7 @@ a modification made there is lost at the next start.
 | Dashboard | Answers |
 | --- | --- |
 | Overview | Is it working? Site, readiness, image server, alerts firing, certificate, disks, last good backup |
-| Application | Requests, errors, Explorer latency and corpus builds, Celery tasks, upstream calls, sign-in attempts, active accounts |
+| Application | Requests, errors, Explorer latency and corpus builds, Celery tasks, upstream calls, sign-in attempts, CSP violations by directive, active accounts |
 | Infrastructure | Containers (state, memory against its limit, restarts, OOM kills), host CPU, memory, swap, clock, PostgreSQL, Redis, scrape targets |
 | Activity | What people do: consultations by kind, content created and changed, workflows, sign-ins, data packages, the health of writes |
 | Storage and backups | Filesystem use and time until full for `/` and `/data`, size of each data area, database size, backup repository, last backup and restore test |
@@ -83,6 +83,34 @@ and counts snapshots. `host-metrics.sh disk` measures only the named
 sub-directories, refuses a path that is a mountpoint, and runs under `nice`,
 `ionice` and a timeout. Do not add a panel, a script or a command that measures
 a mount root.
+
+## CSP violations
+
+nginx sends the policy as `Content-Security-Policy-Report-Only` with
+`report-uri /api/csp-report; report-to csp-endpoint` and a
+`Reporting-Endpoints: csp-endpoint="/api/csp-report"` header (a relative URL is
+resolved against the page). Browsers post their violations to
+`POST /api/csp-report` (legacy `application/csp-report` and Reporting API
+`application/reports+json`), which nginx limits to 30 requests a minute per
+address, 16 KiB and POST only.
+
+- Metric: `manuspectrum_csp_violations_total{directive}`, the effective
+  directive from a closed list (`script-src`, `img-src`, ... , else `other`). Panel
+  « CSP violations by directive » of the Application dashboard (Guards row). No
+  alert: the policy is not enforced, the numbers decide what it may block.
+- Log line, logger `manuspectrum.csp`, INFO, one per violation, fields
+  `directive`, `blocked` (`inline`, `eval`, `wasm-eval`, `data`, `blob`, `self`,
+  `scheme://host`, else `other`; never a path or query), `document` (the route
+  name of the page, `other` when it does not resolve; never its path, which can
+  carry a token or an id) and `disposition` (`enforce`, `report`, else `other`).
+  No address, user, user agent or script sample. At most 20 violations are read
+  per request. The line is visible in the image, where `manuspectrum` logs at
+  INFO; the dev settings do not log that logger.
+
+```bash
+# dc as defined in ACCEPTANCE.md; follows web, Ctrl-C to stop
+dc logs --no-log-prefix -f web | jq -cR 'fromjson? | select(.logger=="manuspectrum.csp") | {directive,blocked,document}'
+```
 
 ## Alerts
 

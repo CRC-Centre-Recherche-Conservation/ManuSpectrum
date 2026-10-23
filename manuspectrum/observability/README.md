@@ -87,7 +87,8 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
   `manuspectrum_readyz_component_up`
 - Memos, IIIF, access: `manuspectrum_memo_lookups`, `manuspectrum_iiif_answers`,
   `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`, `manuspectrum_auth_lockouts`,
-  `manuspectrum_spectrum_previews`
+  `manuspectrum_spectrum_previews`, `manuspectrum_csp_violations{directive}` (browser reports posted to
+  `POST /api/csp-report`, `observability/csp.py`; also one INFO line per report on `manuspectrum.csp`)
 - Explorer: `manuspectrum_explorer_bundle_build_seconds`, `manuspectrum_explorer_bundle_bytes`,
   `manuspectrum_explorer_bundle_rows`, `manuspectrum_explorer_bundle_builds`,
   `manuspectrum_explorer_stale_served`, `manuspectrum_explorer_rebuild_failures`,

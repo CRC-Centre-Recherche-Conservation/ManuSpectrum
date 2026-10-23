@@ -19,6 +19,7 @@ ALLOWED_LABELS = frozenset(
     {
         "background",
         "component",
+        "directive",
         "endpoint",
         "kind",
         "language",
@@ -139,6 +140,27 @@ FETCH_OUTCOMES = (
     "budget",
     "timeout",
     "error",
+)
+CSP_DIRECTIVES = (
+    "script-src",
+    "script-src-elem",
+    "script-src-attr",
+    "style-src",
+    "style-src-elem",
+    "style-src-attr",
+    "img-src",
+    "font-src",
+    "connect-src",
+    "media-src",
+    "object-src",
+    "frame-src",
+    "child-src",
+    "worker-src",
+    "manifest-src",
+    "base-uri",
+    "form-action",
+    "frame-ancestors",
+    "default-src",
 )
 SSRF_REASONS = ("scheme", "malformed", "host", "port", "dns", "private", "redirects")
 TASK_PREFIXES = ("manuspectrum.", "arches.")
@@ -402,6 +424,11 @@ SSRF_REJECTIONS = Counter(
     "manuspectrum_ssrf_rejections",
     "Outbound URLs refused by the SSRF guard, by reason.",
     ["reason"],
+)
+CSP_VIOLATIONS = Counter(
+    "manuspectrum_csp_violations",
+    "Content-Security-Policy violations reported by browsers, by effective directive.",
+    ["directive"],
 )
 
 # Celery
