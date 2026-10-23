@@ -278,3 +278,42 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
       value: 1
+- name: three exports slower than 60 seconds warn, fewer or faster ones do not
+  interval: 1m
+  input_series:
+  - series: django_http_requests_latency_seconds_by_view_method_count{view="export_results", method="GET", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 3x120"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="13.0", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="60.0", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="+Inf", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 3x120"
+  - series: django_http_requests_latency_seconds_by_view_method_count{view="api_export_results", method="GET", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="api_export_results", method="GET", le="60.0", job="web", instance="web:8000"}
+    values: "0x200"
+  promql_expr_test:
+  - expr: ALERTS{alertname="SearchExportSlow", alertstate="firing"}
+    eval_time: 25m
+    exp_samples: []
+  - expr: ALERTS{alertname="SearchExportSlow", alertstate="firing"}
+    eval_time: 60m
+    exp_samples:
+    - labels: ALERTS{alertname="SearchExportSlow", alertstate="firing", service="site", severity="warning"}
+      value: 1
+- name: two slow exports and many exports between 13 and 60 seconds do not warn
+  interval: 1m
+  input_series:
+  - series: django_http_requests_latency_seconds_by_view_method_count{view="export_results", method="GET", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 12x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="13.0", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="60.0", job="web", instance="web:8000"}
+    values: "0x9 0x9 0x9 10x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="+Inf", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 12x200"
+  promql_expr_test:
+  - expr: ALERTS{alertname="SearchExportSlow", alertstate="firing"}
+    eval_time: 120m
+    exp_samples: []

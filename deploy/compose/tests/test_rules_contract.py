@@ -126,6 +126,7 @@ REQUIRED_TESTED = {
     "MetricsDirFilling",
     "WriteRequestsFailing",
     "ActivityStale",
+    "SearchExportSlow",
 }
 
 # Series written by deploy/scripts/host-metrics.sh (Task 6 keeps these names).
@@ -223,6 +224,13 @@ def seconds_bundle():
     text = METRICS_PY.read_text(encoding="utf-8")
     match = re.search(r"^SECONDS_BUNDLE = (\([^)]*\))", text, re.M)
     return ast.literal_eval(match.group(1))
+
+
+def latency_buckets():
+    """PROMETHEUS_LATENCY_BUCKETS of settings.py, read without importing Django."""
+    text = (REPO / "manuspectrum" / "settings.py").read_text(encoding="utf-8")
+    match = re.search(r"^PROMETHEUS_LATENCY_BUCKETS = (\(.*?\n\))", text, re.M | re.S)
+    return eval(match.group(1), {"__builtins__": {}}, {"float": float})
 
 
 def forbidden_label_names(label_names):
@@ -443,6 +451,7 @@ class RuleContractTests(unittest.TestCase):
             "ExplorerRebuildFailing",
             "WriteBudgetSpent",
             "PrometheusRuleFailures",
+            "SearchExportSlow",
         }
         by_name = {r["alert"]: r for _, r in self.alerts}
         for name in events:
@@ -512,7 +521,9 @@ class RuleContractTests(unittest.TestCase):
         self.assertLessEqual({13, 55}, set(seconds_bundle()))
 
     def test_every_le_in_a_rule_is_a_bound_the_exporter_writes(self):
-        written = {floatToGoString(b) for b in seconds_bundle()} | {"+Inf"}
+        written = {floatToGoString(b) for b in seconds_bundle() + latency_buckets()} | {
+            "+Inf"
+        }
         found = set()
         for path in sorted(RULES_DIR.glob("*.yml")):
             found |= set(re.findall(r'\ble="([^"]*)"', path.read_text("utf-8")))
@@ -524,6 +535,11 @@ class RuleContractTests(unittest.TestCase):
             for le in re.findall(r'\ble="([^"]*)"', path.read_text("utf-8")):
                 with self.subTest(rule_file=path.name, le=le):
                     self.assertTrue(le == "+Inf" or float(le) < 1e6)
+
+    def test_search_export_rule_reads_a_django_latency_bucket(self):
+        self.assertLessEqual({60, 120}, set(latency_buckets()))
+        expr = {r["alert"]: r["expr"] for _, r in self.alerts}["SearchExportSlow"]
+        self.assertIn('le="60.0"', expr)
 
     def test_go_string_fallback_matches_prometheus_client(self):
         try:
