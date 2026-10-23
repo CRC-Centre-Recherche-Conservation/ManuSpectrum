@@ -1,14 +1,18 @@
 import { elementColour } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/element-colour.ts";
-import { escapePlotlyText } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
+import {
+    escapePlotlyText,
+    monoGlyphWidth,
+} from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
+import type { InstrumentKind } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
 import type { PlotTheme } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
 import type { Shape } from "plotly.js";
 
 export type LensShape = Partial<Shape>;
 
-/** Most shapes one window carries; the least important are dropped beyond it. */
-export const MAX_LENS_SHAPES = 150;
+/** Most shapes one window carries; beyond it `lensDrawing` sheds marks (`shed`). */
+export const MAX_LENS_SHAPES = 320;
 
 const TICK_PX = 14;
 const MAJOR_INTENSITY = 0.5;
@@ -17,16 +21,31 @@ const OVERLAP_OPACITY = 0.22;
 const OVERLAP_RULE_WIDTH = 4;
 const OVERLAP_RULE_OPACITY = 0.5;
 const COMPTON_OPACITY = 0.12;
-const LABEL_SIZE = 10;
-/** Rows the instrument labels are staggered on, and the height each row adds to its tick. */
-const INSTRUMENT_ROWS = 3;
-const ROW_STEP_PX = 14;
-/** Rows of declared labels in the strip above the plot area, and the room that strip takes above it. */
-export const DECLARED_ROWS = 2;
-export const DECLARED_STRIP_PX = DECLARED_ROWS * ROW_STEP_PX + 4;
-/** Width of one monospace glyph at `LABEL_SIZE`, and the gap kept between two labels on a row. */
-const GLYPH_PX = 6.2;
+export const LABEL_SIZE = 11;
+/** The height one row of labels takes above its tick tip, and the step between two rows. */
+export const ROW_STEP_PX = 14;
+/** Plotly's default `label.padding`: the room between a label and the point it anchors on. */
+const LABEL_PAD_PX = 3;
+/** The room one row of band labels takes above the plot edge, its pad included. */
+export const BAND_ROW_PX = ROW_STEP_PX + LABEL_PAD_PX;
+/** Rows of the band above the plot area of a stacked chart (declared, line and marker labels), and the room the band takes. */
+export const TOP_BAND_ROWS = 2;
+export const TOP_BAND_PX = TOP_BAND_ROWS * ROW_STEP_PX + 4;
+/** Rows the instrument labels are staggered on at the foot of a panel; one on a panel narrower than `NARROW_PANEL_PX`. */
+const INSTRUMENT_ROWS = 2;
+const NARROW_PANEL_PX = 250;
+/** The room the instrument ticks and their labels take at the foot of the plot area. */
+export const INSTRUMENT_BAND_PX =
+    TICK_PX + INSTRUMENT_ROWS * ROW_STEP_PX + LABEL_SIZE;
+/** Width of one glyph of a label, and the gap kept between two labels on a row. */
+const GLYPH_PX = monoGlyphWidth(LABEL_SIZE);
 const LABEL_GAP_PX = 4;
+/** The room kept between a label and a stroke rising past its row. */
+const STROKE_GAP_PX = 2;
+/** An instrument word already placed within this distance is not placed again. */
+const REPEAT_PX = 60;
+/** A declared tick and a line this close (keV) are the same line of the table. */
+const SAME_LINE_KEV = 1e-6;
 /** The panel width assumed when the caller gives none. */
 const DEFAULT_PLOT_PX = 640;
 
@@ -39,6 +58,7 @@ export type LensTheme = Pick<
 /** A vertical line across the panel. `intensity` is relative (0 to 1) within its shell. */
 export interface LensLine {
     energy: number;
+    /** « Fe Kα1 »: the symbol, a space, the line. */
     label: string;
     intensity: number;
 }
@@ -69,10 +89,14 @@ export interface DeclaredTick {
     focusHue?: number;
 }
 
+/** What makes an instrument tick (the Compton band is an `EnergyBand`); a tick without one ranks with the escapes. */
+export type TickKind = Exclude<InstrumentKind, "compton">;
+
 /** A dotted bottom tick in muted ink: one per distinct energy, whatever curves carry it. */
 export interface InstrumentTick {
     label: string;
     energy: number;
+    kind?: TickKind;
 }
 
 export interface EnergyBand {
@@ -101,8 +125,8 @@ export interface LensPanel {
     extent: [number, number];
     /**
      * What the panel shows now, when the reader knows it: the energy range
-     * (keV, inside `extent`) and the plot width (px). The declared and
-     * instrument labels are spread over this range and this width, and a mark
+     * (keV, inside `extent`; reversed when the axis is) and the plot width
+     * (px). The labels are spread over this range and this width, and a mark
      * outside the range is left out.
      */
     view?: { range?: [number, number]; width?: number };
@@ -123,36 +147,123 @@ export interface LensShapesInput {
     elements: LensElementLines[];
     overlaps: OverlapBand[];
     theme: LensTheme;
-    /** Width in pixels of a panel's plot area; sets how many instrument labels fit side by side. */
+    /** Width in pixels of a panel's plot area; sets how many labels fit side by side. */
     plotWidth?: number;
     /** Drawn last, so in front of every other shape, and never dropped by the cap. */
     marker?: IdentifiedMarker;
-    /**
-     * Where the declared labels go: `rows` staggered rows, the first `lift`
-     * pixels above the plot area (the labels rise, the ticks do not). The chart keeps `DECLARED_STRIP_PX` free
-     * above its plot area for the default two rows at no lift.
-     */
-    declaredStrip?: { rows: number; lift: number };
+    /** Rows of the band above the plot area; `TOP_BAND_ROWS` when absent. */
+    bandRows?: number;
 }
 
-interface Ranked {
+/** The shapes of the lens and how many marks the cap left out. */
+export interface LensDrawing {
+    shapes: LensShape[];
+    dropped: number;
+}
+
+/** What the cap sheds between: it never empties a family, and never touches the instrument ticks or the marker. */
+type Family =
+    | "focus"
+    | "lens"
+    | "declared"
+    | "instrument"
+    | "band"
+    | "overlap"
+    | "marker";
+
+interface Entry {
+    family: Family;
+    /** The position of its panel in `LensShapesInput.panels`. */
+    panel: number;
+    /** Within a family, the lowest is shed first. */
+    weight: number;
+    shapes: LensShape[];
+}
+
+/** The families with droppable entries are tried biggest first; at equal size, in this order. */
+const SHED_ORDER: readonly Family[] = [
+    "lens",
+    "focus",
+    "declared",
+    "overlap",
+    "band",
+];
+
+/** A label wanting a place on the rows of a band. */
+interface BandItem {
+    /** Pixels from the left edge of the plot area. */
+    x: number;
+    text: string;
+    /** A shorter text, tried once every full text has been placed. */
+    short?: string;
+    /** The lowest is placed first. */
     priority: number;
-    shape: LensShape;
+    /** Whether a stroke rises from the plot edge to the label's row (a tick, a stub); a band's label has none. */
+    stroke: boolean;
+}
+
+type Anchor = "left" | "center" | "right";
+
+/** Where a label landed: its row (0 against the plot), its text (the full or the short one) and its anchor. */
+interface Placed {
+    row: number;
+    text: string;
+    xanchor: Anchor;
+}
+
+interface Held {
+    /** The item placed. */
+    index: number;
+    text: string;
+    row: number;
+    x: number;
+    lo: number;
+    hi: number;
+    xanchor: Anchor;
+    stroke: boolean;
 }
 
 const RANK_DASH = ["solid", "dash", "dot"] as const;
+const INSTRUMENT_PRIORITY: Record<TickKind, number> = {
+    rayleigh: 0,
+    "duane-hunt": 1,
+    escape: 3,
+    sum: 4,
+};
+const BAND_PRIORITY = 2;
+const UNKNOWN_INSTRUMENT_PRIORITY = 3;
+const MARKER_PRIORITY = 0;
+const DECLARED_PRIORITY = 1;
+const SOLID_LINE_PRIORITY = 4;
+const DASHED_LINE_PRIORITY = 5;
 
 function inside(energy: number, extent: [number, number]): boolean {
     return energy >= extent[0] && energy <= extent[1];
 }
 
-/** The energy range a panel's labels are laid out on: its view clipped to its extent, else its extent. */
-function shownRange(panel: LensPanel): [number, number] {
+/**
+ * The energy range a panel's marks come from (`shown`: its view clipped to
+ * its extent, else its extent) and the one its pixels span (`mapped`: the
+ * view itself, which an autorange pads beyond the data; the extent when the
+ * view is absent or outside it).
+ */
+function panelRanges(panel: LensPanel): {
+    shown: [number, number];
+    mapped: [number, number];
+} {
     const range = panel.view?.range;
-    if (!range) return panel.extent;
+    if (!range) return { shown: panel.extent, mapped: panel.extent };
     const low = Math.max(Math.min(range[0], range[1]), panel.extent[0]);
     const high = Math.min(Math.max(range[0], range[1]), panel.extent[1]);
-    return low < high ? [low, high] : panel.extent;
+    return low < high
+        ? {
+              shown: [low, high],
+              mapped: [
+                  Math.min(range[0], range[1]),
+                  Math.max(range[0], range[1]),
+              ],
+          }
+        : { shown: panel.extent, mapped: panel.extent };
 }
 
 function lineStyle(intensity: number): { width: number; dash: string } {
@@ -161,16 +272,20 @@ function lineStyle(intensity: number): { width: number; dash: string } {
         : { width: 1, dash: "dash" };
 }
 
+/** A horizontal label at the end of a vertical shape, `xanchor` on its energy. */
 function label(
     text: string,
     colour: string,
     theme: LensTheme,
-    textposition: string,
+    xanchor: Anchor,
     placing: Record<string, unknown> = {},
 ): LensShape["label"] {
     return {
         text: escapePlotlyText(text),
-        textposition,
+        textposition: "end",
+        textangle: 0,
+        xanchor,
+        yanchor: "bottom",
         font: { family: theme.fontMono, size: LABEL_SIZE, color: colour },
         ...placing,
     } as LensShape["label"];
@@ -181,8 +296,6 @@ function fullLine(
     energy: number,
     colour: string,
     style: { width: number; dash: string },
-    text: string,
-    theme: LensTheme,
 ): LensShape {
     return {
         type: "line",
@@ -194,33 +307,31 @@ function fullLine(
         y0: 0,
         y1: 1,
         line: { color: colour, width: style.width, dash: style.dash as "dash" },
-        label: label(text, colour, theme, "end"),
     };
 }
 
 /**
  * A short line against the top or the bottom edge of the panel.
  *
- * A bottom tick (`row` 0 to `INSTRUMENT_ROWS - 1`) rises `row` steps higher
- * and carries its label horizontally above its tip. A top tick keeps
- * `TICK_PX` inside the plot and, on `row` 1 and beyond, rises `row` steps
- * above it into the strip over the plot area, where its label sits
- * horizontally above the tip; a `lift` raises the label alone (its padding),
- * the stroke never crossing what sits between the plot and the label. A `null` text draws the tick alone.
+ * A bottom tick keeps `TICK_PX` inside the plot and rises `row` steps higher,
+ * its label horizontal above its tip. A top tick keeps `reach` pixels inside
+ * the plot (`TICK_PX` for a declared tick, nothing for the stub of a line
+ * already drawn across the plot) and, on `row` 1 and beyond, rises `row`
+ * steps above the plot into the band, where its label sits above the tip.
+ * A `null` text draws the tick alone.
  */
 function tick(
     panel: LensPanel,
     energy: number,
     top: boolean,
     colour: string,
-    dash: string,
+    style: { width: number; dash: string },
     text: string | null,
     theme: LensTheme,
     row = 0,
-    lift = 0,
+    xanchor: Anchor = "center",
+    reach = TICK_PX,
 ): LensShape {
-    const length = TICK_PX + (top ? 0 : row * ROW_STEP_PX);
-    const reach = top ? row * ROW_STEP_PX : 0;
     const shape: LensShape = {
         type: "line",
         layer: "above",
@@ -230,64 +341,152 @@ function tick(
         x1: energy,
         ysizemode: "pixel",
         yanchor: top ? 1 : 0,
-        y0: top ? -length : 0,
-        y1: top ? reach : length,
-        line: { color: colour, width: 1.5, dash: dash as "dash" },
+        y0: top && reach > 0 ? -reach : 0,
+        y1: top ? row * ROW_STEP_PX : TICK_PX + row * ROW_STEP_PX,
+        line: { color: colour, width: style.width, dash: style.dash as "dash" },
     };
-    if (text !== null) {
-        shape.label = label(text, colour, theme, "end", {
-            textangle: 0,
-            xanchor: "center",
-            yanchor: "bottom",
-            ...(top && lift > 0 ? { padding: lift } : {}),
-        });
-    }
+    if (text !== null) shape.label = label(text, colour, theme, xanchor);
     return shape;
 }
 
+/** The pixel box of a label and the anchor that puts it there. */
+interface Fit {
+    lo: number;
+    hi: number;
+    xanchor: Anchor;
+}
+
 /**
- * The row (0 to `rowCount - 1`) each tick's label takes, `null` when it
- * fits on none or repeats the text of a neighbour it would touch.
+ * The boxes a label `width` px wide may take on `x`, inside a plot
+ * `plotWidth` px wide, in order of preference: centred on `x`, then starting
+ * `LABEL_PAD_PX` right of it, then ending `LABEL_PAD_PX` left of it (as
+ * Plotly pads an anchored label). None when it is wider than the plot.
  */
-function labelRows(
-    texts: readonly string[],
-    xs: readonly number[],
-    pxPerKev: number,
+function fits(x: number, width: number, plotWidth: number): Fit[] {
+    const half = width / 2;
+    const candidates: Fit[] = [
+        { lo: x - half, hi: x + half, xanchor: "center" },
+        { lo: x + LABEL_PAD_PX, hi: x + LABEL_PAD_PX + width, xanchor: "left" },
+        {
+            lo: x - LABEL_PAD_PX - width,
+            hi: x - LABEL_PAD_PX,
+            xanchor: "right",
+        },
+    ];
+    return candidates.filter((fit) => fit.lo >= 0 && fit.hi <= plotWidth);
+}
+
+/** Whether two boxes on one row keep `LABEL_GAP_PX` between them. */
+function apart(one: Fit, other: Fit): boolean {
+    return (
+        one.hi + LABEL_GAP_PX <= other.lo || other.hi + LABEL_GAP_PX <= one.lo
+    );
+}
+
+/** Whether a stroke on `x` runs through `fit`, `STROKE_GAP_PX` around it included. */
+function crosses(x: number, fit: Fit): boolean {
+    return x > fit.lo - STROKE_GAP_PX && x < fit.hi + STROKE_GAP_PX;
+}
+
+/**
+ * Where each item's label goes on `rowCount` rows over a plot `plotWidth`
+ * px wide, null when it fits nowhere. Items go by priority, then by `x`,
+ * every full text before any short one, each on the lowest row and first
+ * of its `fits` where it touches no label of that row, no stroke from a
+ * higher row crosses it, and its own stroke crosses at most one lower
+ * label, which then moves to a fit that frees the stroke. A text already
+ * placed within `repeatPx` of the item is not placed again (0: never).
+ */
+function placeLabels(
+    items: readonly BandItem[],
     rowCount: number,
-): (number | null)[] {
-    interface Placed {
-        text: string;
-        row: number;
-        lo: number;
-        hi: number;
-    }
-    const order = xs.map((_, index) => index).sort((a, b) => xs[a] - xs[b]);
-    const placed: Placed[] = [];
-    const rows: (number | null)[] = xs.map(() => null);
-    for (const index of order) {
-        const x = xs[index] * pxPerKev;
-        const half = (texts[index].length * GLYPH_PX + LABEL_GAP_PX) / 2;
-        const lo = x - half;
-        const hi = x + half;
-        const text = texts[index];
+    plotWidth: number,
+    repeatPx: number,
+): (Placed | null)[] {
+    const held: Held[] = [];
+    const placed: (Placed | null)[] = items.map(() => null);
+    const order = items
+        .map((_, index) => index)
+        .sort(
+            (a, b) =>
+                items[a].priority - items[b].priority ||
+                items[a].x - items[b].x,
+        );
+    /** Whether `fit` on `row` touches no label of that row and no stroke from a higher row, `except` left out. */
+    const clearOf = (fit: Fit, row: number, except: Held | null): boolean =>
+        held.every(
+            (other) =>
+                other === except ||
+                (other.row === row
+                    ? apart(fit, other)
+                    : other.row < row ||
+                      !other.stroke ||
+                      !crosses(other.x, fit)),
+        );
+    /** The lower labels the stroke of a mark on `x` rising to `row` would cross. */
+    const crossed = (x: number, row: number): Held[] =>
+        held.filter((other) => other.row < row && crosses(x, other));
+    /** Moves `blocker` to a fit of its own that `x` is outside of; false when it has none. */
+    const stepAside = (blocker: Held, x: number): boolean => {
+        const width = blocker.hi - blocker.lo;
+        for (const fit of fits(blocker.x, width, plotWidth)) {
+            if (fit.xanchor === blocker.xanchor || crosses(x, fit)) continue;
+            if (!clearOf(fit, blocker.row, blocker)) continue;
+            blocker.lo = fit.lo;
+            blocker.hi = fit.hi;
+            blocker.xanchor = fit.xanchor;
+            placed[blocker.index] = {
+                row: blocker.row,
+                text: blocker.text,
+                xanchor: fit.xanchor,
+            };
+            return true;
+        }
+        return false;
+    };
+    const tryText = (index: number, text: string): void => {
+        const item = items[index];
         if (
-            placed.some(
-                (held) => held.text === text && held.hi > lo && hi > held.lo,
+            repeatPx > 0 &&
+            held.some(
+                (other) =>
+                    other.text === text &&
+                    Math.abs(other.x - item.x) < repeatPx,
             )
         ) {
-            continue;
+            return;
         }
         for (let row = 0; row < rowCount; row++) {
-            const clear = placed.every(
-                (held) => held.row !== row || held.hi <= lo || hi <= held.lo,
-            );
-            if (!clear) continue;
-            placed.push({ text, row, lo, hi });
-            rows[index] = row;
-            break;
+            for (const fit of fits(item.x, text.length * GLYPH_PX, plotWidth)) {
+                if (!clearOf(fit, row, null)) continue;
+                const blockers = item.stroke ? crossed(item.x, row) : [];
+                if (blockers.length > 1) continue;
+                if (blockers.length === 1 && !stepAside(blockers[0], item.x)) {
+                    continue;
+                }
+                held.push({
+                    index,
+                    text,
+                    row,
+                    x: item.x,
+                    lo: fit.lo,
+                    hi: fit.hi,
+                    xanchor: fit.xanchor,
+                    stroke: item.stroke,
+                });
+                placed[index] = { row, text, xanchor: fit.xanchor };
+                return;
+            }
+        }
+    };
+    for (const index of order) tryText(index, items[index].text);
+    for (const index of order) {
+        const { short, text } = items[index];
+        if (placed[index] === null && short !== undefined && short !== text) {
+            tryText(index, short);
         }
     }
-    return rows;
+    return placed;
 }
 
 function band(
@@ -296,13 +495,11 @@ function band(
     to: number,
     colour: string,
     opacity: number,
-    text: string | null,
-    theme: LensTheme,
 ): LensShape | null {
     const x0 = Math.max(from, panel.extent[0]);
     const x1 = Math.min(to, panel.extent[1]);
     if (!(x1 > x0)) return null;
-    const shape: LensShape = {
+    return {
         type: "rect",
         layer: "below",
         xref: `x${panel.suffix}` as LensShape["xref"],
@@ -315,13 +512,6 @@ function band(
         opacity,
         line: { width: 0 },
     };
-    if (text) {
-        shape.label = label(text, colour, theme, "top center", {
-            textangle: 0,
-            yanchor: "bottom",
-        });
-    }
-    return shape;
 }
 
 function overlapShapes(
@@ -330,15 +520,7 @@ function overlapShapes(
     theme: LensTheme,
 ): LensShape[] {
     const colour = theme.focus[entry.hue] ?? elementColour(theme, entry.symbol);
-    const rect = band(
-        panel,
-        entry.from,
-        entry.to,
-        colour,
-        OVERLAP_OPACITY,
-        null,
-        theme,
-    );
+    const rect = band(panel, entry.from, entry.to, colour, OVERLAP_OPACITY);
     if (!rect) return [];
     const centre = ((rect.x0 as number) + (rect.x1 as number)) / 2;
     const rule: LensShape = {
@@ -356,179 +538,409 @@ function overlapShapes(
     return [rect, rule];
 }
 
-/**
- * The Plotly shapes of the XRF lens for one window.
- *
- * Pure and deterministic: equal input gives an equal array, so
- * `shapesKey` lets a caller skip a relayout. Every shape stays inside its
- * panel's X extent (a shape in data coordinates feeds the axis autorange), is
- * placed by `x`/`y … domain` references and never sets `showlegend` (that
- * flag turns a relayout into a full calc). Beyond `MAX_LENS_SHAPES` the least
- * important are dropped: focus lines, lens elements, declared majors, minors,
- * traces, instrument ticks, then bands; the identified `marker` is never
- * dropped and comes last. No shape reads or extends a data axis: the ticks are pixel-sized
- * on the panel's domain. The instrument labels (muted ink) are horizontal and
- * staggered on `INSTRUMENT_ROWS` rows of taller ticks by the width they need
- * at `plotWidth`; the declared labels (the element's colour) are horizontal
- * too, on `declaredStrip.rows` rows above the plot area, their tick staying in
- * the plot. A label that fits on no row is left out and its tick stays. A
- * band's label sits above its panel.
- */
-export function lensShapes(input: LensShapesInput): LensShape[] {
-    const { theme } = input;
-    const ranked: Ranked[] = [];
-    const add = (priority: number, shape: LensShape | null) => {
-        if (shape) ranked.push({ priority, shape });
-    };
+/** A line the panel draws across its plot, with what its label says. */
+interface LineEntry {
+    family: "focus" | "lens";
+    energy: number;
+    label: string;
+    intensity: number;
+    colour: string;
+    style: { width: number; dash: string };
+}
 
-    for (const panel of input.panels) {
-        for (const group of input.focus) {
-            const colour =
-                theme.focus[group.hue] ??
-                (group.symbol ? elementColour(theme, group.symbol) : theme.ink);
-            for (const line of group.lines) {
-                if (!inside(line.energy, panel.extent)) continue;
-                const style = group.preview
+function lineEntries(
+    input: LensShapesInput,
+    shown: [number, number],
+): LineEntry[] {
+    const { theme } = input;
+    const entries: LineEntry[] = [];
+    for (const group of input.focus) {
+        const colour =
+            theme.focus[group.hue] ??
+            (group.symbol ? elementColour(theme, group.symbol) : theme.ink);
+        for (const line of group.lines) {
+            if (!inside(line.energy, shown)) continue;
+            entries.push({
+                family: "focus",
+                energy: line.energy,
+                label: line.label,
+                intensity: line.intensity,
+                colour,
+                style: group.preview
                     ? { width: 1, dash: "dash" }
-                    : lineStyle(line.intensity);
-                add(
+                    : lineStyle(line.intensity),
+            });
+        }
+    }
+    for (const group of input.elements) {
+        for (const line of group.lines) {
+            if (!inside(line.energy, shown)) continue;
+            entries.push({
+                family: "lens",
+                energy: line.energy,
+                label: line.label,
+                intensity: line.intensity,
+                colour: elementColour(theme, group.symbol),
+                style: lineStyle(line.intensity),
+            });
+        }
+    }
+    return entries;
+}
+
+/** The last word of « Fe Kα1 »: the line alone. */
+function shortLabel(text: string): string {
+    return text.slice(text.lastIndexOf(" ") + 1);
+}
+
+/** The entries of one panel, in drawing order. */
+function panelEntries(
+    input: LensShapesInput,
+    panel: LensPanel,
+    position: number,
+): { entries: Entry[]; marker: Entry | null } {
+    const { theme } = input;
+    const { shown, mapped } = panelRanges(panel);
+    const span = mapped[1] - mapped[0];
+    const width = panel.view?.width ?? input.plotWidth ?? DEFAULT_PLOT_PX;
+    const reversed =
+        panel.view?.range !== undefined &&
+        panel.view.range[0] > panel.view.range[1];
+    const px = (energy: number): number =>
+        span > 0
+            ? ((reversed ? mapped[1] - energy : energy - mapped[0]) / span) *
+              width
+            : 0;
+    const entries: Entry[] = [];
+
+    const lines = lineEntries(input, shown);
+    const declared = panel.declared.filter((entry) =>
+        inside(entry.energy, shown),
+    );
+    const twins = declared.map((entry) =>
+        lines.findIndex(
+            (line) =>
+                Math.abs(line.energy - entry.energy) < SAME_LINE_KEV &&
+                line.label.startsWith(`${entry.symbol} `),
+        ),
+    );
+    const twinned = new Set(twins.filter((index) => index >= 0));
+    const marker =
+        input.marker && inside(input.marker.energy, shown)
+            ? input.marker
+            : null;
+    const top: BandItem[] = [];
+    if (marker) {
+        top.push({
+            x: px(marker.energy),
+            text: marker.label,
+            priority: MARKER_PRIORITY,
+            stroke: false,
+        });
+    }
+    const declaredFrom = top.length;
+    declared.forEach((entry, index) => {
+        const twin = twins[index];
+        top.push({
+            x: px(entry.energy),
+            text: twin >= 0 ? lines[twin].label : entry.symbol,
+            ...(twin >= 0 ? { short: entry.symbol } : {}),
+            priority: DECLARED_PRIORITY + Math.min(Math.max(entry.rank, 0), 2),
+            stroke: true,
+        });
+    });
+    const lineItems = new Map<number, number>();
+    lines.forEach((line, index) => {
+        if (twinned.has(index)) return;
+        lineItems.set(index, top.length);
+        top.push({
+            x: px(line.energy),
+            text: line.label,
+            short: shortLabel(line.label),
+            priority:
+                line.style.dash === "solid"
+                    ? SOLID_LINE_PRIORITY
+                    : DASHED_LINE_PRIORITY + (1 - line.intensity),
+            stroke: true,
+        });
+    });
+    const topPlaced = placeLabels(
+        top,
+        input.bandRows ?? TOP_BAND_ROWS,
+        width,
+        0,
+    );
+
+    lines.forEach((line, index) => {
+        const item = lineItems.get(index);
+        const placed = item === undefined ? null : topPlaced[item];
+        const shapes = [fullLine(panel, line.energy, line.colour, line.style)];
+        if (placed && placed.row === 0) {
+            shapes[0].label = label(
+                placed.text,
+                line.colour,
+                theme,
+                placed.xanchor,
+            );
+        } else if (placed) {
+            shapes.push(
+                tick(
+                    panel,
+                    line.energy,
+                    true,
+                    line.colour,
+                    line.style,
+                    placed.text,
+                    theme,
+                    placed.row,
+                    placed.xanchor,
                     0,
-                    fullLine(
-                        panel,
-                        line.energy,
-                        colour,
-                        style,
-                        line.label,
-                        theme,
-                    ),
-                );
-            }
+                ),
+            );
         }
-        for (const group of input.elements) {
-            for (const line of group.lines) {
-                if (!inside(line.energy, panel.extent)) continue;
-                add(
-                    1,
-                    fullLine(
-                        panel,
-                        line.energy,
-                        elementColour(theme, group.symbol),
-                        lineStyle(line.intensity),
-                        line.label,
-                        theme,
-                    ),
-                );
-            }
-        }
-        const shown = shownRange(panel);
-        const inPanel = panel.declared.filter((entry) =>
-            inside(entry.energy, shown),
-        );
-        const span = shown[1] - shown[0];
-        const pxPerKev =
-            span > 0
-                ? (panel.view?.width ?? input.plotWidth ?? DEFAULT_PLOT_PX) /
-                  span
-                : 0;
-        const strip = input.declaredStrip ?? {
-            rows: DECLARED_ROWS,
-            lift: 0,
-        };
-        const declaredRows = labelRows(
-            inPanel.map((entry) => entry.symbol),
-            inPanel.map((entry) => entry.energy),
-            pxPerKev,
-            strip.rows,
-        );
-        inPanel.forEach((entry, index) => {
-            const rank = Math.min(Math.max(entry.rank, 0), 2);
-            const row = declaredRows[index];
-            add(
-                2 + rank,
+        entries.push({
+            family: line.family,
+            panel: position,
+            weight:
+                line.style.dash === "solid"
+                    ? 1 + line.intensity
+                    : line.intensity,
+            shapes,
+        });
+    });
+    declared.forEach((entry, index) => {
+        const rank = Math.min(Math.max(entry.rank, 0), 2);
+        const placed = topPlaced[declaredFrom + index];
+        const colour =
+            entry.focusHue !== undefined && theme.focus[entry.focusHue]
+                ? theme.focus[entry.focusHue]
+                : elementColour(theme, entry.symbol);
+        entries.push({
+            family: "declared",
+            panel: position,
+            weight: 2 - rank,
+            shapes: [
                 tick(
                     panel,
                     entry.energy,
                     true,
-                    entry.focusHue !== undefined && theme.focus[entry.focusHue]
-                        ? theme.focus[entry.focusHue]
-                        : elementColour(theme, entry.symbol),
-                    RANK_DASH[rank],
-                    row === null ? null : entry.symbol,
+                    colour,
+                    { width: 1.5, dash: RANK_DASH[rank] },
+                    placed?.text ?? null,
                     theme,
-                    row ?? 0,
-                    strip.lift,
+                    placed?.row ?? 0,
+                    placed?.xanchor,
                 ),
-            );
+            ],
         });
-        const ticks = panel.instrument.filter((entry) =>
-            inside(entry.energy, shown),
-        );
-        const rows = labelRows(
-            ticks.map((entry) => entry.label),
-            ticks.map((entry) => entry.energy),
-            pxPerKev,
-            INSTRUMENT_ROWS,
-        );
-        ticks.forEach((entry, index) => {
-            const row = rows[index];
-            add(
-                5,
+    });
+
+    const ticks = panel.instrument.filter((entry) =>
+        inside(entry.energy, shown),
+    );
+    const bands = panel.bands.filter((entry) =>
+        inside((entry.from + entry.to) / 2, shown),
+    );
+    const bottom: BandItem[] = [
+        ...ticks.map((entry) => ({
+            x: px(entry.energy),
+            text: entry.label,
+            priority:
+                entry.kind === undefined
+                    ? UNKNOWN_INSTRUMENT_PRIORITY
+                    : INSTRUMENT_PRIORITY[entry.kind],
+            stroke: true,
+        })),
+        ...bands.map((entry) => ({
+            x: px((entry.from + entry.to) / 2),
+            text: entry.label,
+            priority: BAND_PRIORITY,
+            stroke: false,
+        })),
+    ];
+    const bottomPlaced = placeLabels(
+        bottom,
+        width < NARROW_PANEL_PX ? 1 : INSTRUMENT_ROWS,
+        width,
+        REPEAT_PX,
+    );
+    ticks.forEach((entry, index) => {
+        const placed = bottomPlaced[index];
+        entries.push({
+            family: "instrument",
+            panel: position,
+            weight: 0,
+            shapes: [
                 tick(
                     panel,
                     entry.energy,
                     false,
                     theme.inkMuted,
-                    "dot",
-                    row === null ? null : entry.label,
+                    { width: 1.5, dash: "dot" },
+                    placed?.text ?? null,
                     theme,
-                    row ?? 0,
+                    placed?.row ?? 0,
+                    placed?.xanchor,
                 ),
-            );
+            ],
         });
-        for (const entry of panel.bands) {
-            add(
-                6,
-                band(
-                    panel,
-                    entry.from,
-                    entry.to,
-                    entry.colour,
-                    COMPTON_OPACITY,
-                    entry.label,
-                    theme,
-                ),
+    });
+    panel.bands.forEach((entry) => {
+        const rect = band(
+            panel,
+            entry.from,
+            entry.to,
+            entry.colour,
+            COMPTON_OPACITY,
+        );
+        if (!rect) return;
+        const at = bands.indexOf(entry);
+        const placed = at >= 0 ? bottomPlaced[ticks.length + at] : null;
+        if (placed) {
+            rect.label = label(
+                placed.text,
+                theme.inkMuted,
+                theme,
+                placed.xanchor,
+                {
+                    textposition: "bottom center",
+                    padding: TICK_PX + LABEL_PAD_PX + placed.row * ROW_STEP_PX,
+                },
             );
         }
-        for (const entry of input.overlaps) {
-            for (const shape of overlapShapes(panel, entry, theme)) {
-                add(6, shape);
-            }
-        }
-    }
-
-    for (const panel of input.panels) {
-        if (input.marker && inside(input.marker.energy, panel.extent)) {
-            add(-1, {
-                ...fullLine(
-                    panel,
-                    input.marker.energy,
-                    theme.ink,
-                    { width: 1.5, dash: "dash" },
-                    input.marker.label,
-                    theme,
-                ),
-                layer: "above",
+        entries.push({
+            family: "band",
+            panel: position,
+            weight: 0,
+            shapes: [rect],
+        });
+    });
+    for (const entry of input.overlaps) {
+        const shapes = overlapShapes(panel, entry, theme);
+        if (shapes.length > 0) {
+            entries.push({
+                family: "overlap",
+                panel: position,
+                weight: 0,
+                shapes,
             });
         }
     }
 
-    if (ranked.length <= MAX_LENS_SHAPES) return ranked.map((r) => r.shape);
-    const kept = ranked
-        .map((entry, index) => ({ ...entry, index }))
-        .sort((a, b) => a.priority - b.priority || a.index - b.index)
-        .slice(0, MAX_LENS_SHAPES)
-        .sort((a, b) => a.index - b.index);
-    return kept.map((r) => r.shape);
+    let markerEntry: Entry | null = null;
+    if (marker) {
+        const placed = topPlaced[0];
+        const shape: LensShape = {
+            ...fullLine(panel, marker.energy, theme.ink, {
+                width: 1.5,
+                dash: "dash",
+            }),
+            layer: "above",
+        };
+        if (placed) {
+            shape.label = label(placed.text, theme.ink, theme, placed.xanchor, {
+                padding: LABEL_PAD_PX + placed.row * ROW_STEP_PX,
+            });
+        }
+        markerEntry = {
+            family: "marker",
+            panel: position,
+            weight: 0,
+            shapes: [shape],
+        };
+    }
+    return { entries, marker: markerEntry };
+}
+
+/**
+ * The entries kept under `cap` shapes: while over it, the family with the
+ * most entries (`SHED_ORDER` at a tie) sheds one entry from the panel that
+ * holds most of it (the latest panel at a tie): that panel's lowest weight,
+ * latest entry. A family keeps its first entry on each panel; the
+ * instrument ticks and the marker are never dropped.
+ */
+function shed(
+    entries: readonly Entry[],
+    cap: number,
+): { kept: Entry[]; dropped: number } {
+    let total = entries.reduce((sum, entry) => sum + entry.shapes.length, 0);
+    if (total <= cap) return { kept: [...entries], dropped: 0 };
+    const removed = new Set<number>();
+    const byFamily = new Map<Family, Map<number, number[]>>();
+    entries.forEach((entry, index) => {
+        if (entry.family === "instrument" || entry.family === "marker") return;
+        const panels =
+            byFamily.get(entry.family) ?? new Map<number, number[]>();
+        panels.set(entry.panel, [...(panels.get(entry.panel) ?? []), index]);
+        byFamily.set(entry.family, panels);
+    });
+    for (const panels of byFamily.values()) {
+        for (const indices of panels.values()) {
+            indices.sort(
+                (a, b) => entries[a].weight - entries[b].weight || b - a,
+            );
+        }
+    }
+    const size = (panels: Map<number, number[]>): number =>
+        [...panels.values()].reduce((sum, indices) => sum + indices.length, 0);
+    let dropped = 0;
+    while (total > cap) {
+        let chosen: Map<number, number[]> | null = null;
+        for (const family of SHED_ORDER) {
+            const panels = byFamily.get(family);
+            if (
+                panels &&
+                [...panels.values()].some((indices) => indices.length > 1) &&
+                (chosen === null || size(panels) > size(chosen))
+            ) {
+                chosen = panels;
+            }
+        }
+        let fullest: number[] | null = null;
+        for (const indices of chosen?.values() ?? []) {
+            if (fullest === null || indices.length >= fullest.length) {
+                fullest = indices;
+            }
+        }
+        const index =
+            fullest && fullest.length > 1 ? fullest.shift() : undefined;
+        if (index === undefined) break;
+        removed.add(index);
+        total -= entries[index].shapes.length;
+        dropped += 1;
+    }
+    return {
+        kept: entries.filter((_, index) => !removed.has(index)),
+        dropped,
+    };
+}
+
+/**
+ * The Plotly shapes of the XRF lens for one window, and the count of marks
+ * `shed` left out beyond `MAX_LENS_SHAPES`. Pure and deterministic, so that
+ * `shapesKey` can skip an update.
+ *
+ * Every shape stays inside its panel's X extent and the range it shows
+ * (`view`), sits on its panel's Y domain (no data Y axis) and never sets
+ * `showlegend`. Labels are horizontal, `LABEL_SIZE` px, laid out by
+ * `placeLabels` over the width shown. Above the plot, on `bandRows` rows:
+ * the identified marker, the declared ticks by rank (one on its element's
+ * principal line takes that line's label), then the element lines, solid
+ * before dashed; a line label falls back to the line alone, then to none.
+ * At the foot, on `INSTRUMENT_ROWS` rows (one under `NARROW_PANEL_PX`):
+ * the instrument labels by kind and the Compton band's label. The marker
+ * is drawn last, in front of every other shape.
+ */
+export function lensDrawing(input: LensShapesInput): LensDrawing {
+    const entries: Entry[] = [];
+    const markers: Entry[] = [];
+    input.panels.forEach((panel, position) => {
+        const built = panelEntries(input, panel, position);
+        entries.push(...built.entries);
+        if (built.marker) markers.push(built.marker);
+    });
+    const { kept, dropped } = shed([...entries, ...markers], MAX_LENS_SHAPES);
+    return { shapes: kept.flatMap((entry) => entry.shapes), dropped };
 }
 
 /** A stable string of `shapes`: equal keys mean the same drawing. */

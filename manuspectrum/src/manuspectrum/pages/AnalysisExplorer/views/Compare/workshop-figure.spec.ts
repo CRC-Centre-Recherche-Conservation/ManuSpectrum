@@ -455,6 +455,90 @@ describe("workshop figure", () => {
     });
 
     describe("XRF lens", () => {
+        it("labels a log axis on its decades only, with unlabelled minor ticks between them", () => {
+            const stacked = stackedFigure(
+                input([curve(0, [1, 500, 20])], { yLog: true }),
+                false,
+            );
+            expect(stacked.layout.yaxis).toMatchObject({
+                type: "log",
+                tickmode: "linear",
+                dtick: 1,
+                minor: { ticks: "outside", showgrid: false },
+            });
+            const grid = multiplesFigure(
+                input([curve(0, [1, 500]), curve(1, [1, 500])], {
+                    yLog: true,
+                }),
+            );
+            const layout = grid.layout as Record<string, unknown>;
+            expect(layout.yaxis2).toMatchObject({ type: "log", dtick: 1 });
+            expect(
+                stackedFigure(input([curve(0, [1, 5, 2])]), false).layout.yaxis,
+            ).not.toHaveProperty("dtick");
+        });
+
+        it("leaves the ticks of a log axis spanning less than two decades to Plotly, so labelled ticks remain", () => {
+            const stacked = stackedFigure(
+                input([curve(0, [1500, 9000, 4000])], { yLog: true }),
+                false,
+            );
+            expect(stacked.layout.yaxis).toMatchObject({
+                type: "log",
+                tickmode: "auto",
+            });
+            expect(stacked.layout.yaxis).not.toHaveProperty("dtick");
+            const grid = multiplesFigure(
+                input([curve(0, [1, 50000]), curve(1, [1500, 9000])], {
+                    yLog: true,
+                }),
+            );
+            const layout = grid.layout as Record<string, unknown>;
+            expect(layout.yaxis).toMatchObject({ dtick: 1 });
+            expect(layout.yaxis2).toMatchObject({ tickmode: "auto" });
+            expect(layout.yaxis2).not.toHaveProperty("dtick");
+        });
+
+        it("lifts a panel's title one row above its plot for the label band, with the lens only", () => {
+            const curves = [curve(0, [1, 2]), curve(1, [1, 2])];
+            const titleOf = (figure: ReturnType<typeof multiplesFigure>) =>
+                (figure.layout.annotations as AnnotationCall[])[0];
+            expect(
+                titleOf(multiplesFigure(input(curves, { lens: true }))),
+            ).toMatchObject({ y: 1, yanchor: "bottom", yshift: 17 });
+            expect(titleOf(multiplesFigure(input(curves)))).not.toHaveProperty(
+                "yshift",
+            );
+        });
+
+        it("keeps the end labels of a stacked chart above the instrument band, only when the lens draws one", () => {
+            const low = curve(0, [10, 0]);
+            const high = curve(1, [10, 10]);
+            const lowest = (figure: ReturnType<typeof stackedFigure>) =>
+                (figure.layout.annotations as AnnotationCall[])
+                    .filter((note) => note.text.includes("A1"))
+                    .map((note) => note.ay ?? 0)[0];
+            const plain = stackedFigure(
+                input([low, high], { height: 400 }),
+                false,
+            );
+            const lens = stackedFigure(
+                input([low, high], {
+                    height: 400,
+                    lens: true,
+                    instrumentBand: true,
+                }),
+                false,
+            );
+            const bare = stackedFigure(
+                input([low, high], { height: 400, lens: true }),
+                false,
+            );
+            expect(lowest(plain)).toBe(0);
+            expect(lowest(lens)).toBeLessThan(-40);
+            expect(lowest(bare)).toBe(0);
+        });
+
         it("keeps a linear counts axis at zero and a stacked chart's top margin for the declared labels", () => {
             const plain = stackedFigure(input([curve(0, [0, 5, 2])]), false);
             const lens = stackedFigure(
@@ -469,7 +553,7 @@ describe("workshop figure", () => {
             ).toBe(32);
         });
 
-        it("sets no zero floor on a log axis or in Offset, and none on the grid's margin", () => {
+        it("sets no zero floor on a log axis or in Offset, and gives the grid's margin the band's room only", () => {
             const log = stackedFigure(
                 input([curve(0, [1, 5, 2])], { lens: true, yLog: true }),
                 false,
@@ -486,7 +570,11 @@ describe("workshop figure", () => {
             const layout = grid.layout as Record<string, unknown>;
             expect(layout.yaxis).toMatchObject({ rangemode: "tozero" });
             expect(layout.yaxis2).toMatchObject({ rangemode: "tozero" });
-            expect((layout.margin as { t: number }).t).toBe(28);
+            expect((layout.margin as { t: number }).t).toBe(31);
+            const plain = multiplesFigure(
+                input([curve(0, [1, 5]), curve(1, [1, 5])]),
+            );
+            expect((plain.layout.margin as { t: number }).t).toBe(28);
         });
     });
 
@@ -563,6 +651,33 @@ describe("workshop figure", () => {
             ] as number[];
             expect(from).toBeCloseTo(1 - 0.1);
             expect(to).toBeCloseTo(3 + 0.1);
+        });
+
+        it("lets Plotly tick a log window inside one decade, and labels the decades again on a wider one", () => {
+            const given = input([curve(0, [10, 1500, 9000, 2000, 100000])], {
+                yLog: true,
+            });
+            const narrow = yFitUpdate(given, "overlay", [1, 3]);
+            expect(narrow["yaxis.tickmode"]).toBe("auto");
+            expect(narrow).not.toHaveProperty("yaxis.dtick");
+            expect(yFitUpdate(given, "overlay", [0, 4])).toMatchObject({
+                "yaxis.tickmode": "linear",
+                "yaxis.dtick": 1,
+            });
+        });
+
+        it("gives an autorange log axis the ticks of its whole data", () => {
+            const given = input(
+                [curve(0, [1, 50000]), curve(1, [1500, 9000])],
+                { yLog: true },
+            );
+            expect(yFitUpdate(given, "multiples", null)).toMatchObject({
+                "yaxis.autorange": true,
+                "yaxis.tickmode": "linear",
+                "yaxis.dtick": 1,
+                "yaxis2.autorange": true,
+                "yaxis2.tickmode": "auto",
+            });
         });
 
         it("fits each panel of the grid to its own curves", () => {

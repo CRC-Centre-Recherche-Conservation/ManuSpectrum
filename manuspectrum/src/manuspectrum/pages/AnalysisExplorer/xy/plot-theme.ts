@@ -21,6 +21,8 @@ export const ELEMENT_FALLBACKS = [
 ];
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;
+/** The advance width of one glyph of the mono font (JetBrains Mono: 600/1000 em), as a share of the font size. */
+const MONO_GLYPH_EM = 0.6;
 /** The number format of a hover value: 4 significant digits, no trailing zeros. */
 export const HOVER_VALUE_FORMAT = ".4~g";
 /**
@@ -124,6 +126,16 @@ export function escapePlotlyText(text: string): string {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll("%{", "%&#123;");
+}
+
+/**
+ * The width in pixels of one glyph of `fontMono` at `size` px: what a label
+ * of n characters takes is n times this. Rounded up: Chromium on Linux lays
+ * hinted glyphs on whole pixels (11 px JetBrains Mono advances 7 px, not
+ * 6.6), and an estimate under the drawn width makes labels touch.
+ */
+export function monoGlyphWidth(size: number): number {
+    return Math.ceil(size * MONO_GLYPH_EM);
 }
 
 /**

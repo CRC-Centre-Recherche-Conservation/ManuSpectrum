@@ -216,7 +216,7 @@ async function mountLens(
 }
 
 function shapesOf(lens: XrfLens): LensShape[] {
-    return lens.shapes(THEME);
+    return lens.drawing(THEME).shapes;
 }
 
 function lineAt(shapes: LensShape[], energy: number): LensShape | undefined {
@@ -572,23 +572,45 @@ describe("useXrfLens", () => {
         const { lens } = await mountLens([curve(source)]);
         const texts = (shapes: LensShape[]) =>
             shapes.flatMap((shape) => (shape.label ? [shape.label.text] : []));
+        // The Ag Compton band sits under the Ag Lα1 tube line, whose label is placed first: the band's word is read off the model.
+        const bandWord = (held: XrfLens) =>
+            held.model.value.panels[0].bands.map((band) => band.label);
         expect(texts(shapesOf(lens))).toEqual(
-            expect.arrayContaining(["Compton", "esc", "sum", "20 kV"]),
+            expect.arrayContaining(["esc", "Σ", "20 kV"]),
         );
+        expect(bandWord(lens)).toEqual(["Compton"]);
         harness?.wrapper.unmount();
         const translated = await mountLens([curve(source)], null, {
             compton: "Comptonfr",
             escape: "échap",
-            sum: "somme",
             voltage: (kV) => `${kV} kVfr`,
             elementsFull: "",
             anodesFull: "",
         });
         const french = texts(shapesOf(translated.lens));
         expect(french).toEqual(
-            expect.arrayContaining(["Comptonfr", "échap", "somme", "20 kVfr"]),
+            expect.arrayContaining(["échap", "Σ", "20 kVfr"]),
         );
+        expect(bandWord(translated.lens)).toEqual(["Comptonfr"]);
         expect(french).not.toContain("esc");
+    });
+
+    it("gives each instrument tick its kind, and reports the marks the cap left out", async () => {
+        const { lens } = await mountLens([
+            curve({
+                rawY: PEAKED,
+                excitation: { anode: "Ag", kV: 20, source: "conditions" },
+            }),
+        ]);
+        const kinds = lens.model.value.panels[0].ticks.map((tick) => tick.kind);
+        expect(kinds).toEqual(
+            expect.arrayContaining(["rayleigh", "duane-hunt", "escape"]),
+        );
+        expect(kinds).not.toContain("compton");
+        expect(lens.drawing(THEME)).toEqual({
+            shapes: shapesOf(lens),
+            dropped: 0,
+        });
     });
 
     describe("instrument ticks", () => {

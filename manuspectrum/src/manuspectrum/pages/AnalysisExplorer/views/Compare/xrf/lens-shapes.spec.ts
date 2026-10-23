@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
     MAX_LENS_SHAPES,
-    lensShapes,
+    lensDrawing,
     shapesKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 
 import type {
     LensPanel,
+    LensShape,
     LensShapesInput,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 
@@ -51,6 +52,15 @@ function input(over: Partial<LensShapesInput> = {}): LensShapesInput {
         ...over,
     };
 }
+
+const lensShapes = (given: LensShapesInput): LensShape[] =>
+    lensDrawing(given).shapes;
+const labelled = (shapes: LensShape[]) =>
+    shapes.filter((shape) => shape.label !== undefined);
+const texts = (shapes: LensShape[]) =>
+    shapes.flatMap((shape) => (shape.label ? [shape.label.text] : []));
+const anchors = (shapes: LensShape[]) =>
+    shapes.map((shape) => shape.label?.xanchor);
 
 describe("lensShapes", () => {
     it("draws nothing outside the X extent", () => {
@@ -166,9 +176,15 @@ describe("lensShapes", () => {
         const colourOf = (symbols: string[], wanted: string) =>
             lensShapes(
                 input({
-                    elements: symbols.map((symbol) => ({
+                    elements: symbols.map((symbol, index) => ({
                         symbol,
-                        lines: [{ energy: 6, label: symbol, intensity: 1 }],
+                        lines: [
+                            {
+                                energy: 2 + index * 5,
+                                label: symbol,
+                                intensity: 1,
+                            },
+                        ],
                     })),
                 }),
             ).find((shape) => shape.label?.text === wanted)?.line?.color;
@@ -208,39 +224,9 @@ describe("lensShapes", () => {
         expect(rule?.x0).toBeCloseTo(10.545, 3);
     });
 
-    it("keeps the focus and the majors when it caps at 150", () => {
-        const declared = Array.from({ length: 200 }, (_, i) => ({
-            symbol: `T${i}`,
-            energy: 1 + i * 0.05,
-            rank: 2,
-        }));
-        const shapes = lensShapes(
-            input({
-                panels: [
-                    panel("", {
-                        declared: [
-                            ...declared,
-                            { symbol: "Major", energy: 19, rank: 0 },
-                        ],
-                    }),
-                ],
-                focus: [
-                    {
-                        hue: 0,
-                        lines: [{ energy: 7, label: "Fe Kα1", intensity: 1 }],
-                    },
-                ],
-            }),
-        );
-        expect(shapes).toHaveLength(MAX_LENS_SHAPES);
-        const texts = shapes.map((s) => s.label?.text);
-        expect(texts).toContain("Fe Kα1");
-        expect(texts).toContain("Major");
-    });
-
     it("draws the identified marker as one dashed ink line per panel holding its energy, kept beyond the cap", () => {
         const many = Array.from({ length: MAX_LENS_SHAPES + 20 }, (_, i) => ({
-            energy: 1 + i / 10,
+            energy: 1 + i / 20,
             label: `L${i}`,
             intensity: 1,
         }));
@@ -345,7 +331,8 @@ describe("lensShapes", () => {
         expect(shapesKey([])).toBe("[]");
     });
 
-    describe("declared labels", () => {
+    describe("the band above the plot", () => {
+        /** A 200 px plot over 0–40 keV: 5 px per keV; a glyph is 6.6 px, a gap 4 px, an anchor pad 3 px. */
         const declared = (
             entries: [string, number][],
             over: Partial<LensShapesInput> = {},
@@ -381,61 +368,193 @@ describe("lensShapes", () => {
                 xanchor: "center",
                 yanchor: "bottom",
             });
+            expect(shape.label).not.toHaveProperty("padding");
+            expect(shape.label?.font).toMatchObject({ size: 11 });
             expect(shape.label?.font?.color).toBe(shape.line?.color);
         });
 
-        it("staggers labels that would touch on two rows, rising above the plot", () => {
+        it("raises the second of two touching ticks to the second row, the first stepping aside from its stroke", () => {
             const shapes = declared([
                 ["Fe", 10],
                 ["Hg", 10.4],
                 ["Pb", 14],
             ]);
-            expect(shapes.every((s) => s.label !== undefined)).toBe(true);
+            expect(texts(shapes)).toEqual(["Fe", "Hg", "Pb"]);
             expect(shapes.map((s) => s.y1)).toEqual([0, 14, 0]);
             expect(shapes.map((s) => s.y0)).toEqual([-14, -14, -14]);
+            expect(anchors(shapes)).toEqual(["right", "center", "center"]);
         });
 
-        it("leaves a label out when both rows are taken, the tick stays", () => {
+        it("leaves a label out when it fits on no row, the tick stays", () => {
             const shapes = declared([
                 ["Fe", 10],
                 ["Hg", 10.2],
                 ["Pb", 10.4],
+                ["Cu", 10.6],
             ]);
-            expect(shapes).toHaveLength(3);
-            expect(shapes[2].label).toBeUndefined();
+            expect(shapes).toHaveLength(4);
+            expect(texts(shapes)).toEqual(["Fe", "Hg", "Pb"]);
+            expect(shapes[3]).toMatchObject({ y0: -14, y1: 0 });
         });
 
-        it("lifts the label alone when the caller says so, the stroke staying in the plot", () => {
-            const shapes = declared([["Fe", 10]], {
-                declaredStrip: { rows: 1, lift: 16 },
-            });
-            expect(shapes[0].y1).toBe(0);
-            expect(shapes[0].y0).toBe(-14);
-            expect(shapes[0].label).toMatchObject({ padding: 16 });
-            expect(declared([["Fe", 10]])[0].label).not.toHaveProperty(
-                "padding",
+        it("keeps one row when the caller asks for one, as small multiples do", () => {
+            const shapes = declared(
+                [
+                    ["Fe", 10],
+                    ["Hg", 10.4],
+                ],
+                { bandRows: 1 },
             );
+            expect(texts(shapes)).toEqual(["Fe"]);
+            expect(shapes.map((s) => s.y1)).toEqual([0, 0]);
         });
 
-        it("keeps the level dashes", () => {
+        it("places the majors before the minors and the traces", () => {
             const shapes = lensShapes(
                 input({
+                    plotWidth: 200,
+                    bandRows: 1,
                     panels: [
                         panel("", {
+                            extent: [0, 40],
                             declared: [
-                                { symbol: "A", energy: 1, rank: 0 },
-                                { symbol: "B", energy: 5, rank: 1 },
-                                { symbol: "C", energy: 9, rank: 2 },
+                                { symbol: "Ca", energy: 10, rank: 2 },
+                                { symbol: "Fe", energy: 10.4, rank: 0 },
                             ],
                         }),
                     ],
                 }),
             );
-            expect(shapes.map((s) => s.line?.dash)).toEqual([
-                "solid",
-                "dash",
-                "dot",
+            expect(texts(shapes)).toEqual(["Fe"]);
+        });
+
+        it("anchors a label on the plot edge it would cross", () => {
+            const shapes = declared([
+                ["Pb", 0.2],
+                ["Hg", 39.8],
             ]);
+            expect(anchors(shapes)).toEqual(["left", "right"]);
+        });
+
+        it("gives a declared tick on its element's principal line that line's one label, the symbol when the line's does not fit", () => {
+            const focus = [
+                {
+                    hue: 0,
+                    lines: [{ energy: 6.4, label: "Fe Kα1", intensity: 1 }],
+                },
+            ];
+            const wide = declared([["Fe", 6.4]], { focus });
+            expect(wide).toHaveLength(2);
+            expect(wide[0].label).toBeUndefined();
+            expect(wide[1].label).toMatchObject({
+                text: "Fe Kα1",
+                xanchor: "center",
+            });
+            expect(wide[1].y0).toBe(-14);
+            const narrow = declared([["Fe", 6.4]], { focus, plotWidth: 30 });
+            expect(texts(narrow)).toEqual(["Fe"]);
+            expect(narrow[1].label?.xanchor).toBe("left");
+        });
+
+        it("lays a line's label on the line itself on the first row, and on a stub rising to the row above", () => {
+            const shapes = declared([], {
+                focus: [
+                    {
+                        hue: 0,
+                        lines: [
+                            { energy: 10, label: "Pb Lα1", intensity: 1 },
+                            { energy: 10.4, label: "Hg Lα1", intensity: 1 },
+                        ],
+                    },
+                ],
+            });
+            expect(shapes).toHaveLength(3);
+            expect(shapes[0]).toMatchObject({ y0: 0, y1: 1, layer: "below" });
+            expect(shapes[0].label).toMatchObject({
+                text: "Pb Lα1",
+                xanchor: "right",
+                textangle: 0,
+            });
+            expect(shapes[1].label).toBeUndefined();
+            expect(shapes[2]).toMatchObject({
+                ysizemode: "pixel",
+                yanchor: 1,
+                y0: 0,
+                y1: 14,
+                layer: "above",
+            });
+            expect(shapes[2].label).toMatchObject({
+                text: "Hg Lα1",
+                xanchor: "center",
+            });
+            expect(shapes[2].line).toEqual(shapes[1].line);
+        });
+
+        it("falls back to the line alone when the full label fits nowhere, then to no label, the line staying", () => {
+            const shapes = declared([], {
+                plotWidth: 100,
+                focus: [
+                    {
+                        hue: 0,
+                        lines: [
+                            { energy: 10, label: "Pb Lα1", intensity: 1 },
+                            { energy: 10.4, label: "Hg Lα1", intensity: 1 },
+                            { energy: 10.8, label: "Fe Kα1", intensity: 1 },
+                            { energy: 11.2, label: "Cu Lβ1", intensity: 1 },
+                        ],
+                    },
+                ],
+            });
+            expect(shapes.filter((s) => s.y1 === 1)).toHaveLength(4);
+            expect(texts(shapes)).toEqual(["Pb Lα1", "Hg Lα1", "Kα1"]);
+            expect(labelled(shapes).map((s) => s.label?.xanchor)).toEqual([
+                "left",
+                "center",
+                "right",
+            ]);
+        });
+
+        it("places the solid lines before the dashed ones, the dashed by intensity", () => {
+            const shapes = declared([], {
+                bandRows: 1,
+                focus: [
+                    {
+                        hue: 0,
+                        lines: [
+                            { energy: 10, label: "Pb Lβ2", intensity: 0.1 },
+                            { energy: 10.4, label: "Pb Lα1", intensity: 1 },
+                            { energy: 20, label: "Hg Lγ1", intensity: 0.1 },
+                            { energy: 20.4, label: "Hg Lβ1", intensity: 0.4 },
+                        ],
+                    },
+                ],
+            });
+            expect(texts(shapes)).toEqual(["Pb Lα1", "Hg Lβ1"]);
+        });
+
+        it("places the identified marker's label first, horizontal, a line label never over it", () => {
+            const shapes = declared([], {
+                marker: { energy: 10, label: "⌖ 10.00 keV" },
+                focus: [
+                    {
+                        hue: 0,
+                        lines: [
+                            { energy: 10.2, label: "Pb Lα1", intensity: 1 },
+                        ],
+                    },
+                ],
+            });
+            const marker = shapes.at(-1);
+            expect(marker?.label).toMatchObject({
+                text: "⌖ 10.00 keV",
+                textangle: 0,
+                xanchor: "left",
+                yanchor: "bottom",
+                padding: 3,
+            });
+            const stub = shapes.find((s) => s.ysizemode === "pixel");
+            expect(stub).toMatchObject({ y0: 0, y1: 14 });
+            expect(stub?.label?.text).toBe("Pb Lα1");
         });
     });
 
@@ -478,7 +597,7 @@ describe("lensShapes", () => {
                     panels: [
                         panel("", {
                             instrument: [
-                                { label: "somme", energy: 4 },
+                                { label: "Σ", energy: 4 },
                                 { label: "éch.", energy: 8 },
                             ],
                         }),
@@ -492,16 +611,25 @@ describe("lensShapes", () => {
             ]);
         });
 
-        const ticks = (labels: [string, number][], plotWidth = 200) =>
+        /** A 400 px plot over 0–40 keV: 10 px per keV, two instrument rows. */
+        const ticks = (
+            labels: [
+                string,
+                number,
+                LensPanel["instrument"][number]["kind"]?,
+            ][],
+            plotWidth = 400,
+        ) =>
             lensShapes(
                 input({
                     plotWidth,
                     panels: [
                         panel("", {
                             extent: [0, 40],
-                            instrument: labels.map(([label, energy]) => ({
+                            instrument: labels.map(([label, energy, kind]) => ({
                                 label,
                                 energy,
+                                ...(kind ? { kind } : {}),
                             })),
                         }),
                     ],
@@ -509,56 +637,147 @@ describe("lensShapes", () => {
             );
 
         it("keeps a label alone on the first row, horizontal above its tick", () => {
-            const [shape] = ticks([["somme", 10]]);
+            const [shape] = ticks([["Σ", 10]]);
             expect(shape).toMatchObject({ ysizemode: "pixel", y1: 14 });
             expect(shape.label).toMatchObject({
-                text: "somme",
+                text: "Σ",
                 textangle: 0,
                 xanchor: "center",
                 yanchor: "bottom",
             });
         });
 
-        it("staggers labels that would touch on taller ticks", () => {
+        it("staggers labels that would touch on two rows of taller ticks, anchoring aside where that keeps a stroke off a label", () => {
             const shapes = ticks([
                 ["éch.", 10],
-                ["somme", 11],
-                ["40 kV", 12],
+                ["somme", 10.5],
+                ["40 kV", 11],
             ]);
-            expect(shapes.map((s) => s.y1)).toEqual([14, 28, 42]);
-            expect(shapes.every((s) => s.label !== undefined)).toBe(true);
+            expect(shapes.map((s) => s.y1)).toEqual([14, 28, 14]);
+            expect(texts(shapes)).toEqual(["éch.", "somme", "40 kV"]);
+            expect(anchors(shapes)).toEqual(["right", "center", "left"]);
         });
 
-        it("leaves a label out when it fits on no row, the tick stays", () => {
-            const shapes = ticks([
-                ["a", 10],
-                ["b", 10.1],
-                ["c", 10.2],
-                ["d", 10.3],
-            ]);
-            expect(shapes).toHaveLength(4);
-            expect(shapes.filter((s) => s.label).length).toBe(3);
-            expect(shapes[3].label).toBeUndefined();
-            expect(shapes[3].y1).toBe(14);
-        });
-
-        it("labels one of several close ticks that carry the same text", () => {
-            const shapes = ticks([
-                ["somme", 10],
-                ["somme", 10.2],
-                ["somme", 10.4],
-            ]);
-            expect(shapes.filter((s) => s.label).length).toBe(1);
-            expect(shapes.map((s) => s.y1)).toEqual([14, 14, 14]);
-        });
-
-        it("uses more rows as the plot gets narrower", () => {
-            const labels: [string, number][] = [
-                ["somme", 10],
-                ["éch.", 12],
+        it("places the tube's lines before the voltage, the escapes and the sums, whatever their order on the axis", () => {
+            const crowd: [
+                string,
+                number,
+                LensPanel["instrument"][number]["kind"],
+            ][] = [
+                ["Σ", 10, "sum"],
+                ["éch.", 10.3, "escape"],
+                ["40 kV", 10.6, "duane-hunt"],
+                ["Ag Kα1", 10.9, "rayleigh"],
             ];
-            expect(ticks(labels, 1000).map((s) => s.y1)).toEqual([14, 14]);
-            expect(ticks(labels, 150).map((s) => s.y1)).toEqual([14, 28]);
+            const onOneRow = (count: number) =>
+                texts(ticks(crowd.slice(0, count), 240));
+            expect(onOneRow(4)).toEqual(["Ag Kα1"]);
+            expect(onOneRow(3)).toEqual(["40 kV"]);
+            expect(onOneRow(2)).toEqual(["éch."]);
+            expect(onOneRow(1)).toEqual(["Σ"]);
+        });
+
+        it("keeps one row of labels on a panel narrower than 250 px", () => {
+            const pair: [string, number][] = [
+                ["éch.", 10],
+                ["somme", 10.5],
+            ];
+            expect(ticks(pair, 260).map((s) => s.y1)).toEqual([14, 28]);
+            expect(ticks(pair, 240).map((s) => s.y1)).toEqual([14, 14]);
+            expect(texts(ticks(pair, 240))).toEqual(["éch."]);
+        });
+
+        it("does not place the same word again within 60 px, the tick staying", () => {
+            const near = ticks([
+                ["somme", 10],
+                ["somme", 15],
+            ]);
+            expect(texts(near)).toEqual(["somme"]);
+            expect(near.map((s) => s.y1)).toEqual([14, 14]);
+            const far = ticks([
+                ["somme", 10],
+                ["somme", 17],
+            ]);
+            expect(texts(far)).toEqual(["somme", "somme"]);
+        });
+
+        it("anchors a voltage at the right edge on that edge, whole", () => {
+            const [shape] = ticks([["40 kV", 39.9, "duane-hunt"]]);
+            expect(shape.label).toMatchObject({
+                text: "40 kV",
+                xanchor: "right",
+            });
+        });
+    });
+
+    describe("the Compton band", () => {
+        const drawn = (instrument: LensPanel["instrument"] = []) =>
+            lensShapes(
+                input({
+                    plotWidth: 400,
+                    panels: [
+                        panel("", {
+                            extent: [0, 40],
+                            instrument,
+                            bands: [
+                                {
+                                    label: "Compton",
+                                    from: 5,
+                                    to: 6,
+                                    colour: "#f00",
+                                },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+
+        it("labels the band at its foot, in muted ink, on the first instrument row", () => {
+            const [rect] = drawn();
+            expect(rect.type).toBe("rect");
+            expect(rect.fillcolor).toBe("#f00");
+            expect(rect.label).toMatchObject({
+                text: "Compton",
+                textposition: "bottom center",
+                textangle: 0,
+                xanchor: "center",
+                yanchor: "bottom",
+                padding: 17,
+            });
+            expect(rect.label?.font?.color).toBe("#666");
+        });
+
+        it("shares the instrument rows with the ticks, before the escapes", () => {
+            const shapes = drawn([
+                { label: "éch.", energy: 5.6, kind: "escape" },
+            ]);
+            const [tick, rect] = shapes;
+            expect(tick.y1).toBe(28);
+            expect(tick.label?.text).toBe("éch.");
+            expect(rect.label).toMatchObject({ xanchor: "left", padding: 17 });
+        });
+
+        it("draws the band without its label outside the range shown", () => {
+            const shapes = lensShapes(
+                input({
+                    panels: [
+                        panel("", {
+                            extent: [0, 40],
+                            view: { range: [20, 30] },
+                            bands: [
+                                {
+                                    label: "Compton",
+                                    from: 5,
+                                    to: 6,
+                                    colour: "#f00",
+                                },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(shapes).toHaveLength(1);
+            expect(shapes[0].label).toBeUndefined();
         });
     });
 
@@ -584,10 +803,10 @@ describe("lensShapes", () => {
 
         it("spreads the labels over the energy range shown, not over the data extent", () => {
             const whole = ticks().filter((s) => (s.x0 as number) < 5);
-            expect(whole.map((s) => s.y1)).not.toEqual([14, 14, 14]);
+            expect(labelled(whole).length).toBeLessThan(3);
             const zoomed = ticks({ range: [1, 5] });
             expect(zoomed.map((s) => s.y1)).toEqual([14, 14, 14]);
-            expect(zoomed.every((s) => s.label !== undefined)).toBe(true);
+            expect(labelled(zoomed)).toHaveLength(3);
         });
 
         it("leaves out the marks outside the range shown", () => {
@@ -602,8 +821,45 @@ describe("lensShapes", () => {
         it("uses the width of the panel itself, a grid cell being narrower than the chart", () => {
             const wide = ticks({ range: [1, 5], width: 640 });
             const narrow = ticks({ range: [1, 5], width: 60 });
-            expect(wide.map((s) => s.y1)).toEqual([14, 14, 14]);
-            expect(narrow.map((s) => s.y1)).not.toEqual([14, 14, 14]);
+            expect(labelled(wide)).toHaveLength(3);
+            expect(labelled(narrow).length).toBeLessThan(3);
+        });
+
+        it("lays the labels out from the right on a reversed range", () => {
+            const edge = (range: [number, number]) =>
+                lensShapes(
+                    input({
+                        plotWidth: 640,
+                        panels: [
+                            panel("", {
+                                extent: [0, 40],
+                                view: { range },
+                                instrument: [{ label: "40 kV", energy: 1.05 }],
+                            }),
+                        ],
+                    }),
+                )[0].label?.xanchor;
+            expect(edge([1, 5])).toBe("left");
+            expect(edge([5, 1])).toBe("right");
+        });
+
+        it("maps the pixels on the range shown, padded past the data by an autorange, and keeps the marks inside the data", () => {
+            const shapes = lensShapes(
+                input({
+                    panels: [
+                        panel("", {
+                            extent: [0, 40],
+                            view: { range: [0, 50], width: 500 },
+                            instrument: [
+                                { label: "40 kV", energy: 40 },
+                                { label: "45 kV", energy: 45 },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(shapes.map((s) => s.x0)).toEqual([40]);
+            expect(shapes[0].label?.xanchor).toBe("center");
         });
 
         it("falls back to the data extent when the range is empty or outside it", () => {
@@ -611,30 +867,190 @@ describe("lensShapes", () => {
                 ticks().map((s) => s.x0),
             );
         });
+
+        it("leaves out the lines outside the range shown", () => {
+            const shapes = lensShapes(
+                input({
+                    panels: [panel("", { view: { range: [1, 5] } })],
+                    focus: [
+                        {
+                            hue: 0,
+                            lines: [
+                                { energy: 2, label: "a", intensity: 1 },
+                                { energy: 10, label: "b", intensity: 1 },
+                            ],
+                        },
+                    ],
+                }),
+            );
+            expect(shapes.map((s) => s.x0)).toEqual([2]);
+        });
     });
 
-    it("puts a band's label above the band, horizontal", () => {
-        const shapes = lensShapes(
-            input({
-                panels: [
-                    panel("", {
-                        bands: [
+    describe("the cap", () => {
+        /** A plot too narrow for any label: one shape per mark. */
+        const PLOT_PX = 2;
+
+        it("sheds the weakest lines of the biggest family first, keeps every instrument tick and counts what it left out", () => {
+            const focus = Array.from({ length: 300 }, (_, i) => ({
+                energy: 1 + i * 0.05,
+                label: `F${i}`,
+                intensity: i / 300,
+            }));
+            const lens = Array.from({ length: 30 }, (_, i) => ({
+                energy: 1 + i * 0.1,
+                label: `L${i}`,
+                intensity: 1,
+            }));
+            const { shapes, dropped } = lensDrawing(
+                input({
+                    plotWidth: PLOT_PX,
+                    panels: [
+                        panel("", {
+                            declared: Array.from({ length: 5 }, (_, i) => ({
+                                symbol: `D${i}`,
+                                energy: 2 + i,
+                                rank: 2,
+                            })),
+                            instrument: Array.from({ length: 10 }, (_, i) => ({
+                                label: "Σ",
+                                energy: 1 + i,
+                            })),
+                            bands: [
+                                {
+                                    label: "Compton",
+                                    from: 1,
+                                    to: 2,
+                                    colour: "#f00",
+                                },
+                            ],
+                        }),
+                    ],
+                    focus: [{ hue: 0, lines: focus }],
+                    elements: [{ symbol: "Pb", lines: lens }],
+                    overlaps: [{ from: 3, to: 4, hue: 1, symbol: "Fe" }],
+                }),
+            );
+            expect(shapes).toHaveLength(MAX_LENS_SHAPES);
+            expect(dropped).toBe(28);
+            const focusLeft = shapes.filter((s) => s.line?.color === "#a00");
+            expect(focusLeft).toHaveLength(272);
+            expect(
+                Math.min(...focusLeft.map((s) => s.x0 as number)),
+            ).toBeCloseTo(1 + 28 * 0.05, 6);
+            expect(
+                shapes.filter((s) => s.line?.color === "#c2410c" && s.y1 === 1),
+            ).toHaveLength(30);
+            expect(shapes.filter((s) => s.yanchor === 0)).toHaveLength(10);
+            expect(shapes.filter((s) => s.yanchor === 1)).toHaveLength(5);
+            expect(shapes.filter((s) => s.type === "rect")).toHaveLength(2);
+        });
+
+        it("never empties a family and sheds the dashed lines before the solid ones", () => {
+            const focus = [
+                ...Array.from({ length: 60 }, (_, i) => ({
+                    energy: 1 + i * 0.1,
+                    label: `S${i}`,
+                    intensity: 1,
+                })),
+                ...Array.from({ length: 270 }, (_, i) => ({
+                    energy: 8 + i * 0.04,
+                    label: `W${i}`,
+                    intensity: 0.1,
+                })),
+            ];
+            const { shapes, dropped } = lensDrawing(
+                input({
+                    plotWidth: PLOT_PX,
+                    focus: [{ hue: 0, lines: focus }],
+                    elements: [
+                        {
+                            symbol: "Pb",
+                            lines: [
+                                { energy: 19, label: "Pb", intensity: 0.1 },
+                            ],
+                        },
+                    ],
+                }),
+            );
+            expect(dropped).toBe(11);
+            expect(shapes).toHaveLength(MAX_LENS_SHAPES);
+            expect(shapes.some((s) => s.x0 === 19)).toBe(true);
+            expect(shapes.filter((s) => s.line?.dash === "solid")).toHaveLength(
+                60,
+            );
+        });
+
+        it("sheds evenly across panels, never leaving a panel without the declared ticks the others keep", () => {
+            const suffixes = ["", "2", "3", "4", "5", "6", "7", "8", "9"];
+            const { shapes, dropped } = lensDrawing(
+                input({
+                    plotWidth: 300,
+                    bandRows: 1,
+                    panels: suffixes.map((suffix) =>
+                        panel(suffix, {
+                            declared: Array.from({ length: 40 }, (_, i) => ({
+                                symbol: `D${i}`,
+                                energy: 1 + i * 0.4,
+                                rank: 0,
+                            })),
+                        }),
+                    ),
+                }),
+            );
+            expect(dropped).toBe(40);
+            const counts = suffixes.map(
+                (suffix) =>
+                    shapes.filter((s) => s.xref === `x${suffix}`).length,
+            );
+            expect(Math.min(...counts)).toBeGreaterThan(0);
+            expect(Math.max(...counts) - Math.min(...counts)).toBeLessThan(2);
+        });
+
+        it("sheds the same lines from every panel, so a line shown in one panel is shown in the others", () => {
+            const suffixes = ["", "2", "3", "4", "5", "6", "7", "8", "9"];
+            const lines = Array.from({ length: 40 }, (_, i) => ({
+                energy: 1 + i * 0.4,
+                label: `L${i}`,
+                intensity: 1,
+            }));
+            const { shapes } = lensDrawing(
+                input({
+                    plotWidth: PLOT_PX,
+                    panels: suffixes.map((suffix) => panel(suffix)),
+                    elements: [{ symbol: "Pb", lines }],
+                }),
+            );
+            const energies = suffixes.map((suffix) =>
+                shapes
+                    .filter((s) => s.xref === `x${suffix}`)
+                    .map((s) => s.x0 as number),
+            );
+            const counts = energies.map((list) => list.length);
+            expect(Math.max(...counts) - Math.min(...counts)).toBeLessThan(2);
+            const shortest = Math.min(...counts);
+            for (const list of energies) {
+                expect(list.slice(0, shortest)).toEqual(
+                    energies[0].slice(0, shortest),
+                );
+            }
+        });
+
+        it("reports nothing left out under the cap", () => {
+            expect(
+                lensDrawing(
+                    input({
+                        focus: [
                             {
-                                label: "Compton",
-                                from: 5,
-                                to: 6,
-                                colour: "#f00",
+                                hue: 0,
+                                lines: [
+                                    { energy: 5, label: "a", intensity: 1 },
+                                ],
                             },
                         ],
                     }),
-                ],
-            }),
-        );
-        expect(shapes[0].label).toMatchObject({
-            text: "Compton",
-            textposition: "top center",
-            textangle: 0,
-            yanchor: "bottom",
+                ).dropped,
+            ).toBe(0);
         });
     });
 });

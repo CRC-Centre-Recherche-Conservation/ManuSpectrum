@@ -35,6 +35,7 @@ import {
     fileNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { loadLineTable } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/line-table.ts";
+import { panelWidths } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 
 import type { DOMWrapper, VueWrapper } from "@vue/test-utils";
 import type {
@@ -45,6 +46,7 @@ import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/comp
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
+import type { Figure } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 
 vi.mock("@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts", async () =>
     (
@@ -1863,10 +1865,11 @@ describe("XyWorkshop XRF lens", () => {
         await flushPromises();
     }
 
+    /** The layout part of every `Plotly.update` that carried shapes, in order. */
     function shapeCalls(): Record<string, unknown>[] {
-        return plotly.relayout.mock.calls
-            .map(([, update]) => update)
-            .filter((update) => "shapes" in update);
+        return plotly.update.mock.calls
+            .map(([, , layout]) => layout)
+            .filter((layout) => "shapes" in layout);
     }
 
     beforeEach(() => {
@@ -1880,17 +1883,21 @@ describe("XyWorkshop XRF lens", () => {
         reloadXrfSettings();
     });
 
-    it("draws an element pin as one relayout of the shapes alone, no redraw", async () => {
+    it("draws an element pin as one update of the shapes alone, no trace change, no relayout, no redraw", async () => {
         await mountWorkshop([curve(0, 1), curve(1, 2)]);
         await settle();
         plotly.react.mockClear();
         plotly.relayout.mockClear();
+        plotly.update.mockClear();
         pinElement("Pb");
         await nextFrame();
         await flushPromises();
         expect(plotly.react).not.toHaveBeenCalled();
-        expect(plotly.relayout).toHaveBeenCalledTimes(1);
-        const [, update] = plotly.relayout.mock.calls[0];
+        // A relayout of the whole `shapes` array leaves the X axis with stale shape indices (XyWorkshop `updateShapes`).
+        expect(plotly.relayout).not.toHaveBeenCalled();
+        expect(plotly.update).toHaveBeenCalledTimes(1);
+        const [, traces, update] = plotly.update.mock.calls[0];
+        expect(traces).toEqual({});
         expect(Object.keys(update)).toEqual(["shapes"]);
         const shapes = update.shapes as {
             x0: number;
@@ -1918,7 +1925,7 @@ describe("XyWorkshop XRF lens", () => {
         );
     });
 
-    it("makes at most one shapes relayout and never a redraw for a pin of an analysis, whose hidden curves drop their instrument ticks", async () => {
+    it("makes at most one shapes update and never a redraw for a pin of an analysis, whose hidden curves drop their instrument ticks", async () => {
         const peakAt = (centre: number) =>
             series(
                 Array.from({ length: 2001 }, (_, i) => i / 100),
@@ -1936,7 +1943,7 @@ describe("XyWorkshop XRF lens", () => {
         answer(2, jsonResponse(peakAt(9)));
         await mountWorkshop([curve(0, 1), curve(1, 2)]);
         await settle();
-        plotly.relayout.mockClear();
+        plotly.update.mockClear();
         plotly.react.mockClear();
         fake.selection.value = [analysisNode(analysisHit(1).id)];
         fake.slots.value = [analysisNode(analysisHit(1).id)];
@@ -1955,10 +1962,55 @@ describe("XyWorkshop XRF lens", () => {
         expect(shapes.some((s) => Math.abs(s.x0 - 4.66) < 0.02)).toBe(true);
     });
 
+    it("draws small multiples with the lens labels already laid out for each panel, so no shapes update follows", async () => {
+        const wide = series(
+            Array.from({ length: 151 }, (_, i) => 1 + i / 10),
+            Array.from({ length: 151 }, () => 10),
+        );
+        answer(1, jsonResponse(wide));
+        answer(2, jsonResponse(wide));
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        await settle();
+        const element = view.find(".chart").element as HTMLElement;
+        Object.defineProperty(element, "clientWidth", {
+            value: 500,
+            configurable: true,
+        });
+        Object.defineProperty(element, "_fullLayout", {
+            configurable: true,
+            get: () => {
+                const layout = plotly.react.mock.calls.at(-1)?.[2];
+                const widths = panelWidths(
+                    { layout } as unknown as Figure,
+                    element.clientWidth,
+                );
+                return Object.fromEntries(
+                    Object.entries(widths).map(([suffix, width]) => [
+                        `xaxis${suffix}`,
+                        { range: [1, 16], autorange: true, _length: width },
+                    ]),
+                );
+            },
+        });
+        pinElement("Pb");
+        await nextFrame();
+        await flushPromises();
+        plotly.update.mockClear();
+        await view.find('[data-layout="multiples"]').trigger("click");
+        await flushPromises();
+        await nextFrame();
+        await flushPromises();
+        const drawnShapes = lastDrawing().layout as unknown as {
+            shapes?: unknown[];
+        };
+        expect(drawnShapes.shapes?.length ?? 0).toBeGreaterThan(0);
+        expect(shapeCalls()).toEqual([]);
+    });
+
     it("draws an element added to the lens without touching the focus", async () => {
         const view = await mountWorkshop([curve(0, 1)]);
         await settle();
-        plotly.relayout.mockClear();
+        plotly.update.mockClear();
         const input = view.find(".xrf-strip input");
         await input.setValue("Pb");
         await input.trigger("keydown", { key: "Enter" });
@@ -2049,6 +2101,7 @@ describe("XyWorkshop XRF lens", () => {
         expect(plotly.relayout).toHaveBeenCalledWith(expect.any(HTMLElement), {
             "xaxis.range": [5, 15],
             "yaxis.autorange": true,
+            "yaxis.tickmode": "auto",
         });
         expect(
             view.find('[data-range="5-15"]').attributes("aria-pressed"),
@@ -2378,6 +2431,87 @@ describe("XyWorkshop XRF lens", () => {
             expect(plotly.relayout).toHaveBeenCalledWith(chart, {
                 "yaxis.range": [0, 5250],
             });
+        });
+
+        it("gives a log counts axis fitted again the ticks of its new range", async () => {
+            const view = await mountTwo();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenLastCalledWith(
+                expect.any(HTMLElement),
+                expect.objectContaining({ "yaxis.tickmode": "auto" }),
+            );
+            const narrow = plotly.relayout.mock.calls.at(-1)![1] as Record<
+                string,
+                number[]
+            >;
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: {
+                        range: narrow["yaxis.range"],
+                        autorange: false,
+                        _length: 300,
+                    },
+                },
+            });
+            plotly.relayout.mockClear();
+            await eyeButton(view, curveId(1, 2)).trigger("click");
+            await nextFrame();
+            await flushPromises();
+            expect(plotly.relayout).toHaveBeenCalledWith(
+                chart,
+                expect.objectContaining({
+                    "yaxis.tickmode": "linear",
+                    "yaxis.dtick": 1,
+                }),
+            );
+        });
+
+        it("keeps the ticks of a fitted log counts axis through a redraw for a new size", async () => {
+            answer(1, jsonResponse(LOW));
+            const resize = ref(0);
+            const view = await mountWorkshop([curve(0, 1)], resize);
+            await settle();
+            await view.find('[data-scale="log"]').trigger("click");
+            await flushPromises();
+            await view.find('[data-range="5-15"]').trigger("click");
+            await flushPromises();
+            const fitted = plotly.relayout.mock.calls.at(-1)![1] as Record<
+                string,
+                unknown
+            >;
+            expect(fitted).toMatchObject({ "yaxis.tickmode": "auto" });
+            const chart = view.find(".chart").element;
+            Object.assign(chart, {
+                _fullLayout: {
+                    xaxis: { range: [5, 15], autorange: false, _length: 400 },
+                    yaxis: {
+                        range: fitted["yaxis.range"],
+                        autorange: false,
+                        _length: 300,
+                    },
+                },
+            });
+            Object.defineProperty(chart, "clientWidth", { value: 640 });
+            Object.defineProperty(chart, "clientHeight", { value: 360 });
+            plotly.react.mockClear();
+            plotly.relayout.mockClear();
+            resize.value += 1;
+            await flushPromises();
+            expect(plotly.react).toHaveBeenCalledTimes(1);
+            expect(plotly.relayout).toHaveBeenCalledWith(
+                chart,
+                expect.objectContaining({
+                    "yaxis.range": fitted["yaxis.range"],
+                    "yaxis.tickmode": "auto",
+                }),
+            );
         });
 
         it("leaves the counts axis alone when a curve changes under the full range", async () => {
@@ -3101,11 +3235,11 @@ describe("XyWorkshop XRF lens", () => {
             );
         });
 
-        it("marks the identified energy with one dashed line by a shapes relayout alone, moves it with the arrows and removes it on close", async () => {
+        it("marks the identified energy with one dashed line by a shapes update alone, moves it with the arrows and removes it on close", async () => {
             const view = await mountPeak();
             await toggleButton(view).trigger("click");
             plotly.react.mockClear();
-            plotly.relayout.mockClear();
+            plotly.update.mockClear();
             clickAt(view, 2.33);
             await nextFrame();
             await flushPromises();

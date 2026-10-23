@@ -49,6 +49,7 @@ import {
     exportFigure,
     hoverTemplatesFor,
     hoverValueFor,
+    logTickUpdate,
     multiplesFigure,
     paintOf,
     panelWidths,
@@ -244,15 +245,16 @@ const EMPTY_FILES_FOLDED = 2;
  * (`--xy-chart-floor`), and is size-contained so that a drawing never holds
  * its box open; under 40rem the legend below it scrolls past
  * `--xy-legend-stacked-max`. Every drawing names its width and height to
- * Plotly (the box's, or the height small multiples hold open): `react`
- * otherwise keeps the size of the drawing before (plotly.js-cartesian-dist
- * 4.0.0 `supplyDefaults`). The chart is drawn again for its size (labels,
- * panels) when its box or its window's changes, in the ResizeObserver
- * callback, so that the frame painted after a resize shows the drawing for
- * it; `WINDOW_RESIZE_KEY` asks again once the window settles. The table
- * layout and the unmount purge it,
- * and end a preview the chart or its legend started; a drawing that ends
- * after the unmount is purged too.
+ * Plotly (the box's, or the height small multiples hold open), as `react`
+ * keeps the previous drawing's size for any it is not given
+ * (plotly.js-cartesian-dist 4.0.0 `supplyDefaults`). The chart is drawn
+ * again for its size (labels, panels) when its box or its window's
+ * changes, in the ResizeObserver callback, so that the frame painted after
+ * a resize shows the drawing for it; `WINDOW_RESIZE_KEY` asks again once
+ * the window settles. A drawing carries the lens shapes laid out for the
+ * panels it draws (`plannedViews`). The table layout and the unmount purge
+ * it, and end a preview the chart or its legend started; a drawing that
+ * ends after the unmount is purged too.
  */
 const props = defineProps<{
     curves: readonly FileLine[];
@@ -293,7 +295,7 @@ let shownOpacities: number[] = [];
 let shownHoverMode: "x unified" | "closest" = "x unified";
 let drawing = false;
 let restyleFrame: number | null = null;
-/** The lens shapes the chart shows, serialised (`shapesKey`); a relayout is made only when they differ. */
+/** The lens shapes the chart shows, serialised (`shapesKey`); an update is made only when they differ. */
 let shownShapesKey = "";
 let shapesFrame: number | null = null;
 /**
@@ -367,6 +369,8 @@ const shownEnergy = ref<[number, number] | null>(null);
 const identifying = ref(false);
 /** The peak being identified: the curve it was read on (`curveId`) and its energy (keV). */
 const identified = ref<{ id: string; energy: number } | null>(null);
+/** Whether the drawn chart's lens left marks out at its cap (`lensDrawing`). */
+const marksLeftOut = ref(false);
 /** The cue shown above the chart while the mode is on and no peak is chosen; also announced once when the mode turns on. */
 const identifyHint = computed(() =>
     $gettext(
@@ -562,7 +566,6 @@ const lensCurves = computed<LensCurve[]>(() =>
 const lensLabels = computed<LensLabels>(() => ({
     compton: $gettext("Compton"),
     escape: $gettext("esc"),
-    sum: $gettext("sum"),
     voltage: (kV) =>
         interpolate(
             $gettext("%{kV} kV"),
@@ -1008,6 +1011,9 @@ function figureInput(
         height,
         yLog: logShown.value,
         lens: lens.active.value,
+        instrumentBand: lens.model.value.panels.some(
+            (panel) => panel.ticks.length > 0 || panel.bands.length > 0,
+        ),
     };
 }
 
@@ -1043,6 +1049,48 @@ function liveViews(): PanelViews | undefined {
     return views;
 }
 
+/**
+ * What each panel of `figure` shows once drawn `width` px wide: its plot
+ * width (`panelWidths`) and the energy range `kept` puts back, the data
+ * extent when it puts none.
+ */
+function plannedViews(
+    figure: Figure,
+    width: number,
+    kept: Record<string, unknown> | null,
+): PanelViews {
+    const views: Record<string, NonNullable<PanelViews[string]>> = {};
+    for (const [suffix, plot] of Object.entries(panelWidths(figure, width))) {
+        const range = kept?.[`xaxis${suffix}.range`] as
+            | [number, number]
+            | undefined;
+        views[suffix] = {
+            width: plot,
+            ...(range ? { range: [range[0], range[1]] } : {}),
+        };
+    }
+    return views;
+}
+
+/** The ticks (`logTickUpdate`) of each log axis of `figure` whose range `kept` puts back. */
+function keptLogTicks(
+    figure: Figure,
+    kept: Record<string, unknown>,
+): Record<string, unknown> {
+    const layout = figure.layout as Record<string, { type?: string }>;
+    const ticks: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(kept)) {
+        const name = /^(yaxis\d*)\.range$/.exec(key)?.[1];
+        if (name && layout[name]?.type === "log") {
+            Object.assign(
+                ticks,
+                logTickUpdate(name, value as [number, number]),
+            );
+        }
+    }
+    return ticks;
+}
+
 interface ShapeOptions {
     /** Adds the dashed line at the energy being identified. */
     marker?: boolean;
@@ -1052,16 +1100,21 @@ interface ShapeOptions {
 
 /**
  * The lens shapes for `theme`; none outside an XRF window. Without `views`
- * the labels are laid out on the data extent and the chart's width.
+ * the labels are laid out on the data extent and the chart's width. The
+ * drawing with the marker is the chart's: whether it left marks out reaches
+ * the strip (`marksLeftOut`).
  */
 function lensShapesFor(
     theme: PlotTheme,
     { marker = true, views }: ShapeOptions = {},
 ): Partial<Shape>[] {
-    if (!lens.active.value) return [];
+    if (!lens.active.value) {
+        marksLeftOut.value = false;
+        return [];
+    }
     const width = chart.value?.clientWidth;
     const held = marker ? identification.value : null;
-    return lens.shapes(
+    const drawn = lens.drawing(
         theme,
         width ? width - PLOT_MARGIN_X : undefined,
         held
@@ -1075,6 +1128,8 @@ function lensShapesFor(
             : undefined,
         views,
     );
+    if (marker) marksLeftOut.value = drawn.dropped > 0;
+    return drawn.shapes;
 }
 
 async function draw(): Promise<void> {
@@ -1097,15 +1152,21 @@ async function draw(): Promise<void> {
         }
         remeasure = false;
         if (chartHeight.value === null) naturalHeight = element.clientHeight;
-        const shapes = lensShapesFor(theme);
-        const input = {
-            ...figureInput(theme, element, naturalHeight),
-            ...(shapes.length > 0 ? { shapes } : {}),
-        };
+        const identity = figureIdentity();
+        const kept =
+            drawnOn === element && identity === drawnIdentity
+                ? keptRanges(element)
+                : null;
+        const input = figureInput(theme, element, naturalHeight);
         const figure =
             layout.value === "multiples"
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
+        if (kept) Object.assign(kept, keptLogTicks(figure, kept));
+        const shapes = lensShapesFor(theme, {
+            views: plannedViews(figure, element.clientWidth, kept),
+        });
+        if (shapes.length > 0) figure.layout.shapes = [...shapes];
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, effectiveStates.value);
@@ -1113,11 +1174,6 @@ async function draw(): Promise<void> {
             note.opacity = opacities[index];
         });
         if (identifying.value) figure.layout.dragmode = false;
-        const identity = figureIdentity();
-        const kept =
-            drawnOn === element && identity === drawnIdentity
-                ? keptRanges(element)
-                : null;
         lastFigure = figure;
         drawnOn = element;
         drawnTheme = theme;
@@ -1265,17 +1321,19 @@ function scheduleShapes(): void {
     if (shapesFrame !== null) return;
     shapesFrame = requestAnimationFrame(() => {
         shapesFrame = null;
-        void relayoutShapes();
+        void updateShapes();
     });
 }
 
 /**
  * Shows the lens shapes now due on the drawn chart by replacing the layout's
- * `shapes` (`editType: "arraydraw"` in plotly.js-cartesian-dist 4.0.0: the
- * shapes layer alone is drawn again, no calc, no trace), only when they are
- * not the ones shown. A focus change that moves no line makes no call.
+ * `shapes`, only when they are not the ones shown: a focus change that
+ * moves no line makes no call. Through `Plotly.update` with no trace
+ * change, never `Plotly.relayout`: a relayout of `shapes` alone skips
+ * `Plots.supplyDefaults`, the only pass that resets the axes'
+ * `_shapeIndices` (plotly.js-cartesian-dist 4.0.0 `src/plot_api/plot_api.js`).
  */
-async function relayoutShapes(): Promise<void> {
+async function updateShapes(): Promise<void> {
     const element = drawnOn;
     const theme = drawnTheme;
     if (drawing || !plotly || !element || !lastFigure || !theme) return;
@@ -1283,7 +1341,7 @@ async function relayoutShapes(): Promise<void> {
     const key = shapesKey(shapes);
     if (key === shownShapesKey) return;
     try {
-        await plotly.relayout(element, { shapes });
+        await plotly.update(element, {}, { shapes });
         shownShapesKey = key;
     } catch (error: unknown) {
         console.error("The XRF lines could not be drawn", error);
@@ -1361,8 +1419,9 @@ function hiddenKeyOf(states: readonly string[]): string {
 /**
  * Fits the counts axes again to the energy window shown when the curves
  * hidden changed (a curve that came back may be higher than the fit): a
- * relayout of the ranges that differ, none when the window is the full range
- * or when the reader set a counts range since the last fit (`yFitted`).
+ * relayout of the axes whose range differs, their ticks with them; none
+ * when the window is the full range or when the reader set a counts range
+ * since the last fit (`yFitted`).
  */
 async function refitCounts(element: HTMLElement): Promise<void> {
     if (!lens.active.value || rangeKey.value === "full" || !yFitted) return;
@@ -1370,18 +1429,32 @@ async function refitCounts(element: HTMLElement): Promise<void> {
     const energy = axes.xaxis;
     if (!energy || energy.autorange) return;
     const fit = yFit([energy.range[0], energy.range[1]]);
-    const changed = Object.entries(fit).filter(([key, value]) => {
-        const axis = axes[key.slice(0, key.indexOf("."))];
-        if (key.endsWith(".autorange")) return !axis?.autorange;
-        const [low, high] = value as number[];
-        return (
-            !axis ||
-            axis.autorange ||
-            Math.abs(axis.range[0] - low) > 1e-9 ||
-            Math.abs(axis.range[1] - high) > 1e-9
-        );
-    });
-    await setRanges(element, Object.fromEntries(changed));
+    const moved = new Set<string>();
+    for (const [key, value] of Object.entries(fit)) {
+        const name = key.slice(0, key.indexOf("."));
+        const axis = axes[name];
+        if (key.endsWith(".autorange")) {
+            if (!axis?.autorange) moved.add(name);
+        } else if (key.endsWith(".range")) {
+            const [low, high] = value as number[];
+            if (
+                !axis ||
+                axis.autorange ||
+                Math.abs(axis.range[0] - low) > 1e-9 ||
+                Math.abs(axis.range[1] - high) > 1e-9
+            ) {
+                moved.add(name);
+            }
+        }
+    }
+    await setRanges(
+        element,
+        Object.fromEntries(
+            Object.entries(fit).filter(([key]) =>
+                moved.has(key.slice(0, key.indexOf("."))),
+            ),
+        ),
+    );
     yFitted = true;
 }
 
@@ -2060,6 +2133,7 @@ function chooseView(event: Event): void {
                     :instrument="listedInstrument"
                     :symbols="lens.symbols.value"
                     :lens-symbols="lens.settings.value.elements"
+                    :marks-left-out="marksLeftOut"
                     :lang="lang"
                     @add-element="lens.addElement($event.symbol)"
                     @remove-element="lens.removeElement($event.symbol)"

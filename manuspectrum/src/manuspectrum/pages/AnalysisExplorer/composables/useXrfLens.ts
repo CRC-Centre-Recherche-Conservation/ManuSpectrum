@@ -23,7 +23,7 @@ import {
     instrumentPeaks,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/identify.ts";
 import { mergeInstrument } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/instrument-merge.ts";
-import { lensShapes } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
+import { lensDrawing } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import {
     allSymbols,
     loadLineTable,
@@ -75,9 +75,9 @@ import type {
     IdentifiedMarker,
     InstrumentTick,
     EnergyBand,
+    LensDrawing,
     LensElementLines,
     LensPanel,
-    LensShape,
     OverlapBand,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import type {
@@ -91,8 +91,10 @@ const DETECTOR_FWHM_KEV: Record<XrfDetector, number> = {
     sdd: 0.14,
     "si-pin": 0.18,
 };
-/** Declared labels of small multiples: one row, over the panel's title. */
-const PANEL_STRIP = { rows: 1, lift: 16 };
+/** Rows of the label band above each panel of small multiples: one, between the panel's title and its plot. */
+const MULTIPLES_BAND_ROWS = 1;
+/** The word of a sum peak on the chart, the same in every language; the strip's key explains it. */
+export const SUM_GLYPH = "Σ";
 /** Overlap sentences the strip lists at most. */
 const MAX_OVERLAP_NOTES = 8;
 /** Rank given to a declared element whose material states no level (the weakest). */
@@ -128,7 +130,6 @@ export interface LensSources {
 export interface LensLabels {
     compton: string;
     escape: string;
-    sum: string;
     /** The Duane–Hunt tick: « 40 kV ». */
     voltage: (kV: number) => string;
     /** Said when the lens elements are full. */
@@ -140,7 +141,6 @@ export interface LensLabels {
 const ENGLISH_LABELS: LensLabels = {
     compton: "Compton",
     escape: "esc",
-    sum: "sum",
     voltage: (kV) => `${kV} kV`,
     elementsFull: "The lens holds no more elements",
     anodesFull: "No more anode choices can be kept",
@@ -229,7 +229,7 @@ interface PanelModel {
     suffix: string;
     extent: [number, number];
     declared: LensPanel["declared"];
-    ticks: { label: string; energy: number }[];
+    ticks: { label: string; energy: number; kind: InstrumentKind }[];
     bands: { curveOrder: number; label: string; from: number; to: number }[];
 }
 
@@ -265,9 +265,9 @@ function lineRefOf(symbol: string, line: LineRef): StripLineRef {
  * Selection's materials declare on each curve, the instrument peaks of each
  * curve, the overlaps, and the Plotly shapes and strip text that follow.
  *
- * The lens never touches the focus: `shapes(theme)` is a pure function of its
- * inputs, so an equal key (`shapesKey`) means an equal drawing and no
- * relayout. Lines are kept inside each panel's X extent and, when a tube
+ * The lens never touches the focus: `drawing(theme)` is a pure function of
+ * its inputs, so an equal key (`shapesKey`) means an equal drawing and no
+ * update. Lines are kept inside each panel's X extent and, when a tube
  * voltage is known on every curve, to those it can excite. An element of the
  * window's own pins takes its focus hue; a lens element draws in ink and
  * never filters anything.
@@ -663,7 +663,7 @@ export function useXrfLens(sources: LensSources) {
                 })),
             );
             const ticks: PanelModel["ticks"] = merged.peaks.map(
-                ({ label, energy }) => ({ label, energy }),
+                ({ label, energy, kind }) => ({ label, energy, kind }),
             );
             const bands: PanelModel["bands"] = merged.bands.map((held) => ({
                 curveOrder: held.order,
@@ -756,15 +756,15 @@ export function useXrfLens(sources: LensSources) {
         };
     });
 
-    /** The shapes of the lens in `theme`; empty when the window is not XRF or the table is not loaded. */
-    function shapes(
+    /** The shapes of the lens in `theme` and the marks its cap left out; nothing when the window is not XRF or the table is not loaded. */
+    function drawing(
         theme: PlotTheme,
         plotWidth?: number,
         marker?: IdentifiedMarker,
         views?: PanelViews,
-    ): LensShape[] {
+    ): LensDrawing {
         const current = model.value;
-        if (current.panels.length === 0) return [];
+        if (current.panels.length === 0) return { shapes: [], dropped: 0 };
         const colourOf = (order: number) => theme.series[itemHue(order)];
         const panels: LensPanel[] = current.panels.map((panel) => ({
             suffix: panel.suffix,
@@ -775,6 +775,7 @@ export function useXrfLens(sources: LensSources) {
                 (tick): InstrumentTick => ({
                     label: tick.label,
                     energy: tick.energy,
+                    ...(tick.kind === "compton" ? {} : { kind: tick.kind }),
                 }),
             ),
             bands: panel.bands.map(
@@ -786,15 +787,16 @@ export function useXrfLens(sources: LensSources) {
                 }),
             ),
         }));
-        return lensShapes({
+        return lensDrawing({
             panels,
             focus: current.focus,
             elements: current.elements,
             overlaps: current.overlaps,
             plotWidth,
             marker,
-            declaredStrip:
-                sources.layout() === "multiples" ? PANEL_STRIP : undefined,
+            ...(sources.layout() === "multiples"
+                ? { bandRows: MULTIPLES_BAND_ROWS }
+                : {}),
             theme: {
                 ink: theme.ink,
                 inkMuted: theme.inkMuted,
@@ -1018,7 +1020,7 @@ export function useXrfLens(sources: LensSources) {
         anodeRows,
         drawnSymbols,
         model,
-        shapes,
+        drawing,
         overlapNotes: computed(() => overlapInfo.value.notes),
         instrumentNotes,
         stripElements,
@@ -1051,6 +1053,6 @@ function instrumentLabel(peak: InstrumentPeak, labels: LensLabels): string {
         case "escape":
             return labels.escape;
         default:
-            return labels.sum;
+            return SUM_GLYPH;
     }
 }
