@@ -7229,6 +7229,98 @@ msgid ""
 "again."
 msgstr ""
 
+#: admin.py
+msgid "Account"
+msgstr "Account"
+
+#: admin.py
+msgid "Full name"
+msgstr "Full name"
+
+#: admin.py
+msgid "Enrolled"
+msgstr "Enrolled"
+
+#: admin.py
+msgid "Not enrolled"
+msgstr "Not enrolled"
+
+#: admin.py
+msgid "two-factor authentication"
+msgstr "two-factor authentication"
+
+#: admin.py
+msgid "Planned anonymisation"
+msgstr "Planned anonymisation"
+
+#: admin.py
+msgid "Invitation"
+msgstr "Invitation"
+
+#: admin.py
+msgid "Terms of use accepted"
+msgstr "Terms of use accepted"
+
+#: admin.py
+msgid "Not yet"
+msgstr "Not yet"
+
+#: admin.py
+msgid "Arches profile"
+msgstr "Arches profile"
+
+#: admin.py
+msgid "Open the Arches profile"
+msgstr "Open the Arches profile"
+
+#: admin.py
+msgid "Never (superuser)"
+msgstr "Never (superuser)"
+
+#: admin.py
+msgid "Anonymised on %(date)s"
+msgstr "Anonymised on %(date)s"
+
+#: admin.py
+msgid "Can be invited: no password yet."
+msgstr "Can be invited: no password yet."
+
+#: admin.py
+msgid "Cannot be invited: this is the system account for visitors."
+msgstr "Cannot be invited: this is the system account for visitors."
+
+#: admin.py
+msgid "Cannot be invited: the account is inactive or has no e-mail address."
+msgstr "Cannot be invited: the account is inactive or has no e-mail address."
+
+#: admin.py
+msgid "Has a password."
+msgstr "Has a password."
+
+#: admin.py
+msgid "Send the invitation now"
+msgstr "Send the invitation now"
+
+#: admin.py
+msgid "The person receives a link to accept the terms and set a password."
+msgstr "The person receives a link to accept the terms and set a password."
+
+#: admin.py
+msgid "A user with that username already exists."
+msgstr "A user with that username already exists."
+
+#: admin.py
+msgid "A user with that e-mail address already exists."
+msgstr "A user with that e-mail address already exists."
+
+#: models.py
+msgid "terms acceptance"
+msgstr "terms acceptance"
+
+#: models.py
+msgid "terms acceptances"
+msgstr "terms acceptances"
+
 #~ msgid "met"
 #~ msgstr "met"
 

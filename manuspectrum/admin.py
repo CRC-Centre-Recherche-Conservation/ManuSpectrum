@@ -12,13 +12,19 @@ and extend it here; every change is recorded as an `EmbargoEvent` (who, when,
 old end, new end). Access is Django's own model permission (`change_embargo`);
 no group is created for it. `WorkflowCleanup` is a read-only ledger.
 
-The User admin gains the action « Send invitation » (account activation,
-`accounts/activation.py`); `TermsAcceptance` is a read-only ledger of the
-terms each user accepted.
+The User admin is the one place for accounts: its list shows two-factor
+enrolment and the planned anonymisation date, the change page a read-only
+« Account » section, and the two-factor actions above are offered there too
+(`UserProfile` stays registered for its Arches fields but is left off the admin
+index). Its add form takes an e-mail address and no password: the account is
+created with an unusable password and, unless unticked, invited at once
+(`accounts/activation.py`); « Send invitation » sends it again.
+`TermsAcceptance` is a read-only ledger of the terms each user accepted.
 """
 
 import logging
 from datetime import timedelta
+from types import SimpleNamespace
 
 from arches.app.models.models import UserProfile
 from dateutil.relativedelta import relativedelta
@@ -26,17 +32,23 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.db.models import Q
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
+from django.db.models import OuterRef, Q, Subquery
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
-from manuspectrum.accounts import activation, audience, notices, twofactor
+from manuspectrum.accounts import activation, audience, notices, retention, twofactor
 from manuspectrum.accounts.creation import resource_label
+from manuspectrum.accounts.embargo import local_today
 from manuspectrum.models import (
+    AccountRetention,
     Embargo,
     EmbargoEvent,
     SiteNotice,
@@ -44,19 +56,19 @@ from manuspectrum.models import (
     WorkflowCleanup,
     site_now,
 )
+from manuspectrum.utils.public_visibility import ANONYMOUS_USERNAME
 
 logger = logging.getLogger(__name__)
 
 
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "two_factor")
-    search_fields = ("user__username",)
-    exclude = ("encrypted_mfa_hash",)
-    actions = ["reset_two_factor", "send_enrolment_link"]
+class TwoFactorActionsMixin:
+    """The two superuser actions on two-factor enrolment, shared by the profile and User admins.
 
-    @admin.display(boolean=True, description=_("Two-factor authentication"))
-    def two_factor(self, profile):
-        return bool(profile.encrypted_mfa_hash)
+    ``_profiles(queryset)`` turns the selection into ``UserProfile`` rows.
+    """
+
+    def _profiles(self, queryset):
+        raise NotImplementedError
 
     def _superuser_only(self, request):
         if request.user.is_superuser:
@@ -98,11 +110,14 @@ class UserProfileAdmin(admin.ModelAdmin):
         if not self._superuser_only(request):
             return
         profiles = list(
-            queryset.exclude(encrypted_mfa_hash__isnull=True)
+            self._profiles(queryset)
+            .exclude(encrypted_mfa_hash__isnull=True)
             .exclude(encrypted_mfa_hash="")
             .select_related("user")
         )
-        queryset.filter(pk__in=[p.pk for p in profiles]).update(encrypted_mfa_hash=None)
+        UserProfile.objects.filter(pk__in=[p.pk for p in profiles]).update(
+            encrypted_mfa_hash=None
+        )
         logger.info(
             "Two-factor reset by user %s for %s account(s)",
             request.user.pk,
@@ -123,10 +138,31 @@ class UserProfileAdmin(admin.ModelAdmin):
     def send_enrolment_link(self, request, queryset):
         if not self._superuser_only(request):
             return
-        profiles = queryset.filter(
-            Q(encrypted_mfa_hash__isnull=True) | Q(encrypted_mfa_hash="")
-        ).select_related("user")
+        profiles = (
+            self._profiles(queryset)
+            .filter(Q(encrypted_mfa_hash__isnull=True) | Q(encrypted_mfa_hash=""))
+            .select_related("user")
+        )
         self._mail_links(request, [p.user for p in profiles])
+
+
+class UserProfileAdmin(TwoFactorActionsMixin, admin.ModelAdmin):
+    """The Arches profile, reached from the User page and left off the admin index."""
+
+    list_display = ("user", "two_factor")
+    search_fields = ("user__username",)
+    exclude = ("encrypted_mfa_hash",)
+    actions = ["reset_two_factor", "send_enrolment_link"]
+
+    def get_model_perms(self, request):
+        return {}
+
+    def _profiles(self, queryset):
+        return queryset
+
+    @admin.display(boolean=True, description=_("Two-factor authentication"))
+    def two_factor(self, profile):
+        return bool(profile.encrypted_mfa_hash)
 
 
 admin.site.unregister(UserProfile)
@@ -471,14 +507,232 @@ def _user_admin_class():
 _BaseUserAdmin = _user_admin_class()
 
 
-class InvitingUserAdmin(_BaseUserAdmin):
-    actions = [*(_BaseUserAdmin.actions or []), "send_invitation", "copy_addresses"]
+class AccountCreationForm(forms.ModelForm):
+    """Add form of the User admin: no password, the account is invited instead.
+
+    The account gets an unusable password; the person chooses theirs from the
+    invitation link. The address is required and unique among users, whatever
+    its case.
+    """
+
+    invite_now = forms.BooleanField(
+        required=False,
+        initial=True,
+        label=_("Send the invitation now"),
+        help_text=_(
+            "The person receives a link to accept the terms and set a password."
+        ),
+    )
+
+    class Meta:
+        model = get_user_model()
+        fields = ("username", "email", "first_name", "last_name", "groups")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].required = True
+
+    def clean_username(self):
+        username = self.cleaned_data["username"]
+        if self._meta.model.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError(
+                _("A user with that username already exists."), code="unique"
+            )
+        return username
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip()
+        if self._meta.model.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError(
+                _("A user with that e-mail address already exists."), code="unique"
+            )
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_unusable_password()
+        if commit:
+            user.save()
+            self.save_m2m()
+        return user
+
+
+class TwoFactorFilter(admin.SimpleListFilter):
+    title = _("two-factor authentication")
+    parameter_name = "two_factor"
+
+    def lookups(self, request, model_admin):
+        return (("yes", _("Enrolled")), ("no", _("Not enrolled")))
+
+    def queryset(self, request, queryset):
+        no_secret = Q(userprofile__encrypted_mfa_hash__isnull=True) | Q(
+            userprofile__encrypted_mfa_hash=""
+        )
+        if self.value() == "yes":
+            return queryset.exclude(no_secret)
+        if self.value() == "no":
+            return queryset.filter(no_secret)
+        return queryset
+
+
+class InvitingUserAdmin(TwoFactorActionsMixin, _BaseUserAdmin):
+    """Users: the list at a glance, the add form with the invitation, the account section."""
+
+    add_form = AccountCreationForm
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "groups",
+                    "invite_now",
+                ),
+            },
+        ),
+    )
+    fieldsets = (
+        *_BaseUserAdmin.fieldsets,
+        (
+            _("Account"),
+            {
+                "fields": (
+                    "two_factor",
+                    "planned_anonymisation",
+                    "invitation_state",
+                    "terms_accepted",
+                    "profile_link",
+                )
+            },
+        ),
+    )
+    readonly_fields = (
+        "two_factor",
+        "planned_anonymisation",
+        "invitation_state",
+        "terms_accepted",
+        "profile_link",
+    )
+    list_display = (
+        "username",
+        "full_name",
+        "email",
+        "is_active",
+        "two_factor",
+        "last_login",
+        "planned_anonymisation",
+        "is_superuser",
+    )
+    list_filter = ("is_active", TwoFactorFilter, "is_staff", "is_superuser", "groups")
+    list_select_related = ("userprofile",)
+    actions = [
+        *(_BaseUserAdmin.actions or []),
+        "send_invitation",
+        "copy_addresses",
+        "reset_two_factor",
+        "send_enrolment_link",
+    ]
+    superuser_actions = ("copy_addresses", "reset_two_factor", "send_enrolment_link")
+
+    def get_queryset(self, request):
+        ledger = AccountRetention.objects.filter(user_id=OuterRef("pk"))
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(
+                ledger_noticed_on=Subquery(ledger.values("noticed_on")[:1]),
+                ledger_noticed_for=Subquery(ledger.values("noticed_for")[:1]),
+                ledger_anonymised_on=Subquery(ledger.values("anonymised_on")[:1]),
+            )
+        )
 
     def get_actions(self, request):
         actions = super().get_actions(request)
         if not request.user.is_superuser:
-            actions.pop("copy_addresses", None)
+            for name in self.superuser_actions:
+                actions.pop(name, None)
         return actions
+
+    def _profiles(self, queryset):
+        return UserProfile.objects.filter(user_id__in=queryset.values("pk"))
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not change and form.cleaned_data.get("invite_now"):
+            transaction.on_commit(lambda: self._invite(request, [obj]))
+
+    @admin.display(description=_("Full name"), ordering="last_name")
+    def full_name(self, user):
+        return user.get_full_name() or "-"
+
+    @admin.display(boolean=True, description=_("Two-factor authentication"))
+    def two_factor(self, user):
+        try:
+            return bool(user.userprofile.encrypted_mfa_hash)
+        except ObjectDoesNotExist:
+            return False
+
+    @admin.display(description=_("Planned anonymisation"))
+    def planned_anonymisation(self, user):
+        if not user.pk:
+            return "-"
+        if hasattr(user, "ledger_anonymised_on"):
+            row = SimpleNamespace(
+                noticed_on=user.ledger_noticed_on,
+                noticed_for=user.ledger_noticed_for,
+                anonymised_on=user.ledger_anonymised_on,
+            )
+        else:
+            row = AccountRetention.objects.filter(user_id=user.pk).first()
+        planned = retention.planned_anonymisation(
+            user, row, local_today(timezone.now())
+        )
+        if planned is not None:
+            return date_format(planned, "SHORT_DATE_FORMAT")
+        if row is not None and row.anonymised_on:
+            return _("Anonymised on %(date)s") % {
+                "date": date_format(row.anonymised_on, "SHORT_DATE_FORMAT")
+            }
+        if user.is_superuser:
+            return _("Never (superuser)")
+        return "-"
+
+    @admin.display(description=_("Invitation"))
+    def invitation_state(self, user):
+        if user.username == ANONYMOUS_USERNAME:
+            return _("Cannot be invited: this is the system account for visitors.")
+        if activation.can_be_invited(user):
+            return _("Can be invited: no password yet.")
+        if not user.has_usable_password():
+            return _(
+                "Cannot be invited: the account is inactive or has no e-mail address."
+            )
+        return _("Has a password.")
+
+    @admin.display(description=_("Terms of use accepted"))
+    def terms_accepted(self, user):
+        version = (
+            TermsAcceptance.objects.filter(user=user)
+            .order_by("-accepted_at")
+            .values_list("version", flat=True)
+            .first()
+        )
+        return version or _("Not yet")
+
+    @admin.display(description=_("Arches profile"))
+    def profile_link(self, user):
+        profile = UserProfile.objects.filter(user=user).first()
+        if profile is None:
+            return "-"
+        opts = UserProfile._meta
+        url = reverse(
+            f"admin:{opts.app_label}_{opts.model_name}_change", args=[profile.pk]
+        )
+        return format_html('<a href="{}">{}</a>', url, _("Open the Arches profile"))
 
     @admin.action(description=_("Copy the e-mail addresses"))
     def copy_addresses(self, request, queryset):
@@ -509,8 +763,11 @@ class InvitingUserAdmin(_BaseUserAdmin):
         permissions=["change"],
     )
     def send_invitation(self, request, queryset):
+        self._invite(request, queryset)
+
+    def _invite(self, request, users):
         sent = 0
-        for user in queryset:
+        for user in users:
             if not activation.can_be_invited(user):
                 self.message_user(
                     request,

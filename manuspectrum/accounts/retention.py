@@ -94,6 +94,22 @@ def anonymise_on(activity_day, noticed_on):
     )
 
 
+def planned_date(activity_day, noticed_on, today):
+    """The day an account last active on *activity_day* is anonymised; pure, writes nothing.
+
+    *noticed_on* is the day of its valid notice, or None when it has none yet.
+    With a notice the date is ``anonymise_on(activity_day, noticed_on)``; with
+    none it is the end of the retention period while *today* is before the
+    notice period, else the date a notice sent *today* would give. The pass
+    and the admin both read this one rule.
+    """
+    if noticed_on is not None:
+        return anonymise_on(activity_day, noticed_on)
+    if today < notice_on(activity_day):
+        return due_on(activity_day)
+    return anonymise_on(activity_day, today)
+
+
 def anonymisation_date(user, today=None):
     """The day *user*'s account is anonymised if it stays unused, recording the notice when due.
 
@@ -105,15 +121,37 @@ def anonymisation_date(user, today=None):
     today = today or local_today(timezone.now())
     activity = last_activity_day(user)
     if today < notice_on(activity):
-        return due_on(activity)
+        return planned_date(activity, None, today)
     row = AccountRetention.objects.filter(user_id=user.pk).first()
     if row and row.noticed_on and row.noticed_for == activity:
-        return anonymise_on(activity, row.noticed_on)
+        return planned_date(activity, row.noticed_on, today)
     if row and row.noticed_on:
         _clear_notice(row)
     _claim_notice(user, activity, today)
     row = AccountRetention.objects.get(user_id=user.pk)
-    return anonymise_on(activity, row.noticed_on)
+    return planned_date(activity, row.noticed_on, today)
+
+
+def planned_anonymisation(user, row, today=None):
+    """The day the pass would anonymise *user*, or None when it never will; writes nothing.
+
+    *row* is the account's ``AccountRetention`` ledger row, or None. It
+    follows the rule of ``_handle``: superusers, ``anonymous`` and accounts
+    already anonymised are left out; a notice made void by a later activity
+    counts for nothing. The date itself is ``planned_date``. Inactive accounts
+    are treated like active ones.
+    """
+    if (
+        user.is_superuser
+        or user.username == ANONYMOUS_USERNAME
+        or user.username == former_username(user.pk)
+        or (row is not None and row.anonymised_on)
+    ):
+        return None
+    today = today or local_today(timezone.now())
+    activity = last_activity_day(user)
+    valid = row is not None and row.noticed_on and row.noticed_for == activity
+    return planned_date(activity, row.noticed_on if valid else None, today)
 
 
 def candidates():
@@ -191,8 +229,8 @@ def _handle(user, row, today, report, *, apply):
         if not _claim_notice(user, activity, today):
             report.noticed.pop()
             return None
-        return (user, anonymise_on(activity, today))
-    if today < anonymise_on(activity, noticed_on):
+        return (user, planned_date(activity, None, today))
+    if today < planned_date(activity, noticed_on, today):
         return None
     if user.is_superuser:
         if row.listed_on is None:

@@ -277,6 +277,8 @@ class TermsAcceptance(models.Model):
             )
         ]
         ordering = ["-accepted_at"]
+        verbose_name = _("terms acceptance")
+        verbose_name_plural = _("terms acceptances")
 
     def __str__(self):
         return f"{self.user_id} {self.version}"
