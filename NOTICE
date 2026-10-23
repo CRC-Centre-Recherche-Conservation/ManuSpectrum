@@ -1,20 +1,24 @@
 ManuSpectrum
 Third-party material that is copied into this repository.
 
-OpenFreeMap Positron basemap style
-  File:    manuspectrum/constants/openfreemap_positron_layers.json
-  Source:  https://tiles.openfreemap.org/styles/positron (retrieved 2026-10-13),
+OpenFreeMap Bright basemap style
+  File:    manuspectrum/constants/openfreemap_bright_layers.json
+           (and the frozen copy in manuspectrum/migrations/0013_openfreemap_basemap.json)
+  Source:  https://tiles.openfreemap.org/styles/bright (retrieved 2026-10-23),
            the OpenFreeMap fork (https://github.com/hyperknot/openfreemap-styles)
-           of https://github.com/openmaptiles/positron-gl-style
+           of https://github.com/openmaptiles/osm-bright-gl-style
   Licence: the code of the style is BSD 3-Clause, the design of the style is
            CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); the
-           style is derived from CartoDB Basemaps, designed by Stamen and
-           Paul Norman for CartoDB Inc., CC BY 3.0
-           (https://creativecommons.org/licenses/by/3.0/).
+           style is derived from Mapbox Open Styles
+           (https://github.com/mapbox/mapbox-gl-styles).
            OpenFreeMap itself is MIT licensed.
 
-  Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors.
-  Copyright (c) 2015, CartoDB Inc.
+OpenFreeMap Bright licence text
+  Copyright (c) 2016, KlokanTech.com & OpenMapTiles contributors (the OpenFreeMap
+  fork, https://github.com/hyperknot/openfreemap-styles, styles/bright).
+  Copyright (c) 2024, MapTiler.com & OpenMapTiles contributors (upstream
+  osm-bright-gl-style).
+  Copyright (c) 2014, Mapbox.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
