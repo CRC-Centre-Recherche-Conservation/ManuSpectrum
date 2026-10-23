@@ -449,8 +449,9 @@ class LegalPagesTests(TestCase):
                 "https://www.openmaptiles.org/",
                 "https://www.openstreetmap.org/copyright",
                 "OpenStreetMap contributors",
-                "Positron",
-                "CARTO",
+                "OpenFreeMap Bright" if lang == "en" else "style Bright d",
+                "OSM Bright",
+                "OpenMapTiles",
             ):
                 self.assertIn(needle, html, lang)
 

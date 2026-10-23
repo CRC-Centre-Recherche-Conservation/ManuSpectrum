@@ -1,13 +1,13 @@
 /**
- * Vitest unit spec — the vendored OpenFreeMap Positron layers
- * (constants/openfreemap_positron_layers.json) against the style specification
+ * Vitest unit spec — the vendored OpenFreeMap Bright layers
+ * (constants/openfreemap_bright_layers.json) against the style specification
  * of mapbox-gl 1.13, the renderer of the Arches maps.
  */
 
 import { describe, expect, it } from 'vitest';
 import { validate } from 'mapbox-gl/dist/style-spec/index.es.js';
 
-import layers from '../../../constants/openfreemap_positron_layers.json';
+import layers from '../../../constants/openfreemap_bright_layers.json';
 
 const SOURCE = { type: 'vector', url: 'https://tiles.openfreemap.org/planet' };
 
@@ -19,7 +19,7 @@ const styleWith = (styleLayers, sources = { openfreemap: SOURCE }) => ({
     layers: styleLayers,
 });
 
-describe('OpenFreeMap Positron layers', () => {
+describe('OpenFreeMap Bright layers', () => {
     it('are a valid mapbox-gl 1.13 style', () => {
         expect(validate(styleWith(layers))).toEqual([]);
     });

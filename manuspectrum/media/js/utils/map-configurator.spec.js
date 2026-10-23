@@ -18,7 +18,7 @@ import MapboxGeocoder from "mapbox-gl-geocoder";
 import mapConfigurator, { labelField } from "utils/map-configurator";
 import { validate } from "mapbox-gl/dist/style-spec/index.es.js";
 
-import positron from "../../../constants/openfreemap_positron_layers.json";
+import bright from "../../../constants/openfreemap_bright_layers.json";
 
 class FakeMap {
     constructor() {
@@ -115,6 +115,27 @@ describe("map-configurator", () => {
             expect(labelField("fr", undefined)).toBe(undefined);
         });
 
+        it("labelField handles every text-field the vendored Bright style uses", () => {
+            const fields = bright
+                .map((layer) => layer.layout && layer.layout["text-field"])
+                .filter((field) => field !== undefined);
+            const forms = new Set(fields.map((field) => JSON.stringify(field)));
+            expect(forms.size).toBe(3);
+            const [named, refs] = [
+                fields.filter((field) => field[0] !== "to-string"),
+                fields.filter((field) => field[0] === "to-string"),
+            ];
+            expect(refs.length).toBeGreaterThan(0);
+            refs.forEach((field) => expect(labelField("fr", field)).toBe(field));
+            named.forEach((field) =>
+                expect(labelField("fr", field)).toEqual([
+                    "coalesce",
+                    ["get", "name:fr"],
+                    field,
+                ]),
+            );
+        });
+
         const FONT = ["Noto Sans Regular"];
 
         const fakeMapOf = (layers) => {
@@ -171,7 +192,7 @@ describe("map-configurator", () => {
             archesStub.activeLanguage = "fr";
             const map = fakeMapOf([]);
             mapConfigurator.postConfig(map);
-            const vendored = JSON.parse(JSON.stringify(positron));
+            const vendored = JSON.parse(JSON.stringify(bright));
             map.setStyle({ version: 8, layers: vendored }, { diff: false });
             const [style, options] = map.styled;
             expect(options).toEqual({ diff: false });
@@ -185,7 +206,7 @@ describe("map-configurator", () => {
             const first = JSON.parse(JSON.stringify(style.layers));
             map.setStyle(style);
             expect(map.styled[0].layers).toEqual(first);
-            expect(vendored).toEqual(positron);
+            expect(vendored).toEqual(bright);
         });
 
         it("a setStyle with a URL or on an English page goes through untouched", () => {
@@ -197,9 +218,9 @@ describe("map-configurator", () => {
             archesStub.activeLanguage = "en";
             const enMap = fakeMapOf([]);
             mapConfigurator.postConfig(enMap);
-            const style = { version: 8, layers: positron };
+            const style = { version: 8, layers: bright };
             enMap.setStyle(style);
-            expect(enMap.styled[0].layers).toEqual(positron);
+            expect(enMap.styled[0].layers).toEqual(bright);
         });
 
         it("postConfig sets no label on an English page", () => {
@@ -238,7 +259,7 @@ describe("map-configurator", () => {
                 layout: { "icon-image": "pin" },
             };
             const fonts = new Set(
-                positron.flatMap((layer) =>
+                bright.flatMap((layer) =>
                     layer.layout && layer.layout["text-font"]
                         ? [layer.layout["text-font"][0]]
                         : [],
@@ -285,7 +306,7 @@ describe("map-configurator", () => {
         });
 
         it("the rewritten vendored layers are a valid mapbox-gl 1.13 style", () => {
-            const map = fakeMapOf(JSON.parse(JSON.stringify(positron)));
+            const map = fakeMapOf(JSON.parse(JSON.stringify(bright)));
             archesStub.activeLanguage = "fr";
             mapConfigurator.postConfig(map);
             expect(map.set.length).toBeGreaterThan(10);

@@ -766,8 +766,8 @@ change shows within a minute (reload after waiting). Browser in a private window
 - [ ] one French page (`/fr/…`) and the language switch;
 - [ ] the login page and a login;
 - [ ] a Biblissima import of one item as an editor (the Biblissima workflow);
-- [ ] the maps (OpenFreeMap Positron basemap, no Mapbox key):
-  - the search map (`/fr/search`, map tab) and a Place or Document report map show the light
+- [ ] the maps (OpenFreeMap Bright basemap, no Mapbox key):
+  - the search map (`/fr/search`, map tab) and a Place or Document report map show the
     basemap with its credit (« OpenFreeMap © OpenMapTiles, Data from OpenStreetMap »);
   - labels follow the page language: « Allemagne », « Espagne » on `/fr/`, « Germany », « Spain »
     on `/en/`; toggling an overlay keeps the French labels;

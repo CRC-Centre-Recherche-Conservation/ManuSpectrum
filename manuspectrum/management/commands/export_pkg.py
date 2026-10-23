@@ -489,12 +489,13 @@ def non_core_map_rows():
     """Sorted labels of the `map_layers` / `map_sources` rows that the package
     cannot carry: neither Arches' own nor the OpenFreeMap basemap, or a row that
     needs a Mapbox token (a `mapbox://` source, a layer drawing from a `mapbox-`
-    source). Data migration 0013 turns the Arches rows into the OpenFreeMap ones.
+    source). Data migration 0013 turns the Arches rows into the OpenFreeMap
+    ones.
     """
     core_layers, core_sources = basemaps.core_map_rows()
     own_layers = {
         **core_layers,
-        basemaps.STREETS_LAYER_NAME: basemaps.positron_layers(),
+        basemaps.STREETS_LAYER_NAME: basemaps.bright_layers(),
     }
     own_sources = {
         **core_sources,

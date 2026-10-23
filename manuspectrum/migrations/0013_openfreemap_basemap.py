@@ -1,9 +1,9 @@
-"""Replace the Mapbox basemaps of Arches with the OpenFreeMap Positron basemap.
+"""Replace the Mapbox basemaps of Arches with the OpenFreeMap Bright basemap.
 
 Forward, each step only when the row still is a Mapbox one (a source equal to
 Arches' own, a layer drawing from it), so a row replaced in the designer is left
 alone and a second run changes nothing:
-- `streets` takes the Positron layers drawn from the `openfreemap` source;
+- `streets` takes the Bright layers drawn from the `openfreemap` source;
 - the `satellite` basemap (Mapbox) is deleted;
 - the `mapbox-streets` and `mapbox-satellite` sources are deleted once no layer
   draws from them;
@@ -17,8 +17,8 @@ definitions, the `mapbox-streets` and `mapbox-satellite` sources, and the
 `mapbox://` defaults of the sprite and glyph values.
 
 Every value comes from `0013_openfreemap_basemap.json`, frozen next to this
-file: Arches' core rows as `db_data.sql` installs them, and the Positron layers
-and `openfreemap` source as of 2026-10-13. Nothing is read from `basemaps.py` or
+file: Arches' core rows as `db_data.sql` installs them, and the Bright layers
+and `openfreemap` source as of 2026-10-23. Nothing is read from `basemaps.py` or
 Arches at run time, so a later change of the style is a new migration
 (`tests/test_basemap.py` fails until the snapshot is revisited on purpose).
 
@@ -26,6 +26,12 @@ The sprite and glyph tiles are rewritten here for EXISTING databases. A fresh
 `setup_db` takes them from the System Settings overlay
 (`manuspectrum/system_settings/System_Settings.json` in dev, the package under
 `make init`), which already carries the OpenFreeMap values.
+
+A database migrated by an earlier version of this migration keeps the style it
+got then on `streets`; `basemaps.apply_bright` rewrites it (only when the row
+still draws from the `openfreemap` source). Run once, then restart:
+
+    python manage.py shell -c "from arches.app.models.models import MapLayer as M; from manuspectrum.basemaps import apply_bright as a; print(a(M))"
 
 A running process keeps the sprite and glyph values it read at start
 (`update_from_db`): restart it after the migration.
@@ -98,7 +104,7 @@ def forward(apps, schema_editor):
 
     streets = MapLayer.objects.filter(name=STREETS_LAYER_NAME).first()
     if streets and _references_source(streets.layerdefinitions, "mapbox-streets"):
-        streets.layerdefinitions = FROZEN["positron_layers"]
+        streets.layerdefinitions = FROZEN["bright_layers"]
         streets.save()
 
     satellite = MapLayer.objects.filter(name=SATELLITE_LAYER_NAME).first()
