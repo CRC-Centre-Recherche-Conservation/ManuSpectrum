@@ -38,6 +38,8 @@ class Migration(migrations.Migration):
             ],
             options={
                 "ordering": ["-accepted_at"],
+                "verbose_name": "terms acceptance",
+                "verbose_name_plural": "terms acceptances",
                 "constraints": [
                     models.UniqueConstraint(
                         fields=("user", "version"),
