@@ -925,7 +925,8 @@ READYZ_TIMEOUT = 2.0
 # Redis instances /readyz pings, by component name.
 READYZ_REDIS_URLS = {}
 READYZ_CANTALOUPE = False
-# django-prometheus request latency buckets, aligned on the search SLO (2 s).
+# django-prometheus request latency buckets, aligned on the search SLO (2 s);
+# 60 and 120 s bound the search exports (SearchExportSlow, nginx 504 at 120 s).
 PROMETHEUS_LATENCY_BUCKETS = (
     0.05,
     0.1,
@@ -939,6 +940,8 @@ PROMETHEUS_LATENCY_BUCKETS = (
     5,
     8,
     13,
+    60,
+    120,
     float("inf"),
 )
 # Seconds no background rebuild of a language starts after one failed.

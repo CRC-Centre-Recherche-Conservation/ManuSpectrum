@@ -122,6 +122,60 @@ Wait for a running rebuild to end. A host short of memory: see `MemoryPressure`.
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
 
+## SearchExportSlow
+
+Severity: warning. Search exports run for a long time in the web worker.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout. Read access to the nginx access log directory (`NGINX_LOG_HOST_DIR` in `deploy/compose/.env`; `/data/manuspectrum/nginx-logs` when the value of `.env.example` is kept) and `python3` on the host. Root (`sudo`) for the firewall rule.
+
+### Symptom
+
+Three or more requests to `/{en,fr}/search/export_results` or `/{en,fr}/api/search/export_results` took more than 60 seconds in 64 hours. Arches decides between the immediate export and the Celery export from the `total` parameter sent by the client, so a visitor who sends `total=0` gets the export built in the request. nginx answers 504 after 120 s while the gunicorn thread keeps working until the build ends; the PostgreSQL `statement_timeout` (60 s) bounds each query, not the whole build. The route is open to visitors on purpose (`ADMIN.md`, « Search exports by visitors »).
+
+The latency metric (`django_http_requests_latency_seconds_by_view_method`) counts a request that fails twice (django-prometheus records it in `process_exception` and again in `process_response`), so a burst of failing exports can raise the count faster than the number of requests. It is only visible in the metric, not in the log. The counters are per web container start (multiprocess directory): the first export of a route since the web container started is not counted by `increase`.
+
+### Diagnosis
+
+Find the addresses and the durations in the access log, rotated files included (`access.log`, then `access.log-<date>` and compressed `.gz` files; `zcat -f` reads both). The query string is not logged; the status 504 and `request_time` identify the long ones:
+
+```bash
+DIR=/data/manuspectrum/nginx-logs   # NGINX_LOG_HOST_DIR of deploy/compose/.env
+zcat -f "$DIR"/access.log* | python3 -c '
+import json, re, sys
+for line in sys.stdin:
+    try:
+        r = json.loads(line)
+    except ValueError:
+        continue
+    if "search/export" in r.get("uri", "") and r.get("request_time", 0) > 60:
+        print(r["time"], r["remote_addr"], r["status"], r["request_time"], sep="\t")
+'
+```
+
+The log has no user field, and signed-in curators repeat large exports too: compare the addresses with the networks your curators use before blocking. Dashboard Application: web memory and saturation (`WebSaturated`) during the same hours.
+
+### Remediation
+
+The bounds already in place are `limit_req zone=search_export` (6 per minute), `limit_conn export_conn 1` (one export at a time per address) and the 60 s `statement_timeout`. They are per address: N addresses hold N of the 20 gunicorn threads (5 workers x 4 threads).
+
+Block an abusive address on the host firewall, not in the versioned nginx files. Docker publishes the nginx ports through its own iptables rules, which `ufw` does not see; rules in the `DOCKER-USER` chain are evaluated first and survive a `git` update of the repository:
+
+```bash
+sudo iptables  -I DOCKER-USER -s 203.0.113.7 -j DROP          # an IPv4 address
+sudo ip6tables -I DOCKER-USER -s 2001:db8:1234:5678::/64 -j DROP   # an IPv6 prefix (/64: one subscriber)
+sudo iptables  -L DOCKER-USER -n --line-numbers                # list (ip6tables for IPv6)
+sudo iptables  -D DOCKER-USER -s 203.0.113.7 -j DROP          # remove
+sudo ip6tables -D DOCKER-USER -s 2001:db8:1234:5678::/64 -j DROP   # remove the IPv6 prefix
+```
+
+Block the `/64` for IPv6: a single subscriber owns the whole prefix. The IPv6 rule only applies when Docker runs IPv6 with ip6tables on the nginx network: if the log shows the bridge gateway address instead of IPv6 clients, `docker-proxy` answers them and `DOCKER-USER` cannot single them out. With nftables, put the same drop in a table hooked on `forward` before Docker's. These rules do not survive a reboot. Do not save the whole ruleset (`netfilter-persistent save` would also restore Docker's own chains, with stale container addresses, before Docker starts): re-run the `-I` lines after a reboot while the abuse lasts, and remove them when it stops. The addresses above are documentation examples. Closing the route for every visitor is the other switch: remove `anonymous` from the « Resource Exporter » group (`ADMIN.md`). The lasting fix is a server-side count in Arches (the Celery path decided by the server, not by `total`), which belongs upstream.
+
+### Escalation
+
+The technical lead.
+
 ## WriteRequestsFailing
 
 Severity: warning. At least three write requests (POST, PUT or DELETE) answered a server error in the last 30 minutes. Severity is warning on purpose: the site is up and the failures are few, which `ErrorRateHigh` (critical) does not see; a curator's input may be lost, so it is read the same working day.

@@ -114,7 +114,7 @@ dc logs --no-log-prefix -f web | jq -cR 'fromjson? | select(.logger=="manuspectr
 
 ## Alerts
 
-62 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
+66 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
 (site, application, containers, host, storage, backup, tls, celery, datastores,
 explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of
@@ -145,7 +145,15 @@ episode per 64 h of such an event.
 `ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` fire when more than
 half of the builds of the last hour (at least three) took longer than 13 s, and
 longer than 55 s, respectively (histogram bucket boundaries): one slow cold build
-among several alerts nobody. Disk thresholds:
+among several alerts nobody. `SearchExportSlow` (warning) reads a 64 h window like
+the event warnings, but waits for three search exports slower than 60 s
+(`count - bucket{le="60.0"}`, routes `export_results` and `api_export_results`): one
+export that long may be a curator's, a repeat is a visitor asking the web worker for a
+full export (`deploy/ADMIN.md`, « Search exports by visitors »). nginx answers 504 at 120 s,
+so the 120 s bucket separates the exports that ran past the gateway. The first export of a
+route since the web container started is not counted by `increase`. The two buckets (60 and
+120 s, `PROMETHEUS_LATENCY_BUCKETS`) add two series per view and method to every
+`django_http_requests_latency_seconds_by_view_method_bucket`. Disk thresholds:
 `DiskUsageHigh` warning above 80 %, `DiskAlmostFull` critical above 95 %,
 `DiskFillingUp` warning when the 6 h trend fills a disk within 24 h. There is no
 "no traffic" alert: a quiet site is not a fault.

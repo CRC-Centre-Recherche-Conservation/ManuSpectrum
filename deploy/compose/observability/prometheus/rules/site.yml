@@ -65,6 +65,20 @@ groups:
           summary: "The Explorer search is slow"
           description: "The 95th percentile of the Explorer search is {{ $value | humanizeDuration }} over 10 minutes."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchlatencyhigh
+      - alert: SearchExportSlow
+        expr: |
+          (
+            sum(increase(django_http_requests_latency_seconds_by_view_method_count{view=~"export_results|api_export_results"}[64h]))
+            - sum(increase(django_http_requests_latency_seconds_by_view_method_bucket{view=~"export_results|api_export_results",le="60.0"}[64h]))
+          ) >= 3
+        for: 15m
+        labels:
+          severity: warning
+          service: site
+        annotations:
+          summary: "Search exports run for a long time in the web worker"
+          description: "{{ $value | humanize }} search exports took more than 60 seconds in the last 64 hours (the 60.0 latency bucket). A visitor can ask for an export that the web worker builds itself; nginx allows one at a time per address."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchexportslow
       - alert: WriteRequestsFailing
         expr: |
           (

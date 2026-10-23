@@ -653,6 +653,12 @@ All from the workstation, name resolved to the VM. Codes are the whole expectati
   site's 403 page, with one → answered by Django.
   `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://manuspectrum.test/fr/temp_file` → `404`
   (a GET reaches Django).
+  - Accepted behaviour (`ADMIN.md`, « Search exports by visitors »): an anonymous
+    `curl -s -o /dev/null -w '%{http_code} %{time_total}\n' 'https://manuspectrum.test/fr/search/export_results?format=tilecsv&total=0'`
+    runs the export in the web worker (it may end in `504` after 120 s on a loaded snapshot); a second one
+    from the same address while the first runs is answered `429` by nginx. This is expected today, not a fault.
+    The check feeds `SearchExportSlow` only if it takes more than 60 s; if it does, silence the alert beforehand
+    (`make -C deploy silence ARGS='alertname=SearchExportSlow --duration=2h --comment="acceptance"'`).
   - From the browser, the GeoJSON export is offered only with a resource-type filter set and fewer than
     2 000 results; without a filter, or above that count, the option is absent (not a fault). Filter on one
     resource type first, signed in, to test it; the `curl` forms above do not depend on it.
