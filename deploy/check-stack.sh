@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Offline checks of the image and Compose files: shellcheck, hadolint, the
-# publish-static, entrypoint guard, load-snapshot, backup, restore-test, restore, restic round trip,
+# publish-static, entrypoint guard, probe revision, release ref guard and release verify,
+# load-snapshot, backup, restore-test, restore, restic round trip,
 # secret-set, monitoring-init, host-metrics, local CA, nginx edge, logrotate and systemd unit tests, the monthly report
 # tests, the Compose rules, the Prometheus, blackbox and Alertmanager configuration with the rule unit tests
 # (pinned images, pulled once, no network at run time), actionlint, uv.lock freshness and
@@ -41,6 +42,9 @@ bash deploy/docker/tests/test_publish_static.sh
 step "entrypoint guard tests"
 bash deploy/docker/tests/test_entrypoint_guard.sh
 
+step "probe-image revision tests"
+bash deploy/docker/tests/test_probe_revision.sh
+
 step "load-snapshot tests"
 bash deploy/scripts/tests/test_load_snapshot.sh
 
@@ -67,6 +71,15 @@ bash deploy/scripts/tests/test_host_metrics.sh
 
 step "monthly-report tests"
 python3 -m unittest discover -s deploy/scripts/tests -p 'test_monthly_report.py'
+
+step "release ref guard tests"
+bash deploy/scripts/tests/test_release_ref_guard.sh
+
+step "release ruleset check tests"
+bash deploy/scripts/tests/test_release_ruleset_check.sh
+
+step "release verify tests"
+bash deploy/scripts/tests/test_release_verify.sh
 
 step "local CA tests"
 bash deploy/certs/tests/test_make_local_ca.sh
