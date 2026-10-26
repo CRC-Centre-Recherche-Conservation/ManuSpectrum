@@ -295,7 +295,7 @@ login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_a
 and the worker start refresh it on `worker:9808`; no account is named or stored in
 Prometheus. `manuspectrum_active_accounts_timestamp_seconds` is the time of that count: the report prints it
 ("mesuré le <date>") and flags a count more than two days old, and `ActiveAccountsStale` warns
-when it is. The maximum line says "depuis le <date>" when the month is longer than the
+when it is, or when the worker publishes no time at all. The maximum line says "depuis le <date>" when the month is longer than the
 retention. Without a sample the report prints "n/d". `make -C deploy report-test
 [ARGS="--month YYYY-MM"]` sends one now.
 
@@ -335,7 +335,7 @@ written by every save, and the Biblissima bulk path writes only tile rows noted 
 totals come from `resource_instances`, workflows from `workflow_history` (a run cancelled by its user
 is deleted by Arches: it is counted from the `transaction_reverse` requests), bulk runs from
 `load_event`. Month bounds are UTC instants and the Arches columns read are `timestamptz`: Arches writes
-a naive `datetime.now()` in the process zone (`America/Chicago`, `USE_TZ = False`) and PostgreSQL
+a naive `datetime.now()` in the process zone (`TIME_ZONE = "Europe/Paris"`, `USE_TZ = False`) and PostgreSQL
 converts it with the session zone, so the stored values are true instants. That holds while a writer's
 process zone equals its session zone (Django guarantees it; a hand `psql` session in another zone writing
 naive values would not), and a value written during the repeated hour of the autumn change is ambiguous
@@ -349,7 +349,7 @@ report runs it in its own container.
 starts): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last 24 hours),
 `manuspectrum_workflows{kind,state}` and `manuspectrum_activity_timestamp_seconds`. `model` is the closed
 list of resource models, anything else is `other`. `ActivityStale` warns when they are more than three
-hours old. `WriteRequestsFailing` (warning) warns when three POST, PUT or DELETE requests answer a 5xx
+hours old or the worker publishes no time at all. `WriteRequestsFailing` (warning) warns when three POST, PUT or DELETE requests answer a 5xx
 within 30 minutes: a curator's input may be lost, which `ErrorRateHigh` does not see.
 
 ## Host metrics

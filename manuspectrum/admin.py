@@ -371,9 +371,9 @@ class WorkflowCleanupAdmin(admin.ModelAdmin):
 def _paris_time_widget():
     """Native date and time inputs.
 
-    The admin's own widget compares the browser clock with ``TIME_ZONE`` (Arches'
-    America/Chicago) and prints a misleading offset note; its « Now » shortcut
-    would also fill a Chicago time. These fields hold Paris times.
+    The admin's own widget compares the browser clock with ``TIME_ZONE`` and
+    prints an offset note when the browser is in another zone; its « Now »
+    shortcut fills the browser's time. These fields hold Paris times.
     """
     return forms.SplitDateTimeWidget(
         date_attrs={"type": "date"},

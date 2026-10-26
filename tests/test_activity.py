@@ -149,13 +149,13 @@ class ChangesTests(ActivityCase):
 
     def test_the_window_is_in_utc_not_in_the_local_zone(self):
         res = uuid.uuid4()
-        late_september_chicago = datetime(2026, 10, 1, 1, 0, tzinfo=UTC)
-        self.assertEqual(local(late_september_chicago).month, 9)
-        self.log(self.analysis, res, "create", at=late_september_chicago)
+        late_september_utc = datetime(2026, 9, 30, 23, 30, tzinfo=UTC)
+        self.assertEqual(local(late_september_utc).month, 10)
+        self.log(self.analysis, res, "create", at=late_september_utc)
         september = activity.collect(START, END, NOW)["models"]
         october = activity.collect(END, datetime(2026, 11, 1, tzinfo=UTC), NOW)
-        self.assertNotIn("analysis", september)
-        self.assertEqual(october["models"]["analysis"]["created"], 1)
+        self.assertEqual(september["analysis"]["created"], 1)
+        self.assertNotIn("analysis", october["models"])
 
     def test_the_end_of_the_window_is_excluded(self):
         self.log(self.analysis, uuid.uuid4(), "create", at=END)
