@@ -1,0 +1,18 @@
+---
+app_unit_names:
+  - manuspectrum-backup
+  - manuspectrum-cert-renew
+  - manuspectrum-container-metrics
+  - manuspectrum-disk-usage
+  - manuspectrum-monthly-report
+  - manuspectrum-restore-test
+app_timer_names:
+  - manuspectrum-backup
+  - manuspectrum-restore-test
+  - manuspectrum-container-metrics
+  - manuspectrum-disk-usage
+  - manuspectrum-monthly-report
+app_acme_timer_names:
+  - manuspectrum-cert-renew
+app_compose_project: manuspectrum
+app_pg_volume: ms_pg_data

@@ -3,6 +3,8 @@
 # Renders the backup, restore-test, container-metrics, disk-usage and monthly-report units and checks them with
 # systemd-analyze (verify, calendar). Prints `ok N` / `not ok N`; exits
 # non-zero on failure. Skips the checks when systemd-analyze is missing.
+# RENDERED_UNITS_DIR (deploy/ansible/render.yml output) checks those files instead
+# of rendering the templates.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +26,12 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 for name in backup restore-test container-metrics disk-usage monthly-report; do
   for kind in service timer; do
-    sed -e "s|@APP_USER@|$(id -un)|g" -e "s|@DEPLOY_DIR@|$DEPLOY_DIR|g" \
-      "$UNITS/manuspectrum-$name.$kind.in" >"$TMP/manuspectrum-$name.$kind"
+    if [ -n "${RENDERED_UNITS_DIR:-}" ]; then
+      cp "$RENDERED_UNITS_DIR/manuspectrum-$name.$kind" "$TMP/manuspectrum-$name.$kind"
+    else
+      sed -e "s|@APP_USER@|$(id -un)|g" -e "s|@DEPLOY_DIR@|$DEPLOY_DIR|g" \
+        "$UNITS/manuspectrum-$name.$kind.in" >"$TMP/manuspectrum-$name.$kind"
+    fi
   done
   ! grep -q '@[A-Z_]*@' "$TMP"/manuspectrum-"$name".*
   assert "$name: every placeholder is substituted" $?

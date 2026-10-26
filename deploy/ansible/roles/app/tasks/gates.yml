@@ -1,0 +1,140 @@
+---
+# Four gates, each a fact: secrets, image, certificate, database. A closed
+# gate is not a failure: one summary lists the commands to type and the role
+# ends for the host with rc 0, so the next run goes on from here. Nothing in
+# this role runs init, restore, cert-init, secrets or setup_db: they replace or
+# create what Ansible must never touch.
+#
+# Database gate. It must answer while the stack is down and without writing,
+# so it is two reads: when the postgres container runs, a SELECT of the Arches
+# system settings resource instance (the row the web entrypoint demands); when
+# it does not, the gate stays closed and the volume only tells which hint to
+# print (no PG_VERSION in ms_pg_data: never initialised; present: stopped).
+
+- name: Create the external data volumes
+  ansible.builtin.command: make -C {{ (app_dir ~ '/deploy') | quote }} volumes
+  become: true
+  become_user: "{{ service_user }}"
+  register: app_volumes
+  changed_when: app_volumes.stdout_lines | reject('search', ' exists$') | list | length > 0
+
+- name: Read the docker-side state as the service account
+  become: true
+  become_user: "{{ service_user }}"
+  block:
+    - name: Check the secret files
+      ansible.builtin.command: make -C {{ (app_dir ~ '/deploy') | quote }} secrets-check
+      register: app_secrets_check
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Look for the application image
+      ansible.builtin.command: docker image inspect --format '{% raw %}{{.Id}}{% endraw %}' {{ app_image_in_service | quote }}
+      register: app_image_inspect
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Pull the application image from its registry
+      ansible.builtin.command: docker pull {{ app_image_in_service | quote }}
+      register: app_image_pull
+      changed_when: "'Downloaded newer image' in app_image_pull.stdout"
+      failed_when: false
+      when:
+        - app_image_inspect.rc != 0
+        - "'/' in app_image_in_service"
+        - app_image_in_service.split('/')[0] is search('[.:]') or app_image_in_service.startswith('localhost/')
+
+    - name: Find the running database container
+      ansible.builtin.command: >-
+        docker ps --quiet --filter status=running
+        --filter label=com.docker.compose.project={{ app_compose_project }}
+        --filter label=com.docker.compose.service=postgres
+      register: app_pg_container
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Look for the Arches system settings
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - "{{ app_pg_container.stdout_lines[0] }}"
+          - psql
+          - -qAt
+          - -U
+          - "{{ env_pgusername }}"
+          - -d
+          - "{{ env_pgdbname }}"
+          - -c
+          - "SELECT 1 FROM resource_instances WHERE resourceinstanceid = 'a106c400-260c-11e7-a604-14109fd34195'"
+      register: app_pg_settings
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: app_pg_container.stdout_lines | length > 0
+
+    - name: Locate the database volume
+      ansible.builtin.command: docker volume inspect --format '{% raw %}{{.Mountpoint}}{% endraw %}' {{ app_pg_volume }}
+      register: app_pg_volume_inspect
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+- name: Look for the certificate and its key
+  ansible.builtin.stat:
+    path: "{{ env_certs_dir }}/live/{{ item }}"
+  loop: [fullchain.pem, privkey.pem]
+  register: app_cert_files
+
+- name: Look for the database files of the volume
+  ansible.builtin.stat:
+    path: "{{ app_pg_volume_inspect.stdout | trim }}/PG_VERSION"
+  register: app_pg_files
+  when: app_pg_volume_inspect.rc == 0
+
+- name: Work out which gates are open
+  ansible.builtin.set_fact:
+    app_gate_secrets: "{{ app_secrets_check.rc == 0 }}"
+    app_gate_image: "{{ app_image_inspect.rc == 0 or (app_image_pull is not skipped and app_image_pull.rc == 0) }}"
+    app_gate_cert: "{{ app_cert_files.results | rejectattr('stat.exists') | list | length == 0 }}"
+    app_gate_db: "{{ app_pg_settings is not skipped and app_pg_settings.rc == 0 and (app_pg_settings.stdout | trim) == '1' }}"
+    app_db_stopped: "{{ app_pg_container.stdout_lines | length == 0 and ((app_pg_files.stat | default({})).exists | default(false)) }}"
+
+- name: List what is still to do
+  ansible.builtin.set_fact:
+    app_todo: >-
+      {{
+        ([] if app_gate_secrets else [
+          'Secrets: on a first installation run "make -C deploy secrets" as ' ~ service_user
+          ~ ' and copy the files into the password manager; when moving a host run "make -C deploy secret-set NAME=<secret>"'
+          ~ ' for each secret from the password manager.'
+        ])
+        + ([] if app_gate_image else [
+          'Image ' ~ app_image_in_service ~ ' is missing: build it with "make -C deploy build" on a host with enough memory,'
+          ~ ' or point MANUSPECTRUM_IMAGE (the inventory before the first run, .env after) at a registry image.'
+        ])
+        + ([] if app_gate_cert else [
+          'Certificate missing in ' ~ env_certs_dir ~ '/live: '
+          ~ ('run "make -C deploy cert-init" (ACME).' if env_cert_mode == 'acme'
+             else 'run "make -C deploy certs-local" (rehearsal CA).' if env_cert_mode == 'local'
+             else 'put fullchain.pem and privkey.pem there (CERT_MODE=provided).')
+        ])
+        + ([] if app_gate_db else [
+          ('The database container is stopped: start it (make -C deploy monitoring-init starts postgres) and run the playbook again.'
+           if app_db_stopped else
+           'Database not initialised: on a first installation run "make -C deploy init"; when moving a host run'
+           ~ ' "make -C deploy restore RESTIC_SNAPSHOT=<id> CONFIRM=yes ERASURES_CHECKED=yes" (deploy/BACKUP.md).')
+        ])
+      }}
+
+- name: Summarise what is still to do
+  ansible.builtin.debug:
+    msg: "{{ ['Still to do before the stack can start:'] + app_todo + ['Then run this playbook again.'] }}"
+  when: app_todo | length > 0
+
+- name: Stop here until the prerequisites are in place
+  ansible.builtin.meta: end_host
+  when: app_todo | length > 0

@@ -1,0 +1,66 @@
+---
+- name: Read the service account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ service_user }}"
+
+- name: Take the service account's uid and gid
+  ansible.builtin.set_fact:
+    app_uid: "{{ ansible_facts['getent_passwd'][service_user][1] }}"
+    app_gid: "{{ ansible_facts['getent_passwd'][service_user][2] }}"
+
+- name: Create the data directory
+  ansible.builtin.file:
+    path: "{{ data_dir }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0755"
+
+# SECRETS_DIR is not created here: make secrets makes it, 0700.
+- name: Create the host directories of the stack
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ env_media_host_dir }}", mode: "0750" }
+    - { path: "{{ env_media_host_dir }}/uploadedfiles", mode: "0750" }
+    - { path: "{{ env_backup_dump_dir }}", mode: "0700" }
+    - { path: "{{ env_restic_repository_dir | dirname }}", mode: "0750" }
+    - { path: "{{ env_restic_repository_dir }}", mode: "0700" }
+    - { path: "{{ env_metrics_textfile_dir }}", mode: "0755" }
+    - { path: "{{ env_certs_dir }}", mode: "0755" }
+    - { path: "{{ env_nginx_log_host_dir }}", mode: "0750" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Look for an existing checkout
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/.git"
+  register: app_checkout
+
+- name: Clone the application
+  ansible.builtin.git:
+    repo: "{{ app_git_url }}"
+    dest: "{{ app_dir }}"
+    version: "{{ app_git_ref }}"
+    recursive: true
+  become: true
+  become_user: "{{ service_user }}"
+  when: not app_checkout.stat.exists
+
+- name: Render the environment file, the units and the logrotate rule
+  ansible.builtin.include_tasks: render.yml
+  vars:
+    app_render_env_dest: "{{ app_dir }}/deploy/compose/.env"
+    app_render_env_owner: "{{ service_user }}"
+    app_render_units_dir: /etc/systemd/system
+    app_render_logrotate_dir: /etc/logrotate.d
+    app_render_owner: root
+    app_render_notify: [reload systemd]
+
+- name: Reload systemd before anything uses the new units
+  ansible.builtin.meta: flush_handlers
