@@ -76,7 +76,7 @@ The technical lead. If the cause is the host, the network filesystem or the mail
 
 ## ActiveAccountsStale
 
-Severity: warning. The active accounts count is more than two days old.
+Severity: warning. The active accounts count is more than two days old, or the worker publishes no refresh time.
 
 ### Prerequisites
 
@@ -100,7 +100,7 @@ The technical lead. If the cause is the host, the network filesystem or the mail
 
 ## ActivityStale
 
-Severity: warning. The activity gauges (resources per model, changes of the last 24 hours, open workflows) are more than three hours old.
+Severity: warning. The activity gauges (resources per model, changes of the last 24 hours, open workflows) are more than three hours old, or the worker publishes no refresh time.
 
 ### Prerequisites
 

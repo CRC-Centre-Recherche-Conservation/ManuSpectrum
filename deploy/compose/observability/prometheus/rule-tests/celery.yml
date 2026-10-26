@@ -66,6 +66,8 @@ tests:
   input_series:
   - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
     values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
   promql_expr_test:
   - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
     eval_time: 24h
@@ -259,6 +261,8 @@ tests:
   input_series:
   - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
     values: 0+60x180 10800x2000
+  - series: up{job="node"}
+    values: 1x2180
   promql_expr_test:
   - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
     eval_time: 2h
@@ -285,3 +289,59 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
       value: 1
+- name: ActiveAccountsStale warns when the time disappeared for more than a day on a host that is up, not before the window and the wait have passed
+  interval: 1m
+  input_series:
+  - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 27h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="ActiveAccountsStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActiveAccountsStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: ActivityStale warns when the gauges disappeared for more than four hours on a host that is up, not before the window and the wait have passed
+  interval: 1m
+  input_series:
+  - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x600
+  - series: up{job="node"}
+    values: 1x660
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 3h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 5h15m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 5h45m
+    exp_samples:
+    - labels: ALERTS{alertname="ActivityStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActivityStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x660
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 10h
+    exp_samples: []
