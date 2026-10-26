@@ -160,7 +160,9 @@ class StagingTests(unittest.TestCase):
 
     def test_publish_writes_the_commit_and_digest_to_the_summary(self):
         run = [
-            s["run"] for s in steps(self.workflow["jobs"]["publish"]) if s.get("id") == "push"
+            s["run"]
+            for s in steps(self.workflow["jobs"]["publish"])
+            if s.get("id") == "push"
         ][0]
         self.assertIn("GITHUB_STEP_SUMMARY", run)
         self.assertIn("Commit:", run)
@@ -224,9 +226,11 @@ class ReleaseTests(unittest.TestCase):
 
     def test_the_chain_cannot_skip_a_stage(self):
         needs = {
-            name: set([job["needs"]] if isinstance(job["needs"], str) else job["needs"])
-            if "needs" in job
-            else set()
+            name: (
+                set([job["needs"]] if isinstance(job["needs"], str) else job["needs"])
+                if "needs" in job
+                else set()
+            )
             for name, job in self.jobs.items()
         }
         self.assertIn("guard", needs["promote"])
@@ -259,7 +263,9 @@ class ReleaseTests(unittest.TestCase):
         scan = "\n".join(s.get("run", "") for s in steps(self.jobs["scan"]))
         self.assertIn("trivy-report.sh", scan)
         self.assertIn("--fail", scan)
-        trivy = [s for s in steps(self.jobs["scan"]) if "trivy-action" in s.get("uses", "")]
+        trivy = [
+            s for s in steps(self.jobs["scan"]) if "trivy-action" in s.get("uses", "")
+        ]
         self.assertEqual(trivy[0]["with"]["exit-code"], "0")
         self.assertEqual(trivy[0]["with"]["severity"], "HIGH,CRITICAL")
 
@@ -284,9 +290,13 @@ class ReleaseTests(unittest.TestCase):
 
     def test_promote_verifies_the_staging_attestation_before_tagging(self):
         run = [
-            s["run"] for s in steps(self.jobs["promote"]) if "imagetools" in s.get("run", "")
+            s["run"]
+            for s in steps(self.jobs["promote"])
+            if "imagetools" in s.get("run", "")
         ][0]
-        self.assertLess(run.index("gh attestation verify"), run.index("imagetools create"))
+        self.assertLess(
+            run.index("gh attestation verify"), run.index("imagetools create")
+        )
         for part in (
             "--signer-workflow",
             "workflows/staging.yml",
@@ -294,7 +304,7 @@ class ReleaseTests(unittest.TestCase):
             '--source-digest "$COMMIT"',
             "refs/heads/main",
             "refs/heads/feat/production-platform",
-            'oci://$IMAGE_NAME@$digest',
+            "oci://$IMAGE_NAME@$digest",
         ):
             self.assertIn(part, run)
 
@@ -326,7 +336,9 @@ class ReleaseTests(unittest.TestCase):
 
     def test_cosign_is_pinned_in_the_installer_and_the_policy_script(self):
         installer = [
-            s for s in steps(self.jobs["sign"]) if "cosign-installer" in s.get("uses", "")
+            s
+            for s in steps(self.jobs["sign"])
+            if "cosign-installer" in s.get("uses", "")
         ][0]
         version = installer["with"]["cosign-release"]
         self.assertRegex(version, r"^v\d+\.\d+\.\d+$")
