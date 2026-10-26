@@ -1,11 +1,9 @@
 """Every check of the retired verify-baseline.sh has an assertion in the baseline role."""
 
-import re
 import unittest
 
-from roles import ANSIBLE_DIR, ROLES_DIR, load_tasks, module_of
+from roles import ROLES_DIR, load_tasks, module_of
 
-SCRIPT = ANSIBLE_DIR.parents[1] / "deploy" / "rehearsal" / "verify-baseline.sh"
 VERIFY = ROLES_DIR / "baseline" / "tasks" / "verify.yml"
 
 # verify-baseline.sh label -> name of the task of verify.yml that asserts it,
@@ -57,16 +55,53 @@ PARITY = {
 }
 
 
-def script_labels():
-    text = SCRIPT.read_text(encoding="utf-8")
-    return re.findall(r'^\s*check "([^"]*)"', text, flags=re.MULTILINE)
+# The 37 labels of the checks of the retired verify-baseline.sh, frozen here:
+# the script is gone, so PARITY may not lose an entry unnoticed.
+RETIRED_LABELS = [
+    "${ADMIN2_USER} in the sudo group",
+    "${admin} not in the docker group",
+    "${ADMIN_USER} in the sudo group",
+    "20auto-upgrades: four APT::Periodic lines",
+    "account ${ADMIN2_USER}",
+    "account manuspectrum",
+    "/data in /etc/fstab",
+    "/data mounted over NFS ${NFS_VERS}",
+    "docker: apt repository download.docker.com",
+    "docker: buildx plugin",
+    "docker: compose plugin",
+    "docker: packages docker-ce, containerd.io, buildx and compose",
+    "docker: server present",
+    "/etc/docker/daemon.json absent (before Ansible)",
+    "/etc/docker/daemon.json present (after Ansible)",
+    "fail2ban : jail sshd",
+    "manuspectrum in the docker group",
+    "manuspectrum without authorized_keys",
+    "manuspectrum without password (locked)",
+    "manuspectrum without sudo rights",
+    "postfix active",
+    "postfix: relayhost",
+    "rehearsal host marker /etc/manuspectrum/rehearsal-host (root, 0644)",
+    "sshd : PasswordAuthentication ${SSH_PASSWORD_AUTH}",
+    "sshd : PermitRootLogin no",
+    "SSH key of ${ADMIN2_USER}",
+    "ufw : actif, deny in / allow out",
+    "ufw : allow 443/tcp",
+    "ufw : allow 80/tcp",
+    "ufw : limit 22/tcp",
+    "ufw: no other inbound rule",
+    "unattended-upgrades : Automatic-Reboot ${UNATTENDED_REBOOT}",
+    "unattended-upgrades : Automatic-Reboot-WithUsers ${UNATTENDED_REBOOT}",
+    "unattended-upgrades: four origins",
+    "unattended-upgrades : options Remove-*",
+    "unattended-upgrades: time ${UNATTENDED_REBOOT_TIME}",
+    "vm.max_map_count >= 262144 (after Ansible, value ${max_map})",
+]
 
 
 class BaselineParityTests(unittest.TestCase):
     def test_every_verify_baseline_check_has_an_assertion(self):
         names = {task["name"] for task in load_tasks(VERIFY)}
-        if SCRIPT.exists():
-            self.assertEqual(sorted(script_labels()), sorted(PARITY))
+        self.assertEqual(sorted(RETIRED_LABELS), sorted(PARITY))
         for label, target in PARITY.items():
             if isinstance(target, tuple):
                 self.assertIsNone(target[0], label)

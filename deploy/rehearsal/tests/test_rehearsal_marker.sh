@@ -44,7 +44,20 @@ done
 grep -q '^REHEARSAL_HOST=yes$' "$KIT/rehearsal.env.example" && grep -q 'Never set on a production host' "$KIT/rehearsal.env.example"
 assert "rehearsal.env.example sets REHEARSAL_HOST=yes with the production warning" $?
 
-grep -c "rehearsal_host | bool" "$ROLE/verify.yml" "$ROLE/apply.yml" | grep -qv ':0$'
-assert "the Ansible baseline checks and writes the marker only when rehearsal_host is true" $?
+# Every task that touches the marker or its directory carries the guard, in both files.
+guarded() { # guarded FILE EXPECTED: tasks naming /etc/manuspectrum and `when: rehearsal_host | bool` count the same
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+tasks = re.split(r"(?m)^(?=- name: )", text)
+touching = [t for t in tasks if "/etc/manuspectrum" in t]
+guarded = [t for t in touching if re.search(r"(?m)^  when: rehearsal_host \| bool$", t)]
+sys.exit(0 if len(touching) == int(sys.argv[2]) and len(guarded) == len(touching) else 1)
+PY
+}
+guarded "$ROLE/apply.yml" 2
+assert "every apply task touching /etc/manuspectrum is guarded by rehearsal_host (the directory and the marker)" $?
+guarded "$ROLE/verify.yml" 2
+assert "every verify task touching /etc/manuspectrum is guarded by rehearsal_host (the look and the assertion)" $?
 
 exit "$failed"

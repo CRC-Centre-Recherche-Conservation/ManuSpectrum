@@ -2,8 +2,8 @@
 # Renders `.env`, the twelve units and the logrotate file. Shared by prepare.yml
 # (real destinations) and render.yml (a scratch directory, no privileges).
 # Inputs: app_uid, app_gid, app_render_env_dest, app_render_units_dir,
-# app_render_logrotate_dir, app_render_owner and app_render_group (omit them for
-# no ownership change), app_render_env_owner, app_render_notify. The unit and
+# app_render_logrotate_dir, app_render_owner (omit for no ownership change),
+# app_render_env_owner, app_render_env_group, app_group, app_render_notify. The unit and
 # logrotate sources are the `.in` files of deploy/systemd and deploy/logrotate,
 # whose @...@ placeholders are replaced here.
 
@@ -24,7 +24,7 @@
   ansible.builtin.set_fact:
     app_image_in_service: >-
       {{ (app_env_current.content | b64decode | regex_findall('(?m)^MANUSPECTRUM_IMAGE=(.*)$')
-      | first | default(env_manuspectrum_image, true) | trim)
+      | last | default(env_manuspectrum_image, true) | trim)
       if app_env_file.stat.exists else env_manuspectrum_image }}
 
 - name: Render the application environment file
@@ -32,7 +32,7 @@
     src: env.j2
     dest: "{{ app_render_env_dest }}"
     owner: "{{ app_render_env_owner | default(omit) }}"
-    group: "{{ app_render_env_owner | default(omit) }}"
+    group: "{{ app_render_env_group | default(omit) }}"
     mode: "0640"
 
 - name: Render the systemd units
@@ -54,7 +54,7 @@
       {{ lookup('ansible.builtin.file', playbook_dir ~ '/../logrotate/manuspectrum-nginx.in', rstrip=false)
       | replace('@NGINX_LOG_HOST_DIR@', env_nginx_log_host_dir)
       | replace('@APP_USER@', service_user)
-      | replace('@APP_GROUP@', service_user) }}
+      | replace('@APP_GROUP@', app_group | default(service_user)) }}
     dest: "{{ app_render_logrotate_dir }}/manuspectrum-nginx"
     owner: "{{ app_render_owner | default(omit) }}"
     group: "{{ app_render_owner | default(omit) }}"

@@ -63,7 +63,7 @@ jobs:
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflows)")"
             echo "image=$(matches "^($stack|$build|$workflow)")"
-            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
+            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
   rehearsal-kit:
@@ -367,6 +367,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # The runner's python3 is 3.14 (Ubuntu 26.04): the controller range
+      # (>= 3.12) and the ansible-core pin are explained in requirements-dev.txt.
+      # The pins are versions, not hashes: a hashed lock file would need a
+      # regeneration step at each bump.
       - name: Install Ansible and its collections
         run: |
           python3 -m venv "$RUNNER_TEMP/ansible-venv"

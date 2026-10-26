@@ -127,6 +127,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 - [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then the Ansible verification again → `changed=0`.
 - [ ] After a full `ansible-playbook site.yml` (not only the baseline tags): `cat /etc/docker/daemon.json` (written by the Ansible `host` role) → `json-file` logs 10m x 5, `live-restore`,
   `no-new-privileges`; `docker info --format '{{.LiveRestoreEnabled}}'` → `true`.
+  When containers already run and the file would change, the play stops and asks for
+  `-e docker_restart_ok=true`: the Docker restart stops the stack (plan a window on a live host).
+  A `daemon.json` with keys the role does not manage stops the play: merge them by hand first.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
 - [ ] `findmnt /data` → type `nfs4`, version `NFS_VERS` in the options.
@@ -207,40 +210,38 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 
 ### 2.2 Service account, media directory, `.env` and secrets (rehearsal VM)
 
-- [ ] `command -v make git` → two paths. A fresh baseline has no `make`: it mirrors what the
-  hosting provider delivers, and Ansible installs it from PP-8. Until then the admin installs it
-  by hand with sudo (`sudo apt-get install -y make git`); record that it was needed.
+- [ ] `command -v make git openssl python3` → four paths. The `app` role of `site.yml` installs them
+  (`deploy/ansible/README.md`); the other steps of this section assume `site.yml` has run once
+  (`--tags app` is enough after the baseline) and stopped at its first closed gate.
 - [ ] *(service account)* `docker compose version` and `docker info --format '{{.LoggingDriver}}'` →
   Compose v2 and `json-file`.
-- [ ] `sudo install -d -o manuspectrum -g manuspectrum -m 0750 /data/manuspectrum /data/manuspectrum/media /data/manuspectrum/media/uploadedfiles`
-  (paths and account from `rehearsal.env`), then `sudo ls -ldn /data/manuspectrum/media` (the directory is `0750`, owned by the service
+- [ ] The directories are created by the `app` role (paths and account from the inventory), then
+  `sudo ls -ldn /data/manuspectrum/media` (the directory is `0750`, owned by the service
   account: without `sudo` the admin cannot list it; or run it as the service account) →
   owner and group = `id -u manuspectrum`, `id -g manuspectrum`. Directories `0750`, files
   `0640`, owned by the account: Cantaloupe is not that account, it reads the uploads through
   `group_add: APP_GID`. Files that web or worker write later get `0644` (umask 022).
-  Over NFS the export must keep the uid and gid (no `root_squash` remapping of them).
-- [ ] *(service account)* the repository is at `~/manuspectrum` at the commit under test:
-  `git clone --recurse-submodules https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum.git manuspectrum`
-  (the target name is part of the command: the clone is `~/manuspectrum`, lowercase, as in every path of this page),
-  `git -C manuspectrum checkout <commit>`, `git -C manuspectrum submodule update --init`,
+  Over NFS the export must keep the uid and gid (no `root_squash` remapping of them); for the
+  Ansible rehearsal set `NFS_EXPORT_OPTIONS=rw,sync,no_root_squash,no_subtree_check` in `rehearsal.env`
+  too, or the playbook (root) cannot create the directories on the export.
+- [ ] The repository is at `~/manuspectrum`: the `app` role clones `app_git_url` at `app_git_ref` when
+  `app_dir/.git` is absent and never moves an existing checkout. To test a commit, set `app_git_ref`
+  in the inventory before the first run; on an existing checkout, as the service account:
+  `git -C manuspectrum checkout <commit>`, `git -C manuspectrum submodule update --init`.
   `git -C manuspectrum log -1 --format=%H` → `<commit>`.
-- [ ] *(service account)* `cp deploy/compose/.env.example deploy/compose/.env`, then set
-  `APP_UID`, `APP_GID` (`id -u`, `id -g`), `MEDIA_HOST_DIR`, `DOMAIN_NAMES` and
-  `PUBLIC_SERVER_ADDRESS` to the rehearsal values; leave `MANUSPECTRUM_IMAGE=manuspectrum:local`.
-  Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`.
-  Also set the nginx values (4.1): `CERT_MODE=local`, `CERTS_DIR`, `NGINX_LOG_HOST_DIR`,
-  `PUBLIC_HOST` (the host name of `PUBLIC_SERVER_ADDRESS`, no port) and
-  `LOCAL_CA_CERT=<CERTS_DIR>/ca/ca.crt` as a literal path. Create the log directory as the
-  service account (`install -d -m 0750 <NGINX_LOG_HOST_DIR>`). `make -C deploy certs-local`
-  (4.1) creates the certificates and the CA file that `init` mounts: run it before `init` (2.4). `make up`
-  creates `METRICS_TEXTFILE_DIR` (node-exporter mounts it) when it is missing.
-- [ ] *(service account, rehearsal VM only)* the template ships `DEPLOY_ENVIRONMENT=production`;
-  the rehearsal VM sets it explicitly: `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`.
-  Check: `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`.
-  A production host leaves `production`.
-- [ ] *(admin)* `sudo install -d -o <service-account> -g <service-account> -m 0750 /srv/manuspectrum`
-  (the parent of the `SECRETS_DIR` of `.env.example`, outside the directories TSM backs up by
-  default; keep that value on the rehearsal VM).
+- [ ] `deploy/compose/.env` is rendered by the `app` role from the `env_*` variables of the inventory
+  (one per key of `compose/.env.example`; `APP_UID` and `APP_GID` are read from the host): never edit
+  it by hand, change the inventory and run the playbook again. For the rehearsal VM set
+  `env_deploy_environment: rehearsal` (the template ships `production`), `env_cert_mode: local`,
+  `env_local_ca_cert: <env_certs_dir>/ca/ca.crt` as a literal path, `env_public_host`,
+  `env_domain_names`, `env_public_server_address` and `env_manuspectrum_image: manuspectrum:local`.
+  Check: `grep -E '^APP_(UID|GID)=' deploy/compose/.env` → the two numbers of `id -u; id -g`, and
+  `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`. A production
+  host leaves `production`. `make -C deploy certs-local` (4.1) creates the certificates and the CA
+  file that `init` mounts: run it before `init` (2.4). `make up` creates `METRICS_TEXTFILE_DIR`
+  (node-exporter mounts it) when it is missing.
+- [ ] The parent of `SECRETS_DIR` (`/srv/manuspectrum` in the example inventory, outside the
+  directories TSM backs up by default) is created by the `app` role, owned by the service account.
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
   files; the commands by hand are in `deploy/compose/secrets/README.md`). From here on,
   `SECRETS_DIR=$(make -s -C deploy secrets-dir)` is set in the shell;
@@ -1349,7 +1350,7 @@ reboot.
 - [ ] `make -C deploy report-test` → a message `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>`, in French, header
   `Report`; `smoke.sh mail report` agrees. `make -C deploy report-test ARGS="--month 2020-01"` shows "n/d" for
   data older than 30 days and exits 1 only when Prometheus did not answer.
-- [ ] Change the recipients: edit `ALERT_EMAILS` in `.env` to two addresses, `make -C deploy alert-recipients` →
+- [ ] Change the recipients: set `env_alert_emails` in the inventory to two addresses and run the playbook (it renders `.env`), then `make -C deploy alert-recipients` →
   returns once Alertmanager is ready; `make -C deploy alert-test` reaches both. A bad value (`ALERT_EMAILS=a@b.test,`)
   makes the target fail with `fix .env; alertmanager was left running unchanged`, and `make -C deploy alerts` still
   answers.

@@ -7,6 +7,46 @@
     group: root
     mode: "0755"
 
+- name: Look for an existing daemon.json
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: host_daemon_file
+  failed_when: false
+  check_mode: false
+
+- name: Compare it with the settings of this role
+  ansible.builtin.set_fact:
+    host_daemon_wanted: "{{ lookup('ansible.builtin.template', 'daemon.json.j2') | from_json }}"
+    host_daemon_current: "{{ (host_daemon_file.content | b64decode | from_json) if host_daemon_file.content is defined else {} }}"
+
+- name: Assert the existing daemon.json holds only keys this role sets
+  ansible.builtin.assert:
+    that:
+      - host_daemon_current.keys() | list | difference(host_daemon_wanted.keys() | list) | length == 0
+    quiet: true
+    fail_msg: >-
+      /etc/docker/daemon.json holds settings this role would overwrite
+      ({{ host_daemon_current.keys() | list | difference(host_daemon_wanted.keys() | list) | join(', ') }}).
+      Merge the settings of roles/host/templates/daemon.json.j2 into that file by hand and run the
+      playbook again: it then changes nothing.
+
+- name: Count the running containers
+  ansible.builtin.command: docker ps --quiet
+  register: host_running
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert a restart of Docker is allowed
+  ansible.builtin.assert:
+    that:
+      - host_daemon_current == host_daemon_wanted or host_running.stdout_lines | default([]) | length == 0 or docker_restart_ok | default(false) | bool
+    quiet: true
+    fail_msg: >-
+      daemon.json would change and {{ host_running.stdout_lines | default([]) | length }} container(s) run:
+      Docker would restart (live-restore stops them the first time it is set). Pick a quiet moment and
+      run the playbook again with -e docker_restart_ok=true.
+
 - name: Configure the Docker daemon
   ansible.builtin.template:
     src: daemon.json.j2

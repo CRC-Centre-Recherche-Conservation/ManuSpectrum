@@ -355,5 +355,5 @@ VM installed, snapshot "installed" taken. Next (paths from any directory):
   scp ${HERE}/host-baseline.sh ${env_file} ${ADMIN_USER}@${VM_IP}:
   ssh -t ${ADMIN_USER}@${VM_IP} 'sudo ./host-baseline.sh'
   # then, from the laptop: baseline_mode: verify in your inventory (deploy/ansible/README.md)
-  #   ansible-playbook -i deploy/ansible/inventories/<rehearsal> deploy/ansible/site.yml --ask-become-pass --tags preflight,baseline
+  #   cd deploy/ansible && ansible-playbook -i inventories/<rehearsal> site.yml --ask-become-pass --tags preflight,baseline
 NEXT

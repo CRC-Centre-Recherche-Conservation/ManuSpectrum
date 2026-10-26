@@ -52,7 +52,7 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 ## 2. Network and NFS
 
 - [ ] `sudo ./host-network.sh`: the `ms-rehearsal` libvirt network (192.168.123.0/24) is active. The `default` network is never modified.
-- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you). The script also sets `manage-gids=n` in the `[mountd]` section of `/etc/nfs.conf` (and removes `--manage-gids` from `RPCMOUNTDOPTS` in `/etc/default/nfs-kernel-server`), then restarts the NFS server only if something changed: as in production, the server must honour the client's supplementary groups, or Cantaloupe (`group_add: APP_GID`) is refused.
+- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you). The script also sets `manage-gids=n` in the `[mountd]` section of `/etc/nfs.conf` (and removes `--manage-gids` from `RPCMOUNTDOPTS` in `/etc/default/nfs-kernel-server`), then restarts the NFS server only if something changed: as in production, the server must honour the client's supplementary groups, or Cantaloupe (`group_add: APP_GID`) is refused. For a rehearsal driven by the Ansible `app` role, set `NFS_EXPORT_OPTIONS=rw,sync,no_root_squash,no_subtree_check` in `rehearsal.env`: the playbook runs as root on the VM and creates directories owned by the service account on the export, which `root_squash` refuses.
 
 ## 3. Install the VM
 
@@ -151,9 +151,9 @@ and again, from one snapshot directory.
   `sudo cp -r ms-snapshot-<date> /home/<service-account>/snapshots/`,
   `sudo chown -R <service-account>: /home/<service-account>/snapshots/ms-snapshot-<date>`
   (a glob run by the admin cannot expand inside a directory it cannot read: use `sudo sh -c '…'`).
-- [ ] On the VM, as the service account, set the environment explicitly: the template
-  `deploy/compose/.env.example` ships `DEPLOY_ENVIRONMENT=production`, so run
-  `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`. The command
+- [ ] Set the environment explicitly in the Ansible inventory of the VM: the template ships
+  `DEPLOY_ENVIRONMENT=production`, so put `env_deploy_environment: rehearsal` (and `rehearsal_host: true`)
+  in it and run the playbook again, which renders `deploy/compose/.env`. The command
   also requires the host marker `/etc/manuspectrum/rehearsal-host`, written by `host-baseline.sh`
   in the VM (and checked by the Ansible baseline verification); without it (a production host) the command is
   refused whatever `.env` says.

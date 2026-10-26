@@ -1,13 +1,17 @@
 ---
+# monitoring-init is idempotent (starts postgres if needed, creates or updates
+# the ms_monitor role); it reports no change. It never starts the monitoring
+# services themselves: `make up` does with the observability profile, and this
+# role never runs observability-on.
 - name: Start the monitoring prerequisites
-  ansible.builtin.command: make -C {{ (app_dir ~ '/deploy') | quote }} monitoring-init
+  ansible.builtin.command: make --no-print-directory -C {{ (app_dir ~ '/deploy') | quote }} monitoring-init
   become: true
   become_user: "{{ service_user }}"
   changed_when: false
   when: "'observability' in (env_compose_profiles | split(','))"
 
 - name: Start or update the stack
-  ansible.builtin.command: make -C {{ (app_dir ~ '/deploy') | quote }} up
+  ansible.builtin.command: make --no-print-directory -C {{ (app_dir ~ '/deploy') | quote }} up
   become: true
   become_user: "{{ service_user }}"
   register: app_up

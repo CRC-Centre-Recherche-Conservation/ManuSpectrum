@@ -29,7 +29,7 @@
     - name: Extract the hardening index and the warnings
       ansible.builtin.set_fact:
         lynis_index: >-
-          {{ lynis_text | regex_search('(?m)^hardening_index=([0-9]+)$', '\1') | first | default(-1) | int }}
+          {{ lynis_text | regex_search('(?m)^hardening_index=([0-9]+)$', '\1') | default([-1], true) | first | int }}
         lynis_warnings: >-
           {{ lynis_text.splitlines() | select('match', '^warning\[\]=')
           | map('regex_replace', '^warning\[\]=', '') | list }}

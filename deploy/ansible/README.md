@@ -10,8 +10,8 @@ Roles, played in order:
 |---|---|
 | `preflight` | Assertions only: OS, memory, CPUs, free space, Docker version, `vm.max_map_count`, clock, ports 80/443, DNS (warning), SMTP relay. |
 | `baseline` | `baseline_mode: apply` sets the system baseline (accounts, sshd, UFW, fail2ban, Docker CE, data mount, unattended-upgrades, postfix); both modes then run the same assertion list on the host's effective state (`sshd -T`, `ufw status`, `apt-config dump`, `findmnt`...). |
-| `host` | `/etc/docker/daemon.json` (validated by `dockerd --validate`) and the journald drop-in. |
-| `app` | Directories, checkout, `.env`, logrotate and systemd units, then the gates, `make up`, the checks and the timers. |
+| `host` | `/etc/docker/daemon.json` (validated by `dockerd --validate`) and the journald drop-in. It refuses to overwrite a `daemon.json` that holds other keys, and, when containers run and the file would change, needs `-e docker_restart_ok=true` (Docker restarts). |
+| `app` | `make`, `git`, `openssl` and `python3` (both modes), directories (and the parent of `SECRETS_DIR`), checkout, `.env`, logrotate and systemd units, then the gates, `make up`, the checks and the timers. |
 
 It never runs `make init`, `make restore`, `make cert-init` or `make secrets`,
 never moves an existing checkout (it clones only when `app_dir/.git` is
@@ -30,7 +30,11 @@ absent) and never writes a secret.
   ~/.venvs/ansible/bin/ansible-galaxy collection install -r deploy/ansible/requirements.yml
   ```
 
-- A personal SSH account on the host with a key and `sudo`. The playbook asks
+- A personal SSH account on the host with a key and `sudo`. The account is one
+  of `admin_users` (with its `pubkey`) and the port is 22: apply mode refuses
+  otherwise, because it rewrites sshd and the firewall. An account the playbook
+  creates has a locked password: set one once with `sudo passwd <name>` as the
+  first administrator, or `sudo` asks for a password nobody knows. The playbook asks
   for the sudo password at every run (`--ask-become-pass`): there is no
   `deploy` user and no `NOPASSWD`. Nothing is installed on the host besides
   what the playbook sets.
@@ -48,8 +52,9 @@ variable is explained in `inventories/example/group_vars/all.yml`; the
 ## First installation
 
 1. `ansible-playbook -i inventories/<host> site.yml --ask-become-pass`. The
-   play prepares the host and stops at the first closed gate with the list of
-   what is still to do (exit code 0).
+   play prepares the host, then lists every closed gate together with the
+   commands to type and ends for that host (exit code 0): nothing runs after
+   the summary.
 2. On the host, as the service account: `make -C deploy secrets`, then copy
    the secrets into the password-manager item.
 3. `make -C deploy cert-init` (`CERT_MODE=acme`) or `make -C deploy certs-local`
@@ -84,6 +89,8 @@ ansible-playbook -i inventories/<host> site.yml --ask-become-pass --tags preflig
 Ubuntu 26.04 the Docker repository must have a suite for the release; if it
 has none, apply stops and names `docker_apt_codename` (set it to a suite that
 exists, for example `noble`); it never installs from another suite silently.
+The Docker repository key is checked against the fingerprint published by
+Docker (`baseline_docker_key_fingerprint`) before it is installed.
 `vm.max_map_count` is only verified, never written. sshd is checked with
 `sshd -t` and reloaded, never restarted.
 
@@ -97,20 +104,25 @@ name carries a registry host), `app_gate_cert` (`fullchain.pem` and
 `privkey.pem` in `CERTS_DIR/live`) and `app_gate_db`.
 
 The database gate must answer while the stack is down and without writing.
-When the postgres container runs, it reads the Arches system settings row
+When the postgres container runs, it waits for `pg_isready` (up to a minute),
+then reads the database, the Arches tables and the system settings row
 (`SELECT` through `docker exec ... psql`, the row the web entrypoint demands).
+Only a query that succeeds and finds nothing counts as "not initialised"
+(`init` or `restore`); a failed call is "unreachable": wait and run again.
 When it does not run the gate stays closed, and the `PG_VERSION` file of the
 `ms_pg_data` volume (a `stat`, no container started) only decides which hint
 is printed: never initialised (`make -C deploy init` or `restore`) or stopped
 (start postgres, then run again). `make -C deploy init` leaves postgres up, so
 the second pass finds it.
 
-`changed` reporting relies on documented output: `make volumes` prints
-`<volume> exists` for an existing volume; `make up` changes when Docker
+`changed` reporting relies on documented output (every `make` call runs with
+`--no-print-directory`, so the "Entering directory" lines never count):
+`make volumes` prints `<volume> exists` for an existing volume; `make up` changes when Docker
 Compose prints `Container <name> Created|Recreated|Started` (checked against
 Compose v2.32; `Running` and `Healthy` are not changes). With the
 `observability` profile, `make monitoring-init` runs before `make up`
-(the exporters' health checks need its role).
+(the exporters' health checks need its role); it reports no change and is
+safe to repeat. The role never runs `make observability-on`.
 
 ## The running version
 

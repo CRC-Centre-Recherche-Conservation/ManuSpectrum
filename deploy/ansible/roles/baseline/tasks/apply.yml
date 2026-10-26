@@ -24,6 +24,20 @@
       docker_apt_codename (e.g. noble) in the inventory to a suite that exists, then note the suite
       actually used. If the answer is not 404, check the DNS, proxy and Internet access of the host.
 
+- name: Assert the connecting account stays able to sign in
+  ansible.builtin.assert:
+    that:
+      - connecting_user | length > 0
+      - admin_users | selectattr('name', 'equalto', connecting_user) | selectattr('pubkey', 'truthy') | list | length == 1
+      - ansible_port | default(22) | int == 22
+    quiet: true
+    fail_msg: >-
+      Apply rewrites sshd and the firewall, and keeps only port 22 open: connect as an account of
+      admin_users that has a pubkey (ansible_user is "{{ connecting_user }}"), on port 22
+      (ansible_port is {{ ansible_port | default(22) }}). Otherwise the next connection is refused.
+  vars:
+    connecting_user: "{{ ansible_user | default(ansible_facts['env']['SUDO_USER'] | default(''), true) }}"
+
 - name: Assert the root alias is a plain address
   ansible.builtin.assert:
     that:
@@ -130,8 +144,33 @@
     mode: "0755"
 
 - name: Fetch the Docker repository key
-  ansible.builtin.get_url:
+  ansible.builtin.uri:
     url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
+    return_content: true
+  register: baseline_docker_key
+  check_mode: false
+
+- name: Read the fingerprints of the Docker repository key
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint
+  args:
+    stdin: "{{ baseline_docker_key.content }}"
+  register: baseline_docker_key_info
+  changed_when: false
+  check_mode: false
+
+- name: Assert the Docker repository key has the expected fingerprint
+  ansible.builtin.assert:
+    that:
+      - baseline_docker_key_fingerprint in (baseline_docker_key_info.stdout_lines | select('match', '^fpr:') | map('split', ':') | map(attribute=9) | list)
+    quiet: true
+    fail_msg: >-
+      The key served at download.docker.com does not carry the fingerprint {{ baseline_docker_key_fingerprint }}
+      (published in Docker's installation guide). Do not install it: check the proxy and the network, and
+      the documentation before changing baseline_docker_key_fingerprint.
+
+- name: Install the Docker repository key
+  ansible.builtin.copy:
+    content: "{{ baseline_docker_key.content }}"
     dest: /etc/apt/keyrings/docker.asc
     owner: root
     group: root
@@ -283,3 +322,6 @@
     name: postfix
     enabled: true
     state: started
+
+- name: Run the handlers of the baseline before the next role
+  ansible.builtin.meta: flush_handlers
