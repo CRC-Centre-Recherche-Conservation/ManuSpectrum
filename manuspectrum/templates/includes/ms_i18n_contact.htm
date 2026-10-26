@@ -1,0 +1,20 @@
+{% load i18n %}
+{# Strings of media/js/views/pages/contact.js, read through utils/i18n. #}
+{# An .arches-translations element, parsed by arches.js like the one in javascript.htm. #}
+<div class='arches-translations'
+    ms-contact-fill='{% trans "Please fill in all fields with a valid email." as msContactFill %} "{{ msContactFill|escapejs }}"'
+    ms-contact-subj-project='{% trans "Project submission" as csp %}"{{ csp|escapejs }}"'
+    ms-contact-subj-access='{% trans "Access request" as csa %}"{{ csa|escapejs }}"'
+    ms-contact-subj-question='{% trans "Question" as csq %}"{{ csq|escapejs }}"'
+    ms-contact-subj-other='{% trans "Message" as cso %}"{{ cso|escapejs }}"'
+    ms-contact-lbl-name='{% trans "Name" as cln %}"{{ cln|escapejs }}"'
+    ms-contact-lbl-email='{% trans "Email" as cle %}"{{ cle|escapejs }}"'
+    ms-contact-lbl-reason='{% trans "Reason" as clr %}"{{ clr|escapejs }}"'
+    ms-contact-err-name='{% trans "Please enter your name." as cen %}"{{ cen|escapejs }}"'
+    ms-contact-err-email='{% trans "Please enter a valid email address." as cee %}"{{ cee|escapejs }}"'
+    ms-contact-err-message='{% trans "Please write a message." as cem %}"{{ cem|escapejs }}"'
+    ms-contact-chars-left-one='{% trans "{n} character left" as cclo %}"{{ cclo|escapejs }}"'
+    ms-contact-chars-left='{% trans "{n} characters left" as ccl %}"{{ ccl|escapejs }}"'
+    ms-contact-copied='{% trans "Copied." as ccd %}"{{ ccd|escapejs }}"'
+    ms-contact-copy-failed='{% trans "Copy failed — select the text and copy it manually." as ccf %}"{{ ccf|escapejs }}"'
+></div>

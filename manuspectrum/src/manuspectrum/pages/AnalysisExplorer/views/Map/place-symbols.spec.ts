@@ -1,0 +1,286 @@
+import { describe, expect, it } from "vitest";
+
+import {
+    attestationWeight,
+    featureStates,
+    inBrush,
+    levelCounts,
+    lowLevels,
+    placeFeatures,
+    summarisePlaces,
+    withoutApproximate,
+    withoutLevels,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
+import {
+    label,
+    mapEvent,
+    mapPlace,
+    uuid,
+} from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+
+import type { EventMaterial } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+const LOW = new Set(["low"]);
+
+function material(id: string, reliability: string | null): EventMaterial {
+    return {
+        id,
+        name: label(id),
+        reliability,
+        characterization: uuid(500),
+        colours: [],
+        matches: true,
+        componentColours: [],
+    };
+}
+
+const places = {
+    [uuid(10)]: mapPlace(),
+    [uuid(11)]: mapPlace({
+        id: uuid(11),
+        name: label("Lyon"),
+        geometryKind: "area",
+    }),
+};
+
+describe("place symbols", () => {
+    it("turns the pips of two near places away from each other, and leaves a lone place alone", () => {
+        const near = {
+            avranches: mapPlace({ id: "avranches", lngLat: [-1.36, 48.68] }),
+            caen: mapPlace({ id: "caen", lngLat: [-0.37, 49.18] }),
+            toledo: mapPlace({ id: "toledo", lngLat: [-4.02, 39.86] }),
+        };
+        const events = Object.keys(near).map((id) =>
+            mapEvent({ id, place: id }),
+        );
+        const features = placeFeatures(
+            summarisePlaces(events, near, [], new Set()),
+        );
+        const away = Object.fromEntries(
+            features.features.map((feature) => [
+                feature.properties.id,
+                feature.properties.pipAway,
+            ]),
+        );
+        expect(away.avranches).toBe(135);
+        expect(away.caen).toBe(315);
+        expect(away.toledo).toBeNull();
+    });
+
+    it("keeps an overlapping event under a brush and drops a disjoint one", () => {
+        const event = mapEvent({
+            date: { start: 1301, end: 1400, approximate: false },
+        });
+        expect(inBrush(event, [1390, 1500])).toBe(true);
+        expect(inBrush(event, [1401, 1500])).toBe(false);
+    });
+
+    it("drops an undated event under a brush and keeps it without one", () => {
+        const event = mapEvent({
+            date: { start: null, end: null, approximate: false },
+        });
+        expect(inBrush(event, [1200, 1500])).toBe(false);
+        expect(inBrush(event, null)).toBe(true);
+    });
+
+    it("reads the low levels off the certainty scale", () => {
+        const level = (id: string, rank: number) => ({
+            id,
+            uri: id,
+            label: label(id),
+            rank,
+        });
+        expect(
+            lowLevels({
+                levels: [level("a", 0), level("b", 2), level("c", 3)],
+            }),
+        ).toEqual(new Set(["b", "c"]));
+    });
+
+    it("leaves out the events dated « circa »", () => {
+        const kept = withoutApproximate([
+            mapEvent({ id: "firm" }),
+            mapEvent({
+                id: "circa",
+                date: { start: 1301, end: 1325, approximate: true },
+            }),
+        ]);
+        expect(kept.map((event) => event.id)).toEqual(["firm"]);
+    });
+
+    it("drops the materials of the unticked levels, and keeps those of no level", () => {
+        const [event] = withoutLevels(
+            [
+                mapEvent({
+                    materials: [
+                        material("m", "low"),
+                        material("n", null),
+                        material("o", "sure"),
+                    ],
+                }),
+            ],
+            LOW,
+        );
+        expect(event.materials.map((m) => m.id)).toEqual(["n", "o"]);
+    });
+
+    it("drops a material event whose materials are all hidden, and keeps one that never had any", () => {
+        const events = withoutLevels(
+            [
+                mapEvent({ id: "a", materials: [material("m", "low")] }),
+                mapEvent({ id: "b", materials: [] }),
+                mapEvent({
+                    id: "c",
+                    materials: [material("m", "low"), material("o", "sure")],
+                }),
+            ],
+            LOW,
+        );
+        expect(events.map((event) => event.id)).toEqual(["b", "c"]);
+    });
+
+    it("counts the identified materials of each level", () => {
+        const counts = levelCounts([
+            mapEvent({
+                materials: [material("m", "low"), material("n", null)],
+            }),
+            mapEvent({
+                id: "other",
+                materials: [
+                    material("m", "low"),
+                    { ...material("o", "low"), characterization: uuid(501) },
+                ],
+            }),
+        ]);
+        expect([...counts]).toEqual([["low", 2]]);
+    });
+
+    it("counts distinct documents and components and skips unplaced events", () => {
+        const summaries = summarisePlaces(
+            [
+                mapEvent({
+                    id: "a",
+                    component: { id: uuid(20), name: label("c") },
+                }),
+                mapEvent({
+                    id: "b",
+                    component: { id: uuid(20), name: label("c") },
+                }),
+                mapEvent({
+                    id: "c",
+                    document: { id: uuid(2), name: label("B") },
+                }),
+                mapEvent({ id: "d", place: null }),
+                mapEvent({ id: "e", place: uuid(99) }),
+            ],
+            places,
+            [],
+            LOW,
+        );
+        expect([...summaries.keys()]).toEqual([uuid(10)]);
+        const paris = summaries.get(uuid(10));
+        expect(paris?.documents.size).toBe(2);
+        expect(paris?.components.size).toBe(1);
+        expect(paris?.events).toHaveLength(3);
+    });
+
+    it("marks a followed material pale when all its attestations are low and firm otherwise", () => {
+        const tracked = [
+            { uri: "m", slot: 1 },
+            { uri: "n", slot: 2 },
+        ];
+        const summaries = summarisePlaces(
+            [
+                mapEvent({
+                    materials: [material("m", "low"), material("n", "low")],
+                }),
+                mapEvent({ id: "b", materials: [material("n", null)] }),
+            ],
+            places,
+            tracked,
+            LOW,
+        );
+        expect(summaries.get(uuid(10))?.tracked).toEqual(
+            new Map([
+                [1, "pale"],
+                [2, "firm"],
+            ]),
+        );
+    });
+
+    it("dashes an area place and a place known only through its parent", () => {
+        const summaries = summarisePlaces(
+            [
+                mapEvent({ place: uuid(11) }),
+                mapEvent({ id: "b", placeSource: "parent" }),
+            ],
+            places,
+            [],
+            LOW,
+        );
+        expect(summaries.get(uuid(11))?.dashed).toBe(true);
+        expect(summaries.get(uuid(10))?.dashed).toBe(true);
+        const mixed = summarisePlaces(
+            [
+                mapEvent({ placeSource: "parent" }),
+                mapEvent({ id: "b", placeSource: "own" }),
+            ],
+            places,
+            [],
+            LOW,
+        );
+        expect(mixed.get(uuid(10))?.dashed).toBe(false);
+    });
+
+    it("gives the feature state per slot and dims under all a place lacking a slot", () => {
+        const tracked = [
+            { uri: "a", slot: 1 },
+            { uri: "c", slot: 3 },
+            { uri: "d", slot: 4 },
+        ];
+        const summary = summarisePlaces(
+            [
+                mapEvent({
+                    materials: [material("a", null), material("c", "low")],
+                }),
+            ],
+            places,
+            [
+                { uri: "a", slot: 1 },
+                { uri: "b", slot: 2 },
+                { uri: "c", slot: 3 },
+            ],
+            LOW,
+        ).get(uuid(10));
+        if (!summary) throw new Error("no summary");
+        const two = [
+            { uri: "a", slot: 1 },
+            { uri: "b", slot: 2 },
+            { uri: "c", slot: 3 },
+        ];
+        expect(featureStates(summary, two, "any")).toEqual({
+            t1: 1,
+            t2: 0,
+            t3: 2,
+            t4: 0,
+            dim: false,
+        });
+        expect(featureStates(summary, two, "all").dim).toBe(true);
+        expect(featureStates(summary, tracked.slice(0, 1), "all").dim).toBe(
+            false,
+        );
+    });
+
+    it("weighs a document and a component carrying the uri, each half when only low", () => {
+        const component = { id: uuid(20), name: label("c") };
+        const firm = [
+            mapEvent({ component, materials: [material("m", null)] }),
+        ];
+        const pale = [
+            mapEvent({ component, materials: [material("m", "low")] }),
+        ];
+        expect(attestationWeight(firm, "m", LOW)).toBe(2);
+        expect(attestationWeight(pale, "m", LOW)).toBe(1);
+        expect(attestationWeight(firm, "zzz", LOW)).toBe(0);
+    });
+});

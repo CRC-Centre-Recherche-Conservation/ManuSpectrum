@@ -44,8 +44,41 @@ $ms-maxw:    1240px;
 $ms-gutter:  2rem;
 $ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) reduction
 
+// Public applications (Analysis Explorer): full width up to $ms-app-maxw, and
+// the height of the fixed site header once scrolled (.ms-header.scrolled),
+// under which sticky panels stop.
+$ms-app-maxw:       105rem;
+$ms-header-stuck:   3.75rem;
+
 @mixin ms-spectral-gradient($angle: 90deg) {
     background: linear-gradient($angle, $ms-red, $ms-orange, $ms-yellow, $ms-green, $ms-blue, $ms-purple);
+}
+
+// The site's thin spectral rule (`.spectral-line-thin` in _ms-chrome.scss): the
+// six hues fading to transparent at both ends, on the chrome's custom properties.
+@mixin ms-spectral-thin {
+    background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
+}
+
+// That rule scanned: a window of the gradient travels along it while something
+// loads; under reduced motion the whole gradient shows, still. The keyframes
+// `ms-spectral-scan` ship with the class in _ms-chrome.scss. Include it last
+// (it nests a @media).
+@mixin ms-spectral-scan {
+    @include ms-spectral-thin;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 50%, transparent);
+    -webkit-mask-size: 30% 100%;
+    mask-size: 30% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    animation: ms-spectral-scan 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+        -webkit-mask-image: none;
+        mask-image: none;
+        animation: none;
+    }
 }
 
 // Gutters come from `--ms-gutter` (declared in _ms-chrome.scss, reduced to
@@ -71,9 +104,9 @@ $ms-gutter-sm: 1.2rem;  // matches the .ms-container @media (max-width:768px) re
     padding-bottom: clamp(3rem, 5.5vw, 5rem);
 }
 
-@mixin ms-reveal {
-    opacity: 0;
-    transform: translateY(24px);
-    transition: opacity 0.7s ease, transform 0.7s ease;
-    &.is-visible { opacity: 1; transform: none; }
+// Contract with utils/reveal-on-scroll: visible by default; `is-pending` hides
+// without transition, so removing it plays the transition declared here.
+@mixin ms-reveal($duration: 0.7s, $ease: ease, $hidden: translateY(24px)) {
+    transition: opacity $duration $ease, transform $duration $ease;
+    &.is-pending { opacity: 0; transform: $hidden; transition: none; }
 }

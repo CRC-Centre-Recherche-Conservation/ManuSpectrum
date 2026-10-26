@@ -1,0 +1,40 @@
+import { describe, expect, it } from "vitest";
+import { mount } from "@vue/test-utils";
+
+import DraftBanner from "@/manuspectrum/pages/AnalysisExplorer/components/DraftBanner.vue";
+
+describe("DraftBanner", () => {
+    it("renders nothing without drafts", () => {
+        const wrapper = mount(DraftBanner, {
+            props: { count: 0, scope: "results" },
+        });
+        expect(wrapper.find(".draft-banner").exists()).toBe(false);
+    });
+
+    it("counts the drafts of the whole result set in the results scope", () => {
+        const wrapper = mount(DraftBanner, {
+            props: { count: 3, scope: "results" },
+        });
+        expect(wrapper.find(".draft-banner").text()).toBe(
+            "3 drafts in these results; they are marked “Draft”.",
+        );
+    });
+
+    it("counts the drafts of the document in the page scope", () => {
+        const wrapper = mount(DraftBanner, {
+            props: { count: 1, scope: "page" },
+        });
+        expect(wrapper.find(".draft-banner").text()).toBe(
+            "1 draft in this document; it is marked “Draft”.",
+        );
+    });
+
+    it("counts the drafts the Compare tools read in the tools scope", () => {
+        const wrapper = mount(DraftBanner, {
+            props: { count: 1, scope: "tools" },
+        });
+        expect(wrapper.find(".draft-banner").text()).toBe(
+            "The tools read 1 draft, not published yet.",
+        );
+    });
+});

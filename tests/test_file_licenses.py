@@ -22,6 +22,8 @@ from manuspectrum.constants.licenses import (
     LICENSES,
     catalogue_json,
     default_license,
+    effective_license,
+    iiif_rights,
     stored_license,
 )
 
@@ -77,6 +79,39 @@ class StoredLicenseTests(SimpleTestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     stored_license(value)
+
+
+class IiifRightsTests(SimpleTestCase):
+    def test_iiif_rights_uses_http_for_a_creative_commons_licence(self):
+        licence = effective_license({"license": {"id": "CC-BY-4.0"}}, "en")
+        self.assertEqual(
+            iiif_rights(licence), "http://creativecommons.org/licenses/by/4.0/"
+        )
+
+    def test_iiif_rights_uses_http_for_rightsstatements(self):
+        licence = effective_license(
+            {
+                "license": {
+                    "id": "LicenseRef-custom",
+                    "url": "https://rightsstatements.org/vocab/InC/1.0/",
+                    "label": "In copyright",
+                }
+            },
+            "en",
+        )
+        self.assertEqual(
+            iiif_rights(licence), "http://rightsstatements.org/vocab/InC/1.0/"
+        )
+
+    def test_iiif_rights_is_none_outside_the_registries(self):
+        licence = effective_license({"license": {"id": "etalab-2.0"}}, "en")
+        self.assertIsNone(iiif_rights(licence))
+
+    def test_iiif_rights_is_none_for_a_custom_licence_without_url(self):
+        licence = effective_license(
+            {"license": {"id": "LicenseRef-custom", "label": "Mine"}}, "en"
+        )
+        self.assertIsNone(iiif_rights(licence))
 
 
 class CatalogueDeliveryTests(SimpleTestCase):

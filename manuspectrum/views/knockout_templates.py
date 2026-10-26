@@ -21,7 +21,6 @@ as the browser loader inserts whatever it receives into the page.
 import functools
 import hashlib
 import logging
-import os
 import posixpath
 from importlib import metadata
 
@@ -39,6 +38,7 @@ from manuspectrum.utils.cache import (
     renews_csrf_cookie,
     stable_cache_key,
 )
+from manuspectrum.utils.stamps import files_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -130,23 +130,9 @@ def _distribution_versions():
 
 
 def _read_stamp():
-    digest = hashlib.sha1(usedforsecurity=False)
-    digest.update(_distribution_versions().encode())
-    for directory in ("templates", "locale"):
-        top = os.path.join(settings.APP_ROOT, directory)
-        for folder, subfolders, files in os.walk(top):
-            subfolders.sort()
-            for filename in sorted(files):
-                path = os.path.join(folder, filename)
-                try:
-                    stat = os.stat(path)
-                except FileNotFoundError:
-                    continue
-                relative = os.path.relpath(path, settings.APP_ROOT)
-                digest.update(
-                    f"{relative}:{stat.st_size}:{stat.st_mtime_ns}\n".encode()
-                )
-    return digest.hexdigest()[:12]
+    return files_stamp(
+        settings.APP_ROOT, ("templates", "locale"), _distribution_versions()
+    )
 
 
 def _load(name):

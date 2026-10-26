@@ -1,0 +1,196 @@
+import json
+import re
+
+from django.test import TestCase, override_settings
+from django.urls import reverse
+
+JSON_LD = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+DOCUMENT_ID = "5fbfe388-8acc-4da8-8f8a-382bd2b6ad17"
+
+
+class AnalysisExplorerPageTests(TestCase):
+    def test_page_renders_in_both_languages_with_both_labels(self):
+        for lang, title in (
+            ("en", "Analysis explorer"),
+            ("fr", "Explorateur d'analyses"),
+        ):
+            response = self.client.get(f"/{lang}/discover")
+            self.assertEqual(response.status_code, 200, lang)
+            html = response.content.decode()
+            self.assertIn(title, html, lang)
+            self.assertIn('id="ms-explorer-app"', html, lang)
+
+    def test_bare_path_redirects_to_a_language(self):
+        response = self.client.get("/discover")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].endswith("/en/discover"))
+
+    def test_canonical_never_carries_the_query(self):
+        html = self.client.get(reverse("analysis-explorer") + "?q=XRF").content.decode()
+        self.assertRegex(html, r'<link rel="canonical" href="[^"?]*/en/discover">')
+
+    def test_noindex_only_with_a_query(self):
+        plain = self.client.get(reverse("analysis-explorer")).content.decode()
+        queried = self.client.get(
+            reverse("analysis-explorer") + "?q=XRF"
+        ).content.decode()
+        self.assertNotIn('name="robots"', plain)
+        self.assertIn('<meta name="robots" content="noindex, follow">', queried)
+
+    def test_hreflang_alternates_point_at_both_languages(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn('hreflang="fr" href="http://testserver/fr/discover"', html)
+        self.assertIn('hreflang="en" href="http://testserver/en/discover"', html)
+
+    def test_json_ld_parses(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        blocks = JSON_LD.findall(html)
+        self.assertTrue(blocks)
+        for block in blocks:
+            json.loads(block)
+
+    @override_settings(EXPLORER_MIRADOR_URL="https://viewer.example/mirador/?a=1&b=2")
+    def test_mount_point_carries_the_mirador_viewer_address(self):
+        page = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn(
+            'data-mirador-url="https://viewer.example/mirador/?a=1&amp;b=2"', page
+        )
+
+    @override_settings(EXPLORER_MIRADOR_URL="")
+    def test_mount_point_has_no_mirador_viewer_without_the_setting(self):
+        page = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertNotIn("data-mirador-url", page)
+
+    @override_settings(EXPLORER_MIRADOR_URL="javascript:alert(1)")
+    def test_a_mirador_setting_that_is_not_a_web_address_is_ignored(self):
+        page = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertNotIn("data-mirador-url", page)
+
+    def test_page_is_never_stored_by_a_shared_cache(self):
+        cache_control = self.client.get(reverse("analysis-explorer"))["Cache-Control"]
+        self.assertIn("private", cache_control)
+        self.assertIn("no-store", cache_control)
+
+    def test_scripted_pages_carry_their_strings_and_the_explorer_none(self):
+        explorer = self.client.get(reverse("analysis-explorer")).content.decode()
+        contact = self.client.get(reverse("about-contact")).content.decode()
+        self.assertNotIn("arches-translations", explorer)
+        self.assertIn("arches-translations", contact)
+
+    def test_body_class_marks_the_app_and_stays_default_elsewhere(self):
+        explorer = self.client.get(reverse("analysis-explorer")).content.decode()
+        team = self.client.get(reverse("about-team")).content.decode()
+        self.assertIn('<body class="ms-page ms-page--app">', explorer)
+        self.assertIn('<body class="ms-page">', team)
+
+    def test_fallback_and_noscript_are_rendered(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertIn('id="ms-explorer-fallback"', html)
+        self.assertRegex(html, r'id="ms-explorer-fallback"[^>]*hidden')
+        self.assertIn("<noscript>", html)
+
+    def test_scripts_and_styles_of_the_page_are_loaded(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertRegex(
+            html,
+            r'<script src="[^"]*/js/views/pages/analysis-explorer\.\w+\.js"\s+defer></script>',
+        )
+        self.assertRegex(
+            html, r'<link href="[^"]*/css/explorer\.\w+\.css" rel="stylesheet" />'
+        )
+
+    def test_header_tab_is_current_on_the_page(self):
+        html = self.client.get(reverse("analysis-explorer")).content.decode()
+        self.assertEqual(
+            html.count(f'href="{reverse("analysis-explorer")}" aria-current="page"'), 1
+        )
+        self.assertIn(
+            f'href="{reverse("analysis-explorer")}" class="ms-mobile-nav-link" aria-current="page"',
+            html,
+        )
+
+    def test_body_names_the_screen_the_address_opens_on(self):
+        doc = DOCUMENT_ID
+        for query, screen in (
+            ("?view=map", "map"),
+            ("?view=compare&doc=" + doc, "compare"),
+            ("?doc=" + doc, "document"),
+            ("?doc=" + doc.upper(), "document"),
+            ("?screen=results", "results"),
+            ("?grain=analyses&technique=x", "results"),
+            ("?q=lead", "results"),
+            ("?period=1200,1300", "results"),
+        ):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn(
+                f'<body class="ms-page ms-page--app" data-explorer-screen="{screen}">',
+                html,
+                query,
+            )
+
+    def test_home_and_unread_queries_leave_the_body_unmarked(self):
+        for query in (
+            "",
+            "?view=atlas",
+            "?doc=not-a-uuid",
+            "?doc=" + DOCUMENT_ID.replace("-", ""),
+            "?doc={" + DOCUMENT_ID + "}",
+            "?doc=urn:uuid:" + DOCUMENT_ID,
+            "?grain=analyses",
+            "?period=x",
+        ):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn('<body class="ms-page ms-page--app">', html, query)
+
+    def test_loading_skeleton_announces_itself_and_follows_the_screen(self):
+        home = self.client.get(reverse("analysis-explorer")).content.decode()
+        mapped = self.client.get(
+            reverse("analysis-explorer") + "?view=map"
+        ).content.decode()
+        compare = self.client.get(
+            reverse("analysis-explorer") + "?view=compare"
+        ).content.decode()
+        self.assertIn(
+            '<p class="ms-explorer-loading__status" role="status" aria-live="polite">Loading the explorer…</p>',
+            home,
+        )
+        self.assertIn("ms-explorer-loading--home", home)
+        self.assertIn("ms-explorer-loading__cards", home)
+        self.assertIn("ms-explorer-loading--screen", mapped)
+        self.assertIn("ms-explorer-loading__rail", mapped)
+        self.assertIn("ms-explorer-loading--compare", compare)
+        self.assertNotIn("ms-explorer-loading__body", compare)
+
+    def test_loading_skeleton_carries_no_spectral_line_on_every_screen(self):
+        for query in ("", "?view=map", "?view=compare"):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertNotIn("spectral-line-thin", html, query)
+            self.assertIn("ms-explorer-loading__tabs", html, query)
+
+    def test_title_accent_is_in_the_server_markup_for_the_loading_scan(self):
+        for query in ("", "?view=map"):
+            html = self.client.get(
+                reverse("analysis-explorer") + query
+            ).content.decode()
+            self.assertIn(
+                '<span class="ms-explorer-intro__accent" aria-hidden="true"></span>',
+                html,
+                query,
+            )
+
+
+class AnalysisExplorerIndexingTests(TestCase):
+    def test_sitemap_lists_the_explorer_with_its_french_alternate(self):
+        xml = self.client.get("/sitemap.xml").content.decode()
+        self.assertIn("/en/discover", xml)
+        self.assertIn("/fr/discover", xml)
+
+    def test_robots_does_not_block_the_explorer(self):
+        robots = self.client.get("/robots.txt").content.decode()
+        self.assertNotIn("discover", robots)

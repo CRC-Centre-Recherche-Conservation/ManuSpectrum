@@ -153,21 +153,21 @@ class HashedKeyTests(TestCase):
         self.assertNotIn(HEX40, raw[0])
 
     def test_iiif_manifest_key_never_carries_the_url(self):
-        from manuspectrum.views.iiif_annotation import IIIFAnnotationMixin
+        from manuspectrum.iiif.sources import manifest_json
 
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"@id": "m"}
         with (
             patch(
-                "manuspectrum.utils.iiif_tools.CanvasIIIF.fetch_manifest",
-                return_value={"@id": "m"},
+                "manuspectrum.utils.iiif_tools.fetch_iiif_manifest",
+                return_value=response,
             ),
-            patch(
-                "manuspectrum.views.iiif_annotation.cache.set", wraps=cache.set
-            ) as set_,
+            patch("manuspectrum.utils.iiif_tools.cache.set", wraps=cache.set) as set_,
         ):
-            IIIFAnnotationMixin()._get_manifest_data("https://evil.example/m?x=1")
+            manifest_json("https://evil.example/m?x=1")
         key = set_.call_args[0][0]
         self.assertNotIn("evil.example", key)
-        self.assertTrue(key.startswith("iiif_manifest_data:"))
+        self.assertTrue(key.startswith("manuspectrum:iiif-manifest:"))
 
 
 class StampedeTests(TestCase):
