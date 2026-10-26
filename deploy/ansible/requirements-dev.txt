@@ -1,0 +1,14 @@
+# Controller tooling (CI and the administrator's laptop), exact versions.
+#
+# ansible-core: the target Python of Ubuntu 26.04 is 3.14 (python3 3.14.3 in
+# the resolute archive). ansible-core 2.19 supports target Pythons up to 3.13
+# and 2.20 added 3.14 (changelog: "Add support for Python 3.14"), so 2.20 is
+# the oldest series that can manage the host. 2.20 needs a controller Python
+# >= 3.12. Upgrade within 2.20.x or move to 2.21 (same range) only after
+# re-reading this note.
+# Release dates (all at least two weeks old when pinned): ansible-core 2.20.10
+# 2026-10-05, ansible-lint 26.9.0 2026-09-22; the collections of
+# requirements.yml: ansible.posix 2.2.2 2026-07-13, community.general 13.4.0
+# 2026-09-07.
+ansible-core==2.20.10
+ansible-lint==26.9.0

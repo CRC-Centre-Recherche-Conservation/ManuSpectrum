@@ -34,6 +34,7 @@ jobs:
       rehearsal: ${{ steps.filter.outputs.rehearsal }}
       stack: ${{ steps.filter.outputs.stack }}
       image: ${{ steps.filter.outputs.image }}
+      ansible: ${{ steps.filter.outputs.ansible }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,7 +49,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [ "$EVENT_NAME" != "pull_request" ]; then
-            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; } >> "$GITHUB_OUTPUT"
+            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; echo "ansible=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
@@ -62,6 +63,7 @@ jobs:
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflows)")"
             echo "image=$(matches "^($stack|$build|$workflow)")"
+            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
   rehearsal-kit:
@@ -351,8 +353,49 @@ jobs:
           df -h /
           docker system df
 
+  ansible:
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: deploy/ansible
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Ansible and its collections
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ansible-venv"
+          "$RUNNER_TEMP/ansible-venv/bin/pip" install -r requirements-dev.txt
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-galaxy" collection install -r requirements.yml
+
+      - name: Lint
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-lint --profile production
+
+      - name: Syntax check
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-playbook --syntax-check -i inventories/example site.yml audit.yml
+
+      - name: Contract tests
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          python3 -m unittest discover -s tests
+
+      - name: Check the rendered systemd units
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-playbook -i inventories/example render.yml -e render_dir="$RUNNER_TEMP/rendered"
+          RENDERED_UNITS_DIR="$RUNNER_TEMP/rendered/units" bash ../systemd/tests/test_units.sh
+
   conclusion:
-    needs: [changes, rehearsal-kit, stack, image]
+    needs: [changes, rehearsal-kit, stack, image, ansible]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

@@ -1,0 +1,92 @@
+---
+# Example inventory: fake values only. Copy this directory to
+# inventories/<host>/ (ignored by Git) and put the real values there.
+
+# --- Mode ---
+# verify: assert the host baseline; apply: set it, then assert it.
+baseline_mode: verify
+# true writes /etc/manuspectrum/rehearsal-host (rehearsal VM only).
+rehearsal_host: false
+
+# --- Floor checked by preflight ---
+min_ram_gb: 7
+min_cpus: 4
+min_free_root_gb: 10
+min_free_data_gb: 20
+supported_os:
+  - { distribution: Ubuntu, version: "24.04" }
+  - { distribution: Ubuntu, version: "26.04" }
+  - { distribution: Debian, version: "13" }
+docker_min_version: "28.3.3"
+
+# --- Baseline ---
+admin_users:
+  - name: admin1
+    pubkey: "ssh-ed25519 AAAAexample1 admin1@example"
+  - name: admin2
+    pubkey: "ssh-ed25519 AAAAexample2 admin2@example"
+service_user: manuspectrum
+# yes or no, as printed by `sshd -T`.
+ssh_password_authentication: "no"
+# Suite of the Docker apt repository to install from (for example noble). Empty
+# means the distribution's own codename; apply stops when that suite does not
+# exist.
+docker_apt_codename: ""
+# type nfs: `src` and `opts` go to /etc/fstab, `nfs_version` is the NFSv4 minor
+# the mount must report. type local: `path` is a plain directory, nothing is
+# mounted.
+data_mount:
+  type: nfs
+  path: /data
+  src: "nfs.example:/export/manuspectrum"
+  opts: "defaults,_netdev"
+  nfs_version: "4"
+unattended_reboot: false
+unattended_reboot_time: "03:30"
+smtp_relay: "smtp.example:25"
+root_alias: "alerts@manuspectrum.example"
+
+# --- Application ---
+app_dir: /home/manuspectrum/manuspectrum
+app_git_url: "https://git.example/manuspectrum.git"
+app_git_ref: main
+data_dir: /data/manuspectrum
+lynis_min_index: 70
+
+# --- deploy/compose/.env: one variable per key of .env.example ---
+# APP_UID and APP_GID are read from the host. No secret belongs here.
+env_deploy_environment: "production"
+env_manuspectrum_image: "manuspectrum:local"
+env_compose_profiles: "observability"
+env_media_host_dir: "{{ data_dir }}/media"
+env_pkg_dir: "{{ app_dir }}/pkg"
+env_secrets_dir: "/srv/manuspectrum/secrets"
+env_backup_dump_dir: "/home/{{ service_user }}/backups"
+env_restic_repository_dir: "{{ data_dir }}/backups/restic"
+env_metrics_textfile_dir: "/home/{{ service_user }}/metrics"
+env_alert_emails: "alerts@manuspectrum.example"
+env_alert_email_from: "noreply@manuspectrum.example"
+env_cert_mode: "local"
+env_certs_dir: "{{ data_dir }}/certs"
+env_nginx_log_host_dir: "{{ data_dir }}/nginx-logs"
+env_hsts_max_age: "3600"
+env_local_ca_cert: ""
+env_http_port: "80"
+env_https_port: "443"
+env_acme_email: ""
+env_acme_server: "https://acme.example/directory"
+env_domain_names: "manuspectrum.example"
+env_public_server_address: "https://manuspectrum.example/"
+env_public_host: "manuspectrum.example"
+env_pgdbname: "manuspectrum"
+env_pgusername: "postgres"
+env_elasticsearch_prefix: "manuspectrum"
+env_contact_email: "contact@manuspectrum.example"
+env_email_host: "smtp.example"
+env_email_port: "25"
+env_email_use_tls: "false"
+env_default_from_email: "noreply@manuspectrum.example"
+env_admins: ""
+env_cors_allowed_origins: ""
+env_force_two_factor_authentication: "false"
+env_related_resources_export_limit: "1000"
