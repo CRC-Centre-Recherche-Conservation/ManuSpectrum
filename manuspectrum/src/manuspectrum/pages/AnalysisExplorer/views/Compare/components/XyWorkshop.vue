@@ -13,14 +13,21 @@ import { useGettext } from "vue3-gettext";
 import { deriveAxisLabel } from "utils/xy-transforms";
 import { BASE_VIEW } from "utils/xy-views";
 
+import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import LoadingSpinner from "@/manuspectrum/pages/AnalysisExplorer/components/LoadingSpinner.vue";
+import PeakIdentifier from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/PeakIdentifier.vue";
 import XyCurveList from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyCurveList.vue";
 import XyLegend from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
+import XrfLensControls from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensControls.vue";
+import XrfLensMenu from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue";
+import XrfLensStrip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue";
 
 import { useSeriesSet } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
+import { useXrfLens } from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
 import {
+    ANNOUNCE_KEY,
     LINKED_SELECTION_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -30,6 +37,7 @@ import {
     analysisNode,
     canvasNode,
     fileNode,
+    kindOfNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import {
     annotationLabels,
@@ -38,11 +46,17 @@ import {
 import {
     EXPORT_TITLE_ROOM,
     annotationOpacities,
+    autorangeX,
+    endLabelsFor,
     exportFigure,
     hoverTemplatesFor,
+    hoverValueFor,
+    logTickUpdate,
     multiplesFigure,
     paintOf,
+    panelWidths,
     stackedFigure,
+    yFitUpdate,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop-figure.ts";
 import {
     curveLook,
@@ -51,6 +65,7 @@ import {
     hoverModeFor,
     openingLayout,
     outOfRange,
+    rangeUpdate,
     ranksInSlot,
     restyleUpdate,
     sharedViews,
@@ -61,6 +76,16 @@ import {
     workshopCsv,
     zoomedAfter,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/workshop.ts";
+import {
+    CUSTOM_RANGE,
+    rangePresetOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-range.ts";
+import {
+    XRF_MAX_ANODES,
+    XRF_MAX_ELEMENTS,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layout.ts";
+import { shapesKey } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
+import { isXrfViewer } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/recognise.ts";
 import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-titles.ts";
 import { loadPlotly } from "@/manuspectrum/pages/AnalysisExplorer/xy/plotly.ts";
 import {
@@ -70,7 +95,7 @@ import {
     whenFontsReady,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
 
-import type { PlotMouseEvent } from "plotly.js";
+import type { PlotMouseEvent, Shape } from "plotly.js";
 import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
 import type { XyView } from "utils/xy-views";
 import type { SeriesResult } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSeriesSet.ts";
@@ -83,6 +108,16 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyLegend.vue";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
+import type {
+    DeclaredElement,
+    DeclaredParts,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/declared.ts";
+import type {
+    LensCurve,
+    LensLabels,
+    PanelViews,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useXrfLens.ts";
+import type { LensDrawing } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/xrf/lens-shapes.ts";
 import type { FileLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
 import type {
     Figure,
@@ -103,6 +138,8 @@ type PlotlyModule = Awaited<ReturnType<typeof loadPlotly>>;
 
 interface Curve extends FigureCurve {
     line: FileLine;
+    /** The series as stored: before the treatment. */
+    rawY: number[];
     xRange: Extent | null;
     xReversed: boolean;
 }
@@ -117,9 +154,24 @@ interface DrawnAxis {
     range?: unknown[];
     autorange?: boolean | string;
     _length?: number;
+    type?: string;
+    tickvals?: unknown;
+    ticktext?: unknown;
+    minor?: { tickvals?: unknown };
+}
+
+/** The margins Plotly drew with, `automargin` included, as `_fullLayout._size` holds them. */
+interface DrawnSize {
+    l?: number;
+    r?: number;
 }
 
 const AXIS_NAME = /^[xy]axis\d*$/;
+/** An update that sets or releases the range of an X axis. */
+const TOUCHES_X_AXIS = /xaxis\d*\.(range|autorange)/;
+const Y_AXIS_RANGE = /yaxis\d*\.(range|autorange)/;
+/** The Y axis whose range or autorange a relayout key sets. */
+const Y_AXIS_RANGE_KEY = /^(yaxis\d*)\.(?:range|autorange)/;
 
 /** The layouts drawn as a chart, and their icons; the table is a toggle of its own. */
 const CHART_LAYOUTS: Readonly<
@@ -130,9 +182,9 @@ const CHART_LAYOUTS: Readonly<
     multiples: "th-large",
 };
 
-/** The pixel mapping of an axis Plotly passes with a hovered point. */
+/** The pixel mapping of an axis Plotly passes with a hovered point (`c2p`: data to pixels, linear or log). */
 interface HoverAxis {
-    l2p?: (value: number) => number;
+    c2p?: (value: number) => number;
     _offset?: number;
 }
 
@@ -143,7 +195,11 @@ const DEFAULT_PNG_HEIGHT = 540;
 /** Room on the right of the exported figure for its legend. */
 const PNG_LEGEND_ROOM = 240;
 const REM = 16;
+/** Left and right margins of the plot inside the chart, in px (`workshop-figure` margins). */
+const PLOT_MARGIN_X = 80;
 const DEFAULT_POINTER = "mouse";
+/** From this many files with nothing to draw, they fold into one disclosure line under the chart. */
+const EMPTY_FILES_FOLDED = 2;
 
 /**
  * The XY workshop of a Compare window (§10, D51, D61, D62): every point of
@@ -193,16 +249,27 @@ const DEFAULT_POINTER = "mouse";
  * on either previews it. A press on the chart that slips into a zoom box
  * narrower than `MIN_ZOOM_PX` is the click it was meant to be: the axes go
  * back to the view the press began on and the curve under it, if any,
- * toggles.
+ * toggles. In an XRF window the « Identify a peak » mode sends that click
+ * to `PeakIdentifier` instead (no drag zooms there): the energy is read on
+ * the curve under the pointer, snapped to the local maximum of its raw
+ * counts, and nothing is toggled in the focus.
  *
  * A file over the server's ceiling, missing or empty is named and left
- * out. A chart Plotly cannot draw says so in the window. The chart follows
- * its window's size (`WINDOW_RESIZE_KEY`) only when its own size changed,
- * and is then drawn again for the size (labels, panels); small multiples
- * that no longer need a height of their own are drawn once more at the
- * size the chart shrinks to. The table layout and the unmount purge it,
- * and end a preview the chart or its legend started; a drawing that ends
- * after the unmount is purged too.
+ * out. A chart Plotly cannot draw says so in the window. The chart takes
+ * the height its window leaves below the toolbar, down to a floor
+ * (`--xy-chart-floor`), and is size-contained so that a drawing never holds
+ * its box open; under 40rem the legend below it scrolls past
+ * `--xy-legend-stacked-max`. Every drawing names its width and height to
+ * Plotly (the box's, or the height small multiples hold open), as `react`
+ * keeps the previous drawing's size for any it is not given
+ * (plotly.js-cartesian-dist 4.0.0 `supplyDefaults`). The chart is drawn
+ * again for its size (labels, panels) when its box or its window's
+ * changes, in the ResizeObserver callback, so that the frame painted after
+ * a resize shows the drawing for it; `WINDOW_RESIZE_KEY` asks again once
+ * the window settles. A drawing carries the lens shapes laid out for the
+ * panels it draws (`plannedViews`). The table layout and the unmount purge
+ * it, and end a preview the chart or its legend started; a drawing that
+ * ends after the unmount is purged too.
  */
 const props = defineProps<{
     curves: readonly FileLine[];
@@ -213,6 +280,7 @@ const props = defineProps<{
 
 const resizeTick = inject(WINDOW_RESIZE_KEY, null);
 const linked = inject(LINKED_SELECTION_KEY, null);
+const announce = inject(ANNOUNCE_KEY, () => undefined);
 
 const { $gettext, $ngettext, interpolate } = useGettext();
 const store = useExplorerStore();
@@ -225,6 +293,7 @@ const results = useSeriesSet(
     () => readable.value.map((curve) => curve.file.previewUrl ?? ""),
     "full",
 );
+const root = useTemplateRef<HTMLElement>("root");
 const chart = useTemplateRef<HTMLDivElement>("chart");
 const lang = document.documentElement.lang || "en";
 
@@ -241,18 +310,58 @@ let shownOpacities: number[] = [];
 let shownHoverMode: "x unified" | "closest" = "x unified";
 let drawing = false;
 let restyleFrame: number | null = null;
+/** The lens shapes the chart shows, serialised (`shapesKey`); an update is made only when they differ. */
+let shownShapesKey = "";
+/** The foot band of the last lens drawing (`LensDrawing.footPx`), which the end labels shown stay above. */
+let footPx = 0;
+let shapesFrame: number | null = null;
+/**
+ * Watches the chart element's own box (its height changes when the content
+ * below it does) and the workshop's, which follows the window while small
+ * multiples hold the chart open.
+ */
+let sizeObserver: ResizeObserver | null = null;
+/** Set while the range select's own relayout runs, so its echo is not read as a zoom by hand. */
+let applyingRange = false;
 const boundCharts = new WeakSet<HTMLElement>();
 /** The chart's size when it was last drawn or resized, « width×height ». */
 let drawnSize = "";
+/** The workshop's size when the chart was last drawn, « width×height ». */
+let drawnRootSize = "";
+/** What the chart was last drawn of (`figureIdentity`): the reader's zoom survives a drawing of the same figure. */
+let drawnIdentity = "";
+/**
+ * The height the chart has when small multiples do not hold it open
+ * (`chartHeight` null): small multiples are laid out for it, never for the
+ * height they gave themselves, which would release and grip the box at each
+ * frame.
+ */
+let naturalHeight = 0;
+/** The next drawing releases a held height first, to read the natural one again. */
+let remeasure = false;
 /** Set on unmount: a drawing still waiting stops, and one that ends late is purged. */
 let disposed = false;
 /** Whether a preview started here (a curve or a legend entry) is not ended yet. */
 let previewing = false;
 /** The curve under the mouse, as Plotly last hovered it. */
 let hovered: Curve | null = null;
-/** The curve under the mouse and the axes shown when the last press on the chart began. */
-let press: { curve: Curve | null; axes: Record<string, AxisView> } | null =
-    null;
+/** The energy under the mouse (`points[0].x`), as Plotly last hovered it. */
+let hoveredEnergy: number | null = null;
+/** The curve under the mouse, its energy and the axes shown when the last press on the chart began. */
+let press: {
+    curve: Curve | null;
+    energy: number | null;
+    axes: Record<string, AxisView>;
+} | null = null;
+
+/**
+ * Whether the counts axes are the fit to the energy window (`yFit`) rather
+ * than a range the reader set: a zoom box, an axis drag or a reset on a
+ * counts axis ends it, and no refit overrides what the reader chose.
+ */
+let yFitted = false;
+/** The curves hidden on the chart as last restyled, joined; the counts fit follows a change of it only. */
+let shownHidden = "";
 
 /** The layout the reader picked; null follows the curves. */
 const chosenLayout = ref<WorkshopLayout | null>(null);
@@ -267,6 +376,42 @@ const drawFailed = ref(false);
 const chartHeight = ref<string | null>(null);
 /** How an unrelated curve shows while a focus is active; shown only then, defaults to Hide. */
 const unrelatedMode = ref<"hide" | "dim">("hide");
+/** The XRF lens draws the Y axis on a log scale (never in Offset). */
+const logScale = ref(false);
+/** The energy range shown: a preset key, or `CUSTOM_RANGE` after a zoom by hand. */
+const rangeKey = ref("full");
+/** The energy window the chart shows when it is narrower than the data (a preset or a zoom); null for the full range. */
+const shownEnergy = ref<[number, number] | null>(null);
+/** « Identify a peak »: a click on the chart identifies instead of toggling the focus. */
+const identifying = ref(false);
+/** The peak being identified: the curve it was read on (`curveId`) and its energy (keV). */
+const identified = ref<{ id: string; energy: number } | null>(null);
+/** Whether the drawn chart's lens left marks out at its cap (`lensDrawing`). */
+const marksLeftOut = ref(false);
+/** The cue shown above the chart while the mode is on and no peak is chosen; also announced once when the mode turns on. */
+const identifyHint = computed(() =>
+    $gettext(
+        "Click the top of a peak: the elements with a line at that energy show under the chart.",
+    ),
+);
+const identifyHelpLabel = computed(() => $gettext("How to identify a peak"));
+const identifyHelpId = useId();
+/** The rules of the mode are shown under the cue. */
+const identifyHelpOpen = ref(false);
+const identifyHelp = computed(() => [
+    $gettext("The click snaps to the nearest peak top."),
+    $gettext(
+        "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum.",
+    ),
+    $gettext(
+        "← / → move the energy by one channel; « Show the lines » draws every line of an element.",
+    ),
+    $gettext(
+        "Hints only: the analyst decides. Escape closes the candidates; « Identify a peak » again leaves the mode.",
+    ),
+]);
+const identifyToggle =
+    useTemplateRef<InstanceType<typeof IconButton>>("identifyToggle");
 
 /** Each readable file's answer, by preview URL, once the answer is for the files shown. */
 const answers = computed(() => {
@@ -312,6 +457,7 @@ const drawn = computed<Curve[]>(() => {
             order,
             x: series.x,
             y,
+            rawY: series.y,
             xRange: extent(series.x),
             yRange: extent(y),
             xReversed: series.x_reversed,
@@ -378,6 +524,20 @@ const flags = computed(() =>
 );
 const selecting = computed(() => (linked?.selection.value.length ?? 0) > 0);
 const selected = computed(() => new Set(linked?.selection.value ?? []));
+/** In an XRF window a focus of element pins alone dims the unrelated curves: the lens draws the elements on every spectrum, hiding would empty the window. */
+const elementFocusOnly = computed(
+    () =>
+        lens.active.value &&
+        selecting.value &&
+        (linked?.selection.value ?? []).every((id) => kindOfNode(id) === "el"),
+);
+const dimUnrelated = computed(
+    () => unrelatedMode.value === "dim" || elementFocusOnly.value,
+);
+/** The mode the « Unlinked spectra » switch shows: forced to Dim while an element focus dims. */
+const unrelatedShown = computed(() =>
+    elementFocusOnly.value ? "dim" : unrelatedMode.value,
+);
 /** How the selection links each drawn curve, through its file or its analysis. */
 const levels = computed<(RelationLevel | null)[]>(() =>
     drawn.value.map((curve) => levelIn(linked?.levels.value, curve)),
@@ -388,7 +548,7 @@ const states = computed<CurveState[]>(() =>
             levels.value[index],
             selecting.value,
             levelIn(linked?.previewLevels.value, curve) !== null,
-            unrelatedMode.value === "dim",
+            dimUnrelated.value,
         ),
     ),
 );
@@ -406,6 +566,79 @@ const effectiveStates = computed<CurveState[]>(() =>
     states.value.map((state, index) =>
         hiddenIds.value.has(curveId(drawn.value[index])) ? "hidden" : state,
     ),
+);
+const lensCurves = computed<LensCurve[]>(() =>
+    drawn.value.map((curve) => ({
+        xrf: isXrfViewer(curve.line.file.viewer),
+        analysis: curve.line.analysis.id,
+        analysisName: curve.line.analysis.name.value,
+        slot: curve.line.slot,
+        order: curve.order,
+        x: curve.x,
+        rawY: curve.rawY,
+        extent: curve.xRange,
+        excitation: curve.line.excitation ?? null,
+    })),
+);
+const lensLabels = computed<LensLabels>(() => ({
+    compton: $gettext("Compton"),
+    escape: $gettext("esc"),
+    voltage: (kV) =>
+        interpolate(
+            $gettext("%{kV} kV"),
+            {
+                kV: new Intl.NumberFormat(lang, {
+                    maximumFractionDigits: 1,
+                }).format(kV),
+            },
+            true,
+        ),
+    elementsFull: interpolate(
+        $gettext("The lens holds at most %{n} elements"),
+        { n: XRF_MAX_ELEMENTS },
+        true,
+    ),
+    anodesFull: interpolate(
+        $gettext("At most %{n} anode choices can be kept"),
+        { n: XRF_MAX_ANODES },
+        true,
+    ),
+}));
+const lens = useXrfLens({
+    curves: () => lensCurves.value,
+    hidden: () => effectiveStates.value.map((state) => state === "hidden"),
+    layout: () => layout.value,
+    slots: () => slots.value,
+    labels: () => lensLabels.value,
+});
+/** The identifier's subject: the curve it reads and what the peak may be; null when closed, or when the curve left the window. */
+const identification = computed(() => {
+    const held = identified.value;
+    if (!held || !identifying.value || !lens.active.value) return null;
+    const index = drawn.value.findIndex((curve) => curveId(curve) === held.id);
+    if (index < 0) return null;
+    return {
+        index,
+        name: drawn.value[index].label,
+        energy: held.energy,
+        candidates: lens.candidatesAt(index, held.energy),
+        kV: lens.kVOf(index),
+        channel: lens.channelOf(index),
+        tolerance: lens.toleranceAt(held.energy),
+    };
+});
+/** The instrument peaks the strip lists: those inside the energy window shown. */
+const listedInstrument = computed(() => {
+    const window = shownEnergy.value;
+    return window
+        ? lens.instrumentNotes.value.filter(
+              (peak) => peak.energy >= window[0] && peak.energy <= window[1],
+          )
+        : lens.instrumentNotes.value;
+});
+/** The log scale as drawn: asked for, in an XRF window, and not in Offset. */
+const logShown = computed(
+    () => lens.active.value && logScale.value && layout.value !== "offset",
 );
 const rows = computed<CurveRow[]>(() =>
     drawn.value.map((curve, index) => ({
@@ -460,14 +693,42 @@ const legendGroups = computed<LegendGroup[]>(() =>
         };
     }),
 );
-const notes = computed(() => {
-    const found: string[] = [];
-    for (const line of props.curves) {
-        const name = `${slotLabel(line.slot)} · ${line.file.name}`;
+/** Each answered file of the window, named by its slot and file name. */
+const answered = computed(() =>
+    props.curves.flatMap((line) => {
         const answer = line.file.previewUrl
             ? answers.value.get(line.file.previewUrl)
             : { series: null, failed: false, tooLarge: false };
-        if (!answer) continue;
+        return answer
+            ? [{ name: `${slotLabel(line.slot)} · ${line.file.name}`, answer }]
+            : [];
+    }),
+);
+/** The files that answered with nothing to draw. */
+const emptyFiles = computed(() =>
+    answered.value
+        .filter(
+            ({ answer }) =>
+                !answer.tooLarge && !answer.failed && !answer.series,
+        )
+        .map(({ name }) => name),
+);
+const emptyFilesFolded = computed(
+    () => emptyFiles.value.length >= EMPTY_FILES_FOLDED,
+);
+const emptyFilesSummary = computed(() =>
+    interpolate(
+        $ngettext(
+            "%{n} file with nothing to draw",
+            "%{n} files with nothing to draw",
+            emptyFiles.value.length,
+        ),
+        { n: emptyFiles.value.length },
+    ),
+);
+const notes = computed(() => {
+    const found: string[] = [];
+    for (const { name, answer } of answered.value) {
         if (answer.tooLarge) {
             found.push(
                 interpolate(
@@ -486,7 +747,7 @@ const notes = computed(() => {
                     true,
                 ),
             );
-        } else if (!answer.series) {
+        } else if (!answer.series && !emptyFilesFolded.value) {
             found.push(
                 interpolate(
                     $gettext("%{name}: nothing to draw."),
@@ -515,8 +776,8 @@ const canRetry = computed(() =>
 const loading = computed(
     () => results.status.value === "loading" && drawn.value.length === 0,
 );
-const chartLabel = computed(() =>
-    interpolate(
+const chartLabel = computed(() => {
+    const label = interpolate(
         $ngettext(
             "Chart of %{n} spectrum; the Table layout lists its range.",
             "Chart of %{n} spectra; the Table layout lists their ranges.",
@@ -524,8 +785,16 @@ const chartLabel = computed(() =>
         ),
         { n: drawn.value.length },
         true,
-    ),
-);
+    );
+    if (!lens.active.value || lens.drawnSymbols.value.length === 0)
+        return label;
+    const lines = interpolate(
+        $gettext("XRF lines drawn: %{elements}; listed below the chart."),
+        { elements: lens.drawnSymbols.value.join(", ") },
+        true,
+    );
+    return `${label} ${lines}`;
+});
 /** Whether every curve drawn is hidden, by the selection or by the legend's eye. */
 const allHidden = computed(
     () =>
@@ -587,14 +856,45 @@ useWindowActions(() => {
     return actions;
 });
 
-watch([drawn, layout, chart], () => void draw());
+watch([drawn, layout, chart, logShown], (now, before) => {
+    const onlyLog =
+        now[3] !== before[3] &&
+        now.slice(0, 3).every((value, index) => value === before[index]);
+    void (onlyLog ? redrawKeepingRange() : draw());
+});
 watch(layout, (name) => {
     if (name === "table") purgeChart();
 });
 watch(effectiveStates, () => scheduleRestyle());
+watch(lens.model, () => scheduleShapes());
+watch(identifying, (on) => {
+    if (!on) identifyHelpOpen.value = false;
+    void setDragMode();
+});
+watch(
+    () => identification.value?.energy ?? null,
+    () => scheduleShapes(),
+);
+watch([lens.active, layout], ([isXrf, shown]) => {
+    if (isXrf && shown !== "table") return;
+    identifying.value = false;
+    identified.value = null;
+});
 watch(
     () => resizeTick?.value,
-    () => followSize(),
+    () => followSize(true),
+);
+watch(
+    chart,
+    (element) => {
+        sizeObserver?.disconnect();
+        if (element && typeof ResizeObserver !== "undefined") {
+            sizeObserver ??= new ResizeObserver(onBoxResized);
+            sizeObserver.observe(element);
+            if (root.value) sizeObserver.observe(root.value);
+        }
+    },
+    { flush: "post" },
 );
 watch(drawn, (curves) => {
     const ids = new Set(curves.map(curveId));
@@ -604,6 +904,8 @@ watch(drawn, (curves) => {
 onBeforeUnmount(() => {
     disposed = true;
     if (restyleFrame !== null) cancelAnimationFrame(restyleFrame);
+    if (shapesFrame !== null) cancelAnimationFrame(shapesFrame);
+    sizeObserver?.disconnect();
     purgeChart();
 });
 
@@ -611,14 +913,35 @@ function sizeOf(element: HTMLElement): string {
     return `${element.clientWidth}×${element.clientHeight}`;
 }
 
+function widthOf(size: string): number {
+    return Number(size.split("×")[0]);
+}
+
+/**
+ * Follows the chart's box before the frame is painted: the drawing runs
+ * in this callback and the microtasks it queues. A held chart measures
+ * its natural height again when the workshop's size changed.
+ */
+function onBoxResized(): void {
+    const element = root.value;
+    followSize(element !== null && sizeOf(element) !== drawnRootSize);
+}
+
 /** Draws the chart again for its size, when that size is not the one it was drawn at. */
-function followSize(): void {
+function followSize(measureAgain = false): void {
     const element = chart.value;
     if (!plotly || !element || layout.value === "table") return;
+    if (element.clientWidth === 0 || element.clientHeight === 0) return;
     const size = sizeOf(element);
-    if (size === drawnSize) return;
+    const held = chartHeight.value !== null;
+    if (held && !measureAgain && element.clientWidth === widthOf(drawnSize)) {
+        drawnSize = size;
+        return;
+    }
+    if (size === drawnSize && !(held && measureAgain)) return;
     drawnSize = size;
-    void resizeChart(element);
+    remeasure = held;
+    void draw();
 }
 
 /** The strongest of the levels; null when none links. */
@@ -662,6 +985,9 @@ function purgeChart(): void {
     drawnOn = null;
     lastFigure = null;
     shownStates = "";
+    shownHidden = "";
+    yFitted = false;
+    shownShapesKey = "";
     hovered = null;
     press = null;
     if (previewing) linked?.preview(null);
@@ -686,7 +1012,11 @@ function viewName(entry: XyView): string {
 }
 
 /** What the figure is drawn from, for the chart element's size. */
-function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
+function figureInput(
+    theme: PlotTheme,
+    element: HTMLElement,
+    height = element.clientHeight,
+): FigureInput {
     return {
         curves: drawn.value,
         states: effectiveStates.value,
@@ -695,8 +1025,133 @@ function figureInput(theme: PlotTheme, element: HTMLElement): FigureInput {
         titles: { ...titles.value, offset: offsetTitle.value },
         xReversed: xReversed.value,
         width: element.clientWidth,
-        height: element.clientHeight,
+        height,
+        yLog: logShown.value,
+        lens: lens.active.value,
+        instrumentBandPx: footPx,
     };
+}
+
+/**
+ * What the chart is a drawing of: its curves, layout, treatment and scale.
+ * A drawing of the same figure (a new size) keeps the reader's zoom; another
+ * figure starts from the full range.
+ */
+function figureIdentity(): string {
+    return [
+        layout.value,
+        view.value.key,
+        logShown.value,
+        xReversed.value,
+        drawn.value.map(curveId).join(","),
+    ].join("|");
+}
+
+/** What each panel of the drawn chart shows now: its energy range and its plot width. */
+function liveViews(): PanelViews | undefined {
+    const element = drawnOn;
+    if (!element) return undefined;
+    const axes = axesOf(element);
+    const views: Record<string, NonNullable<PanelViews[string]>> = {};
+    for (const panel of lens.model.value.panels) {
+        const axis = axes[`xaxis${panel.suffix}`];
+        if (!axis) continue;
+        views[panel.suffix] = {
+            range: [axis.range[0], axis.range[1]],
+            ...(axis.length > 0 ? { width: axis.length } : {}),
+        };
+    }
+    return views;
+}
+
+/**
+ * What each panel of `figure` shows once drawn `width` px wide on `element`:
+ * its plot width (`panelWidths`, with the margins Plotly drew when the
+ * element shows the same figure) and the energy range `kept` puts back,
+ * else the one every panel shows under the autorange (`autorangeX`).
+ */
+function plannedViews(
+    figure: Figure,
+    element: HTMLElement,
+    kept: Record<string, unknown> | null,
+    sameFigure: boolean,
+): PanelViews {
+    const size = sameFigure
+        ? (element as { _fullLayout?: { _size?: DrawnSize } })._fullLayout
+              ?._size
+        : undefined;
+    const margins =
+        size && Number.isFinite(size.l) && Number.isFinite(size.r)
+            ? { l: size.l as number, r: size.r as number }
+            : undefined;
+    const autorange = autorangeX(figure, xReversed.value);
+    const views: Record<string, NonNullable<PanelViews[string]>> = {};
+    for (const [suffix, plot] of Object.entries(
+        panelWidths(figure, element.clientWidth, margins),
+    )) {
+        const range =
+            (kept?.[`xaxis${suffix}.range`] as [number, number] | undefined) ??
+            (kept?.["xaxis.range"] as [number, number] | undefined) ??
+            autorange;
+        views[suffix] = {
+            width: plot,
+            ...(range ? { range: [range[0], range[1]] } : {}),
+        };
+    }
+    return views;
+}
+
+/** The ticks (`logTickUpdate`) of each log axis of `figure` whose range `kept` puts back. */
+function keptLogTicks(
+    figure: Figure,
+    kept: Record<string, unknown>,
+): Record<string, unknown> {
+    const layout = figure.layout as Record<string, { type?: string }>;
+    const ticks: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(kept)) {
+        const name = /^(yaxis\d*)\.range$/.exec(key)?.[1];
+        if (name && layout[name]?.type === "log") {
+            Object.assign(
+                ticks,
+                logTickUpdate(name, value as [number, number], lang),
+            );
+        }
+    }
+    return ticks;
+}
+
+interface ShapeOptions {
+    /** Adds the dashed line at the energy being identified. */
+    marker?: boolean;
+    /** What each panel shows: the drawn chart's (`liveViews`) or an export's. */
+    views?: PanelViews;
+}
+
+/**
+ * The lens drawing for `theme`; empty outside an XRF window. Without
+ * `views` the labels are laid out on the data extent and the chart's width.
+ */
+function lensShapesFor(
+    theme: PlotTheme,
+    { marker = true, views }: ShapeOptions = {},
+): LensDrawing {
+    if (!lens.active.value) return { shapes: [], dropped: 0, footPx: 0 };
+    const width = chart.value?.clientWidth;
+    const held = marker ? identification.value : null;
+    return lens.drawing(
+        theme,
+        width ? width - PLOT_MARGIN_X : undefined,
+        held
+            ? {
+                  energy: held.energy,
+                  label: `⌖ ${new Intl.NumberFormat(lang, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                  }).format(held.energy)} keV`,
+              }
+            : undefined,
+        views,
+    );
 }
 
 async function draw(): Promise<void> {
@@ -705,8 +1160,6 @@ async function draw(): Promise<void> {
         return;
     }
     drawing = true;
-    /** Small multiples that needed a height of their own and no longer do: the chart shrinks once drawn. */
-    let released = false;
     try {
         plotly ??= await loadPlotly();
         if (disposed) return;
@@ -714,36 +1167,83 @@ async function draw(): Promise<void> {
         if (disposed) return;
         if (drawnOn && drawnOn !== element) purgeChart();
         const theme = readPlotTheme();
-        const input = figureInput(theme, element);
+        if (remeasure && chartHeight.value !== null) {
+            chartHeight.value = null;
+            await nextTick();
+            if (disposed) return;
+        }
+        remeasure = false;
+        if (chartHeight.value === null) naturalHeight = element.clientHeight;
+        const identity = figureIdentity();
+        const kept =
+            drawnOn === element && identity === drawnIdentity
+                ? keptRanges(element)
+                : null;
+        const input = figureInput(theme, element, naturalHeight);
         const figure =
             layout.value === "multiples"
                 ? multiplesFigure(input)
                 : stackedFigure(input, layout.value === "offset");
-        released = chartHeight.value !== null && figure.height === null;
+        if (kept) Object.assign(kept, keptLogTicks(figure, kept));
+        const planned = lensShapesFor(theme, {
+            views: plannedViews(
+                figure,
+                element,
+                kept,
+                drawnOn === element && identity === drawnIdentity,
+            ),
+        });
+        const shapes = planned.shapes;
+        if (shapes.length > 0) figure.layout.shapes = [...shapes];
+        if (planned.footPx !== footPx) {
+            footPx = planned.footPx;
+            const labels = endLabelsFor(
+                { ...input, instrumentBandPx: footPx },
+                figure,
+                layout.value,
+            );
+            if (labels) figure.layout.annotations = labels;
+        }
         chartHeight.value =
             figure.height === null ? null : `${figure.height / REM}rem`;
         const opacities = annotationOpacities(figure, effectiveStates.value);
         (figure.layout.annotations ?? []).forEach((note, index) => {
             note.opacity = opacities[index];
         });
+        if (identifying.value) figure.layout.dragmode = false;
         lastFigure = figure;
         drawnOn = element;
         drawnTheme = theme;
-        drawnSize = sizeOf(element);
         shownStates = effectiveStates.value.join();
+        shownHidden = hiddenKeyOf(effectiveStates.value);
+        shownShapesKey = shapesKey(shapes);
         shownOpacities = opacities;
         shownHoverMode = hoverModeFor(visibleCurveCount(effectiveStates.value));
         await plotly.react(
             element,
             figure.data,
-            figure.layout,
+            {
+                ...figure.layout,
+                width: element.clientWidth,
+                height: figure.height ?? naturalHeight,
+            },
             WORKSHOP_CONFIG,
         );
-        zoomed.value = false;
         if (disposed) {
             plotly.purge(element);
             return;
         }
+        drawnSize = sizeOf(element);
+        if (root.value) drawnRootSize = sizeOf(root.value);
+        drawnIdentity = identity;
+        if (kept === null) {
+            zoomed.value = false;
+            rangeKey.value = "full";
+            shownEnergy.value = null;
+        } else {
+            await setRanges(element, kept);
+        }
+        await retickLogAxes(element);
         bindEvents(element);
         drawFailed.value = false;
     } catch (error: unknown) {
@@ -752,18 +1252,99 @@ async function draw(): Promise<void> {
         console.error("Spectra comparison could not be drawn", error);
     } finally {
         drawing = false;
-        if (!disposed) scheduleRestyle();
-    }
-    if (released && !disposed) {
-        await nextTick();
-        followSize();
+        if (!disposed) {
+            scheduleRestyle();
+            scheduleShapes();
+        }
     }
 }
 
-async function resizeChart(element: HTMLElement): Promise<void> {
-    if (!plotly) return;
-    await plotly.Plots.resize(element);
-    if (!disposed) await draw();
+/** Reads the energy window the chart shows now. */
+function syncShownEnergy(): void {
+    const axis = drawnOn ? axesOf(drawnOn).xaxis : undefined;
+    shownEnergy.value =
+        axis && !axis.autorange
+            ? [
+                  Math.min(axis.range[0], axis.range[1]),
+                  Math.max(axis.range[0], axis.range[1]),
+              ]
+            : null;
+}
+
+/** The axes the reader zoomed (or a fit set) on `element`, as the relayout that puts them back. */
+function keptRanges(element: HTMLElement): Record<string, unknown> {
+    const kept: Record<string, unknown> = {};
+    for (const [name, axis] of Object.entries(axesOf(element))) {
+        if (!axis.autorange) kept[`${name}.range`] = [...axis.range];
+    }
+    return kept;
+}
+
+/** Relayouts `update` on `element` without the echo being read as the reader's zoom. */
+async function setRanges(
+    element: HTMLElement,
+    update: Record<string, unknown>,
+): Promise<void> {
+    if (!plotly || Object.keys(update).length === 0) return;
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, update);
+    } catch (error: unknown) {
+        console.error("The ranges could not be put back", error);
+    } finally {
+        applyingRange = false;
+    }
+}
+
+/**
+ * The relayout that fits the counts axes to the energy window `xRange`
+ * (`yFitUpdate`), back to their autorange for `null`; empty outside an XRF
+ * window.
+ */
+function yFit(
+    xRange: readonly [number, number] | null,
+): Record<string, unknown> {
+    const element = drawnOn;
+    const theme = drawnTheme;
+    if (!lens.active.value || !element || !theme) return {};
+    return yFitUpdate(
+        figureInput(theme, element),
+        layout.value === "table" ? "overlay" : layout.value,
+        xRange,
+    );
+}
+
+/** Draws again, then puts the energy range the reader had back (a redraw resets the axes). */
+async function redrawKeepingRange(): Promise<void> {
+    const key = rangeKey.value;
+    const preset = rangePresetOf(key);
+    const held = drawnOn ? axesOf(drawnOn).xaxis : undefined;
+    let update: Record<string, unknown> | null = null;
+    if (preset?.range) update = rangeUpdate(preset, xReversed.value);
+    else if (key === CUSTOM_RANGE && held && !held.autorange) {
+        update = { "xaxis.range": [...held.range] };
+    }
+    await draw();
+    const element = drawnOn;
+    if (!update || !plotly || !element || disposed) return;
+    const energyWindow = preset?.range ?? (held ? [...held.range] : null);
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, {
+            ...update,
+            ...(energyWindow ? yFit(energyWindow as [number, number]) : {}),
+        });
+        yFitted = energyWindow !== null && lens.active.value;
+    } catch (error: unknown) {
+        console.error("The energy range could not be set", error);
+    } finally {
+        applyingRange = false;
+    }
+    zoomed.value = true;
+    rangeKey.value = key;
+    shownEnergy.value = energyWindow
+        ? [energyWindow[0] as number, energyWindow[1] as number]
+        : null;
 }
 
 function scheduleRestyle(): void {
@@ -772,6 +1353,64 @@ function scheduleRestyle(): void {
         restyleFrame = null;
         void restyle();
     });
+}
+
+function scheduleShapes(): void {
+    if (shapesFrame !== null) return;
+    shapesFrame = requestAnimationFrame(() => {
+        shapesFrame = null;
+        void updateShapes();
+    });
+}
+
+/**
+ * Shows the lens shapes now due on the drawn chart by replacing the layout's
+ * `shapes`, only when they are not the ones shown: a focus change that
+ * moves no line makes no call. Through `Plotly.update` with no trace
+ * change, never `Plotly.relayout`: a relayout of `shapes` alone skips
+ * `Plots.supplyDefaults`, the only pass that resets the axes'
+ * `_shapeIndices` (plotly.js-cartesian-dist 4.0.0 `src/plot_api/plot_api.js`).
+ */
+async function updateShapes(): Promise<void> {
+    const element = drawnOn;
+    const theme = drawnTheme;
+    const figure = lastFigure;
+    if (drawing || !plotly || !element || !figure || !theme) return;
+    const live = lensShapesFor(theme, { views: liveViews() });
+    marksLeftOut.value = live.dropped > 0;
+    const key = shapesKey(live.shapes);
+    const labels =
+        live.footPx === footPx
+            ? null
+            : endLabelsFor(
+                  {
+                      ...figureInput(theme, element, naturalHeight),
+                      instrumentBandPx: live.footPx,
+                  },
+                  figure,
+                  layout.value === "table" ? "overlay" : layout.value,
+              );
+    labels?.forEach((note, index) => {
+        note.opacity = shownOpacities[index];
+    });
+    if (key === shownShapesKey && !labels) {
+        footPx = live.footPx;
+        return;
+    }
+    try {
+        await plotly.update(
+            element,
+            {},
+            labels
+                ? { shapes: live.shapes, annotations: labels }
+                : { shapes: live.shapes },
+        );
+        shownShapesKey = key;
+        footPx = live.footPx;
+        if (labels && lastFigure === figure) figure.layout.annotations = labels;
+    } catch (error: unknown) {
+        console.error("The XRF lines could not be drawn", error);
+    }
 }
 
 /**
@@ -799,7 +1438,7 @@ async function restyle(): Promise<void> {
     const templates = hoverTemplatesFor(
         input,
         figure.order,
-        layout.value === "offset" ? "customdata" : "y",
+        hoverValueFor(input, layout.value === "offset"),
         mode,
     );
     try {
@@ -827,9 +1466,124 @@ async function restyle(): Promise<void> {
             shownOpacities = opacities;
             shownStates = key;
         }
+        const hiddenKey = hiddenKeyOf(effectiveStates.value);
+        if (lastFigure === figure && hiddenKey !== shownHidden) {
+            shownHidden = hiddenKey;
+            await refitCounts(element);
+        }
     } catch (error: unknown) {
         console.error("Spectra comparison could not be restyled", error);
     }
+}
+
+/** The curves hidden among `states`, as a key: emphasis and dimming leave it as it was. */
+function hiddenKeyOf(states: readonly string[]): string {
+    return states.map((state) => state === "hidden").join();
+}
+
+/**
+ * Fits the counts axes again to the energy window shown when the curves
+ * hidden changed (a curve that came back may be higher than the fit): a
+ * relayout of the axes whose range differs, their ticks with them; none
+ * when the window is the full range or when the reader set a counts range
+ * since the last fit (`yFitted`).
+ */
+async function refitCounts(element: HTMLElement): Promise<void> {
+    if (!lens.active.value || rangeKey.value === "full" || !yFitted) return;
+    const axes = axesOf(element);
+    const energy = axes.xaxis;
+    if (!energy || energy.autorange) return;
+    const fit = yFit([energy.range[0], energy.range[1]]);
+    const moved = new Set<string>();
+    for (const [key, value] of Object.entries(fit)) {
+        const name = key.slice(0, key.indexOf("."));
+        const axis = axes[name];
+        if (key.endsWith(".autorange")) {
+            if (!axis?.autorange) moved.add(name);
+        } else if (key.endsWith(".range")) {
+            const [low, high] = value as number[];
+            if (
+                !axis ||
+                axis.autorange ||
+                Math.abs(axis.range[0] - low) > 1e-9 ||
+                Math.abs(axis.range[1] - high) > 1e-9
+            ) {
+                moved.add(name);
+            }
+        }
+    }
+    await setRanges(
+        element,
+        Object.fromEntries(
+            Object.entries(fit).filter(([key]) =>
+                moved.has(key.slice(0, key.indexOf("."))),
+            ),
+        ),
+    );
+    yFitted = true;
+}
+
+/** The ticks of `values` (labelled by `texts`) that a log axis showing `range` (log10) draws, as a key; empty when none is an array. */
+function ticksInside(
+    range: readonly [number, number],
+    values: unknown,
+    texts?: unknown,
+): string {
+    if (!Array.isArray(values)) return "";
+    const [low, high] = [Math.min(...range), Math.max(...range)];
+    const labels = Array.isArray(texts) ? texts : [];
+    return JSON.stringify(
+        values.flatMap((value: unknown, index) => {
+            const at = Math.log10(Number(value));
+            return at >= low && at <= high
+                ? [[value, labels[index] ?? null]]
+                : [];
+        }),
+    );
+}
+
+/**
+ * Gives each log Y axis of `element` the ticks (`logTickUpdate`) of the range
+ * Plotly shows now, read from its full layout after a relayout or a drawing:
+ * a box zoom, an axis-end drag, a double-click or a fit. `keys` limits it to
+ * the axes a relayout's keys set the range or autorange of; without them,
+ * every log Y axis. An axis already showing those ticks is left alone, so a
+ * relayout of ticks never follows its own.
+ */
+async function retickLogAxes(
+    element: HTMLElement,
+    keys?: readonly string[],
+): Promise<void> {
+    const full = (element as { _fullLayout?: Record<string, unknown> })
+        ._fullLayout;
+    if (!full) return;
+    const names = keys
+        ? new Set(
+              keys.flatMap((key) => {
+                  const name = Y_AXIS_RANGE_KEY.exec(key)?.[1];
+                  return name ? [name] : [];
+              }),
+          )
+        : new Set(Object.keys(full).filter((name) => /^yaxis\d*$/.test(name)));
+    const update: Record<string, unknown> = {};
+    for (const name of names) {
+        const axis = full[name] as DrawnAxis | undefined;
+        if (axis?.type !== "log" || !Array.isArray(axis.range)) continue;
+        const range: [number, number] = [
+            Number(axis.range[0]),
+            Number(axis.range[1]),
+        ];
+        const ticks = logTickUpdate(name, range, lang);
+        const seen = (values: unknown, texts?: unknown) =>
+            ticksInside(range, values, texts);
+        const same =
+            seen(axis.tickvals, axis.ticktext) ===
+                seen(ticks[`${name}.tickvals`], ticks[`${name}.ticktext`]) &&
+            seen(axis.minor?.tickvals) ===
+                seen(ticks[`${name}.minor.tickvals`]);
+        if (!same) Object.assign(update, ticks);
+    }
+    await setRanges(element, update);
 }
 
 function bindEvents(element: HTMLElement): void {
@@ -837,31 +1591,152 @@ function bindEvents(element: HTMLElement): void {
     if (boundCharts.has(element) || typeof target.on !== "function") return;
     boundCharts.add(element);
     element.addEventListener("pointerdown", () => {
-        press = { curve: hovered, axes: axesOf(element) };
+        press = {
+            curve: hovered,
+            energy: hoveredEnergy,
+            axes: axesOf(element),
+        };
+    });
+    element.addEventListener("pointerup", () => {
+        const released = press;
+        setTimeout(() => {
+            if (press === released) press = null;
+        }, 0);
     });
     target.on("plotly_relayout", (update: Record<string, unknown>) => {
         const before = press;
         press = null;
-        if (before && plotly && slipZoom(update, before.axes)) {
+        if (
+            before &&
+            !applyingRange &&
+            plotly &&
+            slipZoom(update, before.axes)
+        ) {
             void plotly.relayout(element, undoZoom(update, before.axes));
-            if (before.curve) toggle(entryNode(before.curve));
+            if (identifying.value) identify(before.curve, before.energy);
+            else if (before.curve) toggle(entryNode(before.curve));
             return;
         }
-        zoomed.value = zoomedAfter(update, zoomed.value);
+        const keys = Object.keys(update).join();
+        void retickLogAxes(element, Object.keys(update));
+        if (!applyingRange && Y_AXIS_RANGE.test(keys)) yFitted = false;
+        const touchesX = TOUCHES_X_AXIS.test(keys);
+        if (!applyingRange) zoomed.value = zoomedAfter(update, zoomed.value);
+        if (!applyingRange && touchesX) {
+            rangeKey.value = zoomed.value ? CUSTOM_RANGE : "full";
+            void fitToEnergyWindow(element, update);
+        }
+        if (touchesX) {
+            syncShownEnergy();
+            scheduleShapes();
+        }
     });
     target.on("plotly_hover", (event: PlotMouseEvent) => {
         const curve = hoveredCurve(event);
         hovered = curve;
+        hoveredEnergy = energyOf(event);
         if (curve) preview(entryNode(curve), pointerOf(event));
     });
     target.on("plotly_unhover", (event: PlotMouseEvent) => {
         hovered = null;
+        hoveredEnergy = null;
         preview(null, pointerOf(event));
     });
     target.on("plotly_click", (event: PlotMouseEvent) => {
+        press = null;
         const curve = hoveredCurve(event);
-        if (curve) toggle(entryNode(curve));
+        if (identifying.value) identify(curve, energyOf(event));
+        else if (curve) toggle(entryNode(curve));
     });
+}
+
+/**
+ * After a change of the energy window by hand (an axis drag), fits the
+ * counts axes to it, unless the same update already sets one (a box zoom,
+ * a reset).
+ */
+async function fitToEnergyWindow(
+    element: HTMLElement,
+    update: Record<string, unknown>,
+): Promise<void> {
+    if (
+        !plotly ||
+        !lens.active.value ||
+        Y_AXIS_RANGE.test(Object.keys(update).join())
+    ) {
+        return;
+    }
+    const axis = axesOf(element).xaxis;
+    if (!axis) return;
+    const fit = yFit(axis.autorange ? null : [axis.range[0], axis.range[1]]);
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, fit);
+        yFitted = true;
+    } catch (error: unknown) {
+        console.error("The counts range could not be fitted", error);
+    } finally {
+        applyingRange = false;
+    }
+}
+
+/** The energy Plotly names for a point (`points[0].x`); null when it is not a number. */
+function energyOf(event: PlotMouseEvent): number | null {
+    const x: unknown = event?.points?.[0]?.x;
+    return typeof x === "number" && Number.isFinite(x) ? x : null;
+}
+
+/** Opens the identifier on `curve` at `energy`, snapped to the local maximum of its raw counts; nothing without both. */
+function identify(curve: Curve | null, energy: number | null): void {
+    if (!curve || energy === null) return;
+    const index = drawn.value.indexOf(curve);
+    if (index < 0) return;
+    identified.value = {
+        id: curveId(curve),
+        energy: lens.snapEnergy(index, energy),
+    };
+}
+
+/** In « Identify a peak » no drag zooms (a press that slips on a peak is the click it was meant to be); a relayout, never a redraw. */
+async function setDragMode(): Promise<void> {
+    const element = drawnOn;
+    if (!plotly || !element) return;
+    try {
+        await plotly.relayout(element, {
+            dragmode: identifying.value ? false : "zoom",
+        });
+    } catch (error: unknown) {
+        console.error("The drag mode could not be set", error);
+    }
+}
+
+function toggleIdentify(): void {
+    identifying.value = !identifying.value;
+    if (!identifying.value) identified.value = null;
+    else announce(identifyHint.value);
+}
+
+/** Escape on the toggle closes the open identifier and keeps the key from clearing the focus. */
+function onToggleEscape(event: KeyboardEvent): void {
+    if (!identification.value) return;
+    event.preventDefault();
+    void closeIdentifier();
+}
+
+async function closeIdentifier(): Promise<void> {
+    identified.value = null;
+    await nextTick();
+    identifyToggle.value?.element?.focus();
+}
+
+function identifiedDeclaredParts(entry: DeclaredElement): DeclaredParts | null {
+    return identification.value
+        ? lens.declaredPartsAt(identification.value.index, entry)
+        : null;
+}
+
+function moveIdentified({ energy }: { energy: number }): void {
+    if (identified.value) identified.value = { ...identified.value, energy };
 }
 
 /** The axes Plotly shows on `element`, by name: range, autorange and length in pixels. */
@@ -901,9 +1776,9 @@ function hoveredCurve(event: PlotMouseEvent): Curve | null {
         let nearest = Infinity;
         for (const point of points) {
             const axis = point.yaxis as unknown as HoverAxis;
-            if (!axis?.l2p || typeof point.y !== "number") continue;
+            if (!axis?.c2p || typeof point.y !== "number") continue;
             const distance = Math.abs(
-                axis.l2p(point.y) + (axis._offset ?? 0) - pointer,
+                axis.c2p(point.y) + (axis._offset ?? 0) - pointer,
             );
             if (distance < nearest) {
                 nearest = distance;
@@ -950,6 +1825,8 @@ function preview(node: NodeId | null, event: PreviewEvent): void {
 
 async function reset(): Promise<void> {
     zoomed.value = false;
+    rangeKey.value = "full";
+    shownEnergy.value = null;
     if (plotly && chart.value) {
         await resetAxes(
             plotly,
@@ -965,6 +1842,36 @@ function save(href: string, name: string): void {
     link.href = href;
     link.download = name;
     link.click();
+}
+
+/** The energy range of a preset, as a relayout of the X axis; a zoom for every preset but « full ». */
+async function chooseRange(key: string): Promise<void> {
+    const preset = rangePresetOf(key);
+    const element = drawnOn;
+    if (!preset || !plotly || !element) return;
+    const xUpdate = rangeUpdate(preset, xReversed.value);
+    const update = { ...xUpdate, ...yFit(preset.range) };
+    rangeKey.value = key;
+    applyingRange = true;
+    try {
+        await plotly.relayout(element, update);
+        yFitted = lens.active.value;
+    } catch (error: unknown) {
+        console.error("The energy range could not be set", error);
+    } finally {
+        applyingRange = false;
+    }
+    zoomed.value = zoomedAfter(xUpdate, zoomed.value);
+    shownEnergy.value = preset.range
+        ? [preset.range[0], preset.range[1]]
+        : null;
+}
+
+function onLayer(event: {
+    name: keyof typeof lens.layers.value;
+    value: boolean;
+}): void {
+    lens.layers.value = { ...lens.layers.value, [event.name]: event.value };
 }
 
 function exportTitle(): string {
@@ -992,6 +1899,19 @@ function sourceLine(): string {
     );
 }
 
+/** The source line of the PNG, with the line table's source when the lens drew lines. */
+function exportSource(shapes: readonly Partial<Shape>[]): string {
+    const source = sourceLine();
+    const version = lens.table.value?.version;
+    if (!version || shapes.length === 0) return source;
+    const lines = interpolate(
+        $gettext("Lines: XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"),
+        { version },
+        true,
+    );
+    return `${source} · ${lines}`;
+}
+
 /**
  * The chart as a PNG, on the page's background rather than the transparent
  * one of the screen: the curves as shown (a hidden curve left out), Plotly's
@@ -1004,12 +1924,24 @@ async function downloadPng(): Promise<void> {
     if (!plotly || !element || !figure || !theme) return;
     const input = figureInput(theme, element);
     const paints = figure.order.map((index) => paintOf(input, index));
+    const widths = panelWidths(
+        figure,
+        element.clientWidth || DEFAULT_PNG_WIDTH,
+    );
+    const views: Record<string, { width: number }> = {};
+    for (const [suffix, width] of Object.entries(widths)) {
+        views[suffix] = { width };
+    }
+    const { shapes } = lensShapesFor(theme, { marker: false, views });
     try {
         const url = await plotly.toImage(
-            exportFigure(figure, paints, theme, {
-                title: exportTitle(),
-                source: sourceLine(),
-            }),
+            exportFigure(
+                figure,
+                paints,
+                theme,
+                { title: exportTitle(), source: exportSource(shapes) },
+                lens.active.value ? shapes : undefined,
+            ),
             {
                 format: "png",
                 width:
@@ -1059,6 +1991,11 @@ function toggleTable(): void {
     chosenLayout.value = "table";
 }
 
+function chooseUnrelated(mode: "hide" | "dim"): void {
+    if (elementFocusOnly.value && mode === "hide") return;
+    unrelatedMode.value = mode;
+}
+
 function chooseView(event: Event): void {
     viewKey.value = (event.target as HTMLSelectElement).value;
 }
@@ -1066,6 +2003,7 @@ function chooseView(event: Event): void {
 
 <template>
     <section
+        ref="root"
         class="xy-workshop"
         :aria-busy="results.status.value === 'loading' ? 'true' : 'false'"
     >
@@ -1118,8 +2056,9 @@ function chooseView(event: Event): void {
                     </select>
                 </label>
                 <div
-                    v-if="selecting"
                     class="unrelated-mode"
+                    :class="{ idle: !selecting }"
+                    :inert="selecting ? undefined : true"
                 >
                     <span>{{ $gettext("Unlinked spectra") }}</span>
                     <span
@@ -1127,22 +2066,88 @@ function chooseView(event: Event): void {
                         role="group"
                         :aria-label="$gettext('Unlinked spectra')"
                     >
-                        <button
+                        <template
                             v-for="option in unrelatedModeOptions"
                             :key="option.value"
-                            type="button"
-                            :data-mode="option.value"
-                            :aria-pressed="
-                                unrelatedMode === option.value
-                                    ? 'true'
-                                    : 'false'
-                            "
-                            @click="unrelatedMode = option.value"
                         >
-                            <span>{{ option.label }}</span>
-                        </button>
+                            <HelpTip
+                                v-if="
+                                    elementFocusOnly && option.value === 'hide'
+                                "
+                                :text="
+                                    $gettext(
+                                        'Not available while only elements are in the focus: the lens draws them on every spectrum',
+                                    )
+                                "
+                                placement="below"
+                            >
+                                <template #default="{ describedby }">
+                                    <button
+                                        type="button"
+                                        :data-mode="option.value"
+                                        aria-pressed="false"
+                                        aria-disabled="true"
+                                        :aria-describedby="describedby"
+                                    >
+                                        <span>{{ option.label }}</span>
+                                    </button>
+                                </template>
+                            </HelpTip>
+                            <button
+                                v-else
+                                type="button"
+                                :data-mode="option.value"
+                                :aria-pressed="
+                                    unrelatedShown === option.value
+                                        ? 'true'
+                                        : 'false'
+                                "
+                                @click="chooseUnrelated(option.value)"
+                            >
+                                <span>{{ option.label }}</span>
+                            </button>
+                        </template>
                     </span>
                 </div>
+                <XrfLensControls
+                    v-if="lens.active.value && layout !== 'table'"
+                    :log="logScale"
+                    :log-disabled="layout === 'offset'"
+                    :range="rangeKey"
+                    @update-log="logScale = $event.log"
+                    @update-range="chooseRange($event.key)"
+                >
+                    <template #settings>
+                        <XrfLensMenu
+                            :declared="lens.layers.value.declared"
+                            :instrument="lens.layers.value.instrument"
+                            :overlaps="lens.layers.value.overlaps"
+                            :detector="lens.settings.value.detector"
+                            :counts="lens.layerCounts.value"
+                            :anodes="lens.anodeRows.value"
+                            :version="lens.table.value?.version ?? ''"
+                            @update-layer="onLayer"
+                            @update-detector="lens.setDetector($event.detector)"
+                            @update-anode="
+                                lens.setAnode($event.analysis, $event.anode)
+                            "
+                        />
+                    </template>
+                    <template #identify>
+                        <IconButton
+                            ref="identifyToggle"
+                            icon="bullseye"
+                            data-action="identify"
+                            :aria-expanded="identification ? 'true' : undefined"
+                            :pressed="identifying"
+                            :label="$gettext('Identify a peak')"
+                            tip-placement="below"
+                            tip-align="start"
+                            @click="toggleIdentify"
+                            @keydown.esc="onToggleEscape"
+                        />
+                    </template>
+                </XrfLensControls>
             </div>
             <p
                 v-if="treatments.mixed"
@@ -1167,12 +2172,6 @@ function chooseView(event: Event): void {
             >
                 <span>{{ $gettext("The chart could not be drawn.") }}</span>
             </p>
-            <p
-                v-if="allHidden && layout !== 'table'"
-                class="note isolated"
-            >
-                <span>{{ allHiddenNote }}</span>
-            </p>
             <div
                 v-if="layout !== 'table'"
                 class="plot-area"
@@ -1181,7 +2180,8 @@ function chooseView(event: Event): void {
                 <div
                     ref="chart"
                     class="chart"
-                    :class="{ failed: drawFailed }"
+                    :data-failed="drawFailed || undefined"
+                    :data-identifying="identifying || undefined"
                     :style="
                         chartHeight ? { minBlockSize: chartHeight } : undefined
                     "
@@ -1195,6 +2195,78 @@ function chooseView(event: Event): void {
                     @preview="onLegendPreview"
                     @toggle-eye="onLegendToggleEye"
                     @show-all="onLegendShowAll"
+                />
+                <p
+                    v-if="allHidden"
+                    class="note isolated"
+                >
+                    <span>{{ allHiddenNote }}</span>
+                </p>
+            </div>
+            <div
+                v-if="lens.active.value && layout !== 'table'"
+                class="lens-region"
+            >
+                <div
+                    v-if="identifying && !identification"
+                    class="identify-hint"
+                >
+                    <p class="note">
+                        <span>{{ identifyHint }}</span>
+                        <IconButton
+                            icon="question-circle"
+                            data-action="identify-help"
+                            :label="identifyHelpLabel"
+                            :aria-expanded="identifyHelpOpen ? 'true' : 'false'"
+                            :aria-controls="identifyHelpId"
+                            tip-placement="below"
+                            tip-align="start"
+                            @click="identifyHelpOpen = !identifyHelpOpen"
+                        />
+                    </p>
+                    <ul
+                        v-show="identifyHelpOpen"
+                        :id="identifyHelpId"
+                        class="note identify-rules"
+                    >
+                        <li
+                            v-for="rule in identifyHelp"
+                            :key="rule"
+                        >
+                            <span>{{ rule }}</span>
+                        </li>
+                    </ul>
+                </div>
+                <PeakIdentifier
+                    v-if="identification"
+                    :energy="identification.energy"
+                    :curve-name="identification.name"
+                    :candidates="identification.candidates"
+                    :k-v="identification.kV"
+                    :channel="identification.channel"
+                    :tolerance="identification.tolerance"
+                    :lang="lang"
+                    :pinnable="lens.pinnable"
+                    :pinned="lens.isPinned"
+                    :lens-symbols="lens.settings.value.elements"
+                    :declared-parts="identifiedDeclaredParts"
+                    @move="moveIdentified"
+                    @close="closeIdentifier"
+                    @toggle-pin="lens.togglePin($event.symbol)"
+                    @toggle-lens="lens.toggleElement($event.symbol)"
+                />
+                <XrfLensStrip
+                    :elements="lens.stripElements.value"
+                    :declared-slots="lens.declaredSlots.value"
+                    :overlaps="lens.overlapNotes.value"
+                    :instrument="listedInstrument"
+                    :symbols="lens.symbols.value"
+                    :lens-symbols="lens.settings.value.elements"
+                    :marks-left-out="marksLeftOut"
+                    :lang="lang"
+                    @add-element="lens.addElement($event.symbol)"
+                    @remove-element="lens.removeElement($event.symbol)"
+                    @toggle-element="lens.toggleElement($event.symbol)"
                 />
             </div>
             <p class="note">
@@ -1216,6 +2288,22 @@ function chooseView(event: Event): void {
                 <span>{{ note }}</span>
             </li>
         </ul>
+        <details
+            v-if="emptyFilesFolded"
+            class="empty-files"
+        >
+            <summary>
+                <span>{{ emptyFilesSummary }}</span>
+            </summary>
+            <ul>
+                <li
+                    v-for="(name, index) in emptyFiles"
+                    :key="index"
+                >
+                    <span>{{ name }}</span>
+                </li>
+            </ul>
+        </details>
         <button
             v-if="canRetry"
             type="button"
@@ -1229,6 +2317,9 @@ function chooseView(event: Event): void {
 
 <style scoped>
 .xy-workshop {
+    --xy-chart-floor: 9rem;
+    --xy-legend-stacked-max: 7.5rem;
+
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -1325,6 +2416,11 @@ function chooseView(event: Event): void {
     font-weight: 600;
 }
 
+.xy-workshop .segmented button[aria-disabled="true"] {
+    color: var(--ink-dim);
+    cursor: default;
+}
+
 .xy-workshop .retry:focus-visible,
 .xy-workshop select:focus-visible,
 .xy-workshop .segmented button:focus-visible {
@@ -1333,50 +2429,118 @@ function chooseView(event: Event): void {
 }
 
 .xy-workshop .plot-area {
+    position: relative;
     display: grid;
+    flex: 1 1 0;
+    grid-template-rows: minmax(var(--xy-chart-floor), 1fr) auto;
     gap: 0.5rem;
 }
 
+.xy-workshop .plot-area.tall {
+    flex: none;
+}
+
+.xy-workshop .plot-area .isolated {
+    position: absolute;
+    inset-block-start: 0.5rem;
+    inset-inline-start: 0.5rem;
+    max-inline-size: calc(100% - 1rem);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: var(--surface);
+    pointer-events: none;
+}
+
 .xy-workshop .chart {
-    min-block-size: 18rem;
+    min-block-size: 0;
+    contain: size;
+}
+
+.xy-workshop .plot-area .xy-legend {
+    max-block-size: var(--xy-legend-stacked-max);
+    overflow: auto;
 }
 
 @container (min-width: 40rem) {
     .xy-workshop .plot-area {
-        flex: 1 1 0;
         grid-template-rows: minmax(0, 1fr);
         grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem);
-        min-block-size: 18rem;
-    }
-
-    .xy-workshop .plot-area.tall {
-        flex: none;
-    }
-
-    .xy-workshop .plot-area .chart {
-        min-block-size: 0;
+        min-block-size: var(--xy-chart-floor);
     }
 
     .xy-workshop .plot-area .xy-legend {
         align-self: start;
         max-block-size: 100%;
+    }
+
+    .xy-workshop .lens-region {
+        flex: none;
+        align-content: start;
+        block-size: 14rem;
         overflow: auto;
+        overscroll-behavior: contain;
     }
 }
 
-.xy-workshop .chart.failed {
-    min-block-size: 0;
+.xy-workshop .chart[data-identifying] :deep(.nsewdrag) {
+    cursor: crosshair !important;
 }
 
 .xy-workshop .note,
-.xy-workshop .notes {
+.xy-workshop .notes,
+.xy-workshop .empty-files {
     margin: 0;
     color: var(--ink-muted);
     font-size: 0.8125rem;
 }
 
+.xy-workshop .identify-hint {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.xy-workshop .identify-hint p {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.xy-workshop .identify-rules {
+    margin: 0;
+    padding-inline-start: 1.25rem;
+}
+
+.xy-workshop .lens-region {
+    display: grid;
+    gap: 0.5rem;
+    min-inline-size: 0;
+}
+
 .xy-workshop .notes {
     padding-inline-start: 1.25rem;
+}
+
+.xy-workshop .empty-files {
+    flex: none;
+}
+
+.xy-workshop .empty-files summary {
+    inline-size: fit-content;
+    cursor: pointer;
+}
+
+.xy-workshop .empty-files summary:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
+.xy-workshop .empty-files ul {
+    max-block-size: 4.5rem;
+    margin: 0;
+    padding-inline-start: 1.25rem;
+    overflow: auto;
+    overscroll-behavior: contain;
 }
 
 .xy-workshop .retry {

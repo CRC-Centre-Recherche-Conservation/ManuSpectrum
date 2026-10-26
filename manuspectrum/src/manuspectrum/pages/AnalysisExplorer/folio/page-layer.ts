@@ -7,7 +7,7 @@ import {
     layerImageChain,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 
-import type { ImageRef } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { FramedImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 
 /** The leaflet-iiif 3.0.0 state read here: the info.json request, the image sizes it yields, the tile container. */
 type IiifLayer = L.TileLayer & {
@@ -492,10 +492,15 @@ function imageBounds(
  * image keeps its own pixel scale relative to the others (`ScaleGroup`).
  * `tileFormat` is the format of the IIIF tiles (`layPage`); a layer's element
  * carries `PIXELATED_CLASS` while the map is zoomed past its native zoom.
+ * `declaredSize` lays an image without a service at the size its image
+ * declares, when it declares one, instead of the size the server sent (a
+ * folio capture is asked smaller than the layer it was taken for); the image
+ * then fills the declared frame, or its `frame` only, the rest of the frame
+ * staying empty.
  */
 export function layImage(
     map: L.Map,
-    image: ImageRef,
+    image: FramedImage,
     handlers: {
         read: (
             size: { w: number; h: number },
@@ -509,6 +514,7 @@ export function layImage(
         scale?: ScaleGroup;
         curtain?: boolean;
         tileFormat?: TileFormat;
+        declaredSize?: boolean;
     } = {},
 ): LaidImage {
     let stopPixelating: (() => void) | null = null;
@@ -565,10 +571,17 @@ export function layImage(
         const probe = new Image();
         probe.onload = () => {
             if (removed) return;
-            const size = { w: probe.naturalWidth, h: probe.naturalHeight };
+            const declared =
+                options.declaredSize && image.width > 0 && image.height > 0;
+            const size = declared
+                ? { w: image.width, h: image.height }
+                : { w: probe.naturalWidth, h: probe.naturalHeight };
+            const frame = declared ? image.frame : undefined;
+            const drawn = frame ? { w: frame.w, h: frame.h } : size;
+            const inset = frame ? { x: frame.x, y: frame.y } : { x: 0, y: 0 };
             const laid = L.imageOverlay(
                 url,
-                imageBounds(map, size, options.scale?.zoom() ?? 0),
+                imageBounds(map, drawn, options.scale?.zoom() ?? 0, inset),
                 options.pane ? { pane: options.pane } : {},
             );
             overlay = wrap(laid);
@@ -579,7 +592,12 @@ export function layImage(
                     size,
                     apply: (zoom, offset) => {
                         allowOverzoom(map, zoom);
-                        laid.setBounds(imageBounds(map, size, zoom, offset));
+                        laid.setBounds(
+                            imageBounds(map, drawn, zoom, {
+                                x: offset.x + inset.x,
+                                y: offset.y + inset.y,
+                            }),
+                        );
                     },
                 };
                 options.scale.join(member);
@@ -630,6 +648,23 @@ export function servedSize(
         return null;
     }
     return { w: largest.x as number, h: largest.y as number };
+}
+
+/**
+ * The Leaflet bounds `[[-h, 0], [0, w]]` of a laid page, in CRS.Simple units
+ * (leaflet-iiif places an image at `size / 2^nativeZoom`); null until the
+ * info.json is read.
+ */
+export function pageBoundsOf(
+    page: PageLayer | null,
+): [[number, number], [number, number]] | null {
+    const size = servedSize(page);
+    if (!size) return null;
+    const scale = 2 ** nativeZoomOf(page);
+    return [
+        [-size.h / scale, 0],
+        [0, size.w / scale],
+    ];
 }
 
 /** The map zoom at which the page shows at its served size, one pixel per unit. */

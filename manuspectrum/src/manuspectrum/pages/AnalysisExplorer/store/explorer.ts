@@ -12,11 +12,19 @@ import {
     pinInSlots,
     unpinFromSlots,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
+import {
+    clampRadius,
+    clampThreshold,
+    defaultMapState,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
+import { toggleTracked } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 
 import type {
     FacetGroup,
     FacetKey,
+    PeriodEvent,
+    PeriodMatch,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketAddResult,
@@ -32,7 +40,6 @@ import type {
     FolioView,
     ItemKey,
     LayerToggles,
-    ColourLevel,
     ListFilterKey,
     MaterialsGrouping,
     Overlay,
@@ -40,14 +47,16 @@ import type {
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { MapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
+import type { TrackResult } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import type { FocusMode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 export const PAGE_SIZES: readonly PageSize[] = [10, 25, 50];
 
 export const LIST_FILTER_KEYS: readonly ListFilterKey[] = [
+    "place",
     "partType",
-    "partColour",
     "technique",
     "part",
     "material",
@@ -62,6 +71,7 @@ const FOLIO_VIEW_OF: Partial<Record<Focus["kind"], FolioView>> = {
     analysis: "analyses",
     characterization: "characterizations",
     sample: "samples",
+    component: "analyses",
 };
 
 export function emptyFilters(): Filters {
@@ -71,7 +81,6 @@ export function emptyFilters(): Filters {
         empty: false,
         size: PAGE_SIZES[0],
         partType: [],
-        partColour: [],
         technique: [],
         part: [],
         material: [],
@@ -81,8 +90,11 @@ export function emptyFilters(): Filters {
         project: [],
         operator: [],
         year: [],
-        place: null,
+        place: [],
         period: null,
+        periodMatch: "overlap",
+        periodEvent: "production",
+        undated: false,
         eventType: [],
     };
 }
@@ -125,7 +137,6 @@ function countCorpusFilters(filters: Filters): number {
         listed +
         filters.year.length +
         (filters.q ? 1 : 0) +
-        (filters.place ? 1 : 0) +
         (filters.period ? 1 : 0)
     );
 }
@@ -138,6 +149,13 @@ function normalized<K extends FilterKey>(
         return [...new Set(value as number[])].sort(
             (a, b) => a - b,
         ) as Filters[K];
+    }
+    if (key === "period") {
+        const bounds = value as [number, number] | null;
+        if (!bounds || !bounds.every((year) => Number.isFinite(year))) {
+            return null as Filters[K];
+        }
+        return [Math.min(...bounds), Math.max(...bounds)] as Filters[K];
     }
     if (Array.isArray(value)) {
         return [...new Set(value as string[])].sort() as Filters[K];
@@ -156,6 +174,8 @@ export const useExplorerStore = defineStore("explorer", () => {
     const documentOrigin = ref<DocumentOrigin>("home");
     const focus = ref<Focus | null>(null);
     const folioView = ref<FolioView>("analyses");
+    /** Whether a document screen draws and lists the analyses the filters leave out (dimmed); kept from one document to the next. */
+    const showOutside = ref(true);
     const layers = ref<LayerToggles>({
         points: true,
         zones: true,
@@ -178,10 +198,12 @@ export const useExplorerStore = defineStore("explorer", () => {
         mode: "any",
         tools: [],
     });
+    /** Map & timeline: mode, territory options, followed materials (by slot) and brushed years; in the address on the map view. */
+    const mapState = ref<MapState>(defaultMapState());
+    /** Whether the map lights the events carrying any or all of the followed materials. */
+    const trackMode = ref<FocusMode>("any");
     /** Rail groups folded to their heading; not in the address. */
     const collapsedGroups = ref<FacetGroup[]>([]);
-    /** Which colour facet the rail's Colour toggle shows; not in the address. */
-    const colourLevel = ref<ColourLevel>("colour");
     /** How the Materials window of Compare groups its rows; for the tab only, not in the address. */
     const materialsGrouping = ref<MaterialsGrouping>("record");
     /**
@@ -205,6 +227,19 @@ export const useExplorerStore = defineStore("explorer", () => {
         filters.value = { ...filters.value, [key]: normalized(key, value) };
     }
 
+    /** Sets the period and its rule, event and undated option as the period facet reports them. */
+    function setPeriod(change: {
+        period: [number, number] | null;
+        match: PeriodMatch;
+        event: PeriodEvent;
+        undated: boolean;
+    }): void {
+        setFilter("period", change.period);
+        setFilter("periodMatch", change.match);
+        setFilter("periodEvent", change.event);
+        setFilter("undated", change.undated);
+    }
+
     function clearFilter(key: FilterKey, value?: string | number): void {
         const current = filters.value[key];
         if (value !== undefined && Array.isArray(current)) {
@@ -214,7 +249,14 @@ export const useExplorerStore = defineStore("explorer", () => {
             filters.value = { ...filters.value, [key]: remaining };
             return;
         }
-        filters.value = { ...filters.value, [key]: emptyFilters()[key] };
+        const reset = emptyFilters();
+        filters.value = {
+            ...filters.value,
+            [key]: reset[key],
+            ...(key === "period"
+                ? { periodMatch: reset.periodMatch, undated: reset.undated }
+                : {}),
+        };
     }
 
     function clearFilters(): void {
@@ -285,6 +327,10 @@ export const useExplorerStore = defineStore("explorer", () => {
         folioView.value = next;
     }
 
+    function setShowOutside(shown: boolean): void {
+        showOutside.value = shown;
+    }
+
     /** A facet's selected values from the rail; year values are read as integers. */
     function setFacet(key: FacetKey, ids: string[]): void {
         if (key === "year") {
@@ -301,10 +347,6 @@ export const useExplorerStore = defineStore("explorer", () => {
         collapsedGroups.value = collapsedGroups.value.includes(group)
             ? collapsedGroups.value.filter((entry) => entry !== group)
             : [...collapsedGroups.value, group];
-    }
-
-    function setColourLevel(level: ColourLevel): void {
-        colourLevel.value = level;
     }
 
     function setMaterialsGrouping(grouping: MaterialsGrouping): void {
@@ -395,6 +437,56 @@ export const useExplorerStore = defineStore("explorer", () => {
 
     function removeFromBasket(key: ItemKey): void {
         basket.value = basket.value.filter((item) => item.key !== key);
+    }
+
+    /** Removes the held keys in one assignment, leaving their slots as holes; returns the removed items with their slots. */
+    function removeManyFromBasket(keys: readonly string[]): BasketItem[] {
+        const wanted = new Set(keys);
+        const removed = basket.value.filter((item) => wanted.has(item.key));
+        if (removed.length > 0) {
+            basket.value = basket.value.filter((item) => !wanted.has(item.key));
+        }
+        return removed;
+    }
+
+    /**
+     * Puts removed items back in one assignment, each at its own slot when
+     * that slot is free, else in the lowest hole; items already held are
+     * skipped and what exceeds the 30 places is dropped.
+     */
+    function restoreBasketItems(
+        items: readonly BasketItem[],
+    ): BasketLoadResult {
+        const present = new Set(basket.value.map((item) => item.key));
+        const fresh = items.filter((item, index) => {
+            if (present.has(item.key)) return false;
+            return items.findIndex((other) => other.key === item.key) === index;
+        });
+        const kept = fresh.slice(0, basketFree.value);
+        const next = [...basket.value];
+        const taken = new Set(next.map((item) => item.slot));
+        const pending: BasketItem[] = [];
+        for (const item of kept) {
+            if (
+                taken.has(item.slot) ||
+                item.slot < 0 ||
+                item.slot >= BASKET_LIMIT
+            ) {
+                pending.push(item);
+            } else {
+                taken.add(item.slot);
+                next.push({ ...item });
+            }
+        }
+        const holes = freeSlots(next, pending.length);
+        pending.forEach((item, index) => {
+            next.push({ ...item, slot: holes[index] });
+        });
+        if (kept.length > 0) basket.value = next;
+        return {
+            kept: kept.map((item) => item.key),
+            truncated: fresh.length - kept.length,
+        };
     }
 
     function clearBasket(): void {
@@ -505,6 +597,30 @@ export const useExplorerStore = defineStore("explorer", () => {
         return dropped;
     }
 
+    function setMapState(patch: Partial<MapState>): void {
+        mapState.value = {
+            ...mapState.value,
+            ...patch,
+            radius: clampRadius(patch.radius ?? mapState.value.radius),
+            threshold: clampThreshold(
+                patch.threshold ?? mapState.value.threshold,
+            ),
+        };
+    }
+
+    /** Follows or stops following a material uri; a fifth is refused and changes nothing. */
+    function toggleTrack(uri: string): TrackResult {
+        const next = toggleTracked(mapState.value.track, uri);
+        if (next.result !== "refused") {
+            mapState.value = { ...mapState.value, track: next.slots };
+        }
+        return next.result;
+    }
+
+    function setTrackMode(mode: FocusMode): void {
+        trackMode.value = mode;
+    }
+
     return {
         view,
         corpusScreen,
@@ -513,18 +629,21 @@ export const useExplorerStore = defineStore("explorer", () => {
         documentOrigin,
         focus,
         folioView,
+        showOutside,
         layers,
         overlays,
         basket,
         compare,
+        mapState,
+        trackMode,
         collapsedGroups,
-        colourLevel,
         materialsGrouping,
         hiddenCurves,
         legendOpen,
         basketFree,
         activeFilterCount,
         setFilter,
+        setPeriod,
         setFacet,
         clearFilter,
         clearFilters,
@@ -534,9 +653,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         setCanvas,
         focusOn,
         setFolioView,
+        setShowOutside,
         setLayer,
         toggleGroup,
-        setColourLevel,
         setMaterialsGrouping,
         toggleCurveVisibility,
         showAllCurves,
@@ -545,6 +664,8 @@ export const useExplorerStore = defineStore("explorer", () => {
         addToBasket,
         addManyToBasket,
         removeFromBasket,
+        removeManyFromBasket,
+        restoreBasketItems,
         clearBasket,
         replaceBasket,
         mergeBasket,
@@ -555,6 +676,9 @@ export const useExplorerStore = defineStore("explorer", () => {
         clearSelection,
         setFocusMode,
         pruneSelection,
+        setMapState,
+        toggleTrack,
+        setTrackMode,
     };
 });
 

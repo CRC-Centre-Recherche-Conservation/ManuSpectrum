@@ -73,6 +73,9 @@ function record(
         selected: true,
         cites: [],
         canvases: [],
+        components: summary.objects.filter(
+            (entry) => entry.model === "component",
+        ),
         ...rest,
     };
 }
@@ -142,8 +145,25 @@ describe("materialRecords", () => {
             selected: true,
             cites: [],
             canvases: ["c8"],
+            components: [],
         });
         expect(records[1].selected).toBe(true);
+    });
+
+    it("keeps the components a ch:-only Selection's material is linked to, the one it cites outside the Selection included", () => {
+        const initial = component(1, "Initial T");
+        const border = component(2, "Border");
+        const cited = characterization(1, {
+            objects: [],
+            components: [initial, border],
+        });
+        const synthesis = { ...SYNTHESIS, coverage: [], materials: [] };
+        const [entry] = materialRecords([row(0, cited)], synthesis);
+        expect(entry.components).toEqual([initial, border]);
+        expect(materialRecords([row(0, cited)], null)[0].components).toEqual([
+            initial,
+            border,
+        ]);
     });
 
     it("lists the rows alone without a synthesis, once each", () => {

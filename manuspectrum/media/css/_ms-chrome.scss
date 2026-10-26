@@ -19,6 +19,7 @@
 // Self-hosted webfonts — replaces the Google Fonts <link> both templates used
 // to carry (see _ms-fonts.scss for the why).
 @import 'ms-fonts';
+@import 'ms-tokens';
 
 // Announcement banner (media/js/utils/site-notice/banner.js).
 @import 'ms-site-notice';
@@ -131,6 +132,8 @@
     --tech-9: #a3e635;
     --tech-10: #94a3b8;
     --stage: #1c1b26;
+    // Lighter folio stage of the Corpus: white reads at 9.5:1, technique hues at 3.45:1 or more.
+    --stage-soft: #454452;
     --map-sea: #e4ebf1;
     --map-land: #f4f0e7;
     --map-coast: #b7c4cf;
@@ -168,6 +171,24 @@
     --focus-2: #1e6256;
     --focus-3: #93499e;
     --focus-4: #760a03;
+    // XRF lens: one hue per chemical element (lines, labels, chips), for the
+    // elements that hold no focus slot. Every hue reads as text at >= 4.5:1 on
+    // --surface and --bg (lines and chips need 3:1) and sits >= 7 OKLab dE
+    // from --focus-1…4; element-colour.ts assigns them by element, never by
+    // rank, and plot-theme.ts holds the same values as fallbacks (a spec pins
+    // them equal).
+    --element-1: #c2410c;
+    --element-2: #0e6baa;
+    --element-3: #8a6508;
+    --element-4: #14804a;
+    --element-5: #b912e2;
+    --element-6: #d0257a;
+    --element-7: #475569;
+    --element-8: #8e3329;
+    --element-9: #3f6212;
+    --element-10: #6d28d9;
+    --element-11: #0828a0;
+    --element-12: #680070;
     --focus-on: #ffffff;
     // Light table: the letter and rim of panes A to D, apart from the focus
     // hues (gold, teal, orchil, olive: white letters on them >= 4.5:1).
@@ -293,8 +314,14 @@ img { max-width: 100%; height: auto; display: block; }
 
 .spectral-line-thin {
     height: 1px;
-    background: linear-gradient(90deg, transparent 0%, var(--spectral-1) 10%, var(--spectral-2) 25%, var(--spectral-3) 40%, var(--spectral-4) 55%, var(--spectral-5) 70%, var(--spectral-6) 85%, transparent 100%);
+    @include ms-spectral-thin;
     opacity: 0.45;
+}
+
+// A window 30% wide, from just off the start to just off the end.
+@keyframes ms-spectral-scan {
+    from { -webkit-mask-position: -43% 0; mask-position: -43% 0; }
+    to { -webkit-mask-position: 143% 0; mask-position: 143% 0; }
 }
 
 // --- SECTION HEADINGS (shared by homepage + About pages) ---
@@ -463,6 +490,7 @@ img { max-width: 100%; height: auto; display: block; }
     padding: 0.5rem 1.3rem;
     font-weight: 500;
     font-size: 0.82rem;
+    margin-inline-end: 1.5rem;
     transition: background 0.3s, transform 0.3s;
 }
 
@@ -686,7 +714,11 @@ img { max-width: 100%; height: auto; display: block; }
     }
 }
 
-.ms-nav-dropdown.open .ms-nav-dropdown-menu {
+.ms-nav-dropdown.open .ms-nav-dropdown-menu,
+// Without script the panel opens on hover and focus; ms-nav.js sets
+// `.ms-nav--js` on the header and takes over through `.open`.
+.ms-header:not(.ms-nav--js) .ms-nav-dropdown:hover .ms-nav-dropdown-menu,
+.ms-header:not(.ms-nav--js) .ms-nav-dropdown:focus-within .ms-nav-dropdown-menu {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
@@ -1022,6 +1054,30 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 @media (max-width: 480px) {
+    // Header at 320px: the page gutter, the menu button whole and a 44px target.
+    .ms-header-inner { padding: 0 var(--ms-gutter); }
+    .ms-header-logo { gap: 0.5rem; min-width: 0; }
+    .ms-header-logo-mark { width: 20px; flex-shrink: 0; }
+    .ms-header-logo-text {
+        font-size: 1.05rem;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .ms-header .ms-nav { margin-right: 0.25rem; flex-shrink: 0; }
+    .ms-lang-switch { font-size: 11px; }
+    .ms-lang-switch a { padding: 0.3rem 0.35rem; }
+    .ms-hamburger {
+        box-sizing: border-box;
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+
     .ms-btn { width: 100%; justify-content: center; max-width: 280px; }
 
     .ms-partners-grid { gap: 1.5rem 1.5rem; }

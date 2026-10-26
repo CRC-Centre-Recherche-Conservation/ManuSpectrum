@@ -55,10 +55,12 @@ from manuspectrum.views.iiif.annotations import (
     PageViewV2,
 )
 from manuspectrum.views.analysis_explorer import AnalysisExplorerPageView
+from manuspectrum.views.search_redirect import SearchTermRedirectView
 from manuspectrum.views.explorer.api import (
     ExplorerAnalysisView,
     ExplorerDocumentMatchView,
     ExplorerDocumentView,
+    ExplorerEventsView,
     ExplorerFacetView,
     ExplorerHomeView,
     ExplorerItemsView,
@@ -66,6 +68,10 @@ from manuspectrum.views.explorer.api import (
     ExplorerSearchView,
     ExplorerShareView,
     ExplorerSynthesisView,
+)
+from manuspectrum.views.explorer.events_export import (
+    ExplorerEventsCsvView,
+    ExplorerEventsGeoJsonView,
 )
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
@@ -216,6 +222,12 @@ urlpatterns.append(
     path("discover", AnalysisExplorerPageView.as_view(), name="analysis-explorer")
 )
 
+### Homepage search form target: wrapped like the search page it redirects to
+### (a GET page redirect, /en/search-term, /fr/search-term).
+urlpatterns.append(
+    path("search-term", SearchTermRedirectView.as_view(), name="search-term")
+)
+
 ### Model-graph API: wrapped too, so the URL carries the language
 ### (/en/api/model-graph, /fr/api/model-graph). Its payload is localised, so
 ### the language belongs in the path rather than in per-request negotiation —
@@ -315,6 +327,13 @@ urlpatterns.append(
         "api/explorer/synthesis",
         ExplorerSynthesisView.as_view(),
         name="explorer-synthesis",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events",
+        ExplorerEventsView.as_view(),
+        name="explorer-events",
     )
 )
 
@@ -493,6 +512,20 @@ urlpatterns.append(
 )
 urlpatterns.append(
     path("api/explorer/export", ExplorerExportView.as_view(), name="explorer-export")
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events.csv",
+        ExplorerEventsCsvView.as_view(),
+        name="explorer-events-csv",
+    )
+)
+urlpatterns.append(
+    path(
+        "api/explorer/events.geojson",
+        ExplorerEventsGeoJsonView.as_view(),
+        name="explorer-events-geojson",
+    )
 )
 
 ### Manuspectrum URL - IIIF Annotations

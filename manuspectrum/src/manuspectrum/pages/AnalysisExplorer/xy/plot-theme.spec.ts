@@ -12,6 +12,7 @@ import {
     resetAxes,
     separatorsFor,
     seriesColour,
+    tickNumber,
     unifiedHoverLine,
     unifiedHoverTitle,
 } from "@/manuspectrum/pages/AnalysisExplorer/xy/plot-theme.ts";
@@ -39,6 +40,20 @@ describe("plot theme", () => {
         expect(theme.series[7]).toBe("#be185d");
         expect(theme.ink).toBe("#1a1a2e");
         expect(theme.background).toBe("#faf9f7");
+    });
+
+    it("reads the four focus hues, with the tokens' own values as fallback", () => {
+        expect(readPlotTheme().focus).toEqual([
+            "#3d2e8d",
+            "#1e6256",
+            "#93499e",
+            "#760a03",
+        ]);
+        setTokens({ "--focus-2": "#00aa00", "--focus-4": "#aa0000" });
+        const { focus } = readPlotTheme();
+        expect(focus).toHaveLength(4);
+        expect(focus[1]).toBe("#00aa00");
+        expect(focus[3]).toBe("#aa0000");
     });
 
     it("reads the grey of context curves", () => {
@@ -128,6 +143,36 @@ describe("plot theme", () => {
     it("uses the decimal comma in French", () => {
         expect(separatorsFor("fr")).toBe(", ");
         expect(separatorsFor("en")).toBe(".,");
+    });
+
+    it("writes a tick value as Plotly does alone: plain under 10⁴, an SI suffix beyond, the page's marks", () => {
+        const en = (value: number) => tickNumber(value, separatorsFor("en"));
+        expect([1, 10, 100, 1000, 4000, 9000].map(en)).toEqual([
+            "1",
+            "10",
+            "100",
+            "1000",
+            "4000",
+            "9000",
+        ]);
+        expect([10000, 12500, 250000, 1e6, 2.5e9].map(en)).toEqual([
+            "10k",
+            "12.5k",
+            "250k",
+            "1M",
+            "2.5G",
+        ]);
+        expect([0.5, 0.05, 0.001, 0.0001].map(en)).toEqual([
+            "0.5",
+            "0.05",
+            "0.001",
+            "100\u03BC",
+        ]);
+        expect(tickNumber(12500, separatorsFor("fr"))).toBe("12,5k");
+        expect(tickNumber(0.25, separatorsFor("fr"))).toBe("0,25");
+        expect(en(0)).toBe("0");
+        expect(en(-2000)).toBe("\u22122000");
+        expect(en(Number.NaN)).toBe("");
     });
 
     it("draws a transparent chart with a horizontal grid only and a reversed x when asked", () => {

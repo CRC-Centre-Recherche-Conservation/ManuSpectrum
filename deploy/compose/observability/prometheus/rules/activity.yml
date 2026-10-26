@@ -46,7 +46,7 @@ groups:
           kind: explorer_compare
       - record: manuspectrum:consultations:total
         expr: |
-          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-series-csv|iiif-data-series"})
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"explorer-series-csv|iiif-data-series|explorer-events-csv|explorer-events-geojson"})
         labels:
           kind: export_csv
       - record: manuspectrum:consultations:total

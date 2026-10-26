@@ -7,14 +7,18 @@ import {
     valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import {
+    CAPTURE_PREFIX,
+    captureThumbnail,
     NEUTRAL_FILTERS,
     canStack,
+    captureLayer,
     defaultState,
     linkedGroups,
     setSyncViews,
     moveInStack,
     pairsOf,
     place,
+    layerById,
     reconcile,
     setLayout,
     setOpacity,
@@ -325,5 +329,120 @@ describe("linkedGroups", () => {
                 maps,
             ),
         ).toEqual([]);
+    });
+});
+
+describe("captures", () => {
+    const capture = {
+        url: "https://iiif.example/folio/full/200,/0/default.jpg",
+        width: 200,
+        height: 300,
+        canvas: "https://iiif.example/canvas/1",
+        at: 1,
+    };
+    const maps = [line(1, [{}, {}]), line(2, [{}])];
+    const id = maps[0].analysis.id;
+    const captures = { [id]: captureLayer(id, capture, "Folio photo") };
+
+    it("builds a layer without service from the capture", () => {
+        const layer = captures[id];
+        expect(layer.id).toBe(CAPTURE_PREFIX + id);
+        expect(layer.index).toBe(-1);
+        expect(layer.image).toEqual({
+            service: null,
+            url: capture.url,
+            width: 200,
+            height: 300,
+        });
+        expect(layer.elements).toEqual([]);
+    });
+
+    it("carries the frame of a capture taken over part of the layer", () => {
+        const framed = { x: 10, y: 20, w: 100, h: 200 };
+        expect(
+            captureLayer(id, { ...capture, frame: framed }, "Folio photo")
+                .image,
+        ).toEqual({
+            service: null,
+            url: capture.url,
+            width: 200,
+            height: 300,
+            frame: framed,
+        });
+    });
+
+    it("carries the note it is given", () => {
+        expect(
+            captureLayer(id, capture, "Folio photo", "Kept in this browser")
+                .note,
+        ).toBe("Kept in this browser");
+        expect(captures[id].note).toBeNull();
+    });
+
+    it("rewrites the size of a stored IIIF address to the thumbnail's, keeping region and turn", () => {
+        expect(
+            captureThumbnail(
+                "https://iiif.example/folio/10,20,300,400/300,400/270/default.jpg",
+            ),
+        ).toBe(
+            "https://iiif.example/folio/10,20,300,400/!120,150/270/default.jpg",
+        );
+        expect(captureThumbnail("https://x.example/photo.png")).toBe(
+            "https://x.example/photo.png",
+        );
+    });
+
+    it("resolves a capture id with the line of its analysis", () => {
+        const found = layerById(CAPTURE_PREFIX + id, maps, captures);
+        expect(found?.layer.label).toBe("Folio photo");
+        expect(found?.line.analysis.id).toBe(id);
+        expect(layerById(CAPTURE_PREFIX + id, maps)).toBeNull();
+    });
+
+    it("ignores a capture whose analysis is not among the maps", () => {
+        const other = { x: captureLayer("x", capture, "Folio photo") };
+        expect(layerById(CAPTURE_PREFIX + "x", maps, other)).toBeNull();
+    });
+
+    function withPane(canvas: string): TableState {
+        const state = place(defaultState(maps), canvas, 0);
+        return { ...state, layout: "grid2" };
+    }
+
+    it("keeps a pane and a stack layer holding a capture while its analysis is selected", () => {
+        const canvas = CAPTURE_PREFIX + id;
+        const state = toggleInStack(withPane(canvas), canvas, [
+            {
+                ...maps[0],
+                file: {
+                    ...maps[0].file,
+                    layers: [...maps[0].file.layers, captures[id]],
+                },
+            },
+            maps[1],
+        ]);
+        const next = reconcile(state, maps, captures);
+        expect(next.panes[0]).toBe(canvas);
+        expect(next.stack.layers.map((l) => l.canvas)).toEqual([canvas]);
+    });
+
+    it("drops it once the analysis leaves the Selection or the capture is deleted", () => {
+        const canvas = CAPTURE_PREFIX + id;
+        const state = withPane(canvas);
+        expect(reconcile(state, [maps[1]], captures).panes[0]).not.toBe(canvas);
+        expect(reconcile(state, maps, {}).panes[0]).not.toBe(canvas);
+    });
+
+    it("never lays a capture into an empty pane by itself", () => {
+        const next = reconcile(
+            {
+                ...defaultState(maps),
+                layout: "grid4",
+                panes: [null, null, null, null],
+            },
+            maps,
+            captures,
+        );
+        expect(next.panes.includes(CAPTURE_PREFIX + id)).toBe(false);
     });
 });

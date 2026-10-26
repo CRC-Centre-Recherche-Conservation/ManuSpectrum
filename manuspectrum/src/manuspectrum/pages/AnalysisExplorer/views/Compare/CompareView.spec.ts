@@ -119,7 +119,13 @@ function spectrum(n: number, axisKey: string, extra = {}): FileEntry {
 
 function whole(n: number, files: FileEntry[]): Item {
     const analysis = analysisHit(n);
-    return { key: `an:${analysis.id}:-`, kind: "analysis", analysis, files };
+    return {
+        key: `an:${analysis.id}:-`,
+        kind: "analysis",
+        analysis,
+        excitation: null,
+        files,
+    };
 }
 
 const XRF_ITEM = whole(1, [
@@ -160,6 +166,7 @@ const MAPS_ITEM = whole(8, [imagingEntry()]);
 const COMPONENT_ITEM: Item = {
     key: `an:${analysisHit(11).id}:-`,
     kind: "analysis",
+    excitation: null,
     analysis: {
         ...analysisHit(11),
         component: {

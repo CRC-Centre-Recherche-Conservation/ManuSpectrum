@@ -225,6 +225,49 @@ describe("the tab memo", () => {
     });
 });
 
+describe("the map events memo", () => {
+    const EVENTS = "manuspectrum:explorer-events";
+
+    function eventsQuery(type: string): { query: URLSearchParams } {
+        return { query: new URLSearchParams([["eventType", type]]) };
+    }
+
+    it("keeps the last two events payloads apart: they never evict an Explorer payload", async () => {
+        fetchMock.mockImplementation(async () => respond(200, { events: [] }));
+        for (let page = 1; page <= 20; page += 1) {
+            await getJson(SEARCH, {
+                query: new URLSearchParams([["page", String(page)]]),
+            });
+        }
+        for (const type of ["production", "modification", "alteration"]) {
+            await getJson(EVENTS, eventsQuery(type));
+        }
+        expect(
+            peekJson(SEARCH, { query: new URLSearchParams("page=1") }),
+        ).toEqual({ events: [] });
+        expect(peekJson(EVENTS, eventsQuery("production"))).toBe(null);
+        expect(peekJson(EVENTS, eventsQuery("modification"))).toEqual({
+            events: [],
+        });
+        fetchMock.mockClear();
+        await getJson(EVENTS, eventsQuery("alteration"));
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("shares one events request between its callers and forgets it after five minutes", async () => {
+        vi.useFakeTimers();
+        const pending = pendingFetch();
+        const first = getJson(EVENTS);
+        const second = getJson(EVENTS);
+        pending.resolve({ events: [1] });
+        expect(await first).toEqual({ events: [1] });
+        expect(await second).toEqual({ events: [1] });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(5 * 60 * 1000);
+        expect(peekJson(EVENTS)).toBe(null);
+    });
+});
+
 describe("prefetchJson", () => {
     it("aborts a prefetch nobody waits for when its signal aborts", () => {
         const pending = pendingFetch();

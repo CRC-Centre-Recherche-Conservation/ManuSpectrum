@@ -67,6 +67,8 @@ IGNORED = {
     "explorer-facet": "UI plumbing of the Explorer filters",
     "explorer-home": "UI plumbing of the Explorer",
     "explorer-items": "UI plumbing of the Explorer Selection",
+    "explorer-events": "UI plumbing of the Explorer map and timeline",
+    "search-term": "redirect of the homepage search form to the search page",
     "api-spectrum-preview": "counted by manuspectrum_spectrum_previews_total",
     "site-notice": "UI plumbing of the announcement banner",
     "csp-report": "machine endpoint, counted by manuspectrum_csp_violations_total",

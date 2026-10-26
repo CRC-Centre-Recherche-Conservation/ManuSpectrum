@@ -13,20 +13,24 @@ const THUMBNAIL_SIZE = "!120,150";
 
 /**
  * One imaging canvas of the gallery: a small image from its IIIF service
- * (lazy, an http(s) address only), its stored label always, the declared tag
+ * (lazy, an http(s) address only; an image with no service, a folio capture,
+ * is drawn from its own `url`), its stored label always, the declared tag
  * as a badge when it says something else, the panes holding it (A to D) and a
  * gold outline while it is in the stack. A failed image becomes a flat with
  * the label and is not asked again, at no other size. A click emits `pick`;
- * a drag carries the canvas id (`LAYER_DRAG_TYPE`).
+ * a drag carries the canvas id (`LAYER_DRAG_TYPE`). `current` marks the one
+ * being looked at (`aria-current`, an outline).
  */
 const props = defineProps<{
     canvas: string;
     label: string;
     service: string | null;
+    url?: string | null;
     tag: string | null;
     panes: readonly string[];
     inStack: boolean;
     stop: boolean;
+    current?: boolean;
 }>();
 const emit = defineEmits<{ pick: [] }>();
 
@@ -34,11 +38,13 @@ const { $gettext, interpolate } = useGettext();
 
 const failed = ref(false);
 
-const source = computed(() =>
-    props.service && !failed.value
-        ? safeHref(imageUrl(props.service, { size: THUMBNAIL_SIZE }))
-        : null,
-);
+const source = computed(() => {
+    if (failed.value) return null;
+    if (props.service) {
+        return safeHref(imageUrl(props.service, { size: THUMBNAIL_SIZE }));
+    }
+    return props.url ? safeHref(props.url) : null;
+});
 const badge = computed(() =>
     props.tag && !sameText(props.tag, props.label) ? props.tag : null,
 );
@@ -71,12 +77,14 @@ function onDragStart(event: DragEvent): void {
         :class="{
             'in-stack': props.inStack,
             placed: props.panes.length > 0,
+            current: props.current,
         }"
         :data-pane="props.panes[0]?.toLowerCase()"
         draggable="true"
         :data-canvas="props.canvas"
         :tabindex="props.stop ? 0 : -1"
         :aria-label="name"
+        :aria-current="props.current ? 'true' : undefined"
         @click="emit('pick')"
         @dragstart="onDragStart"
     >
@@ -170,6 +178,12 @@ function onDragStart(event: DragEvent): void {
 
 .layer-thumb.placed {
     outline: 0.125rem solid var(--pane);
+    outline-offset: -0.0625rem;
+}
+
+.layer-thumb.current {
+    border-color: var(--blue-text);
+    outline: 0.125rem solid var(--blue-text);
     outline-offset: -0.0625rem;
 }
 

@@ -6,7 +6,6 @@ Homepage — Prismatic Luminescence aesthetic
 {% load template_tags %}
 {% load i18n %}
 {% load manuspectrum_settings %}
-{% load explorer_home %}
 {% load render_bundle from webpack_loader %}
 {% load webpack_static from webpack_loader %}
 {% get_current_language as LANGUAGE_CODE %}
@@ -595,7 +594,7 @@ Homepage — Prismatic Luminescence aesthetic
             </div>
 
             <div class="ms-search-box reveal reveal-d1">
-                <form id="ms-search-form" action="{% url 'search_home' %}" method="get">
+                <form id="ms-search-form" action="{% url 'search-term' %}" method="get">
                     <div class="ms-search-input-wrapper">
                         <i class="fa-solid fa-magnifying-glass ms-search-icon"></i>
                         <input
@@ -615,20 +614,11 @@ Homepage — Prismatic Luminescence aesthetic
 
                 <div class="ms-search-chips">
                     <button type="button" class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
+                    <button type="button" class="ms-search-chip" data-term="FORS">FORS</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
                 </div>
-
-                {% homepage_techniques as techniques %}
-                {% if techniques %}
-                <p class="ms-technique-label" id="ms-technique-label">{% trans "Explore by technique" %}</p>
-                <div class="ms-technique-chips" role="group" aria-labelledby="ms-technique-label">
-                    {% for technique in techniques %}
-                    <a class="ms-search-chip ms-technique-chip" lang="{{ technique.label.lang }}" href="{% url 'analysis-explorer' %}?grain=analyses&amp;technique={{ technique.id|urlencode:'' }}">{{ technique.label.value }}</a>
-                    {% endfor %}
-                </div>
-                {% endif %}
 
                 <div class="ms-search-cta">
                     <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">

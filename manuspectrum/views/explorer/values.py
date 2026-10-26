@@ -10,8 +10,11 @@ because the Explorer contract needs the language a name actually resolved to
 ``localized()`` only returns the text.
 """
 
+import functools
 import os
 import re
+import sys
+import unicodedata
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
@@ -25,6 +28,26 @@ from manuspectrum.utils.iiif_tools import BBoxCalculator
 from manuspectrum.utils.spectrum_preview import is_readable
 
 FALLBACK_LANGUAGE = "en"
+
+
+@functools.cache
+def _combining_marks():
+    return dict.fromkeys(
+        code for code in range(sys.maxunicode + 1) if unicodedata.combining(chr(code))
+    )
+
+
+def fold(text):
+    """*text* without accents, casefolded, for free-text matching.
+
+    The accents are the characters of non-zero canonical combining class
+    left by the NFKD decomposition.
+    """
+    text = text or ""
+    if text.isascii():
+        return text.casefold()
+    decomposed = unicodedata.normalize("NFKD", text)
+    return decomposed.translate(_combining_marks()).casefold()
 
 
 def label(texts, language):
@@ -70,7 +93,7 @@ def name_of(values, model_name, resource_id, language):
     }
 
 
-def _reference_items(value):
+def reference_items(value):
     items = value if isinstance(value, list) else [value]
     return [item for item in items if isinstance(item, dict) and item.get("uri")]
 
@@ -78,7 +101,7 @@ def _reference_items(value):
 def value_refs(value, language):
     """``ValueRef`` list of a ``reference`` value: list item id, uri, and its prefLabel, else altLabel, else the uri."""
     refs = []
-    for item in _reference_items(value):
+    for item in reference_items(value):
         preferred, other, item_id = {}, {}, None
         for entry in item.get("labels") or []:
             if not isinstance(entry, dict) or not isinstance(entry.get("value"), str):
@@ -109,7 +132,7 @@ def acronym(value):
     candidate of the first language; None without candidates.
     """
     found = {}
-    for item in _reference_items(value)[:1]:
+    for item in reference_items(value)[:1]:
         for entry in item.get("labels") or []:
             if not isinstance(entry, dict) or entry.get("valuetype_id") != "altLabel":
                 continue
@@ -136,7 +159,7 @@ def element_symbols(value):
     ``Pb``), else None.
     """
     symbols = []
-    for item in _reference_items(value):
+    for item in reference_items(value):
         code = acronym(item)
         symbols.append(code if code and ELEMENT_SYMBOL.match(code) else None)
     return symbols
@@ -146,7 +169,7 @@ def reference_terms(value):
     """Every label of a ``reference`` value, preferred and alternative, in every language."""
     return {
         entry["value"]
-        for item in _reference_items(value)
+        for item in reference_items(value)
         for entry in item.get("labels") or []
         if isinstance(entry, dict)
         and isinstance(entry.get("value"), str)

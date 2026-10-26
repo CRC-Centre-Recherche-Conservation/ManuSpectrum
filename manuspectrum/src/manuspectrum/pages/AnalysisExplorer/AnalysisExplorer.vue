@@ -8,6 +8,7 @@ import {
     provide,
     ref,
     shallowRef,
+    useTemplateRef,
     watch,
 } from "vue";
 import { useGettext } from "vue3-gettext";
@@ -22,13 +23,20 @@ import ViewTabs from "@/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.
 import CorpusView from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusView.vue";
 
 import { useUrlState } from "@/manuspectrum/public/useUrlState.ts";
+import { useHome } from "@/manuspectrum/pages/AnalysisExplorer/composables/useHome.ts";
+import { useRailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import {
     ANNOUNCE_KEY,
+    CITE_OPEN_KEY,
+    CORPUS_COUNT_KEY,
     FACET_LABELS_KEY,
+    FACET_NARROWER_KEY,
     MIRADOR_URL_KEY,
+    RAIL_WIDTH_KEY,
     RESULTS_MEMO_KEY,
     SCREEN_FOCUS_KEY,
+    SELECTION_DRAWER_KEY,
     SELECTION_HINTS_KEY,
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
@@ -37,7 +45,9 @@ import {
     introBar,
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { localDay } from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document-of-the-day.ts";
 import { loadCompareView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/load-compare-view.ts";
+import { loadMapView } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/load-map-view.ts";
 import { useBasketPersistence } from "@/manuspectrum/pages/AnalysisExplorer/store/persistence.ts";
 import {
     SELECTION_PARAM,
@@ -76,6 +86,7 @@ const { $gettext } = useGettext();
 
 /** The stored Selection was emptied for age (on this load or by another tab); the notice stays until dismissed. */
 const { expired: selectionExpired } = useBasketPersistence(store);
+const railWidth = useRailWidth();
 useUrlState({
     snapshot: () => snapshotOf(store),
     toQuery,
@@ -87,31 +98,61 @@ const hasIntroBar = introBar() !== null;
 const sharedSelection = ref<SharedSelection | null>(INITIAL_SELECTION);
 const announcement = ref("");
 const facetLabels = ref(new Map<string, Label>());
+const facetNarrower = ref(new Set<string>());
 const screenFocusPending = ref(false);
 const resultsMemo = ref<ResultsMemo | null>(null);
 const selectionHints = ref(new Map<string, SelectionHint>());
+/** Whether the « Cite » block of the Analysis card is unfolded: memory only, for the life of the tab. */
+const citeOpen = ref(false);
 /** The Compare view once its chunk has arrived. */
+const selectionDrawer =
+    useTemplateRef<InstanceType<typeof SelectionDrawer>>("selectionDrawer");
 const compareView = shallowRef<Component>();
 /** Its chunk is on its way, or could not be fetched (Retry fetches it again). */
 const compareChunk = ref<"idle" | "loading" | "failed">("idle");
+/** The Map & timeline view once its chunk has arrived, and the state of that chunk. */
+const mapView = shallowRef<Component>();
+const mapChunk = ref<"idle" | "loading" | "failed">("idle");
 /** The shared reading of the Selection, started by its first reader (the Selection panel or the Compare view). */
 const selectionScope = effectScope();
 let selectionItems: SelectionItems | null = null;
 
-/** The screen shown, as CorpusView decides it: the page intro folds to one line off the home. */
+/** The screen shown, as CorpusView decides it: the page intro folds to one line everywhere but the Corpus home. */
 const screen = computed(() => {
     if (store.view !== "corpus") return store.view;
     if (store.corpusScreen === "document" && store.document) return "document";
     return store.corpusScreen === "results" ? "results" : "home";
 });
 
+/**
+ * The size of the whole corpus, read from the home payload (the tab memo the
+ * home screen shares); asked only once a screen other than the home is shown,
+ * where « See the whole corpus » needs it.
+ */
+const home = useHome(() =>
+    screen.value === "results" || screen.value === "document"
+        ? localDay(new Date())
+        : null,
+);
+const corpusCount = computed(() => {
+    const count = home.data.value?.documentCount;
+    return typeof count === "number" ? count : null;
+});
+
+provide(CORPUS_COUNT_KEY, corpusCount);
 provide(FACET_LABELS_KEY, facetLabels);
+provide(FACET_NARROWER_KEY, facetNarrower);
 provide(SCREEN_FOCUS_KEY, screenFocusPending);
 provide(RESULTS_MEMO_KEY, resultsMemo);
 provide(SELECTION_HINTS_KEY, selectionHints);
 provide(ANNOUNCE_KEY, announce);
 provide(MIRADOR_URL_KEY, props.miradorUrl);
+provide(CITE_OPEN_KEY, citeOpen);
 provide(SELECTION_ITEMS_KEY, sharedSelectionItems);
+provide(RAIL_WIDTH_KEY, railWidth);
+provide(SELECTION_DRAWER_KEY, {
+    open: () => selectionDrawer.value?.open(document.activeElement),
+});
 
 /**
  * Another view, a new Corpus screen or another document moves the focus to
@@ -130,6 +171,7 @@ watch(
     () => store.view,
     (view) => {
         if (view === "compare") void openCompare();
+        if (view === "map") void openMap();
     },
     { immediate: true },
 );
@@ -189,6 +231,19 @@ async function openCompare(): Promise<void> {
     }
 }
 
+/** Fetches the Map view's chunk, once; a failure is shown with Retry. */
+async function openMap(): Promise<void> {
+    if (mapView.value || mapChunk.value === "loading") return;
+    mapChunk.value = "loading";
+    try {
+        mapView.value = await loadMapView();
+        mapChunk.value = "idle";
+    } catch (error: unknown) {
+        mapChunk.value = "failed";
+        console.error("The Map view could not be loaded", error);
+    }
+}
+
 function onSelectionResolved(message: string): void {
     sharedSelection.value = null;
     announcement.value = message;
@@ -197,13 +252,18 @@ function onSelectionResolved(message: string): void {
 </script>
 
 <template>
-    <div class="analysis-explorer">
+    <div
+        class="analysis-explorer"
+        :class="{ 'is-rail-wide': railWidth.wide.value }"
+    >
         <Teleport
             :to="`#${INTRO_BAR_ID}`"
             :disabled="!hasIntroBar"
         >
-            <ShareExportPanel class="share" />
-            <SelectionDrawer class="selection" />
+            <div class="ms-explorer-intro__actions">
+                <ShareExportPanel />
+                <SelectionDrawer ref="selectionDrawer" />
+            </div>
         </Teleport>
         <p
             v-if="selectionExpired"
@@ -247,6 +307,26 @@ function onSelectionResolved(message: string): void {
             >
                 <LoadingSpinner />
                 <span>{{ $gettext("Loading the Compare view…") }}</span>
+            </p>
+        </template>
+        <template v-else-if="store.view === 'map'">
+            <component
+                :is="mapView"
+                v-if="mapView"
+            />
+            <UnavailableState
+                v-else-if="mapChunk === 'failed'"
+                status="error"
+                :hide-home="true"
+                @retry="openMap"
+            />
+            <p
+                v-else
+                class="compare-loading"
+                role="status"
+            >
+                <LoadingSpinner />
+                <span>{{ $gettext("Loading the map…") }}</span>
             </p>
         </template>
         <p

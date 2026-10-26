@@ -25,6 +25,7 @@ function whole(n: number): Item {
     return {
         key: `an:${analysis.id}:-`,
         kind: "analysis",
+        excitation: null,
         analysis,
         files: [fileEntry()],
     };

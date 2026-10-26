@@ -36,7 +36,10 @@ import { shortAnalysisName } from "@/manuspectrum/pages/AnalysisExplorer/views/C
 import { LAYER_DRAG_TYPE } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-drag.ts";
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
-import { layerById } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
+import {
+    isCapture,
+    layerById,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import { filterCss } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-filters.ts";
 import {
@@ -386,6 +389,7 @@ function drawSide(side: Side): void {
             scale: scale ?? undefined,
             curtain: true,
             tileFormat: "png",
+            declaredSize: isCapture(layer),
         },
     );
 }
