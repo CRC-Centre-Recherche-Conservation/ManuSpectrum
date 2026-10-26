@@ -65,6 +65,19 @@ PREFIXED = [
         "two-factor-authentication-login",
     ),
     ("snippets/edge-rules.conf", "api/explorer/share", "explorer-share"),
+    ("snippets/edge-rules.conf", "api/explorer/search", "explorer-search"),
+    ("snippets/edge-rules.conf", f"api/explorer/document/{UUID}", "explorer-document"),
+    (
+        "snippets/edge-rules.conf",
+        f"api/explorer/document/{UUID}/match",
+        "explorer-document-match",
+    ),
+    ("snippets/edge-rules.conf", "api/explorer/facet/technique", "explorer-facet"),
+    ("snippets/edge-rules.conf", "api/explorer/home", "explorer-home"),
+    ("snippets/edge-rules.conf", f"api/explorer/analysis/{UUID}", "explorer-analysis"),
+    ("snippets/edge-rules.conf", "api/explorer/items", "explorer-items"),
+    ("snippets/edge-rules.conf", "api/explorer/synthesis", "explorer-synthesis"),
+    ("snippets/edge-rules.conf", "api/explorer/events", "explorer-events"),
     ("snippets/edge-rules.conf", f"mvt/{UUID}/5/16/11.pbf", "mvt"),
     ("snippets/edge-rules.conf", "iiifannotations", "iiifannotations"),
     ("snippets/media.conf", f"files/{UUID}", "file_access"),
@@ -250,6 +263,37 @@ class EdgeContractTests(SimpleTestCase):
             self.assertIsNotNone(bound)
             self.assertGreaterEqual(int(bound.group(1)), 100)
             self.assertNotIn("perip", body)
+
+    def test_explorer_calls_spend_a_pace_zone_and_an_hourly_budget(self):
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertRegex(zones, r"zone=explorer:\w+\s+rate=10r/s;")
+        budget = re.search(r"zone=explorer_budget:\w+\s+rate=(\d+)r/m;", zones)
+        self.assertIsNotNone(budget)
+        self.assertEqual(int(budget.group(1)), 100)
+        paths = [f"/{code}/api/explorer/search" for code, _ in settings.LANGUAGES]
+        paths.append(f"/api/spectrum-preview/{UUID}")
+        for path in paths:
+            with self.subTest(path=path):
+                body = self.location_body("snippets/edge-rules.conf", path)
+                self.assertIn("limit_req zone=explorer burst=40 nodelay;", body)
+                burst = re.search(
+                    r"limit_req zone=explorer_budget burst=(\d+) nodelay;", body
+                )
+                self.assertIsNotNone(burst)
+                self.assertEqual(int(burst.group(1)), 6000)
+                self.assertEqual(int(budget.group(1)) * 60, int(burst.group(1)))
+                self.assertNotIn("zone=api ", body)
+
+    def test_share_and_the_downloads_keep_their_own_zones_above_the_explorer_ones(self):
+        for code, _ in settings.LANGUAGES:
+            body = self.location_body(
+                "snippets/edge-rules.conf", f"/{code}/api/explorer/share"
+            )
+            self.assertIn("limit_req zone=share", body)
+            self.assertNotIn("zone=explorer", body)
+        for path in ("/api/explorer/export", "/api/explorer/events.csv"):
+            body = self.location_body("snippets/edge-rules.conf", path)
+            self.assertIn("limit_req zone=heavy", body)
 
     def test_iiif_annotations_have_their_own_rate_and_connection_zones(self):
         for code, _ in settings.LANGUAGES:
