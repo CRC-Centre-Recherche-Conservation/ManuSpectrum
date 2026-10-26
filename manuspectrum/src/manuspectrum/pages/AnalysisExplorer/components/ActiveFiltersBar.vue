@@ -1,10 +1,32 @@
 <script setup lang="ts">
+import { computed, inject, ref } from "vue";
 import { useGettext } from "vue3-gettext";
 
 import { useActiveFilters } from "@/manuspectrum/pages/AnalysisExplorer/composables/useActiveFilters.ts";
+import { CORPUS_COUNT_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
-const { $gettext, interpolate } = useGettext();
+const { $gettext, $ngettext, interpolate } = useGettext();
 const { activeFilters, clearAll } = useActiveFilters();
+const corpusCount = inject(
+    CORPUS_COUNT_KEY,
+    () => ref<number | null>(null),
+    true,
+);
+
+/** « See the whole corpus », with its number of documents once the home has told it. */
+const clearLabel = computed(() => {
+    const count = corpusCount.value;
+    if (count === null) return $gettext("See the whole corpus");
+    return interpolate(
+        $ngettext(
+            "See the whole corpus (%{n} document)",
+            "See the whole corpus (%{n} documents)",
+            count,
+        ),
+        { n: count },
+        true,
+    );
+});
 
 function removeLabel(label: string): string {
     return interpolate($gettext("Remove filter: %{label}"), { label }, true);
@@ -38,7 +60,7 @@ function removeLabel(label: string): string {
             class="clear-all"
             @click="clearAll"
         >
-            <span>{{ $gettext("Clear all") }}</span>
+            <span>{{ clearLabel }}</span>
         </button>
     </section>
 </template>
@@ -76,10 +98,10 @@ function removeLabel(label: string): string {
 }
 
 .active-filters .clear-all {
-    border-color: transparent;
-    background: transparent;
+    border-color: var(--blue-text);
+    background: var(--surface);
     color: var(--blue-text);
-    text-decoration: underline;
+    font-weight: 600;
 }
 
 .active-filters .chip:focus-visible,

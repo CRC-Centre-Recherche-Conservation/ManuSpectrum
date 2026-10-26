@@ -27,6 +27,8 @@ from arches.app.models.models import (
     TileModel,
 )
 from arches.app.utils.permission_backend import assign_perm
+from arches_controlled_lists.models import List, ListItem, ListItemValue
+from manuspectrum.views.explorer import memo as explorer_memo
 
 LIFECYCLE = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
 DRAFT = "9375c9a7-dad2-4f14-a5c1-d7e329fdde4f"
@@ -40,6 +42,10 @@ GRAPHS = {
     "sample": "7a5eda79-6b48-49d0-826d-931d5681e84e",
     "characterization": "af6eed4f-04a3-40d8-baef-1ad37b86c4dd",
     "person": "5bf45c85-84cd-4a76-b64a-3ffe86eea1b8",
+    "place": "3f2b036a-b65d-474d-b692-0b21903655c5",
+    "group": "0f6a1c52-3d8e-4b7a-9c14-6e2b8a5d7f31",
+    "modification": "bfe5ab65-67ed-44b1-a5f8-301a614e625f",
+    "alteration": "7554cd18-3cb9-4754-b5d2-a27631997385",
 }
 
 # (slug, alias, datatype, nodegroup key): nodes sharing a key share a nodegroup.
@@ -70,6 +76,7 @@ ROLE_NODES = [
     ("sample", "label_of_name", "string", "sample_name"),
     ("sample", "location_in_object_of_sampling_taking", "annotation", "sample_zone"),
     ("person", "label_of_name", "string", "person_name"),
+    ("group", "label_of_name", "string", "group_name"),
     ("characterization", "label_of_name", "string", "char_name"),
     ("characterization", "object_observed", "resource-instance-list", "char_object"),
     (
@@ -115,8 +122,67 @@ ROLE_NODES = [
     ("document", "type_of_identifier", "reference", "doc_identifier"),
     ("document", "date_start_of_production_time", "date", "doc_production"),
     ("document", "date_end_of_production_time", "date", "doc_production"),
+    ("document", "production_at_place", "resource-instance-list", "doc_production"),
+    ("document", "type_of_production_time", "boolean", "doc_production"),
+    ("component", "date_start_of_production_time", "date", "comp_production"),
+    ("component", "date_end_of_production_time", "date", "comp_production"),
+    ("component", "type_of_production_time", "boolean", "comp_production"),
+    ("component", "production_at_place", "resource-instance-list", "comp_production"),
+    ("place", "label_of_name", "string", "place_name"),
+    ("place", "part_of_places", "resource-instance-list", "place_parent"),
     ("document", "content_of_statement", "string", "doc_statement"),
     ("document", "type", "reference", "doc_type"),
+    (
+        "document",
+        "literal_location_of_production",
+        "geojson-feature-collection",
+        "doc_production",
+    ),
+    (
+        "component",
+        "literal_location_of_production",
+        "geojson-feature-collection",
+        "comp_production",
+    ),
+    ("component", "production_date_end_of_the_begin_", "date", "comp_production"),
+    ("component", "production_date_end_of_the_end_", "date", "comp_production"),
+    ("place", "literal_location", "geojson-feature-collection", "place_geometry"),
+    ("place", "value_of_identifier", "string", "place_identifier"),
+    ("modification", "label_of_name", "string", "mod_name"),
+    ("modification", "document_modified", "resource-instance-list", "mod_object"),
+    ("modification", "date_start_of_production_time", "date", "mod_dates"),
+    ("modification", "date_end_of_modification_time", "date", "mod_dates"),
+    ("modification", "modification_date_end_of_the_begin_", "date", "mod_dates"),
+    ("modification", "modification_date_end_of_the_end_", "date", "mod_dates"),
+    ("modification", "type_of_modification_time", "boolean", "mod_dates"),
+    ("modification", "took_place_at_place", "resource-instance", "mod_place"),
+    (
+        "modification",
+        "literal_location_of_modification",
+        "geojson-feature-collection",
+        "mod_place",
+    ),
+    (
+        "modification",
+        "observed_by_characterisation",
+        "resource-instance-list",
+        "mod_cites",
+    ),
+    ("alteration", "label_of_name", "string", "alt_name"),
+    ("alteration", "object_altered", "resource-instance-list", "alt_object"),
+    ("alteration", "alteration_process_start_date", "date", "alt_dates"),
+    ("alteration", "alteration_process_end_date", "date", "alt_dates"),
+    ("alteration", "alteration_process_date_end_of_the_begin_", "date", "alt_dates"),
+    ("alteration", "alteration_process_date_end_of_the_end_", "date", "alt_dates"),
+    ("alteration", "type_of_alteration_process_timespan", "boolean", "alt_dates"),
+    ("alteration", "alteration_took_place_at_place", "resource-instance", "alt_place"),
+    ("alteration", "occured_in_presence_of_material", "reference", "alt_material"),
+    (
+        "alteration",
+        "analysis_reference_observed_about_inference_making",
+        "resource-instance-list",
+        "alt_analyses",
+    ),
 ]
 
 # Roles whose node carries the id it has in the ManuSpectrum model, for readers
@@ -131,7 +197,13 @@ XY_CONFIG_ID = "7a1c3f80-5d21-4e63-9b0a-2c4f8e1d6a01"
 
 
 class ExplorerCase(TestCase):
-    """Two Documents with a Component each, four Analyses, two Projects, a Sample and one identified material."""
+    """Two Documents with a Component each, four Analyses, two Projects, a Sample and one identified material.
+
+    The open Document is produced in Paris from 1401-01 to 1500-12
+    (approximate); its Component in Lyon, undated. Paris falls within France
+    (a Draft), which falls within Europe; ``places["hidden"]`` is linked to
+    nothing until a test restricts it.
+    """
 
     @classmethod
     def setUpTestData(cls):
@@ -192,6 +264,14 @@ class ExplorerCase(TestCase):
         }
         cls.samples = {"s1": new("sample", "S1")}
         cls.operator = new("person", "Robinet, L.")
+        cls.group = new("group", "CNRS, CRC")
+        cls.places = {
+            "paris": new("place", "Paris"),
+            "france": new("place", "France", state=DRAFT),
+            "europe": new("place", "Europe"),
+            "lyon": new("place", "Lyon"),
+            "hidden": new("place", "Hidden place"),
+        }
         cls.analyses = {
             "open": new("analysis", "X01 — f. 1v"),
             "on_document": new("analysis", "FORS_009 — f. 1v"),
@@ -201,6 +281,21 @@ class ExplorerCase(TestCase):
         cls.characterization = new("characterization", "Azurite, blue ground")
 
         tile = cls.tile
+        tile(cls.places["paris"], "part_of_places", cls.refs(cls.places["france"]))
+        tile(cls.places["france"], "part_of_places", cls.refs(cls.places["europe"]))
+        cls.tile_values(
+            cls.documents["open"],
+            "document",
+            date_start_of_production_time="1401-01",
+            date_end_of_production_time="1500-12",
+            type_of_production_time=True,
+            production_at_place=cls.refs(cls.places["paris"]),
+        )
+        cls.tile_values(
+            cls.components["open"],
+            "component",
+            production_at_place=cls.refs(cls.places["lyon"]),
+        )
         tile(
             cls.components["open"],
             "item_visual_is_part_of_document",
@@ -328,6 +423,47 @@ class ExplorerCase(TestCase):
         return [{"uri": uri, "list_id": list_id or str(uuid.uuid4()), "labels": labels}]
 
     @staticmethod
+    def _item_id(uri, repeated):
+        item = uuid.uuid5(uuid.NAMESPACE_URL, uri)
+        if repeated or ListItem.objects.filter(pk=item).exists():
+            return uuid.uuid4()
+        return item
+
+    @classmethod
+    def term_list(cls, slug, alias, tree):
+        """A controlled list for the node *alias* of *slug*, set as its ``controlledList``.
+
+        *tree* is ``[(uri, parent uri or None, labels)]``, ``labels`` being
+        ``{"en": .., "fr": ..}`` plus an optional ``"alt"`` (English altLabel).
+        A uri listed again is another occurrence, under another parent. The
+        first occurrence of a uri takes the id ``reference_value`` stores in
+        its labels, unless another list already holds that id; the others a
+        random one.
+        """
+        vocab = List.objects.create(name=f"{slug}.{alias}")
+        first = {}
+        for order, (uri, parent, labels) in enumerate(tree):
+            item = ListItem.objects.create(
+                id=cls._item_id(uri, uri in first),
+                list=vocab,
+                uri=uri,
+                sortorder=order,
+                parent=first[parent] if parent else None,
+            )
+            first.setdefault(uri, item)
+            for key, text in labels.items():
+                ListItemValue.objects.create(
+                    list_item=item,
+                    valuetype_id="altLabel" if key == "alt" else "prefLabel",
+                    language_id="en" if key == "alt" else key,
+                    value=text,
+                )
+        Node.objects.filter(pk=cls.nodes[(slug, alias)].pk).update(
+            config={"controlledList": str(vocab.pk)}
+        )
+        return vocab
+
+    @staticmethod
     def annotation_value(canvas, geometry):
         return {
             "type": "FeatureCollection",
@@ -342,7 +478,11 @@ class ExplorerCase(TestCase):
         }
 
     def setUp(self):
-        """Clear the caches and give the test its own ``MEDIA_ROOT``.
+        """Clear the caches, give the test its own rebuild guard and ``MEDIA_ROOT``.
+
+        The guard set of ``memo`` is process-wide: a test that mocks
+        ``memo.spawn`` leaves its slot taken, and every later rebuild in the
+        process is skipped, so readers are answered from a stale bundle.
 
         The media override is enabled before a method-level
         ``override_settings`` and disabled after it: the two nest, and each
@@ -352,6 +492,9 @@ class ExplorerCase(TestCase):
         caches["user_permission"].clear()
         self.addCleanup(cache.clear)
         self.addCleanup(caches["user_permission"].clear)
+        guard = mock.patch.object(explorer_memo, "_rebuilding", set())
+        guard.start()
+        self.addCleanup(guard.stop)
         self._media_root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self._media_root, True)
         media = override_settings(MEDIA_ROOT=self._media_root)

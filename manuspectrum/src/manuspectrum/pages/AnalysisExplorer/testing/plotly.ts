@@ -57,6 +57,13 @@ export const plotly = {
         async (_element: HTMLElement, _update: Record<string, unknown>) =>
             undefined,
     ),
+    update: vi.fn(
+        async (
+            _element: HTMLElement,
+            _traces: Record<string, unknown>,
+            _layout: Record<string, unknown>,
+        ) => undefined,
+    ),
     purge: vi.fn((_element: HTMLElement) => undefined),
     toImage: vi.fn(
         async (_figure: unknown, _options: unknown) =>
@@ -73,12 +80,13 @@ export const loadPlotly = vi.fn(async () => plotly);
 export function resetPlotly(): void {
     loadPlotly.mockReset();
     loadPlotly.mockImplementation(async () => plotly);
-    plotly.react.mockClear();
-    plotly.restyle.mockClear();
-    plotly.relayout.mockClear();
-    plotly.purge.mockClear();
-    plotly.toImage.mockClear();
-    plotly.Plots.resize.mockClear();
+    plotly.react.mockReset();
+    plotly.restyle.mockReset();
+    plotly.relayout.mockReset();
+    plotly.update.mockReset();
+    plotly.purge.mockReset();
+    plotly.toImage.mockReset();
+    plotly.Plots.resize.mockReset();
 }
 
 export function plotlyModule(): { loadPlotly: typeof loadPlotly } {

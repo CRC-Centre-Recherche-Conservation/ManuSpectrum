@@ -22,7 +22,7 @@ import {
 import type { Pinia } from "pinia";
 import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-const BLUE = valueRef("http://example.org/blue", "Blue");
+const BLUE = { ...valueRef("http://example.org/blue", "Blue"), swatch: null };
 const AZURITE = valueRef("http://example.org/azurite", "Azurite");
 const CHALK = valueRef("http://example.org/chalk", "Chalk");
 const SYNTHESIS: SynthesisResponse = {

@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import {
+    computed,
+    inject,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+    useTemplateRef,
+} from "vue";
 import { useGettext } from "vue3-gettext";
 
+import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/BulkStatusLine.vue";
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
+import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import {
     SCREEN_FOCUS_KEY,
     SELECTION_HINTS_KEY,
@@ -33,7 +42,10 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * what the card that added it knew (`SELECTION_HINTS_KEY`). « Compare »
  * opens the Compare view, asks for its heading to take the focus
  * (`SCREEN_FOCUS_KEY`) and emits `compare`, so a drawer holding the panel
- * closes. When the reading of the Selection fails, the rows not read lose
+ * closes. The panel is a column filling its container: the heading on top,
+ * the list as the only scrolling region, the footer (actions, undo line)
+ * pinned below it. « Empty… » empties the Selection at once and leaves a status
+ * line with « Undo » that puts every item back at its slot. When the reading of the Selection fails, the rows not read lose
  * their placeholder and the panel offers Retry.
  */
 const emit = defineEmits<{ (event: "compare"): void }>();
@@ -51,12 +63,24 @@ const { $gettext, $ngettext, interpolate } = useGettext();
 const { dataKindBadge } = useVocabulary();
 
 const { byKey, missing, status, retry } = selectionItems();
+const { clearAll, lastBulk, undo, dismiss } = useSelectionToggle();
+const panel = useTemplateRef<HTMLElement>("panel");
 
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
 const failed = computed(
     () => status.value === "error" || status.value === "unavailable",
 );
 const canCompare = computed(() => isViewAvailable("compare"));
+const emptied = computed(() =>
+    lastBulk.value?.kind === "emptied" ? lastBulk.value : null,
+);
+const compareLabel = computed(() =>
+    interpolate($gettext("Compare (%{n})"), { n: store.basket.length }, true),
+);
+
+onBeforeUnmount(() => {
+    if (emptied.value) dismiss();
+});
 
 /** What a whole analysis holds, « 2 spectra · 1 map », or that it holds nothing to show. */
 function holdingsText(item: AnalysisItem): string {
@@ -123,6 +147,13 @@ function compare(): void {
     emit("compare");
 }
 
+/** Empties the Selection; the buttons go, so the keyboard focus moves to « Undo ». */
+async function empty(): Promise<void> {
+    clearAll();
+    await nextTick();
+    panel.value?.querySelector<HTMLElement>('[data-action="undo"]')?.focus();
+}
+
 function removeLabel(slot: number): string {
     return interpolate(
         $gettext("Remove %{slot}"),
@@ -134,6 +165,7 @@ function removeLabel(slot: number): string {
 
 <template>
     <section
+        ref="panel"
         class="selection-panel"
         aria-labelledby="selection-title"
     >
@@ -236,33 +268,50 @@ function removeLabel(slot: number): string {
                 </button>
             </li>
         </ol>
-        <div
-            v-if="store.basket.length > 0"
-            class="actions"
+        <footer
+            v-if="store.basket.length > 0 || emptied"
+            class="foot"
         >
-            <button
-                type="button"
-                class="clear"
-                @click="store.clearBasket()"
+            <div
+                v-if="store.basket.length > 0"
+                class="actions"
             >
-                <span>{{ $gettext("Empty the Selection") }}</span>
-            </button>
-            <button
-                v-if="canCompare"
-                type="button"
-                class="compare"
-                @click="compare"
-            >
-                <span>{{ $gettext("Compare") }}</span>
-            </button>
-        </div>
+                <button
+                    v-if="canCompare"
+                    type="button"
+                    class="compare primary"
+                    @click="compare"
+                >
+                    <span>{{ compareLabel }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="clear secondary"
+                    @click="empty"
+                >
+                    <span>{{ $gettext("Empty…") }}</span>
+                </button>
+            </div>
+            <BulkStatusLine
+                :status="emptied"
+                @undo="undo"
+                @dismiss="dismiss"
+            />
+        </footer>
     </section>
 </template>
 
 <style scoped>
 .selection-panel {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 1rem;
+    block-size: 100%;
+    min-block-size: 0;
+}
+
+.selection-panel > * {
+    flex: none;
 }
 
 .selection-panel h3 {
@@ -296,35 +345,66 @@ function removeLabel(slot: number): string {
 
 .selection-panel ol {
     display: grid;
-    gap: 0.25rem;
+    flex: 1 1 0;
+    align-content: start;
+    gap: 0;
+    min-block-size: 0;
+    overflow-y: auto;
     padding: 0;
+    border-block-start: 0.0625rem solid var(--border-hover);
     list-style: none;
 }
 
 .selection-panel li {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    align-items: center;
+    align-items: start;
     gap: 0 0.5rem;
+    padding-block: 0.375rem;
+    padding-inline: 0.25rem;
+    border-block-end: 0.0625rem solid var(--border-hover);
+}
+
+.selection-panel li:nth-child(even) {
+    background: var(--bg);
+}
+
+.selection-panel li:hover {
+    background: var(--bg-alt);
 }
 
 .selection-panel .slot {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: 2rem;
+    padding-block: 0.125rem;
+    border-radius: 0.25rem;
+    background: var(--ink);
+    color: var(--surface);
     font-family: var(--font-mono);
+    font-size: 0.75rem;
     font-weight: 600;
+    line-height: 1.3;
 }
 
 .selection-panel .info {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0 0.5rem;
+    gap: 0 0.375rem;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+}
+
+.selection-panel .title {
+    font-weight: 500;
 }
 
 .selection-panel .kind,
 .selection-panel .document,
 .selection-panel .gone {
     color: var(--ink-muted);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
 }
 
 .selection-panel .pending {
@@ -335,8 +415,8 @@ function removeLabel(slot: number): string {
 .selection-panel .remove {
     display: inline-grid;
     place-items: center;
-    inline-size: var(--explorer-target, 2.75rem);
-    block-size: var(--explorer-target, 2.75rem);
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
     border: 0.0625rem solid var(--border-hover);
     border-radius: 0.25rem;
     background: var(--surface);
@@ -345,11 +425,26 @@ function removeLabel(slot: number): string {
     cursor: pointer;
 }
 
+@media (pointer: coarse) {
+    .selection-panel .remove {
+        inline-size: var(--explorer-target, 2.75rem);
+        block-size: var(--explorer-target, 2.75rem);
+    }
+}
+
 .selection-panel .remove:focus-visible,
 .selection-panel .clear:focus-visible,
 .selection-panel .compare:focus-visible {
     outline: 0.125rem solid var(--blue-text);
     outline-offset: 0.125rem;
+}
+
+.selection-panel .foot {
+    display: grid;
+    gap: 0.5rem;
+    padding-block: 0.5rem;
+    border-block-start: 0.0625rem solid var(--border-hover);
+    background: var(--surface);
 }
 
 .selection-panel .actions {
@@ -368,5 +463,18 @@ function removeLabel(slot: number): string {
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+}
+
+.selection-panel .compare.primary {
+    border-color: var(--blue-text);
+    background: var(--blue-text);
+    color: var(--surface);
+    font-weight: 600;
+}
+
+.selection-panel .clear.secondary {
+    border-color: transparent;
+    background: transparent;
+    color: var(--blue-text);
 }
 </style>

@@ -19,6 +19,8 @@ export interface Annotation {
     technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
+    /** Id of the Component the analysis observed; null on the document itself. */
+    component: string | null;
     /** Whether the Corpus filters keep the analysis. */
     match: boolean;
 }
@@ -30,6 +32,7 @@ export interface UnlocatedAnalysis {
     technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
+    component: string | null;
     match: boolean;
 }
 
@@ -70,6 +73,7 @@ export function documentView(
                     : techniques[analysis.technique] ?? null,
             dataKind: analysis.dataKind,
             unpublished: analysis.unpublished,
+            component: analysis.component,
             match: kept?.has(analysis.id) ?? true,
         };
         if (analysis.zones.length === 0) {

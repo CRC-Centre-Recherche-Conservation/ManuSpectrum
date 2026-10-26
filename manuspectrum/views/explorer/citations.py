@@ -84,7 +84,10 @@ def _clean(text):
 
 
 def person_name(text):
-    """``{"family", "given"}`` of ``Family, Given``; ``{"literal"}`` of a name without comma."""
+    """``{"family", "given"}`` of the name of a Person, ``Family, Given``; ``{"literal"}`` of a name without comma.
+
+    Not for a Group or a Project, whose name is cited literally (``cited_analysis``).
+    """
     family, comma, given = text.partition(",")
     family, given = family.strip(), given.strip()
     if comma and family and given:

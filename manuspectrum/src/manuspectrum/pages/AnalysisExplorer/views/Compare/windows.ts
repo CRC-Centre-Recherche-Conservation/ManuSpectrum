@@ -4,6 +4,7 @@ import { firstStoredTitle } from "@/manuspectrum/pages/AnalysisExplorer/xy/axis-
 import type {
     AnalysisHit,
     CharacterizationSummary,
+    Excitation,
     FileEntry,
     Item,
     SynthesisResponse,
@@ -38,6 +39,8 @@ export interface FileLine {
     slot: number;
     analysis: AnalysisHit;
     file: FileEntry;
+    /** The X-ray tube of the item's analysis; null or absent for an item that carries none. */
+    excitation?: Excitation | null;
 }
 
 /** A layered map (`chemical-imaging` file) of a Selection item; `named` is the layer index a one-layer key (`im:`) names. */
@@ -206,6 +209,7 @@ class Collector {
                 slot,
                 analysis: read.analysis,
                 file: read.file,
+                excitation: null,
             };
             if (!this.addFile(line, Number.isInteger(named) ? named : null)) {
                 this.addEntry(item, "no-data", read.analysis, read.file);
@@ -216,6 +220,7 @@ class Collector {
                 slot,
                 analysis: read.analysis,
                 file: read.file,
+                excitation: read.excitation,
             };
             if (!this.addFile(line)) {
                 this.addEntry(
@@ -234,6 +239,7 @@ class Collector {
                         slot,
                         analysis: read.analysis,
                         file,
+                        excitation: read.excitation,
                     }) || shown;
             }
             if (!shown) this.addEntry(item, "no-data", read.analysis);

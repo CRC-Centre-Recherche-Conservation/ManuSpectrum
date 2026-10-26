@@ -30,7 +30,8 @@ XRF, FORS = "http://vocab/pxrf", "http://vocab/fors"
 AZURITE, CHALK, BLUE = (
     "http://vocab/azurite",
     "http://vocab/chalk",
-    "http://vocab/blue",
+    "https://thesaurus.inha.fr/thesaurus/resource/ark:/54721/"
+    "d549884f-ed29-4a28-87c8-07311d9a14ad",
 )
 HIGHLY, RELIABLE = "http://vocab/highly-reliable", "http://vocab/reliable"
 MAJOR, TRACE = "http://vocab/major", "http://vocab/trace"
@@ -500,6 +501,12 @@ class PairsAndElementsTests(SynthesisCase):
             [(e["symbol"], e["level"]["uri"], e["count"]) for e in payload["elements"]],
             [("Cu", MAJOR, 2)],
         )
+
+    def test_a_pair_colour_carries_its_swatch_by_uri(self):
+        payload = self.payload([self.an("open")])
+
+        self.assertEqual(payload["pairs"][0]["colour"]["swatch"], "#2f55a4")
+        assert_shape(self, payload["pairs"][0]["colour"], "ColourRef")
 
     def test_a_material_without_colour_pairs_with_null(self):
         payload = self.payload([f"ch:{self.chalk.pk}:-"])

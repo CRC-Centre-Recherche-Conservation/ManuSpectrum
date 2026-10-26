@@ -2,8 +2,27 @@ import type { Config, Layout } from "plotly.js";
 
 const TRANSPARENT = "rgba(0,0,0,0)";
 const SERIES = 12;
+/** Compare's focus holds this many slots, each with its hue (`--focus-1…4`). */
+const FOCUS_SLOTS = 4;
+const FOCUS_FALLBACKS = ["#3d2e8d", "#1e6256", "#93499e", "#760a03"];
+export const ELEMENT_FALLBACKS = [
+    "#c2410c",
+    "#0e6baa",
+    "#8a6508",
+    "#14804a",
+    "#b912e2",
+    "#d0257a",
+    "#475569",
+    "#8e3329",
+    "#3f6212",
+    "#6d28d9",
+    "#0828a0",
+    "#680070",
+];
 /** Room under the plot for the legend Plotly draws below it. */
 const LEGEND_ROOM = 48;
+/** The advance width of one glyph of the mono font (JetBrains Mono: 600/1000 em), as a share of the font size. */
+const MONO_GLYPH_EM = 0.6;
 /** The number format of a hover value: 4 significant digits, no trailing zeros. */
 export const HOVER_VALUE_FORMAT = ".4~g";
 /**
@@ -17,6 +36,10 @@ export const UNIFIED_HOVER_MAX_CURVES = 12;
 
 export interface PlotTheme {
     series: string[];
+    /** The hue of each focus slot (index 0 is slot 1). */
+    focus: string[];
+    /** The hue of each chemical element of the XRF lens (`elementColour`), apart from the focus hues. */
+    element: string[];
     /** The grey of a curve dimmed by the focus's « Dim » switch (unrelated to any pin). */
     context: string;
     ink: string;
@@ -54,6 +77,12 @@ export function readPlotTheme(
         series: Array.from({ length: SERIES }, (_, index) =>
             token(`--series-${index + 1}`, "#1a1a2e"),
         ),
+        focus: Array.from({ length: FOCUS_SLOTS }, (_, index) =>
+            token(`--focus-${index + 1}`, FOCUS_FALLBACKS[index]),
+        ),
+        element: Array.from({ length: ELEMENT_FALLBACKS.length }, (_, index) =>
+            token(`--element-${index + 1}`, ELEMENT_FALLBACKS[index]),
+        ),
         context: token("--series-context", "#8a8999"),
         ink: token("--ink", "#1a1a2e"),
         inkMuted: token("--ink-muted", "#4a4a5e"),
@@ -74,6 +103,47 @@ export function seriesColour(
     return position !== null && position >= 0
         ? theme.series[position % SERIES]
         : theme.ink;
+}
+
+/** The number format of every tick label: SI suffixes past 10³ (« 10k »), as Plotly's `exponentformat`/`minexponent`. */
+const TICK_EXPONENT_FORMAT = "SI" as const;
+const TICK_MIN_EXPONENT = 3;
+/** Plotly's SI suffixes, from 10⁻¹⁵ to 10¹². */
+const SI_PREFIXES = ["f", "p", "n", "\u03BC", "m", "", "k", "M", "G", "T"];
+const MINUS_SIGN = "\u2212";
+
+/**
+ * The tick label Plotly gives `value` on an axis of `plotLayout` when it
+ * formats that value alone, as on a log axis: plain under 10⁴, then an SI
+ * suffix (« 10k », « 2.5M »), trailing zeros dropped, decimal and
+ * thousands marks from `separators` (`separatorsFor`). The rule of
+ * `numFormat` in plotly.js-cartesian-dist 4.0.0 under `TICK_EXPONENT_FORMAT`
+ * and `TICK_MIN_EXPONENT`; a linear axis shares one suffix across its ticks,
+ * the one of its largest end.
+ */
+export function tickNumber(value: number, separators: string): string {
+    if (!Number.isFinite(value)) return "";
+    if (value === 0) return "0";
+    const magnitude = Math.floor(Math.log10(Math.abs(value)) + 0.01);
+    const exponent =
+        Math.abs(magnitude) > TICK_MIN_EXPONENT
+            ? Math.min(12, Math.max(-15, 3 * Math.round((magnitude - 1) / 3)))
+            : 0;
+    const digits = Math.min(20, Math.max(0, 6 - magnitude + exponent));
+    let text = (Math.abs(value) / 10 ** exponent).toFixed(digits);
+    if (text.includes(".")) text = text.replace(/\.?0+$/, "");
+    const [whole, fraction] = text.split(".");
+    const [decimalMark, thousandsMark] = separators;
+    const grouped =
+        thousandsMark && (fraction !== undefined || whole.length > 4)
+            ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsMark)
+            : whole;
+    const number =
+        fraction === undefined
+            ? grouped
+            : `${grouped}${decimalMark}${fraction}`;
+    const sign = value < 0 ? MINUS_SIGN : "";
+    return `${sign}${number}${SI_PREFIXES[exponent / 3 + 5]}`;
 }
 
 /** Plotly `separators`: decimal mark then thousands mark. */
@@ -97,6 +167,16 @@ export function escapePlotlyText(text: string): string {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll("%{", "%&#123;");
+}
+
+/**
+ * The width in pixels of one glyph of `fontMono` at `size` px: what a label
+ * of n characters takes is n times this. Rounded up: Chromium on Linux lays
+ * hinted glyphs on whole pixels (11 px JetBrains Mono advances 7 px, not
+ * 6.6), and an estimate under the drawn width makes labels touch.
+ */
+export function monoGlyphWidth(size: number): number {
+    return Math.ceil(size * MONO_GLYPH_EM);
 }
 
 /**
@@ -172,8 +252,8 @@ export function plotLayout(
         showline: true,
         linecolor: theme.inkMuted,
         zeroline: false,
-        exponentformat: "SI" as const,
-        minexponent: 3,
+        exponentformat: TICK_EXPONENT_FORMAT,
+        minexponent: TICK_MIN_EXPONENT,
         showspikes: true,
         spikemode: "across" as const,
         spikedash: "dot",

@@ -17,6 +17,7 @@ import {
 import type { EffectScope } from "vue";
 
 import type {
+    ColourRef,
     Item,
     SynthesisResponse,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
@@ -39,7 +40,10 @@ export const C2 = "https://iiif.example/c2";
 export const D1 = uuid(1);
 export const XRF = technique("http://example.org/xrf", "XRF", 1, "xrf");
 export const RAMAN = technique("http://example.org/raman", "Raman", 2, "raman");
-export const BLUE = valueRef("http://example.org/blue", "Blue");
+export const BLUE: ColourRef = {
+    ...valueRef("http://example.org/blue", "Blue"),
+    swatch: null,
+};
 export const AZURITE = valueRef("http://example.org/azurite", "Azurite");
 export const CHALK = valueRef("http://example.org/chalk", "Chalk");
 
@@ -57,6 +61,7 @@ const DOCUMENT = { id: D1, model: "document", name: label("Manuscript 1") };
 const A1: Item = {
     key: `an:${AN1}:-`,
     kind: "analysis",
+    excitation: null,
     analysis: analysisHit(1, {
         technique: XRF,
         canvas: C1,
@@ -86,6 +91,7 @@ const A1: Item = {
 const A2: Item = {
     key: `an:${AN2}:-`,
     kind: "analysis",
+    excitation: null,
     analysis: analysisHit(2, {
         technique: RAMAN,
         canvas: C2,
@@ -269,6 +275,7 @@ export const SYNTHESIS_WITH_COMPONENT: SynthesisResponse = {
                   summary: {
                       ...material.summary,
                       objects: [DOCUMENT, COMPONENT],
+                      components: [COMPONENT],
                   },
               }
             : material,

@@ -46,7 +46,7 @@ describe("searchQuery", () => {
         );
     });
 
-    it("sends text, facets, years, the page size and the page, never place, period or eventType", () => {
+    it("sends text, places, facets, years, the period, the page size and the page, never eventType", () => {
         const query = searchQuery(
             {
                 ...emptyFilters(),
@@ -55,15 +55,49 @@ describe("searchQuery", () => {
                 size: 25,
                 part: ["p2", "p1"],
                 year: [2023, 2021],
-                place: "x",
+                place: ["x2", "x1"],
                 period: [1000, 1100],
                 eventType: ["production"],
             },
             3,
         );
         expect(query.toString()).toBe(
-            "q=lead&grain=analyses&size=25&part=p1&part=p2&year=2021&year=2023&page=3",
+            "q=lead&grain=analyses&size=25&place=x1&place=x2&part=p1&part=p2&year=2021&year=2023&period=1000%2C1100&page=3",
         );
+    });
+
+    it("sends the period options only when they are not the defaults, and keeps them in the filters", () => {
+        expect(
+            searchQuery(
+                { ...emptyFilters(), period: [1300, 1400] },
+                1,
+            ).toString(),
+        ).toBe("grain=documents&period=1300%2C1400");
+        const options = searchQuery(
+            {
+                ...emptyFilters(),
+                period: [1300, 1400],
+                periodMatch: "within",
+                periodEvent: "modification",
+                undated: true,
+            },
+            1,
+        );
+        expect(options.toString()).toBe(
+            "grain=documents&period=1300%2C1400&periodMatch=within&periodEvent=modification&undated=1",
+        );
+        expect(filtersOf(options.toString())).toBe(
+            "period=1300%2C1400&periodMatch=within&periodEvent=modification&undated=1",
+        );
+        expect(
+            filterQuery({ ...emptyFilters(), undated: true }).toString(),
+        ).toBe("undated=1");
+    });
+
+    it("sends the colour as one list and no scope", () => {
+        const query = searchQuery({ ...emptyFilters(), colour: ["c1"] }, 1);
+        expect(query.toString()).toBe("grain=documents&colour=c1");
+        expect(filtersOf(query.toString())).toBe("colour=c1");
     });
 
     it("asks for the documents without analyses only in the documents grain", () => {

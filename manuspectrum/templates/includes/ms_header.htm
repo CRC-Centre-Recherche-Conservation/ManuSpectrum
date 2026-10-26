@@ -1,8 +1,4 @@
 {% load i18n static template_tags manuspectrum_settings %}
-{# No-JS fallback: ms-nav.js opens the About dropdown by toggling `.open`; #}
-{# without JS, hover/focus-within must do that job or the four About pages #}
-{# become unreachable from the header. #}
-<noscript><style>.ms-nav-dropdown:hover .ms-nav-dropdown-menu,.ms-nav-dropdown:focus-within .ms-nav-dropdown-menu{opacity:1;visibility:visible;transform:translateY(0);}</style></noscript>
 <header class="ms-header{% if user.username != 'anonymous' %} ms-header--signed-in{% endif %}" id="ms-header">
     <div class="ms-header-inner">
         <a href="{% url 'root' %}" class="ms-header-logo" aria-label="{% trans 'ManuSpectrum — Home' %}">

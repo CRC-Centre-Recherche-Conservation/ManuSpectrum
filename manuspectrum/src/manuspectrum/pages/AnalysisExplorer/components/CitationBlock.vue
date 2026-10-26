@@ -96,7 +96,7 @@ const copyLabel = computed(() =>
     font-size: 0.8125rem;
 }
 
-.citation-block .bar .copy-button {
+.citation-block .bar :deep(.copy-button) {
     --explorer-target: 2.25rem;
 }
 

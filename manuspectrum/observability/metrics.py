@@ -69,7 +69,6 @@ MEMO_NAMES = (
     "biblissima:wikibase:entity",
     "biblissima:wikibase:place-geo",
     "explorer-bundle",
-    "explorer-home-techniques",
     "iiif",
     "model-graph",
     "public-visibility",

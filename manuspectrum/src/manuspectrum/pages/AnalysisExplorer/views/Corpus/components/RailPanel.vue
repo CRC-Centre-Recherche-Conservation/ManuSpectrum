@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, inject, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
 
+import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
+
+import { RAIL_WIDTH_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 
 const COMPACT_QUERY = "(max-width: 80rem)";
@@ -14,6 +17,10 @@ const FOCUSABLE = "input:not([disabled]), button:not([disabled])";
  * header and scrolls on its own. Below 80rem it folds into a toggle
  * that opens the filters in a left drawer; the drawer closes on Escape or on
  * `showLabel` (« See n analyses »), and the focus goes back to the toggle.
+ * On a wide screen, a small icon button before the title widens or narrows
+ * the column (`RAIL_WIDTH_KEY`, one choice for every rail of the browser):
+ * a toggle with the fixed name « Widen the filters » and `aria-pressed`;
+ * without a provider, or in the drawer, there is none.
  */
 const props = withDefaults(
     defineProps<{
@@ -25,6 +32,7 @@ const props = withDefaults(
 );
 defineExpose({ focusFilters });
 
+const railWidth = inject(RAIL_WIDTH_KEY, null);
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
 const compact = useMediaQuery(COMPACT_QUERY);
@@ -34,6 +42,7 @@ const column = useTemplateRef<HTMLElement>("column");
 const open = ref(false);
 
 const heading = computed(() => props.title || $gettext("Filters"));
+const wide = computed(() => railWidth?.wide.value ?? false);
 const toggleLabel = computed(() =>
     interpolate(
         $gettext("Filters (%{count})"),
@@ -62,7 +71,9 @@ function focusFilters(): void {
         openDrawer();
         return;
     }
-    const first = column.value?.querySelector<HTMLElement>(FOCUSABLE);
+    const first = [
+        ...(column.value?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []),
+    ].find((element) => !element.closest(".rail-head"));
     (first ?? column.value)?.focus();
 }
 </script>
@@ -110,9 +121,23 @@ function focusFilters(): void {
         tabindex="-1"
         :aria-label="heading"
     >
-        <h2 class="rail-title">
-            <span>{{ heading }}</span>
-        </h2>
+        <div class="rail-head">
+            <span
+                v-if="railWidth"
+                class="rail-width"
+            >
+                <IconButton
+                    :icon="wide ? 'angle-double-left' : 'angle-double-right'"
+                    :label="$gettext('Widen the filters')"
+                    :pressed="wide"
+                    tip-align="start"
+                    @click="railWidth.toggleWide()"
+                />
+            </span>
+            <h2 class="rail-title">
+                <span>{{ heading }}</span>
+            </h2>
+        </div>
         <slot></slot>
     </aside>
 </template>
@@ -158,6 +183,37 @@ function focusFilters(): void {
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+}
+
+.rail-panel .rail-head {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.rail-panel .rail-width {
+    --explorer-target: 1.5rem;
+    display: inline-flex;
+    flex: none;
+}
+
+.rail-panel .rail-width :deep(.icon-button-control),
+.rail-panel .rail-width :deep(.icon-button-control[aria-pressed="true"]) {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-muted);
+}
+
+.rail-panel .rail-width :deep(.icon-button-control:hover),
+.rail-panel .rail-width :deep(.icon-button-control:focus-visible) {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink);
+}
+
+.rail-panel .rail-width :deep(.icon) {
+    inline-size: 1rem;
+    block-size: 1rem;
 }
 
 .rail-panel .rail-title {

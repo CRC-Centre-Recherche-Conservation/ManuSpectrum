@@ -4,11 +4,16 @@ import PrimeVue from "primevue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
+import type { Ref } from "vue";
+
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
 import AnalysisCard from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue";
 
-import { MIRADOR_URL_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    CITE_OPEN_KEY,
+    MIRADOR_URL_KEY,
+} from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
@@ -35,13 +40,14 @@ interface CardExtras {
     feature?: string | null;
     mirador?: string;
     attach?: boolean;
+    citeOpen?: Ref<boolean>;
 }
 
 function mountCard(
     payload: AnalysisPayload | null,
     status: RequestStatus = "ready",
     analysisId: string = payload?.id ?? uuid(101),
-    { feature = null, mirador = "", attach = false }: CardExtras = {},
+    { feature = null, mirador = "", attach = false, citeOpen }: CardExtras = {},
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -57,13 +63,39 @@ function mountCard(
         global: {
             plugins: [pinia, PrimeVue],
             stubs: { SpectrumPreview: true },
-            provide: { [MIRADOR_URL_KEY as symbol]: mirador },
+            provide: {
+                [MIRADOR_URL_KEY as symbol]: mirador,
+                ...(citeOpen ? { [CITE_OPEN_KEY as symbol]: citeOpen } : {}),
+            },
         },
     });
     return { wrapper, store: useExplorerStore() };
 }
 
 describe("AnalysisCard", () => {
+    it("opens the Component card from the studied component line", async () => {
+        const { wrapper, store } = mountCard(
+            analysisPayload({
+                component: {
+                    id: uuid(701),
+                    model: "component",
+                    name: label("f. 1v — initial"),
+                },
+            }),
+        );
+        store.openDocument(uuid(1));
+        const button = wrapper.get(".details dd button.component-link");
+        expect(button.text()).toBe("f. 1v — initial");
+        await button.trigger("click");
+        expect(store.focus).toEqual({ kind: "component", id: uuid(701) });
+        expect(store.folioView).toBe("analyses");
+    });
+
+    it("shows no component line without a component", () => {
+        const { wrapper } = mountCard(analysisPayload({ component: null }));
+        expect(wrapper.find("button.component-link").exists()).toBe(false);
+    });
+
     it("shows the readable file with its raw pair beside it", () => {
         const readable = fileEntry({ id: uuid(8), pairedWith: uuid(9) });
         const raw = fileEntry({
@@ -167,13 +199,12 @@ describe("AnalysisCard", () => {
         expect(wrapper.find(".conditions").text()).toContain("Not provided");
     });
 
-    it("says the project's licence applies when the file states none", () => {
+    it("shows no licence when the file states none", () => {
         const file = fileEntry();
         file.license = { ...file.license, isDefault: true };
         const { wrapper } = mountCard(analysisPayload({ files: [file] }));
-        expect(wrapper.find(".licence").text()).toContain(
-            "Project licence (not stated for this file)",
-        );
+        expect(wrapper.find(".licence").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("Project licence");
     });
 
     it("credits the rights holder and writes a licence without a safe address as plain text", () => {
@@ -222,6 +253,7 @@ describe("AnalysisCard", () => {
         );
         expect(wrapper.findAll(".add-to-selection")).toHaveLength(1);
         expect(wrapper.find(".files .add-to-selection").exists()).toBe(false);
+        expect(wrapper.find(".selection-line").exists()).toBe(false);
     });
 
     it("links a DOI dataset to its resolver and writes an unsafe address as plain text", () => {
@@ -289,15 +321,30 @@ describe("AnalysisCard", () => {
         expect(record.text()).toContain("(new tab)");
     });
 
+    it("closes through an icon button named « Close the card », described by Escape", async () => {
+        const { wrapper } = mountCard(analysisPayload());
+        const button = wrapper.find("button.close");
+        const named = (attribute: string) =>
+            wrapper.find(`[id="${button.attributes(attribute)}"]`).text();
+
+        expect(button.text()).toBe("");
+        expect(named("aria-labelledby")).toBe("Close the card");
+        expect(named("aria-describedby")).toBe("Escape");
+        await button.trigger("click");
+        expect(wrapper.emitted("close")).toHaveLength(1);
+    });
+
     it("asks to be closed", async () => {
         const { wrapper } = mountCard(analysisPayload());
-        await wrapper.find(".card-head .close").trigger("click");
+        await wrapper.find(".card-head button.close").trigger("click");
         expect(wrapper.emitted("close")).toHaveLength(1);
     });
 
     it("puts Close right after the heading, whatever the header holds", () => {
         const { wrapper } = mountCard(analysisPayload());
-        expect(wrapper.find(".card-head .name + .close").exists()).toBe(true);
+        expect(wrapper.find(".card-head .name + .icon-button").exists()).toBe(
+            true,
+        );
     });
 
     it("marks a draft analysis", () => {
@@ -440,9 +487,10 @@ describe("AnalysisCard", () => {
         expect(description.text()).toBe(IIIF_HELP);
         expect(description.attributes("hidden")).toBeDefined();
         expect(description.attributes("role")).toBe("tooltip");
-        expect(document.body.querySelectorAll('[role="tooltip"]')).toHaveLength(
-            1,
-        );
+        const copies = [
+            ...document.body.querySelectorAll('[role="tooltip"]'),
+        ].filter((tooltip) => tooltip.textContent === IIIF_HELP);
+        expect(copies).toHaveLength(1);
     });
 
     describe("IIIF link help", () => {
@@ -583,5 +631,43 @@ describe("AnalysisCard", () => {
         );
         expect(dataset.exists()).toBe(true);
         expect(wrapper.findComponent(CitationBlock).exists()).toBe(true);
+    });
+
+    it("folds the citation by default and keeps its copy button in view", () => {
+        const payload = analysisPayload();
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            attach: true,
+        });
+        const toggle = wrapper.get(".cite button.toggle");
+        expect(toggle.attributes("aria-expanded")).toBe("false");
+        expect(toggle.text()).toBe("Cite");
+        expect(wrapper.find(".cite .summary").exists()).toBe(false);
+        expect(wrapper.get(".cite .content").isVisible()).toBe(false);
+        const copy = wrapper.get(".cite .head").findComponent(CopyButton);
+        expect(copy.props("text")).toBe(payload.citation.text);
+        expect(copy.isVisible()).toBe(true);
+    });
+
+    it("unfolds the citation and records it in the state the shell keeps", async () => {
+        const payload = analysisPayload();
+        const citeOpen = ref(false);
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            attach: true,
+            citeOpen,
+        });
+        await wrapper.get(".cite button.toggle").trigger("click");
+        expect(citeOpen.value).toBe(true);
+        expect(wrapper.get(".cite .content").isVisible()).toBe(true);
+    });
+
+    it("opens the citation when the shell says so", () => {
+        const payload = analysisPayload();
+        const { wrapper } = mountCard(payload, "ready", payload.id, {
+            attach: true,
+            citeOpen: ref(true),
+        });
+        expect(
+            wrapper.get(".cite button.toggle").attributes("aria-expanded"),
+        ).toBe("true");
     });
 });

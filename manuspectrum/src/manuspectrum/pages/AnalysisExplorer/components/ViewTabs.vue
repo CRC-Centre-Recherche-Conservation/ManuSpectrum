@@ -68,7 +68,7 @@ function select(view: ExplorerView): void {
     min-block-size: 2.75rem;
     padding-inline: 1rem;
     border: none;
-    border-block-end: 0.1875rem solid transparent;
+    border-block-end: 0.125rem solid transparent;
     background: transparent;
     color: var(--ink-muted);
     font: inherit;

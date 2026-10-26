@@ -47,8 +47,11 @@
     {% render_bundle 'css/pages' 'css' %}
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}ms-page{% endblock %}">
-    {% block arches_js_data %}{% include 'javascript.htm' %}{% endblock %}
+<body class="{% block body_class %}ms-page{% endblock %}"{% block body_attrs %}{% endblock %}>
+    {# Hook for pages that need Arches' data attributes (javascript.htm); none of the public pages does. #}
+    {% block arches_js_data %}{% endblock %}
+    {# The strings of the page's own script, as an .arches-translations element (see includes/ms_i18n_*.htm). #}
+    {% block page_translations %}{% endblock %}
     {% include 'includes/ms_header.htm' %}
     <main id="ms-main">
         {% block content %}{% endblock %}

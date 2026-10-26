@@ -45,6 +45,7 @@ from manuspectrum.views.explorer.service import (
     document_characterizations,
     licence_labels,
     linkable,
+    model_of,
     names,
     parse_keys,
     permalink,
@@ -538,6 +539,7 @@ def scope_content(scope, keys=()):
         )
     )
     label_of = names(named, language, scope.reader)
+    slug_of = model_of(named)
     files, groups, datasets, all_licences = {}, [], [], []
     for row in rows:
         analysis_id = row["id"]
@@ -569,6 +571,7 @@ def scope_content(scope, keys=()):
                         label_of,
                         [o for o in row["operators"] if o in named],
                         projects,
+                        slug_of,
                     )
                 ],
                 licences,
