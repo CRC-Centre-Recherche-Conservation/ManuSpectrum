@@ -116,12 +116,17 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 
 ### 1.6 Host baseline (rehearsal VM)
 
-- [ ] Copy and run, from the host:
-  `scp deploy/rehearsal/{host-baseline.sh,verify-baseline.sh,rehearsal.env} <admin>@192.168.123.10:`
-  then `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`.
-  - Expected: every line starts with `OK`, exit code `0` (`echo $?`).
-  - If a `MISMATCH` line appears: note the line and the output of the matching command.
-- [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then `sudo ./verify-baseline.sh` → everything `OK`.
+- [ ] Play the system administrator, from the host:
+  `scp deploy/rehearsal/{host-baseline.sh,rehearsal.env} <admin>@192.168.123.10:` then
+  `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh'`.
+- [ ] Verify it with Ansible, from the laptop (`deploy/ansible/README.md`): an inventory copied from
+  `inventories/example/` with `baseline_mode: verify` and `rehearsal_host: true`, then
+  `cd deploy/ansible && ansible-playbook -i inventories/<rehearsal> site.yml --ask-become-pass --tags preflight,baseline`.
+  - Expected: no failed task, `changed=0`.
+  - If an assertion fails: its message says what to do; note it and the output of the matching command.
+- [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then the Ansible verification again → `changed=0`.
+- [ ] After a full `ansible-playbook site.yml` (not only the baseline tags): `cat /etc/docker/daemon.json` (written by the Ansible `host` role) → `json-file` logs 10m x 5, `live-restore`,
+  `no-new-privileges`; `docker info --format '{{.LiveRestoreEnabled}}'` → `true`.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
 - [ ] `findmnt /data` → type `nfs4`, version `NFS_VERS` in the options.
@@ -150,7 +155,7 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   `baseline` was taken with the VM shut down (1.7), so the guest boots afresh with a right clock; check
   with `timedatectl` (see « How to read and record »).
 - [ ] Host reboot: `ssh -t <admin>@192.168.123.10 'sudo reboot'`, wait
-  2 min → SSH answers, `findmnt /data` still mounts, `sudo ./verify-baseline.sh` all `OK`.
+  2 min → SSH answers, `findmnt /data` still mounts, the Ansible verification (`--tags preflight,baseline`) passes.
 - [ ] If `UNATTENDED_REBOOT=true` in `rehearsal.env`:
   `grep Automatic-Reboot /etc/apt/apt.conf.d/50unattended-upgrades` → the values from
   `rehearsal.env`.
@@ -424,7 +429,7 @@ research data: never in Git, never in a public place.
 
 - [ ] *(service account)* `grep '^DEPLOY_ENVIRONMENT=' deploy/compose/.env` → `DEPLOY_ENVIRONMENT=rehearsal`
   (step 2.2), and `ls -l /etc/manuspectrum/rehearsal-host` → a root-owned file (written by
-  `host-baseline.sh` when `rehearsal.env` sets `REHEARSAL_HOST=yes`, checked by `verify-baseline.sh` then).
+  `host-baseline.sh` or the Ansible `baseline` role when `REHEARSAL_HOST=yes` / `rehearsal_host: true`, checked by the baseline verification then).
   - On failure: the command needs both guards. A production host has `production` and no marker
     file, and the command is refused there whatever `.env` says.
 - [ ] *(service account)* `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
@@ -852,10 +857,9 @@ change shows within a minute (reload after waiting). Browser in a private window
 
 ### 4.9 Rotation
 
-- [ ] (admin) Render the host file by hand until PP-8 installs it: replace `@NGINX_LOG_HOST_DIR@`,
-  `@APP_USER@`, `@APP_GROUP@` in `deploy/logrotate/manuspectrum-nginx.in`, make the file `root:root` mode `0644`
-  (`sudo chown root:root <file>; sudo chmod 0644 <file>`: logrotate ignores a file writable by group or others), then
-  `sudo logrotate -f -s /tmp/state <rendered file>`.
+- [ ] (admin) The playbook has installed `/etc/logrotate.d/manuspectrum-nginx` (`root:root`, `0644`, rendered by the
+  `app` role from `deploy/logrotate/manuspectrum-nginx.in`; logrotate ignores a file writable by group or others). Force
+  a rotation: `sudo logrotate -f -s /tmp/state /etc/logrotate.d/manuspectrum-nginx`.
   - Expected: dated, then compressed (next run) files appear in `$LOG`, a new `access.log` is
     created `0640` for the service account, and nginx keeps writing to it with no restart
     (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 30`: thirty days.
@@ -902,8 +906,8 @@ ACME against Let's Encrypt: the domain must resolve publicly, so the first real 
 staging first (`ACME_SERVER` default) then production; Pebble covers the flow in CI
 (`test_acme_pebble.sh`). A certificate trusted by every browser without a local CA, public DNS,
 the external probe (PP-9), fail2ban (PP-8), the Grafana location (PP-6), and the installation of
-the host logrotate and certificate-renewal units (PP-8; their content is checked by the tests
-above).
+the host logrotate and certificate-renewal units (installed by the Ansible `app` role; their content
+is checked by the tests above).
 
 ### 4.12 Before production (nginx and TLS)
 
@@ -913,7 +917,7 @@ above).
   `CANTALOUPE_HTTP_ENDPOINT` follows (`<PUBLIC_SERVER_ADDRESS>iiifserver/`, set by Compose).
 - [ ] Raise `HSTS_MAX_AGE` to `31536000` after one stable week.
 - [ ] 4.10 run on the production database, with the origins of the snapshot as `--from`.
-- [ ] The host logrotate file and the renewal timer are installed (PP-8) and `systemctl list-timers` shows the timer.
+- [ ] The host logrotate file and the renewal timer are installed by `site.yml` and `systemctl list-timers` shows the timer.
 
 ---
 
@@ -1182,10 +1186,10 @@ timings and the systemd timers, which CI does not run.
 
 ### 6.9 Timers
 
-- [ ] The four units are installed by hand as in `BACKUP.md`, "Setup on a host", step 4 (the
-  configuration management does it in production, PP-8). `systemd-analyze verify /etc/systemd/system/manuspectrum-backup.service /etc/systemd/system/manuspectrum-backup.timer /etc/systemd/system/manuspectrum-restore-test.service /etc/systemd/system/manuspectrum-restore-test.timer`
+- [ ] The units are installed by `ansible-playbook site.yml` (`app` role; `BACKUP.md`, "Setup on a host", step 4
+  describes the same by hand). `systemd-analyze verify /etc/systemd/system/manuspectrum-backup.service /etc/systemd/system/manuspectrum-backup.timer /etc/systemd/system/manuspectrum-restore-test.service /etc/systemd/system/manuspectrum-restore-test.timer`
   → no output.
-  - On failure: a `@…@` left in a unit means a placeholder was not substituted; redo the `sed`.
+  - On failure: a `@…@` left in a unit means a placeholder was not substituted; `ansible-playbook render.yml` and the Ansible tests catch it.
 - [ ] `bash deploy/systemd/tests/test_units.sh` → only `ok` lines. **(CI too)**
 - [ ] `systemctl list-timers 'manuspectrum-*'` → `manuspectrum-backup.timer` (next run 02:00 of the coming
   night) and `manuspectrum-restore-test.timer` (next run Sunday 05:30). `systemctl show -p Persistent manuspectrum-backup.timer manuspectrum-restore-test.timer`
@@ -1261,7 +1265,7 @@ textfile directory; PP-10's `TAG=pre-update` backup in the update procedure.
 - [ ] `make -C deploy backup-init` is done on the production repository; the first nightly run is seen
   `failed 0`, with its duration; `make -C deploy restore-test` run once there (6.4).
 - [ ] The timings and sizes of 6.2 to 6.6 are written into `BACKUP.md`.
-- [ ] The units are installed by the configuration management (PP-8) and `systemctl list-timers 'manuspectrum-*'`
+- [ ] The units are installed by `ansible-playbook site.yml` and `systemctl list-timers 'manuspectrum-*'`
   lists both (6.9).
 
 ## Step 7 — Monitoring (`deploy/OBSERVABILITY.md`)
@@ -1302,8 +1306,7 @@ reboot.
   `make -C deploy status` → the seven monitoring containers `healthy`.
   - On failure: `monitoring-init` needs `postgres` up; read `docker compose logs <service>` of the unhealthy one.
 - [ ] The vault item has the fields `grafana_admin_password` and `pg_monitor_password` (`SECRETS.md`).
-- [ ] *(service account)* Install the timers (PP-8 does it in production): render `deploy/systemd/*.in`, copy to
-  `/etc/systemd/system/`, `systemctl enable --now manuspectrum-container-metrics.timer manuspectrum-disk-usage.timer manuspectrum-monthly-report.timer`;
+- [ ] The timers are installed and enabled by `ansible-playbook site.yml` once the stack is up;
   `systemctl list-timers 'manuspectrum-*'` lists them.
 
 ### 7.2 Tunnel and dashboards

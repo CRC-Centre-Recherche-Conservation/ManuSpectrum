@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests that the rehearsal host marker has one path in the script that creates
-# it (host-baseline.sh), the one that checks it (verify-baseline.sh) and the
-# one that requires it (load-snapshot.sh). Prints `ok N` / `not ok N`; exits
+# it (host-baseline.sh and the Ansible baseline role), the one that checks it
+# (the Ansible baseline verification) and the one that requires it (load-snapshot.sh). Prints `ok N` / `not ok N`; exits
 # non-zero on failure.
 set -uo pipefail
 
@@ -18,8 +18,11 @@ assert() {
 grep -q "write_file $MARKER" "$KIT/host-baseline.sh"
 assert "host-baseline.sh writes the marker" $?
 
-grep -q "$MARKER" "$KIT/verify-baseline.sh" && grep -q 'root:644' "$KIT/verify-baseline.sh"
-assert "verify-baseline.sh checks the marker, root-owned 0644" $?
+ROLE="$KIT/../ansible/roles/baseline/tasks"
+grep -q "$MARKER" "$ROLE/verify.yml" && grep -q "pw_name == 'root'" "$ROLE/verify.yml" && grep -q "mode == '0644'" "$ROLE/verify.yml"
+assert "the Ansible baseline verification checks the marker, root-owned 0644" $?
+grep -q "$MARKER" "$ROLE/apply.yml"
+assert "the Ansible baseline apply writes the marker" $?
 
 grep -q "^REHEARSAL_MARKER=$MARKER\$" "$KIT/../scripts/load-snapshot.sh"
 assert "load-snapshot.sh requires the same path by default" $?
@@ -41,16 +44,7 @@ done
 grep -q '^REHEARSAL_HOST=yes$' "$KIT/rehearsal.env.example" && grep -q 'Never set on a production host' "$KIT/rehearsal.env.example"
 assert "rehearsal.env.example sets REHEARSAL_HOST=yes with the production warning" $?
 
-check_marker_line() { # check_marker_line REHEARSAL_HOST-VALUE: runs the gated block of verify-baseline.sh
-  local vblock
-  # shellcheck disable=SC2016
-  vblock="$(sed -n '/^if \[ "\${REHEARSAL_HOST:-no}" = yes \]/,/^fi$/p' "$KIT/verify-baseline.sh")"
-  REHEARSAL_HOST="$1" bash -c 'check() { echo "CHECK $1"; }; '"$vblock" 2>&1
-}
-check_marker_line yes | grep -q "CHECK rehearsal host marker"
-assert "verify-baseline.sh checks the marker when REHEARSAL_HOST=yes" $?
-out="$(check_marker_line no)"
-! grep -q CHECK <<<"$out" && grep -q "not checked" <<<"$out"
-assert "verify-baseline.sh does not check the marker otherwise" $?
+grep -c "rehearsal_host | bool" "$ROLE/verify.yml" "$ROLE/apply.yml" | grep -qv ':0$'
+assert "the Ansible baseline checks and writes the marker only when rehearsal_host is true" $?
 
 exit "$failed"

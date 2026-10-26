@@ -64,12 +64,13 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 
 ## 4. Baseline
 
-- [ ] `scp host-baseline.sh verify-baseline.sh rehearsal.env <admin>@192.168.123.10:` (`<admin>` = `ADMIN_USER` of your `rehearsal.env`). After rebuilding the VM: `ssh-keygen -R 192.168.123.10`.
-- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`: every line of `verify-baseline.sh` starts with `OK`, exit code 0. When `rehearsal.env` sets `REHEARSAL_HOST=yes` (the example does; never set it on a production host) the baseline also writes `/etc/manuspectrum/rehearsal-host`, the marker `make load-snapshot` requires, and `verify-baseline.sh` checks it; without it no marker is written. The script can be re-run; what is already in place is reported as "already done".
+- [ ] `scp host-baseline.sh rehearsal.env <admin>@192.168.123.10:` (`<admin>` = `ADMIN_USER` of your `rehearsal.env`). After rebuilding the VM: `ssh-keygen -R 192.168.123.10`.
+- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh'`. When `rehearsal.env` sets `REHEARSAL_HOST=yes` (the example does; never set it on a production host) the baseline also writes `/etc/manuspectrum/rehearsal-host`, the marker `make load-snapshot` requires; without it no marker is written. The script can be re-run; what is already in place is reported as "already done".
+- [ ] Verify the baseline with Ansible (`deploy/ansible/README.md`): `ansible-playbook -i inventories/<rehearsal> site.yml --ask-become-pass --tags preflight,baseline` with `baseline_mode: verify` and `rehearsal_host: true` in the inventory. Every assertion passes (the marker included) and nothing changes. This script plays the system administrator; the playbook is what checks (and, on a fresh VM, `baseline_mode: apply` replaces the script).
 - [ ] If the Docker repository does not have the Ubuntu 26.04 suite yet, the script stops and suggests `DOCKER_APT_CODENAME=noble` in `rehearsal.env`; it never falls back silently. Note the suite actually used in production.
 - [ ] Shut the VM down (`virsh -c qemu:///system shutdown ms-rehearsal`) then `virsh -c qemu:///system snapshot-create-as ms-rehearsal baseline`: the starting point of every rehearsal, equivalent to the VM as delivered. Restart: `virsh -c qemu:///system start ms-rehearsal`. Take every snapshot with the VM shut down: a snapshot of a running VM, or a revert to one, leaves the guest clock wrong (minutes after a live snapshot, days after a revert), which breaks two-factor codes and announcements. After such a revert, `virsh shutdown` and `virsh start` the VM, and check `ssh <admin>@192.168.123.10 timedatectl` before time-sensitive steps.
 
-Before Ansible, `verify-baseline.sh` prints `vm.max_map_count` without checking it and requires `/etc/docker/daemon.json` to be absent. `verify-baseline.sh --after-ansible` requires `vm.max_map_count` >= 262144 and `/etc/docker/daemon.json` to be present. A failing point is printed as a `MISMATCH` line.
+`host-baseline.sh` leaves `vm.max_map_count` and `/etc/docker/daemon.json` to Ansible: the `preflight` role requires `vm.max_map_count` >= 262144 and the `host` role writes `daemon.json`. A failing assertion stops the play with a message saying what to do.
 
 ## 5. VM name on the host
 
@@ -98,7 +99,7 @@ NFS_EXPORT_DIR=/media/<user>/<label>/ms-rehearsal/data
 ```
 
 `NFS_EXPORT` (the path the VM mounts) follows `NFS_EXPORT_DIR`; if you set it too it must be
-equal, `host-baseline.sh` and `verify-baseline.sh` refuse otherwise. `make-vm.sh` and
+equal, `host-baseline.sh` refuses otherwise. `make-vm.sh` and
 `host-nfs.sh` check the directory before creating anything:
 
 - `NFS_EXPORT_DIR` must be on a Linux filesystem (ext4, xfs, btrfs): vfat, exfat and ntfs are
@@ -154,7 +155,7 @@ and again, from one snapshot directory.
   `deploy/compose/.env.example` ships `DEPLOY_ENVIRONMENT=production`, so run
   `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`. The command
   also requires the host marker `/etc/manuspectrum/rehearsal-host`, written by `host-baseline.sh`
-  in the VM and checked by `verify-baseline.sh`; without it (a production host) the command is
+  in the VM (and checked by the Ansible baseline verification); without it (a production host) the command is
   refused whatever `.env` says.
 - [ ] `sudo -u <service-account> make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` (or as root; the
   uploads are then handled as the service account through `setpriv`; any other account is refused). Before anything is changed, a
