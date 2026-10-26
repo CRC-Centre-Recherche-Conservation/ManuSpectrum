@@ -90,6 +90,12 @@ BARE = [
     ),
     ("snippets/edge-rules.conf", "/api/explorer/export", "explorer-export"),
     ("snippets/edge-rules.conf", "/api/explorer/series.csv", "explorer-series-csv"),
+    ("snippets/edge-rules.conf", "/api/explorer/events.csv", "explorer-events-csv"),
+    (
+        "snippets/edge-rules.conf",
+        "/api/explorer/events.geojson",
+        "explorer-events-geojson",
+    ),
     (
         "snippets/edge-rules.conf",
         "/iiif/v3/explorer-manifest",
