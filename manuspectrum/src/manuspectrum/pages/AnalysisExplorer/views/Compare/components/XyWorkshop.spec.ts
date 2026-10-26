@@ -1936,18 +1936,14 @@ describe("XyWorkshop", () => {
                     : 300,
         });
         const watcher = observers.find((o) => o.observed.includes(element))!;
-        const frame = () =>
-            new Promise((resolve) => requestAnimationFrame(resolve));
         watcher.callback();
-        await frame();
-        await flushPromises();
+        await nextFrame();
         const held = element.style.minBlockSize;
         expect(held).not.toBe("");
         const drawings = plotly.react.mock.calls.length;
         for (let turn = 0; turn < 4; turn += 1) {
             watcher.callback();
-            await frame();
-            await flushPromises();
+            await nextFrame();
         }
         expect(element.style.minBlockSize).toBe(held);
         expect(plotly.react.mock.calls.length).toBe(drawings);
