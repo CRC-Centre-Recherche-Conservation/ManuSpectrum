@@ -274,21 +274,33 @@ class ReconcileTests(PassCase):
 
 
 class DatingTests(PassCase):
-    def test_a_row_dated_by_the_pass_ends_exactly_the_maximum_after_its_local_day(self):
+    def dated_at(self, detected):
         from manuspectrum.accounts.embargo import record_restriction
 
-        chicago = ZoneInfo("America/Chicago")
-        detected = datetime(2026, 3, 2, 23, 30, tzinfo=chicago)
-        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 3))
         with mock.patch(
             "django.utils.timezone.now", return_value=detected.replace(tzinfo=None)
         ):
             self.assertTrue(record_restriction(self.resource_x.pk, now=detected))
-        row = Embargo.objects.get(resourceinstance=self.resource_x)
+        return Embargo.objects.get(resourceinstance=self.resource_x)
+
+    def test_a_row_dated_by_the_pass_ends_exactly_the_maximum_after_its_local_day(self):
+        detected = datetime(2026, 3, 2, 23, 30, tzinfo=LOCAL_TZ)
+        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 2))
+        row = self.dated_at(detected)
+        expected = date(2026, 3, 2) + relativedelta(months=settings.EMBARGO_MAX_MONTHS)
+        self.assertEqual(row.ends_on, expected)
+        self.assertEqual(row.start, date(2026, 3, 2))
+        self.assertEqual(row.latest_allowed_end(), expected)
+
+    @override_settings(TIME_ZONE="America/Chicago")
+    def test_the_local_day_is_the_paris_one_whatever_the_server_zone(self):
+        chicago = ZoneInfo("America/Chicago")
+        detected = datetime(2026, 3, 2, 23, 30, tzinfo=chicago)
+        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 3))
+        row = self.dated_at(detected)
         expected = date(2026, 3, 3) + relativedelta(months=settings.EMBARGO_MAX_MONTHS)
         self.assertEqual(row.ends_on, expected)
         self.assertEqual(row.start, date(2026, 3, 3))
-        self.assertEqual(row.latest_allowed_end(), expected)
 
 
 class NoticeTests(PassCase):

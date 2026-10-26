@@ -335,7 +335,7 @@ written by every save, and the Biblissima bulk path writes only tile rows noted 
 totals come from `resource_instances`, workflows from `workflow_history` (a run cancelled by its user
 is deleted by Arches: it is counted from the `transaction_reverse` requests), bulk runs from
 `load_event`. Month bounds are UTC instants and the Arches columns read are `timestamptz`: Arches writes
-a naive `datetime.now()` in the process zone (`America/Chicago`, `USE_TZ = False`) and PostgreSQL
+a naive `datetime.now()` in the process zone (`TIME_ZONE = "Europe/Paris"`, `USE_TZ = False`) and PostgreSQL
 converts it with the session zone, so the stored values are true instants. That holds while a writer's
 process zone equals its session zone (Django guarantees it; a hand `psql` session in another zone writing
 naive values would not), and a value written during the repeated hour of the autumn change is ambiguous

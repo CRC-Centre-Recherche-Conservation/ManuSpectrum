@@ -508,6 +508,8 @@ CONTACT_EMAIL = ""
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "Europe/Paris"
+# Naive datetimes (USE_TZ False): the zone the timestamptz columns are read in.
+TIME_ZONE = "Europe/Paris"
 CELERY_RESULT_BACKEND = (
     "django-db"  # Use 'django-cache' if you want to use your cache as your backend
 )
