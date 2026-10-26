@@ -55,7 +55,13 @@ class AboutRoutingTests(TestCase):
 
     def test_homepage_and_pages_render(self):
         self.assertEqual(self.client.get(reverse("root")).status_code, 200)
-        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+        for name in (
+            "about-model",
+            "about-explorer",
+            "about-data",
+            "about-team",
+            "about-contact",
+        ):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
     def test_index_htm_redirects_permanently_to_root(self):
@@ -119,7 +125,13 @@ class SocialMetaTests(TestCase):
         import json
         import re
 
-        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+        for name in (
+            "about-model",
+            "about-explorer",
+            "about-data",
+            "about-team",
+            "about-contact",
+        ):
             html = self.client.get(reverse(name)).content.decode()
             self.assertIn('property="og:title"', html, name)
             self.assertIn('property="og:image"', html, name)
@@ -140,7 +152,13 @@ class SocialMetaTests(TestCase):
 class SitemapTests(TestCase):
     def test_static_sitemap_lists_about_pages_not_index_htm(self):
         xml = self.client.get("/sitemap.xml").content.decode()
-        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+        for name in (
+            "about-model",
+            "about-explorer",
+            "about-data",
+            "about-team",
+            "about-contact",
+        ):
             self.assertIn(reverse(name), xml)
         self.assertNotIn("/index.htm", xml)
 
@@ -246,7 +264,13 @@ class LanguagePrefixRoutingTests(TestCase):
     def test_all_about_alternates_point_at_our_host(self):
         import re
 
-        for name in ("about-model", "about-explorer", "about-team", "about-contact"):
+        for name in (
+            "about-model",
+            "about-explorer",
+            "about-data",
+            "about-team",
+            "about-contact",
+        ):
             html = self.client.get(reverse(name)).content.decode()
             for href in re.findall(r'hreflang="[^"]+" href="([^"]*)"', html):
                 self.assertTrue(

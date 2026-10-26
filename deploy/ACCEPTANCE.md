@@ -757,7 +757,16 @@ change shows within a minute (reload after waiting). Browser in a private window
   `curl -s … | jq -r '."@id"'` → `https://manuspectrum.test/iiifserver/iiif/2/<name>`;
   `…/full/!300,300/0/default.jpg` → `200`, `image/jpeg`, the same single header.
   - On failure: two `Access-Control-Allow-Origin` lines = Cantaloupe's header is not hidden in `iiifserver.conf`.
-- [ ] Application routes do not get the wildcard: `curl -sI -H 'Origin: https://example.org' https://manuspectrum.test/fr/api/explorer/search | grep -i access-control` → empty.
+- [ ] Application routes do not get the wildcard: `curl -sI -H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-Mode: cors' -H 'Origin: https://example.org' https://manuspectrum.test/fr/api/explorer/search | grep -i access-control` → empty.
+- [ ] The Explorer's internal APIs answer the page only (`EXPLORER_UI_ONLY=enforce`):
+  `curl -si https://manuspectrum.test/en/api/explorer/search` → `403`, `Content-Type: application/json`,
+  `Cache-Control: no-store`, a `Link: <https://manuspectrum.test/en/about/data#reuse>; rel="help"` header and a JSON body naming the same address;
+  the same call with `-H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-Mode: cors'` → `200`;
+  `curl -s -o /dev/null -w '%{http_code}' https://manuspectrum.test/api/explorer/series.csv?ids=<key>` is not `403` (the data products stay open);
+  a call with no Fetch Metadata but `-H 'Referer: https://manuspectrum.test/en/discover'` → `200` (legacy browsers, metric reason `referer`).
+  - On failure: `EXPLORER_UI_ONLY` in `.env` is `observe` or `off` (200 everywhere), or the wrong value stops web at start.
+- [ ] (browser) `/en/discover` works as before (search, a document, a spectrum plot): the page's own calls carry the Fetch Metadata headers.
+- [ ] (browser) « Reuse the data » opens `/en/about/data` from the footer and from the Explorer's « Share and export » panel.
 - [ ] (browser) Open the manifest in the project viewer and in one external Mirador: the images display
   (no mixed-content or certificate error in the console).
 

@@ -608,6 +608,14 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
   check "the share route is limited (share zone)" grep -q 429 <<<"$out"
   equals "the share zone does not spend the heavy budget of the manifest" 200 "$(code /iiif/v3/explorer-manifest)"
   sleep 3
+  out="$(get_many 80 /en/api/explorer/search)"
+  check "the Explorer calls are limited at 10 r/s, burst 40 (80 at once: some 429, the first ones pass)" \
+    bash -c 'grep -q 429 <<<"$1" && grep -q "^200" <<<"$1"' _ "$out"
+  equals "an Explorer burst does not spend the generic api zone" 200 "$(code /api/site-notice)"
+  block="$(location_block 'api/explorer/ {' < <(docker exec "$NGINX" nginx -T 2>&1))"
+  check "the Explorer location applies the pace zone and the hourly budget bucket (6000 at 100 r/m)" \
+    bash -c 'grep -q "limit_req zone=explorer burst=40 nodelay;" <<<"$1" && grep -q "limit_req zone=explorer_budget burst=6000 nodelay;" <<<"$1"' _ "$block"
+  sleep 3
   out="$(get_many 80 /healthz)"
   check "/healthz is limited too (burst 10, 80 requests at once)" grep -q 429 <<<"$out"
   sleep 3

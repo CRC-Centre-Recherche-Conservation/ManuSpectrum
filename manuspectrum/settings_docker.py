@@ -100,6 +100,19 @@ def env_positive_int(name, default):
     return number
 
 
+def env_choice(name, choices, default):
+    """Return the variable `name` when it is one of `choices`, `default` when unset or empty."""
+    value = get_optional_env_variable(name)
+    if value is None or value.strip() == "":
+        return default
+    value = value.strip().lower()
+    if value not in choices:
+        raise ImproperlyConfigured(
+            f"{name} must be one of {', '.join(choices)}, not {value!r}"
+        )
+    return value
+
+
 DEBUG = False
 
 SECRET_KEY = read_secret("MANUSPECTRUM_SECRET_KEY")
@@ -146,6 +159,9 @@ ENABLE_USER_SIGNUP = False
 FORCE_TWO_FACTOR_AUTHENTICATION = env_bool("FORCE_TWO_FACTOR_AUTHENTICATION", False)
 RELATED_RESOURCES_EXPORT_LIMIT = env_positive_int(
     "RELATED_RESOURCES_EXPORT_LIMIT", RELATED_RESOURCES_EXPORT_LIMIT
+)
+EXPLORER_UI_ONLY = env_choice(
+    "EXPLORER_UI_ONLY", ("enforce", "observe", "off"), "enforce"
 )
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

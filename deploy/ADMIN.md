@@ -287,6 +287,23 @@ exports and ETL modules never read this value. To change it, edit `.env` and run
 `make -C deploy up` (web reads it at start); a value that is not a whole number above 0
 stops web from starting.
 
+## Explorer APIs: page only
+
+The Analysis Explorer's internal APIs (`/{lang}/api/explorer/*` except `export`, `series.csv`,
+`events.csv`, `events.geojson` and the manifest, and `/api/spectrum-preview/*`) serve the
+Explorer page, not other programs. `EXPLORER_UI_ONLY` in `.env` has three modes:
+
+- `enforce` (the default of the deployment): a request that is not the page's own `fetch()`
+  (`Sec-Fetch-Site: same-origin` and `Sec-Fetch-Mode: cors`) gets a 403 with a link to « Reuse
+  the data » (`/{lang}/about/data`). A browser sending no Fetch Metadata is answered when its
+  `Referer` is a page of this site.
+- `observe`: answered, and counted as `observed` in `manuspectrum_explorer_ui_checks_total`.
+- `off`: no check, no count.
+
+Any other value stops web from starting. Change it in `.env`, then `make -C deploy up`. The
+per-address request budget and how to raise it before an event are in
+`deploy/runbooks/explorer.md`.
+
 ## Abandoned workflows
 
 An open workflow run with no activity for 90 days (`WORKFLOW_CLEANUP_AFTER_DAYS`) is cleaned

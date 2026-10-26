@@ -40,6 +40,7 @@ from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import anonymous_user, is_connected
 from manuspectrum.views.explorer import memo as explorer_memo
 from manuspectrum.views.explorer.events import events_payload, parse_event_types
+from manuspectrum.views.explorer.guard import ui_only
 from manuspectrum.views.explorer.manifest import ManifestTooLarge, build_manifest
 from manuspectrum.views.explorer.scopes import (
     ScopeError,
@@ -144,6 +145,7 @@ def _ticket(reader):
     return explorer_memo.ticket(reader, translation.get_language())
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerSearchView(View):
     """``GET /{lang}/api/explorer/search``: results, facets and counts for the reader.
@@ -163,6 +165,7 @@ class ExplorerSearchView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerFacetView(View):
     """``GET /{lang}/api/explorer/facet/<key>``: every value of one facet under the filters, narrowed by ``find``.
@@ -192,6 +195,7 @@ class ExplorerFacetView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerHomeView(View):
     """``GET /{lang}/api/explorer/home?day=YYYY-MM-DD``: the explorer home of the reader's day.
@@ -221,6 +225,7 @@ class ExplorerHomeView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerDocumentView(View):
     """``GET /{lang}/api/explorer/document/<uuid>``: canvases, analyses and identified materials of one document.
@@ -236,6 +241,7 @@ class ExplorerDocumentView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerDocumentMatchView(View):
     """``GET /{lang}/api/explorer/document/<uuid>/match``: what the Corpus filters keep in one document.
@@ -254,6 +260,7 @@ class ExplorerDocumentMatchView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerAnalysisView(View):
     """``GET /{lang}/api/explorer/analysis/<uuid>``: one analysis with its files, conditions, evidence and dataset.
@@ -269,6 +276,7 @@ class ExplorerAnalysisView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerItemsView(View):
     """``GET /{lang}/api/explorer/items?ids=``: the Selection's items, at most ``EXPLORER_ITEMS_MAX`` keys.
@@ -287,6 +295,7 @@ class ExplorerItemsView(View):
         )
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerSynthesisView(View):
     """``GET /{lang}/api/explorer/synthesis?ids=``: the Compare tools' synthesis of the Selection (D60).
@@ -311,6 +320,7 @@ class ExplorerSynthesisView(View):
         return _answer(request, lambda: synthesis_payload(scope))
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerShareView(View):
     """``GET /{lang}/api/explorer/share?ids=|document=|project=``: citations and export estimate of a scope.
@@ -373,6 +383,7 @@ class ExplorerManifestView(View):
         return _answer(request, lambda: manifest, content_type=IIIF_MEDIA_TYPE)
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerEventsView(View):
     """``GET /{lang}/api/explorer/events``: the map's events kept by the Corpus filters and ``eventType``.

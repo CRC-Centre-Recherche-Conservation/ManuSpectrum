@@ -7541,3 +7541,63 @@ msgid ""
 "own = the record's own location, place = the linked place, parent = a "
 "broader place it belongs to."
 msgstr ""
+
+#: templates/views/pages/data.htm
+msgid "Reuse the data"
+msgstr "Reuse the data"
+
+#: templates/views/pages/data.htm
+msgid "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented."
+msgstr "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented."
+
+#: templates/views/pages/data.htm
+msgid "Data package"
+msgstr "Data package"
+
+#: templates/views/pages/data.htm
+msgid "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection."
+msgstr "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection."
+
+#: templates/views/pages/data.htm
+msgid "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer."
+msgstr "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer."
+
+#: templates/views/pages/data.htm
+msgid "Annotations and content states"
+msgstr "Annotations and content states"
+
+#: templates/views/pages/data.htm
+msgid "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer."
+msgstr "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer."
+
+#: templates/views/pages/data.htm
+msgid "Spectra"
+msgstr "Spectra"
+
+#: templates/views/pages/data.htm
+msgid "the spectra of a selection as one CSV, never decimated; the clean series of a single file is at /iiif/data/{file}/series.csv."
+msgstr "the spectra of a selection as one CSV, never decimated; the clean series of a single file is at /iiif/data/{file}/series.csv."
+
+#: templates/views/pages/data.htm
+msgid "Events"
+msgstr "Events"
+
+#: templates/views/pages/data.htm
+msgid "the dated and located events of the corpus as CSV or GeoJSON."
+msgstr "the dated and located events of the corpus as CSV or GeoJSON."
+
+#: templates/views/pages/data.htm
+msgid "XY reading"
+msgstr "XY reading"
+
+#: templates/views/pages/data.htm
+msgid "the JSON-LD context and the documentation of the reading of an XY series."
+msgstr "the JSON-LD context and the documentation of the reading of an XY series."
+
+#: templates/views/pages/data.htm
+msgid "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403."
+msgstr "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403."
+
+#: templates/views/pages/data.htm
+msgid "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."
+msgstr "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."

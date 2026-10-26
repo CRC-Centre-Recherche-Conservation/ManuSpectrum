@@ -54,6 +54,7 @@ NAMES = [
     "ENABLE_TWO_FACTOR_AUTHENTICATION",
     "FORCE_TWO_FACTOR_AUTHENTICATION",
     "RELATED_RESOURCES_EXPORT_LIMIT",
+    "EXPLORER_UI_ONLY",
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
     "SESSION_COOKIE_HTTPONLY",
@@ -186,6 +187,20 @@ class SettingsDockerTests(SimpleTestCase):
             with self.subTest(value=text):
                 values = load(dict(BASE_ENV, RELATED_RESOURCES_EXPORT_LIMIT=text))
                 self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
+
+    def test_the_explorer_api_guard_enforces_by_default(self):
+        self.assertEqual(load(BASE_ENV)["EXPLORER_UI_ONLY"], "enforce")
+        for text in ("observe", "off", " Enforce "):
+            with self.subTest(value=text):
+                values = load(dict(BASE_ENV, EXPLORER_UI_ONLY=text))
+                self.assertEqual(values["EXPLORER_UI_ONLY"], text.strip().lower())
+
+    def test_an_unknown_explorer_guard_mode_refuses_to_start(self):
+        for text in ("on", "true", "enforced"):
+            with self.subTest(value=text):
+                self.assertRefused(
+                    dict(BASE_ENV, EXPLORER_UI_ONLY=text), "EXPLORER_UI_ONLY"
+                )
 
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
         values = load(BASE_ENV)

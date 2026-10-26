@@ -175,6 +175,7 @@ urlpatterns.append(path("", include("arches.urls")))
 for _slug, _name, _tpl in [
     ("about/model", "about-model", "views/pages/conceptual-model.htm"),
     ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
+    ("about/data", "about-data", "views/pages/data.htm"),
     ("about/team", "about-team", "views/pages/team.htm"),
     ("about/contact", "about-contact", "views/pages/contact.htm"),
 ]:
