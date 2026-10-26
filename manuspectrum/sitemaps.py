@@ -31,6 +31,7 @@ class StaticSitemap(Sitemap):
             "analysis-explorer",
             "about-model",
             "about-explorer",
+            "about-data",
             "about-team",
             "about-contact",
             "about-legal",

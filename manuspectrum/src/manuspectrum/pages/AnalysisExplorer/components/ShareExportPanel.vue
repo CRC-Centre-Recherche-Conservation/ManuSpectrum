@@ -5,6 +5,8 @@ import Drawer from "primevue/drawer";
 import RadioButton from "primevue/radiobutton";
 import { useGettext } from "vue3-gettext";
 
+import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";
@@ -36,7 +38,7 @@ const CITATIONS_FOLDED_AFTER = 3;
  * then per project of the analyses without one, the first three shown
  * until the reader asks for the others),
  * Data (spectra CSV, data package with its announced size, one package per
- * document over the export limit) and IIIF (manifest, Mirador when
+ * document over the export limit, a link to « Reuse the data ») and IIIF (manifest, Mirador when
  * `EXPLORER_MIRADOR_URL` is set), shown only when the scope's manifest
  * holds a canvas. Links follow each product's site `path`;
  * copies and Mirador take its absolute `url`. The share payload is asked
@@ -49,6 +51,7 @@ const { $gettext, $ngettext, interpolate } = useGettext();
 const phone = useMediaQuery(PHONE_QUERY);
 const button = useTemplateRef<HTMLButtonElement>("button");
 const lang = document.documentElement.lang || "en";
+const reuseHref = `${generateArchesURL("django:about-data")}#reuse`;
 
 const open = ref(false);
 const chosenKind = ref<OfferedScope["kind"] | null>(null);
@@ -379,6 +382,19 @@ function shareLink(): string {
                                 </li>
                             </ul>
                         </template>
+                        <p class="reuse">
+                            <a
+                                class="reuse-link external"
+                                rel="noopener"
+                                target="_blank"
+                                :href="reuseHref"
+                            >
+                                <span>{{ $gettext("Reuse the data") }}</span>
+                                <span class="visually-hidden">
+                                    {{ $gettext("(new tab)") }}
+                                </span>
+                            </a>
+                        </p>
                     </section>
 
                     <section

@@ -19,7 +19,16 @@ import {
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
-    generateArchesURL: () => "/en/api/explorer/share",
+    generateArchesURL: (route: string) => {
+        const routes: Record<string, string> = {
+            "django:about-data": "/en/about/data",
+            "manuspectrum:explorer-share": "/en/api/explorer/share",
+        };
+        if (!(route in routes)) {
+            throw new Error(`Key '${route}' not found in JSON object`);
+        }
+        return routes[route];
+    },
 }));
 
 const DOCUMENT = uuid(1);
@@ -128,6 +137,16 @@ describe("ShareExportPanel", () => {
         expect(askedUrls()[1]).toBe(
             `/en/api/explorer/share?${new URLSearchParams([["ids", KEY]])}`,
         );
+        wrapper.unmount();
+    });
+
+    it("links « Reuse the data » whatever the scope", async () => {
+        const { wrapper } = await openPanel();
+        const link = [...drawer().querySelectorAll("a")].find((element) =>
+            element.textContent?.includes("Reuse the data"),
+        );
+        expect(link?.getAttribute("href")).toBe("/en/about/data#reuse");
+        expect(link?.getAttribute("target")).toBe("_blank");
         wrapper.unmount();
     });
 

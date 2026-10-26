@@ -1,0 +1,44 @@
+{% extends 'ms_base.htm' %}
+{% load i18n %}
+{% load render_bundle from webpack_loader %}
+{% block page_title %}{% trans "Reuse the data" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools." %}{% endblock %}
+{% block og_title %}{% trans "Reuse the data" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools." %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
+        {"@type": "ListItem", "position": 2, "name": "{% trans 'Reuse the data' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'about-data' %}"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="ms-page-hero">
+    <div class="ms-page-hero__eyebrow">{% trans "Reuse" %}</div>
+    <h1 class="ms-page-hero__title">{% trans "Reuse the data" %}</h1>
+    <div class="ms-page-hero__accent"></div>
+</section>
+
+<div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
+
+<section class="ms-ge-reuse" id="reuse">
+    <p class="ms-ge-reuse-lead">{% trans "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented." %}</p>
+    <ul class="ms-ge-reuse-list">
+        <li><strong>{% trans "Data package" %}</strong> — {% trans "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection." %} <code>{% url 'explorer-export' %}?project=…</code> <code>?document=…</code> <code>?ids=…</code></li>
+        <li><strong>{% trans "IIIF manifest" %}</strong> — {% trans "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer." %} <code>{% url 'iiif-v3-explorer-manifest' %}?document=…</code></li>
+        <li><strong>{% trans "Annotations and content states" %}</strong> — {% trans "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer." %} <code>/iiif/v3/annotation-collection/…</code> <code>/iiif/v3/content-state/…</code></li>
+        <li><strong>{% trans "Spectra" %}</strong> — {% trans "the spectra of a selection as one CSV, never decimated; the clean series of a single file is at /iiif/data/{file}/series.csv." %} <code>{% url 'explorer-series-csv' %}?ids=…</code></li>
+        <li><strong>{% trans "Events" %}</strong> — {% trans "the dated and located events of the corpus as CSV or GeoJSON." %} <code>{% url 'explorer-events-csv' %}</code> <code>{% url 'explorer-events-geojson' %}</code></li>
+        <li><strong>{% trans "XY reading" %}</strong> — {% trans "the JSON-LD context and the documentation of the reading of an XY series." %} <a href="{% url 'iiif-xy-reading-doc' %}">{% url 'iiif-xy-reading-doc' %}</a></li>
+    </ul>
+    <p class="ms-ge-reuse-note">{% trans "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403." %}</p>
+</section>
+{% endblock %}
+
+{% block js_bundle %}{% render_bundle 'views/pages/team' %}{% endblock %}
