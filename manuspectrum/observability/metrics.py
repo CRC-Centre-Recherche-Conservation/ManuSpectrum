@@ -95,6 +95,15 @@ IIIF_TOKEN_OUTCOMES = (
     "invalidCredentials",
     "unavailable",
 )
+EXPLORER_UI_OUTCOMES = ("accepted", "refused", "observed")
+EXPLORER_UI_REASONS = (
+    "same_origin",
+    "referer",
+    "absent",
+    "cross_site",
+    "same_site",
+    "navigate",
+)
 READ_SURFACES = ("summary", "thumbnail", "iiif_file", "spectrum_preview")
 ACCOUNT_MAIL_KINDS = (
     "embargo_notice",
@@ -283,6 +292,11 @@ READ_REFUSALS = Counter(
     "manuspectrum_read_refusals",
     "Reads refused by the permission guard, by surface.",
     ["surface"],
+)
+EXPLORER_UI_CHECKS = Counter(
+    "manuspectrum_explorer_ui_checks",
+    "Fetch Metadata checks of the Explorer's internal APIs, by outcome and reason.",
+    ["outcome", "reason"],
 )
 AUTH_LOGINS = Counter(
     "manuspectrum_auth_logins",

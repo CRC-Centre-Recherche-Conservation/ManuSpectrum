@@ -95,3 +95,7 @@ MANIFEST_FETCH_RATE_LIMITS = {}
 # developer's settings_local.py, nor enqueue real messages on the broker. Tests
 # covering the async path turn it on with override_settings.
 BIBLISSIMA_ASYNC_INDEXING = False
+
+# The Explorer API guard is exercised by tests/test_explorer_ui_only.py, which
+# switches it on with override_settings.
+EXPLORER_UI_ONLY = "off"

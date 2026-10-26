@@ -961,6 +961,10 @@ EXPLORER_MANIFEST_MAX_CANVASES = 1000
 # Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
 # ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
 EXPLORER_MIRADOR_URL = ""
+# The Explorer's internal APIs answer the page's own requests only (Fetch
+# Metadata, views/explorer/guard.py): "enforce" refuses the others with a 403,
+# "observe" answers them and counts, "off" checks nothing.
+EXPLORER_UI_ONLY = "observe"
 
 # Site announcement (views/site_notice.py). Memo lifetime of the payload, in
 # seconds; the zone its start and end are typed in; the directory nginx reads

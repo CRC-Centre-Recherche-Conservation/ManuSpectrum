@@ -53,6 +53,7 @@ LABELLED_APP_METRICS = frozenset(
         "manuspectrum_explorer_bundle_builds_total",
         "manuspectrum_explorer_rebuild_failures_total",
         "manuspectrum_explorer_stale_served_total",
+        "manuspectrum_explorer_ui_checks_total",
         "manuspectrum_iiif_answers_total",
         "manuspectrum_iiif_auth_tokens_total",
         "manuspectrum_index_resources_total",

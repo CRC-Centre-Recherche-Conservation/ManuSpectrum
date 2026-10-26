@@ -67,6 +67,7 @@ from manuspectrum.observability import metrics
 from manuspectrum.utils.cache import etag_already_held, get_or_build
 from manuspectrum.utils.public_visibility import anonymous_user
 from manuspectrum.utils.spectrum_preview import build_preview, is_readable, read_series
+from manuspectrum.views.explorer.guard import ui_only
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,7 @@ def _too_large():
     return response
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class SpectrumPreviewView(View):
     """``GET /api/spectrum-preview/<file_id>``, at most one file read per day and tier; ``full`` reads it every time.

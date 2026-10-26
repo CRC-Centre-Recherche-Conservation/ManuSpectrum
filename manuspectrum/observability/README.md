@@ -92,7 +92,8 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
 - Explorer: `manuspectrum_explorer_bundle_build_seconds`, `manuspectrum_explorer_bundle_bytes`,
   `manuspectrum_explorer_bundle_rows`, `manuspectrum_explorer_bundle_builds`,
   `manuspectrum_explorer_stale_served`, `manuspectrum_explorer_rebuild_failures`,
-  `manuspectrum_explorer_export_bytes`
+  `manuspectrum_explorer_export_bytes`,
+  `manuspectrum_explorer_ui_checks{outcome,reason}` (Fetch Metadata guard of the Explorer APIs, `views/explorer/guard.py`)
 - Biblissima: `manuspectrum_biblissima_upstream_requests`,
   `manuspectrum_biblissima_upstream_latency_seconds`, `manuspectrum_biblissima_slot_timeouts`,
   `manuspectrum_biblissima_inflight`, `manuspectrum_biblissima_cache`,
