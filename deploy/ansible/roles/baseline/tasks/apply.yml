@@ -1,0 +1,285 @@
+---
+# Same values and order as deploy/rehearsal/host-baseline.sh. The Docker
+# suite is probed first so that a missing suite stops the play before any
+# change.
+
+- name: Probe the Docker repository for this release
+  ansible.builtin.uri:
+    url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}\
+      /dists/{{ docker_apt_codename | default(ansible_facts['distribution_release'], true) }}/Release"
+    method: HEAD
+    status_code: [200, 404]
+  register: baseline_docker_suite
+  failed_when: false
+  check_mode: false
+
+- name: Assert the Docker repository has the suite
+  ansible.builtin.assert:
+    that:
+      - baseline_docker_suite.status | default(0) == 200
+    quiet: true
+    fail_msg: >-
+      The Docker repository answered {{ baseline_docker_suite.status | default('nothing') }} for the suite
+      "{{ docker_apt_codename | default(ansible_facts['distribution_release'], true) }}": set
+      docker_apt_codename (e.g. noble) in the inventory to a suite that exists, then note the suite
+      actually used. If the answer is not 404, check the DNS, proxy and Internet access of the host.
+
+- name: Assert the root alias is a plain address
+  ansible.builtin.assert:
+    that:
+      - root_alias is regex('^[A-Za-z0-9._@+-]*$')
+    quiet: true
+    fail_msg: "root_alias must be an e-mail address or a local account (no | or &)."
+
+- name: Install the baseline packages
+  ansible.builtin.apt:
+    name: "{{ ['ufw', 'fail2ban', 'ca-certificates', 'curl', 'gnupg', 'unattended-upgrades'] + (['nfs-common'] if data_mount.type == 'nfs' else []) }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the docker group
+  ansible.builtin.group:
+    name: docker
+    system: true
+
+- name: Create the administrator accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+  loop: "{{ admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install the administrators' SSH keys
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.pubkey }}"
+  loop: "{{ admin_users | selectattr('pubkey', 'truthy') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create the service account
+  ansible.builtin.user:
+    name: "{{ service_user }}"
+    groups: docker
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+
+- name: Configure sshd
+  ansible.builtin.template:
+    src: sshd-manuspectrum.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-baseline.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: sshd -t -f %s
+  notify: reload sshd
+
+- name: Set the UFW default policies
+  community.general.ufw:
+    default: "{{ item.policy }}"
+    direction: "{{ item.direction }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+
+- name: Rate-limit SSH in UFW
+  community.general.ufw:
+    rule: limit
+    port: "22"
+    proto: tcp
+
+- name: Allow the web ports in UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: ["80", "443"]
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Configure the fail2ban sshd jail
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart fail2ban
+
+- name: Start fail2ban at boot
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: Create the apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Fetch the Docker repository key
+  ansible.builtin.get_url:
+    url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure the Docker apt repository
+  ansible.builtin.template:
+    src: docker.sources.j2
+    dest: /etc/apt/sources.list.d/docker.sources
+    owner: root
+    group: root
+    mode: "0644"
+  notify: update apt cache
+
+- name: Refresh the apt cache once the Docker repository is configured
+  ansible.builtin.meta: flush_handlers
+
+- name: Install Docker Engine and its plugins
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Start Docker at boot
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Read the members of the docker group
+  ansible.builtin.getent:
+    database: group
+    key: docker
+
+- name: Remove the administrators from the docker group
+  ansible.builtin.command: gpasswd -d {{ item | quote }} docker
+  loop: "{{ admin_users | map(attribute='name') | list | intersect(ansible_facts['getent_group']['docker'][2] | split(',')) }}"
+  changed_when: true
+
+- name: Mount the data directory
+  ansible.posix.mount:
+    path: "{{ data_mount.path }}"
+    src: "{{ data_mount.src }}"
+    fstype: nfs4
+    opts: "{{ data_mount.opts }}"
+    state: mounted
+  when: data_mount.type == 'nfs'
+
+- name: Create the local data directory
+  ansible.builtin.file:
+    path: "{{ data_mount.path }}"
+    state: directory
+    mode: "0755"
+  when: data_mount.type == 'local'
+
+- name: Create the rehearsal marker directory
+  ansible.builtin.file:
+    path: /etc/manuspectrum
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: rehearsal_host | bool
+
+- name: Mark this host as the rehearsal VM
+  ansible.builtin.copy:
+    dest: /etc/manuspectrum/rehearsal-host
+    content: |
+      This host is the ManuSpectrum rehearsal VM: `make load-snapshot` may replace its database.
+      Created by deploy/ansible (baseline role). Never create this file on a production host.
+    owner: root
+    group: root
+    mode: "0644"
+  when: rehearsal_host | bool
+
+- name: Configure unattended-upgrades
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable the periodic apt tasks
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Preseed the postfix mailer type
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "{{ 'Satellite system' if smtp_relay | length > 0 else 'Local only' }}"
+    vtype: select
+
+- name: Preseed the postfix relay host
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/relayhost
+    value: "{{ smtp_relay }}"
+    vtype: string
+  when: smtp_relay | length > 0
+
+- name: Preseed the postfix mail name
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/mailname
+    value: "{{ ansible_facts['fqdn'] }}"
+    vtype: string
+
+- name: Install postfix
+  ansible.builtin.apt:
+    name: postfix
+    state: present
+
+- name: Read the postfix relay host
+  ansible.builtin.command: postconf -h relayhost
+  register: baseline_postfix_current_relay
+  changed_when: false
+  check_mode: false
+
+- name: Set the postfix relay host
+  ansible.builtin.command: postconf -e {{ ('relayhost = ' ~ smtp_relay) | quote }}
+  changed_when: true
+  notify: reload postfix
+  when: (baseline_postfix_current_relay.stdout | trim) != smtp_relay
+
+- name: Alias root to the administrators' mailbox
+  ansible.builtin.lineinfile:
+    path: /etc/aliases
+    regexp: "^root:"
+    line: "root: {{ root_alias }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: rebuild the alias database
+  when: root_alias | length > 0
+
+- name: Start postfix at boot
+  ansible.builtin.service:
+    name: postfix
+    enabled: true
+    state: started
