@@ -1,32 +1,50 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PrimeVue from "primevue/config";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ref } from "vue";
 
+import type {
+    FileEntry,
+    FileLayer,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+
+import {
+    reloadRegistrations,
+    useRegistration,
+} from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import ImagingPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue";
 
 import {
     CURTAIN_KEY,
+    FOLIO_CANVAS_KEY,
     FOLIO_ZONES_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisPayload,
     imagingEntry,
+    layerOf,
     uuid,
+    valueRef,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
+
+beforeEach(() => {
+    window.localStorage.clear();
+    reloadRegistrations();
+});
 
 function mountPreview(
     zones: string[] = [uuid(101)],
     prepare: (store: ReturnType<typeof useExplorerStore>) => void = () =>
         undefined,
+    file = imagingEntry(),
+    folioCanvas: string | null = null,
 ) {
     const pinia = createPinia();
     setActivePinia(pinia);
     prepare(useExplorerStore());
     const curtain = ref<string | null>(null);
-    const file = imagingEntry();
     const wrapper = mount(ImagingPreview, {
         props: { file, analysis: analysisPayload({ files: [file] }) },
         global: {
@@ -34,10 +52,39 @@ function mountPreview(
             provide: {
                 [CURTAIN_KEY as symbol]: curtain,
                 [FOLIO_ZONES_KEY as symbol]: ref(new Set(zones)),
+                [FOLIO_CANVAS_KEY as symbol]: ref(folioCanvas),
             },
         },
     });
     return { wrapper, curtain, store: useExplorerStore() };
+}
+
+const ELEMENT_MAP = valueRef("http://example.org/element-map", "Element map");
+
+function elementLayer(index: number, symbol: string): FileLayer {
+    return layerOf({
+        index,
+        label: `${symbol} map`,
+        content: ELEMENT_MAP,
+        elements: [
+            {
+                value: valueRef(`http://example.org/el-${symbol}`, symbol),
+                symbol,
+            },
+        ],
+    });
+}
+
+function manyLayers(count: number): FileEntry {
+    return imagingEntry({
+        layers: Array.from({ length: count }, (_, index) =>
+            layerOf({ index, label: `L${index}` }),
+        ),
+    });
+}
+
+function thumbs(wrapper: ReturnType<typeof mountPreview>["wrapper"]) {
+    return wrapper.findAll(".strip .layer-thumb");
 }
 
 describe("ImagingPreview", () => {
@@ -67,7 +114,7 @@ describe("ImagingPreview", () => {
 
     it("names the current layer by its stored label", () => {
         const { wrapper } = mountPreview();
-        expect(wrapper.find(".current").text()).toBe("Pb");
+        expect(wrapper.find(".current .value").text()).toBe("Pb");
     });
 
     it("lays the current layer on the page and keeps its opacity", async () => {
@@ -83,13 +130,10 @@ describe("ImagingPreview", () => {
         );
     });
 
-    it("moves the laid map to the next layer when the layer scroll moves", async () => {
+    it("moves the laid map to the next layer with the next button", async () => {
         const { wrapper, store } = mountPreview();
         await wrapper.find("input.lay").setValue(true);
-        wrapper
-            .findComponent({ name: "Slider" })
-            .vm.$emit("update:modelValue", 1);
-        await wrapper.vm.$nextTick();
+        await wrapper.find("[data-action=next]").trigger("click");
         expect(store.overlays[`${uuid(101)}:0`]?.on).toBe(false);
         expect(store.overlays[`${uuid(101)}:1`]).toMatchObject({
             element: "Hg",
@@ -97,11 +141,163 @@ describe("ImagingPreview", () => {
         });
     });
 
-    it("puts the laid layer under the curtain", async () => {
-        const { wrapper, curtain } = mountPreview();
+    it("carries a laid map to the layer whose thumbnail is clicked", async () => {
+        const { wrapper, store } = mountPreview(
+            [uuid(101)],
+            undefined,
+            manyLayers(5),
+        );
         await wrapper.find("input.lay").setValue(true);
-        await wrapper.find("input.curtain").setValue(true);
-        expect(curtain.value).toBe(`${uuid(101)}:0`);
+        await thumbs(wrapper)[3].trigger("click");
+        expect(store.overlays[`${uuid(101)}:0`]?.on).toBe(false);
+        expect(store.overlays[`${uuid(101)}:3`]).toMatchObject({
+            element: "L3",
+            on: true,
+        });
+        expect(wrapper.find(".current").text()).toContain("4 / 5");
+    });
+
+    it("disables the arrows at the ends and does not wrap", async () => {
+        const { wrapper } = mountPreview();
+        const previous = wrapper.find("[data-action=previous]");
+        const next = wrapper.find("[data-action=next]");
+        expect(previous.attributes("aria-disabled")).toBe("true");
+        expect(next.attributes("aria-disabled")).toBeUndefined();
+        expect(wrapper.find(".current").text()).toContain("1 / 2");
+        await next.trigger("click");
+        expect(wrapper.find(".current").text()).toContain("2 / 2");
+        expect(next.attributes("aria-disabled")).toBe("true");
+        await next.trigger("click");
+        expect(wrapper.find(".current").text()).toContain("2 / 2");
+        expect(previous.attributes("aria-disabled")).toBeUndefined();
+    });
+
+    it("marks the current thumbnail and keeps one tab stop moved by the arrow keys", async () => {
+        const { wrapper } = mountPreview([uuid(101)], undefined, manyLayers(4));
+        const list = thumbs(wrapper);
+        expect(list).toHaveLength(4);
+        expect(list.map((item) => item.attributes("aria-current"))).toEqual([
+            "true",
+            undefined,
+            undefined,
+            undefined,
+        ]);
+        expect(list.map((item) => item.attributes("tabindex"))).toEqual([
+            "0",
+            "-1",
+            "-1",
+            "-1",
+        ]);
+        await list[0].trigger("keydown", { key: "ArrowRight" });
+        expect(
+            thumbs(wrapper).map((item) => item.attributes("tabindex")),
+        ).toEqual(["-1", "0", "-1", "-1"]);
+        await list[1].trigger("keydown", { key: "End" });
+        expect(thumbs(wrapper)[3].attributes("tabindex")).toBe("0");
+    });
+
+    it("shows group headings only when the layers fall in two groups or more", () => {
+        const plain = mountPreview();
+        expect(plain.wrapper.find(".group-title").exists()).toBe(false);
+        const grouped = mountPreview(
+            [uuid(101)],
+            undefined,
+            imagingEntry({
+                layers: [
+                    elementLayer(0, "Pb"),
+                    layerOf({ index: 1, label: "Raw" }),
+                    elementLayer(2, "Fe"),
+                    elementLayer(3, "Pb"),
+                ],
+            }),
+        );
+        const titles = grouped.wrapper
+            .findAll(".group-title")
+            .map((item) => item.text());
+        expect(titles).toEqual(["Fe", "Pb", "Unclassified · 1"]);
+    });
+
+    it("shows no navigation and no strip for a file with one layer", () => {
+        const { wrapper } = mountPreview([uuid(101)], undefined, manyLayers(1));
+        expect(wrapper.find("[data-action=next]").exists()).toBe(false);
+        expect(wrapper.find(".strip").exists()).toBe(false);
+        expect(wrapper.find(".current .value").text()).toBe("L0");
+    });
+
+    it("leaves opacity and curtain to the toolbar on the laid layer", async () => {
+        const { wrapper } = mountPreview();
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.find(".opacity").exists()).toBe(false);
+        expect(wrapper.find("[role=slider]").exists()).toBe(false);
+        expect(wrapper.find("input.curtain").exists()).toBe(false);
+        expect(wrapper.text()).not.toContain("Curtain: compare with the page");
+    });
+
+    it("keeps a laid layer's opacity and curtain when it moves to the next layer", async () => {
+        const { wrapper, store, curtain } = mountPreview();
+        await wrapper.find("input.lay").setValue(true);
+        store.setOverlay(`${uuid(101)}:0`, {
+            element: "Pb",
+            opacity: 0.3,
+            on: true,
+        });
+        curtain.value = `${uuid(101)}:0`;
+        await wrapper.find("[data-action=next]").trigger("click");
+        expect(store.overlays[`${uuid(101)}:1`]).toMatchObject({
+            opacity: 0.3,
+            on: true,
+        });
+        expect(curtain.value).toBe(`${uuid(101)}:1`);
+    });
+
+    const PLACE = { x: 10, y: 10, w: 100, h: 100 };
+
+    it("says the position is registered in this browser when the analysis has a place on the page the folio shows", async () => {
+        const { wrapper } = mountPreview(
+            [uuid(101)],
+            () => undefined,
+            imagingEntry(),
+            "canvas-1",
+        );
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).toContain("Indicative positioning");
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
+        await wrapper.vm.$nextTick();
+        expect(wrapper.text()).toContain("Registered in this browser");
+        expect(wrapper.text()).not.toContain("Indicative positioning");
+    });
+
+    it("reads the page the folio shows, not the document's canvas, which can still be unset", async () => {
+        const { wrapper, store } = mountPreview(
+            [uuid(101)],
+            () => undefined,
+            imagingEntry(),
+            "canvas-1",
+        );
+        expect(store.document?.canvas ?? null).toBeNull();
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).toContain("Registered in this browser");
+    });
+
+    it("keeps the indicative note when the place was taken on another page", async () => {
+        const { wrapper } = mountPreview(
+            [uuid(101)],
+            () => undefined,
+            imagingEntry(),
+            "canvas-2",
+        );
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).toContain("Indicative positioning");
+        expect(wrapper.text()).not.toContain("Registered in this browser");
+    });
+
+    it("keeps the indicative note when no folio provides its page", async () => {
+        const { wrapper } = mountPreview();
+        useRegistration().setPlace(uuid(101), "canvas-1", PLACE, 0);
+        await wrapper.find("input.lay").setValue(true);
+        expect(wrapper.text()).not.toContain("Registered in this browser");
     });
 
     it("explains why a layer cannot be laid when the analysis has no zone on this page", () => {
@@ -114,15 +310,6 @@ describe("ImagingPreview", () => {
         const { wrapper } = mountPreview();
         expect(wrapper.find(".add-to-selection").exists()).toBe(false);
         expect(wrapper.text()).not.toContain("Add the map");
-    });
-
-    it("shows the ends of the layer scale and says where the handle is", () => {
-        const { wrapper } = mountPreview();
-        expect(wrapper.find(".scroll .ends").text()).toContain("Pb");
-        expect(wrapper.find(".scroll .ends").text()).toContain("Hg");
-        expect(
-            wrapper.find(".scroll [role=slider]").attributes("aria-valuetext"),
-        ).toBe("Pb, layer 1 of 2");
     });
 
     it("opens on the layer of this file that is laid on the page", () => {

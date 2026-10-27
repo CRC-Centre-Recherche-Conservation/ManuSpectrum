@@ -192,6 +192,24 @@ class GuardTests(DataCase):
 
         self.assertEqual(self.raw(file_id).status_code, 401)
 
+    def test_a_file_on_a_place_tile_is_refused_though_the_place_is_visible(self):
+        from manuspectrum.iiif.data import file_allowed
+        from manuspectrum.utils.public_visibility import anonymous_user, visible_set
+
+        file_id = self.fors_file()
+        place = self.places["paris"]
+        nodegroup = self.nodes[("analysis", "measurement_point_data")].nodegroup_id
+        visitor = anonymous_user()
+        File.objects.filter(pk=file_id).update(
+            tile=self.tile(place, "literal_location", {})
+        )
+
+        self.assertIn(str(place.pk), visible_set(visitor))
+        self.assertFalse(file_allowed(place.pk, nodegroup, visitor))
+        self.assertTrue(file_allowed(self.analyses["open"].pk, nodegroup, visitor))
+        self.assertEqual(self.raw(file_id).status_code, 401)
+        self.assertEqual(self.raw(file_id, self.reader).status_code, 403)
+
 
 class SeriesTests(DataCase):
     def test_the_clean_csv_is_the_configured_curve_never_decimated(self):

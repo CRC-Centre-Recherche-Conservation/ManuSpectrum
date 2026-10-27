@@ -3,9 +3,10 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from celery.signals import worker_ready
+from celery.signals import worker_process_init, worker_ready
 
 from django.test import SimpleTestCase, TestCase
+from prometheus_client import REGISTRY
 
 from manuspectrum import tasks
 from manuspectrum.observability import celery_signals, metrics
@@ -44,6 +45,30 @@ class TaskMetricsTests(SimpleTestCase):
         ) as folded:
             self.run_task("thirdparty.task", "REVOKED")
         self.assertEqual(folded.value, 1)
+
+
+class PrimingTests(SimpleTestCase):
+    def test_a_failing_task_registry_still_primes_the_other_label_sets(self):
+        app = SimpleNamespace(tasks=None)
+        with (
+            patch("manuspectrum.celery.app", app),
+            patch.object(metrics, "prime_label_sets") as prime,
+            self.assertLogs("manuspectrum.observability.celery_signals", "WARNING"),
+        ):
+            celery_signals.prime_worker_metrics()
+        prime.assert_called_once_with(tasks=())
+
+    def test_each_worker_process_primes_its_registered_tasks(self):
+        app = SimpleNamespace(tasks={"manuspectrum.primed_only_here": None})
+        with patch("manuspectrum.celery.app", app):
+            worker_process_init.send(sender=None)
+        self.assertEqual(
+            REGISTRY.get_sample_value(
+                "manuspectrum_celery_tasks_total",
+                {"task": "manuspectrum.primed_only_here", "outcome": "failure"},
+            ),
+            0.0,
+        )
 
 
 class WorkerEndpointTests(SimpleTestCase):

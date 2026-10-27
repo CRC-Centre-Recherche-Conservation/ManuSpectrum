@@ -3,10 +3,10 @@
 A file is read only through its ``File`` row, the tile that row hangs from
 and that tile's resource: never from a path or an id written in tile data.
 ``file_allowed`` is the one guard of a file, shared with the spectrum
-preview: the resource is in ``visible_set(reader)`` and the tile's nodegroup
-is one ``readable_nodegroups`` lets through. ``readable_file`` returns None
-for an unknown file and raises ``Refused`` when the file exists and the
-reader may not read it.
+preview: the resource is one ``visible_set(reader).holds_files`` accepts
+and the tile's nodegroup is one ``readable_nodegroups`` lets through.
+``readable_file`` returns None for an unknown file and raises ``Refused``
+when the file exists and the reader may not read it.
 
 A file has a clean CSV when ``read_series`` reads its format
 (``is_readable``: a text format of ``XY_TEXT_FILE_FORMATS``; an instrument
@@ -82,9 +82,12 @@ def media_type(name, stored):
 def file_allowed(resource_id, nodegroup_id, reader, version=None):
     """Whether *reader* may read a file of *resource_id* held in a tile of *nodegroup_id*.
 
+    The resource must be a visible Document, Component, Analysis, Project,
+    Sample or Characterization (``VisibleSet.holds_files``): a file on a Place,
+    Modification or Alteration is refused though the Explorer shows them.
     *version* is the ``data_version()`` the request read, else read here.
     """
-    if str(resource_id) not in visible_set(reader, version):
+    if not visible_set(reader, version).holds_files(str(resource_id)):
         return False
     nodegroups = readable_nodegroups(reader)
     return nodegroups is None or str(nodegroup_id) in nodegroups

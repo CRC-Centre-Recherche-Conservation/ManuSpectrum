@@ -19,7 +19,7 @@ because an administrator created it. People ask for one through the contact page
    created with an unusable password. Leave **Send the invitation now** ticked (the default)
    and save: the person receives a mail `[ManuSpectrum][Account] Your ManuSpectrum
    account` (English, then French) with a personal link, valid for a limited time. Staff and
-   superuser rights are set on the change page afterwards.
+   superuser rights are set on the change page afterwards, by a superuser (below).
 2. To send the invitation again (lost mail, expired link), or when the box was unticked: in
    the Users list, tick the account and choose **Send invitation (account with no
    password)**. An account that is inactive, has no e-mail or already has a password is
@@ -32,6 +32,67 @@ because an administrator created it. People ask for one through the contact page
    authenticator application at `/<lang>/account/two-factor`.
 4. An invitation never activated shows in the monthly report (below) after three months.
 5. Advise editors not to switch on the spell checker (SCAYT) of the rich-text editor: it sends the typed text to a third party (WebSpellChecker); the browser's own spell checker does not.
+
+### Who can do what
+
+Three roles. The rule lives in `manuspectrum/accounts/roles.py` and is enforced by the
+server, not only by the forms.
+
+| | Superuser | Site manager | Editor |
+|---|---|---|---|
+| Reaches the admin | yes | yes (staff status + group) | no |
+| Creates and invites accounts | every account | ordinary accounts only | no |
+| Edits first and last name, "Active" | every account | ordinary accounts only | no |
+| Edits user name, e-mail address, last login, date joined | yes | no (set at creation only) | no |
+| Grants a group | any | the assignable groups only | no |
+| Grants staff or superuser status, direct permissions | yes | no | no |
+| Sets or changes a password in the admin | yes | no | no |
+| Resets two-factor, sends the enrolment link, copies the addresses | yes | no | no |
+| Site announcements | yes | add, edit, delete | no |
+| Restrictions (embargoes): end date | yes, beyond the maximum and without end date | shorten or extend (not past today), within the maximum | no |
+| Terms acceptances, workflow cleanups | view | view | no |
+| Groups, OAuth applications, Arches profiles, access attempts, every other admin page | yes | no | no |
+| Arches data entry | through Arches groups | through Arches groups | through Arches groups |
+
+- **Site manager** = the group **Site managers** (created by migration `0015`, an English
+  identifier like Arches' own groups) **and** staff status. Both are granted by a superuser on
+  the user's change page: the group alone opens no admin page, staff status alone grants
+  nothing. Only a superuser appoints or removes a site manager.
+- **Ordinary account**: not a superuser, not staff, not the visitors' system account
+  `anonymous`, no direct permission and only assignable groups. Any other account (another
+  manager, an administrator, the manager's own account) is read-only for a site manager:
+  its change page shows the values without a Save button, and a change, a delete or a
+  password change is refused (`403`). A site manager changes their own name or e-mail from
+  their Arches profile, and their own password there or through the admin's « Change
+  password » link (old password required).
+- **Identity and dates** of an existing account (user name, e-mail address, last login, date
+  joined) are read-only for a site manager: the e-mail receives invitations and password
+  resets, and the dates drive the anonymisation. This is also why a site manager needs no view
+  of the resource permissions an ordinary account may hold: it cannot redirect its mail.
+- **Assignable groups**: the groups holding no Django permission beyond Arches' nodegroup
+  permissions, except the Arches administrator roles (`System Administrator`, `Application
+  Administrator`, `RDM Administrator`, `Mobile Project Administrator`) and `Site managers`.
+  Today: `Resource Editor`, `Resource Reviewer`, `Resource Exporter`, `Crowdsource Editor`,
+  `Graph Editor`, `Guest`. A group created later with any admin permission becomes
+  superuser-only by itself. What each one unlocks in Arches:
+  - `Resource Editor`: the resource editor (create, edit and delete records) and the bulk
+    data managers (imports);
+  - `Resource Reviewer`: approves or rejects the provisional edits of other users, and edits
+    without going through provisional edits;
+  - `Resource Exporter`: exports search results;
+  - `Graph Editor`: the graph designer: create, edit, publish and delete resource models;
+  - `Crowdsource Editor`: read and write permission on the cards, without the resource editor
+    pages;
+  - `Guest`: read permission on the cards.
+- **Passwords** are never set by a site manager: an account gets its first password from its
+  invitation (« Send invitation » sends it again while the account has no password; a site
+  manager's selection skips the accounts only a superuser manages, with a message); a lost
+  password goes through the sign-in page's « forgot password » mail; a lost phone needs a
+  superuser (two-factor reset, below).
+- **Editors** are the Arches groups above; they never reach the admin.
+- The permissions of the group come from migration `0015`; do not edit them in the admin.
+  Reversing the migration leaves the group and its members in place; a change of its
+  permissions is a new data migration.
 
 ### Two-factor authentication
 
@@ -57,9 +118,11 @@ because an administrator created it. People ask for one through the contact page
   (superuser)** mails the link again to the selected accounts that hold no secret (lost
   mail, expired link). An account without an address or inactive gets no mail: the action
   says so.
-- **New `SECRET_KEY`.** Every stored secret becomes unreadable (`SECRETS.md`). In the Users
-  list, use the filter **By two-factor authentication** → **Enrolled**, select all and run **Reset two-factor authentication
-  (superuser)**: every person gets their link. Rotate when the working hours allow, since
+- **New `SECRET_KEY`.** Every stored secret becomes unreadable. Clear them all before `web`
+  serves sign-ins on the new key, in the same maintenance window, never afterwards: the
+  rotation procedure of `SECRETS.md` does it with only PostgreSQL running. Once the stack is
+  up, select every active account in the Users list and run **Send the two-factor enrolment
+  link (superuser)**: every person gets their link. Rotate when the working hours allow, since
   those who do not follow their link stay locked out until they do (re-send it as needed).
 - An OAuth2 application with the password grant signs a user in at `o/token/` with a password
   alone, whatever `FORCE_TWO_FACTOR_AUTHENTICATION` says. System check `manuspectrum.W004`
@@ -69,6 +132,11 @@ because an administrator created it. People ask for one through the contact page
   through the project pages above, and no mail comes from Arches' routes.
 - The secrets are encrypted with `SECRET_KEY`: a new key makes everyone re-enrol
   (`SECRETS.md`).
+- Upgrading Arches or Django keeps every password hash valid (Django's, Argon2 first, PBKDF2
+  still read; Django may rehash one at its next sign-in) and changes none of the two-factor
+  secrets (Arches' field, in the form its sign-in step
+  reads); tests fail if either drifts. Keep `argon2-cffi` installed wherever these hashes are
+  read, a plain Arches install included.
 
 ### Unlock a locked account
 
@@ -191,6 +259,11 @@ accounts anonymised in the month.
 - **Dry run.** `make -C deploy manage ARGS="anonymise_inactive_accounts"` lists, by user id,
   the notices and anonymisations the pass would make and writes and sends nothing; `--apply`
   runs the pass.
+- **Notices.** A notice counts as sent only when it reached someone, or nobody had an address
+  to write to. When every send failed, the next pass sends it again, and the 7-day (workflow)
+  or 30-day (account) delay starts from that new notice. A pass runs only at its hour, up to
+  two hours late: after a stop over that hour, beat does not catch it up and the next night
+  runs it. This holds for the three daily passes.
 - Alerts: `AccountRetentionFailures`, `AccountRetentionStale`.
 
 ## Restrictions (embargoes)
@@ -206,9 +279,13 @@ unless an administrator records an exception (below).
 - **Date.** The daily pass (06:00 Europe/Paris) records every restriction it finds without an
   Embargo row and dates it at the detection day plus 12 months (events `detected`, then
   `dated` by nobody); open Embargoes in the admin and edit "Ends on" (the last day of the
-  restriction) to shorten it. It is lifted the day after at 06:00. A row restored or
-  migrated with the database keeps its dates; one already past its end is lifted at the
-  next pass with the usual mail. After moving data between hosts without the `ms_embargo`
+  restriction) to shorten it. It is lifted the day after at 06:00. An end date must be at least
+  7 days after today, for every administrator, superusers included: each lift follows its final
+  notice by 7 days. When a restriction would end without that notice (a pass missed, a mail
+  that failed, a database restored or loaded), the daily pass moves its end 7 days on (history:
+  « End date set », by nobody, old and new end), sends the notice, which says the date was
+  moved, and lifts it after the new date; the dry run lists such rows as « would be re-dated
+  for a final notice ». After moving data between hosts without the `ms_embargo`
   table, the first pass therefore dates every restriction it finds at its own detection day
   + 12 months: review the list and shorten what must end sooner.
   Notices go to the resource creator and the user who set the restriction at 30 and 7 days
@@ -220,7 +297,9 @@ unless an administrator records an exception (below).
   "Extend the end date by 3, 6 or 12 months". Beyond the maximum duration only a superuser can
   set the date. Each change is recorded: who, when, from and to.
 - **History.** Open the embargo: the inline "events" list every change, and "Notices sent"
-  the notices already mailed.
+  the notices already mailed. When `AccountMailFailures` persists, check this history: rows
+  whose final notice cannot be delivered are re-dated every day and never lifted until a
+  notice gets through.
 - **Rehearsal / by hand.** `make -C deploy manage ARGS="release_expired_embargoes"` lists what
   the pass would do (dry run); `--apply` runs it as the beat task does.
 - Alerts: `EmbargoLiftFailures`, `EmbargoOverdue`, `EmbargoPassStale` (`runbooks/application.md`,
@@ -280,12 +359,29 @@ resources summary of the report API (new-style reports, the workflow summary ste
 Arches' default of 10,000, a resource with about 1,650 relations froze the browser tab on
 the graph: its layout and search grow with the square of the number of relations.
 
-`RELATED_RESOURCES_EXPORT_LIMIT` in `.env` caps those three lists (1000 by default). Beyond
-the cap Arches keeps that many relations, in no guaranteed order, and says nothing. The
-paginated related resources of a report (15 per page) still show every relation; search
-exports and ETL modules never read this value. To change it, edit `.env` and run
-`make -C deploy up` (web reads it at start); a value that is not a whole number above 0
+`RELATED_RESOURCES_EXPORT_LIMIT` in `.env` caps those three lists (500 by default). Beyond
+the cap Arches keeps that many relations, in no guaranteed order, and says nothing: a report
+lists at most that many relations per model (Arches 8.1.5 has no working « Load more » on the
+report; an upstream fix is proposed). Search exports and ETL modules never read this value.
+To change it, edit `.env` and run `make -C deploy up` (web reads it at start); a value that is not a whole number above 0
 stops web from starting.
+
+## Explorer APIs: page only
+
+The Analysis Explorer's internal APIs (`/{lang}/api/explorer/*` except `export`, `series.csv`,
+`events.csv`, `events.geojson` and the manifest, and `/api/spectrum-preview/*`) serve the
+Explorer page, not other programs. `EXPLORER_UI_ONLY` in `.env` has three modes:
+
+- `enforce` (the default of the deployment): a request that is not the page's own `fetch()`
+  (`Sec-Fetch-Site: same-origin` and `Sec-Fetch-Mode: cors`) gets a 403 with a link to « Reuse
+  the data » (`/{lang}/about/data`). A browser sending no Fetch Metadata is answered when its
+  `Referer` is a page of this site.
+- `observe`: answered, and counted as `observed` in `manuspectrum_explorer_ui_checks_total`.
+- `off`: no check, no count.
+
+Any other value stops web from starting. Change it in `.env`, then `make -C deploy up`. The
+per-address request budget and how to raise it before an event are in
+`deploy/runbooks/explorer.md`.
 
 ## Abandoned workflows
 
@@ -300,10 +396,9 @@ completed workflows are never touched.
   be noticed and cleaned and the resources it would delete and keep, and writes and sends
   nothing. `--apply` runs the pass; `--workflow <id>` restricts it to one run.
 - **After a long outage or a restore.** A run found already past its delay gets both notices
-  (21 and 7 days) the same day and is cleaned 7 days later. Before the beat schedule is enabled
-  again (after a restore, a move to a new host, or a stack stopped for weeks), run the dry run,
-  read who would be warned and what would be cleaned, and tell those people beforehand or delay
-  the first pass.
+  (21 and 7 days) the same day and is cleaned 7 days later. After `restore` or `load-snapshot`
+  the pending notices are voided: the first pass after it only sends notices, and the dry run
+  shows who will be warned.
 - Alerts: `WorkflowCleanupFailures`, `WorkflowCleanupStale`.
 
 ## Draft register of processing

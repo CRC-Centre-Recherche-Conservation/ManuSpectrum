@@ -11,6 +11,7 @@ import { FACET_LABELS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injectio
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     documentHit,
+    facetValue,
     homeResponse,
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -165,6 +166,92 @@ describe("CorpusHome", () => {
         await wrapper.find("form").trigger("submit");
         expect(store.filters.q).toBe("vermilion");
         expect(store.corpusScreen).toBe("results");
+    });
+
+    it("a narrower carried technique is nested under its carried parent", async () => {
+        fetchMock.mockImplementation(async () =>
+            jsonResponse(
+                homeResponse({
+                    techniques: [
+                        facetValue("t:xrf", "X-ray fluorescence", {
+                            count: 12,
+                            narrower: true,
+                        }),
+                        facetValue("t:pxrf", "pXRF", {
+                            count: 9,
+                            parents: ["t:xrf"],
+                        }),
+                        facetValue("t:om", "Optical microscopy", { count: 3 }),
+                    ],
+                }),
+            ),
+        );
+        const store = useExplorerStore();
+        const wrapper = mountHome();
+        await flushPromises();
+        const door = wrapper.find(".techniques");
+        const top = door.findAll(":scope > .choices > li > .choice");
+        expect(top.map((choice) => choice.text())).toEqual([
+            "Optical microscopy (3)",
+            "X-ray fluorescence (12)",
+        ]);
+        const nested = door.findAll(".choices .choices .choice");
+        expect(nested.map((choice) => choice.text())).toEqual(["pXRF (9)"]);
+        expect(
+            nested[0].element
+                .closest("li")
+                ?.parentElement?.closest("li")
+                ?.querySelector(".choice")?.textContent,
+        ).toContain("X-ray fluorescence");
+        await nested[0].trigger("click");
+        expect(store.filters.technique).toEqual(["t:pxrf"]);
+    });
+
+    it("draws a technique with two carried parents under each of them", async () => {
+        fetchMock.mockImplementation(async () =>
+            jsonResponse(
+                homeResponse({
+                    techniques: [
+                        facetValue("t:a", "Alpha", { count: 2 }),
+                        facetValue("t:b", "Beta", { count: 2 }),
+                        facetValue("t:c", "Gamma", {
+                            count: 1,
+                            parents: ["t:a", "t:b"],
+                        }),
+                    ],
+                }),
+            ),
+        );
+        const wrapper = mountHome();
+        await flushPromises();
+        const door = wrapper.find(".techniques");
+        const nested = door.findAll(".choices .choices .choice");
+        expect(nested.map((choice) => choice.text())).toEqual([
+            "Gamma (1)",
+            "Gamma (1)",
+        ]);
+    });
+
+    it("says in the how-to that a ticked term keeps its narrower terms", () => {
+        const notes = mountHome()
+            .findAll(".how-to .how-to-notes li")
+            .map((note) => note.text());
+        expect(notes).toEqual([
+            "A ticked term also keeps its narrower terms (e.g. X-ray fluorescence includes portable and micro-XRF).",
+            "Ticking a broader material (e.g. red pigment) now filters by every material under it.",
+        ]);
+    });
+
+    it("the search box describes what free text looks in", () => {
+        const wrapper = mountHome();
+        const input = wrapper.find("input[type=search]");
+        const help = wrapper.find(`#${input.attributes("aria-describedby")}`);
+        expect(help.text()).toBe(
+            "Looks in names and notes. To browse families of materials, use the Material facet.",
+        );
+        expect(
+            wrapper.find("[role=search]").element.contains(help.element),
+        ).toBe(true);
     });
 
     it("says so instead of showing the doors when nothing is published", async () => {

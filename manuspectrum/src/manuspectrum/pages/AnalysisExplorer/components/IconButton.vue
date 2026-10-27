@@ -18,7 +18,8 @@ import type { IconName } from "@/manuspectrum/pages/AnalysisExplorer/components/
  * (`aria-pressed`); left null it is a plain button. A disabled button stays
  * focusable (`aria-disabled`) and emits no click. Other attributes
  * (`data-action`, `aria-expanded`…) go to the button; `element` is the
- * button, for a parent that moves the focus to it. Its target is
+ * button, for a parent that moves the focus to it. `info` marks a button
+ * that only reveals its tooltip: a tap toggles it (`HelpTip` `toggle`). Its target is
  * `--explorer-target` square.
  */
 defineOptions({ inheritAttrs: false });
@@ -32,6 +33,7 @@ const props = withDefaults(
         disabled?: boolean;
         tipPlacement?: "above" | "below";
         tipAlign?: "start" | "end";
+        info?: boolean;
     }>(),
     {
         description: "",
@@ -39,6 +41,7 @@ const props = withDefaults(
         disabled: false,
         tipPlacement: "below",
         tipAlign: "end",
+        info: false,
     },
 );
 
@@ -61,6 +64,7 @@ function onClick(event: MouseEvent): void {
         :detail="props.description"
         :placement="props.tipPlacement"
         :align="props.tipAlign"
+        :toggle="props.info"
     >
         <template #default="{ labelledby, describedby }">
             <button

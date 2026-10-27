@@ -6,6 +6,11 @@ import { h } from "vue";
 
 import RailPanel from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/RailPanel.vue";
 
+import { useRailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
+import { RAIL_WIDTH_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+
+import type { RailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
+
 let compact = false;
 
 beforeEach(() => {
@@ -19,10 +24,13 @@ beforeEach(() => {
     }));
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    vi.unstubAllGlobals();
+    window.localStorage.clear();
+});
 
 /** `transitions`: run PrimeVue's own transitions, whose enter hook binds Escape. */
-function mountPanel(transitions = false) {
+function mountPanel(transitions = false, railWidth: RailWidth | null = null) {
     return mount(RailPanel, {
         attachTo: document.body,
         props: { showLabel: "See 12 analyses" },
@@ -31,6 +39,7 @@ function mountPanel(transitions = false) {
         },
         global: {
             plugins: [PrimeVue],
+            provide: railWidth ? { [RAIL_WIDTH_KEY as symbol]: railWidth } : {},
             stubs: transitions ? { transition: false } : {},
         },
     });
@@ -75,6 +84,53 @@ describe("RailPanel", () => {
         await flushPromises();
         expect(toggle.attributes("aria-expanded")).toBe("false");
         expect(document.activeElement).toBe(toggle.element);
+        wrapper.unmount();
+    });
+
+    it("puts a width toggle before the title that widens and narrows the column", async () => {
+        const railWidth = useRailWidth();
+        const wrapper = mountPanel(false, railWidth);
+        const head = wrapper.find(".rail-head");
+        const button = head.find("button");
+        expect(head.element.firstElementChild?.contains(button.element)).toBe(
+            true,
+        );
+        expect(head.element.lastElementChild?.matches("h2.rail-title")).toBe(
+            true,
+        );
+        const name = () =>
+            document.getElementById(button.attributes("aria-labelledby") ?? "")
+                ?.textContent;
+        expect(button.attributes("aria-pressed")).toBe("false");
+        expect(name()).toBe("Widen the filters");
+        await button.trigger("click");
+        expect(railWidth.wide.value).toBe(true);
+        expect(button.attributes("aria-pressed")).toBe("true");
+        expect(name()).toBe("Widen the filters");
+        await button.trigger("click");
+        expect(railWidth.wide.value).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("focuses the first filter on request, not the width toggle", () => {
+        const wrapper = mountPanel(false, useRailWidth());
+        expect(wrapper.find(".rail-width button").exists()).toBe(true);
+        (wrapper.vm as unknown as { focusFilters: () => void }).focusFilters();
+        expect(document.activeElement).toBe(wrapper.find(".filter").element);
+        wrapper.unmount();
+    });
+
+    it("has no width toggle without a provider or in the drawer", async () => {
+        const alone = mountPanel();
+        expect(alone.find(".rail-width").exists()).toBe(false);
+        alone.unmount();
+        compact = true;
+        const wrapper = mountPanel(false, useRailWidth());
+        await wrapper.find(".toggle").trigger("click");
+        await flushPromises();
+        expect(
+            document.querySelector(".explorer-rail-drawer .rail-width"),
+        ).toBeNull();
         wrapper.unmount();
     });
 });

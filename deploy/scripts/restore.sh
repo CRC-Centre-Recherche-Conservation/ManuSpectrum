@@ -32,9 +32,10 @@
 # then the steps of lib-replace-data.sh: start the data services and stop the
 # application, dump the current database aside, recreate the database from
 # template_postgis and restore the dump, flush Redis, move the previous uploads
-# aside and the new ones in, clear and recreate Cantaloupe, migrate, replace the
-# admin password, refresh the map geometries, reindex Elasticsearch, compare the
-# counts with the manifest (warnings only: restore-test.sh is the strict check),
+# aside and the new ones in, clear and recreate Cantaloupe, migrate, void the
+# pending notices of the daily passes, replace the admin password, refresh the
+# map geometries, reindex Elasticsearch, compare the counts with the manifest
+# (warnings only: restore-test.sh is the strict check),
 # start the stack and smoke test it. Nothing is changed before the preflight
 # passes; the staging directories are removed on success, and on failure before
 # the first change. After a failure later on they are kept and logged.
@@ -60,7 +61,7 @@ CONFIRM="${CONFIRM:-}"
 ERASURES_CHECKED="${ERASURES_CHECKED:-}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 ASIDE_NAME_RE='^previous-[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9]{6}$'
-TOTAL=14
+TOTAL=15
 KEEP_ASIDE=2
 LOG_NAME=restore
 ASIDE_DUMP=before-restore.dump

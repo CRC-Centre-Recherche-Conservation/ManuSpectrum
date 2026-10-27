@@ -25,6 +25,7 @@ import {
     ICONS,
     ICON_VIEW_BOX,
 } from "@/manuspectrum/pages/AnalysisExplorer/components/icons.ts";
+import { useRegistration } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRegistration.ts";
 import { useWindowActions } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import {
     ANNOUNCE_KEY,
@@ -34,6 +35,7 @@ import { layGroup } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/gr
 import {
     applyFiltersToAll,
     canStack,
+    captureLayer,
     defaultState,
     linkedGroups,
     moveInStack,
@@ -73,6 +75,7 @@ import {
     storedOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-memory.ts";
 
+import type { Captures } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     IconName,
@@ -129,8 +132,44 @@ const { $gettext, $ngettext, interpolate } = useGettext();
 const announce = inject(ANNOUNCE_KEY, () => undefined);
 const frameRef = inject(WINDOW_FRAME_KEY, ref(DEFAULT_FRAME));
 
+const registration = useRegistration();
+const captures = computed<Captures>(() => {
+    const found: Record<string, FileLayer> = {};
+    for (const line of props.maps) {
+        const id = line.analysis.id;
+        const capture = registration.entries.value[id]?.capture;
+        if (capture && !(id in found)) {
+            found[id] = captureLayer(
+                id,
+                capture,
+                $gettext("Folio photo · capture"),
+                $gettext("Kept in this browser"),
+            );
+        }
+    }
+    return found;
+});
+/** The maps with each analysis's capture appended to its last line's layers, for what only reads layers. */
+const tableMaps = computed<readonly MapLine[]>(() => {
+    const last = new Map(props.maps.map((line) => [line.analysis.id, line]));
+    return props.maps.map((line) => {
+        const layer = captures.value[line.analysis.id];
+        return layer && last.get(line.analysis.id) === line
+            ? {
+                  ...line,
+                  file: { ...line.file, layers: [...line.file.layers, layer] },
+              }
+            : line;
+    });
+});
+
+function onDeleteCapture(analysisId: string): void {
+    registration.clearCapture(analysisId);
+    announce($gettext("Capture deleted."));
+}
+
 const stored = readImaging();
-const state = ref<TableState>(restoreState(stored, props.maps));
+const state = ref<TableState>(restoreState(stored, tableMaps.value));
 const root = useTemplateRef<HTMLElement>("root");
 const width = ref<number | null>(null);
 const galleryChoice = ref<boolean | null>(stored?.gallery ?? null);
@@ -142,7 +181,7 @@ const notice = ref("");
 const dockId = `${useId()}-gallery`;
 
 const analysisIds = computed(() => [
-    ...new Set(props.maps.map((line) => line.analysis.id)),
+    ...new Set(tableMaps.value.map((line) => line.analysis.id)),
 ]);
 const frame = computed(() => frameRef.value);
 const small = computed(() => !frame.value.enlarged && frame.value.size === "S");
@@ -187,7 +226,7 @@ const railed = computed(() => !frame.value.phone);
 const byCanvas = computed(
     () =>
         new Map(
-            props.maps.flatMap((line) =>
+            tableMaps.value.flatMap((line) =>
                 line.file.layers.map(
                     (layer) => [layer.id, { layer, line }] as const,
                 ),
@@ -195,7 +234,7 @@ const byCanvas = computed(
         ),
 );
 const notes = computed(() =>
-    scaleNotes(shownState.value, props.maps, sizes.value),
+    scaleNotes(shownState.value, tableMaps.value, sizes.value),
 );
 const paneIndexes = computed(() =>
     Array.from({ length: shownCount.value }, (_, pane) => pane),
@@ -301,12 +340,9 @@ useWindowActions(() => [
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let dirty = false;
 
-watch(
-    () => props.maps,
-    (maps) => {
-        state.value = reconcile(state.value, maps);
-    },
-);
+watch([() => props.maps, captures], ([maps, held]) => {
+    state.value = reconcile(state.value, maps, held);
+});
 watch(
     () => state.value.panes,
     (now, before) => {
@@ -467,7 +503,7 @@ function onSizeRead(payload: { canvas: string; size: ServedSize }): void {
 
 function onViewChanged(pane: number, view: NormalisedView): void {
     const next = [...views.value];
-    for (const group of linkedGroups(shownState.value, props.maps)) {
+    for (const group of linkedGroups(shownState.value, tableMaps.value)) {
         if (!group.includes(pane)) continue;
         for (const other of group) {
             if (other !== pane) next[other] = view;
@@ -484,7 +520,7 @@ function onPair(pane: number, canvas: string): void {
                 panes: [state.value.panes[pane], canvas, null, null],
             },
             "curtain",
-            props.maps,
+            tableMaps.value,
         );
         apply(curtain, $gettext("Layout: Curtain"));
         return;
@@ -494,7 +530,7 @@ function onPair(pane: number, canvas: string): void {
 }
 
 function onPaneStep(pane: number, step: 1 | -1): void {
-    apply(stepPane(state.value, pane, step, props.maps));
+    apply(stepPane(state.value, pane, step, tableMaps.value));
 }
 
 function onFilters(index: number, filters: Partial<PaneFilters>): void {
@@ -510,14 +546,14 @@ function onFiltersApplyAll(index: number): void {
 }
 
 function onToggleStack(canvas: string): void {
-    const next = toggleInStack(state.value, canvas, props.maps);
+    const next = toggleInStack(state.value, canvas, tableMaps.value);
     if (next === state.value) refuse(canvas);
     else apply(next);
 }
 
 function onPlaceGroup(canvases: string[]): void {
     if (state.value.layout !== "stack") {
-        apply(layGroup(state.value, canvases, props.maps));
+        apply(layGroup(state.value, canvases, tableMaps.value));
         return;
     }
     let next = state.value;
@@ -525,8 +561,8 @@ function onPlaceGroup(canvases: string[]): void {
     for (const canvas of canvases) {
         if (next.stack.layers.some((layer) => layer.canvas === canvas))
             continue;
-        if (canStack(next, canvas, props.maps)) {
-            next = toggleInStack(next, canvas, props.maps);
+        if (canStack(next, canvas, tableMaps.value)) {
+            next = toggleInStack(next, canvas, tableMaps.value);
         } else refused = canvas;
     }
     apply(next);
@@ -534,7 +570,7 @@ function onPlaceGroup(canvases: string[]): void {
 }
 
 function onCompare(canvases: string[]): void {
-    apply(layGroup(state.value, canvases, props.maps));
+    apply(layGroup(state.value, canvases, tableMaps.value));
 }
 
 function onCurtainPlace(payload: { pane: Side; canvas: string }): void {
@@ -641,7 +677,7 @@ function onGrouping(grouping: TableGrouping): void {
                 <LayerStack
                     v-if="shown === 'stack'"
                     :stack="state.stack"
-                    :maps="props.maps"
+                    :maps="tableMaps"
                     :filters="state.filters[PANE_COUNT]"
                     :notes="notes"
                     @add="onToggleStack"
@@ -667,7 +703,7 @@ function onGrouping(grouping: TableGrouping): void {
                     v-else-if="shown === 'curtain'"
                     :canvas-a="state.panes[0]"
                     :canvas-b="state.panes[1]"
-                    :maps="props.maps"
+                    :maps="tableMaps"
                     :filters-a="state.filters[0]"
                     :filters-b="state.filters[1]"
                     :active="shownState.active"
@@ -692,7 +728,7 @@ function onGrouping(grouping: TableGrouping): void {
                         v-for="pane in paneIndexes"
                         :key="pane"
                         :canvas="state.panes[pane]"
-                        :maps="props.maps"
+                        :maps="tableMaps"
                         :letter="PANE_LETTERS[pane]"
                         :active="shownState.active === pane"
                         :filters="state.filters[pane]"
@@ -778,6 +814,7 @@ function onGrouping(grouping: TableGrouping): void {
                     v-if="galleryOpen"
                     class="gallery"
                     :maps="props.maps"
+                    :captures="captures"
                     :state="shownState"
                     @place="apply(place(state, $event, shownState.active))"
                     @toggle-stack="onToggleStack"
@@ -785,12 +822,14 @@ function onGrouping(grouping: TableGrouping): void {
                     @group-change="onGrouping"
                     @place-group="onPlaceGroup"
                     @compare="onCompare"
+                    @delete-capture="onDeleteCapture"
                 />
             </div>
             <LayerGallery
                 v-else-if="galleryAt === 'strip'"
                 class="gallery"
                 :maps="props.maps"
+                :captures="captures"
                 :state="shownState"
                 @place="apply(place(state, $event, shownState.active))"
                 @toggle-stack="onToggleStack"
@@ -798,6 +837,7 @@ function onGrouping(grouping: TableGrouping): void {
                 @group-change="onGrouping"
                 @place-group="onPlaceGroup"
                 @compare="onCompare"
+                @delete-capture="onDeleteCapture"
             />
         </div>
     </section>

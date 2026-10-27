@@ -27,6 +27,7 @@ import { shortAnalysisName } from "@/manuspectrum/pages/AnalysisExplorer/views/C
 import { tagText } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tag-text.ts";
 import { layerTag } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/layer-tags.ts";
 import {
+    isCapture,
     layerById,
     pairsOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/light-table.ts";
@@ -317,7 +318,7 @@ function drawCanvas(): void {
         map,
         layer.image,
         { read: loaded, failed },
-        { tileFormat: "png" },
+        { tileFormat: "png", declaredSize: isCapture(layer) },
     );
 }
 

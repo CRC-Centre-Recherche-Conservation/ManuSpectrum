@@ -1,0 +1,427 @@
+"""``GET /api/explorer/events.csv`` and ``events.geojson``: the map's kept events as files (spec 2026-10-09 §3.4).
+
+Below the language boundary; the language is ``lang`` (``export_language``).
+Same filters and event types as the events route (``kept_events``), plus the
+two display switches of the map, applied here and nowhere else on the server:
+``approximate=hide`` drops the events dated « circa » and ``hideLevel=<id>``
+(repeated or comma-separated; an id outside the certainty scale is ignored, and
+neither the files nor their name echo it) drops the materials of that
+reliability level, an event left without a matching material with them.
+Absent, both keep everything. The visitor's view (D59), one row per (event, material) in the CSV, one feature per
+event in the GeoJSON, both streamed (no geometry when the place is unmapped). The territories
+grid is a client model and is never exported. Answers are ``private, no-store``
+and never gzipped.
+"""
+
+import datetime
+import csv
+import hashlib
+from urllib.parse import parse_qsl, urlencode
+
+import orjson
+from django.conf import settings
+from django.http import HttpResponseBadRequest, StreamingHttpResponse
+from django.urls import reverse
+from django.utils import translation
+from django.utils.http import content_disposition_header
+from django.utils.translation import gettext as _
+from django.views import View
+
+from manuspectrum.utils.public_visibility import anonymous_user
+from manuspectrum.views.explorer import memo as explorer_memo
+from manuspectrum.views.explorer.citations import Home, citation_entry
+from manuspectrum.views.explorer.events import kept_events
+from manuspectrum.views.explorer.scopes import ScopeError, export_language
+from manuspectrum.views.explorer.series import _comment, _Line, neutralise
+from manuspectrum.views.explorer.service import (
+    REF_FACETS,
+    cited_analysis,
+    corpus_bundle,
+)
+
+HEADER = (
+    "event",
+    "type",
+    "carrier",
+    "carrier_model",
+    "carrier_name",
+    "document",
+    "document_name",
+    "component",
+    "component_name",
+    "place",
+    "place_name",
+    "longitude",
+    "latitude",
+    "geometry_kind",
+    "place_source",
+    "date_start",
+    "date_end",
+    "approximate",
+    "material",
+    "material_name",
+    "material_colours",
+    "reliability",
+    "characterization",
+    "analyses",
+)
+ROWS_PER_CHUNK = 500
+# Event-material keys that describe the query, not the material.
+QUERY_FIELDS = ("matches", "componentColours")
+LABEL_ALIASES = {"partColour": "colour"}
+LABELLED_KEYS = frozenset(
+    (*REF_FACETS, "technique", "place", "part", "project", "operator", *LABEL_ALIASES)
+)
+
+
+SWITCH_KEYS = frozenset(("approximate", "hideLevel"))
+
+
+def _query_text(query, hide_approximate, hidden_levels):
+    """*query* as sorted text without ``lang``, its display switches written only as they act: ``approximate=hide``, one ``hideLevel`` per known level."""
+    pairs = [
+        (k, v)
+        for k in query
+        if k != "lang" and k not in SWITCH_KEYS
+        for v in query.getlist(k)
+    ]
+    if hide_approximate:
+        pairs.append(("approximate", "hide"))
+    pairs.extend(("hideLevel", level) for level in hidden_levels)
+    return urlencode(sorted(pairs), safe=":,")
+
+
+def display_switches(query, levels):
+    """``(hide_approximate, hidden_levels)`` of the map's display switches in *query*.
+
+    Anything but ``approximate=hide`` keeps the approximate dates; a
+    ``hideLevel`` id outside *levels* (the ids of the certainty scale) is
+    ignored.
+    """
+    asked = {
+        v.strip()
+        for raw in query.getlist("hideLevel")
+        for v in raw.split(",")
+        if v.strip() in levels
+    }
+    return query.get("approximate") == "hide", asked
+
+
+def apply_display_switches(events, hide_approximate, hidden_levels):
+    """*events* without the « circa » ones when *hide_approximate*, then without the materials of *hidden_levels*.
+
+    A material of no recorded reliability stays; an event whose materials were
+    all dropped leaves, one that never had a material stays. Twin of the map's
+    ``withoutApproximate`` and ``withoutLevels`` (``views/Map/place-symbols.ts``),
+    pinned by ``tests/fixtures/explorer/map-switches.json``.
+    """
+    kept = []
+    for event in events:
+        if hide_approximate and event["date"]["approximate"]:
+            continue
+        if hidden_levels:
+            materials = [
+                m for m in event["materials"] if m["reliability"] not in hidden_levels
+            ]
+            if not materials and event["materials"]:
+                continue
+            event = {**event, "materials": materials}
+        kept.append(event)
+    return kept
+
+
+def _labelled(bundle, query_text):
+    """*query_text* with each value of a reference facet written as its label and its uri (« label <uri> »).
+
+    Reference facets are those of ``LABELLED_KEYS``; ``partColour`` reads the
+    ``colour`` labels. The uri stands alone when no label is known; the other
+    parameters are kept as they are. ``hideLevel`` values read the reliability
+    labels.
+    """
+    parts = []
+    levels = _levels(bundle) if "hideLevel=" in query_text else {}
+    for key, value in parse_qsl(query_text):
+        if key == "hideLevel":
+            ids = [v.strip() for v in value.split(",")]
+            shown = [f"{levels[v]} <{v}>" if v in levels else v for v in ids]
+            parts.append(f"{key}={', '.join(shown)}")
+            continue
+        if key not in LABELLED_KEYS:
+            parts.append(f"{key}={value}")
+            continue
+        names = bundle.labels.get(LABEL_ALIASES.get(key, key), {})
+        shown = [
+            f"{names[v]['value']} <{v}>" if v in names else v for v in value.split(",")
+        ]
+        parts.append(f"{key}={', '.join(shown)}")
+    return "&".join(parts)
+
+
+def _digest(text):
+    return hashlib.sha1(text.encode(), usedforsecurity=False).hexdigest()[:12]
+
+
+def _resolve(request):
+    """``(language, bundle, events, query_text)`` of an export request: the map's events, switches applied, and the query as the files echo it."""
+    language = export_language(request.GET)
+    reader = anonymous_user()
+    with translation.override(language):
+        bundle = corpus_bundle(reader, language, explorer_memo.ticket(reader, language))
+        events, _keep, _filters = kept_events(bundle, request.GET)
+    switches = display_switches(request.GET, _levels(bundle))
+    return (
+        language,
+        bundle,
+        shown_events(events, *switches),
+        _query_text(request.GET, *switches),
+    )
+
+
+def shown_events(events, hide_approximate, hidden_levels):
+    """The events the map shows under its display switches, each with its matching materials only."""
+    shown = (
+        _matching(event)
+        for event in apply_display_switches(events, hide_approximate, hidden_levels)
+    )
+    return [event for event in shown if event is not None]
+
+
+def _matching(event):
+    """*event* with only its materials that meet the filters, without their ``matches`` and ``componentColours``; None when it has materials and none meets them.
+
+    Twin of the map's ``matchingEvents`` (``views/Map/matching.ts``), pinned
+    by ``tests/fixtures/explorer/map-switches.json``.
+    """
+    materials = [
+        {key: value for key, value in m.items() if key not in QUERY_FIELDS}
+        for m in event["materials"]
+        if m["matches"]
+    ]
+    if event["materials"] and not materials:
+        return None
+    return {**event, "materials": materials}
+
+
+def _citation(bundle, events, language, query_text):
+    analyses = sorted(
+        {a for e in events for a in e["analyses"]}, key=bundle.order.__getitem__
+    )
+    if not analyses:
+        return None
+    with translation.override(language):
+        page = reverse("analysis-explorer").lstrip("/")
+        name = _("%(site)s, map and timeline of the analyses") % {
+            "site": settings.APP_TITLE
+        }
+    link = f"{settings.PUBLIC_SERVER_ADDRESS}{page}?view=map" + (
+        f"&{query_text}" if query_text else ""
+    )
+    cited = [cited_analysis(bundle.by_id[a], None, {}, [], [], {}) for a in analyses]
+    home = Home(id=f"explorer-map:{_digest(query_text)}", name=name, permalink=link)
+    return citation_entry(
+        None,
+        cited,
+        licences=[],
+        language=language,
+        accessed=datetime.date.today(),
+        home=home,
+        link=link,
+    )["recommended"]
+
+
+def _levels(bundle):
+    return {
+        level["id"]: level["label"]["value"]
+        for level in (bundle.certainty or {}).get("levels", [])
+    }
+
+
+def csv_lines(language, bundle, events, query_text):
+    """The CSV body: comment lines (title, day, filters, citation, reading of the fields), the header, then the rows."""
+    places, materials, colours, levels = (
+        bundle.event_places,
+        bundle.event_materials,
+        bundle.event_colours,
+        _levels(bundle),
+    )
+    writer = csv.writer(_Line(), lineterminator="\r\n")
+    with translation.override(language):
+        head = [
+            _("%(site)s: events of the map and timeline")
+            % {"site": settings.APP_TITLE},
+            _("Generated on %(date)s") % {"date": datetime.date.today().isoformat()},
+            _("Filters: %(filters)s")
+            % {"filters": _labelled(bundle, query_text) or _("none")},
+            _("A filter term also keeps its narrower terms."),
+        ]
+        citation = _citation(bundle, events, language, query_text)
+        if citation:
+            head.append(_("Cite as: %(citation)s") % {"citation": citation})
+        head.append(
+            _(
+                "Dates are intervals in years; approximate = dated « circa »; place_source: own = the record's own location, place = the linked place, parent = a broader place it belongs to."
+            )
+        )
+    yield "".join(_comment(line) for line in head)
+    yield writer.writerow(HEADER)
+    chunk = []
+    for event in events:
+        place = places.get(event["place"]) if event["place"] else None
+        lng_lat = place["lngLat"] if place else None
+        component = event["component"] or {}
+        date = event["date"]
+        base = [
+            event["id"],
+            event["type"],
+            event["carrier"]["id"],
+            event["carrier"]["model"],
+            neutralise(event["carrier"]["name"]["value"]),
+            event["document"]["id"],
+            neutralise(event["document"]["name"]["value"]),
+            component.get("id", ""),
+            neutralise(component.get("name", {}).get("value", "")),
+            event["place"] or "",
+            neutralise(place["name"]["value"]) if place else "",
+            f"{lng_lat[0]:.6f}" if lng_lat else "",
+            f"{lng_lat[1]:.6f}" if lng_lat else "",
+            place["geometryKind"] if place else "",
+            event["placeSource"] or "",
+            date["start"] if date["start"] is not None else "",
+            date["end"] if date["end"] is not None else "",
+            "true" if date["approximate"] else "false",
+        ]
+        for material in event["materials"] or [None]:
+            tail = (
+                [
+                    material["id"],
+                    neutralise(material["name"]["value"]),
+                    neutralise(
+                        "; ".join(
+                            colours[c]["label"]["value"]
+                            for c in materials.get(material["id"], {}).get(
+                                "colours", []
+                            )
+                        )
+                    ),
+                    neutralise(levels.get(material["reliability"], "")),
+                    material["characterization"],
+                ]
+                if material
+                else ["", "", "", "", ""]
+            )
+            chunk.append(writer.writerow([*base, *tail, " ".join(event["analyses"])]))
+        if len(chunk) >= ROWS_PER_CHUNK:
+            yield "".join(chunk)
+            chunk = []
+    if chunk:
+        yield "".join(chunk)
+
+
+def _feature(event, places, materials, levels):
+    place = places.get(event["place"]) if event["place"] else None
+    return {
+        "type": "Feature",
+        "id": event["id"],
+        "geometry": (
+            {"type": "Point", "coordinates": place["lngLat"]}
+            if place and place["lngLat"]
+            else None
+        ),
+        "properties": {
+            "type": event["type"],
+            "carrier": event["carrier"],
+            "document": event["document"],
+            "component": event["component"],
+            "place": (
+                {
+                    "id": place["id"],
+                    "name": place["name"],
+                    "geometryKind": place["geometryKind"],
+                    "extentKm": place["extentKm"],
+                    "source": event["placeSource"],
+                }
+                if place
+                else None
+            ),
+            "date": event["date"],
+            "materials": [
+                {
+                    **m,
+                    "colours": materials.get(m["id"], {}).get("colours", []),
+                    "reliabilityLabel": levels.get(m["reliability"]),
+                }
+                for m in event["materials"]
+            ],
+            "analyses": event["analyses"],
+        },
+    }
+
+
+def geojson_chunks(language, bundle, events, query_text):
+    """The GeoJSON body in chunks: one Feature per event, its place as a Point (None when unmapped), a ``citation`` member.
+
+    The chunks join into one compact ``FeatureCollection`` whose ``features``
+    member comes last; ``ROWS_PER_CHUNK`` features are serialised at a time.
+    """
+    places, materials, levels = (
+        bundle.event_places,
+        bundle.event_materials,
+        _levels(bundle),
+    )
+    head = orjson.dumps(
+        {
+            "type": "FeatureCollection",
+            "generated": datetime.date.today().isoformat(),
+            "filters": query_text,
+            "citation": _citation(bundle, events, language, query_text),
+        }
+    )
+    yield head[:-1] + b',"features":['
+    chunk = []
+    first = True
+    for event in events:
+        chunk.append(orjson.dumps(_feature(event, places, materials, levels)))
+        if len(chunk) >= ROWS_PER_CHUNK:
+            yield (b"" if first else b",") + b",".join(chunk)
+            first, chunk = False, []
+    if chunk:
+        yield (b"" if first else b",") + b",".join(chunk)
+    yield b"]}"
+
+
+class ExplorerEventsCsvView(View):
+    """``GET /api/explorer/events.csv?<filters>&lang=``: the kept events, a private streamed download; unknown language → bodyless 400."""
+
+    def get(self, request):
+        try:
+            language, bundle, events, query_text = _resolve(request)
+        except ScopeError:
+            return HttpResponseBadRequest()
+        response = StreamingHttpResponse(
+            csv_lines(language, bundle, events, query_text),
+            content_type="text/csv; charset=utf-8",
+        )
+        response["Content-Disposition"] = content_disposition_header(
+            True, f"manuspectrum-events-{_digest(query_text)}.csv"
+        )
+        response["Cache-Control"] = "private, no-store"
+        return response
+
+
+class ExplorerEventsGeoJsonView(View):
+    """``GET /api/explorer/events.geojson?<filters>&lang=``: the kept events as a GeoJSON download; unknown language → bodyless 400."""
+
+    def get(self, request):
+        try:
+            language, bundle, events, query_text = _resolve(request)
+        except ScopeError:
+            return HttpResponseBadRequest()
+        response = StreamingHttpResponse(
+            geojson_chunks(language, bundle, events, query_text),
+            content_type="application/geo+json",
+        )
+        response["Content-Disposition"] = content_disposition_header(
+            True, f"manuspectrum-events-{_digest(query_text)}.geojson"
+        )
+        response["Cache-Control"] = "private, no-store"
+        return response

@@ -26,7 +26,7 @@ NGINX_DIR = Path(
 LOCATION = re.compile(
     r"^\s*location\s+(?:(~\*?|=|\^~)\s+)?(\"[^\"]+\"|[^\s{]+)\s*\{", re.M
 )
-LANGUAGE_ALTERNATION = re.compile(r"/\(([a-z]{2}(?:\|[a-z]{2})*)\)")
+LANGUAGE_ALTERNATION = re.compile(r"/\((?:\?P<\w+>)?([a-z]{2}(?:\|[a-z]{2})*)\)")
 UUID = str(uuid.uuid4())
 
 QUERYSETS_BLOCK = "snippets/edge-rules.conf"
@@ -65,6 +65,19 @@ PREFIXED = [
         "two-factor-authentication-login",
     ),
     ("snippets/edge-rules.conf", "api/explorer/share", "explorer-share"),
+    ("snippets/edge-rules.conf", "api/explorer/search", "explorer-search"),
+    ("snippets/edge-rules.conf", f"api/explorer/document/{UUID}", "explorer-document"),
+    (
+        "snippets/edge-rules.conf",
+        f"api/explorer/document/{UUID}/match",
+        "explorer-document-match",
+    ),
+    ("snippets/edge-rules.conf", "api/explorer/facet/technique", "explorer-facet"),
+    ("snippets/edge-rules.conf", "api/explorer/home", "explorer-home"),
+    ("snippets/edge-rules.conf", f"api/explorer/analysis/{UUID}", "explorer-analysis"),
+    ("snippets/edge-rules.conf", "api/explorer/items", "explorer-items"),
+    ("snippets/edge-rules.conf", "api/explorer/synthesis", "explorer-synthesis"),
+    ("snippets/edge-rules.conf", "api/explorer/events", "explorer-events"),
     ("snippets/edge-rules.conf", f"mvt/{UUID}/5/16/11.pbf", "mvt"),
     ("snippets/edge-rules.conf", "iiifannotations", "iiifannotations"),
     ("snippets/media.conf", f"files/{UUID}", "file_access"),
@@ -76,7 +89,6 @@ DENIED = [
     ("auth/signup", "signup"),
     ("auth/confirm_signup", "confirm_signup"),
     ("two-factor-authentication-settings", "two-factor-authentication-settings"),
-    ("two-factor-authentication-reset", "two-factor-authentication-reset"),
 ]
 BARE = [
     ("snippets/edge-rules.conf", "/healthz", "healthz"),
@@ -90,6 +102,12 @@ BARE = [
     ),
     ("snippets/edge-rules.conf", "/api/explorer/export", "explorer-export"),
     ("snippets/edge-rules.conf", "/api/explorer/series.csv", "explorer-series-csv"),
+    ("snippets/edge-rules.conf", "/api/explorer/events.csv", "explorer-events-csv"),
+    (
+        "snippets/edge-rules.conf",
+        "/api/explorer/events.geojson",
+        "explorer-events-geojson",
+    ),
     (
         "snippets/edge-rules.conf",
         "/iiif/v3/explorer-manifest",
@@ -245,6 +263,37 @@ class EdgeContractTests(SimpleTestCase):
             self.assertGreaterEqual(int(bound.group(1)), 100)
             self.assertNotIn("perip", body)
 
+    def test_explorer_calls_spend_a_pace_zone_and_an_hourly_budget(self):
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertRegex(zones, r"zone=explorer:\w+\s+rate=10r/s;")
+        budget = re.search(r"zone=explorer_budget:\w+\s+rate=(\d+)r/m;", zones)
+        self.assertIsNotNone(budget)
+        self.assertEqual(int(budget.group(1)), 100)
+        paths = [f"/{code}/api/explorer/search" for code, _ in settings.LANGUAGES]
+        paths.append(f"/api/spectrum-preview/{UUID}")
+        for path in paths:
+            with self.subTest(path=path):
+                body = self.location_body("snippets/edge-rules.conf", path)
+                self.assertIn("limit_req zone=explorer burst=40 nodelay;", body)
+                burst = re.search(
+                    r"limit_req zone=explorer_budget burst=(\d+) nodelay;", body
+                )
+                self.assertIsNotNone(burst)
+                self.assertEqual(int(burst.group(1)), 6000)
+                self.assertEqual(int(budget.group(1)) * 60, int(burst.group(1)))
+                self.assertNotIn("zone=api ", body)
+
+    def test_share_and_the_downloads_keep_their_own_zones_above_the_explorer_ones(self):
+        for code, _ in settings.LANGUAGES:
+            body = self.location_body(
+                "snippets/edge-rules.conf", f"/{code}/api/explorer/share"
+            )
+            self.assertIn("limit_req zone=share", body)
+            self.assertNotIn("zone=explorer", body)
+        for path in ("/api/explorer/export", "/api/explorer/events.csv"):
+            body = self.location_body("snippets/edge-rules.conf", path)
+            self.assertIn("limit_req zone=heavy", body)
+
     def test_iiif_annotations_have_their_own_rate_and_connection_zones(self):
         for code, _ in settings.LANGUAGES:
             body = self.location_body(
@@ -336,6 +385,76 @@ class EdgeContractTests(SimpleTestCase):
                 )
                 self.assertIsNotNone(body, f"{path}: location block not found")
                 self.assertEqual(body.group(1).strip(), "return 404;", path)
+
+    def test_two_factor_reset_link_gets_a_static_page_and_never_reaches_django(self):
+        page = (NGINX_DIR / "errors/two-factor-reset.html").read_text()
+        for code, _ in settings.LANGUAGES:
+            path = f"/{code}/two-factor-authentication-reset"
+            self.assertView(path, "two-factor-authentication-reset")
+            body = self.location_body("snippets/edge-rules.conf", path)
+            self.assertNotIn("proxy_pass", body)
+            self.assertRegex(
+                body,
+                r"if \(\$request_method !~ \^\(\?:GET\|HEAD\)\$\) \{\s*"
+                r"return 303 /\$lang/two-factor-authentication-reset;",
+            )
+            self.assertIn("root /etc/nginx/errors;", body)
+            self.assertIn("try_files /two-factor-reset.html =404;", body)
+            self.assertIn("include snippets/security-headers.conf;", body)
+            with translation.override(code):
+                auth = reverse("auth")
+                contact = reverse("about-contact")
+            self.assertIn(f'href="{auth}"', page)
+            self.assertIn(f'href="{contact}"', page)
+            self.assertView(auth, "auth")
+            self.assertView(contact, "about-contact")
+        self.assertIn('<html lang="en">', page)
+        self.assertIn('lang="fr"', page)
+        self.assertNotIn("<script", page)
+
+    def test_root_favicon_is_the_icon_the_templates_link(self):
+        from django.contrib.staticfiles import finders
+
+        template = Path(settings.APP_ROOT, "templates", "ms_base.htm").read_text()
+        icon = re.search(r"webpack_static '([^']*favicon\.ico)'", template)
+        self.assertIsNotNone(icon, "ms_base.htm links no favicon.ico")
+        self.assertIsNotNone(finders.find(icon[1]), f"{icon[1]} is not collected")
+        text = (NGINX_DIR / "snippets/static.conf").read_text()
+        block = re.search(r"location = /favicon\.ico\s*\{(.*?)\n\}", text, re.S)
+        self.assertIsNotNone(block, "static.conf: no location = /favicon.ico")
+        self.assertIn(f"alias /srv/static/current/{icon[1]};", block[1])
+        self.assertIn("include snippets/security-headers.conf;", block[1])
+
+    def test_spectrum_previews_have_their_own_connection_zone(self):
+        body = self.location_body(
+            "snippets/edge-rules.conf", f"/api/spectrum-preview/{UUID}"
+        )
+        self.assertNotIn("perip", body)
+        bound = re.search(r"limit_conn preview_conn (\d+);", body)
+        self.assertIsNotNone(bound)
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertIn("zone=preview_conn:", zones)
+        http = Path(
+            settings.APP_ROOT,
+            "src/manuspectrum/pages/AnalysisExplorer/api/http.ts",
+        ).read_text()
+        in_flight = re.search(r"PREVIEW_FETCHES_IN_FLIGHT = (\d+);", http)
+        self.assertIsNotNone(in_flight, "http.ts: no PREVIEW_FETCHES_IN_FLIGHT")
+        self.assertGreaterEqual(int(bound[1]), 5 * int(in_flight[1]))
+
+    def test_one_compare_view_of_full_series_fits_the_preview_full_burst(self):
+        body = self.location_body(
+            "snippets/edge-rules.conf", f"/api/spectrum-preview/{UUID}"
+        )
+        burst = re.search(r"limit_req zone=preview_full burst=(\d+) nodelay;", body)
+        self.assertIsNotNone(burst)
+        http = Path(
+            settings.APP_ROOT,
+            "src/manuspectrum/pages/AnalysisExplorer/api/http.ts",
+        ).read_text()
+        room = re.search(r"FULL_SERIES_MAX_ENTRIES = (\d+);", http)
+        self.assertIsNotNone(room, "http.ts: no FULL_SERIES_MAX_ENTRIES")
+        self.assertGreaterEqual(int(burst[1]) + 1, int(room[1]))
 
     def test_silk_is_named_in_every_language_without_requiring_the_app(self):
         for code, _ in settings.LANGUAGES:

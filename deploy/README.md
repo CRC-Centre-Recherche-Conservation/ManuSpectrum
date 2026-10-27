@@ -12,15 +12,16 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `docker/entrypoint.sh` | Container commands: `web`, `worker`, `beat`, `init`, `manage` |
 | `docker/publish-static.sh` | Publishes the image's static files into the shared volume |
 | `docker/gunicorn.conf.py` | gunicorn settings of `web` |
-| `docker/placeholder.env`, `docker/probe-image.sh` | Build-time values and the image probe |
+| `docker/placeholder.env`, `docker/probe-image.sh` | Build-time values and the image probe (it also checks the revision label) |
 | `compose/compose.yaml` | The stack: security, health checks, persistence |
 | `compose/compose.prod.yaml` | Sizing of the production host only |
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README); the default `SECRETS_DIR` |
+| `RELEASES.md` | Releases: staging image, tags, signature, verification by hand, retention |
 | `BACKUP.md` | Backups: what is kept where, the schedule, the restore test, restore of a file or of the stack, moving day, personal data |
 | `ADMIN.md` | Administration: accounts, invitation and two-factor, unlocking, terms, embargoes, abandoned workflows, draft register of processing |
 | `SECRETS.md` | Secret inventory, the vault item, restore and rotation of each secret, scanning |
-| `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh`, `backup.sh`, `restore-test.sh`, `restore.sh`, `restore-files.sh`, the libraries they share and their tests |
+| `scripts/` | `secret-set.sh`, `secrets-check.sh`, `gitleaks.sh`, `load-snapshot.sh`, `backup.sh`, `restore-test.sh`, `restore.sh`, `restore-files.sh`, `image-digest.sh`, `release-ref-guard.sh`, `release-ruleset-check.sh`, `release-verify.sh`, the libraries they share and their tests |
 | `compose/postgres/init/` | Creates `template_postgis` the way Arches does |
 | `compose/nginx/` | nginx configuration: `nginx.conf`, the server template (names, HSTS), `snippets/` (TLS, headers, edge rules, rate limits, media, IIIF image server, logs), error pages, `tests/test_edge.sh` |
 | `compose/certbot/` | Deploy hook of the `certbot` service (`CERT_MODE=acme`) |
@@ -169,6 +170,18 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   then set `true` and recreate `web`. A new `SECRET_KEY` makes everyone re-enrol
   (`SECRETS.md`). The edge rate-limits the account POSTs and refuses Arches' unsafe 2FA
   and sign-up routes (`ACCEPTANCE.md` 8).
+- Daily passes that mail people and change their data (workflow cleanup 03:30, account
+  retention 04:30, embargo 06:00, Europe/Paris) run only at their hour (up to 2 h late):
+  beat does not catch up an older run after a stop (`CELERY_BEAT_CRON_STARTING_DEADLINE`)
+  and a pass message older than 2 h expires; the next night runs it at its normal hour. Nothing
+  irreversible happens without a notice sent from this site: a workflow is cleaned 7 days
+  after its final notice, an account anonymised 30 days after its notice, and an embargo
+  lifted 7 days after its final notice (an end date closer than 7 days is refused; one that
+  would come without that notice is moved 7 days on and warned). A notice whose every send
+  failed is not recorded: the next pass sends it again and the delay counts from the
+  delivered one (an address-less account is recorded as warned). A database replaced through
+  `restore` or `load-snapshot` has its pending notices voided, so the notices start again;
+  always replace data through those scripts, never a manual `pg_restore`.
 - `web` and `init` run Django's deployment checks first
   (`check --deploy --tag security --fail-level WARNING`) and refuse to start
   on any warning.
@@ -255,7 +268,8 @@ Set in `compose/.env` (`compose/.env.example` documents each one):
 
 `deploy-lint.yml` renders the Compose files, runs the tests of `compose/tests/`,
 lints the shell scripts and checks `uv.lock`. The smoke checks run in CI
-with `compose/smoke.sh`.
+with `compose/smoke.sh`, inside `stack-proof.yml`, the workflow that
+`deploy-lint.yml` (pull requests) and `staging.yml` (main) both call.
 
 Developers run `pre-commit install` once per clone: the `gitleaks` hook scans
 every commit for secrets with a pinned image, so it needs Docker
@@ -264,4 +278,13 @@ every commit for secrets with a pinned image, so it needs Docker
 ## What comes next
 
 - PP-8: Ansible writes `.env` and creates the volumes.
-- PP-10: image publication and the update command.
+- PP-10b: the update command on the host, which verifies a release with
+  `scripts/release-verify.sh`.
+
+## Releases
+
+GitHub builds, proves, publishes and signs the application image; a host
+only ever pulls a signed digest. `staging.yml` publishes `sha-<commit>` for
+every merge to `main`, `release.yml` turns a `v*` tag into a signed release.
+How to cut a candidate or a final release, what each workflow proves and how to
+verify an image by hand: [RELEASES.md](RELEASES.md).

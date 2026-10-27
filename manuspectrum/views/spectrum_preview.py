@@ -34,6 +34,11 @@ the anonymous visitor whoever asks, as the whole Explorer is (D59). A file over
 ``SPECTRUM_PREVIEW_MAX_BYTES`` answers a bodyless 413 there, after the guard,
 so a refused file stays indistinguishable from an unknown one.
 
+A file of a readable format whose row and tile exist but whose bytes are gone
+from storage answers a bodyless 410, after the guard: it is a fault to report
+(« file not found »), not a spectrum with nothing to draw. One warning per file and
+``MISSING_LOG_TTL`` names the file id, never its path.
+
 ``None`` (no row, no stored file, no tile) is not memoised, and no caller waits
 on the join's lock: an unknown id costs one query per request, never a 2 s
 poll for a value that will never be stored, and a file created later is found
@@ -47,6 +52,7 @@ import os
 
 import orjson
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.http import (
     HttpResponse,
@@ -67,6 +73,7 @@ from manuspectrum.observability import metrics
 from manuspectrum.utils.cache import etag_already_held, get_or_build
 from manuspectrum.utils.public_visibility import anonymous_user
 from manuspectrum.utils.spectrum_preview import build_preview, is_readable, read_series
+from manuspectrum.views.explorer.guard import ui_only
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +84,9 @@ FULL = "full"
 
 # Presets change by migration only, so an hour is short for what it saves.
 CONFIG_TTL = 3600
+
+# A file missing from storage is logged once per file id in this window.
+MISSING_LOG_TTL = 3600
 
 # A lost builder costs one extra read, never a stalled popup.
 LOCK_TIMEOUT = 10
@@ -185,6 +195,10 @@ def _load_config(config_id):
     return config if isinstance(config, dict) else {}
 
 
+class FileMissing(Exception):
+    """The file row names a path with nothing stored at it."""
+
+
 def _series(path, n, config, name=None):
     """The series of a supported, small enough file; ``{}`` when there is none.
 
@@ -194,7 +208,8 @@ def _series(path, n, config, name=None):
     file over the ceiling is measured once and answers 204 from the memo
     afterwards. A file that cannot be opened returns ``None`` instead, which
     ``get_or_build`` keeps out of the cache — it may be there on the next
-    request.
+    request. A readable format with nothing stored at *path* raises
+    ``FileMissing``, never memoised either.
     """
     if not is_readable(path, name):
         return {}
@@ -202,6 +217,8 @@ def _series(path, n, config, name=None):
         if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
             return {}
         return build_preview(path, n, config) or {}
+    except FileNotFoundError:
+        raise FileMissing() from None
     except OSError:
         return None
 
@@ -209,7 +226,8 @@ def _series(path, n, config, name=None):
 def _full_series(path, config, name=None):
     """Every point of a supported file in the shape of the tiers; ``{}`` when there is none, None when it is too large.
 
-    A file that cannot be opened draws nothing, as in ``_series``.
+    A file that cannot be opened draws nothing; one missing from storage raises
+    ``FileMissing``, as in ``_series``.
     """
     if not is_readable(path, name):
         return {}
@@ -217,6 +235,8 @@ def _full_series(path, config, name=None):
         if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
             return None
         series = read_series(path, config)
+    except FileNotFoundError:
+        raise FileMissing() from None
     except OSError:
         return {}
     if not series:
@@ -237,12 +257,24 @@ def _not_found():
     return response
 
 
+def _missing(file_id):
+    """The answer for a file whose bytes are gone from storage, logged once per ``MISSING_LOG_TTL``."""
+    if cache.add(
+        f"spectrum-preview-missing:{str(file_id).lower()}", True, MISSING_LOG_TTL
+    ):
+        logger.warning("spectrum preview: file %s is missing from storage", file_id)
+    response = HttpResponse(status=410)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
 def _too_large():
     response = HttpResponse(status=413)
     response["Cache-Control"] = "private, no-store"
     return response
 
 
+@method_decorator(ui_only, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class SpectrumPreviewView(View):
     """``GET /api/spectrum-preview/<file_id>``, at most one file read per day and tier; ``full`` reads it every time.
@@ -252,7 +284,8 @@ class SpectrumPreviewView(View):
     tier, or fewer than two points — and carries the same lifetime as a
     series, because the answer for a given file id cannot change either. The
     full series of a file over the ceiling is a bodyless 413 the browser does
-    not keep: the ceiling is a setting.
+    not keep: the ceiling is a setting. A file missing from storage is a
+    bodyless 410, not kept either.
     """
 
     def get(self, request, file_id):
@@ -286,18 +319,21 @@ class SpectrumPreviewView(View):
             tier=metrics.tier_label(FULL if full else n)
         ).inc()
 
-        if full:
-            payload = _full_series(path, renderer_config(config_id), name)
-            if payload is None:
-                return _too_large()
-        else:
-            payload = get_or_build(
-                f"spectrum-preview:{file_id}:{n}:{config_id}",
-                lambda: _series(path, n, renderer_config(config_id), name),
-                CACHE_TTL,
-                lock_timeout=LOCK_TIMEOUT,
-                wait=LOCK_WAIT,
-            )
+        try:
+            if full:
+                payload = _full_series(path, renderer_config(config_id), name)
+                if payload is None:
+                    return _too_large()
+            else:
+                payload = get_or_build(
+                    f"spectrum-preview:{file_id}:{n}:{config_id}",
+                    lambda: _series(path, n, renderer_config(config_id), name),
+                    CACHE_TTL,
+                    lock_timeout=LOCK_TIMEOUT,
+                    wait=LOCK_WAIT,
+                )
+        except FileMissing:
+            return _missing(file_id)
         if not payload:
             return self._with_lifetime(HttpResponse(status=204))
 

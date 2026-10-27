@@ -83,6 +83,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
             technique: XRF_URI,
             dataKind: "xy",
             unpublished: false,
+            component: null,
             zones: [
                 {
                     canvas: 0,
@@ -97,6 +98,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
             technique: XRF_URI,
             dataKind: "xy",
             unpublished: false,
+            component: null,
             zones: [
                 {
                     canvas: 1,
@@ -119,6 +121,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
 const INITIAL = {
     id: K1,
     name: label("Initial T"),
+    unpublished: false,
     zones: [
         {
             canvas: 0,
@@ -135,6 +138,7 @@ const INITIAL = {
 const BORDER = {
     id: uuid(952),
     name: label("Border"),
+    unpublished: false,
     zones: [
         {
             canvas: 0,

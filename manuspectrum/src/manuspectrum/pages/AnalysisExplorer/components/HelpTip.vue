@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId } from "vue";
+import { computed, onBeforeUnmount, ref, useId, useTemplateRef } from "vue";
+
+import { useAnchoredPopover } from "@/manuspectrum/pages/AnalysisExplorer/composables/useAnchoredPopover.ts";
 
 const SHOW_DELAY_MS = 500;
 const FOCUS_VISIBLE = ":focus-visible";
@@ -14,7 +16,12 @@ const FOCUS_VISIBLE = ":focus-visible";
  * `detail` shown under the text is then the control's description
  * (`describedby`). The node stays in the DOM, `hidden` until shown.
  * `placement` puts it above (the default) or below the control, `align`
- * lines it up with the control's start (the default) or end.
+ * lines it up with the control's start (the default) or end; the other side
+ * is used when the first has too little room (both may change while mounted).
+ * The tooltip closes when its control scrolls out of sight. The node is a `popover="manual"`
+ * element shown in the top layer (`useAnchoredPopover`), so no ancestor's
+ * overflow clips it; the padding above and below it bridges the gap to the
+ * control so the pointer can reach it.
  *
  * Shown `SHOW_DELAY_MS` after a mouse or pen hover, or after a keyboard focus
  * (`:focus-visible`); never after a click or a tap, which also hide it and
@@ -23,6 +30,12 @@ const FOCUS_VISIBLE = ":focus-visible";
  * hover area, so it can be hovered), on blur, and on Escape wherever focus is:
  * the document listener exists only while a show is pending or shown. The
  * Escape is left to the page, so a dialog the tooltip sits in still closes.
+ *
+ * With `toggle`, for a control that only reveals the tip (an info button), a
+ * tap, a pen-less touch or a keyboard activation opens and closes it, and a
+ * press outside closes it; a mouse or pen click keeps the behaviour above, so
+ * a click after a hover does not toggle twice. Left off, the control is an
+ * action and a click never leaves the tip open.
  */
 const props = withDefaults(
     defineProps<{
@@ -31,12 +44,14 @@ const props = withDefaults(
         detail?: string;
         placement?: "above" | "below";
         align?: "start" | "end";
+        toggle?: boolean;
     }>(),
     {
         mode: "description",
         detail: "",
         placement: "above",
         align: "start",
+        toggle: false,
     },
 );
 
@@ -45,8 +60,21 @@ const labelId = useId();
 const detailId = useId();
 
 const shown = ref(false);
+const root = useTemplateRef<HTMLElement>("root");
+const bubble = useTemplateRef<HTMLElement>("bubble");
+const { style: bubbleStyle } = useAnchoredPopover(shown, bubble, root, {
+    get prefer() {
+        return props.placement;
+    },
+    get align() {
+        return props.align;
+    },
+    offset: 0,
+    onLost: hide,
+});
 let timer: ReturnType<typeof setTimeout> | null = null;
 let suppressed = false;
+let pressType = "";
 
 const labelling = computed(() => props.mode === "label");
 const labelledby = computed(() => (labelling.value ? labelId : undefined));
@@ -73,25 +101,53 @@ function hide(): void {
     }
     shown.value = false;
     document.removeEventListener("keydown", onDocumentKeydown);
+    document.removeEventListener("pointerdown", onDocumentPointerdown, true);
 }
 
 function onPointerEnter(event: PointerEvent): void {
     if (event.pointerType !== "touch") schedule();
 }
 
-function onPointerLeave(): void {
+function onPointerLeave(event: PointerEvent): void {
+    if (event.pointerType === "touch") return;
     suppressed = false;
     hide();
 }
 
-function onPointerDown(): void {
+function togglesOnClick(): boolean {
+    return props.toggle && pressType !== "mouse" && pressType !== "pen";
+}
+
+function onPointerDown(event: PointerEvent): void {
+    pressType = event.pointerType;
+    if (togglesOnClick()) return;
     suppressed = true;
     hide();
 }
 
 function onClick(): void {
-    suppressed = true;
-    hide();
+    const toggling = togglesOnClick();
+    pressType = "";
+    if (!toggling) {
+        suppressed = true;
+        hide();
+        return;
+    }
+    if (shown.value) {
+        hide();
+        return;
+    }
+    if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+    }
+    shown.value = true;
+    document.addEventListener("keydown", onDocumentKeydown);
+    document.addEventListener("pointerdown", onDocumentPointerdown, true);
+}
+
+function onDocumentPointerdown(event: PointerEvent): void {
+    if (!root.value?.contains(event.target as Node)) hide();
 }
 
 function onFocusIn(event: FocusEvent): void {
@@ -112,6 +168,7 @@ function onDocumentKeydown(event: KeyboardEvent): void {
 
 <template>
     <span
+        ref="root"
         class="help-tip"
         @pointerenter="onPointerEnter"
         @pointerleave="onPointerLeave"
@@ -126,8 +183,11 @@ function onDocumentKeydown(event: KeyboardEvent): void {
         />
         <span
             :id="helpId"
+            ref="bubble"
+            popover="manual"
             class="bubble"
             :class="[props.placement, props.align]"
+            :style="bubbleStyle"
             role="tooltip"
             :hidden="!shown"
         >
@@ -159,23 +219,17 @@ function onDocumentKeydown(event: KeyboardEvent): void {
 }
 
 .help-tip .bubble {
-    position: absolute;
-    z-index: 1;
-    inset-block-end: 100%;
-    inset-inline-start: 0;
+    position: fixed;
+    inset: auto;
     display: flex;
     inline-size: max-content;
-    max-inline-size: 18rem;
-    padding-block-end: 0.375rem;
-}
-
-.help-tip .bubble.below {
-    inset-block: 100% auto;
-    padding-block: 0.375rem 0;
-}
-
-.help-tip .bubble.end {
-    inset-inline: auto 0;
+    max-inline-size: min(18rem, calc(100vw - 1rem));
+    margin: 0;
+    padding: 0.375rem 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    overflow: visible;
 }
 
 .help-tip .bubble[hidden] {

@@ -53,6 +53,15 @@ msgstr ""
 "%(date)s (%(when)s). Le lendemain, elle est levée automatiquement et les "
 "données deviennent visibles de tous."
 
+#: accounts/notices.py:99
+msgid ""
+"This end date was moved: the restriction was due to end sooner, before this "
+"notice could reach you, and it is never lifted without this much warning."
+msgstr ""
+"Cette date de fin a été repoussée : la restriction devait se terminer plus "
+"tôt, avant que cet avis puisse vous parvenir, et elle n'est jamais levée sans "
+"ce délai d'avertissement."
+
 #: accounts/notices.py:97
 msgid ""
 "If it must last longer, ask an administrator to extend it before that date, "
@@ -123,13 +132,13 @@ msgstr "Votre compte ManuSpectrum"
 
 #: accounts/notices.py:169
 msgid ""
-"An account has been created for you on ManuSpectrum. Use the link below to"
-" read the terms of use, accept them, choose your password and set up two-"
+"An account has been created for you on ManuSpectrum. Use the link below to "
+"read the terms of use, accept them, choose your password and set up two-"
 "factor authentication."
 msgstr ""
-"Un compte a été créé pour vous sur ManuSpectrum. Utilisez le lien ci-dessous "
-"pour lire les conditions d'utilisation, les accepter, choisir votre "
-"mot de passe et configurer l'authentification à deux facteurs."
+"Un compte a été créé pour vous sur ManuSpectrum. Utilisez le lien ci-dessous"
+" pour lire les conditions d'utilisation, les accepter, choisir votre mot de "
+"passe et configurer l'authentification à deux facteurs."
 
 #: accounts/notices.py:173
 #, python-format
@@ -148,14 +157,14 @@ msgstr "Configurer à nouveau l'authentification à deux facteurs"
 
 #: accounts/notices.py:186
 msgid ""
-"Your two-factor authentication was reset by an administrator. Use the link"
-" below, type your password and scan the new QR code with your authenticator "
+"Your two-factor authentication was reset by an administrator. Use the link "
+"below, type your password and scan the new QR code with your authenticator "
 "application. You will then be signed in."
 msgstr ""
 "Votre authentification à deux facteurs a été réinitialisée par un "
-"administrateur. Utilisez le lien ci-dessous, saisissez votre mot de passe "
-"et scannez le nouveau code QR avec votre application d'authentification. "
-"Vous serez ensuite connecté."
+"administrateur. Utilisez le lien ci-dessous, saisissez votre mot de passe et"
+" scannez le nouveau code QR avec votre application d'authentification. Vous "
+"serez ensuite connecté."
 
 #: accounts/notices.py:191
 #, python-format
@@ -226,8 +235,8 @@ msgstr "Votre compte ManuSpectrum a été désactivé le %(date)s."
 
 #: accounts/notices.py:257
 msgid ""
-"If you need it reactivated, contact the team through the contact page "
-"(link below)."
+"If you need it reactivated, contact the team through the contact page (link "
+"below)."
 msgstr ""
 "Si vous souhaitez le réactiver, contactez l'équipe par la page de contact "
 "(lien ci-dessous)."
@@ -449,7 +458,8 @@ msgstr "Avec date de fin"
 msgid "Resource"
 msgstr "Ressource"
 
-#: admin.py:221 templates/javascript.htm:120
+#: admin.py:221 templates/includes/ms_i18n_graph_explorer.htm:34
+#: templates/javascript.htm:120
 #: templates/views/components/ms-summary-popup.htm:40
 #: templates/views/pages/graph-explorer.htm:113
 msgid "Model"
@@ -484,7 +494,7 @@ msgstr "Prolonger la date de fin de 6 mois"
 msgid "Extend the end date by 12 months"
 msgstr "Prolonger la date de fin de 12 mois"
 
-#: admin.py:383 templates/index.htm:548
+#: admin.py:383 templates/index.htm:546 templates/index.htm:548
 msgid "Text"
 msgstr "Texte"
 
@@ -566,6 +576,14 @@ msgstr ""
 #, python-format
 msgid "The invitation to %(user)s could not be sent."
 msgstr "L'invitation à %(user)s n'a pas pu être envoyée."
+
+#: admin.py:846
+#, python-format
+msgid "%(count)d account was skipped: only a superuser can invite it."
+msgid_plural ""
+"%(count)d accounts were skipped: only a superuser can invite them."
+msgstr[0] "%(count)d compte a été ignoré : seul un super-utilisateur peut l'inviter."
+msgstr[1] "%(count)d comptes ont été ignorés : seul un super-utilisateur peut les inviter."
 
 #: admin.py:539
 #, python-format
@@ -711,6 +729,7 @@ msgstr "Document"
 
 #: iiif/annotations.py:28
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-config-step.htm:29
+#: templates/views/pages/conceptual-model.htm:189
 #: templates/views/pages/conceptual-model.htm:191
 msgid "Component"
 msgstr "Composant"
@@ -730,16 +749,18 @@ msgstr "Brouillon"
 
 #: iiif/bodies.py:46 iiif/sources.py:276
 #: templates/explorer/export_readme.md:33
+#: templates/explorer/export_readme.md:35
 #: templates/views/components/ms-file-workbench.htm:44
 #: templates/views/components/ms-file-workbench.htm:47
 msgid "Attribution"
 msgstr "Attribution"
 
 #: iiif/bodies.py:51 templates/explorer/export_readme.md:33
+#: templates/explorer/export_readme.md:35
 #: templates/views/components/ms-file-license.htm:14
 #: templates/views/components/ms-file-license.htm:15
 #: templates/views/components/widgets/file-xy.htm:9
-#: templates/views/pages/team.htm:89 templates/views/pages/team.htm:176
+#: templates/views/pages/team.htm:176 templates/views/pages/team.htm:89
 msgid "Licence"
 msgstr "Licence"
 
@@ -787,7 +808,7 @@ msgid "Without a position on the image"
 msgstr "Sans position sur l'image"
 
 #: iiif/manifest.py:178 views/explorer/export.py:385
-#: views/explorer/series.py:126
+#: views/explorer/export.py:386 views/explorer/series.py:126
 msgid "Contains drafts"
 msgstr "Contient des brouillons"
 
@@ -895,9 +916,14 @@ msgstr "restriction"
 msgid "restrictions"
 msgstr "restrictions"
 
-#: models.py:126
-msgid "The end date must be after today."
-msgstr "La date de fin doit être postérieure à aujourd'hui."
+#: models.py:133
+#, python-format
+msgid ""
+"The end date must be at least %(days)d days after today: the final notice "
+"is sent that many days before the restriction is lifted."
+msgstr ""
+"La date de fin doit être au moins %(days)d jours après aujourd'hui : le "
+"dernier avis est envoyé ce nombre de jours avant la levée de la restriction."
 
 #: models.py:131
 #, python-format
@@ -1167,23 +1193,23 @@ msgstr "Votre mot de passe doit contenir au moins une lettre minuscule"
 msgid "Have at least 1 lower case character"
 msgstr "Avoir au moins 1 lettre minuscule"
 
-#: settings.py:156
+#: settings.py:153 settings.py:156
 msgid "Term Matches"
 msgstr "Correspondances de termes"
 
-#: settings.py:162
+#: settings.py:159 settings.py:162
 msgid "References"
 msgstr "Références"
 
-#: settings.py:629
+#: settings.py:575 settings.py:629
 msgid "Hi"
 msgstr "Bonjour"
 
-#: settings.py:666
+#: settings.py:612 settings.py:666
 msgid "English"
 msgstr "Anglais"
 
-#: settings.py:667
+#: settings.py:613 settings.py:667
 msgid "French"
 msgstr "Français"
 
@@ -1320,20 +1346,20 @@ msgid_plural ""
 "password, use the reset link on the sign-in page."
 msgstr[0] ""
 "Ce compte est verrouillé pendant %(minutes)s minute depuis cet ordinateur "
-"après plusieurs échecs de connexion. Patientez, puis réessayez. Si vous avez "
-"perdu votre mot de passe, utilisez le lien de réinitialisation de la page de "
-"connexion."
+"après plusieurs échecs de connexion. Patientez, puis réessayez. Si vous avez"
+" perdu votre mot de passe, utilisez le lien de réinitialisation de la page "
+"de connexion."
 msgstr[1] ""
 "Ce compte est verrouillé pendant %(minutes)s minutes depuis cet ordinateur "
-"après plusieurs échecs de connexion. Patientez, puis réessayez. Si vous avez "
-"perdu votre mot de passe, utilisez le lien de réinitialisation de la page de "
-"connexion."
+"après plusieurs échecs de connexion. Patientez, puis réessayez. Si vous avez"
+" perdu votre mot de passe, utilisez le lien de réinitialisation de la page "
+"de connexion."
 
 #: templates/accounts/lockout.htm:16
 msgid ""
-"This account is locked from this computer after repeated sign-in "
-"failures. Contact the team to unlock it. If you have lost your password, "
-"use the reset link on the sign-in page."
+"This account is locked from this computer after repeated sign-in failures. "
+"Contact the team to unlock it. If you have lost your password, use the reset"
+" link on the sign-in page."
 msgstr ""
 "Ce compte est verrouillé depuis cet ordinateur après plusieurs échecs de "
 "connexion. Contactez l'équipe pour le déverrouiller. Si vous avez perdu "
@@ -1605,7 +1631,8 @@ msgstr ""
 "vous pensez devoir y avoir accès, contactez l'équipe."
 
 #: templates/errors/403.htm:18 templates/includes/ms_footer.htm:20
-#: templates/includes/ms_header.htm:64 templates/includes/ms_header.htm:121
+#: templates/includes/ms_header.htm:117 templates/includes/ms_header.htm:121
+#: templates/includes/ms_header.htm:60 templates/includes/ms_header.htm:64
 msgid "Sign In"
 msgstr "Se connecter"
 
@@ -1702,10 +1729,12 @@ msgid "How to cite"
 msgstr "Comment citer"
 
 #: templates/explorer/export_readme.md:23
+#: templates/explorer/export_readme.md:25
 msgid "Data availability"
 msgstr "Disponibilité des données"
 
 #: templates/explorer/export_readme.md:27
+#: templates/explorer/export_readme.md:29
 msgid ""
 "The data come from the datasets below; cite and reuse them by their "
 "identifier."
@@ -1713,20 +1742,27 @@ msgstr ""
 "Les données proviennent des jeux de données ci-dessous ; citez-les et "
 "réutilisez-les par leur identifiant."
 
-#: templates/explorer/export_readme.md:31 views/explorer/export.py:508
+#: templates/explorer/export_readme.md:31
+#: templates/explorer/export_readme.md:33 views/explorer/export.py:508
+#: views/explorer/export.py:509
 msgid "Licences per file"
 msgstr "Licences par fichier"
 
-#: templates/explorer/export_readme.md:33 templates/javascript.htm:162
-#: templates/javascript.htm:169
+#: templates/explorer/export_readme.md:33
+#: templates/explorer/export_readme.md:35
+#: templates/includes/ms_i18n_graph_explorer.htm:73
+#: templates/includes/ms_i18n_graph_explorer.htm:80
+#: templates/javascript.htm:162 templates/javascript.htm:169
 msgid "Path"
 msgstr "Chemin"
 
 #: templates/explorer/export_readme.md:33
+#: templates/explorer/export_readme.md:35
 msgid "Size (bytes)"
 msgstr "Taille (octets)"
 
 #: templates/explorer/export_readme.md:36
+#: templates/explorer/export_readme.md:38
 msgid "No data file."
 msgstr "Aucun fichier de données."
 
@@ -1758,7 +1794,7 @@ msgstr "Fermer cette fenêtre"
 msgid "ManuSpectrum IIIF access token"
 msgstr "Jeton d'accès IIIF de ManuSpectrum"
 
-#: templates/iiif/xy_reading_1.htm:6 templates/iiif/xy_reading_1.htm:10
+#: templates/iiif/xy_reading_1.htm:10 templates/iiif/xy_reading_1.htm:6
 msgid "xyReading, a IIIF extension for XY spectra (version 1)"
 msgstr "xyReading, une extension IIIF pour les spectres XY (version 1)"
 
@@ -2102,9 +2138,10 @@ msgstr ""
 msgid "Platform"
 msgstr "Plateforme"
 
-#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:18
-#: templates/includes/ms_header.htm:94 templates/index.htm:590
-#: templates/index.htm:611
+#: templates/includes/ms_footer.htm:18 templates/includes/ms_header.htm:14
+#: templates/includes/ms_header.htm:18 templates/includes/ms_header.htm:90
+#: templates/includes/ms_header.htm:94 templates/index.htm:588
+#: templates/index.htm:590 templates/index.htm:609 templates/index.htm:611
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm:49
 msgid "Search"
 msgstr "Rechercher"
@@ -2113,44 +2150,50 @@ msgstr "Rechercher"
 msgid "Request access"
 msgstr "Demander un accès"
 
-#: templates/includes/ms_footer.htm:23
+#: templates/includes/ms_footer.htm:22 templates/includes/ms_footer.htm:23
 msgid "My Profile"
 msgstr "Mon profil"
 
-#: templates/includes/ms_footer.htm:28 templates/includes/ms_header.htm:23
-#: templates/includes/ms_header.htm:98
+#: templates/includes/ms_footer.htm:27 templates/includes/ms_footer.htm:28
+#: templates/includes/ms_header.htm:19 templates/includes/ms_header.htm:23
+#: templates/includes/ms_header.htm:94 templates/includes/ms_header.htm:98
 msgid "About"
 msgstr "À propos"
 
-#: templates/includes/ms_footer.htm:30 templates/includes/ms_header.htm:33
-#: templates/includes/ms_header.htm:101
-#: templates/views/pages/conceptual-model.htm:4
-#: templates/views/pages/conceptual-model.htm:6
+#: templates/includes/ms_footer.htm:29 templates/includes/ms_footer.htm:30
+#: templates/includes/ms_header.htm:101 templates/includes/ms_header.htm:29
+#: templates/includes/ms_header.htm:33 templates/includes/ms_header.htm:97
 #: templates/views/pages/conceptual-model.htm:15
 #: templates/views/pages/conceptual-model.htm:23
+#: templates/views/pages/conceptual-model.htm:4
+#: templates/views/pages/conceptual-model.htm:6
 msgid "Conceptual Model"
 msgstr "Modèle conceptuel"
 
-#: templates/includes/ms_footer.htm:31 templates/includes/ms_header.htm:37
-#: templates/includes/ms_header.htm:102
-#: templates/views/pages/graph-explorer.htm:4
-#: templates/views/pages/graph-explorer.htm:6
+#: templates/includes/ms_footer.htm:30 templates/includes/ms_footer.htm:31
+#: templates/includes/ms_header.htm:102 templates/includes/ms_header.htm:33
+#: templates/includes/ms_header.htm:37 templates/includes/ms_header.htm:98
 #: templates/views/pages/graph-explorer.htm:15
 #: templates/views/pages/graph-explorer.htm:23
+#: templates/views/pages/graph-explorer.htm:4
+#: templates/views/pages/graph-explorer.htm:6
 msgid "Graph Explorer"
 msgstr "Explorateur de graphe"
 
-#: templates/includes/ms_footer.htm:32 templates/includes/ms_header.htm:41
-#: templates/includes/ms_header.htm:103 templates/views/pages/team.htm:4
-#: templates/views/pages/team.htm:6 templates/views/pages/team.htm:15
-#: templates/views/pages/team.htm:36
+#: templates/includes/ms_footer.htm:31 templates/includes/ms_footer.htm:32
+#: templates/includes/ms_header.htm:103 templates/includes/ms_header.htm:37
+#: templates/includes/ms_header.htm:41 templates/includes/ms_header.htm:99
+#: templates/views/pages/team.htm:15 templates/views/pages/team.htm:36
+#: templates/views/pages/team.htm:4 templates/views/pages/team.htm:6
 msgid "About & Team"
 msgstr "À propos & équipe"
 
-#: templates/includes/ms_footer.htm:33 templates/includes/ms_header.htm:45
-#: templates/includes/ms_header.htm:104 templates/views/pages/contact.htm:4
-#: templates/views/pages/contact.htm:6 templates/views/pages/contact.htm:15
-#: templates/views/pages/contact.htm:27 templates/views/pages/legal.htm:37
+#: templates/includes/ms_footer.htm:32 templates/includes/ms_footer.htm:33
+#: templates/includes/ms_header.htm:100 templates/includes/ms_header.htm:104
+#: templates/includes/ms_header.htm:41 templates/includes/ms_header.htm:45
+#: templates/views/pages/contact.htm:15 templates/views/pages/contact.htm:27
+#: templates/views/pages/contact.htm:4 templates/views/pages/contact.htm:6
+#: templates/views/pages/legal.htm:37
 msgid "Contact"
 msgstr "Contact"
 
@@ -2176,15 +2219,15 @@ msgstr "Politique de confidentialité"
 msgid "Terms of use"
 msgstr "Conditions d'utilisation"
 
-#: templates/includes/ms_footer.htm:45
+#: templates/includes/ms_footer.htm:36 templates/includes/ms_footer.htm:45
 msgid "Resources"
 msgstr "Ressources"
 
-#: templates/includes/ms_footer.htm:53
+#: templates/includes/ms_footer.htm:44 templates/includes/ms_footer.htm:53
 msgid "Standards"
 msgstr "Standards"
 
-#: templates/includes/ms_footer.htm:64
+#: templates/includes/ms_footer.htm:55 templates/includes/ms_footer.htm:64
 msgid ""
 "This work has benefited from state aid managed by the Agence Nationale de la"
 " Recherche under the Investissements d'avenir programme, reference "
@@ -2194,19 +2237,16 @@ msgstr ""
 "la Recherche au titre du programme d'Investissements d'avenir portant la "
 "référence ANR-21-ESRE-0005 (Biblissima+)."
 
-#: templates/includes/ms_footer.htm:68
-msgid "All rights reserved"
-msgstr "Tous droits réservés"
-
-#: templates/includes/ms_footer.htm:71 templates/views/pages/contact.htm:160
+#: templates/includes/ms_footer.htm:62 templates/includes/ms_footer.htm:71
+#: templates/views/pages/contact.htm:147 templates/views/pages/contact.htm:160
 msgid "Source code"
 msgstr "Code source"
 
-#: templates/includes/ms_footer.htm:75
+#: templates/includes/ms_footer.htm:66 templates/includes/ms_footer.htm:75
 msgid "GPL-3.0 License"
 msgstr "Licence GPL-3.0"
 
-#: templates/includes/ms_footer.htm:78
+#: templates/includes/ms_footer.htm:69 templates/includes/ms_footer.htm:78
 msgid ""
 "Powered by <a href=\"https://www.archesproject.org\" target=\"_blank\" "
 "rel=\"noopener\">Arches</a>"
@@ -2214,91 +2254,101 @@ msgstr ""
 "Propulsé par <a href=\"https://www.archesproject.org\" target=\"_blank\" "
 "rel=\"noopener\">Arches</a>"
 
-#: templates/includes/ms_header.htm:8
+#: templates/includes/ms_header.htm:4 templates/includes/ms_header.htm:8
 msgid "ManuSpectrum — Home"
 msgstr "ManuSpectrum — Accueil"
 
-#: templates/includes/ms_header.htm:13
+#: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:9
 msgid "Main Navigation"
 msgstr "Navigation principale"
 
-#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:91
-#: templates/index.htm:263
+#: templates/includes/ms_header.htm:11 templates/includes/ms_header.htm:15
+#: templates/includes/ms_header.htm:87 templates/includes/ms_header.htm:91
+#: templates/index.htm:261 templates/index.htm:263
 msgid "The Project"
 msgstr "Le Projet"
 
-#: templates/includes/ms_header.htm:16 templates/includes/ms_header.htm:92
-#: templates/index.htm:406
+#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:16
+#: templates/includes/ms_header.htm:88 templates/includes/ms_header.htm:92
+#: templates/index.htm:404 templates/index.htm:406
 msgid "Explore"
 msgstr "Explorer"
 
-#: templates/includes/ms_header.htm:17 templates/includes/ms_header.htm:93
-#: templates/index.htm:472
+#: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:17
+#: templates/includes/ms_header.htm:89 templates/includes/ms_header.htm:93
+#: templates/index.htm:470 templates/index.htm:472
 msgid "Analyses"
 msgstr "Analyses"
 
-#: templates/includes/ms_header.htm:19 templates/includes/ms_header.htm:95
-#: templates/index.htm:612 templates/views/pages/analysis-explorer.htm:4
-#: templates/views/pages/analysis-explorer.htm:6
+#: templates/includes/ms_header.htm:15 templates/includes/ms_header.htm:19
+#: templates/includes/ms_header.htm:91 templates/includes/ms_header.htm:95
+#: templates/index.htm:610 templates/index.htm:612
 #: templates/views/pages/analysis-explorer.htm:15
 #: templates/views/pages/analysis-explorer.htm:30
+#: templates/views/pages/analysis-explorer.htm:31
+#: templates/views/pages/analysis-explorer.htm:4
+#: templates/views/pages/analysis-explorer.htm:6
 msgid "Discover the data"
 msgstr "Découvrir les données"
 
-#: templates/includes/ms_header.htm:33
+#: templates/includes/ms_header.htm:29 templates/includes/ms_header.htm:33
 msgid "The data model behind ManuSpectrum"
 msgstr "Le modèle de données qui sous-tend ManuSpectrum"
 
-#: templates/includes/ms_header.htm:37
+#: templates/includes/ms_header.htm:33 templates/includes/ms_header.htm:37
 msgid "Explore models and relationships interactively"
 msgstr "Explorer les modèles et leurs relations de façon interactive"
 
-#: templates/includes/ms_header.htm:41
+#: templates/includes/ms_header.htm:37 templates/includes/ms_header.htm:41
 msgid "The project and the people behind it"
 msgstr "Le projet et les personnes qui le portent"
 
-#: templates/includes/ms_header.htm:45
+#: templates/includes/ms_header.htm:41 templates/includes/ms_header.htm:45
 msgid "Submit a project or ask a question"
 msgstr "Soumettre un projet ou poser une question"
 
-#: templates/includes/ms_header.htm:52 templates/includes/ms_header.htm:108
+#: templates/includes/ms_header.htm:104 templates/includes/ms_header.htm:108
+#: templates/includes/ms_header.htm:48 templates/includes/ms_header.htm:52
 msgid "Management"
 msgstr "Gestion"
 
-#: templates/includes/ms_header.htm:57 templates/views/pages/team.htm:179
+#: templates/includes/ms_header.htm:53 templates/includes/ms_header.htm:57
+#: templates/views/pages/team.htm:179
 msgid "Source code on GitHub"
 msgstr "Code source sur GitHub"
 
-#: templates/includes/ms_header.htm:66
+#: templates/includes/ms_header.htm:62 templates/includes/ms_header.htm:66
 msgid "User Profile"
 msgstr "Profil utilisateur"
 
-#: templates/includes/ms_header.htm:66
+#: templates/includes/ms_header.htm:62 templates/includes/ms_header.htm:66
 #, python-format
 msgid "Welcome, %(name)s"
 msgstr "Bienvenue, %(name)s"
 
-#: templates/includes/ms_header.htm:67 templates/includes/ms_header.htm:124
+#: templates/includes/ms_header.htm:120 templates/includes/ms_header.htm:124
+#: templates/includes/ms_header.htm:63 templates/includes/ms_header.htm:67
 msgid "Sign Out"
 msgstr "Déconnexion"
 
-#: templates/includes/ms_header.htm:78 templates/includes/ms_header.htm:113
+#: templates/includes/ms_header.htm:109 templates/includes/ms_header.htm:113
+#: templates/includes/ms_header.htm:74 templates/includes/ms_header.htm:78
 #: views/model_graph_service.py:121
 msgid "Language"
 msgstr "Langue"
 
-#: templates/includes/ms_header.htm:86
+#: templates/includes/ms_header.htm:82 templates/includes/ms_header.htm:86
 msgid "Open Menu"
 msgstr "Ouvrir le menu"
 
 # ============================================================
 # Homepage — index.htm
 # ============================================================
-#: templates/index.htm:14
+#: templates/index.htm:13 templates/index.htm:14
 msgid "ManuSpectrum — Physicochemical Analysis of Heritage"
 msgstr "ManuSpectrum — Analyse physico-chimique du patrimoine"
 
-#: templates/index.htm:15
+#: templates/index.htm:14 templates/index.htm:15
 msgid ""
 "Open heritage science database of physicochemical analyses — XRF, Raman, "
 "FTIR, FORS — of manuscripts, printed books and inscriptions: pigments, inks,"
@@ -2308,11 +2358,12 @@ msgstr ""
 "chimiques — XRF, Raman, FTIR, FORS — de manuscrits, imprimés et inscriptions"
 " : pigments, encres, supports."
 
-#: templates/index.htm:207
+#: templates/index.htm:205 templates/index.htm:207
 msgid "Enlarge the spectral plot"
 msgstr "Agrandir le tracé spectral"
 
-#: templates/index.htm:214 templates/javascript.htm:232
+#: templates/index.htm:212 templates/index.htm:214
+#: templates/javascript.htm:131 templates/javascript.htm:232
 #: templates/views/pages/graph-explorer.htm:204
 msgid "Close"
 msgstr "Fermer"
@@ -2320,23 +2371,23 @@ msgstr "Fermer"
 # ============================================================
 # Homepage — index.htm
 # ============================================================
-#: templates/index.htm:218
+#: templates/index.htm:216 templates/index.htm:218
 msgid "ManuSpectrum — Spectral Analysis Plot"
 msgstr "ManuSpectrum — Tracé d'analyse spectrale"
 
-#: templates/index.htm:219
+#: templates/index.htm:217 templates/index.htm:219
 msgid "interactive"
 msgstr "interactif"
 
-#: templates/index.htm:223
+#: templates/index.htm:221 templates/index.htm:223
 msgid "Channel 1 (XRF)"
 msgstr "Canal 1 (XRF)"
 
-#: templates/index.htm:224
+#: templates/index.htm:222 templates/index.htm:224
 msgid "Channel 2 (FORS)"
 msgstr "Canal 2 (FORS)"
 
-#: templates/index.htm:231
+#: templates/index.htm:229 templates/index.htm:231
 msgid ""
 "Interoperable database for <em>physicochemical analysis</em> of written "
 "cultural heritage"
@@ -2344,7 +2395,7 @@ msgstr ""
 "Base de données interopérable pour l'<em>analyse physico-chimique</em> du "
 "patrimoine culturel écrit"
 
-#: templates/index.htm:235
+#: templates/index.htm:233 templates/index.htm:235
 msgid ""
 "Explore, visualize, and share written cultural heritage materials analysis "
 "data within the Biblissima+ ecosystem."
@@ -2352,23 +2403,24 @@ msgstr ""
 "Explorer, visualiser et partager les données d'analyse des matériaux du "
 "patrimoine culturel écrit au sein de l'écosystème Biblissima+."
 
-#: templates/index.htm:240 templates/index.htm:591
+#: templates/index.htm:238 templates/index.htm:240 templates/index.htm:589
+#: templates/index.htm:591
 msgid "Explore the database"
 msgstr "Explorer la base de données"
 
-#: templates/index.htm:243
+#: templates/index.htm:241 templates/index.htm:243
 msgid "Learn more"
 msgstr "En savoir plus"
 
-#: templates/index.htm:250
+#: templates/index.htm:248 templates/index.htm:250
 msgid "scroll"
 msgstr "défiler"
 
-#: templates/index.htm:264
+#: templates/index.htm:262 templates/index.htm:264
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
 
-#: templates/index.htm:270
+#: templates/index.htm:268 templates/index.htm:270
 msgid ""
 "ManuSpectrum was developed within Cluster 2 — “Consideration and "
 "searchability of materials analysis data” — of the ANR Biblissima+ "
@@ -2383,7 +2435,7 @@ msgstr ""
 "inscriptions, sceaux et autres objets patrimoniaux, en partenariat avec "
 "Huma-Num."
 
-#: templates/index.htm:273
+#: templates/index.htm:271 templates/index.htm:273
 msgid ""
 "Through structuring and standardizing data according to shared models, the "
 "project provides reliable, easy-to-use tools accessible to non-specialists. "
@@ -2398,7 +2450,7 @@ msgstr ""
 "l'accès aux données et la collaboration entre chercheurs de différentes "
 "disciplines."
 
-#: templates/index.htm:276
+#: templates/index.htm:274 templates/index.htm:276
 msgid ""
 "The model focuses on identifying the component as a pivot axis between the "
 "object, its context, the analyses, and their interpretations, using thesauri"
@@ -2410,12 +2462,13 @@ msgstr ""
 "utilisant des thésaurus et des bases d'autorité pour contextualiser les "
 "informations sur des documents hétérogènes."
 
-#: templates/index.htm:284 templates/views/pages/contact.htm:159
+#: templates/index.htm:282 templates/index.htm:284
+#: templates/views/pages/contact.htm:146 templates/views/pages/contact.htm:159
 #: templates/views/pages/team.htm:173
 msgid "Biblissima+ — Cluster 2"
 msgstr "Biblissima+ — Cluster 2"
 
-#: templates/index.htm:286
+#: templates/index.htm:284 templates/index.htm:286
 msgid ""
 "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient"
 " written cultures. Within Cluster 2, the objective is to archive, share and "
@@ -2430,62 +2483,66 @@ msgstr ""
 "interopérabilité avec le portail Biblissima et les standards du patrimoine "
 "culturel écrit."
 
-#: templates/index.htm:303 templates/index.htm:487
+#: templates/index.htm:301 templates/index.htm:303 templates/index.htm:485
+#: templates/index.htm:487
 msgid "X-ray Fluorescence"
 msgstr "Fluorescence X"
 
-#: templates/index.htm:308
+#: templates/index.htm:306 templates/index.htm:308
 msgid "X-ray Micro-Fluorescence"
 msgstr "Microfluorescence X"
 
-#: templates/index.htm:313
+#: templates/index.htm:311 templates/index.htm:313
 msgid "Fiber Optic Reflectance"
 msgstr "Réflectance par fibre optique"
 
-#: templates/index.htm:318
+#: templates/index.htm:316 templates/index.htm:318
 msgid "Raman Spectroscopy"
 msgstr "Spectroscopie Raman"
 
-#: templates/index.htm:323
+#: templates/index.htm:321 templates/index.htm:323
 msgid "IR Spectroscopy"
 msgstr "Spectroscopie IR"
 
-#: templates/index.htm:328
+#: templates/index.htm:326 templates/index.htm:328
 msgid "Hyperspectral Imaging"
 msgstr "Imagerie hyperspectrale"
 
-#: templates/index.htm:333 templates/index.htm:561
+#: templates/index.htm:331 templates/index.htm:333 templates/index.htm:559
+#: templates/index.htm:561
 msgid "Multispectral Imaging"
 msgstr "Imagerie multispectrale"
 
-#: templates/index.htm:338
+#: templates/index.htm:336 templates/index.htm:338
 msgid "Proteomics (MALDI-TOF)"
 msgstr "Protéomique (MALDI-TOF)"
 
-#: templates/index.htm:343
+#: templates/index.htm:341 templates/index.htm:343
 msgid "And many more"
 msgstr "Et bien d'autres"
 
-#: templates/index.htm:348
+#: templates/index.htm:346 templates/index.htm:348
 msgctxt "aria-roledescription"
 msgid "carousel"
 msgstr "carrousel"
 
-#: templates/index.htm:348
+#: templates/index.htm:346 templates/index.htm:348
 msgid "Analysis techniques in pictures"
 msgstr "Les techniques d'analyse en images"
 
-#: templates/index.htm:350 templates/index.htm:358 templates/index.htm:366
+#: templates/index.htm:348 templates/index.htm:350 templates/index.htm:356
+#: templates/index.htm:358 templates/index.htm:364 templates/index.htm:366
 msgctxt "aria-roledescription"
 msgid "slide"
 msgstr "diapositive"
 
-#: templates/index.htm:350 templates/index.htm:358 templates/index.htm:366
+#: templates/index.htm:348 templates/index.htm:350 templates/index.htm:356
+#: templates/index.htm:358 templates/index.htm:364 templates/index.htm:366
 #, python-format
 msgid "%(n)s of %(total)s"
 msgstr "%(n)s sur %(total)s"
 
-#: templates/index.htm:351
+#: templates/index.htm:349 templates/index.htm:351
 msgid ""
 "A manuscript on the motorised stage of a macro-XRF scanner, which maps "
 "chemical elements across the page without touching it"
@@ -2493,18 +2550,18 @@ msgstr ""
 "Un manuscrit sur la platine motorisée d'un scanner macro-XRF, qui "
 "cartographie les éléments chimiques de la page sans la toucher"
 
-#: templates/index.htm:353
+#: templates/index.htm:351 templates/index.htm:353
 msgid "Macro-XRF scanning of a manuscript"
 msgstr "Balayage macro-XRF d'un manuscrit"
 
-#: templates/index.htm:354
+#: templates/index.htm:352 templates/index.htm:354
 msgid ""
 "In situ acquisition of elemental maps by macro X-ray fluorescence scanning"
 msgstr ""
 "Acquisition in situ de cartographies élémentaires par balayage de "
 "fluorescence X (macro-XRF)"
 
-#: templates/index.htm:359
+#: templates/index.htm:357 templates/index.htm:359
 msgid ""
 "An optical fibre held over a manuscript for FORS analysis — the reflected "
 "light carries the spectral signature of the pigments"
@@ -2512,11 +2569,11 @@ msgstr ""
 "Une fibre optique tenue au-dessus d'un manuscrit pour une analyse FORS — la "
 "lumière réfléchie porte la signature spectrale des pigments"
 
-#: templates/index.htm:361
+#: templates/index.htm:359 templates/index.htm:361
 msgid "Fiber optic reflectance spectroscopy (FORS)"
 msgstr "Spectroscopie de réflectance par fibre optique (FORS)"
 
-#: templates/index.htm:362
+#: templates/index.htm:360 templates/index.htm:362
 msgid ""
 "Non-invasive characterization of pigments by fiber optic reflectance "
 "spectroscopy"
@@ -2524,7 +2581,7 @@ msgstr ""
 "Caractérisation non invasive des pigments par spectroscopie de réflectance "
 "par fibre optique"
 
-#: templates/index.htm:367
+#: templates/index.htm:365 templates/index.htm:367
 msgid ""
 "A manuscript under ultraviolet light during hyperspectral imaging, revealing"
 " inks and retouches invisible to the naked eye"
@@ -2532,11 +2589,11 @@ msgstr ""
 "Un manuscrit sous lumière ultraviolette pendant une imagerie hyperspectrale,"
 " révélant encres et retouches invisibles à l'œil nu"
 
-#: templates/index.htm:369
+#: templates/index.htm:367 templates/index.htm:369
 msgid "UV hyperspectral imaging"
 msgstr "Imagerie hyperspectrale UV"
 
-#: templates/index.htm:370
+#: templates/index.htm:368 templates/index.htm:370
 msgid ""
 "Ultraviolet hyperspectral imaging to reveal details invisible to the naked "
 "eye"
@@ -2544,35 +2601,35 @@ msgstr ""
 "Imagerie hyperspectrale ultraviolette pour révéler des détails invisibles à "
 "l'œil nu"
 
-#: templates/index.htm:378
+#: templates/index.htm:376 templates/index.htm:378
 msgid "Previous"
 msgstr "Précédent"
 
-#: templates/index.htm:381
+#: templates/index.htm:379 templates/index.htm:381
 msgid "Next"
 msgstr "Suivant"
 
-#: templates/index.htm:387
+#: templates/index.htm:385 templates/index.htm:387
 msgid "Choose a slide"
 msgstr "Choisir une diapositive"
 
-#: templates/index.htm:388
+#: templates/index.htm:386 templates/index.htm:388
 msgid "Slide 1 of 3 — Macro-XRF scanning"
 msgstr "Diapositive 1 sur 3 — Balayage macro-XRF"
 
-#: templates/index.htm:389
+#: templates/index.htm:387 templates/index.htm:389
 msgid "Slide 2 of 3 — Fiber optic reflectance spectroscopy"
 msgstr "Diapositive 2 sur 3 — Spectroscopie de réflectance par fibre optique"
 
-#: templates/index.htm:390
+#: templates/index.htm:388 templates/index.htm:390
 msgid "Slide 3 of 3 — UV hyperspectral imaging"
 msgstr "Diapositive 3 sur 3 — Imagerie hyperspectrale UV"
 
-#: templates/index.htm:407
+#: templates/index.htm:405 templates/index.htm:407
 msgid "What you can discover"
 msgstr "Ce que vous pouvez découvrir"
 
-#: templates/index.htm:409
+#: templates/index.htm:407 templates/index.htm:409
 msgid ""
 "A platform designed to explore physicochemical analyses on historical "
 "documents, correlating data with their written cultural heritage context."
@@ -2581,11 +2638,11 @@ msgstr ""
 "documents historiques, en corrélant les données avec leur contexte de "
 "patrimoine culturel écrit."
 
-#: templates/index.htm:416
+#: templates/index.htm:414 templates/index.htm:416
 msgid "Spectra and analysis data"
 msgstr "Spectres et données d'analyse"
 
-#: templates/index.htm:417
+#: templates/index.htm:415 templates/index.htm:417
 msgid ""
 "Visualize and compare reference spectra and analysis datasets. Explore XRF, "
 "FTIR, Raman, and other analysis results directly on the platform."
@@ -2594,11 +2651,11 @@ msgstr ""
 "d'analyse. Explorez les résultats d'analyses XRF, FTIR, Raman et d'autres "
 "techniques directement dans la plateforme."
 
-#: templates/index.htm:428
+#: templates/index.htm:426 templates/index.htm:428
 msgid "IIIF Annotations"
 msgstr "Annotations IIIF"
 
-#: templates/index.htm:429
+#: templates/index.htm:427 templates/index.htm:429
 msgid ""
 "Analysis data is exposed as IIIF annotations, making it accessible from any "
 "compatible viewer. The mirador-xyviewer plugin, developed for Mirador 4, "
@@ -2611,11 +2668,11 @@ msgstr ""
 " les données spectrales de ManuSpectrum (XRF, Raman, FTIR, UV-Vis) "
 "directement superposées aux images haute résolution des documents."
 
-#: templates/index.htm:440
+#: templates/index.htm:438 templates/index.htm:440
 msgid "Interoperability and Standards"
 msgstr "Interopérabilité et standards"
 
-#: templates/index.htm:441
+#: templates/index.htm:439 templates/index.htm:441
 msgid ""
 "Data is structured according to the CIDOC-CRM (v7.1.2) and CRMsci (v2.0) "
 "ontologies, and enriched with the AGORHA and AAT Getty thesauri, ensuring "
@@ -2627,15 +2684,15 @@ msgstr ""
 "garantissant leur interopérabilité avec les systèmes patrimoniaux "
 "internationaux et le portail Biblissima."
 
-#: templates/index.htm:445
+#: templates/index.htm:443 templates/index.htm:445
 msgid "AGORHA thesaurus"
 msgstr "Thésaurus AGORHA"
 
-#: templates/index.htm:452
+#: templates/index.htm:450 templates/index.htm:452
 msgid "Material Characterization"
 msgstr "Caractérisation matérielle"
 
-#: templates/index.htm:453
+#: templates/index.htm:451 templates/index.htm:453
 msgid ""
 "Explore the layers, materials and chemical elements identified on "
 "manuscripts, printed books and other written heritage — pigments, inks, "
@@ -2647,27 +2704,27 @@ msgstr ""
 " liants, supports de parchemin et de papier — avec différents niveaux de "
 "fiabilité et de caractérisation."
 
-#: templates/index.htm:455
+#: templates/index.htm:453 templates/index.htm:455
 msgid "Pigments"
 msgstr "Pigments"
 
-#: templates/index.htm:456
+#: templates/index.htm:454 templates/index.htm:456
 msgid "Layers"
 msgstr "Couches"
 
-#: templates/index.htm:457
+#: templates/index.htm:455 templates/index.htm:457
 msgid "Binders"
 msgstr "Liants"
 
-#: templates/index.htm:458
+#: templates/index.htm:456 templates/index.htm:458
 msgid "Substrates"
 msgstr "Supports"
 
-#: templates/index.htm:473
+#: templates/index.htm:471 templates/index.htm:473
 msgid "Visualize physicochemical analyses"
 msgstr "Visualiser les analyses physico-chimiques"
 
-#: templates/index.htm:475
+#: templates/index.htm:473 templates/index.htm:475
 msgid ""
 "From elemental mapping to multispectral imaging, explore the different "
 "analysis techniques applied to written cultural heritage objects."
@@ -2676,7 +2733,7 @@ msgstr ""
 "différentes techniques d'analyse appliquées aux objets du patrimoine "
 "culturel écrit."
 
-#: templates/index.htm:481
+#: templates/index.htm:479 templates/index.htm:481
 msgid ""
 "Macro-XRF map of calcium (Ca) on an ornate letter — bright areas mark "
 "calcium-rich zones"
@@ -2684,7 +2741,7 @@ msgstr ""
 "Cartographie macro-XRF du calcium (Ca) sur une lettre ornée — les zones "
 "claires marquent les zones riches en calcium"
 
-#: templates/index.htm:482
+#: templates/index.htm:480 templates/index.htm:482
 msgid ""
 "Macro-XRF map of mercury (Hg) on the same ornate letter — bright areas "
 "reveal vermilion, a mercury pigment"
@@ -2692,16 +2749,16 @@ msgstr ""
 "Cartographie macro-XRF du mercure (Hg) sur la même lettre ornée — les zones "
 "claires révèlent le vermillon, un pigment au mercure"
 
-#: templates/index.htm:485
+#: templates/index.htm:483 templates/index.htm:485
 msgid "Position of the divide between the mercury map and the calcium map"
 msgstr ""
 "Position de la séparation entre la carte du mercure et celle du calcium"
 
-#: templates/index.htm:488
+#: templates/index.htm:486 templates/index.htm:488
 msgid "Macro-XRF mapping"
 msgstr "Cartographie macro-XRF"
 
-#: templates/index.htm:489
+#: templates/index.htm:487 templates/index.htm:489
 msgid ""
 "Mercury (Hg) and calcium (Ca) distribution across an ornamented initial — "
 "Avranches, BM, Ms. 86, f. 32v"
@@ -2709,84 +2766,87 @@ msgstr ""
 "Répartition du mercure (Hg) et du calcium (Ca) sur une lettre ornée — "
 "Avranches, BM, Ms. 86, f. 32v"
 
-#: templates/index.htm:494
+#: templates/index.htm:492 templates/index.htm:494
 msgid "Manuscript analysis"
 msgstr "Analyse sur manuscrit"
 
-#: templates/index.htm:496 templates/index.htm:497 templates/index.htm:498
-#: templates/index.htm:499
+#: templates/index.htm:494 templates/index.htm:495 templates/index.htm:496
+#: templates/index.htm:497 templates/index.htm:498 templates/index.htm:499
 #, python-format
 msgid "Analysis point %(n)s"
 msgstr "Point d'analyse %(n)s"
 
-#: templates/index.htm:508 templates/index.htm:521 templates/index.htm:534
-#: templates/index.htm:547
+#: templates/index.htm:506 templates/index.htm:508 templates/index.htm:519
+#: templates/index.htm:521 templates/index.htm:532 templates/index.htm:534
+#: templates/index.htm:545 templates/index.htm:547
 msgid "Material"
 msgstr "Matériau"
 
-#: templates/index.htm:508
+#: templates/index.htm:506 templates/index.htm:508
 msgid "Lapis lazuli"
 msgstr "Lapis-lazuli"
 
-#: templates/index.htm:509 templates/index.htm:522 templates/index.htm:535
-#: templates/index.htm:548
+#: templates/index.htm:507 templates/index.htm:509 templates/index.htm:520
+#: templates/index.htm:522 templates/index.htm:533 templates/index.htm:535
+#: templates/index.htm:546 templates/index.htm:548
 msgid "Layer"
 msgstr "Couche"
 
-#: templates/index.htm:509
+#: templates/index.htm:507 templates/index.htm:509
 msgid "Pigment"
 msgstr "Pigment"
 
-#: templates/index.htm:510 templates/index.htm:523 templates/index.htm:536
-#: templates/index.htm:549
+#: templates/index.htm:508 templates/index.htm:510 templates/index.htm:521
+#: templates/index.htm:523 templates/index.htm:534 templates/index.htm:536
+#: templates/index.htm:547 templates/index.htm:549
 msgid "Range"
 msgstr "Plage"
 
-#: templates/index.htm:521
+#: templates/index.htm:519 templates/index.htm:521
 msgid "Vermilion (HgS)"
 msgstr "Vermillon (HgS)"
 
-#: templates/index.htm:522
+#: templates/index.htm:520 templates/index.htm:522
 msgid "Paint"
 msgstr "Peinture"
 
-#: templates/index.htm:534
+#: templates/index.htm:532 templates/index.htm:534
 msgid "Gold leaf"
 msgstr "Feuille d'or"
 
-#: templates/index.htm:535
+#: templates/index.htm:533 templates/index.htm:535
 msgid "Gilding"
 msgstr "Dorure"
 
-#: templates/index.htm:547
+#: templates/index.htm:545 templates/index.htm:547
 msgid "Iron gall ink"
 msgstr "Encre ferrogallique"
 
-#: templates/index.htm:554
+#: templates/index.htm:552 templates/index.htm:554
 msgid "Spectroscopy"
 msgstr "Spectroscopie"
 
-#: templates/index.htm:555
+#: templates/index.htm:553 templates/index.htm:555
 msgid "Point Analysis"
 msgstr "Analyse ponctuelle"
 
-#: templates/index.htm:556
+#: templates/index.htm:554 templates/index.htm:556
 msgid "Click on analysis points to explore spectral data"
 msgstr "Cliquez sur les points d'analyse pour explorer les données spectrales"
 
-#: templates/index.htm:571
+#: templates/index.htm:569 templates/index.htm:571
 msgid "Imaging"
 msgstr "Imagerie"
 
-#: templates/index.htm:572
+#: templates/index.htm:570 templates/index.htm:572
 msgid "Multispectral"
 msgstr "Multispectral"
 
-#: templates/index.htm:573
+#: templates/index.htm:571 templates/index.htm:573
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
 
-#: templates/index.htm:593
+#: templates/index.htm:591 templates/index.htm:593
 msgid ""
 "Search by material — a pigment, an ink, a support —, analysis technique, "
 "written cultural heritage object, or chemical element. Advanced filters "
@@ -2796,51 +2856,49 @@ msgstr ""
 "d'analyse, objet du patrimoine culturel écrit ou élément chimique. Filtres "
 "avancés disponibles dans l'interface de recherche."
 
-#: templates/index.htm:606
+#: templates/index.htm:604 templates/index.htm:606
 msgid "Search materials, techniques, objects..."
 msgstr "Rechercher des matériaux, techniques, objets..."
 
-#: templates/index.htm:617
+#: templates/index.htm:615 templates/index.htm:617
 msgid "Vermilion"
 msgstr "Vermillon"
 
-#: templates/index.htm:618
+#: templates/index.htm:617 templates/index.htm:618
 msgid "manuscript"
 msgstr "manuscrit"
 
-#: templates/index.htm:618
+#: templates/index.htm:617 templates/index.htm:618
 msgid "Manuscripts"
 msgstr "Manuscrits"
 
-#: templates/index.htm:619
+#: templates/index.htm:618 templates/index.htm:619
 msgid "parchment"
 msgstr "parchemin"
 
-#: templates/index.htm:619
+#: templates/index.htm:618 templates/index.htm:619
 msgid "Parchment"
 msgstr "Parchemin"
 
-#: templates/index.htm:620
+#: templates/index.htm:619 templates/index.htm:620
 msgid "illumination"
 msgstr "enluminure"
 
-#: templates/index.htm:620
+#: templates/index.htm:619 templates/index.htm:620
 msgid "Illuminations"
 msgstr "Enluminures"
 
-#: templates/index.htm:625
-msgid "Explore by technique"
-msgstr "Explorer par technique"
-
-#: templates/index.htm:635
+#: templates/index.htm:624 templates/index.htm:635
 msgid "Access advanced search"
 msgstr "Accéder à la recherche avancée"
 
-#: templates/index.htm:648 templates/views/pages/team.htm:190
+#: templates/index.htm:637 templates/index.htm:648
+#: templates/views/pages/team.htm:190
 msgid "Our Partners"
 msgstr "Nos Partenaires"
 
-#: templates/index.htm:652 templates/views/pages/team.htm:193
+#: templates/index.htm:641 templates/index.htm:652
+#: templates/views/pages/team.htm:193
 msgid "Ministry of Culture"
 msgstr "Ministère de la Culture"
 
@@ -3123,12 +3181,12 @@ msgstr "Requête trop longue ({n} caractères maximum)"
 msgid "EN: "
 msgstr "EN : "
 
-#: templates/javascript.htm:77
+#: templates/includes/ms_i18n_contact.htm:6 templates/javascript.htm:77
 msgid "Please fill in all fields with a valid email."
 msgstr ""
 "Veuillez remplir tous les champs et indiquer une adresse e-mail valide."
 
-#: templates/javascript.htm:78
+#: templates/includes/ms_i18n_contact.htm:7 templates/javascript.htm:78
 msgid "Project submission"
 msgstr "Soumission de projet"
 
@@ -3136,118 +3194,137 @@ msgstr "Soumission de projet"
 msgid "Account reactivation"
 msgstr "Réactivation de compte"
 
-#: templates/javascript.htm:80
+#: templates/includes/ms_i18n_contact.htm:8 templates/javascript.htm:80
 msgid "Access request"
 msgstr "Demande d'accès"
 
-#: templates/javascript.htm:81 templates/views/pages/contact.htm:105
+#: templates/includes/ms_i18n_contact.htm:9 templates/javascript.htm:81
+#: templates/views/pages/contact.htm:105 templates/views/pages/contact.htm:92
 msgid "Question"
 msgstr "Question"
 
-#: templates/javascript.htm:82 templates/views/pages/contact.htm:116
+#: templates/includes/ms_i18n_contact.htm:10 templates/javascript.htm:82
+#: templates/views/pages/contact.htm:103 templates/views/pages/contact.htm:116
 msgid "Message"
 msgstr "Message"
 
-#: templates/javascript.htm:83 templates/views/pages/privacy.htm:124
+#: templates/includes/ms_i18n_contact.htm:11 templates/javascript.htm:83
+#: templates/views/pages/privacy.htm:124
 msgid "Name"
 msgstr "Nom"
 
-#: templates/javascript.htm:84
+#: templates/includes/ms_i18n_contact.htm:12 templates/javascript.htm:84
 msgid "Email"
 msgstr "E-mail"
 
-#: templates/javascript.htm:85 templates/views/pages/contact.htm:100
+#: templates/includes/ms_i18n_contact.htm:13 templates/javascript.htm:85
+#: templates/views/pages/contact.htm:100 templates/views/pages/contact.htm:88
 msgid "Reason"
 msgstr "Motif"
 
-#: templates/javascript.htm:86
+#: templates/includes/ms_i18n_contact.htm:14 templates/javascript.htm:86
 msgid "Please enter your name."
 msgstr "Veuillez saisir votre nom."
 
-#: templates/javascript.htm:87
+#: templates/includes/ms_i18n_contact.htm:15 templates/javascript.htm:87
 msgid "Please enter a valid email address."
 msgstr "Veuillez saisir une adresse e-mail valide."
 
-#: templates/javascript.htm:88
+#: templates/includes/ms_i18n_contact.htm:16 templates/javascript.htm:88
 msgid "Please write a message."
 msgstr "Veuillez rédiger un message."
 
-#: templates/javascript.htm:89
+#: templates/includes/ms_i18n_contact.htm:18 templates/javascript.htm:89
 #, python-brace-format
 msgid "{n} characters left"
 msgstr "{n} caractères restants"
 
-#: templates/javascript.htm:90
+#: templates/includes/ms_i18n_contact.htm:19 templates/javascript.htm:90
 msgid "Copied."
 msgstr "Copié."
 
-#: templates/javascript.htm:91
+#: templates/includes/ms_i18n_contact.htm:20 templates/javascript.htm:91
 msgid "Copy failed — select the text and copy it manually."
 msgstr "Échec de la copie — sélectionnez le texte et copiez-le manuellement."
 
-#: templates/javascript.htm:92 templates/javascript.htm:107
+#: templates/includes/ms_i18n_graph_explorer.htm:21
+#: templates/includes/ms_i18n_graph_explorer.htm:6
+#: templates/javascript.htm:107 templates/javascript.htm:92
 #: templates/views/pages/graph-explorer.htm:198
 msgid "Fields"
 msgstr "Champs"
 
-#: templates/javascript.htm:93 templates/views/pages/graph-explorer.htm:83
+#: templates/includes/ms_i18n_graph_explorer.htm:7 templates/javascript.htm:93
+#: templates/views/pages/graph-explorer.htm:83
 msgid "Relations"
 msgstr "Relations"
 
-#: templates/javascript.htm:94
+#: templates/includes/ms_i18n_graph_explorer.htm:8 templates/javascript.htm:94
 msgid "records"
 msgstr "enregistrements"
 
-#: templates/javascript.htm:95
+#: templates/includes/ms_i18n_graph_explorer.htm:9 templates/javascript.htm:95
 msgid "field groups"
 msgstr "groupes de champs"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:10
 #: templates/javascript.htm:96
 msgid "required"
 msgstr "requis"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:11
 #: templates/javascript.htm:97
 msgid "→ target · ← source"
 msgstr "→ cible · ← source"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:12
 #: templates/javascript.htm:98
 msgid "No relations"
 msgstr "Aucune relation"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:13
 #: templates/javascript.htm:99
 msgid "The chart could not be loaded — reopen this tab to retry."
 msgstr ""
 "Le graphique n'a pas pu être chargé — rouvrez cet onglet pour réessayer."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:14
 #: templates/javascript.htm:100
 #, python-brace-format
 msgid "data as of {date}"
 msgstr "données au {date}"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:15
 #: templates/javascript.htm:101
 msgid "models"
 msgstr "modèles"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:16
 #: templates/javascript.htm:102
 msgid "relations"
 msgstr "relations"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:17
 #: templates/javascript.htm:103
 msgid "fields"
 msgstr "champs"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:18
 #: templates/javascript.htm:104
 msgid "datatypes"
 msgstr "types de données"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:19
 #: templates/javascript.htm:105
 msgid "Fields by datatype"
 msgstr "Champs par type de données"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:20
 #: templates/javascript.htm:106
 msgid "Datatype (sorted by field count, descending)"
 msgstr "Type de données (trié par nombre de champs, décroissant)"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:22
 #: templates/javascript.htm:108
 #, python-brace-format
 msgid ""
@@ -3257,10 +3334,12 @@ msgstr ""
 "Matrice d'adjacence : {models} modèles, {relations} relations typées. Les "
 "lignes sont les sources, les colonnes les cibles."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:23
 #: templates/javascript.htm:109
 msgid "Source model, down; target model, across"
 msgstr "Modèle source en ligne ; modèle cible en colonne"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:24
 #: templates/javascript.htm:110
 msgid ""
 "Point at or focus a cell to read its CIDOC-CRM properties. Select one to "
@@ -3269,28 +3348,34 @@ msgstr ""
 "Survolez une cellule ou placez-y le focus pour lire ses propriétés CIDOC-"
 "CRM. Sélectionnez-la pour ouvrir le modèle."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:25
 #: templates/javascript.htm:111
 msgid "same model"
 msgstr "même modèle"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:26
 #: templates/javascript.htm:112
 msgid "no relation"
 msgstr "aucune relation"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:27
 #: templates/javascript.htm:113
 msgid "1 relation"
 msgstr "1 relation"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:28
 #: templates/javascript.htm:114
 #, python-brace-format
 msgid "{n} relations"
 msgstr "{n} relations"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:29
 #: templates/javascript.htm:115
 msgid "No family selected — turn one back on to see the matrix."
 msgstr ""
 "Aucune famille sélectionnée — réactivez-en une pour afficher la matrice."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:30
 #: templates/javascript.htm:116
 #, python-brace-format
 msgid ""
@@ -3302,36 +3387,44 @@ msgstr ""
 "typées. Chaque courbe représente une relation, annotée de sa propriété "
 "CIDOC-CRM."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:31
 #: templates/javascript.htm:117 templates/views/pages/graph-explorer.htm:159
 msgid "Select a model to see it with its directly connected models."
 msgstr ""
 "Sélectionnez un modèle pour l'afficher avec les modèles qui lui sont "
 "directement connectés."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:32
 #: templates/javascript.htm:118
 msgid "Circle size = published records"
 msgstr "Taille du cercle = enregistrements publiés"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:33
 #: templates/javascript.htm:119
 msgid "Dashed outline = no records published yet"
 msgstr "Contour en pointillés = aucun enregistrement publié"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:35
 #: templates/javascript.htm:121
 msgid "Family"
 msgstr "Famille"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:36
 #: templates/javascript.htm:122
 msgid "Links"
 msgstr "Liens"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:37
 #: templates/javascript.htm:123
 msgid "Outgoing"
 msgstr "Sortantes"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:38
 #: templates/javascript.htm:124
 msgid "Incoming"
 msgstr "Entrantes"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:39
 #: templates/javascript.htm:125
 #, python-brace-format
 msgid ""
@@ -3341,43 +3434,52 @@ msgstr ""
 "Chaque modèle avec ses relations typées sortantes et entrantes. {n} modèles,"
 " {r} relations."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:40
 #: templates/javascript.htm:126
 msgid "Filter fields…"
 msgstr "Filtrer les champs…"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:41
 #: templates/javascript.htm:127
 msgid "Relation fields only"
 msgstr "Champs de relation uniquement"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:42
 #: templates/javascript.htm:128
 msgid "No field matches."
 msgstr "Aucun champ ne correspond."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:43
 #: templates/javascript.htm:129
 #, python-brace-format
 msgid "{n} of {total}"
 msgstr "{n} sur {total}"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:44
 #: templates/javascript.htm:130
 msgid "No model matches"
 msgstr "Aucun modèle ne correspond"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:45
 #: templates/javascript.htm:131
 #, python-brace-format
 msgid "{n} records published"
 msgstr "{n} enregistrements publiés"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:48
 #: templates/javascript.htm:132
 #, python-brace-format
 msgid "{n} models defined and open for deposit"
 msgstr "{n} modèles définis et ouverts au dépôt"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:49
 #: templates/javascript.htm:133
 msgid "No records published yet — model defined and open for deposit."
 msgstr ""
 "Aucun enregistrement publié pour l'instant — modèle défini et ouvert au "
 "dépôt."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:50
 #: templates/javascript.htm:134
 #, python-format, python-brace-format
 msgid ""
@@ -3389,6 +3491,7 @@ msgstr ""
 "répartis sur {models} modèles, dont {pct}%% adossés à un thésaurus publié "
 "plutôt qu’à du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
+#: templates/includes/ms_i18n_conceptual_model.htm:6
 #: templates/javascript.htm:135
 #, python-brace-format
 msgid ""
@@ -3397,11 +3500,13 @@ msgstr ""
 "des champs s’appuient sur un thésaurus publié plutôt que sur du texte libre "
 "— {n} sur {total}"
 
+#: templates/includes/ms_i18n_conceptual_model.htm:7
 #: templates/javascript.htm:136
 #, python-brace-format
 msgid "typed relationships across {models} interconnected models"
 msgstr "relations typées entre {models} modèles interconnectés"
 
+#: templates/includes/ms_i18n_conceptual_model.htm:8
 #: templates/javascript.htm:137
 #, python-brace-format
 msgid ""
@@ -3411,6 +3516,7 @@ msgstr ""
 "{nodegroups} groupes de champs · {total} nœuds (dont {data} porteurs de "
 "données) · {properties} propriétés d’ontologie · {thesauri} thésaurus."
 
+#: templates/includes/ms_i18n_conceptual_model.htm:9
 #: templates/javascript.htm:138
 #, python-brace-format
 msgid ""
@@ -3422,174 +3528,209 @@ msgstr ""
 "— ainsi une personne enregistrée une fois comme analyste est le même "
 "enregistrement lorsqu’elle réapparaît comme propriétaire d’un manuscrit."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:53
 #: templates/javascript.htm:142
 #, python-brace-format
 msgid "No field, class or property matches “{q}”."
 msgstr "Aucun champ, classe ou propriété ne correspond à « {q} »."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:54
 #: templates/javascript.htm:143
 #, python-brace-format
 msgid "{n} of {total} fields"
 msgstr "{n} champs sur {total}"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:55
 #: templates/javascript.htm:144
 #, python-brace-format
 msgid "{n} fields"
 msgstr "{n} champs"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:56
 #: templates/javascript.htm:145
 #, python-brace-format
 msgid "{n} field"
 msgstr "{n} champ"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:57
 #: templates/javascript.htm:146
 #, python-brace-format
 msgid "{n} fields · {m} group"
 msgstr "{n} champs · {m} groupe"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:58
 #: templates/javascript.htm:147
 #, python-brace-format
 msgid "{n} fields · {m} groups"
 msgstr "{n} champs · {m} groupes"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:59
 #: templates/javascript.htm:148
 msgid "Repeatable"
 msgstr "Répétable"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:60
 #: templates/javascript.htm:149
 msgid "Once"
 msgstr "Une seule fois"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:61
 #: templates/javascript.htm:150
 msgid "Structural node — carries no data"
 msgstr "Nœud structurel — ne porte aucune donnée"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:62
 #: templates/javascript.htm:151
 #, python-brace-format
 msgid "Links to {model}"
 msgstr "Pointe vers {model}"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:63
 #: templates/javascript.htm:152
 #, python-brace-format
 msgid "View {model} →"
 msgstr "Voir {model} →"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:64
 #: templates/javascript.htm:153
 msgid "From parent"
 msgstr "Depuis le parent"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:65
 #: templates/javascript.htm:154
 msgid "View structure →"
 msgstr "Voir la structure →"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:66
 #: templates/javascript.htm:155
 #, python-brace-format
 msgid "Showing {node} and below"
 msgstr "Affichage de {node} et de ses descendants"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:67
 #: templates/javascript.htm:156
 #, python-brace-format
 msgid "← {model}"
 msgstr "← {model}"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:68
 #: templates/javascript.htm:157
 #, python-brace-format
 msgid "{model}: {n} fields in {g} field groups, nested {d} levels deep."
 msgstr "{model} : {n} champs dans {g} groupes, imbriqués sur {d} niveaux."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:69
 #: templates/javascript.htm:158
 msgid "Common properties (P1, P2) are dimmed."
 msgstr "Les propriétés courantes (P1, P2) sont estompées."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:70
 #: templates/javascript.htm:159
 msgid "Ring = field group · double ring = repeatable"
 msgstr "Anneau = groupe de champs · double anneau = répétable"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:71
 #: templates/javascript.htm:160
 msgid "∗ = required"
 msgstr "∗ = obligatoire"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:72
 #: templates/javascript.htm:161
 msgid "CIDOC-CRM class"
 msgstr "Classe CIDOC-CRM"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:74
+#: templates/includes/ms_i18n_graph_explorer.htm:86
 #: templates/javascript.htm:163 templates/javascript.htm:175
 msgid "Cardinality"
 msgstr "Cardinalité"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:75
+#: templates/includes/ms_i18n_graph_explorer.htm:85
 #: templates/javascript.htm:164 templates/javascript.htm:174
 msgid "Required"
 msgstr "Obligatoire"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:76
 #: templates/javascript.htm:165
 msgid "Optional"
 msgstr "Facultatif"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:77
 #: templates/javascript.htm:166
 msgid "Controlled vocabulary"
 msgstr "Vocabulaire contrôlé"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:78
 #: templates/javascript.htm:167
 msgid "See this relationship in the Network view"
 msgstr "Voir cette relation dans la vue Réseau"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:79
 #: templates/javascript.htm:168 templates/views/pages/conceptual-model.htm:89
 msgid "Field group"
 msgstr "Groupe de champs"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:81
 #: templates/javascript.htm:170
 msgid "Field"
 msgstr "Champ"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:82
 #: templates/javascript.htm:171 templates/views/pages/conceptual-model.htm:87
 msgid "Datatype"
 msgstr "Type de donnée"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:83
 #: templates/javascript.htm:172
 msgid "CIDOC class"
 msgstr "Classe CIDOC"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:84
 #: templates/javascript.htm:173
 msgid "Property"
 msgstr "Propriété"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:87
 #: templates/javascript.htm:176
 msgid "Target"
 msgstr "Cible"
 
+#: templates/includes/ms_i18n_graph_explorer.htm:88
 #: templates/javascript.htm:177
 #, python-brace-format
 msgid "Every field of every model: {n} rows across {m} models."
 msgstr ""
 "Tous les champs de tous les modèles : {n} lignes réparties sur {m} modèles."
 
+#: templates/includes/ms_i18n_graph_explorer.htm:89
 #: templates/javascript.htm:178
 msgid "Yes"
 msgstr "Oui"
 
-#: templates/javascript.htm:179
+#: templates/javascript.htm:179 templates/javascript.htm:78
 msgid "How to combine them"
 msgstr "Comment les combiner"
 
-#: templates/javascript.htm:180
+#: templates/javascript.htm:180 templates/javascript.htm:79
 msgid "Delete this configuration?"
 msgstr "Supprimer cette configuration ?"
 
-#: templates/javascript.htm:181
+#: templates/javascript.htm:181 templates/javascript.htm:80
 #, python-brace-format
 msgid "“{name}” will be removed for everyone. This cannot be undone."
 msgstr ""
 "« {name} » sera supprimée pour tout le monde. Cette action est irréversible."
 
-#: templates/javascript.htm:182
+#: templates/javascript.htm:182 templates/javascript.htm:81
 msgid "Protected configuration"
 msgstr "Configuration protégée"
 
-#: templates/javascript.htm:183
+#: templates/javascript.htm:183 templates/javascript.htm:82
 msgid "Configuration not saved"
 msgstr "Configuration non enregistrée"
 
-#: templates/javascript.htm:184
+#: templates/javascript.htm:184 templates/javascript.htm:83
 msgid ""
 "The server refused the change. Your edits are still on screen — copy "
 "anything you need before closing the panel."
@@ -3597,59 +3738,60 @@ msgstr ""
 "Le serveur a refusé la modification. Vos changements sont toujours à l'écran"
 " — copiez ce dont vous avez besoin avant de fermer le panneau."
 
-#: templates/javascript.htm:185
+#: templates/javascript.htm:185 templates/javascript.htm:84
 msgid "Viz"
 msgstr "Viz"
 
-#: templates/javascript.htm:186
+#: templates/javascript.htm:186 templates/javascript.htm:85
 msgid "As measured"
 msgstr "Tel que mesuré"
 
-#: templates/javascript.htm:187 templates/javascript.htm:209
+#: templates/javascript.htm:108 templates/javascript.htm:187
+#: templates/javascript.htm:209 templates/javascript.htm:86
 msgid "Pseudo-absorbance log10(1/R)"
 msgstr "Pseudo-absorbance log10(1/R)"
 
-#: templates/javascript.htm:188
+#: templates/javascript.htm:188 templates/javascript.htm:87
 msgid "Kubelka-Munk"
 msgstr "Kubelka-Munk"
 
-#: templates/javascript.htm:189
+#: templates/javascript.htm:189 templates/javascript.htm:88
 msgid "Normalised to maximum"
 msgstr "Normalisé au maximum"
 
-#: templates/javascript.htm:190
+#: templates/javascript.htm:190 templates/javascript.htm:89
 msgid "Normalised to total (TIC)"
 msgstr "Normalisé au total (TIC)"
 
-#: templates/javascript.htm:191
+#: templates/javascript.htm:191 templates/javascript.htm:90
 msgid "First derivative"
 msgstr "Dérivée première"
 
-#: templates/javascript.htm:192
+#: templates/javascript.htm:192 templates/javascript.htm:91
 msgid "Second derivative"
 msgstr "Dérivée seconde"
 
-#: templates/javascript.htm:193
+#: templates/javascript.htm:193 templates/javascript.htm:92
 msgid "Divided by the white reference"
 msgstr "Divisé par la référence blanche"
 
-#: templates/javascript.htm:194
+#: templates/javascript.htm:194 templates/javascript.htm:93
 msgid "Smoothed"
 msgstr "Lissé"
 
-#: templates/javascript.htm:195
+#: templates/javascript.htm:195 templates/javascript.htm:94
 msgid "Derivative"
 msgstr "Dérivée"
 
-#: templates/javascript.htm:196
+#: templates/javascript.htm:196 templates/javascript.htm:95
 msgid "Averaged into a single series"
 msgstr "Moyennées en une seule série"
 
-#: templates/javascript.htm:197
+#: templates/javascript.htm:197 templates/javascript.htm:96
 msgid "window"
 msgstr "fenêtre"
 
-#: templates/javascript.htm:198
+#: templates/javascript.htm:198 templates/javascript.htm:97
 msgid ""
 "These files use different configurations — the axes describe only one of "
 "them, and no view is offered."
@@ -3657,28 +3799,28 @@ msgstr ""
 "Ces fichiers utilisent des configurations différentes — les axes n'en "
 "décrivent qu'une, et aucune vue n'est proposée."
 
-#: templates/javascript.htm:199
+#: templates/javascript.htm:199 templates/javascript.htm:98
 msgid "normalised to max"
 msgstr "normalisé au maximum"
 
-#: templates/javascript.htm:200
+#: templates/javascript.htm:200 templates/javascript.htm:99
 msgid "normalised to area"
 msgstr "normalisé à l'aire"
 
-#: templates/javascript.htm:201
+#: templates/javascript.htm:100 templates/javascript.htm:201
 msgid "smoothed"
 msgstr "lissé"
 
-#: templates/javascript.htm:202
+#: templates/javascript.htm:101 templates/javascript.htm:202
 msgid "derivative"
 msgstr "dérivée"
 
-#: templates/javascript.htm:203
+#: templates/javascript.htm:102 templates/javascript.htm:203
 #: templates/views/components/plugins/importer-configuration.htm:178
 msgid "Reverse the X axis"
 msgstr "Inverser l'axe X"
 
-#: templates/javascript.htm:204
+#: templates/javascript.htm:103 templates/javascript.htm:204
 msgid ""
 "Plot the X axis descending. Conventional for FTIR (4000 to 400 cm-1), NMR "
 "and XPS."
@@ -3686,13 +3828,13 @@ msgstr ""
 "Tracer l'axe X en ordre décroissant. Convention pour l'IRTF (4000 à 400 "
 "cm-1), la RMN et l'XPS."
 
-#: templates/javascript.htm:205
+#: templates/javascript.htm:104 templates/javascript.htm:205
 #: templates/views/components/plugins/importer-configuration.htm:252
 #: templates/views/pages/conceptual-model.htm:111
 msgid "Transformations"
 msgstr "Transformations"
 
-#: templates/javascript.htm:206
+#: templates/javascript.htm:105 templates/javascript.htm:206
 msgid ""
 "Applied to the plotted spectrum, in order. The file itself is never "
 "modified."
@@ -3700,47 +3842,47 @@ msgstr ""
 "Appliquées au spectre tracé, dans l'ordre. Le fichier lui-même n'est jamais "
 "modifié."
 
-#: templates/javascript.htm:207
+#: templates/javascript.htm:106 templates/javascript.htm:207
 msgid "Add a transformation"
 msgstr "Ajouter une transformation"
 
-#: templates/javascript.htm:208
+#: templates/javascript.htm:107 templates/javascript.htm:208
 msgid "Reference normalisation (S-D)/(W-D)"
 msgstr "Normalisation par référence (S-D)/(B-D)"
 
-#: templates/javascript.htm:210
+#: templates/javascript.htm:109 templates/javascript.htm:210
 msgid "Kubelka-Munk (1-R)^2/2R"
 msgstr "Kubelka-Munk (1-R)^2/2R"
 
-#: templates/javascript.htm:211
+#: templates/javascript.htm:110 templates/javascript.htm:211
 msgid "Normalise to maximum"
 msgstr "Normaliser au maximum"
 
-#: templates/javascript.htm:212
+#: templates/javascript.htm:111 templates/javascript.htm:212
 msgid "Normalise to total area (TIC)"
 msgstr "Normaliser à l'aire totale (TIC)"
 
-#: templates/javascript.htm:213
+#: templates/javascript.htm:112 templates/javascript.htm:213
 msgid "Smoothing (Savitzky-Golay)"
 msgstr "Lissage (Savitzky-Golay)"
 
-#: templates/javascript.htm:214
+#: templates/javascript.htm:113 templates/javascript.htm:214
 msgid "Derivative (Savitzky-Golay)"
 msgstr "Dérivée (Savitzky-Golay)"
 
-#: templates/javascript.htm:215
+#: templates/javascript.htm:114 templates/javascript.htm:215
 msgid "Window"
 msgstr "Fenêtre"
 
-#: templates/javascript.htm:216
+#: templates/javascript.htm:115 templates/javascript.htm:216
 msgid "Polynomial order"
 msgstr "Ordre du polynôme"
 
-#: templates/javascript.htm:217
+#: templates/javascript.htm:116 templates/javascript.htm:217
 msgid "Derivative order"
 msgstr "Ordre de la dérivée"
 
-#: templates/javascript.htm:218
+#: templates/javascript.htm:117 templates/javascript.htm:218
 msgid ""
 "This transformation needs parameters you choose. It is never applied "
 "automatically."
@@ -3748,44 +3890,44 @@ msgstr ""
 "Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
 "jamais appliquée automatiquement."
 
-#: templates/javascript.htm:219
+#: templates/javascript.htm:118 templates/javascript.htm:219
 msgid "White reference"
 msgstr "Référence blanche"
 
-#: templates/javascript.htm:220
+#: templates/javascript.htm:119 templates/javascript.htm:220
 msgid "Dark current"
 msgstr "Courant d'obscurité"
 
-#: templates/javascript.htm:221
+#: templates/javascript.htm:120 templates/javascript.htm:221
 msgid "Configuration deduced from the analysis technique"
 msgstr "Configuration déduite de la technique d'analyse"
 
-#: templates/javascript.htm:225
+#: templates/javascript.htm:124 templates/javascript.htm:225
 msgid "The summary could not be loaded."
 msgstr "La fiche n'a pas pu être chargée."
 
-#: templates/javascript.htm:226
+#: templates/javascript.htm:125 templates/javascript.htm:226
 msgid "You do not have permission to view this resource."
 msgstr "Vous n'avez pas l'autorisation de consulter cette ressource."
 
-#: templates/javascript.htm:227
+#: templates/javascript.htm:126 templates/javascript.htm:227
 msgid "This resource no longer exists."
 msgstr "Cette ressource n'existe plus."
 
-#: templates/javascript.htm:228
+#: templates/javascript.htm:127 templates/javascript.htm:228
 msgid "Details are unavailable right now."
 msgstr "Les détails sont indisponibles pour le moment."
 
-#: templates/javascript.htm:229
+#: templates/javascript.htm:128 templates/javascript.htm:229
 msgid "No details to show."
 msgstr "Aucun détail à afficher."
 
-#: templates/javascript.htm:230
+#: templates/javascript.htm:129 templates/javascript.htm:230
 #, python-brace-format
 msgid "+{n}"
 msgstr "+{n}"
 
-#: templates/javascript.htm:231
+#: templates/javascript.htm:130 templates/javascript.htm:231
 msgid "Spectrum"
 msgstr "Spectre"
 
@@ -3825,20 +3967,26 @@ msgid "Password reset — %(site_name)s"
 msgstr "Réinitialisation du mot de passe — %(site_name)s"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:29
+#: templates/views/components/cards/file-renderers/afs-reader.htm:42
 #: templates/views/components/widgets/file-xy.htm:103
+#: templates/views/components/widgets/file-xy.htm:120
 msgid "Processing:"
 msgstr "Traitement :"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:31
+#: templates/views/components/cards/file-renderers/afs-reader.htm:44
 #: templates/views/components/widgets/file-xy.htm:105
+#: templates/views/components/widgets/file-xy.htm:122
 msgid "none applied"
 msgstr "aucun"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:45
+#: templates/views/components/cards/file-renderers/afs-reader.htm:58
 msgid "Config"
 msgstr "Configuration"
 
 #: templates/views/components/cards/file-renderers/afs-reader.htm:54
+#: templates/views/components/cards/file-renderers/afs-reader.htm:67
 msgid "Chart Configuration"
 msgstr "Configuration du graphique"
 
@@ -3854,8 +4002,8 @@ msgstr ""
 msgid "XY file(s) selected"
 msgstr "fichier(s) XY sélectionné(s)"
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:46
 #: templates/views/components/cards/file-renderers/xy-reader.htm:154
+#: templates/views/components/cards/file-renderers/xy-reader.htm:46
 msgid ""
 "Deduced from the analysis technique. Change it here if the technique is "
 "wrong."
@@ -3863,8 +4011,8 @@ msgstr ""
 "Déduite de la technique d'analyse. Modifiez-la ici si la technique est "
 "erronée."
 
-#: templates/views/components/cards/file-renderers/xy-reader.htm:47
 #: templates/views/components/cards/file-renderers/xy-reader.htm:155
+#: templates/views/components/cards/file-renderers/xy-reader.htm:47
 msgid "auto"
 msgstr "auto"
 
@@ -3925,6 +4073,7 @@ msgid "Has custom parsing"
 msgstr "A un parsing personnalisé"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:159
+#: views/explorer/events_export.py:173
 msgid "none"
 msgstr "aucune"
 
@@ -3957,8 +4106,8 @@ msgstr "Utiliser la config"
 
 #: templates/views/components/cards/file-renderers/xy-reader.htm:195
 #: templates/views/components/cards/file-renderers/xy-reader.htm:207
-#: templates/views/components/plugins/importer-configuration.htm:84
 #: templates/views/components/plugins/importer-configuration.htm:104
+#: templates/views/components/plugins/importer-configuration.htm:84
 msgid "Auto-detect"
 msgstr "Détection automatique"
 
@@ -4300,7 +4449,7 @@ msgid "Pipe"
 msgstr "Barre verticale"
 
 #: templates/views/components/plugins/importer-configuration.htm:107
-#: templates/views/pages/contact.htm:106
+#: templates/views/pages/contact.htm:106 templates/views/pages/contact.htm:93
 msgid "Other"
 msgstr "Autre"
 
@@ -4572,13 +4721,16 @@ msgid "View:"
 msgstr "Affichage :"
 
 #: templates/views/components/widgets/file-xy.htm:69
+#: templates/views/components/widgets/file-xy.htm:85
 msgid "Loading charts..."
 msgstr "Chargement des graphiques..."
 
 #: templates/views/components/widgets/file-xy.htm:77
+#: templates/views/components/widgets/file-xy.htm:93
 msgid "Unable to load chart data"
 msgstr "Impossible de charger les données du graphique"
 
+#: templates/views/components/widgets/file-xy.htm:101
 #: templates/views/components/widgets/file-xy.htm:85
 msgid "Select files to display"
 msgstr "Sélectionnez les fichiers à afficher"
@@ -4599,13 +4751,13 @@ msgstr "Créer un manifeste IIIF"
 msgid "Build a manifest from your own images"
 msgstr "Construire un manifeste à partir de vos propres images"
 
-#: templates/views/components/widgets/manifest-widget.htm:45
 #: templates/views/components/widgets/manifest-widget.htm:115
+#: templates/views/components/widgets/manifest-widget.htm:45
 msgid "Create a manifest"
 msgstr "Créer un manifeste"
 
-#: templates/views/components/widgets/manifest-widget.htm:50
 #: templates/views/components/widgets/manifest-widget.htm:159
+#: templates/views/components/widgets/manifest-widget.htm:50
 msgid "Accepted formats:"
 msgstr "Formats acceptés :"
 
@@ -4742,8 +4894,8 @@ msgstr "Composants à créer"
 msgid "linked"
 msgstr "liés"
 
-#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:38
 #: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:379
+#: templates/views/components/workflows/import-biblissima-workflow/biblissima-create-step.htm:38
 msgid "Resolving parent manuscripts…"
 msgstr "Résolution des manuscrits parents…"
 
@@ -5134,10 +5286,11 @@ msgstr "Voir l'étape 3 pour les détails."
 msgid "Open project"
 msgstr "Ouvrir le projet"
 
-#: templates/views/pages/analysis-explorer.htm:4
-#: templates/views/pages/analysis-explorer.htm:6
 #: templates/views/pages/analysis-explorer.htm:17
 #: templates/views/pages/analysis-explorer.htm:29
+#: templates/views/pages/analysis-explorer.htm:30
+#: templates/views/pages/analysis-explorer.htm:4
+#: templates/views/pages/analysis-explorer.htm:6
 msgid "Analysis explorer"
 msgstr "Explorateur d'analyses"
 
@@ -5152,6 +5305,7 @@ msgstr ""
 "été analysé."
 
 #: templates/views/pages/analysis-explorer.htm:33
+#: templates/views/pages/analysis-explorer.htm:34
 msgid ""
 "Search the analyses of written heritage by technique, material, project or "
 "year, then open a document to see where each analysis was made."
@@ -5161,19 +5315,24 @@ msgstr ""
 "faite."
 
 #: templates/views/pages/analysis-explorer.htm:41
+#: templates/views/pages/analysis-explorer.htm:48
 msgid "Loading the explorer…"
 msgstr "Chargement de l'explorateur…"
 
 #: templates/views/pages/analysis-explorer.htm:44
+#: templates/views/pages/analysis-explorer.htm:71
 msgid "The explorer could not start in this browser."
 msgstr "L'explorateur n'a pas pu démarrer dans ce navigateur."
 
 #: templates/views/pages/analysis-explorer.htm:45
 #: templates/views/pages/analysis-explorer.htm:50
+#: templates/views/pages/analysis-explorer.htm:72
+#: templates/views/pages/analysis-explorer.htm:77
 msgid "Use the advanced search instead"
 msgstr "Utiliser plutôt la recherche avancée"
 
 #: templates/views/pages/analysis-explorer.htm:49
+#: templates/views/pages/analysis-explorer.htm:76
 msgid "The explorer needs JavaScript."
 msgstr "L'explorateur a besoin de JavaScript."
 
@@ -5230,16 +5389,6 @@ msgstr ""
 #: templates/views/pages/graph-explorer.htm:197
 msgid "Models"
 msgstr "Modèles"
-
-#: templates/views/pages/conceptual-model.htm:65
-msgid ""
-"12 independent models linked by 70 typed CIDOC relationships — so a person "
-"recorded once as an analyst is the same record when they reappear as a "
-"volume's owner."
-msgstr ""
-"12 modèles indépendants reliés par 70 relations CIDOC typées — ainsi, une "
-"personne enregistrée une fois comme analyste constitue le même "
-"enregistrement lorsqu'elle réapparaît comme possesseur d'un volume."
 
 #: templates/views/pages/conceptual-model.htm:69
 msgid "Vocabularies"
@@ -5366,12 +5515,6 @@ msgstr "03 · Granularité"
 msgid "Granularity of the model"
 msgstr "Granularité du modèle"
 
-#: templates/views/pages/conceptual-model.htm:133
-msgid "of fields draw on a published thesaurus, not free text — 187 of 452"
-msgstr ""
-"des champs s'appuient sur un thésaurus publié plutôt que sur du texte libre "
-"— 187 sur 452"
-
 #: templates/views/pages/conceptual-model.htm:137
 msgid "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127"
 msgstr ""
@@ -5389,22 +5532,17 @@ msgstr "concepts issus de Getty AAT, Pactols, AGORHA et LOTERRE"
 msgid "Technical detail"
 msgstr "Détail technique"
 
-#: templates/views/pages/conceptual-model.htm:156
-msgid ""
-"169 field groups · 580 nodes (452 of them data) · 77 ontology properties · "
-"12 thesauri."
-msgstr ""
-"169 groupes de champs · 580 nœuds (dont 452 porteurs de données) · 77 "
-"propriétés d’ontologie · 12 thésaurus."
-
+#: templates/views/pages/conceptual-model.htm:162
 #: templates/views/pages/conceptual-model.htm:164
 msgid "04 · Thought schema"
 msgstr "04 · Schéma de pensée"
 
+#: templates/views/pages/conceptual-model.htm:163
 #: templates/views/pages/conceptual-model.htm:165
 msgid "Two timelines, one pivot"
 msgstr "Deux temporalités, un pivot"
 
+#: templates/views/pages/conceptual-model.htm:172
 #: templates/views/pages/conceptual-model.htm:174
 msgid ""
 "An event-based trajectory rather than a static object-attribute schema. Two "
@@ -5414,42 +5552,52 @@ msgstr ""
 "Deux temporalités s'écoulent à des rythmes différents et se rejoignent sur "
 "un même objet."
 
+#: templates/views/pages/conceptual-model.htm:177
 #: templates/views/pages/conceptual-model.htm:179
 msgid "The object's life"
 msgstr "La vie de l'objet"
 
+#: templates/views/pages/conceptual-model.htm:178
 #: templates/views/pages/conceptual-model.htm:180
 msgid "centuries"
 msgstr "siècles"
 
+#: templates/views/pages/conceptual-model.htm:181
 #: templates/views/pages/conceptual-model.htm:183
 msgid "Production"
 msgstr "Production"
 
+#: templates/views/pages/conceptual-model.htm:181
 #: templates/views/pages/conceptual-model.htm:183
 msgid "made: parchment, ink, binding"
 msgstr "fabrication : parchemin, encre, reliure"
 
+#: templates/views/pages/conceptual-model.htm:182
 #: templates/views/pages/conceptual-model.htm:184
 msgid "Modification"
 msgstr "Modification"
 
+#: templates/views/pages/conceptual-model.htm:182
 #: templates/views/pages/conceptual-model.htm:184
 msgid "deliberate: rebinding, restoration"
 msgstr "délibérée : reliure refaite, restauration"
 
+#: templates/views/pages/conceptual-model.htm:183
 #: templates/views/pages/conceptual-model.htm:185
 msgid "Alteration"
 msgstr "Altération"
 
+#: templates/views/pages/conceptual-model.htm:183
 #: templates/views/pages/conceptual-model.htm:185
 msgid "undergone: corrosion, fading, damp"
 msgstr "subie : corrosion, décoloration, humidité"
 
+#: templates/views/pages/conceptual-model.htm:188
 #: templates/views/pages/conceptual-model.htm:190
 msgid "Pivot"
 msgstr "Pivot"
 
+#: templates/views/pages/conceptual-model.htm:190
 #: templates/views/pages/conceptual-model.htm:192
 msgid ""
 "The material component is what both timelines describe: the thing that was "
@@ -5458,42 +5606,52 @@ msgstr ""
 "Le composant matériel est ce que décrivent les deux temporalités : ce qui a "
 "été fabriqué puis altéré, et ce qui a été échantillonné puis mesuré."
 
+#: templates/views/pages/conceptual-model.htm:195
 #: templates/views/pages/conceptual-model.htm:197
 msgid "The research act"
 msgstr "L'acte de recherche"
 
+#: templates/views/pages/conceptual-model.htm:196
 #: templates/views/pages/conceptual-model.htm:198
 msgid "days — present day"
 msgstr "jours — aujourd'hui"
 
+#: templates/views/pages/conceptual-model.htm:199
 #: templates/views/pages/conceptual-model.htm:201
 msgid "Sampling"
 msgstr "Échantillonnage"
 
+#: templates/views/pages/conceptual-model.htm:199
 #: templates/views/pages/conceptual-model.htm:201
 msgid "what was examined, and where on the object"
 msgstr "ce qui a été examiné, et à quel endroit de l'objet"
 
+#: templates/views/pages/conceptual-model.htm:200
 #: templates/views/pages/conceptual-model.htm:202
 msgid "Analysis"
 msgstr "Analyse"
 
+#: templates/views/pages/conceptual-model.htm:200
 #: templates/views/pages/conceptual-model.htm:202
 msgid "the measurement: instrument, operator, date"
 msgstr "la mesure : instrument, opérateur, date"
 
+#: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
 msgid "Characterization"
 msgstr "Caractérisation"
 
+#: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
 msgid "the interpretation — stored apart from the measurement"
 msgstr "l'interprétation — enregistrée à part de la mesure"
 
+#: templates/views/pages/conceptual-model.htm:210
 #: templates/views/pages/conceptual-model.htm:212
 msgid "05 · Vocabularies"
 msgstr "05 · Vocabulaires"
 
+#: templates/views/pages/conceptual-model.htm:211
 #: templates/views/pages/conceptual-model.htm:213
 msgid "Thesauri mobilised"
 msgstr "Thésaurus mobilisés"
@@ -5580,19 +5738,19 @@ msgstr "le projet ou les données que vous souhaitez décrire"
 msgid "optionally, your contact at the CRC"
 msgstr "facultatif : votre contact au CRC"
 
-#: templates/views/pages/contact.htm:86
+#: templates/views/pages/contact.htm:74 templates/views/pages/contact.htm:86
 msgid "Your name"
 msgstr "Votre nom"
 
-#: templates/views/pages/contact.htm:93
+#: templates/views/pages/contact.htm:81 templates/views/pages/contact.htm:93
 msgid "Your email"
 msgstr "Votre e-mail"
 
-#: templates/views/pages/contact.htm:102
+#: templates/views/pages/contact.htm:102 templates/views/pages/contact.htm:90
 msgid "Submit a project"
 msgstr "Soumettre un projet"
 
-#: templates/views/pages/contact.htm:103
+#: templates/views/pages/contact.htm:103 templates/views/pages/contact.htm:91
 msgid "Request an account / access"
 msgstr "Demander un compte / un accès"
 
@@ -5600,33 +5758,33 @@ msgstr "Demander un compte / un accès"
 msgid "Reactivate my account"
 msgstr "Réactiver mon compte"
 
-#: templates/views/pages/contact.htm:126
+#: templates/views/pages/contact.htm:113 templates/views/pages/contact.htm:126
 msgid "Open my email app"
 msgstr "Ouvrir mon application e-mail"
 
-#: templates/views/pages/contact.htm:129
+#: templates/views/pages/contact.htm:116 templates/views/pages/contact.htm:129
 msgid "A contact address is not configured yet. Please check back soon."
 msgstr ""
 "Aucune adresse de contact n'est configurée pour le moment. Merci de revenir "
 "bientôt."
 
-#: templates/views/pages/contact.htm:140
+#: templates/views/pages/contact.htm:127 templates/views/pages/contact.htm:140
 msgid "Or write to us directly:"
 msgstr "Ou écrivez-nous directement :"
 
-#: templates/views/pages/contact.htm:144
+#: templates/views/pages/contact.htm:131 templates/views/pages/contact.htm:144
 msgid "Copy address"
 msgstr "Copier l'adresse"
 
-#: templates/views/pages/contact.htm:155
+#: templates/views/pages/contact.htm:142 templates/views/pages/contact.htm:155
 msgid "Elsewhere"
 msgstr "Ailleurs"
 
-#: templates/views/pages/contact.htm:157
+#: templates/views/pages/contact.htm:144 templates/views/pages/contact.htm:157
 msgid "Who we are, how to cite, funding and licence"
 msgstr "Qui nous sommes, comment citer, financement et licence"
 
-#: templates/views/pages/contact.htm:158
+#: templates/views/pages/contact.htm:145 templates/views/pages/contact.htm:158
 msgid "The conceptual model"
 msgstr "Le modèle conceptuel"
 
@@ -5643,17 +5801,6 @@ msgstr ""
 #: templates/views/pages/graph-explorer.htm:24
 msgid "The model as a living graph"
 msgstr "Le modèle comme un graphe vivant"
-
-#: templates/views/pages/graph-explorer.htm:35
-#, python-format
-msgid ""
-"Every field in ManuSpectrum and every link between models: 452 fields across"
-" 12 models, 41%% of them bound to a published thesaurus rather than free "
-"text. Click any model to read its schema."
-msgstr ""
-"Chaque champ de ManuSpectrum et chaque lien entre modèles : 452 champs "
-"répartis sur 12 modèles, dont 41%% adossés à un thésaurus publié plutôt qu'à"
-" du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
 #: templates/views/pages/graph-explorer.htm:53
 msgid "Explorer"
@@ -5954,8 +6101,8 @@ msgid ""
 msgstr ""
 "Le fond de carte est fourni par OpenFreeMap à partir de tuiles vectorielles "
 "OpenMapTiles et des données des contributeurs d'OpenStreetMap. Il est "
-"dessiné avec le style Bright d'OpenFreeMap, d'après OSM Bright d'OpenMapTiles "
-"(CC BY 4.0, dérivé de Mapbox Open Styles)."
+"dessiné avec le style Bright d'OpenFreeMap, d'après OSM Bright "
+"d'OpenMapTiles (CC BY 4.0, dérivé de Mapbox Open Styles)."
 
 #: templates/views/pages/privacy.htm:5 templates/views/pages/privacy.htm:6
 msgid ""
@@ -6485,15 +6632,15 @@ msgstr ""
 "À propos du projet ManuSpectrum et de l'équipe qui le porte, au sein du "
 "Cluster 2 de Biblissima+."
 
-#: templates/views/pages/team.htm:18 templates/views/pages/team.htm:118
+#: templates/views/pages/team.htm:118 templates/views/pages/team.htm:18
 msgid "Maîtresse de conférences, physical chemistry"
 msgstr "Maîtresse de conférences, chimie physique"
 
-#: templates/views/pages/team.htm:22 templates/views/pages/team.htm:131
+#: templates/views/pages/team.htm:131 templates/views/pages/team.htm:22
 msgid "Research engineer, head of the Images service"
 msgstr "Ingénieur de recherche, responsable du service Images"
 
-#: templates/views/pages/team.htm:26 templates/views/pages/team.htm:144
+#: templates/views/pages/team.htm:144 templates/views/pages/team.htm:26
 msgid "Engineer / web developer"
 msgstr "Ingénieur / développeur web"
 
@@ -6542,7 +6689,7 @@ msgstr ""
 msgid "At a glance"
 msgstr "En bref"
 
-#: templates/views/pages/team.htm:77 templates/views/pages/team.htm:170
+#: templates/views/pages/team.htm:170 templates/views/pages/team.htm:77
 msgid "Funding"
 msgstr "Financement"
 
@@ -6933,28 +7080,28 @@ msgstr "Questions sur ces conditions ou sur vos données :"
 msgid "contact the team"
 msgstr "contactez l'équipe"
 
-#: views/biblissima_proxy.py:628
+#: views/biblissima_proxy.py:624 views/biblissima_proxy.py:628
 msgid ""
 "Too many Biblissima requests are in progress. Please try again in a moment."
 msgstr ""
 "Trop de requêtes Biblissima sont en cours. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:641
+#: views/biblissima_proxy.py:637 views/biblissima_proxy.py:641
 msgid ""
 "The Biblissima portal did not respond in time. Please try again in a moment."
 msgstr ""
 "Le portail Biblissima n'a pas répondu à temps. Veuillez réessayer dans un "
 "instant."
 
-#: views/biblissima_proxy.py:652
+#: views/biblissima_proxy.py:648 views/biblissima_proxy.py:652
 msgid ""
 "Unable to reach the Biblissima portal. Check your connection and try again."
 msgstr ""
 "Impossible de joindre le portail Biblissima. Vérifiez votre connexion et "
 "réessayez."
 
-#: views/biblissima_proxy.py:665
+#: views/biblissima_proxy.py:661 views/biblissima_proxy.py:665
 #, python-format
 msgid ""
 "The Biblissima portal returned an error (%(status)s). Please try again in a "
@@ -6963,68 +7110,69 @@ msgstr ""
 "Le portail Biblissima a renvoyé une erreur (%(status)s). Veuillez réessayer "
 "dans un instant."
 
-#: views/biblissima_proxy.py:677 views/biblissima_proxy.py:686
+#: views/biblissima_proxy.py:673 views/biblissima_proxy.py:677
+#: views/biblissima_proxy.py:682 views/biblissima_proxy.py:686
 msgid "Invalid response from the Biblissima portal."
 msgstr "Réponse invalide du portail Biblissima."
 
-#: views/biblissima_proxy.py:694
+#: views/biblissima_proxy.py:690 views/biblissima_proxy.py:694
 msgid "Unknown error while querying Biblissima."
 msgstr "Erreur inconnue lors de la requête Biblissima."
 
-#: views/biblissima_proxy.py:2446
+#: views/biblissima_proxy.py:2442 views/biblissima_proxy.py:2446
 #, python-format
 msgid "Time limit of %(seconds)s s for this item exceeded."
 msgstr "Délai de %(seconds)s s dépassé pour cet élément."
 
-#: views/biblissima_proxy.py:2494
+#: views/biblissima_proxy.py:2490 views/biblissima_proxy.py:2494
 #, python-format
 msgid "Select at most %(max)s descriptors."
 msgstr "Sélectionnez au plus %(max)s descripteurs."
 
-#: views/biblissima_proxy.py:2503
+#: views/biblissima_proxy.py:2499 views/biblissima_proxy.py:2503
 msgid "The descriptor list is malformed."
 msgstr "La liste de descripteurs est mal formée."
 
-#: views/biblissima_proxy.py:3063
+#: views/biblissima_proxy.py:3059 views/biblissima_proxy.py:3063
 msgid "The manuscript identifier is malformed."
 msgstr "L'identifiant du manuscrit est mal formé."
 
-#: views/explorer/citations.py:224
+#: views/explorer/citations.py:224 views/explorer/citations.py:227
 #, python-format
 msgid "Analyses: %(parts)s"
 msgstr "Analyses : %(parts)s"
 
-#: views/explorer/citations.py:228
+#: views/explorer/citations.py:228 views/explorer/citations.py:231
 #, python-format
 msgid "%(count)d analysis"
 msgid_plural "%(count)d analyses"
 msgstr[0] "%(count)d analyse"
 msgstr[1] "%(count)d analyses"
 
-#: views/explorer/citations.py:259
+#: views/explorer/citations.py:259 views/explorer/citations.py:262
 #, python-format
 msgid "Project: %(names)s"
 msgid_plural "Projects: %(names)s"
 msgstr[0] "Projet : %(names)s"
 msgstr[1] "Projets : %(names)s"
 
-#: views/explorer/citations.py:264
+#: views/explorer/citations.py:264 views/explorer/citations.py:267
 #, python-format
 msgid "Licence: %(names)s"
 msgid_plural "Licences: %(names)s"
 msgstr[0] "Licence : %(names)s"
 msgstr[1] "Licences : %(names)s"
 
-#: views/explorer/citations.py:335
+#: views/explorer/citations.py:335 views/explorer/citations.py:338
 msgid "[Dataset]"
 msgstr "[Jeu de données]"
 
-#: views/explorer/citations.py:347
+#: views/explorer/citations.py:347 views/explorer/citations.py:350
 #, python-format
 msgid "Accessed %(date)s."
 msgstr "Consulté le %(date)s."
 
-#: views/explorer/citations.py:429
+#: views/explorer/citations.py:429 views/explorer/citations.py:432
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
@@ -7033,7 +7181,7 @@ msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
 "%(datasets)s, sous les licences indiquées pour chaque fichier."
 
-#: views/explorer/citations.py:434
+#: views/explorer/citations.py:434 views/explorer/citations.py:437
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s) and in %(datasets)s, "
@@ -7042,7 +7190,7 @@ msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
 "%(datasets)s, sous licence %(licence)s."
 
-#: views/explorer/citations.py:439
+#: views/explorer/citations.py:439 views/explorer/citations.py:442
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s) and in %(datasets)s."
@@ -7050,7 +7198,7 @@ msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s) et dans "
 "%(datasets)s."
 
-#: views/explorer/citations.py:443
+#: views/explorer/citations.py:443 views/explorer/citations.py:446
 #, python-format
 msgid ""
 "The data are available in %(site)s (%(permalink)s), under the licences given"
@@ -7059,34 +7207,34 @@ msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s), sous les "
 "licences indiquées pour chaque fichier."
 
-#: views/explorer/citations.py:448
+#: views/explorer/citations.py:448 views/explorer/citations.py:451
 #, python-format
 msgid "The data are available in %(site)s (%(permalink)s), under %(licence)s."
 msgstr ""
 "Les données sont disponibles dans %(site)s (%(permalink)s), sous licence "
 "%(licence)s."
 
-#: views/explorer/citations.py:451
+#: views/explorer/citations.py:451 views/explorer/citations.py:454
 #, python-format
 msgid "The data are available in %(site)s (%(permalink)s)."
 msgstr "Les données sont disponibles dans %(site)s (%(permalink)s)."
 
-#: views/explorer/export.py:378
+#: views/explorer/export.py:378 views/explorer/export.py:379
 #, python-format
 msgid "Selection of %(count)d item"
 msgid_plural "Selection of %(count)d items"
 msgstr[0] "Sélection de %(count)d élément"
 msgstr[1] "Sélection de %(count)d éléments"
 
-#: views/explorer/export.py:510
+#: views/explorer/export.py:510 views/explorer/export.py:511
 msgid "Each file carries its own licence, given with the file."
 msgstr "Chaque fichier porte sa propre licence, indiquée avec le fichier."
 
-#: views/explorer/export.py:514
+#: views/explorer/export.py:514 views/explorer/export.py:515
 msgid "Licence of the files of this package that name it."
 msgstr "Licence des fichiers de ce paquet qui la mentionnent."
 
-#: views/explorer/export.py:797
+#: views/explorer/export.py:797 views/explorer/export.py:798
 #, python-format
 msgid ""
 "The IIIF manifest of this scope is too large to be included (more than "
@@ -7095,7 +7243,7 @@ msgstr ""
 "Le manifeste IIIF de cette portée est trop volumineux pour être inclus (plus"
 " de %(count)d canvases) : ouvrez-le par document."
 
-#: views/explorer/export.py:807
+#: views/explorer/export.py:807 views/explorer/export.py:808
 msgid ""
 "Chemical imaging is given as IIIF manifests (imaging-<n>.json); their images"
 " are served by IIIF image servers and are not in the package."
@@ -7104,7 +7252,7 @@ msgstr ""
 "(imaging-<n>.json) ; ses images sont servies par des serveurs d'images IIIF "
 "et ne sont pas dans le paquet."
 
-#: views/explorer/export.py:814
+#: views/explorer/export.py:814 views/explorer/export.py:815
 #, python-format
 msgid ""
 "Not included: the imaging manifest %(url)s of %(analysis)s could not be "
@@ -7148,7 +7296,7 @@ msgstr "fichier brut %(url)s"
 msgid "%(site)s: spectra of a Selection"
 msgstr "%(site)s : spectres d'une Sélection"
 
-#: views/explorer/series.py:123
+#: views/explorer/events_export.py:171 views/explorer/series.py:123
 #, python-format
 msgid "Generated on %(date)s"
 msgstr "Produit le %(date)s"
@@ -7167,7 +7315,7 @@ msgstr ""
 msgid "not in the CSV: %(file)s; file: %(url)s"
 msgstr "absent du CSV : %(file)s ; fichier : %(url)s"
 
-#: views/explorer/synthesis.py:85
+#: views/explorer/synthesis.py:85 views/explorer/synthesis.py:86
 #, python-format
 msgid "%(label)s · view %(number)s"
 msgstr "%(label)s · vue %(number)s"
@@ -7377,13 +7525,12 @@ msgstr "Cette page est périmée"
 
 #: templates/errors/csrf.htm:13
 msgid ""
-"Your session changed since this page was opened, for example because "
-"you signed in or out in another tab. Go back, reload the page and try "
-"again."
+"Your session changed since this page was opened, for example because you "
+"signed in or out in another tab. Go back, reload the page and try again."
 msgstr ""
-"Votre session a changé depuis l'ouverture de cette page, par exemple "
-"parce que vous vous êtes connecté ou déconnecté dans un autre onglet. "
-"Revenez en arrière, rechargez la page et réessayez."
+"Votre session a changé depuis l'ouverture de cette page, par exemple parce "
+"que vous vous êtes connecté ou déconnecté dans un autre onglet. Revenez en "
+"arrière, rechargez la page et réessayez."
 
 #: admin.py
 msgid "Account"
@@ -7448,8 +7595,7 @@ msgstr "Ne peut pas être invité : c'est le compte système des visiteurs."
 #: admin.py
 msgid "Cannot be invited: the account is inactive or has no e-mail address."
 msgstr ""
-"Ne peut pas être invité : le compte est inactif ou n'a pas d'adresse "
-"e-mail."
+"Ne peut pas être invité : le compte est inactif ou n'a pas d'adresse e-mail."
 
 #: admin.py
 msgid "Has a password."
@@ -7462,8 +7608,8 @@ msgstr "Envoyer l'invitation maintenant"
 #: admin.py
 msgid "The person receives a link to accept the terms and set a password."
 msgstr ""
-"La personne reçoit un lien pour accepter les conditions et choisir un "
-"mot de passe."
+"La personne reçoit un lien pour accepter les conditions et choisir un mot de"
+" passe."
 
 #: admin.py
 msgid "A user with that username already exists."
@@ -7481,345 +7627,161 @@ msgstr "acceptation des conditions"
 msgid "terms acceptances"
 msgstr "acceptations des conditions"
 
-#~ msgid "met"
-#~ msgstr "respectée"
+#: templates/explorer/export_readme.md:23 views/explorer/events_export.py:174
+msgid "A filter term also keeps its narrower terms."
+msgstr "Un terme de filtre retient aussi ses termes plus précis."
 
-#~ msgid "Why this step"
-#~ msgstr "Pourquoi cette étape"
-
-#~ msgid "Document not found? Import it from Biblissima"
-#~ msgstr "Document introuvable ? Importez-le depuis Biblissima"
-
-#~ msgid "One letter"
-#~ msgstr "Une lettre"
-
-#~ msgid "Deleted records:"
-#~ msgstr "Fiches supprimées :"
-
-#~ msgid "embargo"
-#~ msgstr "embargo"
-
-#~ msgid "embargoes"
-#~ msgstr "embargos"
-
-#~ msgid "embargo event"
-#~ msgstr "événement d'embargo"
-
-#~ msgid "embargo events"
-#~ msgstr "événements d'embargo"
-
-#~ msgid "Record"
-#~ msgstr "Fiche"
-
-#~ msgid ""
-#~ "A description kept on the platform: a document, an analysis, a material, a "
-#~ "characterization, and the files attached to it."
-#~ msgstr ""
-#~ "Une description conservée sur la plateforme : un document, une analyse, un "
-#~ "matériau, une caractérisation, et les fichiers qui s'y rattachent."
-
-#~ msgid ""
-#~ "A guided, multi-step entry (for example an import) that creates records as "
-#~ "you go."
-#~ msgstr ""
-#~ "Une saisie guidée en plusieurs étapes (par exemple un import) qui crée des "
-#~ "fiches au fil de l'eau."
-
-#~ msgid "Open the workflow again before that date to keep it."
-#~ msgstr "Rouvrez le workflow avant cette date pour le conserver."
-
-#~ msgid "Kept as long as the record exists."
-#~ msgstr "Conservé tant que la fiche existe."
-
-#~ msgid ""
-#~ "Kept while the contributor works on the platform. An account is deactivated,"
-#~ " never deleted, so that the history of the data keeps its author."
-#~ msgstr ""
-#~ "Conservé tant que le contributeur travaille sur la plateforme. Un compte est"
-#~ " désactivé, jamais supprimé, afin que l'historique des données garde son "
-#~ "auteur."
-
-#, python-format
-#~ msgid ""
-#~ "%(count)s accounts have not signed in for %(months)s months (or never signed"
-#~ " in since their creation). Nothing was changed: deactivating an account is a"
-#~ " decision of the administrators."
-#~ msgstr ""
-#~ "%(count)s comptes ne se sont pas connectés depuis %(months)s mois (ou jamais"
-#~ " depuis leur création). Rien n'a été modifié : désactiver un compte est une "
-#~ "décision des administrateurs."
-
-#~ msgid "Analysis point"
-#~ msgstr "Point d'analyse"
-
-#~ msgid ""
-#~ "What an axis measures, for instance <code>wavelength</code>, "
-#~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
-#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</code>, "
-#~ "<code>count</code>. Absent when unknown."
-#~ msgstr ""
-#~ "Ce que mesure un axe, par exemple <code>wavelength</code>, "
-#~ "<code>wavenumber</code>, <code>energy</code>, <code>channel</code>, "
-#~ "<code>reflectance</code>, <code>absorbance</code>, <code>intensity</code>, "
-#~ "<code>count</code>. Absente quand elle est inconnue."
-
+#: templates/includes/ms_i18n_contact.htm:17
 #, python-brace-format
-#~ msgid ""
-#~ "The UCUM code of the unit: <code>nm</code>, <code>cm-1</code>, "
-#~ "<code>keV</code>, <code>deg</code>, <code>1</code> (a ratio or an index), "
-#~ "<code>{counts}</code>, <code>[arb'U]</code> (arbitrary units)."
-#~ msgstr ""
-#~ "Le code UCUM de l'unité : <code>nm</code>, <code>cm-1</code>, "
-#~ "<code>keV</code>, <code>deg</code>, <code>1</code> (un rapport ou un "
-#~ "indice), <code>{counts}</code>, <code>[arb'U]</code> (unités arbitraires)."
+msgid "{n} character left"
+msgstr "{n} caractère restant"
 
-#~ msgid "Wavenumber (cm⁻¹)"
-#~ msgstr "Nombre d'onde (cm⁻¹)"
+#: templates/includes/ms_i18n_graph_explorer.htm:46
+#, python-brace-format
+msgid "{n} record published"
+msgstr "{n} enregistrement publié"
 
-#~ msgid "Absorbance"
-#~ msgstr "Absorbance"
+#: templates/includes/ms_i18n_graph_explorer.htm:47
+#, python-brace-format
+msgid "{n} model defined and open for deposit"
+msgstr "{n} modèle défini et ouvert au dépôt"
 
-#~ msgid "Intensity (a.u.)"
-#~ msgstr "Intensité (u.a.)"
+#: templates/views/components/cards/file-renderers/afs-reader.htm:13
+#: templates/views/components/widgets/file-xy.htm:68
+msgid "Y axis scale"
+msgstr "Échelle de l'axe Y"
 
-#~ msgid "Intensity (counts)"
-#~ msgstr "Intensité (coups)"
+#: templates/views/components/cards/file-renderers/afs-reader.htm:17
+#: templates/views/components/widgets/file-xy.htm:72
+msgid "Lin"
+msgstr "Lin"
 
-#~ msgid "Raman shift (cm⁻¹)"
-#~ msgstr "Déplacement Raman (cm⁻¹)"
+#: templates/views/components/cards/file-renderers/afs-reader.htm:22
+#: templates/views/components/widgets/file-xy.htm:77
+msgid "Log"
+msgstr "Log"
 
-#~ msgid "m/z"
-#~ msgstr "m/z"
+#: templates/views/pages/conceptual-model.htm:65
+msgid ""
+"12 independent models linked by 73 typed CIDOC relationships — so a person "
+"recorded once as an analyst is the same record when they reappear as a "
+"volume's owner."
+msgstr ""
+"12 modèles indépendants reliés par 73 relations CIDOC typées — ainsi, une "
+"personne enregistrée une fois comme analyste constitue le même "
+"enregistrement lorsqu'elle réapparaît comme possesseur d'un volume."
 
-#~ msgid "2θ (°)"
-#~ msgstr "2θ (°)"
+#: templates/views/pages/conceptual-model.htm:133
+msgid "of fields draw on a published thesaurus, not free text — 193 of 465"
+msgstr ""
+"des champs s'appuient sur un thésaurus publié plutôt que sur du texte libre "
+"— 193 sur 465"
 
-#~ msgid "Instrument formats"
-#~ msgstr "Formats des instruments"
+#: templates/views/pages/conceptual-model.htm:154
+msgid ""
+"170 field groups · 600 nodes (465 of them data) · 80 ontology properties · "
+"38 thesauri."
+msgstr ""
+"170 groupes de champs · 600 nœuds (dont 465 porteurs de données) · 80 "
+"propriétés d’ontologie · 38 thésaurus."
 
-#~ msgid ""
-#~ "ELIO <code>.mca</code>: the energy axis in keV comes from the calibration "
-#~ "lines of the header (a least-squares line through two or more points); "
-#~ "without them, x is the channel index and its <code>quantity</code> is "
-#~ "<code>channel</code>."
-#~ msgstr ""
-#~ "ELIO <code>.mca</code> : l'axe d'énergie en keV vient des lignes de "
-#~ "calibration de l'en-tête (une droite des moindres carrés par deux points ou "
-#~ "plus) ; sans elles, x est l'indice du canal et sa grandeur "
-#~ "(<code>quantity</code>) est <code>channel</code>."
-
-#~ msgid ""
-#~ "ASD <code>.asd</code>: a raw spectrum saved with its white reference reads "
-#~ "as the reflectance target / reference, relative to that reference: no panel "
-#~ "calibration factor and no splice correction at the detector joins (about "
-#~ "1000 and 1800 nm), as ViewSpec Pro reads it by default."
-#~ msgstr ""
-#~ "ASD <code>.asd</code> : un spectre brut enregistré avec sa référence blanche"
-#~ " se lit comme la réflectance cible / référence, relative à cette référence :"
-#~ " sans facteur de calibration du panneau ni correction des raccords entre "
-#~ "détecteurs (vers 1000 et 1800 nm), comme ViewSpec Pro la lit par défaut."
-
-#~ msgid "Energy (keV)"
-#~ msgstr "Énergie (keV)"
-
-#~ msgid "Channel"
-#~ msgstr "Canal"
-
-#~ msgid "Wavelength (nm)"
-#~ msgstr "Longueur d'onde (nm)"
-
-#~ msgid "Reflectance (0-1)"
-#~ msgstr "Réflectance (0-1)"
-
-#~ msgid "XRF"
-#~ msgstr "XRF"
-
-#~ msgid "Raman"
-#~ msgstr "Raman"
-
+#: templates/views/pages/graph-explorer.htm:35
 #, python-format
-#~ msgid "Could not apply the XY configuration to tile %s"
-#~ msgstr "Impossible d'appliquer la configuration XY à la tuile %s"
+msgid ""
+"Every field in ManuSpectrum and every link between models: 465 fields across"
+" 12 models, 42%% of them bound to a published thesaurus rather than free "
+"text. Click any model to read its schema."
+msgstr ""
+"Chaque champ de ManuSpectrum et chaque lien entre modèles : 465 champs "
+"répartis sur 12 modèles, dont 42%% adossés à un thésaurus publié plutôt qu'à"
+" du texte libre. Cliquez sur un modèle pour consulter son schéma."
 
-#~ msgid ""
-#~ "Specify how to process the data files for viewing.  Any additional files "
-#~ "(such as images) will be automatically displayed if possible."
-#~ msgstr ""
-#~ "Spécifiez comment traiter les fichiers de données pour la visualisation. "
-#~ "Tout fichier supplémentaire (comme les images) sera automatiquement affiché "
-#~ "si possible."
+#: views/explorer/events_export.py:132
+#, python-format
+msgid "%(site)s, map and timeline of the analyses"
+msgstr "%(site)s, carte et chronologie des analyses"
 
-#~ msgid "Data Files"
-#~ msgstr "Fichiers de données"
+#: views/explorer/events_export.py:169
+#, python-format
+msgid "%(site)s: events of the map and timeline"
+msgstr "%(site)s : événements de la carte et de la chronologie"
 
-#~ msgid "Additional Files"
-#~ msgstr "Fichiers supplémentaires"
+#: views/explorer/events_export.py:172
+#, python-format
+msgid "Filters: %(filters)s"
+msgstr "Filtres : %(filters)s"
 
-#~ msgid "files"
-#~ msgstr "fichiers"
+#: views/explorer/events_export.py:178
+#, python-format
+msgid "Cite as: %(citation)s"
+msgstr "À citer : %(citation)s"
 
-#~ msgid "file"
-#~ msgstr "fichier"
+#: views/explorer/events_export.py:181
+msgid ""
+"Dates are intervals in years; approximate = dated « circa »; place_source: "
+"own = the record's own location, place = the linked place, parent = a "
+"broader place it belongs to."
+msgstr ""
+"Les dates sont des intervalles en années ; approximate = daté « vers » ; "
+"place_source : own = la localisation propre de la notice, place = le lieu "
+"lié, parent = un lieu plus large auquel il appartient."
 
-#~ msgid "Select All"
-#~ msgstr "Tout sélectionner"
+#: templates/views/pages/data.htm
+msgid "Reuse the data"
+msgstr "Réutiliser les données"
 
-#~ msgid "Deselect All"
-#~ msgstr "Tout désélectionner"
+#: templates/views/pages/data.htm
+msgid "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented."
+msgstr "L'Explorateur d'analyses repose sur des produits publics faits pour être téléchargés, cités et ouverts dans d'autres outils. Utilisez-les : ils sont stables et documentés."
 
-#~ msgid "Import Preview"
-#~ msgstr "Aperçu de l'importation"
+#: templates/views/pages/data.htm
+msgid "Data package"
+msgstr "Paquet de données"
 
-#~ msgid "Selected Files"
-#~ msgstr "Fichiers sélectionnés"
+#: templates/views/pages/data.htm
+msgid "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection."
+msgstr "un RO-Crate avec les séries, les métadonnées et les citations d'un projet, d'un document ou d'une sélection."
 
-#~ msgid "Select an importer configuration on the right to apply to all files"
-#~ msgstr ""
-#~ "Sélectionnez une configuration d'importation à droite pour l'appliquer à "
-#~ "tous les fichiers"
+#: templates/views/pages/data.htm
+msgid "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer."
+msgstr "le manifeste de l'Explorateur pour un périmètre, à ouvrir dans Mirador ou tout visualiseur IIIF."
 
-#~ msgid "Apply Importer to Selected Files"
-#~ msgstr "Appliquer l'importateur aux fichiers sélectionnés"
+#: templates/views/pages/data.htm
+msgid "Annotations and content states"
+msgstr "Annotations et états de contenu"
 
-#~ msgid "File Preview"
-#~ msgstr "Aperçu du fichier"
+#: templates/views/pages/data.htm
+msgid "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer."
+msgstr "collections d'annotations, caractérisations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
 
-#~ msgid "This file type cannot be previewed."
-#~ msgstr "Ce type de fichier ne peut pas être prévisualisé."
+#: templates/views/pages/data.htm
+msgid "Spectra"
+msgstr "Spectres"
 
-#~ msgid "These look like percentages, not the 0-1 ratio the axis names."
-#~ msgstr ""
-#~ "Ces valeurs ressemblent à des pourcentages, pas au rapport 0-1 annoncé par "
-#~ "l'axe."
+#: templates/views/pages/data.htm
+msgid "the spectra of a selection as one CSV, never decimated; the clean series of a single file is at /iiif/data/{file}/series.csv."
+msgstr "les spectres d'une sélection en un seul CSV, jamais décimés ; la série propre d'un fichier se trouve à /iiif/data/{file}/series.csv."
 
-#~ msgid "These values are too large to be an absorbance."
-#~ msgstr "Ces valeurs sont trop grandes pour une absorbance."
+#: templates/views/pages/data.htm
+msgid "Events"
+msgstr "Événements"
 
-#~ msgid ""
-#~ "These values look like percentages, but the axis names a ratio between 0 and"
-#~ " 1. Divide by 100 before upload, or the pseudo-absorbance and Kubelka-Munk "
-#~ "views will be wrong."
-#~ msgstr ""
-#~ "Ces valeurs ressemblent à des pourcentages, alors que l'axe annonce un "
-#~ "rapport entre 0 et 1. Divisez par 100 avant le téléversement, sinon les vues"
-#~ " pseudo-absorbance et Kubelka-Munk seront fausses."
+#: templates/views/pages/data.htm
+msgid "the dated and located events of the corpus as CSV or GeoJSON."
+msgstr "les événements datés et localisés du corpus en CSV ou GeoJSON."
 
-#~ msgid ""
-#~ "These values are too large to be an absorbance. The file probably holds "
-#~ "transmittance or raw counts, in which case every band on this chart is "
-#~ "inverted."
-#~ msgstr ""
-#~ "Ces valeurs sont trop grandes pour une absorbance. Le fichier contient "
-#~ "probablement de la transmittance ou des comptages bruts, auquel cas toutes "
-#~ "les bandes de ce graphique sont inversées."
+#: templates/views/pages/data.htm
+msgid "XY reading"
+msgstr "Lecture XY"
 
-#~ msgid ""
-#~ "The X axis will be evenly spaced between start and end values, based on the "
-#~ "number of data rows."
-#~ msgstr ""
-#~ "L'axe X sera uniformément réparti entre les valeurs de début et de fin, en "
-#~ "fonction du nombre de lignes de données."
+#: templates/views/pages/data.htm
+msgid "the JSON-LD context and the documentation of the reading of an XY series."
+msgstr "le contexte JSON-LD et la documentation de la lecture d'une série XY."
 
-#~ msgid "e.g. -3500"
-#~ msgstr "ex. -3500"
+#: templates/views/pages/data.htm
+msgid "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403."
+msgstr "Une API pour les machines, avec des jetons d'accès personnels en lecture seule (OAuth, MCP), est prévue. D'ici là, les adresses sous /{lang}/api/explorer/ (par exemple /en/api/explorer/search) et /api/spectrum-preview/ servent uniquement la page de l'Explorateur ; elles ne sont pas un contrat et répondent par un 403 aux autres requêtes."
 
-#~ msgid "e.g. 500"
-#~ msgstr "ex. 500"
-
-#~ msgid "Data Column Delimiter"
-#~ msgstr "Délimiteur de colonnes de données"
-
-#~ msgid "The data delimiter must be a valid regular expression"
-#~ msgstr "Le délimiteur de données doit être une expression régulière valide"
-
-#~ msgid "Define how the data are separated"
-#~ msgstr "Définissez comment les données sont séparées"
-
-#~ msgid "Whitespace"
-#~ msgstr "Espace"
-
-#~ msgid "Include Delimiter in Value"
-#~ msgstr "Inclure le délimiteur dans la valeur"
-
-#~ msgid "Spectral Range"
-#~ msgstr "Gamme spectrale"
-
-#~ msgid ""
-#~ "Limit the displayed X range. Leave empty to show the whole acquired range."
-#~ msgstr ""
-#~ "Limiter la gamme X affichée. Laisser vide pour montrer toute la gamme "
-#~ "acquise."
-
-#~ msgid "Min X"
-#~ msgstr "X min"
-
-#~ msgid "Max X"
-#~ msgstr "X max"
-
-#~ msgid ""
-#~ "Points outside this range are not plotted. A configuration is shared by "
-#~ "every file of its technique, and instruments do not all cover the same range"
-#~ " — a crop set here hides real signal from acquisitions that go further. The "
-#~ "range is stated under each chart."
-#~ msgstr ""
-#~ "Les points hors de cette gamme ne sont pas tracés. Une configuration est "
-#~ "partagée par tous les fichiers de sa technique, et les instruments ne "
-#~ "couvrent pas tous la même gamme — un cadrage défini ici masque du signal "
-#~ "réel sur les acquisitions qui vont plus loin. La gamme est indiquée sous "
-#~ "chaque graphique."
-
-#~ msgid "e.g. 400"
-#~ msgstr "ex. 400"
-
-#~ msgid "e.g. 4000"
-#~ msgstr "ex. 4000"
-
-#~ msgid "Multiple Y Columns"
-#~ msgstr "Colonnes Y multiples"
-
-#~ msgid ""
-#~ "If your file has multiple Y columns, they are displayed as separate series. "
-#~ "Use “mean” to average them into a single series instead."
-#~ msgstr ""
-#~ "Si votre fichier a plusieurs colonnes Y, elles sont affichées comme des "
-#~ "séries distinctes. Utilisez « mean » pour les moyenner en une seule série."
-
-#~ msgid "Move up"
-#~ msgstr "Monter"
-
-#~ msgid "Move down"
-#~ msgstr "Descendre"
-
-#~ msgid "Remove"
-#~ msgstr "Retirer"
-
-#~ msgid "e.g. 9"
-#~ msgstr "ex. 9"
-
-#~ msgid "e.g. 2"
-#~ msgstr "ex. 2"
-
-#~ msgid ""
-#~ "This transformation depends on parameters you choose. It is never applied "
-#~ "automatically by a technique preset."
-#~ msgstr ""
-#~ "Cette transformation dépend de paramètres que vous choisissez. Elle n'est "
-#~ "jamais appliquée automatiquement par un preset de technique."
-
-#~ msgid ""
-#~ "Reference normalisation needs a column tagged “White reference” under Column"
-#~ " Assignment. Until then this step does nothing and the raw series are "
-#~ "plotted."
-#~ msgstr ""
-#~ "La normalisation par référence exige une colonne marquée « Référence blanche"
-#~ " » dans l'affectation des colonnes. Sans cela, cette étape ne fait rien et "
-#~ "les séries brutes sont tracées."
-
-#~ msgid "Publication"
-#~ msgstr "Publication"
-
-#~ msgid "unpublished"
-#~ msgstr "non publiée"
-
-#~ msgid "Published"
-#~ msgstr "Publiée"
+#: templates/views/pages/data.htm
+msgid "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."
+msgstr "Les produits publics de l'Explorateur d'analyses, faits pour être téléchargés, cités et ouverts dans d'autres outils."

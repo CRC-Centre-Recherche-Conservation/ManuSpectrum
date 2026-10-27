@@ -4,6 +4,8 @@ import {
     onBeforeUnmount,
     onMounted,
     ref,
+    shallowRef,
+    useId,
     useTemplateRef,
     watch,
 } from "vue";
@@ -13,15 +15,30 @@ import "leaflet.markercluster";
 import { useGettext } from "vue3-gettext";
 import { stackSmallestOnTop } from "utils/leaflet-stack";
 
+import LayerControls from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue";
+
+import { adjustLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/adjust-layer.ts";
+import { anchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import {
     markedZones,
     shapeCentre,
     shapeFeature,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import {
+    layerSizeOf,
+    planCapture,
+    probeImage,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
+import {
+    boundsOfBox,
+    boxOfBounds,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import {
     fitPage,
     layPage,
+    pageBoundsOf,
+    servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     nextId,
@@ -37,8 +54,15 @@ import {
 import type {
     CharacterizationSummary,
     DocumentCanvas,
+    DocumentComponent,
     SampleSummary,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
+import type {
+    Box,
+    Frame,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
@@ -66,6 +90,10 @@ const PINNED_PANE = "folio-pinned";
 // Above Leaflet's marker pane (600), below its tooltips (650).
 const PINNED_PANE_Z_INDEX = "620";
 const MARKER_PANE = "markerPane";
+const CONTROLS_HOST_CLASS = "layer-controls-host";
+/** Pixels between the toolbars of layers laid at the same corner. */
+const CONTROLS_STACK_STEP = 44;
+const SAME_BOX = 0.01;
 
 const props = withDefaults(
     defineProps<{
@@ -80,17 +108,57 @@ const props = withDefaults(
         layers: LayerToggles;
         view: FolioView;
         samples: SampleSummary[];
+        /** The Components with their zones on this page: an outline each, opening its card. */
+        components?: DocumentComponent[];
         overlays?: FolioOverlay[];
         curtain?: string | null;
+        /** The key of the laid layer being adjusted, if any. */
+        adjusting?: string | null;
+        /** The key of the laid layer whose capture is being taken, if any. */
+        capturing?: string | null;
+        /** True while a turn is being checked with the image server. */
+        turning?: boolean;
         /** The line under the page: document, page, position. */
         caption?: string;
+        /** `soft` lightens the stage (`--stage-soft`), for the Corpus; the light table and Compare keep `dark`. */
+        stage?: "dark" | "soft";
     }>(),
-    { overlays: () => [], curtain: null, caption: "" },
+    {
+        components: () => [],
+        overlays: () => [],
+        curtain: null,
+        adjusting: null,
+        capturing: null,
+        turning: false,
+        caption: "",
+        stage: "dark",
+    },
 );
-const emit = defineEmits<{ select: [focus: Focus] }>();
+const emit = defineEmits<{
+    select: [focus: Focus];
+    "layer-adjust": [key: string, on: boolean];
+    "layer-turn": [key: string, by: 1 | -1];
+    "layer-opacity": [key: string, value: number];
+    "layer-curtain": [key: string, on: boolean];
+    "layer-capture": [key: string];
+    captured: [
+        key: string,
+        capture: {
+            url: string;
+            width: number;
+            height: number;
+            frame?: Frame;
+        },
+        origin: { analysis: string; canvas: string },
+    ];
+    "capture-failed": [key: string, reason: CaptureFailure];
+    "layer-reset": [key: string];
+    "layer-place": [key: string, box: Box];
+}>();
 defineExpose({ focusTarget, focusCurrent });
 
 const { $gettext, interpolate } = useGettext();
+const adjustHelpId = useId();
 const motion = usePreferredReducedMotion();
 const host = useTemplateRef<HTMLDivElement>("host");
 
@@ -98,6 +166,8 @@ const active = ref<string | null>(null);
 const pageFailed = ref(false);
 /** Keys of laid maps whose image did not load. */
 const failedOverlays = ref<ReadonlySet<string>>(new Set());
+/** The element each laid layer's toolbar is teleported into, by layer key. */
+const controlHosts = shallowRef<ReadonlyMap<string, HTMLElement>>(new Map());
 // Leaflet objects live outside Vue reactivity.
 let map: L.Map | null = null;
 let page: PageLayer | null = null;
@@ -108,6 +178,7 @@ const matchOf = new Map<L.Marker, boolean>();
 let frames: L.GeoJSON | null = null;
 let materials: L.GeoJSON | null = null;
 let sampleZones: L.GeoJSON | null = null;
+let componentZones: L.GeoJSON | null = null;
 let order: string[] = [];
 let openedGroup: Set<string> | null = null;
 // An imageless page is fitted to its markers once; later redraws keep the reader's view.
@@ -115,6 +186,28 @@ let fittedCanvas: string | null | undefined;
 const markers = new Map<string, L.Marker>();
 const targets = new Map<string, L.Marker>();
 let laid: LaidLayers | null = null;
+const anchors = new Map<string, AnchoredControl>();
+
+/** What the keys do on the adjusted image; `[` and `]` only when its layer can turn. */
+const adjustHelp = computed((): string =>
+    props.overlays.find((entry) => entry.key === props.adjusting)?.canTurn ===
+    false
+        ? $gettext("Arrows move, plus and minus scale, Escape stops.")
+        : $gettext(
+              "Arrows move, plus and minus scale, [ and ] turn, Escape stops.",
+          ),
+);
+
+/** The layer being adjusted (`adjustLayer`), the box the parent was last given, and the one on screen. */
+interface Adjustment {
+    key: string;
+    layer: L.ImageOverlay;
+    stop: () => void;
+    kept: Box;
+    shown: Box;
+    quiet: boolean;
+}
+let adjustment: Adjustment | null = null;
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 
@@ -129,6 +222,7 @@ watch(
         props.dimmedMaterials,
         props.view,
         props.samples,
+        props.components,
         props.lit,
     ],
     drawMarks,
@@ -141,6 +235,13 @@ watch(
     },
 );
 watch(() => [props.overlays, props.curtain], drawOverlays);
+watch(
+    () => props.adjusting,
+    () => {
+        syncAdjustment();
+        drawControls();
+    },
+);
 
 onMounted(() => {
     const surface = host.value?.querySelector<HTMLElement>(".surface");
@@ -173,8 +274,11 @@ useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 onBeforeUnmount(() => {
     page?.remove();
     page = null;
+    stopAdjusting(true);
     laid?.remove();
     laid = null;
+    for (const anchor of anchors.values()) anchor.remove();
+    anchors.clear();
     map?.remove();
     map = null;
 });
@@ -377,6 +481,52 @@ function drawPage(): void {
     });
 }
 
+/**
+ * Takes the folio region under a layer: `layer-capture` says it started, then
+ * `captured` once the image server answers the url, with the analysis and
+ * page it was taken for, else `capture-failed` with the reason.
+ */
+async function captureUnder(overlay: FolioOverlay): Promise<void> {
+    emit("layer-capture", overlay.key);
+    const origin = {
+        analysis: overlay.analysis,
+        canvas: props.canvas?.id ?? "",
+    };
+    const bounds = pageBoundsOf(page);
+    const served = servedSize(page);
+    const box = boxOfBounds(overlay.bounds);
+    const element = laid?.layerOf(overlay.key)?.getElement() ?? null;
+    const onPage = bounds && served ? { bounds, served } : null;
+    const service = props.canvas?.image.service ?? null;
+    const early = planCapture({
+        page: onPage,
+        service,
+        box,
+        quarter: overlay.quarter,
+        layerSize: { w: 0, h: 0 },
+    });
+    if ("refused" in early) {
+        emit("capture-failed", overlay.key, early.refused);
+        return;
+    }
+    const layerSize = (await layerSizeOf(
+        overlay.service ?? null,
+        element,
+        overlay.quarter,
+    )) ?? { w: 0, h: 0 };
+    const plan = planCapture({
+        page: onPage,
+        service,
+        box,
+        quarter: overlay.quarter,
+        layerSize,
+    });
+    if ("refused" in plan) emit("capture-failed", overlay.key, plan.refused);
+    else if (await probeImage(plan.url)) {
+        emit("captured", overlay.key, plan, origin);
+    } else emit("capture-failed", overlay.key, "server");
+}
+
 /** The targets drawn above the groups: the open analysis or sample, and the lit evidence. */
 function pinnedTargets(): Set<string> {
     const targets = new Set<string>(props.lit ?? []);
@@ -404,6 +554,45 @@ function repin(): void {
     }
 }
 
+/**
+ * A dashed outline per area zone of the components, under the markers; only
+ * while the zones layer is on, so a hidden outline is not a click target.
+ * The outline is a button of the SVG, named by its component.
+ */
+function drawComponentZones(): L.GeoJSON {
+    const features = props.layers.zones
+        ? props.components.flatMap((component) =>
+              component.zones.flatMap((zone) => {
+                  const feature =
+                      zone.shape.type !== "point"
+                          ? shapeFeature(zone.shape, { id: component.id })
+                          : null;
+                  return feature ? [feature] : [];
+              }),
+          )
+        : [];
+    const group = L.geoJSON(features, {
+        style: () => ({
+            className: "folio-component-zone",
+            dashArray: "2 4",
+            weight: 1.5,
+            fill: false,
+        }),
+        onEachFeature: (feature, layer) => {
+            const id = String(feature.properties.id);
+            const component = props.components.find((entry) => entry.id === id);
+            if (component) layer.bindTooltip(component.name.value);
+            layer.on("click", () => emit("select", { kind: "component", id }));
+            layer.on("add", () => {
+                (layer as L.Path)
+                    .getElement()
+                    ?.setAttribute("aria-hidden", "true");
+            });
+        },
+    });
+    return group;
+}
+
 function drawMarks(): void {
     if (!map) return;
     openedGroup = null;
@@ -413,7 +602,10 @@ function drawMarks(): void {
     frames?.remove();
     materials?.remove();
     sampleZones?.remove();
+    componentZones?.remove();
     markers.clear();
+
+    componentZones = drawComponentZones().addTo(map);
 
     cluster = L.markerClusterGroup({
         maxClusterRadius: CLUSTER_RADIUS,
@@ -564,6 +756,155 @@ function drawOverlays(): void {
         [...failedOverlays.value].filter((key) => wanted.has(key)),
     );
     laid.draw(props.overlays, props.curtain);
+    syncAdjustment();
+    drawControls();
+}
+
+function sameBox(a: Box, b: Box): boolean {
+    return (
+        Math.abs(a.x - b.x) < SAME_BOX &&
+        Math.abs(a.y - b.y) < SAME_BOX &&
+        Math.abs(a.w - b.w) < SAME_BOX &&
+        Math.abs(a.h - b.h) < SAME_BOX
+    );
+}
+
+/** How far down the toolbar of a layer sits under those of the layers laid before it. */
+function stackOffsetOf(key: string): number {
+    return (
+        Math.max(
+            props.overlays.findIndex((overlay) => overlay.key === key),
+            0,
+        ) * CONTROLS_STACK_STEP
+    );
+}
+
+/** Ends the adjustment; `quiet` drops a change not yet kept instead of handing it to the parent. */
+function stopAdjusting(quiet: boolean): void {
+    if (!adjustment) return;
+    const ending = adjustment;
+    adjustment = null;
+    ending.quiet = quiet;
+    ending.stop();
+}
+
+/**
+ * Keeps the adjustment on the layer `adjusting` names: starts it from the
+ * layer's box, ends it when the layer or the name goes, and starts it again
+ * when the parent gave the layer another box (a turn, a reset). A redraw
+ * leaves the box on screen where the reader put it.
+ */
+function syncAdjustment(): void {
+    const key = props.adjusting;
+    const layer = key ? laid?.layerOf(key) ?? null : null;
+    const overlay = props.overlays.find((entry) => entry.key === key);
+    if (!key || !layer || !overlay) {
+        stopAdjusting(false);
+        return;
+    }
+    const given = boxOfBounds(overlay.bounds);
+    if (adjustment?.key === key && adjustment.layer === layer) {
+        if (sameBox(given, adjustment.kept)) {
+            layer.setBounds(L.latLngBounds(boundsOfBox(adjustment.shown)));
+            return;
+        }
+        stopAdjusting(true);
+    } else {
+        stopAdjusting(false);
+    }
+    startAdjustment(key, layer, given, overlay.label);
+}
+
+function startAdjustment(
+    key: string,
+    layer: L.ImageOverlay,
+    given: Box,
+    name: string,
+): void {
+    if (!map) return;
+    const current: Adjustment = {
+        key,
+        layer,
+        kept: given,
+        shown: given,
+        quiet: false,
+        stop: () => undefined,
+    };
+    const turnable = props.overlays.find((entry) => entry.key === key)?.canTurn;
+    const control = adjustLayer(map, layer, given, {
+        label: interpolate($gettext("Adjusting %{label}"), { label: name }),
+        describedBy: adjustHelpId,
+        onChange(box) {
+            current.shown = box;
+            anchors.get(key)?.place(boundsOfBox(box), stackOffsetOf(key), true);
+        },
+        onDone(box) {
+            if (current.quiet) return;
+            current.kept = box;
+            emit("layer-place", key, box);
+        },
+        onTurn: turnable ? (by) => emit("layer-turn", key, by) : undefined,
+        onExit() {
+            adjustment = null;
+            emit("layer-adjust", key, false);
+            controlHosts.value
+                .get(key)
+                ?.querySelector<HTMLElement>("[data-action=adjust]")
+                ?.focus();
+        },
+    });
+    current.stop = control.stop;
+    adjustment = current;
+}
+
+/**
+ * One host element per laid layer, in the map's container and on the
+ * corner of the layer (`anchoredControl`), for its toolbar to be teleported
+ * into; the host of a layer that is gone is removed. While a layer is
+ * adjusted the hosts of the others are hidden and inert, so no toolbar covers
+ * the handles of the adjusted one.
+ */
+function drawControls(): void {
+    if (!map) return;
+    const wanted = new Set(props.overlays.map((overlay) => overlay.key));
+    const hosts = new Map(controlHosts.value);
+    for (const [key, anchor] of anchors) {
+        if (wanted.has(key)) continue;
+        anchor.remove();
+        anchors.delete(key);
+        hosts.delete(key);
+    }
+    for (const [index, overlay] of props.overlays.entries()) {
+        let anchor = anchors.get(overlay.key);
+        if (!anchor) {
+            const element = document.createElement("div");
+            element.className = CONTROLS_HOST_CLASS;
+            map.getContainer().append(element);
+            anchor = anchoredControl(map, element);
+            anchors.set(overlay.key, anchor);
+            hosts.set(overlay.key, element);
+        }
+        const element = hosts.get(overlay.key);
+        if (element) {
+            const aside =
+                props.adjusting !== null && props.adjusting !== overlay.key;
+            element.style.visibility = aside ? "hidden" : "";
+            element.toggleAttribute("inert", aside);
+        }
+        anchor.place(
+            adjustment?.key === overlay.key
+                ? boundsOfBox(adjustment.shown)
+                : overlay.bounds,
+            index * CONTROLS_STACK_STEP,
+            props.adjusting === overlay.key,
+        );
+    }
+    if (
+        hosts.size !== controlHosts.value.size ||
+        [...hosts.keys()].some((key) => !controlHosts.value.has(key))
+    ) {
+        controlHosts.value = hosts;
+    }
 }
 
 function markOverlayFailed(key: string): void {
@@ -764,12 +1105,19 @@ function wholePage(): void {
     <div
         ref="host"
         class="folio"
+        :class="{ soft: props.stage === 'soft' }"
         role="group"
         tabindex="-1"
         :aria-label="$gettext('Page and its analyses')"
         @keydown="onKeydown"
     >
         <div class="surface"></div>
+        <p
+            :id="adjustHelpId"
+            class="visually-hidden"
+        >
+            {{ adjustHelp }}
+        </p>
         <div class="controls">
             <button
                 type="button"
@@ -853,6 +1201,30 @@ function wholePage(): void {
                 <span>{{ $gettext("Retry") }}</span>
             </button>
         </p>
+        <template
+            v-for="overlay in props.overlays"
+            :key="overlay.key"
+        >
+            <Teleport
+                v-if="controlHosts.get(overlay.key)"
+                :to="controlHosts.get(overlay.key)!"
+            >
+                <LayerControls
+                    :overlay="overlay"
+                    :adjusting="props.adjusting === overlay.key"
+                    :under-curtain="props.curtain === overlay.key"
+                    :capturing="props.capturing === overlay.key"
+                    :can-capture="hasImage"
+                    :turning="props.turning"
+                    @adjust="emit('layer-adjust', overlay.key, $event)"
+                    @turn="emit('layer-turn', overlay.key, $event)"
+                    @opacity="emit('layer-opacity', overlay.key, $event)"
+                    @curtain="emit('layer-curtain', overlay.key, $event)"
+                    @capture="captureUnder(overlay)"
+                    @reset="emit('layer-reset', overlay.key)"
+                />
+            </Teleport>
+        </template>
         <p
             v-if="props.caption"
             class="caption"
@@ -871,6 +1243,19 @@ function wholePage(): void {
     background: var(--stage);
     border-radius: var(--explorer-radius, 0.625rem);
     overflow: hidden;
+}
+
+.folio.soft,
+.folio.soft .surface {
+    background: var(--stage-soft);
+}
+
+.folio.soft {
+    --stage: var(--stage-soft);
+}
+
+.folio.soft .caption {
+    background: color-mix(in srgb, var(--stage-soft) 85%, black);
 }
 
 .folio:focus-visible {
@@ -928,6 +1313,15 @@ function wholePage(): void {
 
 .folio .control:focus-visible {
     outline-color: var(--surface);
+}
+
+.folio .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .folio .caption {
@@ -1128,6 +1522,16 @@ function wholePage(): void {
     stroke: var(--ink);
 }
 
+.folio :deep(.folio-component-zone) {
+    stroke: var(--surface);
+    stroke-opacity: 0.6;
+    cursor: pointer;
+}
+
+.folio :deep(.folio-component-zone:hover) {
+    stroke-opacity: 1;
+}
+
 .folio :deep(.folio-cluster) {
     display: grid;
     place-items: center;
@@ -1214,6 +1618,34 @@ function wholePage(): void {
 
 .folio :deep(.folio-overlay) {
     image-rendering: pixelated;
+}
+
+.folio :deep(.folio-overlay.is-adjusting) {
+    cursor: move;
+    touch-action: none;
+}
+
+.folio :deep(.adjust-handle) {
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 0.125rem solid var(--blue-text);
+    border-radius: 0.25rem;
+    touch-action: none;
+}
+
+.folio :deep(.adjust-handle[data-corner="nw"]),
+.folio :deep(.adjust-handle[data-corner="se"]) {
+    cursor: nwse-resize;
+}
+
+.folio :deep(.adjust-handle[data-corner="ne"]),
+.folio :deep(.adjust-handle[data-corner="sw"]) {
+    cursor: nesw-resize;
+}
+
+.folio :deep(.folio-overlay.is-adjusting:focus-visible) {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

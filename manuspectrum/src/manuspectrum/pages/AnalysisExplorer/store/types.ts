@@ -1,4 +1,8 @@
-import type { EventType } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    EventType,
+    PeriodEvent,
+    PeriodMatch,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 // 'an:<analysisId>:-' | 'af:<analysisId>:<fileId>' | 'im:<analysisId>:<mapIndex>' | 'ch:<characterizationId>:-'
 export type ItemKey = string;
@@ -12,8 +16,8 @@ export type BasketKind =
     | "imaging"
     | "characterization";
 export type ListFilterKey =
+    | "place"
     | "partType"
-    | "partColour"
     | "technique"
     | "part"
     | "material"
@@ -22,9 +26,6 @@ export type ListFilterKey =
     | "layer"
     | "project"
     | "operator";
-
-/** The two colour facets the rail's Colour toggle switches between: seen on the part, identified by analysis. */
-export type ColourLevel = "partColour" | "colour";
 
 /** Results per page the search offers. */
 export type PageSize = 10 | 25 | 50;
@@ -36,7 +37,6 @@ export interface Filters {
     empty: boolean;
     size: PageSize;
     partType: string[];
-    partColour: string[];
     technique: string[];
     part: string[];
     material: string[];
@@ -46,10 +46,15 @@ export interface Filters {
     project: string[];
     operator: string[];
     year: number[];
-    // ignored by search: the Map & timeline view is not built yet
-    place: string | null;
-    // ignored by search: the Map & timeline view is not built yet
+    place: string[];
+    // whole years, both included; null = no period
     period: [number, number] | null;
+    // overlap the period, or lie entirely within it
+    periodMatch: PeriodMatch;
+    // the dated event the period bears on
+    periodEvent: PeriodEvent;
+    // with a period: also keep the rows without a date for the event
+    undated: boolean;
     // Map only; never filters Corpus
     eventType: EventType[];
 }
@@ -65,7 +70,7 @@ export interface DocumentState {
 export type FolioView = "analyses" | "characterizations" | "samples";
 
 export interface Focus {
-    kind: "analysis" | "characterization" | "file" | "sample";
+    kind: "analysis" | "characterization" | "component" | "file" | "sample";
     id: string;
 }
 
@@ -109,4 +114,14 @@ export interface BasketAddResult {
 export interface BasketLoadResult {
     kept: ItemKey[];
     truncated: number;
+}
+
+/** The last grouped change of the Selection, kept for the status line and its undo. */
+export interface BulkStatus {
+    kind: "added" | "removed" | "emptied";
+    keys: ItemKey[];
+    /** Slot labels (« A3 ») of the keys, in the order of `keys`. */
+    slots: string[];
+    /** Size of the Selection after the change. */
+    total: number;
 }

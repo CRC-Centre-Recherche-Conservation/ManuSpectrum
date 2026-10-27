@@ -35,6 +35,15 @@ describe("IconButton", () => {
         );
     });
 
+    it("draws the check icon", () => {
+        const wrapper = mountButton({ icon: "check" });
+        expect(
+            wrapper
+                .findAll("button svg path")
+                .map((path) => path.attributes("d")),
+        ).toEqual([...ICONS.check]);
+    });
+
     it("is named by its tooltip, and read once", () => {
         const wrapper = mountButton();
         const button = wrapper.find("button").element;

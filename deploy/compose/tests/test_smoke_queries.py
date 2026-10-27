@@ -93,9 +93,18 @@ class OptionalMetricsTests(unittest.TestCase):
     )
 
     def derived(self):
-        """Series of every labelled Counter/Histogram declared in metrics.py."""
+        """Series of every labelled Counter/Histogram of metrics.py named in
+        ``UNPRIMED_METRICS`` (the others are primed at 0 in each process)."""
+        tree = ast.parse(self.METRICS_PY.read_text(encoding="utf-8"))
+        unprimed = set()
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                getattr(target, "id", None) == "UNPRIMED_METRICS"
+                for target in node.targets
+            ):
+                unprimed = set(ast.literal_eval(node.value.args[0]))
         names = set()
-        for node in ast.walk(ast.parse(self.METRICS_PY.read_text(encoding="utf-8"))):
+        for node in ast.walk(tree):
             if not (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
@@ -109,17 +118,25 @@ class OptionalMetricsTests(unittest.TestCase):
             if labels is None or not labels.elts:
                 continue
             base = node.args[0].value
+            if base not in unprimed:
+                continue
             if node.func.id == "Counter":
                 names.add(base + "_total")
             else:
                 names.update({base + "_bucket", base + "_count", base + "_sum"})
         return names
 
-    def test_every_labelled_counter_and_histogram_is_optional(self):
+    def test_only_the_unprimed_labelled_metrics_are_optional(self):
         derived = self.derived()
-        self.assertIn("manuspectrum_explorer_rebuild_failures_total", derived)
+        self.assertIn("manuspectrum_celery_task_seconds_bucket", derived)
         self.assertEqual(smoke_queries.LABELLED_APP_METRICS, derived)
         self.assertLessEqual(derived, smoke_queries.OPTIONAL_METRICS)
+        for name in (
+            "manuspectrum_explorer_rebuild_failures_total",
+            "manuspectrum_account_mails_total",
+            "manuspectrum_celery_tasks_total",
+        ):
+            self.assertNotIn(name, smoke_queries.OPTIONAL_METRICS)
 
     def test_unlabelled_application_metrics_stay_strict(self):
         text = self.METRICS_PY.read_text(encoding="utf-8")
@@ -127,15 +144,19 @@ class OptionalMetricsTests(unittest.TestCase):
             self.assertIn(name[: -len("_total")], text)
             self.assertNotIn(name, smoke_queries.OPTIONAL_METRICS)
 
-    def test_the_event_series_a_fresh_stack_lacks_are_not_reported(self):
+    def test_only_unprimed_series_a_fresh_stack_lacks_are_not_reported(self):
         answer = rules_answer(
+            alert("rate(manuspectrum_celery_task_seconds_count[30m]) > 0"),
             alert("increase(manuspectrum_explorer_rebuild_failures_total[30m]) > 0"),
             alert('max(redis_key_size{key="celery"}) > 100'),
             alert("manuspectrum_unknown_total > 1"),
         )
         self.assertEqual(
             smoke_queries.missing_metrics(answer, {"data": ["up"]}),
-            ["manuspectrum_unknown_total"],
+            [
+                "manuspectrum_explorer_rebuild_failures_total",
+                "manuspectrum_unknown_total",
+            ],
         )
 
 

@@ -1,0 +1,286 @@
+name: stack-proof
+
+# The full proof of the production image on a runner: probe, the whole Compose
+# stack (smoke, observability, mails, down/up, Docker restart, static swap),
+# backup / loss / restore, and a Trivy report. Called by deploy-lint.yml on
+# pull requests (the image is built here, from the buildkit cache) and by
+# staging.yml on main (the image comes from its build job as a docker save
+# archive, so the proven image is the one that is published).
+# The caller grants contents: read and actions: read.
+on:
+  workflow_call:
+    inputs:
+      git-sha:
+        description: Commit the image must be labelled with (org.opencontainers.image.revision)
+        type: string
+        required: true
+      image-artifact:
+        description: Name of an artifact holding image.tar, tagged manuspectrum:ci; empty builds the image here
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  image:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+    env:
+      IMAGE: manuspectrum:ci
+      ENV_FILE: ${{ github.workspace }}/deploy/compose/.env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      # The toolchains the job never uses are removed only when the runner has
+      # less than MIN_FREE_GB available. What the job itself uses (image layers,
+      # service images, volumes, backups) is printed by its last step.
+      - name: Runner disk
+        env:
+          MIN_FREE_GB: "40"
+        run: |
+          df -h /
+          docker system df
+          avail_gb="$(df --output=avail -BG / | tail -n1 | tr -dc '0-9')"
+          if [ "$avail_gb" -lt "$MIN_FREE_GB" ]; then
+            echo "$avail_gb GB available, under $MIN_FREE_GB GB: removing the unused toolchains"
+            sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+            df -h /
+          fi
+
+      - name: Kernel setting for Elasticsearch
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      # Either the image of the caller's build job (a docker save archive), or
+      # built here from the buildkit cache of the pull request and its base.
+      - name: Load the image built by the caller
+        if: inputs.image-artifact != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.image-artifact }}
+          path: ${{ runner.temp }}/image
+
+      - name: Docker load
+        id: docker-load
+        if: inputs.image-artifact != ''
+        run: |
+          docker load --input "$RUNNER_TEMP/image/image.tar"
+          rm -rf "$RUNNER_TEMP/image"
+          docker image inspect "$IMAGE" >/dev/null
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: inputs.image-artifact == ''
+
+      - name: Build the image
+        id: build
+        if: inputs.image-artifact == ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE }}
+          build-args: GIT_SHA=${{ inputs.git-sha }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=image
+          # A failed cache export never fails the pull request: the export is not a test.
+          cache-to: type=gha,scope=image,mode=max,ignore-error=true
+
+      - name: Probe the image
+        env:
+          GIT_SHA: ${{ inputs.git-sha }}
+        run: bash deploy/docker/probe-image.sh "$IMAGE" "$GIT_SHA"
+
+      - name: Export the frontend build
+        run: |
+          out="$RUNNER_TEMP/frontend"
+          mkdir -p "$out/webpack" "$out/manuspectrum/media"
+          id="$(docker create "$IMAGE")"
+          docker cp "$id:/app/webpack/webpack-stats.json" "$out/webpack/"
+          docker cp "$id:/app/manuspectrum/media/build" "$out/manuspectrum/media/"
+          docker rm "$id" >/dev/null
+          du -sh "$out"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-build
+          path: ${{ runner.temp }}/frontend
+          retention-days: 5
+
+      - name: Prepare the stack environment
+        run: |
+          secrets="$RUNNER_TEMP/secrets"
+          media="$RUNNER_TEMP/media"
+          certs="$RUNNER_TEMP/certs"
+          install -d "$media/uploadedfiles" "$certs/acme-webroot" "$certs/live" "$RUNNER_TEMP/nginx-logs"
+          install -d -m 0700 "$RUNNER_TEMP/backups" "$RUNNER_TEMP/backups/latest" "$RUNNER_TEMP/backups/tmp" "$RUNNER_TEMP/restic"
+          install -d -m 0755 "$RUNNER_TEMP/metrics"
+          CA_DIR="$certs/ca" bash deploy/certs/make-local-ca.sh "$certs/live" manuspectrum.test
+          make -C deploy secrets SECRETS_DIR="$secrets"
+          sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
+              -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
+              -e "s#^APP_GID=.*#APP_GID=$(id -g)#" \
+              -e "s#^MEDIA_HOST_DIR=.*#MEDIA_HOST_DIR=$media#" \
+              -e "s#^SECRETS_DIR=.*#SECRETS_DIR=$secrets#" \
+              -e "s#^CERTS_DIR=.*#CERTS_DIR=$certs#" \
+              -e "s#^NGINX_LOG_HOST_DIR=.*#NGINX_LOG_HOST_DIR=$RUNNER_TEMP/nginx-logs#" \
+              -e "s#^BACKUP_DUMP_DIR=.*#BACKUP_DUMP_DIR=$RUNNER_TEMP/backups#" \
+              -e "s#^RESTIC_REPOSITORY_DIR=.*#RESTIC_REPOSITORY_DIR=$RUNNER_TEMP/restic#" \
+              -e "s#^METRICS_TEXTFILE_DIR=.*#METRICS_TEXTFILE_DIR=$RUNNER_TEMP/metrics#" \
+              -e "s#^LOCAL_CA_CERT=.*#LOCAL_CA_CERT=$certs/ca/ca.crt#" \
+              -e "s#^COMPOSE_PROFILES=.*#COMPOSE_PROFILES=observability,mailpit#" \
+              -e "s#^EMAIL_HOST=.*#EMAIL_HOST=mailpit#" \
+              -e "s#^EMAIL_PORT=.*#EMAIL_PORT=1025#" \
+              -e "s#^ALERT_EMAILS=.*#ALERT_EMAILS=alerts@manuspectrum.test#" \
+              -e "s#^ALERT_EMAIL_FROM=.*#ALERT_EMAIL_FROM=noreply@manuspectrum.test#" \
+              -e "s#^PKG_DIR=.*#PKG_DIR=$GITHUB_WORKSPACE/pkg#" \
+              deploy/compose/.env.example > "$ENV_FILE"
+
+      # The ms_monitor role and pg_stat_statements come before `up`: the
+      # postgres-exporter healthcheck fails until the role exists.
+      - name: First installation
+        run: make -C deploy volumes init monitoring-init up
+
+      - name: Check the stack
+        run: |
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh observability
+          deploy/compose/smoke.sh edge
+          deploy/compose/smoke.sh mark
+          deploy/compose/smoke.sh init-guard
+
+      # Mailpit (profile mailpit) stands in for the SMTP relay: the alert and
+      # report e-mails must reach it with their subject and category header.
+      - name: "Monitoring: targets, rules, dashboards and e-mails"
+        run: |
+          make -C deploy container-metrics disk-usage
+          deploy/compose/smoke.sh monitoring
+          make -C deploy alert-test
+          deploy/compose/smoke.sh mail alert
+          make -C deploy report-test
+          deploy/compose/smoke.sh mail report
+
+      - name: Readiness follows Elasticsearch
+        run: deploy/compose/smoke.sh readiness
+
+      - name: Data survives down and up
+        run: |
+          make -C deploy down up
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh survived
+
+      - name: Data survives a Docker restart (the host reboot path)
+        run: |
+          sudo systemctl restart docker
+          deploy/compose/smoke.sh wait
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh survived
+          make -C deploy container-metrics
+          deploy/compose/smoke.sh monitoring
+
+      - name: Static files follow the image
+        run: deploy/compose/smoke.sh static-swap
+
+      - name: External volumes survive down -v
+        run: |
+          docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
+            -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml down -v
+          for volume in ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms_prometheus_data; do
+            docker volume inspect "$volume" >/dev/null
+          done
+          make -C deploy up
+          deploy/compose/smoke.sh survived
+
+      # The dumps hold the runner's own accounts: the log collection below
+      # never copies the backup or repository directories.
+      - name: "Backups: back up, test, lose, restore"
+        run: |
+          make -C deploy backup-init backup TAG=nightly
+          make -C deploy restore-test
+          grep -q '^manuspectrum_backup_failed 0$' "$RUNNER_TEMP/metrics/manuspectrum_backup.prom"
+          grep -q '^manuspectrum_restore_test_failed 0$' "$RUNNER_TEMP/metrics/manuspectrum_restore_test.prom"
+          deploy/compose/smoke.sh lose
+          echo "Expected below: FAIL lines from smoke.sh survived, the markers are gone until the restore."
+          if deploy/compose/smoke.sh survived; then
+            echo "::error::the markers were not lost"
+            exit 1
+          fi
+          make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes
+          deploy/compose/smoke.sh check
+          deploy/compose/smoke.sh survived
+
+      # The backup and restore-test gauges exist now: Prometheus must read them.
+      - name: Monitoring reads the backup gauges
+        env:
+          SMOKE_EXPECT_BACKUP: "1"
+        run: |
+          make -C deploy container-metrics disk-usage
+          deploy/compose/smoke.sh monitoring
+
+      - name: Collect the service logs
+        if: failure()
+        run: |
+          [ -f "$ENV_FILE" ] || { echo "The stack was never started: no service log."; exit 0; }
+          mkdir -p "$RUNNER_TEMP/compose-logs"
+          cp -r "$RUNNER_TEMP/nginx-logs" "$RUNNER_TEMP/compose-logs/nginx-logs" 2>/dev/null || true
+          compose() {
+            docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
+              -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml "$@"
+          }
+          compose ps -a | tee "$RUNNER_TEMP/compose-logs/ps.txt"
+          compose logs --no-color --timestamps > "$RUNNER_TEMP/compose-logs/services.log" || true
+          compose ps -aq | xargs -r docker inspect \
+            -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} exit={{.State.ExitCode}}' \
+            | tee "$RUNNER_TEMP/compose-logs/state.txt" || true
+          # The last lines of each service, not of the interleaved log: the
+          # failing service is rarely the one that logged last.
+          for service in $(compose ps -a --format '{{.Service}}' | sort -u); do
+            echo "::group::$service (last 80 lines)"
+            compose logs --no-color --tail 80 "$service" || true
+            echo "::endgroup::"
+          done
+
+      - name: Upload the service logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compose-logs
+          path: ${{ runner.temp }}/compose-logs
+          retention-days: 5
+
+      # Reported, never fatal: a pull request is judged on what it changes, and
+      # an advisory published overnight is not a change. The blocking scan runs
+      # weekly on the default branch (trivy-weekly.yml).
+      - name: Trivy
+        id: trivy
+        if: always() && (steps.build.outcome == 'success' || steps.docker-load.outcome == 'success')
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          version: v0.74.0
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          format: json
+          output: ${{ runner.temp }}/trivy.json
+          exit-code: "0"
+
+      - name: Trivy report
+        if: always() && steps.trivy.outcome == 'success'
+        run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json"
+
+      # Nothing is pruned during the job: the usage here is what the job needs.
+      - name: Runner disk after the job
+        if: always()
+        run: |
+          df -h /
+          docker system df

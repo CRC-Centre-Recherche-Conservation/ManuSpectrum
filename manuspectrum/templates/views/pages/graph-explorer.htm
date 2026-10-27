@@ -30,7 +30,7 @@
        /api/model-graph on load, so the page cannot go stale the way the "84
        relationships" figure did. Never hand-edit these to "fix" a drift —
        fix the payload. {% endcomment %}
-    <p class="ms-page-hero__lead" id="ms-ge-lead">{% trans "Every field in ManuSpectrum and every link between models: 452 fields across 12 models, 41% of them bound to a published thesaurus rather than free text. Click any model to read its schema." %}</p>
+    <p class="ms-page-hero__lead" id="ms-ge-lead">{% trans "Every field in ManuSpectrum and every link between models: 465 fields across 12 models, 42% of them bound to a published thesaurus rather than free text. Click any model to read its schema." %}</p>
     {% comment %} WAVE 3 item 9: this was a flex row of anonymous <div>s carrying aria-live="polite",
        so it announced four unlabelled numbers, unprompted, once at load. A definition
        list is the correct semantic for value/label pairs and needs no live region. {% endcomment %}
@@ -197,4 +197,5 @@
 </section>
 {% endblock %}
 
+{% block page_translations %}{% include 'includes/ms_i18n_graph_explorer.htm' %}{% endblock %}
 {% block js_bundle %}{% render_bundle 'views/pages/graph-explorer' %}{% endblock %}

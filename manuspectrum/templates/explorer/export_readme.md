@@ -20,6 +20,8 @@
 
 {% for citation in citations %}- {{ citation }}
 {% endfor %}
+{% trans "A filter term also keeps its narrower terms." %}
+
 ## {% trans "Data availability" %}
 
 {{ availability }}

@@ -294,23 +294,38 @@ swap_media() {
   compose up -d --force-recreate cantaloupe
 }
 
-# ------------------------------------------------------------- steps 9 to 13
+# ------------------------------------------------------------- steps 9 to 14
 rebuild_derived_state() {
   step 9 "migrating"
   compose run --rm --no-deps -T web manage migrate --noinput
 
-  step 10 "replacing the admin password from the admin_password secret"
+  step 10 "voiding the pending notices of the daily passes: the first pass warns before it acts"
+  void_pending_notices || die "voiding the pending notices failed. The database is already replaced and the stack is stopped: do not start it (its first daily passes could clean, anonymise or lift on notices sent from elsewhere). Fix the cause shown above, then run the same command again; it replaces the data from the start"
+
+  step 11 "replacing the admin password from the admin_password secret"
   "${make_cmd[@]}" admin-password
 
-  step 11 "refreshing the map geometries"
+  step 12 "refreshing the map geometries"
   psql_admin -d "$PGDBNAME" -c "SELECT refresh_geojson_geometries();"
 
-  step 12 "reindexing Elasticsearch"
+  step 13 "reindexing Elasticsearch"
   compose run --rm --no-deps -T web manage es reindex_database
 }
 
+# The notices recorded in the replaced database were sent from another site or
+# another time: nobody can be assumed warned. With them voided, the next
+# workflow cleanup and account retention passes only send notices (a cleanup
+# follows the final notice by 7 days, an anonymisation by 30), and an embargo
+# whose end has come without its final notice is moved 7 days on and warned
+# (manuspectrum/accounts/embargo.py, redate_unwarned).
+void_pending_notices() {
+  psql_admin -d "$PGDBNAME" -c "UPDATE ms_workflow_cleanup SET notices_sent = '[]' WHERE cleaned_at IS NULL;
+    UPDATE ms_account_retention SET noticed_on = NULL, noticed_for = NULL, listed_on = NULL WHERE anonymised_on IS NULL;
+    UPDATE ms_embargo SET notices_sent = '[]' WHERE state = 'active';"
+}
+
 compare_counts() {
-  step 13 "comparing the counts with the manifest"
+  step 14 "comparing the counts with the manifest"
   has_manifest || { log "restore mode: no manifest, counts not compared"; return 0; }
   local table expected actual
   for table in resource_instances tiles; do
@@ -324,7 +339,7 @@ compare_counts() {
   done
 }
 
-# ------------------------------------------------------------------ step 14
+# ------------------------------------------------------------------ step 15
 prune_asides() {
   # Newest first by name (the stamp is UTC). Only complete directories count
   # and only they are removed; an incomplete one is a failed run's, kept.
@@ -350,7 +365,7 @@ prune_asides() {
 }
 
 finish() {
-  step 14 "starting the stack, running the smoke checks, checking Cantaloupe, pruning the aside directories"
+  step 15 "starting the stack, running the smoke checks, checking Cantaloupe, pruning the aside directories"
   "${make_cmd[@]}" up
   # A file created now, after the swap, that Cantaloupe must see: a bind mount
   # that still points at the moved directory would not show it.

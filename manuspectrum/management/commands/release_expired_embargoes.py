@@ -62,7 +62,9 @@ class Command(BaseCommand):
         for label, ids in (
             ("recorded", report.detected),
             ("released by hand", report.released),
+            ("re-dated for a final notice", report.redated),
             ("noticed", report.noticed),
+            ("undelivered (will be retried)", report.undelivered),
             (
                 "due" if not apply else "lifted",
                 report.due if not apply else report.lifted,

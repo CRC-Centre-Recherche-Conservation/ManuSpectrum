@@ -1,8 +1,11 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import AnalysisRow from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/AnalysisRow.vue";
 
+import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
     analysisHit,
     label,
@@ -33,6 +36,10 @@ function mountRow(overrides = {}) {
         },
     });
 }
+
+beforeEach(() => {
+    setActivePinia(createPinia());
+});
 
 describe("AnalysisRow", () => {
     it("heads the result with the analysis name", () => {
@@ -67,5 +74,51 @@ describe("AnalysisRow", () => {
         const wrapper = mountRow();
         await wrapper.find("h3 .link").trigger("click");
         expect(wrapper.emitted("open")).toHaveLength(1);
+    });
+
+    it("puts the Selection checkbox before the title, named by the analysis", () => {
+        const wrapper = mountRow();
+        const input = wrapper.get(".selection-checkbox input");
+        expect(input.attributes("aria-label")).toBe(
+            "Add MS1_f12_XRF_03 to the Selection",
+        );
+        const html = wrapper.html();
+        expect(html.indexOf("selection-checkbox")).toBeLessThan(
+            html.indexOf("<h3"),
+        );
+    });
+
+    it("keeps the title a separate button: the checkbox does not open the analysis", async () => {
+        const wrapper = mountRow();
+        await wrapper.get(".selection-checkbox input").setValue(true);
+        expect(wrapper.emitted("open")).toBeUndefined();
+        expect(wrapper.find("h3 .link").exists()).toBe(true);
+    });
+
+    it("adds the analysis under its own key and tints the row with its slot", async () => {
+        const wrapper = mountRow();
+        const store = useExplorerStore();
+        await wrapper.get(".selection-checkbox input").setValue(true);
+        expect(store.basket.map((item) => item.key)).toEqual([
+            analysisKey(wrapper.props("hit").id),
+        ]);
+        expect(wrapper.classes()).toContain("held");
+        expect(wrapper.get(".selection-checkbox .slot").text()).toBe("A1");
+        expect(
+            wrapper.get(".selection-checkbox input").attributes("aria-label"),
+        ).toBe("Remove MS1_f12_XRF_03 from the Selection");
+    });
+
+    it("follows the store when the Selection changes elsewhere", async () => {
+        const wrapper = mountRow();
+        const store = useExplorerStore();
+        store.addToBasket(analysisKey(wrapper.props("hit").id));
+        await wrapper.vm.$nextTick();
+        expect(wrapper.classes()).toContain("held");
+        store.$patch((state) => {
+            state.basket = [];
+        });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.classes()).not.toContain("held");
     });
 });

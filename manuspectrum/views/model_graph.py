@@ -52,15 +52,37 @@ def _cards_hash():
         return cursor.fetchone()[0] or ""
 
 
-def graph_fingerprint():
-    """Content fingerprint: publications, card/widget texts, record counts.
+def _lists_hash():
+    """Digest of the controlled lists the payload quotes.
 
-    Moves on republish, on any in-place widget label edit, and on any
-    resource or concept add/delete, which keeps the "live figures" (records,
-    concepts, thesauri) honest without a rebuild on every request. Four cheap
-    queries (1 values_list, 1 md5 aggregate, 2 COUNTs).
+    One query: every list's id and name (the collection labels) and the
+    counts of its items and guide items (the concept figures). The payload
+    reads only the lists its reference fields name; hashing all of them keeps
+    the query independent of the graphs.
     """
-    from arches.app.models.models import Concept, GraphModel, ResourceInstance
+    from arches_controlled_lists.models import List, ListItem
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT
+                (SELECT md5(string_agg(l.id::text || ':' || l.name, '' ORDER BY l.id))
+                 FROM {List._meta.db_table} l),
+                (SELECT count(*) FROM {ListItem._meta.db_table}),
+                (SELECT count(*) FROM {ListItem._meta.db_table} WHERE guide)
+            """)
+        return ":".join(str(v or "") for v in cursor.fetchone())
+
+
+def graph_fingerprint():
+    """Content fingerprint: publications, card/widget texts, record and list figures.
+
+    Moves on republish, on any in-place widget label edit, on any resource
+    add/delete and on any controlled-list rename or item add/delete, which
+    keeps the "live figures" (records, concepts, thesauri, collection labels
+    and sizes) honest without a rebuild on every request. Four cheap queries
+    (1 values_list, 1 md5 aggregate, 1 COUNT, 1 lists aggregate).
+    """
+    from arches.app.models.models import GraphModel, ResourceInstance
 
     rows = GraphModel.objects.filter(isresource=True).values_list(
         "graphid", "publication_id"
@@ -68,7 +90,7 @@ def graph_fingerprint():
     payload = ";".join(sorted(f"{g}:{p}" for g, p in rows))
     payload += f"|labels:{_cards_hash()}"
     payload += f"|ri:{ResourceInstance.objects.count()}"
-    payload += f"|c:{Concept.objects.count()}"
+    payload += f"|lists:{_lists_hash()}"
     return hashlib.md5(payload.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 

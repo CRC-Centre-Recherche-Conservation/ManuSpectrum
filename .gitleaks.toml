@@ -13,6 +13,13 @@ paths = ['''(^|/)tests/test_set_admin_password\.py$''']
 regexTarget = "line"
 regexes = ['''\bPASSWORD = "[^"]+"''']
 
+[[allowlists]]
+description = "Facet key paths in the Explorer facet-tree test, not credentials"
+condition = "AND"
+paths = ['''(^|/)facet-tree\.spec\.ts$''']
+regexTarget = "line"
+regexes = ['''"[a-z]+(/[a-z]+)+"''']
+
 [[rules]]
 id = "sops-encrypted-value"
 description = "A sops-encrypted value: escrow files stay out of the repository (see deploy/SECRETS.md)"

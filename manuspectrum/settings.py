@@ -508,6 +508,8 @@ CONTACT_EMAIL = ""
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "Europe/Paris"
+# Naive datetimes (USE_TZ False): the zone the timestamptz columns are read in.
+TIME_ZONE = "Europe/Paris"
 CELERY_RESULT_BACKEND = (
     "django-db"  # Use 'django-cache' if you want to use your cache as your backend
 )
@@ -516,6 +518,14 @@ CELERY_TASK_SERIALIZER = "json"
 
 CELERY_SEARCH_EXPORT_EXPIRES = 24 * 3600  # seconds
 CELERY_SEARCH_EXPORT_CHECK = 3600  # seconds
+
+# The daily passes below mail people and change their data: they run only at
+# their hour. Beat skips any crontab entry (every crontab of this schedule, not
+# only the passes) that fell due more than this many seconds ago (after a stop,
+# a restore) instead of catching it up at start, and each pass's message expires
+# as long after it was sent, so a worker that was down discards it; the next
+# night runs it at its normal hour.
+CELERY_BEAT_CRON_STARTING_DEADLINE = 2 * 3600
 
 CELERY_BEAT_SCHEDULE = {
     "delete-expired-search-export": {
@@ -537,18 +547,21 @@ CELERY_BEAT_SCHEDULE = {
     "embargo-pass": {
         "task": "manuspectrum.embargo_pass",
         "schedule": crontab(hour=6, minute=0),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
     # Notices and cleanup of abandoned workflow runs at 03:30 Europe/Paris
     # (accounts/workflows.py).
     "workflow-cleanup-pass": {
         "task": "manuspectrum.workflow_cleanup_pass",
         "schedule": crontab(hour=3, minute=30),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
     # Notices and anonymisation of long-inactive accounts at 04:30 Europe/Paris
     # (accounts/retention.py).
     "account-retention-pass": {
         "task": "manuspectrum.account_retention_pass",
         "schedule": crontab(hour=4, minute=30),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
     # Login records older than LOGIN_RECORDS_RETENTION_DAYS.
     "prune-login-records": {
@@ -632,8 +645,9 @@ RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 
 # Upper bound of the relations Arches loads at once (paginate=false): the related
 # resources graph, « load all » on a report and the report API's summary. Arches'
-# default (10000) freezes the graph's browser tab on a resource with ~1650 relations.
-RELATED_RESOURCES_EXPORT_LIMIT = 1000
+# default (10000) freezes the graph's browser tab on a resource with ~1650 relations;
+# 500 kept it responsive on the rehearsal VM.
+RELATED_RESOURCES_EXPORT_LIMIT = 500
 
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
@@ -779,6 +793,14 @@ IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
 # plus an image fetch from the provider, so the browser and any intermediary
 # must be told the answer keeps.
 SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
+# One search thumbnail's outbound calls (manifest, then image) share this
+# budget in seconds, without retry, each connect within the timeout below. A
+# host that does not accept a connection is skipped by every thumbnail for
+# SEARCH_THUMBNAIL_HOST_DOWN_TTL seconds, so a server that is down never holds
+# a request thread for long (views/thumbnail.py).
+SEARCH_THUMBNAIL_DEADLINE = 8
+SEARCH_THUMBNAIL_CONNECT_TIMEOUT = 2.5
+SEARCH_THUMBNAIL_HOST_DOWN_TTL = 5 * 60
 
 # Knockout component templates (manuspectrum.views.knockout_templates).
 # max-age: how long a browser reuses a template without asking. The URL carries
@@ -911,8 +933,6 @@ RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
 # A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
 EXPLORER_LEGACY_HOSTS = ()
 EXPLORER_ITEMS_MAX = 30
-# Seconds the homepage technique list is kept per language.
-EXPLORER_TECHNIQUES_TTL = 600
 # Seconds a compressed corpus bundle of the Explorer stays in the default cache
 # (~3 MB each). Entries stored under a previous code prefix are never read again
 # and expire by this TTL.
@@ -963,6 +983,10 @@ EXPLORER_MANIFEST_MAX_CANVASES = 1000
 # Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
 # ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
 EXPLORER_MIRADOR_URL = ""
+# The Explorer's internal APIs answer the page's own requests only (Fetch
+# Metadata, views/explorer/guard.py): "enforce" refuses the others with a 403,
+# "observe" answers them and counts, "off" checks nothing.
+EXPLORER_UI_ONLY = "observe"
 
 # Site announcement (views/site_notice.py). Memo lifetime of the payload, in
 # seconds; the zone its start and end are typed in; the directory nginx reads
@@ -1007,7 +1031,16 @@ IIIF_AUTH_TOKEN_RATE = "30/m"
 CORS_URLS_REGEX = r"^(?!/iiif/).*$"
 
 ####### PASSWORDS #######
-# Argon2 first: PBKDF2 hashes stay valid and are rehashed at the next sign-in.
+# Argon2 first. A PBKDF2 hash stays valid and is rehashed at the next sign-in;
+# so is an Argon2 hash whose parameters a Django upgrade changes. The hashes
+# are plain Django (auth_user): a plain Arches install, on Django's default
+# list (which includes Argon2 and which Arches keeps), reads them as long as
+# argon2-cffi is installed. Never remove Argon2PasswordHasher from this list,
+# nor argon2-cffi from pyproject.toml, while a hash or a django-oauth-toolkit
+# client secret (verified, never rehashed) starts with "argon2$": those
+# accounts and clients would stop signing in. To leave Argon2, move PBKDF2
+# first and keep Argon2 listed until every account has signed in again and
+# every OAuth client secret has been regenerated.
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",

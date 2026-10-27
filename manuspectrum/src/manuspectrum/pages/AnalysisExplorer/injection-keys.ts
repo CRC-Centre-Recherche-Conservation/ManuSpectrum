@@ -1,7 +1,11 @@
 import type { InjectionKey, Ref } from "vue";
 
-import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    Label,
+    SynthesisResponse,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { RailWidth } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRailWidth.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import type { WindowActionsHost } from "@/manuspectrum/pages/AnalysisExplorer/composables/useWindowActions.ts";
 import type { TableFrame } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/table-frame.ts";
@@ -25,6 +29,14 @@ export interface ResultsMemo {
 export const FACET_LABELS_KEY: InjectionKey<Ref<Map<string, Label>>> =
     Symbol("facet-labels");
 
+/** The facet values seen with a narrower term in their facet (`FacetValue.narrower`), keyed as `FACET_LABELS_KEY`; filled with it. */
+export const FACET_NARROWER_KEY: InjectionKey<Ref<Set<string>>> =
+    Symbol("facet-narrower");
+
+/** Number of documents of the whole corpus, or null while it is unknown; provided by the shell from the home payload. */
+export const CORPUS_COUNT_KEY: InjectionKey<Ref<number | null>> =
+    Symbol("corpus-count");
+
 /** Set when the heading of the screen or view shown next should take the focus; cleared by the heading that takes it. */
 export const SCREEN_FOCUS_KEY: InjectionKey<Ref<boolean>> =
     Symbol("screen-focus");
@@ -35,6 +47,10 @@ export const CURTAIN_KEY: InjectionKey<Ref<string | null>> = Symbol("curtain");
 /** Analyses that have a rectangle or polygon on the page shown: an imaging layer can be laid only there. */
 export const FOLIO_ZONES_KEY: InjectionKey<Ref<ReadonlySet<string>>> =
     Symbol("folio-zones");
+
+/** Id of the canvas the document folio shows, or null before it shows one; provided by the document screen. */
+export const FOLIO_CANVAS_KEY: InjectionKey<Readonly<Ref<string | null>>> =
+    Symbol("folio-canvas");
 
 /** A folio asked of the folio image tools of Compare; `count` grows with each request, so the same folio asked again is a new one. */
 export interface FolioRequest {
@@ -74,6 +90,9 @@ export const SELECTION_HINTS_KEY: InjectionKey<
     Ref<Map<string, SelectionHint>>
 > = Symbol("selection-hints");
 
+/** Whether the « Cite » block of the Analysis card is unfolded; kept by the shell for the tab (memory only), provided by the shell. */
+export const CITE_OPEN_KEY: InjectionKey<Ref<boolean>> = Symbol("cite-open");
+
 /** Address of the Mirador viewer the IIIF products open in (`EXPLORER_MIRADOR_URL`); empty: no viewer. */
 export const MIRADOR_URL_KEY: InjectionKey<string> = Symbol("mirador-url");
 
@@ -96,3 +115,19 @@ export const WINDOW_ACTIONS_KEY: InjectionKey<WindowActionsHost> =
 /** How the Compare window holding a body is framed (its preset size, enlarged or not); provided by the window. */
 export const WINDOW_FRAME_KEY: InjectionKey<Readonly<Ref<TableFrame>>> =
     Symbol("window-frame");
+
+/** The synthesis of the Selection shown in the Compare view, null while it is read or after a failure; provided by the Compare view. */
+export const SYNTHESIS_KEY: InjectionKey<
+    Readonly<Ref<SynthesisResponse | null>>
+> = Symbol("synthesis");
+
+/** Opens the Selection drawer; provided by the shell, whose drawer holds the state. */
+export interface SelectionDrawerHandle {
+    open: () => void;
+}
+
+export const SELECTION_DRAWER_KEY: InjectionKey<SelectionDrawerHandle> =
+    Symbol("selection-drawer");
+
+/** The width mode of the filter column (`useRailWidth`), shared by the Corpus, document and Map rails; provided by the shell. */
+export const RAIL_WIDTH_KEY: InjectionKey<RailWidth> = Symbol("rail-width");

@@ -4,6 +4,8 @@
 export type Label = { value: string; lang: string };
 export type Ref = { id: string; model: string; name: Label };
 export type ValueRef = { id: string; uri: string; label: Label };
+/** A colour concept with its display colour: a CSS colour or gradient, by INHA uri then by label word; null when neither names one. */
+export type ColourRef = ValueRef & { swatch: string | null };
 /** A resource named in the request language. */
 export type NamedRef = { id: string; name: Label };
 export type RankedValue = ValueRef & { rank: number };
@@ -29,16 +31,10 @@ export type ImageRef = {
     width: number;
     height: number;
 };
-export type EventType =
-    | "production"
-    | "current-location"
-    | "modification"
-    | "alteration"
-    | "analysis"
-    | "sampling";
+export type EventType = "production" | "modification" | "alteration";
 export type FacetKey =
+    | "place"
     | "partType"
-    | "partColour"
     | "part"
     | "technique"
     | "operator"
@@ -48,9 +44,17 @@ export type FacetKey =
     | "element"
     | "layer"
     | "project";
-/** Level of the chain a facet filters: the studied part, the analysis, the identified material. */
-export type FacetGroup = "part" | "analysis" | "characterization";
+/** Level of the chain a facet filters: the document, the studied component, the analysis, the identified material. */
+export type FacetGroup = "document" | "part" | "analysis" | "characterization";
+export type PeriodMatch = "overlap" | "within";
+export type PeriodEvent = "production" | "modification";
 export type DateRange = { start: string | null; end: string | null };
+/** Production bounds as stored (YYYY, YYYY-MM or YYYY-MM-DD) and whether the date is approximate. */
+export interface ProductionDates {
+    start: string | null;
+    end: string | null;
+    approximate: boolean;
+}
 
 export interface FacetValue {
     id: string;
@@ -60,6 +64,31 @@ export interface FacetValue {
     mark: TechniqueMark | null;
     /** Colour values only: CSS colour of the concept, the same in every language; null when its labels name none. */
     swatch: string | null;
+    /**
+     * The ids of the parents shown: a place has zero or one, a term facet
+     * every parent listed in the facet, the others none. On the homes, the
+     * nearest carried ancestors.
+     */
+    parents: string[];
+    /** The value has a narrower term in the facet universe; never for a place. */
+    narrower: boolean;
+    /** Place values only: the place is a Draft; false elsewhere. */
+    unpublished: boolean;
+}
+
+/** Century histogram of the `period` filter, counted open to the other selections. */
+export interface RangeFacet {
+    key: "period";
+    group: "document";
+    /** The event counted (`periodEvent` of the query). */
+    event: PeriodEvent;
+    /** Lowest start year and highest end year of the dated rows. */
+    min: number;
+    max: number;
+    /** One per century from `min` to `max`: from = 100k + 1, to = 100(k + 1). */
+    buckets: { from: number; to: number; count: number }[];
+    /** Rows kept by the other filters without a date for the event. */
+    undated: number;
 }
 
 /**
@@ -73,6 +102,8 @@ export interface Facet {
     group: FacetGroup;
     values: FacetValue[];
     total: number;
+    /** With a `find` query: the ids of the values the query matches; null otherwise. */
+    found: string[] | null;
 }
 
 export interface DocumentHit {
@@ -84,7 +115,7 @@ export interface DocumentHit {
     thumbnail: string | null;
     unpublished: boolean;
     shelfmark: Label | null;
-    dates: DateRange | null;
+    dates: ProductionDates | null;
     /** Plain text, cut on a word at about 220 characters with « … ». */
     description: Label | null;
     documentType: Label | null;
@@ -113,6 +144,8 @@ export interface SearchResponse {
     unpublishedCount: number;
     /** Documents without analyses the query would list with `empty=1` (0 outside the documents grain). */
     withoutAnalyses: number;
+    /** Null with `facets=0` or when no visible row is dated for the event. */
+    period: RangeFacet | null;
 }
 
 /** Body of `GET home?day=YYYY-MM-DD`: the explorer home of the reader's day. */
@@ -147,13 +180,16 @@ export interface DocumentAnalysis {
     dataKind: DataKind;
     unpublished: boolean;
     zones: AnalysisZone[];
+    /** Id of the Component the analysis observed (a key of `DocumentPayload.components`); null on the document itself. */
+    component: string | null;
 }
 
-/** A visible Component of a document placed on its pages: its own zones, by page then feature id. */
+/** A visible Component of a document, placed on its pages (own zones, by page then feature id) or observed by one of its analyses (no zone). */
 export interface DocumentComponent {
     id: string;
     name: Label;
     zones: AnalysisZone[];
+    unpublished: boolean;
 }
 
 export interface MatchKept {
@@ -169,6 +205,8 @@ export interface DocumentMatch {
     kept: MatchKept;
     /** Number of analyses kept. */
     total: number;
+    /** The range facet over the document's analyses; null when none is dated. */
+    period: RangeFacet | null;
 }
 
 export interface SampleSummary {
@@ -181,20 +219,102 @@ export interface SampleSummary {
 
 export interface HistoryLine {
     type: EventType;
-    place: Label | null;
-    date: DateRange;
+    carrier: Ref;
+    places: NamedRef[];
+    date: ProductionDates;
+}
+
+export type PlaceSource = "own" | "place" | "parent";
+
+/** Years of an event: the widest interval of its bounds; a single bound stands for both; null when undated. */
+export interface EventDate {
+    start: number | null;
+    end: number | null;
+    approximate: boolean;
+}
+
+/** An identified material placed on an event (`id` is its uri, `reliability` the Confidence item id). */
+export interface EventMaterial {
+    id: string;
+    name: Label;
+    reliability: string | null;
+    characterization: string;
+    /** The characterization's own colour uris (never its Component's), as `MapMaterial.colours` orders them. */
+    colours: string[];
+    /** Meets every active characterization filter; true for all without one. */
+    matches: boolean;
+    /** The ticked colour uris it carries only through a linked Component's colour. */
+    componentColours: string[];
+}
+
+export interface MapEvent {
+    id: string;
+    type: EventType;
+    carrier: Ref;
+    document: NamedRef;
+    component: NamedRef | null;
+    place: string | null;
+    placeSource: PlaceSource | null;
+    date: EventDate;
+    materials: EventMaterial[];
+    analyses: string[];
+}
+
+export interface MapPlace {
+    id: string;
+    name: Label;
+    lngLat: [number, number] | null;
+    geometryKind: "point" | "area";
+    extentKm: number | null;
+    parent: string | null;
+    unpublished: boolean;
+    authorities: { geonames?: string; wikidata?: string };
+}
+
+/** A material of the events; `colours` are the uris of its observed colours, most frequent first. */
+export interface MapMaterial {
+    uri: string;
+    label: Label;
+    colours: string[];
+    swatch: string | null;
+    /** The uris of the broader terms of the material. */
+    ancestors: string[];
+}
+
+export interface MapColour {
+    uri: string;
+    label: Label;
+    swatch: string | null;
+}
+
+export interface EventsResponse {
+    events: MapEvent[];
+    places: Record<string, MapPlace>;
+    unplaced: number;
+    period: RangeFacet | null;
+    materials: Record<string, MapMaterial>;
+    /** The ticked `material` filter values that are an ancestor of a listed material, by uri. */
+    coveringMaterials: Record<string, Label>;
+    /** The colours of `materials` and every ticked `colour` filter value, by uri. */
+    colours: Record<string, MapColour>;
+    analysisNames: Record<string, Label>;
+    /** The technique mark of each cited analysis that names a technique. */
+    analysisTechniques: Record<string, TechniqueMark>;
+    certaintyScale: CertaintyScale;
 }
 
 export interface CharacterizationSummary {
     id: string;
     name: Label;
     objects: Ref[];
+    /** The visible components linked to it, by id: those it observes and those of the analyses it cites. */
+    components: Ref[];
     materials: {
         value: ValueRef;
         confidence: RankedValue | null;
         proportion: { value: number; unit: ValueRef | null } | null;
     }[];
-    colours: ValueRef[];
+    colours: ColourRef[];
     layers: ValueRef[];
     elements: { level: RankedValue | null; values: ValueRef[] }[];
     zone: { canvas: string; shape: Shape; source: "own" | "component" } | null;
@@ -420,11 +540,20 @@ export interface AnalysisPayload {
     unpublished: boolean;
 }
 
+/** The X-ray tube read from the analysis's measurement conditions; each field is null when not found or ambiguous. */
+export interface Excitation {
+    anode: string | null;
+    kV: number | null;
+    /** Where the value comes from; only the free-text conditions today. */
+    source: "conditions";
+}
+
 /** A whole analysis in the Selection, with the files a viewer shows (raw files left out; possibly none). */
 export interface AnalysisItem {
     key: string;
     kind: "analysis";
     analysis: AnalysisHit;
+    excitation: Excitation | null;
     files: FileEntry[];
 }
 
@@ -434,6 +563,7 @@ export type Item =
           key: string;
           kind: "analysis-file";
           analysis: AnalysisHit;
+          excitation: Excitation | null;
           file: FileEntry;
       }
     | { key: string; kind: "imaging"; analysis: AnalysisHit; file: FileEntry }
@@ -495,7 +625,7 @@ export type SynthesisElementRef = ValueRef & { symbol: string | null };
 
 /** One colour × material value over the identified materials carrying both (colour null: none given). */
 export interface SynthesisPair {
-    colour: ValueRef | null;
+    colour: ColourRef | null;
     material: ValueRef;
     elements: SynthesisElementRef[];
     /** Number of identified materials. */
@@ -567,6 +697,12 @@ export const SHAPE_KEYS = {
         keyof Citation,
         true
     >,
+    ColourRef: {
+        id: true,
+        uri: true,
+        label: true,
+        swatch: true,
+    } satisfies Record<keyof ColourRef, true>,
     ValueRef: { id: true, uri: true, label: true } satisfies Record<
         keyof ValueRef,
         true
@@ -578,6 +714,77 @@ export const SHAPE_KEYS = {
         rank: true,
     } satisfies Record<keyof RankedValue, true>,
     NamedRef: { id: true, name: true } satisfies Record<keyof NamedRef, true>,
+    ProductionDates: {
+        start: true,
+        end: true,
+        approximate: true,
+    } satisfies Record<keyof ProductionDates, true>,
+    HistoryLine: {
+        type: true,
+        carrier: true,
+        places: true,
+        date: true,
+    } satisfies Record<keyof HistoryLine, true>,
+    EventsResponse: {
+        events: true,
+        places: true,
+        unplaced: true,
+        period: true,
+        materials: true,
+        coveringMaterials: true,
+        colours: true,
+        analysisNames: true,
+        analysisTechniques: true,
+        certaintyScale: true,
+    } satisfies Record<keyof EventsResponse, true>,
+    MapEvent: {
+        id: true,
+        type: true,
+        carrier: true,
+        document: true,
+        component: true,
+        place: true,
+        placeSource: true,
+        date: true,
+        materials: true,
+        analyses: true,
+    } satisfies Record<keyof MapEvent, true>,
+    EventDate: {
+        start: true,
+        end: true,
+        approximate: true,
+    } satisfies Record<keyof EventDate, true>,
+    EventMaterial: {
+        id: true,
+        name: true,
+        reliability: true,
+        characterization: true,
+        colours: true,
+        matches: true,
+        componentColours: true,
+    } satisfies Record<keyof EventMaterial, true>,
+    MapPlace: {
+        id: true,
+        name: true,
+        lngLat: true,
+        geometryKind: true,
+        extentKm: true,
+        parent: true,
+        unpublished: true,
+        authorities: true,
+    } satisfies Record<keyof MapPlace, true>,
+    MapMaterial: {
+        uri: true,
+        label: true,
+        colours: true,
+        swatch: true,
+        ancestors: true,
+    } satisfies Record<keyof MapMaterial, true>,
+    MapColour: {
+        uri: true,
+        label: true,
+        swatch: true,
+    } satisfies Record<keyof MapColour, true>,
     ImageRef: {
         service: true,
         url: true,
@@ -640,6 +847,7 @@ export const SHAPE_KEYS = {
         group: true,
         values: true,
         total: true,
+        found: true,
     } satisfies Record<keyof Facet, true>,
     FacetValue: {
         id: true,
@@ -647,7 +855,19 @@ export const SHAPE_KEYS = {
         count: true,
         mark: true,
         swatch: true,
+        parents: true,
+        narrower: true,
+        unpublished: true,
     } satisfies Record<keyof FacetValue, true>,
+    RangeFacet: {
+        key: true,
+        group: true,
+        event: true,
+        min: true,
+        max: true,
+        buckets: true,
+        undated: true,
+    } satisfies Record<keyof RangeFacet, true>,
     SearchResponse: {
         total: true,
         page: true,
@@ -655,6 +875,7 @@ export const SHAPE_KEYS = {
         facets: true,
         unpublishedCount: true,
         withoutAnalyses: true,
+        period: true,
     } satisfies Record<keyof SearchResponse, true>,
     HomeResponse: {
         documentCount: true,
@@ -712,23 +933,28 @@ export const SHAPE_KEYS = {
         dataKind: true,
         unpublished: true,
         zones: true,
+        component: true,
     } satisfies Record<keyof DocumentAnalysis, true>,
     AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
         keyof AnalysisZone,
         true
     >,
-    DocumentComponent: { id: true, name: true, zones: true } satisfies Record<
-        keyof DocumentComponent,
-        true
-    >,
+    DocumentComponent: {
+        id: true,
+        name: true,
+        zones: true,
+        unpublished: true,
+    } satisfies Record<keyof DocumentComponent, true>,
     ContentStateLink: {
         feature: true,
         url: true,
     } satisfies Record<keyof ContentStateLink, true>,
-    DocumentMatch: { facets: true, kept: true, total: true } satisfies Record<
-        keyof DocumentMatch,
-        true
-    >,
+    DocumentMatch: {
+        facets: true,
+        kept: true,
+        total: true,
+        period: true,
+    } satisfies Record<keyof DocumentMatch, true>,
     MatchKept: { analyses: true, characterizations: true } satisfies Record<
         keyof MatchKept,
         true
@@ -744,6 +970,7 @@ export const SHAPE_KEYS = {
         id: true,
         name: true,
         objects: true,
+        components: true,
         materials: true,
         colours: true,
         layers: true,
@@ -806,10 +1033,15 @@ export const SHAPE_KEYS = {
         points: true,
         decimated: true,
     } satisfies Record<keyof FileViewer, true>,
+    Excitation: { anode: true, kV: true, source: true } satisfies Record<
+        keyof Excitation,
+        true
+    >,
     AnalysisItem: {
         key: true,
         kind: true,
         analysis: true,
+        excitation: true,
         files: true,
     } satisfies Record<keyof AnalysisItem, true>,
     ItemsResponse: { items: true, missing: true } satisfies Record<

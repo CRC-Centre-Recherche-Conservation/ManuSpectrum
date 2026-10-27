@@ -1,0 +1,629 @@
+import {
+    createExpression,
+    validateStyleMin,
+} from "@maplibre/maplibre-gl-style-spec";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+    LABEL_FONT_ITALIC,
+    OHM_TILES,
+    WATER_LAYER,
+    baseStyle,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/base-style.ts";
+import { FALLBACK_COLOURS } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-colours.ts";
+import { ringRadius } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/place-symbols.ts";
+import {
+    BORDERS_MIN_ZOOM,
+    BORDER_NAMES_LAYER,
+    HATCH_IMAGE,
+    OHM_SOURCE,
+    PIP_OFFSETS,
+    PLACES_SOURCE,
+    REGIONAL_NAMES_MIN_ZOOM,
+    RING_DASHED_IMAGE,
+    TERRITORIES_SOURCE,
+    borderNameField,
+    borderNamesFilter,
+    borderNamesLayer,
+    bordersFilter,
+    bordersLayer,
+    dashedRingImage,
+    hatchImage,
+    pipAngle,
+    pipImage,
+    placeLayers,
+    stageImages,
+    territoryLayers,
+    territoryOpacity,
+} from "@/manuspectrum/pages/AnalysisExplorer/views/Map/stage-layers.ts";
+
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+
+const PLACES = placeLayers(FALLBACK_COLOURS);
+const TERRITORIES = territoryLayers(FALLBACK_COLOURS);
+
+function layer(
+    layers: LayerSpecification[],
+    id: string,
+): LayerSpecification & {
+    layout?: Record<string, unknown>;
+    paint?: Record<string, unknown>;
+    filter?: unknown;
+} {
+    const found = layers.find((candidate) => candidate.id === id);
+    if (!found) throw new Error(`no layer ${id}`);
+    return found as ReturnType<typeof layer>;
+}
+
+/** The value of a data expression for one feature, through MapLibre's own evaluator. */
+function evaluate(
+    value: unknown,
+    properties: Record<string, unknown>,
+    state: Record<string, unknown> = {},
+    zoom = 6,
+): unknown {
+    const compiled = createExpression(value);
+    if (compiled.result !== "success") {
+        throw new Error(JSON.stringify(compiled.value));
+    }
+    return compiled.value.evaluate(
+        { zoom },
+        { type: "Point", properties, geometry: [] } as never,
+        state,
+    );
+}
+
+describe("the full stage style", () => {
+    it("validates against the MapLibre style spec", () => {
+        const base = baseStyle(FALLBACK_COLOURS);
+        const style: StyleSpecification = {
+            ...base,
+            sources: {
+                ...base.sources,
+                [PLACES_SOURCE]: {
+                    type: "geojson",
+                    data: { type: "FeatureCollection", features: [] },
+                    promoteId: "id",
+                },
+                [TERRITORIES_SOURCE]: {
+                    type: "geojson",
+                    data: { type: "FeatureCollection", features: [] },
+                },
+                [OHM_SOURCE]: { type: "vector", tiles: [OHM_TILES] },
+            },
+            layers: [
+                ...TERRITORIES,
+                ...base.layers,
+                bordersLayer(1350, FALLBACK_COLOURS, true),
+                borderNamesLayer(1350, FALLBACK_COLOURS, true, "fr"),
+                ...PLACES,
+            ],
+        };
+        expect(validateStyleMin(style)).toEqual([]);
+    });
+});
+
+describe("placeLayers", () => {
+    it("stacks rings, points, labels, pips, then the label blockers", () => {
+        const ids = PLACES.map((candidate) => candidate.id);
+        expect(ids.slice(0, 5)).toEqual([
+            "place-rings",
+            "place-rings-dashed",
+            "place-points",
+            "place-labels",
+            "place-badges",
+        ]);
+        expect(ids.slice(5, -1).every((id) => id.startsWith("pip-"))).toBe(
+            true,
+        );
+        expect(ids.filter((id) => id.startsWith("pip-"))).toHaveLength(8);
+        expect(ids.at(-1)).toBe("place-blockers");
+    });
+
+    it("blocks labels over a place's ring and pips with an invisible symbol", () => {
+        const blockers = layer(PLACES, "place-blockers");
+        expect(blockers.type).toBe("symbol");
+        expect(blockers.layout?.["icon-allow-overlap"]).toBe(true);
+        expect(blockers.layout?.["icon-ignore-placement"]).toBe(false);
+        expect(blockers.paint?.["icon-opacity"]).toBe(0);
+        const size = blockers.layout?.["icon-size"];
+        const ring = ringRadius(4);
+        expect((evaluate(size, { ring }, {}, 7) as number) * 16).toBeCloseTo(
+            ring + 4 + 7,
+        );
+        expect((evaluate(size, { ring }, {}, 4) as number) * 16).toBeCloseTo(
+            ring + 4 + 7 * 0.75,
+        );
+        for (let slot = 1; slot <= 4; slot++) {
+            for (const kind of ["firm", "pale"]) {
+                const pip = layer(PLACES, `pip-${slot}-${kind}`).layout ?? {};
+                expect(pip["icon-allow-overlap"]).toBe(true);
+            }
+        }
+    });
+
+    it("sets each label just outside its place's pips", () => {
+        for (const id of ["place-labels", "place-badges"]) {
+            const labels = layer(PLACES, id).layout ?? {};
+            const ring = ringRadius(9);
+            const offset = labels["text-radial-offset"];
+            expect(
+                (evaluate(offset, { ring }, {}, 7) as number) * 12.125,
+            ).toBeCloseTo(ring + 4 + 7 + 2);
+            expect(labels["text-offset"]).toBeUndefined();
+            expect(labels["text-padding"]).toBe(0);
+        }
+    });
+
+    it("turns two near places' pips to opposite sides, so they never interleave", () => {
+        const offset = (slot: number, away: number | null): number[] =>
+            evaluate(
+                layer(PLACES, `pip-${slot}-firm`).layout?.["icon-offset"],
+                { ring: 10, pipAway: away },
+                {},
+                7,
+            ) as number[];
+        for (let slot = 1; slot <= 4; slot++) {
+            const [westX] = offset(slot, 180);
+            const [eastX] = offset(slot, 0);
+            expect(westX).toBeLessThan(0);
+            expect(eastX).toBeGreaterThan(0);
+            const [x, y] = offset(slot, 90);
+            const angle = (pipAngle(slot, 90) * Math.PI) / 180;
+            expect(x).toBeCloseTo(Math.cos(angle) * 14, 2);
+            expect(y).toBeCloseTo(Math.sin(angle) * 14, 2);
+        }
+    });
+
+    it("reads the slot states in paint opacity only, never in layout", () => {
+        for (let slot = 1; slot <= 4; slot++) {
+            for (const kind of ["firm", "pale"]) {
+                const pip = layer(PLACES, `pip-${slot}-${kind}`);
+                expect(JSON.stringify(pip.paint?.["icon-opacity"])).toContain(
+                    `["feature-state","t${slot}"]`,
+                );
+                expect(JSON.stringify(pip.layout)).not.toContain(
+                    "feature-state",
+                );
+                expect(pip.layout?.["icon-image"]).toBe(
+                    pipImage(slot, kind === "pale"),
+                );
+            }
+        }
+        for (const candidate of PLACES) {
+            expect(
+                JSON.stringify(
+                    (candidate as { layout?: unknown }).layout ?? {},
+                ),
+            ).not.toContain("feature-state");
+        }
+    });
+
+    it("shows the firm pip for level 1, the hollow one for level 2, none for 0", () => {
+        const firm = layer(PLACES, "pip-2-firm").paint?.["icon-opacity"];
+        const pale = layer(PLACES, "pip-2-pale").paint?.["icon-opacity"];
+        expect(evaluate(firm, {}, { t2: 1 })).toBe(1);
+        expect(evaluate(pale, {}, { t2: 1 })).toBe(0);
+        expect(evaluate(firm, {}, { t2: 2 })).toBe(0);
+        expect(evaluate(pale, {}, { t2: 2 })).toBe(1);
+        expect(evaluate(firm, {}, { t2: 0 })).toBe(0);
+    });
+
+    it("sets each pip on the outer edge of its ring, 4 px out", () => {
+        const offset = layer(PLACES, "pip-1-firm").layout?.["icon-offset"];
+        const small = ringRadius(1);
+        expect(evaluate(offset, { ring: small }, {}, 7)).toEqual(
+            PIP_OFFSETS[0],
+        );
+        const large = ringRadius(25);
+        const [x, y] = evaluate(offset, { ring: large }, {}, 7) as number[];
+        expect(x).toBeCloseTo(0);
+        expect(y).toBeCloseTo(-(large + 4));
+        const third = layer(PLACES, "pip-3-firm").layout?.["icon-offset"];
+        const [x3, y3] = evaluate(third, { ring: large }, {}, 7) as number[];
+        expect(Math.hypot(x3, y3)).toBeCloseTo(large + 4, 2);
+        expect(Math.atan2(y3, x3) * (180 / Math.PI)).toBeCloseTo(10, 1);
+    });
+
+    it("shrinks the pips at low zoom and keeps them on the ring's edge", () => {
+        const pip = layer(PLACES, "pip-2-firm");
+        const large = ringRadius(9);
+        for (const [zoom, scale] of [
+            [4, 0.75],
+            [7, 1],
+            [9, 1],
+        ]) {
+            const size = evaluate(pip.layout?.["icon-size"], {}, {}, zoom);
+            expect(size).toBeCloseTo(scale);
+            const [x, y] = evaluate(
+                pip.layout?.["icon-offset"],
+                { ring: large },
+                {},
+                zoom,
+            ) as number[];
+            expect(Math.hypot(x, y) * (size as number)).toBeCloseTo(
+                large + 4,
+                2,
+            );
+        }
+    });
+
+    it("gives the labels of the places with most documents the first place", () => {
+        for (const id of ["place-labels", "place-badges"]) {
+            const labels = layer(PLACES, id).layout ?? {};
+            expect(labels["text-allow-overlap"]).toBe(false);
+            expect(labels["text-variable-anchor"]).toEqual([
+                "top",
+                "bottom",
+                "left",
+                "right",
+            ]);
+            const key = labels["symbol-sort-key"];
+            expect(evaluate(key, { documents: 9 })).toBeLessThan(
+                evaluate(key, { documents: 2 }) as number,
+            );
+        }
+    });
+
+    it("rims the selected point in blue, not in a slot hue", () => {
+        const stroke = layer(PLACES, "place-points").paint?.[
+            "circle-stroke-color"
+        ];
+        expect(evaluate(stroke, { kind: "point" }, { selected: true })).toEqual(
+            evaluate(FALLBACK_COLOURS.blue, {}),
+        );
+        expect(evaluate(stroke, { kind: "point" }, {})).toEqual(
+            evaluate(FALLBACK_COLOURS.surface, {}),
+        );
+    });
+
+    it("fades a dimmed place to the linked fade", () => {
+        const opacity = layer(PLACES, "place-points").paint?.["circle-opacity"];
+        expect(evaluate(opacity, {}, { dim: true })).toBe(0.35);
+        expect(evaluate(opacity, {}, {})).toBe(1);
+    });
+
+    it("draws dashed places with the dashed ring image only", () => {
+        const solid = layer(PLACES, "place-rings").filter;
+        const dashed = layer(PLACES, "place-rings-dashed");
+        expect(evaluate(solid, { dashed: true })).toBe(false);
+        expect(evaluate(dashed.filter, { dashed: true })).toBe(true);
+        expect(dashed.layout?.["icon-image"]).toBe(RING_DASHED_IMAGE);
+    });
+});
+
+describe("territoryLayers", () => {
+    it("holds a cell fill, a hatch fill on hatched cells and an edge line", () => {
+        expect(TERRITORIES.map((candidate) => candidate.id)).toEqual([
+            "territory-cells",
+            "territory-hatch",
+            "territory-casing",
+            "territory-edges",
+        ]);
+        const hatch = layer(TERRITORIES, "territory-hatch");
+        expect(hatch.paint?.["fill-pattern"]).toBe(HATCH_IMAGE);
+        expect(evaluate(hatch.filter, { layer: "cell", hatched: true })).toBe(
+            true,
+        );
+        expect(evaluate(hatch.filter, { layer: "cell", hatched: false })).toBe(
+            false,
+        );
+        expect(layer(TERRITORIES, "territory-edges").type).toBe("line");
+    });
+
+    it("paints a slot in its hue and a dominance frontier in surface", () => {
+        const cells = layer(TERRITORIES, "territory-cells").paint?.[
+            "fill-color"
+        ];
+        expect(evaluate(cells, { slot: 3 })).toEqual(
+            evaluate(FALLBACK_COLOURS.focus[2], {}),
+        );
+        const edges = layer(TERRITORIES, "territory-edges").paint?.[
+            "line-color"
+        ];
+        expect(evaluate(edges, { slot: 0 })).toEqual(
+            evaluate(FALLBACK_COLOURS.surface, {}),
+        );
+    });
+
+    it("lays the dominance frontier as a surface line on an ink casing", () => {
+        const casing = layer(TERRITORIES, "territory-casing");
+        expect(evaluate(casing.filter, { layer: "edge", slot: 0 })).toBe(true);
+        expect(evaluate(casing.filter, { layer: "edge", slot: 2 })).toBe(false);
+        expect(casing.paint?.["line-color"]).toBe(FALLBACK_COLOURS.ink);
+        const edges = layer(TERRITORIES, "territory-edges").paint ?? {};
+        const frontier = evaluate(edges["line-width"], { slot: 0 }) as number;
+        expect(casing.paint?.["line-width"] as number).toBeGreaterThan(
+            frontier + 2,
+        );
+        expect(territoryOpacity(null).casing).toBeGreaterThan(0.5);
+        expect(territoryOpacity(2).casing).toBeLessThan(0.2);
+    });
+
+    it("isolates one slot by paint, fading the others' cells, hatch and edges", () => {
+        const plain = territoryOpacity(null);
+        expect(
+            layer(TERRITORIES, "territory-cells").paint?.["fill-opacity"],
+        ).toEqual(plain.cells);
+        expect(
+            layer(TERRITORIES, "territory-hatch").paint?.["fill-opacity"],
+        ).toBe(0.55);
+        expect(
+            layer(TERRITORIES, "territory-edges").paint?.["line-opacity"],
+        ).toBe(1);
+        const only = territoryOpacity(4);
+        expect(evaluate(only.cells, { slot: 4, alpha: 0.3 })).toBeCloseTo(0.3);
+        expect(evaluate(only.cells, { slot: 1, alpha: 0.3 })).toBeCloseTo(0.06);
+        expect(evaluate(only.edges, { slot: 4 })).toBe(1);
+        expect(evaluate(only.edges, { slot: 0 })).toBeCloseTo(0.2);
+        expect(evaluate(only.hatch, { slot: 2 })).toBeCloseTo(0.11);
+    });
+
+    it("leaves the sea layer to the base style", () => {
+        expect(
+            TERRITORIES.some((candidate) => candidate.id === WATER_LAYER),
+        ).toBe(false);
+    });
+});
+
+describe("bordersFilter", () => {
+    it("keeps country borders alive in the middle of the year", () => {
+        const filter = bordersFilter(1350);
+        const text = JSON.stringify(filter);
+        expect(text).toContain('["<=",["coalesce",["get","start_decdate"]');
+        expect(text).toContain('[">=",["coalesce",["get","end_decdate"]');
+        expect(text).toContain("1350.5");
+        expect(
+            evaluate(filter, {
+                admin_level: 2,
+                start_decdate: 1300,
+                end_decdate: 1400,
+            }),
+        ).toBe(true);
+        expect(evaluate(filter, { admin_level: 2, start_decdate: 1351 })).toBe(
+            false,
+        );
+        expect(evaluate(filter, { admin_level: 1 })).toBe(true);
+        expect(
+            evaluate(filter, {
+                admin_level: 4,
+                start_decdate: 1300,
+                end_decdate: 1400,
+            }),
+        ).toBe(false);
+    });
+
+    it("keeps only the admin level clause without a year", () => {
+        const text = JSON.stringify(bordersFilter(null));
+        expect(text).not.toContain("decdate");
+        expect(text).toContain("admin_level");
+        expect(evaluate(bordersFilter(null), { admin_level: 2 })).toBe(true);
+    });
+
+    it("loads the borders from the continental view, zoom 4", () => {
+        expect(BORDERS_MIN_ZOOM).toBe(0);
+        expect(
+            (bordersLayer(null, FALLBACK_COLOURS, true) as { minzoom?: number })
+                .minzoom,
+        ).toBe(BORDERS_MIN_ZOOM);
+    });
+
+    it("draws the borders in the ring grey, dashed, hidden on request", () => {
+        const borders = bordersLayer(null, FALLBACK_COLOURS, false) as {
+            layout?: Record<string, unknown>;
+            paint?: Record<string, unknown>;
+        };
+        expect(borders.paint?.["line-color"]).toBe(FALLBACK_COLOURS.ring);
+        expect(borders.layout?.visibility).toBe("none");
+    });
+});
+
+describe("borderNamesLayer", () => {
+    const NAMES = layer(
+        [borderNamesLayer(1200, FALLBACK_COLOURS, true, "fr")],
+        BORDER_NAMES_LAYER,
+    );
+    const alive = { start_decdate: 1150, end_decdate: 1250 };
+
+    it("reads the polity centroids of the borders' source, hidden with them", () => {
+        expect(NAMES.type).toBe("symbol");
+        expect((NAMES as { source?: string }).source).toBe(OHM_SOURCE);
+        expect((NAMES as { "source-layer"?: string })["source-layer"]).toBe(
+            "land_ohm_centroids",
+        );
+        expect(
+            layer(
+                [borderNamesLayer(null, FALLBACK_COLOURS, false, "en")],
+                BORDER_NAMES_LAYER,
+            ).layout?.visibility,
+        ).toBe("none");
+        expect(NAMES.layout?.visibility).toBe("visible");
+    });
+
+    it("keeps the polities alive in the middle of the year, by the borders' rule", () => {
+        const filter = borderNamesFilter(1200);
+        expect(JSON.stringify(filter)).toContain(
+            JSON.stringify((bordersFilter(1200) as unknown[]).slice(2)).slice(
+                1,
+                -1,
+            ),
+        );
+        expect(evaluate(filter, { admin_level: 2, ...alive }, {}, 4)).toBe(
+            true,
+        );
+        expect(
+            evaluate(filter, { admin_level: 2, start_decdate: 1201 }, {}, 4),
+        ).toBe(false);
+        expect(
+            evaluate(
+                filter,
+                { admin_level: 1, start_decdate: 1000, end_decdate: 1200 },
+                {},
+                4,
+            ),
+        ).toBe(false);
+        expect(
+            evaluate(borderNamesFilter(null), { admin_level: 2 }, {}, 4),
+        ).toBe(true);
+        expect(JSON.stringify(borderNamesFilter(null))).not.toContain(
+            "decdate",
+        );
+    });
+
+    it("names the country level at every zoom, the regional ones only from their zoom", () => {
+        const filter = borderNamesFilter(1200);
+        const below = REGIONAL_NAMES_MIN_ZOOM - 1;
+        expect(REGIONAL_NAMES_MIN_ZOOM).toBe(6);
+        expect(evaluate(filter, { admin_level: 1, ...alive }, {}, 0)).toBe(
+            true,
+        );
+        for (const level of [3, 4]) {
+            expect(
+                evaluate(filter, { admin_level: level, ...alive }, {}, below),
+            ).toBe(false);
+            expect(
+                evaluate(
+                    filter,
+                    { admin_level: level, ...alive },
+                    {},
+                    REGIONAL_NAMES_MIN_ZOOM,
+                ),
+            ).toBe(true);
+        }
+        expect(evaluate(filter, { admin_level: 5, ...alive }, {}, 12)).toBe(
+            false,
+        );
+        expect(NAMES.filter).toEqual(filter);
+    });
+
+    it("writes the name in the interface language, else in English, else as stored", () => {
+        const field = borderNameField("fr-FR");
+        expect(field).toEqual([
+            "coalesce",
+            ["get", "name_fr"],
+            ["get", "name_en"],
+            ["get", "name"],
+        ]);
+        expect(NAMES.layout?.["text-field"]).toEqual(borderNameField("fr"));
+        const latin = { name: "Regnum Hungariae" };
+        expect(
+            evaluate(field, {
+                ...latin,
+                name_fr: "Royaume de Hongrie",
+                name_en: "Kingdom of Hungary",
+            }),
+        ).toBe("Royaume de Hongrie");
+        expect(
+            evaluate(field, { ...latin, name_en: "Kingdom of Hungary" }),
+        ).toBe("Kingdom of Hungary");
+        expect(evaluate(field, latin)).toBe("Regnum Hungariae");
+        expect(borderNameField("en")).toEqual([
+            "coalesce",
+            ["get", "name_en"],
+            ["get", "name"],
+        ]);
+    });
+
+    it("sets the names apart from the places: italic capitals, muted ink, land halo, smaller", () => {
+        expect(NAMES.layout?.["text-font"]).toEqual(LABEL_FONT_ITALIC);
+        expect(NAMES.layout?.["text-transform"]).toBe("uppercase");
+        expect(NAMES.layout?.["text-letter-spacing"]).toBeGreaterThan(0);
+        expect(NAMES.paint?.["text-color"]).toBe(FALLBACK_COLOURS.inkMuted);
+        expect(NAMES.paint?.["text-halo-color"]).toBe(FALLBACK_COLOURS.land);
+        const placeSize = layer(PLACES, "place-labels").layout?.["text-size"];
+        const size = NAMES.layout?.["text-size"];
+        for (const zoom of [4, 6, 8]) {
+            const place = evaluate(placeSize, {}, {}, zoom) as number;
+            const national = evaluate(
+                size,
+                { admin_level: 2 },
+                {},
+                zoom,
+            ) as number;
+            const regional = evaluate(
+                size,
+                { admin_level: 4 },
+                {},
+                zoom,
+            ) as number;
+            expect(national).toBeLessThan(place);
+            expect(regional).toBeLessThan(national);
+        }
+    });
+
+    it("lets the largest polity win, never overlapping another label", () => {
+        const key = NAMES.layout?.["symbol-sort-key"];
+        expect(
+            (evaluate(key, { area: 9e11 }) as number) <
+                (evaluate(key, { area: 3e7 }) as number),
+        ).toBe(true);
+        expect(NAMES.layout?.["text-allow-overlap"]).toBe(false);
+        expect(NAMES.layout?.["text-ignore-placement"]).toBe(false);
+    });
+});
+
+describe("the drawn images", () => {
+    it("is transparent, at its size, without a 2D context", () => {
+        const image = dashedRingImage("#000000", () => null);
+        expect(image.width).toBe(64);
+        expect(image.height).toBe(64);
+        expect(image.data.every((value) => value === 0)).toBe(true);
+    });
+
+    it("draws the tie hatch in 1 CSS px paper lines", () => {
+        const drawn: Record<string, unknown> = {};
+        const context = new Proxy(
+            {
+                getImageData: vi.fn(() => ({
+                    data: new Uint8ClampedArray(12 * 12 * 4),
+                })),
+            },
+            {
+                get: (target, key) =>
+                    key in target
+                        ? target[key as keyof typeof target]
+                        : () => undefined,
+                set: (_, key, value) => {
+                    drawn[String(key)] = value;
+                    return true;
+                },
+            },
+        ) as unknown as CanvasRenderingContext2D;
+        const image = hatchImage("#fbfaf6", () => context);
+        expect(image.width).toBe(12);
+        expect(drawn.lineWidth).toBe(2);
+        expect(drawn.strokeStyle).toBe("#fbfaf6");
+    });
+
+    it("reads back what the context drew", () => {
+        const drawn = new Uint8ClampedArray(28 * 28 * 4).fill(7);
+        const context = new Proxy(
+            {
+                getImageData: vi.fn(() => ({ data: drawn })),
+                setLineDash: vi.fn(),
+            },
+            {
+                get: (target, key) =>
+                    key in target
+                        ? target[key as keyof typeof target]
+                        : () => undefined,
+                set: () => true,
+            },
+        ) as unknown as CanvasRenderingContext2D;
+        const images = stageImages(FALLBACK_COLOURS, () => context);
+        expect([...images.keys()]).toEqual([
+            RING_DASHED_IMAGE,
+            HATCH_IMAGE,
+            "pip-firm-1",
+            "pip-pale-1",
+            "pip-firm-2",
+            "pip-pale-2",
+            "pip-firm-3",
+            "pip-pale-3",
+            "pip-firm-4",
+            "pip-pale-4",
+        ]);
+        expect(images.get("pip-pale-3")?.width).toBe(28);
+        expect(images.get("pip-pale-3")?.data[0]).toBe(7);
+    });
+});

@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from arches.app.models.models import ResourceInstance
@@ -48,7 +48,11 @@ class Embargo(models.Model):
     after its detection day. ``ends_on`` empty means the restriction has no end
     and is never lifted automatically: an exception only a superuser records.
     The end may not be later than ``EMBARGO_MAX_MONTHS`` after the day the
-    record was created, unless a superuser sets it.
+    record was created, unless a superuser sets it, nor closer than the final
+    notice stage (``min(EMBARGO_NOTICE_DAYS)`` days) from today, for anyone.
+    The daily pass moves an end that would come without its final notice to
+    that many days from today (``accounts.embargo.redate_unwarned``), even past
+    ``EMBARGO_MAX_MONTHS``.
     """
 
     ACTIVE = "active"
@@ -116,14 +120,24 @@ class Embargo(models.Model):
     def validate_end(self, ends_on, *, superuser=False, today=None):
         """Raise ``ValidationError`` unless *ends_on* is an acceptable end date.
 
-        Empty is accepted (no end; the admin form leaves that to a superuser). A date must be after *today*; beyond the
-        maximum duration only a superuser may set it.
+        Empty is accepted (no end; the admin form leaves that to a superuser). A
+        date must be at least the final notice stage (``min(EMBARGO_NOTICE_DAYS)``
+        days) after *today*, for everyone: every lift follows its final notice
+        by that much. Beyond the maximum duration only a superuser may set it.
         """
         if ends_on is None:
             return
         today = today or date.today()
-        if ends_on <= today:
-            raise ValidationError(_("The end date must be after today."))
+        lead = min(settings.EMBARGO_NOTICE_DAYS, default=1)
+        if ends_on < today + timedelta(days=lead):
+            raise ValidationError(
+                _(
+                    "The end date must be at least %(days)d days after today: the "
+                    "final notice is sent that many days before the restriction is "
+                    "lifted."
+                ),
+                params={"days": lead},
+            )
         latest = self.latest_allowed_end()
         if not superuser and ends_on > latest:
             raise ValidationError(

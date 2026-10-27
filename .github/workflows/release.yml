@@ -1,0 +1,346 @@
+name: release
+
+# Turns a tag into a signed release without rebuilding anything. The image was
+# built and proven on the tagged commit by staging.yml and sits in GHCR as
+# sha-<commit>; this workflow:
+#   guard    final tags (vX.Y.Z) must sit on the first-parent line of main,
+#            release candidates (vX.Y.Z-rc.N) on the integration branch,
+#            anything else is refused; a ruleset must protect the v* tags
+#   promote  verifies the build provenance staging.yml attached to the
+#            sha-<commit> digest (workflow staging.yml, branch main for a
+#            final tag, the integration branch for a candidate), gives it the
+#            tag name and checks the digest did not change
+#   scan     Trivy, blocking, with the expiries of .trivyignore
+#   sign     SBOM attestation, then a keyless cosign signature of the digest
+#            (certificate identity = this workflow at the tag, GitHub OIDC
+#            issuer)
+#   verify   deploy/scripts/release-verify.sh, the policy a host runs, on what
+#            was just signed, and the refusals it must keep
+#   release  the GitHub Release (a pre-release for a candidate)
+# There is no manual trigger: « Re-run jobs » on a run of the tag (kept 30
+# days) repeats promotion and signature on the same digest, with the
+# release.yml and .trivyignore of the tagged commit, and edits the existing
+# Release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/crc-centre-recherche-conservation/manuspectrum
+
+jobs:
+  guard:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      commit: ${{ steps.guard.outputs.commit }}
+      kind: ${{ steps.guard.outputs.kind }}
+    steps:
+      # The whole history: the ancestry of the tag is judged against origin/main
+      # and the integration branch.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: A ruleset protects the release tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: bash deploy/scripts/release-ruleset-check.sh "$REPO"
+
+      - name: Check the tag against the branch rules
+        id: guard
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          commit="$(bash deploy/scripts/release-ref-guard.sh "$TAG")"
+          if [ "$commit" != "$GITHUB_SHA" ]; then
+            echo "::error::$TAG resolves to $commit but the workflow runs on $GITHUB_SHA"
+            exit 1
+          fi
+          case "$TAG" in
+            *-rc.*) kind=rc ;;
+            *) kind=final ;;
+          esac
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+  promote:
+    needs: guard
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      attestations: read
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      digest: ${{ steps.promote.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Give the tested digest the tag name
+        id: promote
+        env:
+          TAG: ${{ github.ref_name }}
+          COMMIT: ${{ needs.guard.outputs.commit }}
+          KIND: ${{ needs.guard.outputs.kind }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source="$IMAGE_NAME:sha-$COMMIT"
+          if ! digest="$(bash deploy/scripts/image-digest.sh "$source")"; then
+            echo "::error::no image $source in GHCR: staging.yml has not published commit $COMMIT (it did not run on it, or it failed). Run staging.yml on this commit, then run this workflow again."
+            exit 1
+          fi
+          if [ "$KIND" = rc ]; then
+            source_ref=refs/heads/feat/production-platform
+          else
+            source_ref=refs/heads/main
+          fi
+          if ! gh attestation verify "oci://$IMAGE_NAME@$digest" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/staging.yml" \
+            --source-ref "$source_ref" --source-digest "$COMMIT" \
+            --deny-self-hosted-runners; then
+            echo "::error::$source has no build provenance from staging.yml on $source_ref: a $KIND release needs an image that staging.yml built and proved on that branch"
+            exit 1
+          fi
+          docker buildx imagetools create --tag "$IMAGE_NAME:$TAG" "$IMAGE_NAME@$digest"
+          promoted="$(bash deploy/scripts/image-digest.sh "$IMAGE_NAME:$TAG")"
+          if [ "$promoted" != "$digest" ]; then
+            echo "::error::$IMAGE_NAME:$TAG is $promoted, the tested image is $digest"
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Promoted image"
+            echo
+            echo "- Source: \`sha-$COMMIT\`"
+            echo "- Tag: \`$TAG\`"
+            echo "- Digest: \`$digest\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  scan:
+    needs: promote
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      DIGEST: ${{ needs.promote.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
+          version: v0.74.0
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          format: json
+          output: ${{ runner.temp }}/trivy.json
+          exit-code: "0"
+
+      - name: Trivy report (blocking)
+        run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json" --fail
+
+  sign:
+    needs: [promote, scan]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      DIGEST: ${{ needs.promote.outputs.digest }}
+    steps:
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Software bill of materials
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Attach the bill of materials
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ env.DIGEST }}
+          sbom-path: ${{ runner.temp }}/sbom.spdx.json
+          push-to-registry: true
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      # The digest carries attestations (staging.yml's provenance, the SBOM)
+      # but no signature of this tag yet: cosign verify must refuse it. Only
+      # the first attempt proves it; a re-run finds the first run's signature.
+      - name: Attestations are not a signature
+        env:
+          IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          if cosign verify --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$IMAGE_NAME@$DIGEST" >/dev/null 2>&1; then
+            if [ "$ATTEMPT" = 1 ]; then
+              echo "::error::cosign verify accepted a digest that is attested but not signed"
+              exit 1
+            fi
+            echo "signed by an earlier attempt of this run: nothing to prove here"
+          else
+            echo "attested and not signed: cosign verify refuses it, as expected"
+          fi
+
+      - name: Sign the digest (keyless)
+        run: cosign sign --yes "$IMAGE_NAME@$DIGEST"
+
+  verify:
+    needs: [guard, promote, sign]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      DIGEST: ${{ needs.promote.outputs.digest }}
+      KIND: ${{ needs.guard.outputs.kind }}
+      TAG: ${{ github.ref_name }}
+      COMMIT: ${{ needs.guard.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: The policy a host runs accepts the release
+        run: |
+          export DOCKER_CONFIG_DIR="$RUNNER_TEMP/docker-config"
+          mkdir -p "$DOCKER_CONFIG_DIR"
+          cp "$HOME/.docker/config.json" "$DOCKER_CONFIG_DIR/config.json"
+          if [ "$KIND" = rc ]; then policy=rc; else policy=prod; fi
+          echo "policy: $policy"
+          bash deploy/scripts/release-verify.sh --policy "$policy" "$IMAGE_NAME@$DIGEST" "$TAG"
+
+      # The signed digest is also the one tagged sha-<commit>: only the way it
+      # is named, and the tag it is verified for, can tell a release from a
+      # staging image.
+      - name: The policy refuses what it must refuse
+        run: |
+          refused() { # refused DESCRIPTION COMMAND...
+            description="$1"; shift
+            if "$@" >/dev/null 2>&1; then
+              echo "::error::accepted but must be refused: $description"
+              exit 1
+            fi
+            echo "refused, as expected: $description"
+          }
+          export DOCKER_CONFIG_DIR="$RUNNER_TEMP/docker-config"
+          verify=(bash deploy/scripts/release-verify.sh)
+          refused "a staging tag as the image reference" \
+            "${verify[@]}" --policy rc "$IMAGE_NAME:sha-$COMMIT" "$TAG"
+          refused "sha-<commit> as the release tag" \
+            "${verify[@]}" --policy rc "$IMAGE_NAME@$DIGEST" "sha-$COMMIT"
+          refused "a signature of another tag (identity bound to the tag)" \
+            "${verify[@]}" --policy rc "$IMAGE_NAME@$DIGEST" v0.0.0 --commit "$COMMIT"
+          if [ "$KIND" = rc ]; then
+            refused "a release candidate under the prod policy" \
+              "${verify[@]}" --policy prod "$IMAGE_NAME@$DIGEST" "$TAG"
+          fi
+
+  release:
+    needs: [guard, promote, verify]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      DIGEST: ${{ needs.promote.outputs.digest }}
+      COMMIT: ${{ needs.guard.outputs.commit }}
+      KIND: ${{ needs.guard.outputs.kind }}
+    steps:
+      - name: Create or update the GitHub Release
+        run: |
+          if [ "$KIND" = rc ]; then prerelease=true; else prerelease=false; fi
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "Image: \`$IMAGE_NAME@$DIGEST\`"
+            echo
+            echo "Commit: \`$COMMIT\`. Signed by this repository's release workflow (cosign, keyless); the SBOM and the build provenance are attached to the image in GHCR."
+            echo
+            echo "Verify it with \`deploy/scripts/release-verify.sh\` (see \`deploy/RELEASES.md\`)."
+          } > "$notes"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes" --prerelease="$prerelease"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
+              --notes-file "$notes" --prerelease="$prerelease"
+          fi

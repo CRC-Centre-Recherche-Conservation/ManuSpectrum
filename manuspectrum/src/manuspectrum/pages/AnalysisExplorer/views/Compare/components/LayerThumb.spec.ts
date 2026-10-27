@@ -75,4 +75,16 @@ describe("LayerThumb", () => {
         expect(thumb({ stop: true }).attributes("tabindex")).toBe("0");
         expect(thumb().attributes("tabindex")).toBe("-1");
     });
+
+    it("draws an image without service from its own url", () => {
+        const url = "https://iiif.example/folio/full/200,/0/default.jpg";
+        const view = thumb({ service: null, url });
+        expect(view.find("img").attributes("src")).toBe(url);
+    });
+
+    it("refuses a url that is not http(s)", () => {
+        const view = thumb({ service: null, url: "javascript:alert(1)" });
+        expect(view.find("img").exists()).toBe(false);
+        expect(view.find(".flat").exists()).toBe(true);
+    });
 });

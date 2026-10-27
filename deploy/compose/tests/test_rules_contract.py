@@ -489,9 +489,23 @@ class RuleContractTests(unittest.TestCase):
 
     def test_absent_based_alerts_wait_for_node_exporter(self):
         for _, rule in self.alerts:
-            if "absent(" in rule["expr"]:
+            if re.search(r"absent(_over_time)?\(", rule["expr"]):
                 with self.subTest(alert=rule["alert"]):
                     self.assertIn('up{job="node"} == 1', rule["expr"])
+
+    def test_worker_timestamp_alerts_also_fire_when_the_series_is_absent(self):
+        by_name = {r["alert"]: r["expr"] for _, r in self.alerts}
+        for name in (
+            "ActiveAccountsStale",
+            "ActivityStale",
+            "LoginRecordsPruneStale",
+            "EmbargoPassStale",
+            "WorkflowCleanupStale",
+            "AccountRetentionStale",
+        ):
+            with self.subTest(alert=name):
+                self.assertIn("absent_over_time(", by_name[name])
+                self.assertIn('and on() (up{job="node"} == 1)', by_name[name])
 
     def test_the_fresh_install_silence_covers_the_alerts_a_new_host_raises(self):
         makefile = (REPO / "deploy" / "Makefile").read_text(encoding="utf-8")

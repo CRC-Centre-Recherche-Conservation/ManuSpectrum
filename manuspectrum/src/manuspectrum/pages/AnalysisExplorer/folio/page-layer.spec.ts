@@ -8,6 +8,7 @@ import {
     layPage,
     layServed,
     nativeZoomOf,
+    pageBoundsOf,
     servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import { overlayPane } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
@@ -165,6 +166,23 @@ describe("servedSize", () => {
         expect(nativeZoomOf(page)).toBe(2);
     });
 
+    it("lays the page bounds at size / 2^nativeZoom units, y down", async () => {
+        fake = pendingPage([
+            { x: 300, y: 500 },
+            { x: 1529, y: 2405 },
+        ]);
+        const page = layPage(map, "https://iiif.example/image/p1", vi.fn());
+        expect(pageBoundsOf(page)).toBeNull();
+        answer.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(pageBoundsOf(page)).toEqual([
+            [-2405 / 2, 0],
+            [0, 1529 / 2],
+        ]);
+        expect(pageBoundsOf(null)).toBeNull();
+    });
+
     it("reads no size from a missing page or a size that is not a number", async () => {
         expect(servedSize(null)).toBeNull();
         expect(nativeZoomOf(null)).toBe(0);
@@ -284,6 +302,96 @@ describe("layImage", () => {
         expect(layer).toBeInstanceOf(L.ImageOverlay);
         expect(map.hasLayer(layer)).toBe(true);
         expect(drawnExtent(layer)).toEqual({ w: 600, h: 1000 });
+    });
+
+    it("lays a capture at its declared size, not at the size the server sent", async () => {
+        const read = vi.fn();
+        const capture = { ...BY_URL, width: 1200, height: 2000 };
+        layImage(
+            map,
+            capture,
+            { read, failed: vi.fn() },
+            { declaredSize: true },
+        );
+        await settle();
+        const [size, , layer] = read.mock.calls[0];
+        expect(size).toEqual({ w: 1200, h: 2000 });
+        expect(drawnExtent(layer)).toEqual({ w: 1200, h: 2000 });
+    });
+
+    it("lays a capture at its frame inside its declared size, the rest left empty", async () => {
+        const read = vi.fn();
+        const capture = {
+            ...BY_URL,
+            width: 1200,
+            height: 2000,
+            frame: { x: 100, y: 500, w: 600, h: 1000 },
+        };
+        layImage(
+            map,
+            capture,
+            { read, failed: vi.fn() },
+            { declaredSize: true },
+        );
+        await settle();
+        const [size, , layer] = read.mock.calls[0];
+        expect(size).toEqual({ w: 1200, h: 2000 });
+        const box = (layer as L.ImageOverlay).getBounds();
+        expect(box.getEast() - box.getWest()).toBe(600);
+        expect(box.getNorth() - box.getSouth()).toBe(1000);
+        expect(box.getWest()).toBe(0 + 100);
+        expect(box.getNorth()).toBe(-500);
+    });
+
+    it("keeps a capture's frame in the frame of its scale group, lined up with a larger layer", async () => {
+        const LAYER_WIDTH = 1200;
+        const BIG_WIDTH = 1400;
+        const FRAME_INSET_X = 100;
+        const FRAME_INSET_Y = 500;
+        const CENTRING = (BIG_WIDTH - LAYER_WIDTH) / 2;
+        FakeImage.served = {
+            "https://img.example/a.png": { w: 300, h: 500 },
+            "https://img.example/big.png": { w: BIG_WIDTH, h: 2000 },
+        };
+        const scale = createScaleGroup();
+        const read = vi.fn();
+        layImage(
+            map,
+            {
+                ...BY_URL,
+                width: LAYER_WIDTH,
+                height: 2000,
+                frame: { x: FRAME_INSET_X, y: FRAME_INSET_Y, w: 300, h: 500 },
+            },
+            { read, failed: vi.fn() },
+            { scale, declaredSize: true },
+        );
+        layImage(
+            map,
+            { ...BY_URL, url: "https://img.example/big.png" },
+            { read, failed: vi.fn() },
+            { scale },
+        );
+        await settle();
+        const [photo, big] = read.mock.calls.map(
+            (call) => call[2] as L.ImageOverlay,
+        );
+        expect(scale.frame()).toEqual({ w: BIG_WIDTH, h: 2000 });
+        const at = (layer: L.ImageOverlay) => layer.getBounds().getWest();
+        expect(at(photo) - at(big)).toBe(CENTRING + FRAME_INSET_X);
+        const top = (layer: L.ImageOverlay) => layer.getBounds().getNorth();
+        expect(top(photo) - top(big)).toBe(-FRAME_INSET_Y);
+    });
+
+    it("keeps the natural size of an image with a declared size when not told to use it", async () => {
+        const read = vi.fn();
+        layImage(
+            map,
+            { ...BY_URL, width: 1200, height: 2000 },
+            { read, failed: vi.fn() },
+        );
+        await settle();
+        expect(read.mock.calls[0][0]).toEqual({ w: 600, h: 1000 });
     });
 
     it("fails when the image has no address or none answers, and reads one that answers", async () => {

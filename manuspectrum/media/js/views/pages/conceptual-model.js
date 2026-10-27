@@ -96,8 +96,6 @@ async function liveFigures() {
     }
     const tech = document.getElementById("ms-cm-technical-line");
     if (tech) {
-        // "32 controlled lists" is deliberately absent: arches_controlled_lists is
-        // not installed, so no code here can verify that figure.
         tech.textContent = trv(
             "msCmTechnical",
             "{nodegroups} field groups · {total} nodes ({data} of them data) · {properties} ontology properties · {thesauri} thesauri.",

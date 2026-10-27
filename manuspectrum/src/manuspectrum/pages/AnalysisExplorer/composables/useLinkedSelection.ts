@@ -40,7 +40,7 @@ const PREVIEW_POINTERS: readonly string[] = ["mouse", "pen"];
 /** How long the nodes that gained a slot stay marked for their bloom and their windows' breath (`--breathe-dur`). */
 const CUE_MS = 900;
 /** An open dialog, menu or popover, or a tooltip shown: Escape belongs to it. A popover's button carries `data-popover`. */
-const OPEN_POPUP =
+export const OPEN_POPUP =
     'dialog[open], [aria-haspopup][aria-expanded="true"], [data-popover][aria-expanded="true"], [role="tooltip"]:not([hidden])';
 const EDITABLE = "input, textarea, select, [contenteditable='true']";
 

@@ -147,11 +147,11 @@ class Fixtures:
             timestamp=datetime(2026, 1, 1, tzinfo=LOCAL_TZ),
         )
 
-    def restrict(self, resource, ends_on=None, by=None, undated=False):
+    def restrict(self, resource, ends_on=None, by=None, undated=False, noticed=False):
         """Restrict *resource* from the visitor and record it, as a request of *by* would.
 
         The row is dated by the detection rule unless *ends_on* sets another end
-        or *undated* clears it.
+        or *undated* clears it; *noticed* marks every notice stage as sent.
         """
         with mock.patch(
             "manuspectrum.signals.current_request",
@@ -163,6 +163,9 @@ class Fixtures:
         if ends_on or undated:
             row.change_end(ends_on, by=None)
             row.events.all().delete()
+        if noticed:
+            row.notices_sent = sorted(str(d) for d in settings.EMBARGO_NOTICE_DAYS)
+            row.save(update_fields=["notices_sent"])
         return row
 
     def go(self, now, **kwargs):
@@ -274,21 +277,33 @@ class ReconcileTests(PassCase):
 
 
 class DatingTests(PassCase):
-    def test_a_row_dated_by_the_pass_ends_exactly_the_maximum_after_its_local_day(self):
+    def dated_at(self, detected):
         from manuspectrum.accounts.embargo import record_restriction
 
-        chicago = ZoneInfo("America/Chicago")
-        detected = datetime(2026, 3, 2, 23, 30, tzinfo=chicago)
-        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 3))
         with mock.patch(
             "django.utils.timezone.now", return_value=detected.replace(tzinfo=None)
         ):
             self.assertTrue(record_restriction(self.resource_x.pk, now=detected))
-        row = Embargo.objects.get(resourceinstance=self.resource_x)
+        return Embargo.objects.get(resourceinstance=self.resource_x)
+
+    def test_a_row_dated_by_the_pass_ends_exactly_the_maximum_after_its_local_day(self):
+        detected = datetime(2026, 3, 2, 23, 30, tzinfo=LOCAL_TZ)
+        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 2))
+        row = self.dated_at(detected)
+        expected = date(2026, 3, 2) + relativedelta(months=settings.EMBARGO_MAX_MONTHS)
+        self.assertEqual(row.ends_on, expected)
+        self.assertEqual(row.start, date(2026, 3, 2))
+        self.assertEqual(row.latest_allowed_end(), expected)
+
+    @override_settings(TIME_ZONE="America/Chicago")
+    def test_the_local_day_is_the_paris_one_whatever_the_server_zone(self):
+        chicago = ZoneInfo("America/Chicago")
+        detected = datetime(2026, 3, 2, 23, 30, tzinfo=chicago)
+        self.assertEqual(detected.astimezone(LOCAL_TZ).date(), date(2026, 3, 3))
+        row = self.dated_at(detected)
         expected = date(2026, 3, 3) + relativedelta(months=settings.EMBARGO_MAX_MONTHS)
         self.assertEqual(row.ends_on, expected)
         self.assertEqual(row.start, date(2026, 3, 3))
-        self.assertEqual(row.latest_allowed_end(), expected)
 
 
 class NoticeTests(PassCase):
@@ -384,6 +399,11 @@ class NoticeTests(PassCase):
 
 
 class LiftTests(PassCase):
+    def restrict(self, resource, ends_on=None, **kwargs):
+        """Rows here got their notices: a lift needs the final one."""
+        kwargs.setdefault("noticed", True)
+        return super().restrict(resource, ends_on, **kwargs)
+
     def test_nothing_is_lifted_before_6_the_day_after_the_end_date(self):
         self.restrict(self.resource_x, ENDS)
         self.go(at(ENDS, hour=23))
@@ -572,6 +592,206 @@ class LiftTests(PassCase):
         )
 
 
+class NoticeFirstTests(PassCase):
+    REDATED = LIFT_TIME.date() + timedelta(days=7)
+
+    def test_an_overdue_restriction_never_warned_is_redated_and_noticed_not_lifted(
+        self,
+    ):
+        row = self.restrict(self.resource_x, ENDS, by=self.setter)
+        report, index = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        resource_id = str(self.resource_x.pk)
+        self.assertEqual(
+            (report.redated, report.noticed), ([resource_id], [resource_id])
+        )
+        self.assertEqual((report.due, report.lifted), ([], []))
+        self.assertEqual((row.state, row.ends_on), (Embargo.ACTIVE, self.REDATED))
+        self.assertIn("7", row.notices_sent)
+        self.assertFalse(self.readable(self.resource_x))
+        index.assert_not_called()
+        dated = row.events.get(kind=EmbargoEvent.DATED)
+        self.assertEqual(
+            (dated.by, dated.from_date, dated.to_date), (None, ENDS, self.REDATED)
+        )
+        self.assertTrue(row.events.filter(kind=EmbargoEvent.NOTICED).exists())
+        self.assertIn(self.creator.email, self.recipients())
+        self.assertFalse(any("now public" in m.subject for m in mail.outbox))
+
+    def test_the_redated_restriction_is_lifted_once_its_new_date_is_passed(self):
+        self.restrict(self.resource_x, ENDS)
+        self.go(LIFT_TIME)
+        report, _ = self.go(at(self.REDATED - timedelta(days=1)))
+        self.assertEqual((report.redated, report.lifted), ([], []))
+        report, _ = self.go(at(self.REDATED + timedelta(days=1)))
+        self.assertEqual(report.lifted, [str(self.resource_x.pk)])
+        self.assertTrue(self.readable(self.resource_x))
+
+    def test_an_end_today_without_the_final_notice_is_redated(self):
+        row = self.restrict(self.resource_x, LIFT_TIME.date())
+        report, _ = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        self.assertEqual(report.redated, [str(self.resource_x.pk)])
+        self.assertEqual(row.ends_on, self.REDATED)
+
+    def test_a_restriction_with_its_final_notice_is_lifted_as_today(self):
+        row = self.restrict(self.resource_x, ENDS)
+        Embargo.objects.filter(pk=row.pk).update(notices_sent=["7"])
+        report, _ = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        self.assertEqual(
+            (report.redated, report.lifted), ([], [str(self.resource_x.pk)])
+        )
+        self.assertEqual((row.state, row.ends_on), (Embargo.LIFTED, ENDS))
+
+    def test_a_dry_run_reports_redated_and_noticed_and_writes_nothing(self):
+        row = self.restrict(self.resource_x, ENDS)
+        report, index = self.go(LIFT_TIME, apply=False)
+        row.refresh_from_db()
+        resource_id = str(self.resource_x.pk)
+        self.assertEqual(
+            (report.redated, report.noticed), ([resource_id], [resource_id])
+        )
+        self.assertEqual((report.due, report.lifted), ([], []))
+        self.assertEqual((row.ends_on, row.notices_sent), (ENDS, []))
+        self.assertEqual((row.events.count(), mail.outbox), (0, []))
+        index.assert_not_called()
+
+    def test_an_end_within_7_days_without_the_final_notice_is_moved_to_7_days(self):
+        row = self.restrict(self.resource_x, LIFT_TIME.date() + timedelta(days=3))
+        report, _ = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        self.assertEqual(report.redated, [str(self.resource_x.pk)])
+        self.assertEqual(row.ends_on, self.REDATED)
+        self.assertIn("7", row.notices_sent)
+
+    def test_an_end_7_days_out_gets_its_final_notice_without_a_move(self):
+        row = self.restrict(self.resource_x, self.REDATED)
+        report, _ = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        self.assertEqual(report.redated, [])
+        self.assertEqual(
+            (row.ends_on, report.noticed), (self.REDATED, [str(self.resource_x.pk)])
+        )
+
+    def test_the_notice_of_a_moved_restriction_says_the_date_was_moved(self):
+        self.restrict(self.resource_x, ENDS)
+        self.go(LIFT_TIME)
+        body = mail.outbox[0].body
+        self.assertIn("was moved", body)
+        self.assertIn("a été repoussée", body)
+
+    def test_the_notice_of_a_restriction_on_schedule_does_not_mention_a_move(self):
+        self.restrict(self.resource_x, self.REDATED)
+        self.go(LIFT_TIME)
+        self.assertNotIn("was moved", mail.outbox[0].body)
+
+    def test_an_admin_end_7_days_out_is_noticed_next_morning_without_a_move(self):
+        set_on = LIFT_TIME.date()
+        row = self.restrict(self.resource_x, set_on + timedelta(days=7))
+        next_morning = LIFT_TIME + timedelta(days=1)
+        report, _ = self.go(next_morning)
+        row.refresh_from_db()
+        self.assertEqual(report.redated, [])
+        self.assertEqual(report.noticed, [str(self.resource_x.pk)])
+        self.assertEqual(row.ends_on, set_on + timedelta(days=7))
+        self.assertIn("7", row.notices_sent)
+        self.assertNotIn("was moved", mail.outbox[0].body)
+        report, _ = self.go(next_morning + timedelta(days=7) - timedelta(minutes=1))
+        self.assertEqual(report.lifted, [])
+        report, _ = self.go(next_morning + timedelta(days=7))
+        self.assertEqual(report.lifted, [str(self.resource_x.pk)])
+
+    def test_the_command_dry_run_names_the_redated_restriction(self):
+        self.restrict(self.resource_x, ENDS)
+        out = io.StringIO()
+        with mock.patch(
+            "manuspectrum.accounts.embargo.timezone.now", return_value=LIFT_TIME
+        ):
+            call_command("release_expired_embargoes", stdout=out)
+        self.assertIn("1 would be re-dated for a final notice", out.getvalue())
+        self.assertNotIn("would be due", out.getvalue())
+
+
+class UndeliveredNoticeTests(PassCase):
+    def test_a_final_notice_nobody_received_is_not_recorded_and_the_end_moves(self):
+        seven_days = LIFT_TIME.date() + timedelta(days=7)
+        row = self.restrict(self.resource_x, seven_days, by=self.setter)
+        resource_id = str(self.resource_x.pk)
+        for day in (0, 1):
+            with mock.patch(
+                "manuspectrum.accounts.notices.deliver", return_value="failed"
+            ):
+                report, _ = self.go(LIFT_TIME + timedelta(days=day))
+            row.refresh_from_db()
+            self.assertEqual((report.redated, report.noticed), ([], []))
+            self.assertEqual(report.undelivered, [resource_id])
+            self.assertEqual(row.ends_on, seven_days)
+            self.assertNotIn("7", row.notices_sent)
+            self.assertFalse(row.events.filter(kind=EmbargoEvent.NOTICED).exists())
+        delivered = LIFT_TIME + timedelta(days=2)
+        report, _ = self.go(delivered)
+        row.refresh_from_db()
+        self.assertEqual(report.redated, [resource_id])
+        self.assertEqual(row.ends_on, delivered.date() + timedelta(days=7))
+        self.assertIn("7", row.notices_sent)
+        report, _ = self.go(at(row.ends_on))
+        self.assertEqual(report.lifted, [])
+        report, _ = self.go(at(row.ends_on + timedelta(days=1)))
+        self.assertEqual(report.lifted, [resource_id])
+
+    def test_a_send_that_raises_releases_the_claim(self):
+        row = self.restrict(self.resource_x, LIFT_TIME.date() + timedelta(days=7))
+        with mock.patch(
+            "manuspectrum.accounts.notices.send_account_mail",
+            side_effect=RuntimeError("smtp"),
+        ):
+            with self.assertLogs("manuspectrum.accounts.embargo", "ERROR"):
+                report, _ = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        self.assertEqual(report.undelivered, [str(self.resource_x.pk)])
+        self.assertNotIn("7", row.notices_sent)
+        self.assertFalse(row.events.filter(kind=EmbargoEvent.NOTICED).exists())
+
+    def test_a_helper_that_raises_releases_only_its_rows(self):
+        other = self.resource(creator=self.creator, name="Other")
+        broken = self.restrict(self.resource_x, LIFT_TIME.date() + timedelta(days=7))
+        fine = self.restrict(other, LIFT_TIME.date() + timedelta(days=20))
+        real = embargo._group_by_recipient
+
+        def group(rows):
+            if any(r.pk == broken.pk for r in rows):
+                raise RuntimeError("query")
+            return real(rows)
+
+        with mock.patch.object(embargo, "_group_by_recipient", side_effect=group):
+            with self.assertLogs("manuspectrum.accounts.embargo", "ERROR"):
+                report, _ = self.go(LIFT_TIME)
+        broken.refresh_from_db()
+        fine.refresh_from_db()
+        self.assertEqual(report.undelivered, [str(self.resource_x.pk)])
+        self.assertEqual(report.noticed, [str(other.pk)])
+        self.assertEqual(broken.notices_sent, [])
+        self.assertEqual(fine.notices_sent, ["30"])
+
+    def test_a_notice_with_no_deliverable_recipient_is_recorded(self):
+        orphan = self.resource(name="Orphan")
+        row = self.restrict(orphan, LIFT_TIME.date() + timedelta(days=7))
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            report, _ = self.go(LIFT_TIME)
+        row.refresh_from_db()
+        self.assertEqual(report.undelivered, [])
+        self.assertIn("7", row.notices_sent)
+
+    def test_the_dry_run_is_unchanged_by_a_failing_relay(self):
+        self.restrict(self.resource_x, LIFT_TIME.date() + timedelta(days=7))
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            report, _ = self.go(LIFT_TIME, apply=False)
+        self.assertEqual(
+            (report.noticed, report.undelivered), ([str(self.resource_x.pk)], [])
+        )
+
+
 class CommandTests(PassCase):
     def test_the_command_is_a_dry_run_unless_applied(self):
         self.restrict(self.resource_x, ENDS)
@@ -589,6 +809,7 @@ class CommandTests(PassCase):
         out = io.StringIO()
         call_command("release_expired_embargoes", stdout=out)
         self.assertNotIn("would be due", out.getvalue())
+        Embargo.objects.update(notices_sent=["30", "7"])
         tomorrow = (date.today() + timedelta(days=3)).isoformat()
         with mock.patch("arches.app.models.resource.Resource.index"):
             with self.captureOnCommitCallbacks(execute=True):
@@ -641,6 +862,11 @@ class ScheduleTests(TestCase):
 @override_settings(ACCOUNT_SUMMARY_RECIPIENTS=SUMMARY)
 class ConcurrencyTests(Fixtures, TransactionTestCase):
     serialized_rollback = True
+
+    def restrict(self, resource, ends_on=None, **kwargs):
+        """Rows here got their notices: a lift needs the final one."""
+        kwargs.setdefault("noticed", True)
+        return super().restrict(resource, ends_on, **kwargs)
 
     def setUp(self):
         self.build()

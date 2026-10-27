@@ -274,14 +274,29 @@ describe("SpectrumPreview", () => {
         missing.unmount();
     });
 
-    it("says which file has nothing to draw", async () => {
+    it("says a file missing from the server is not found, without Retry", async () => {
+        const { wrapper } = mountPreview([readable(1), readable(2)], (url) =>
+            url.includes(uuid(702))
+                ? jsonResponse({}, 410)
+                : jsonResponse(SERIES),
+        );
+        await flushPromises();
+        expect(wrapper.text()).toContain(
+            "P2.csv: file not found on the server.",
+        );
+        expect(wrapper.text()).not.toContain("could not be drawn");
+        expect(wrapper.find("button.retry").exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("says which file has no preview", async () => {
         const { wrapper } = mountPreview(
             [readable(1)],
             () =>
                 ({ ok: true, status: 204, json: async () => ({}) }) as Response,
         );
         await flushPromises();
-        expect(wrapper.text()).toContain("P1.csv: nothing to draw.");
+        expect(wrapper.text()).toContain("P1.csv: no preview available.");
         expect(plotly.react).not.toHaveBeenCalled();
         wrapper.unmount();
     });

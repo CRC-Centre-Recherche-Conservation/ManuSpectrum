@@ -91,6 +91,7 @@ class PassReport:
 
     locked: bool = False
     noticed: list = field(default_factory=list)
+    undelivered: list = field(default_factory=list)
     cleaned: list = field(default_factory=list)
     kept_resources: list = field(default_factory=list)
     failed: list = field(default_factory=list)
@@ -342,7 +343,7 @@ def _run(now, report, *, apply, send_mail, only):
         kind, payload = outcome
         (noticed if kind == "notice" else cleaned).append(payload)
     if send_mail:
-        _mail_notices(noticed)
+        _mail_notices(noticed, report)
         _mail_cleaned(cleaned)
 
 
@@ -366,6 +367,8 @@ def _handle(run, now, today, report, *, apply):
                 "notice",
                 {
                     "run": run,
+                    "stages": [s for s in stages if claimed.get(s) == today],
+                    "today": today,
                     "cleanup_on": cleanup_on(activity_day, sent),
                     "days": max((cleanup_on(activity_day, sent) - today).days, 0),
                     "created": created_in_transaction(run.workflowid),
@@ -388,6 +391,23 @@ def _sent_of(ledger, last_activity):
     if ledger is None or _aware(ledger.last_activity) < last_activity:
         return {}
     return parse_sent(ledger.notices_sent)
+
+
+def _release_notice(workflowid, stages, today):
+    """Remove from the ledger the *stages* recorded on *today*, under a row lock."""
+    entries = {_stage_entry(stage, today) for stage in stages}
+    with transaction.atomic():
+        ledger = (
+            WorkflowCleanup.objects.select_for_update()
+            .filter(workflowid=workflowid)
+            .first()
+        )
+        if ledger is None or ledger.cleaned_at:
+            return
+        kept = [entry for entry in ledger.notices_sent if entry not in entries]
+        if kept != ledger.notices_sent:
+            ledger.notices_sent = kept
+            ledger.save(update_fields=["notices_sent"])
 
 
 def _claim_notice(run, stages, today):
@@ -526,27 +546,73 @@ def _reindex(resource_ids):
             logger.exception("Reindexing after a workflow cleanup failed")
 
 
-def _mail_notices(payloads):
+def _mail_notices(payloads, report):
+    """Send the notices claimed by this pass; forget those nobody received.
+
+    A run's stages stay recorded when one recipient got the mail, or when no
+    mail could be sent (no recipient, no address: ``skipped``). A send that
+    raises is logged and counted as failed. Every claim not confirmed that way
+    is removed from the ledger, in a ``finally``, so the next pass sends it
+    again and the cleanup date follows the notice that is delivered. A worker
+    killed between the claim and this release leaves the claim recorded.
+    """
     if not payloads:
         return
-    everything = []
-    for payload in payloads:
+    confirmed = set()
+    try:
+        for payload in payloads:
+            if _send_notice(payload):
+                confirmed.add(payload["run"].workflowid)
+        try:
+            _send_notice_summary(payloads)
+        except Exception:
+            logger.exception("Workflow notice summary failed")
+    finally:
+        for payload in payloads:
+            run = payload["run"]
+            if run.workflowid in confirmed:
+                continue
+            try:
+                _release_notice(run.workflowid, payload["stages"], payload["today"])
+            except Exception:
+                logger.exception("Releasing an undelivered workflow notice failed")
+            if str(run.workflowid) in report.noticed:
+                report.noticed.remove(str(run.workflowid))
+            report.undelivered.append(str(run.workflowid))
+
+
+def _send_notice(payload):
+    """Mail one run's notice; True when it reached someone or had nobody to reach."""
+    outcomes = []
+    try:
         run = payload["run"]
         by_user = _items_by_user(payload["created"], list(payload["created"]))
         for user in _recipients(by_user):
-            notices.send_account_mail(
-                user,
-                "workflow_notice",
-                {
-                    "workflow": KIND_LABELS[run.name],
-                    "cleanup_on": payload["cleanup_on"],
-                    "days": payload["days"],
-                    "resources": resource_items(by_user[user.pk]),
-                },
-            )
-        everything.append(payload)
-    first = min(everything, key=lambda p: p["cleanup_on"])
-    names = [p["run"].name for p in everything]
+            try:
+                outcome = notices.send_account_mail(
+                    user,
+                    "workflow_notice",
+                    {
+                        "workflow": KIND_LABELS[run.name],
+                        "cleanup_on": payload["cleanup_on"],
+                        "days": payload["days"],
+                        "resources": resource_items(by_user[user.pk]),
+                    },
+                )
+            except Exception:
+                logger.exception("Workflow notice failed")
+                outcome = notices.count_failure("workflow_notice")
+            outcomes.append(outcome)
+    except Exception:
+        logger.exception("Workflow notice failed")
+        notices.count_failure("workflow_notice")
+        return False
+    return notices.SENT in outcomes or notices.FAILED not in outcomes
+
+
+def _send_notice_summary(payloads):
+    first = min(payloads, key=lambda p: p["cleanup_on"])
+    names = [p["run"].name for p in payloads]
     notices.send_summary_mail(
         "workflow_notice",
         {
@@ -555,7 +621,7 @@ def _mail_notices(payloads):
             "days": first["days"],
             "resources": resource_items(
                 ResourceInstance.objects.filter(
-                    pk__in=[rid for p in everything for rid in p["created"]]
+                    pk__in=[rid for p in payloads for rid in p["created"]]
                 ).order_by("pk")
             ),
         },

@@ -59,6 +59,7 @@ class PassReport:
 
     locked: bool = False
     noticed: list = field(default_factory=list)
+    undelivered: list = field(default_factory=list)
     reset: list = field(default_factory=list)
     anonymised: list = field(default_factory=list)
     superusers_due: list = field(default_factory=list)
@@ -206,7 +207,7 @@ def _run(now, report, *, apply, send_mail):
         if user.pk in report.superusers_due and apply:
             review.append(user.username)
     if send_mail:
-        _mail_notices(to_mail)
+        _mail_notices(to_mail, report)
         _mail_summary(report, review)
 
 
@@ -229,7 +230,7 @@ def _handle(user, row, today, report, *, apply):
         if not _claim_notice(user, activity, today):
             report.noticed.pop()
             return None
-        return (user, planned_date(activity, None, today))
+        return (user, planned_date(activity, None, today), activity, today)
     if today < planned_date(activity, noticed_on, today):
         return None
     if user.is_superuser:
@@ -326,19 +327,63 @@ def _purge_sign_in_records(username):
         model.objects.filter(username__iexact=username).delete()
 
 
-def _mail_notices(claimed):
-    for user, on in claimed:
-        notices.send_account_mail(
-            user,
-            "anonymisation_notice",
-            {
-                "on": on,
-                "days": settings.ACCOUNT_RETENTION_NOTICE_DAYS,
-                "review": user.is_superuser,
-                "active": user.is_active,
-            },
-            allow_inactive=True,
+def _mail_notices(claimed, report):
+    """Send the notices claimed by this pass; forget those not delivered.
+
+    A notice that failed or raised (logged and counted as failed) is removed
+    from the ledger, in a ``finally`` for every claim not confirmed sent or
+    ``skipped`` (no address, which stays recorded), so the next pass sends it
+    again and the anonymisation date counts from the day one is delivered. A
+    worker killed between the claim and this release leaves the claim recorded.
+    """
+    confirmed = set()
+    try:
+        for user, on, _activity, _day in claimed:
+            try:
+                outcome = notices.send_account_mail(
+                    user,
+                    "anonymisation_notice",
+                    {
+                        "on": on,
+                        "days": settings.ACCOUNT_RETENTION_NOTICE_DAYS,
+                        "review": user.is_superuser,
+                        "active": user.is_active,
+                    },
+                    allow_inactive=True,
+                )
+            except Exception:
+                logger.exception("Account retention notice failed")
+                outcome = notices.count_failure("anonymisation_notice")
+            if outcome != notices.FAILED:
+                confirmed.add(user.pk)
+    finally:
+        for user, _on, activity, day in claimed:
+            if user.pk in confirmed:
+                continue
+            try:
+                _release_notice(user.pk, day, activity)
+            except Exception:
+                logger.exception("Releasing an undelivered account notice failed")
+            if user.pk in report.noticed:
+                report.noticed.remove(user.pk)
+            report.undelivered.append(user.pk)
+
+
+def _release_notice(user_id, day, activity):
+    """Forget the notice recorded on *day* for *activity*, under a row lock."""
+    with transaction.atomic():
+        row = (
+            AccountRetention.objects.select_for_update().filter(user_id=user_id).first()
         )
+        if (
+            row is None
+            or row.anonymised_on
+            or row.noticed_on != day
+            or row.noticed_for != activity
+        ):
+            return
+        row.noticed_on = row.noticed_for = None
+        row.save(update_fields=["noticed_on", "noticed_for"])
 
 
 def _mail_summary(report, review):

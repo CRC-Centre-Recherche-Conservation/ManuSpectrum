@@ -176,6 +176,8 @@ setup() {
   for release in aaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbb; do
     printf 'body{color:red}/* %s */\n' "$release" >"$STATIC/releases/$release/app.0123456789abcdef0123.css"
     printf 'unhashed %s\n' "$release" >"$STATIC/releases/$release/plain.txt"
+    mkdir -p "$STATIC/releases/$release/favicons"
+    printf 'icon %s\n' "$release" >"$STATIC/releases/$release/favicons/favicon.ico"
     printf 'id\n' >"$STATIC/releases/$release/.build-id"
     printf 'done\n' >"$STATIC/releases/$release/.complete"
   done
@@ -315,6 +317,11 @@ group_static() {
   equals "/static/.complete is 404" 404 "$(code /static/.complete)"
   equals "an absent static file is 404" 404 "$(code /static/none.js)"
   check "static serves the first release" grep -q 'unhashed aaaa' <<<"$(get /static/plain.txt)"
+  out="$(headers /favicon.ico)"
+  equals "/favicon.ico is the site icon of the current release" "200 public, max-age=86400" \
+    "$(head -1 <<<"$out" | cut -d' ' -f2) $(header_value cache-control <<<"$out")"
+  check "/favicon.ico: the bytes of favicons/favicon.ico" grep -q 'icon aaaa' <<<"$(get /favicon.ico)"
+  assert_one_of_each "/favicon.ico" "$out"
   ln -sfn releases/bbbbbbbbbbbbbbbb "$STATIC/current.new" && mv -Tf "$STATIC/current.new" "$STATIC/current"
   sleep "$STATIC_SWAP_WAIT"
   check "after the symlink swap and open_file_cache_valid the new release is served" \
@@ -519,12 +526,27 @@ group_acl() {
   equals "/fr/api/tiles/x (core, plural) reaches Django" web "$(jget name <<<"$(get /fr/api/tiles/x)")"
   equals "/en/api/relatable-resources/g/n reaches Django" web "$(jget name <<<"$(get /en/api/relatable-resources/g/n)")"
   for lang in en fr; do
-    for path in auth/signup auth/confirm_signup "auth/confirm_signup?link=x" two-factor-authentication-settings two-factor-authentication-reset; do
+    for path in auth/signup auth/confirm_signup "auth/confirm_signup?link=x" two-factor-authentication-settings; do
       equals "/$lang/$path: 404 from nginx" "404 -" "$(code "/$lang/$path") $(reaches "/$lang/$path")"
     done
     equals "POST /$lang/auth/signup: 404 from nginx" "404 -" "$(code "/$lang/auth/signup" -X POST) $(reaches "/$lang/auth/signup" -X POST)"
     equals "POST /$lang/two-factor-authentication-settings: 404 from nginx" "404 -" \
       "$(code "/$lang/two-factor-authentication-settings" -X POST) $(reaches "/$lang/two-factor-authentication-settings" -X POST)"
+    out="$(headers "/$lang/two-factor-authentication-reset")"
+    equals "/$lang/two-factor-authentication-reset: the static page from nginx" "200 -" \
+      "$(head -1 <<<"$out" | cut -d' ' -f2) $(reaches "/$lang/two-factor-authentication-reset")"
+    equals "/$lang/two-factor-authentication-reset: served as HTML" "text/html" "$(header_value content-type <<<"$out")"
+    check "/$lang/two-factor-authentication-reset: the page sends the person to an administrator" \
+      grep -q 'Lost your authenticator app?' <<<"$(get "/$lang/two-factor-authentication-reset")"
+    assert_one_of_each "/$lang/two-factor-authentication-reset" "$out"
+    out="$(headers "/$lang/two-factor-authentication-reset?x=1" -X POST -d 'code=1')"
+    equals "POST /$lang/two-factor-authentication-reset: 303 from nginx" "303 -" \
+      "$(head -1 <<<"$out" | cut -d' ' -f2) $(reaches "/$lang/two-factor-authentication-reset" -X POST)"
+    check "POST /$lang/two-factor-authentication-reset: sent to the page, without its query" \
+      grep -Eq "^https://$HOST(:[0-9]+)?/$lang/two-factor-authentication-reset\$" <<<"$(header_value location <<<"$out")"
+    out="$(headers "/$lang/two-factor-authentication-reset%0D%0ASet-Cookie:%20pwn=1" -X POST)"
+    equals "POST /$lang/two-factor-authentication-reset with CRLF in the path: one Location, no Set-Cookie" "1 0" \
+      "$(header_count location <<<"$out") $(header_count set-cookie <<<"$out")"
   done
   equals "/en/auth/ (sign-in) reaches Django" web "$(jget name <<<"$(get /en/auth/)")"
   equals "/fr/two-factor-authentication-login reaches Django" web "$(jget name <<<"$(get /fr/two-factor-authentication-login)")"
@@ -595,8 +617,9 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
     bash -c '! grep -Eq "limiting (requests|connections)" "$1"' _ "$LOGS/error.log"
   out="$(codes 7 /en/auth/)"
   check "7 GETs to /en/auth/ are never limited" bash -c '! grep -q 429 <<<"$1"' _ "$out"
-  out="$(codes 15 "/api/spectrum-preview/$FILE_A?n=full")"
-  check "15 requests for ?n=full: some are 429" grep -q 429 <<<"$out"
+  out="$(codes 45 "/api/spectrum-preview/$FILE_A?n=full")"
+  check "45 requests for ?n=full: the first 31 (a Compare view) pass, some are 429" \
+    bash -c '[ "$(tr " " "\n" <<<"$1" | head -31 | sort -u)" = 200 ] && grep -q 429 <<<"$1"' _ "$out"
   sleep 4
   out="$(codes 15 "/api/spectrum-preview/$FILE_A")"
   check "15 requests without n: none is 429" bash -c '! grep -q 429 <<<"$1"' _ "$out"
@@ -604,9 +627,20 @@ assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in r
   out="$(codes 12 "/api/spectrum-preview/$FILE_A?n=200")"
   check "12 requests with n=200 are not counted as full" bash -c '! grep -q 429 <<<"$1"' _ "$out"
   sleep 4
+  out="$(get_many 30 "/api/spectrum-preview/$FILE_A?n=4096&slow=1" 30)"
+  check "30 previews in flight at once (above perip 20): none is 429 (preview_conn zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
   out="$(codes 14 /en/api/explorer/share)"
   check "the share route is limited (share zone)" grep -q 429 <<<"$out"
   equals "the share zone does not spend the heavy budget of the manifest" 200 "$(code /iiif/v3/explorer-manifest)"
+  sleep 3
+  out="$(get_many 80 /en/api/explorer/search)"
+  check "the Explorer calls are limited at 10 r/s, burst 40 (80 at once: some 429, the first ones pass)" \
+    bash -c 'grep -q 429 <<<"$1" && grep -q "^200" <<<"$1"' _ "$out"
+  equals "an Explorer burst does not spend the generic api zone" 200 "$(code /api/site-notice)"
+  block="$(location_block 'api/explorer/ {' < <(docker exec "$NGINX" nginx -T 2>&1))"
+  check "the Explorer location applies the pace zone and the hourly budget bucket (6000 at 100 r/m)" \
+    bash -c 'grep -q "limit_req zone=explorer burst=40 nodelay;" <<<"$1" && grep -q "limit_req zone=explorer_budget burst=6000 nodelay;" <<<"$1"' _ "$block"
   sleep 3
   out="$(get_many 80 /healthz)"
   check "/healthz is limited too (burst 10, 80 requests at once)" grep -q 429 <<<"$out"

@@ -23,8 +23,9 @@ export interface SearchScope {
 /**
  * Build the search query string for `filters`.
  *
- * `place`, `period` and `eventType` are never sent: the Map & timeline view
- * that reads them is not built yet, and `eventType` filters Map only. The
+ * `eventType` is never sent: it filters Map only.
+ * `periodMatch` (`overlap`), `periodEvent` (`production`) and
+ * `undated` (false) are sent unless they are the server's default. The
  * default page size (10) is not sent; documents without analyses are asked
  * for in the documents grain only.
  */
@@ -45,6 +46,16 @@ export function searchQuery(
     for (const year of [...filters.year].sort((a, b) => a - b)) {
         query.append("year", String(year));
     }
+    if (filters.period) {
+        query.set("period", `${filters.period[0]},${filters.period[1]}`);
+    }
+    if (filters.periodMatch !== "overlap") {
+        query.set("periodMatch", filters.periodMatch);
+    }
+    if (filters.periodEvent !== "production") {
+        query.set("periodEvent", filters.periodEvent);
+    }
+    if (filters.undated) query.set("undated", "1");
     if (page > 1) query.set("page", String(page));
     return query;
 }

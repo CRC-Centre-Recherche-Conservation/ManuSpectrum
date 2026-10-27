@@ -23,7 +23,7 @@
 {% endblock %}
 {% block extra_head %}{% render_bundle 'css/explorer' 'css' %}{% endblock %}
 {% block body_class %}ms-page ms-page--app{% endblock %}
-{% block arches_js_data %}{% endblock %}
+{% block body_attrs %}{% if initial_screen != "home" %} data-explorer-screen="{{ initial_screen }}"{% endif %}{% endblock %}
 {% block content %}
 <section class="ms-explorer-intro">
     <p class="ms-explorer-intro__kicker">{% trans "Analysis explorer" %}</p>
@@ -38,7 +38,33 @@
     <div id="ms-explorer-intro-bar" class="ms-explorer-intro__bar"></div>
 </section>
 <div id="ms-explorer-app" class="ms-explorer" aria-busy="true"{% if explorer_mirador_url %} data-mirador-url="{{ explorer_mirador_url }}"{% endif %}>
-    <p class="ms-explorer__loading">{% trans "Loading the explorer…" %}</p>
+    <div class="ms-explorer-loading ms-explorer-loading--{% if initial_screen == "home" or initial_screen == "compare" %}{{ initial_screen }}{% else %}screen{% endif %}">
+        <div class="ms-explorer-loading__tabs" aria-hidden="true">
+            <span class="ms-skeleton"></span>
+            <span class="ms-skeleton"></span>
+            <span class="ms-skeleton"></span>
+        </div>
+        <p class="ms-explorer-loading__status" role="status" aria-live="polite">{% trans "Loading the explorer…" %}</p>
+        {% if initial_screen != "compare" %}
+        <div class="ms-explorer-loading__body" aria-hidden="true">
+        {% if initial_screen == "home" %}
+            <span class="ms-skeleton ms-explorer-loading__headline"></span>
+            <span class="ms-explorer-loading__search">
+                <span class="ms-skeleton"></span>
+                <span class="ms-skeleton"></span>
+            </span>
+            <span class="ms-explorer-loading__cards">
+                <span class="ms-explorer-loading__card"></span>
+                <span class="ms-explorer-loading__card"></span>
+                <span class="ms-explorer-loading__card"></span>
+            </span>
+        {% else %}
+            <span class="ms-explorer-loading__card ms-explorer-loading__rail"></span>
+            <span class="ms-explorer-loading__card ms-explorer-loading__main"></span>
+        {% endif %}
+        </div>
+        {% endif %}
+    </div>
 </div>
 <div id="ms-explorer-fallback" class="ms-explorer-fallback" role="alert" hidden>
     <p>{% trans "The explorer could not start in this browser." %}</p>
@@ -51,4 +77,4 @@
     </div>
 </noscript>
 {% endblock %}
-{% block js_bundle %}{% include 'includes/ms_site_notice.htm' %}{% render_bundle 'views/pages/analysis-explorer' 'js' attrs=' defer' %}{% endblock %}
+{% block js_bundle %}{% render_bundle 'views/pages/analysis-explorer' 'js' attrs=' defer' %}{% endblock %}

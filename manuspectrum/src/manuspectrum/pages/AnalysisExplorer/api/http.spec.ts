@@ -7,8 +7,10 @@ import {
     getJson,
     getSeries,
     PREFETCHES_IN_FLIGHT,
+    PREVIEW_FETCHES_IN_FLIGHT,
     peekJson,
     prefetchJson,
+    resetPreviewQueueForTests,
     setFullSeriesRoom,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 
@@ -59,6 +61,7 @@ const SEARCH = "manuspectrum:explorer-search";
 
 beforeEach(() => {
     forgetPayloads();
+    resetPreviewQueueForTests();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
 });
@@ -225,6 +228,49 @@ describe("the tab memo", () => {
     });
 });
 
+describe("the map events memo", () => {
+    const EVENTS = "manuspectrum:explorer-events";
+
+    function eventsQuery(type: string): { query: URLSearchParams } {
+        return { query: new URLSearchParams([["eventType", type]]) };
+    }
+
+    it("keeps the last two events payloads apart: they never evict an Explorer payload", async () => {
+        fetchMock.mockImplementation(async () => respond(200, { events: [] }));
+        for (let page = 1; page <= 20; page += 1) {
+            await getJson(SEARCH, {
+                query: new URLSearchParams([["page", String(page)]]),
+            });
+        }
+        for (const type of ["production", "modification", "alteration"]) {
+            await getJson(EVENTS, eventsQuery(type));
+        }
+        expect(
+            peekJson(SEARCH, { query: new URLSearchParams("page=1") }),
+        ).toEqual({ events: [] });
+        expect(peekJson(EVENTS, eventsQuery("production"))).toBe(null);
+        expect(peekJson(EVENTS, eventsQuery("modification"))).toEqual({
+            events: [],
+        });
+        fetchMock.mockClear();
+        await getJson(EVENTS, eventsQuery("alteration"));
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("shares one events request between its callers and forgets it after five minutes", async () => {
+        vi.useFakeTimers();
+        const pending = pendingFetch();
+        const first = getJson(EVENTS);
+        const second = getJson(EVENTS);
+        pending.resolve({ events: [1] });
+        expect(await first).toEqual({ events: [1] });
+        expect(await second).toEqual({ events: [1] });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(5 * 60 * 1000);
+        expect(peekJson(EVENTS)).toBe(null);
+    });
+});
+
 describe("prefetchJson", () => {
     it("aborts a prefetch nobody waits for when its signal aborts", () => {
         const pending = pendingFetch();
@@ -379,12 +425,132 @@ describe("getSeries", () => {
         );
         const first = urls.map((url) => getSeries(url, "full"));
         const second = urls.map((url) => getSeries(url, "full"));
-        expect(fetchMock).toHaveBeenCalledTimes(8);
+        await vi.waitFor(() =>
+            expect(fetchMock).toHaveBeenCalledTimes(PREVIEW_FETCHES_IN_FLIGHT),
+        );
+        pending.resolve({ x: [1], y: [2] });
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(8));
         pending.resolve({ x: [1], y: [2] });
         expect(await Promise.all([...first, ...second])).toHaveLength(16);
         fetchMock.mockClear();
         await getSeries(urls[7], "full");
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("fetches six previews at once and starts the others in order as each one ends", async () => {
+        const settles: ((response: Response) => void)[] = [];
+        fetchMock.mockImplementation(
+            () =>
+                new Promise<Response>((resolve) => {
+                    settles.push(resolve);
+                }),
+        );
+        const urls = Array.from(
+            { length: 9 },
+            (_, file) => `http://testserver/api/spectrum-preview/q${file}`,
+        );
+        const answers = urls.map((url, index) =>
+            getSeries(url, index % 2 ? "full" : 4096),
+        );
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+
+        settles[2](respond(200, { x: [], y: [] }));
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
+        expect(fetchMock.mock.calls[6][0]).toBe(
+            "/api/spectrum-preview/q6?n=4096",
+        );
+
+        settles.slice(0, 7).forEach((settle, index) => {
+            if (index !== 2) settle(respond(204));
+        });
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(9));
+        settles.slice(7).forEach((settle) => settle(respond(204)));
+        expect(await Promise.all(answers)).toHaveLength(9);
+    });
+
+    it("gives a free slot to a waiting quick tier before the full series that wait", async () => {
+        const settles: ((response: Response) => void)[] = [];
+        fetchMock.mockImplementation(
+            () =>
+                new Promise<Response>((resolve) => {
+                    settles.push(resolve);
+                }),
+        );
+        const full = Array.from(
+            { length: PREVIEW_FETCHES_IN_FLIGHT + 4 },
+            (_, n) =>
+                getSeries(
+                    `http://testserver/api/spectrum-preview/f${n}`,
+                    "full",
+                ),
+        );
+        await vi.waitFor(() =>
+            expect(fetchMock).toHaveBeenCalledTimes(PREVIEW_FETCHES_IN_FLIGHT),
+        );
+        const popup = getSeries(
+            "http://testserver/api/spectrum-preview/pop",
+            200,
+        );
+
+        settles[0](respond(204));
+        await vi.waitFor(() =>
+            expect(fetchMock).toHaveBeenCalledTimes(
+                PREVIEW_FETCHES_IN_FLIGHT + 1,
+            ),
+        );
+        expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(
+            "/api/spectrum-preview/pop?n=200",
+        );
+
+        let settled = 1;
+        while (
+            settled < settles.length ||
+            fetchMock.mock.calls.length < full.length + 1
+        ) {
+            await vi.waitFor(() =>
+                expect(settles.length).toBeGreaterThan(settled),
+            );
+            settles[settled](respond(204));
+            settled += 1;
+        }
+        await Promise.all([...full, popup]);
+    });
+
+    it("drops a waiting preview whose caller aborts: it never takes a slot", async () => {
+        const settles: ((response: Response) => void)[] = [];
+        fetchMock.mockImplementation(
+            () =>
+                new Promise<Response>((resolve) => {
+                    settles.push(resolve);
+                }),
+        );
+        const busy = Array.from({ length: PREVIEW_FETCHES_IN_FLIGHT }, (_, n) =>
+            getSeries(`http://testserver/api/spectrum-preview/b${n}`, 4096),
+        );
+        const controller = new AbortController();
+        const waiting = getSeries(
+            "http://testserver/api/spectrum-preview/late",
+            4096,
+            controller.signal,
+        );
+        const next = getSeries(
+            "http://testserver/api/spectrum-preview/next",
+            4096,
+        );
+        controller.abort();
+        await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+
+        settles[0](respond(204));
+        await vi.waitFor(() =>
+            expect(fetchMock).toHaveBeenCalledTimes(
+                PREVIEW_FETCHES_IN_FLIGHT + 1,
+            ),
+        );
+        expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(
+            "/api/spectrum-preview/next?n=4096",
+        );
+        settles.slice(1).forEach((settle) => settle(respond(204)));
+        await Promise.all([...busy, next]);
     });
 
     it("asks for the full series again on reload", async () => {

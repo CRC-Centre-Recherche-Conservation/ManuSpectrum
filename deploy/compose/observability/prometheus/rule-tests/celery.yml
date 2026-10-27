@@ -66,6 +66,8 @@ tests:
   input_series:
   - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
     values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
   promql_expr_test:
   - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
     eval_time: 24h
@@ -137,6 +139,9 @@ tests:
     eval_time: 72h
     exp_samples: []
   - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
     eval_time: 80h
     exp_samples:
     - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
@@ -179,6 +184,9 @@ tests:
     exp_samples: []
   - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
     eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 75h30m
     exp_samples: []
   - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
     eval_time: 80h
@@ -225,6 +233,9 @@ tests:
     eval_time: 72h
     exp_samples: []
   - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
     eval_time: 80h
     exp_samples:
     - labels: ALERTS{alertname="AccountRetentionStale", alertstate="firing", service="celery", severity="warning"}
@@ -259,6 +270,8 @@ tests:
   input_series:
   - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
     values: 0+60x180 10800x2000
+  - series: up{job="node"}
+    values: 1x2180
   promql_expr_test:
   - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
     eval_time: 2h
@@ -284,4 +297,88 @@ tests:
     eval_time: 2h
     exp_samples:
     - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActiveAccountsStale warns when the time disappeared for more than a day on a host that is up, not before the window and the wait have passed
+  interval: 1m
+  input_series:
+  - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 27h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="ActiveAccountsStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActiveAccountsStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: ActivityStale warns when the gauges disappeared for more than four hours on a host that is up, not before the window and the wait have passed
+  interval: 1m
+  input_series:
+  - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x600
+  - series: up{job="node"}
+    values: 1x660
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 3h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 5h15m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 5h45m
+    exp_samples:
+    - labels: ALERTS{alertname="ActivityStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActivityStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x660
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 10h
+    exp_samples: []
+
+- name: a task or indexing failure series that appears directly at 1 is not counted, which is why each worker process primes every label set at 0
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="manuspectrum.embargo_pass", outcome="failure"}
+    values: _x10 1x120
+  - series: manuspectrum_index_resources_total{mode="resource", outcome="failed"}
+    values: _x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+
+- name: a primed task failure series fires on its first failure
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="manuspectrum.embargo_pass", outcome="failure"}
+    values: 0x10 1x120
+  - series: manuspectrum_index_resources_total{mode="resource", outcome="failed"}
+    values: 0x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", task="manuspectrum.embargo_pass", service="celery", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="resource", service="celery", severity="warning"}
       value: 1

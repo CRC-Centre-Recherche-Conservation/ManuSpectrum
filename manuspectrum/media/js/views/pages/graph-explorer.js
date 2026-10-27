@@ -1,5 +1,5 @@
 import initMsNav from "utils/ms-nav";
-import { t, tv } from "utils/i18n";
+import { isSingular, t, tv } from "utils/i18n";
 import revealOnScroll from "utils/reveal-on-scroll";
 import { createForceGraph } from "utils/force-graph";
 // The Structure view uses THIS, never createForceGraph — see the header comment
@@ -376,13 +376,23 @@ function renderVolume(data) {
     const records = models.reduce((n, m) => n + (Number(m.instances) || 0), 0);
     const empty = models.filter((m) => !Number(m.instances)).length;
     const parts = [
-        tv("msGeVolumeRecords", "{n} records published", { n: records }),
+        isSingular(records)
+            ? tv("msGeVolumeRecordOne", "{n} record published", { n: records })
+            : tv("msGeVolumeRecords", "{n} records published", { n: records }),
     ];
     if (empty) {
         parts.push(
-            tv("msGeVolumeOpen", "{n} models defined and open for deposit", {
-                n: empty,
-            }),
+            isSingular(empty)
+                ? tv(
+                      "msGeVolumeOpenOne",
+                      "{n} model defined and open for deposit",
+                      { n: empty },
+                  )
+                : tv(
+                      "msGeVolumeOpen",
+                      "{n} models defined and open for deposit",
+                      { n: empty },
+                  ),
         );
     }
     // Freshness marker — the payload is cached, so say when it was built.
@@ -2838,8 +2848,8 @@ function openNodeInspector(view, node) {
     const model = view.model || {};
     const path = view.ancestors(node.id).filter((a) => a.id !== view.modelRoot);
     const targets = view.targetModels(node);
-    // Prefer the RDM label ("Pigments (312)") over the raw collection UUID —
-    // the payload ships collection_label/collection_size when the RDM has them.
+    // Show the controlled list's name and size ("Pigments (312)") rather than
+    // its raw UUID; the payload ships collection_label/collection_size for it.
     const cfg = node.config || {};
     const collection = cfg.collection_label
         ? `${cfg.collection_label}${cfg.collection_size ? ` (${cfg.collection_size})` : ""}`

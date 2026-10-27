@@ -144,7 +144,13 @@ and again, from one snapshot directory.
   does not have under `migrations_ahead_of_code` (a warning is printed; the snapshot is still written but an
   image built from this commit refuses it), sha256 of the files),
   directory `0700`, files `0600`. It refuses a non-empty directory and never prints the
-  database password.
+  database password. It counts the `files` rows whose file is missing under
+  `MEDIA_ROOT/uploadedfiles`, prints the count and records it in `manifest.json`
+  (`uploaded_files`: `cited`, `missing`; `load-snapshot` prints it again). Above
+  `SNAPSHOT_MAX_MISSING_PERCENT` (default `10`) of the cited files it stops before dumping:
+  `MEDIA_ROOT` lives inside the Python package of each checkout, so a high share usually
+  means the script ran from a checkout other than the one the development server uses (pass
+  `--repo`). `ALLOW_MISSING_FILES=yes` writes the snapshot anyway.
 - [ ] Copy it: `scp -r ~/ms-snapshots/ms-snapshot-<date> <admin>@192.168.123.10:`, then
   move it where the service account reads it (placeholders: `<service-account>`, `<date>`):
   `sudo install -d -o <service-account> -g <service-account> -m 0700 /home/<service-account>/snapshots`,

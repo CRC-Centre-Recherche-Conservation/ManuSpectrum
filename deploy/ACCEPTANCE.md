@@ -132,6 +132,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   A `daemon.json` with keys the role does not manage stops the play: merge them by hand first.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
+- [ ] `chronyc tracking` → `Leap status : Normal` and a `Reference ID` naming a server (the clock is
+  synchronised). `Not synchronised` with every source `^?` in `chronyc sources -v`: follow the runbook
+  `deploy/runbooks/host.md#clocknotsynchronised` (NTS blocked on the network) and note the server used.
 - [ ] `findmnt /data` → type `nfs4`, version `NFS_VERS` in the options.
 - [ ] `sudo touch /data/.t && sudo chown 1000 /data/.t; ls -ln /data/.t; sudo rm /data/.t`
   → the result (owner changed or not) matches the NFS options of `rehearsal.env`
@@ -241,7 +244,8 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   file that `init` mounts: run it before `init` (2.4). `make up` creates `METRICS_TEXTFILE_DIR`
   (node-exporter mounts it) when it is missing.
 - [ ] The parent of `SECRETS_DIR` (`/srv/manuspectrum` in the example inventory, outside the
-  directories TSM backs up by default) is created by the `app` role, owned by the service account.
+  directories TSM backs up by default) and the nginx log directory (`env_nginx_log_host_dir`) are
+  created by the `app` role, owned by the service account.
 - [ ] *(service account)* `make -C deploy secrets` (creates the directory `0700` and the missing
   files; the commands by hand are in `deploy/compose/secrets/README.md`). From here on,
   `SECRETS_DIR=$(make -s -C deploy secrets-dir)` is set in the shell;
@@ -324,6 +328,8 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 - [ ] *(service account)* `make -C deploy status` → nine services: `postgres`,
   `elasticsearch`, `redis-broker`, `redis-cache`, `cantaloupe`, `web`, `worker`, `nginx` as
   `healthy`, `beat` as `running` (it has no health check on purpose).
+  Check: `dc ps --format '{{.Service}} {{.State}} {{.Health}}' | grep -v ' running healthy$'` → one line,
+  `beat running ` (do not count lines of `make status`: make prints its own lines, and `beat` has no health).
 - [ ] *(service account)* `make -C deploy smoke` (= `deploy/compose/smoke.sh check`) →
   only `ok:` lines, exit 0. **(CI too)** Among them, the three that fail most
   often on a new host:
@@ -434,9 +440,10 @@ research data: never in Git, never in a public place.
   - On failure: the command needs both guards. A production host has `production` and no marker
     file, and the command is refused there whatever `.env` says.
 - [ ] *(service account)* `make -C deploy load-snapshot SNAPSHOT=<path>` without `CONFIRM=yes` → refused, nothing changed.
-- [ ] *(service account)* `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → fourteen `load-snapshot: step n/14`
-  lines, `checksums match`, `preflight: ok`, counts `equal to the manifest` (or a `WARNING` naming
-  the difference a migration explains), `done: the snapshot is loaded`.
+- [ ] *(service account)* `make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` → fifteen `load-snapshot: step n/15`
+  lines, `checksums match`, `uploaded files: <n> cited by the snapshot's database, <m> missing from media.tar`
+  (`m` at most 10 % of `n`, see `deploy/rehearsal/README.md`), `preflight: ok`, counts
+  `equal to the manifest` (or a `WARNING` naming the difference a migration explains), `done: the snapshot is loaded`.
   - A snapshot holding a migration of an installed app that the image does not know is refused before
     anything is changed; migrations of apps the image does not install (silk, for instance) give one warning.
   - The command runs as the service account (`sudo -u <service-account> make -C deploy load-snapshot ...`)
@@ -449,7 +456,7 @@ research data: never in Git, never in a public place.
   two complete such directories are kept (a directory without `.complete`, left by a failed run, is
   never removed). The command logs the aside path when it creates it.
 - [ ] Undo a load: `sudo -u <service-account> make -C deploy load-snapshot RESTORE_BEFORE=<MEDIA_HOST_DIR>/previous-<stamp>-<id> CONFIRM=yes`
-  → the same fourteen steps, restoring `rehearsal-before.dump` and a copy of `uploadedfiles/`
+  → the same fifteen steps, restoring `rehearsal-before.dump` and a copy of `uploadedfiles/`
   from that directory (the migration check and the counts are skipped, there is no manifest);
   refused when `rehearsal-before.dump` is missing; `smoke` is `ok:` afterwards.
 - [ ] *(service account)* The dev admin password does not survive: `deploy/compose/smoke.sh check` is `ok:` and logging in as
@@ -603,7 +610,12 @@ Rows marked **(CI too)** repeat a CI check on purpose.
     from the host name of `PUBLIC_SERVER_ADDRESS`.
 - [ ] (workstation, the laptop with the browser) Copy `ca/ca.crt` only (`scp`, never `ca/ca.key`), trust it
   (`deploy/certs/README.md`, « Trusting the CA on a workstation »: system store, Firefox or NSS
-  store), and add `<vm> manuspectrum.test` to `/etc/hosts`.
+  store), and add `<vm> manuspectrum.test` to `/etc/hosts`. Chrome and Chromium on Linux ignore the system
+  store: `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n manuspectrum-local -i ca.crt` (package `libnss3-tools`),
+  then restart the browser.
+  - At the end of the rehearsal, remove the CA from the workstation: `certutil -d sql:$HOME/.pki/nssdb -D -n manuspectrum-local`,
+    `sudo rm /usr/local/share/ca-certificates/manuspectrum-local-ca.crt && sudo update-ca-certificates --fresh`,
+    the Firefox authority (Settings, Certificates, Authorities, Delete) and the `/etc/hosts` line.
   - Expected: `curl -sI https://manuspectrum.test/` with no `-k` → `HTTP/2 200` or a redirect to the
     language page; the browser shows no warning and the padlock names the local CA.
   - On failure: `curl` complaining about the issuer = the CA is not trusted on this workstation;
@@ -763,7 +775,16 @@ change shows within a minute (reload after waiting). Browser in a private window
   `curl -s … | jq -r '."@id"'` → `https://manuspectrum.test/iiifserver/iiif/2/<name>`;
   `…/full/!300,300/0/default.jpg` → `200`, `image/jpeg`, the same single header.
   - On failure: two `Access-Control-Allow-Origin` lines = Cantaloupe's header is not hidden in `iiifserver.conf`.
-- [ ] Application routes do not get the wildcard: `curl -sI -H 'Origin: https://example.org' https://manuspectrum.test/fr/api/explorer/search | grep -i access-control` → empty.
+- [ ] Application routes do not get the wildcard: `curl -sI -H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-Mode: cors' -H 'Origin: https://example.org' https://manuspectrum.test/fr/api/explorer/search | grep -i access-control` → empty.
+- [ ] The Explorer's internal APIs answer the page only (`EXPLORER_UI_ONLY=enforce`):
+  `curl -si https://manuspectrum.test/en/api/explorer/search` → `403`, `Content-Type: application/json`,
+  `Cache-Control: no-store`, a `Link: <https://manuspectrum.test/en/about/data#reuse>; rel="help"` header and a JSON body naming the same address;
+  the same call with `-H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-Mode: cors'` → `200`;
+  `curl -s -o /dev/null -w '%{http_code}' https://manuspectrum.test/api/explorer/series.csv?ids=<key>` is not `403` (the data products stay open);
+  a call with no Fetch Metadata but `-H 'Referer: https://manuspectrum.test/en/discover'` → `200` (legacy browsers, metric reason `referer`).
+  - On failure: `EXPLORER_UI_ONLY` in `.env` is `observe` or `off` (200 everywhere), or the wrong value stops web at start.
+- [ ] (browser) `/en/discover` works as before (search, a document, a spectrum plot): the page's own calls carry the Fetch Metadata headers.
+- [ ] (browser) « Reuse the data » opens `/en/about/data` from the footer and from the Explorer's « Share and export » panel.
 - [ ] (browser) Open the manifest in the project viewer and in one external Mirador: the images display
   (no mixed-content or certificate error in the console).
 
@@ -807,8 +828,8 @@ change shows within a minute (reload after waiting). Browser in a private window
   (search → a result → the graph button) with `RELATED_RESOURCES_EXPORT_LIMIT` at 300, 500 and 1000 in `.env`
   (`make -C deploy up` between two values). For each value note whether the tab stays responsive (pan, zoom,
   select a node, search in the list) and how long the graph takes to settle; keep the highest value that does
-  not freeze. « Load all » in the report's related resources lists at most that many relations; the paginated
-  list still reaches every relation.
+  not freeze. The report's related resources list at most that many relations per model (Arches 8.1.5 has no
+  working « Load more » there; an upstream fix is proposed).
 - [ ] *Map tile load*: signed in or not, open `/fr/search`, switch on several resource layers on the map, then pan and zoom
   quickly for one minute. Meanwhile, *(service account)* every 15 seconds read the open scroll contexts:
   `dc exec -T elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/stats/indices/search?filter_path=**.open_contexts"'`.
@@ -1141,8 +1162,8 @@ timings and the systemd timers, which CI does not run.
   `deploy/compose/smoke.sh lose` → the PostgreSQL marker row and the uploads marker are deleted, and
   `deploy/compose/smoke.sh survived` now fails.
 - [ ] *(service account)* `time make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes`
-  → fourteen `restore: step n/14` lines, then `done: snapshot latest is restored. Replay the erasure
-  requests …`. Record the total duration and the duration of step 12 (the reindex) from the log
+  → fifteen `restore: step n/15` lines, then `done: snapshot latest is restored. Replay the erasure
+  requests …`. Record the total duration and the duration of step 13 (the reindex) from the log
   timestamps; the share of the reindex is the part that grows with the data.
   - On failure: a step that fails before step 4 changed nothing (checksums, migrations, Arches version,
     free space are checked first); from step 4 on, the log names the aside directory and the undo
@@ -1155,7 +1176,7 @@ timings and the systemd timers, which CI does not run.
     fact 7 of the plan.
 - [ ] *(service account)* Undo it. The last log line names the aside directory:
   `ls -d "$MEDIA_HOST_DIR"/previous-*` → its newest entry. `make -C deploy restore ASIDE=<that directory> CONFIRM=yes ERASURES_CHECKED=yes`
-  → fourteen steps, `done: <directory> is restored`; `smoke.sh check` → only `ok:` lines, and the counts
+  → fifteen steps, `done: <directory> is restored`; `smoke.sh check` → only `ok:` lines, and the counts
   are those of before the drill. Then restore `latest` again (the same command as the drill) and
   `smoke.sh check` → `ok:`.
 
@@ -1236,13 +1257,12 @@ as the only memory.
   you expect. Neither command touched `SECRETS_DIR`.
 - [ ] *(service account)* Restore the secrets that must be kept with `make -C deploy secret-set NAME=<name>`
   (5.3), then `make -C deploy restore RESTIC_SNAPSHOT=latest CONFIRM=yes ERASURES_CHECKED=yes` →
-  fourteen steps, `done`; `smoke.sh check` → only `ok:` lines; `make -C deploy secrets-check` → all `ok`.
+  fifteen steps, `done`; `smoke.sh check` → only `ok:` lines; `make -C deploy secrets-check` → all `ok`.
   `SECRETS_DIR` and `.env` are what the operator put there, **not** what the snapshot held
   (`restore` never writes them).
-- [ ] *(service account)* Before the beat schedule is enabled again after a restore or a long outage, run
-  `make -C deploy manage ARGS="prune_workflow_history"` (dry run) and read who would be warned and which workflows cleaned:
-  a run found already past its delay receives both notices (21 and 7 days) the same day and is cleaned a week later.
-  Warn those people, or delay the first pass, before the schedule starts (`ADMIN.md`, « Abandoned workflows »).
+- [ ] *(service account)* The first passes after a restore only send notices: `make -C deploy manage ARGS="prune_workflow_history"`,
+  `anonymise_inactive_accounts` and `release_expired_embargoes` (dry runs) show who will be warned, and nothing cleaned,
+  anonymised or due (a run past its delay gets both notices the same day and is cleaned a week later).
 - [ ] *(service account)* `rm -r $HOME/moving-secrets $HOME/moving-env "${SECRETS_DIR:?}/aside"`; then
   `make -C deploy backup` → `done` (the first backup on the restored stack).
 
@@ -1475,8 +1495,11 @@ Create the test accounts in the admin and delete them afterwards.
   as soon as the permissions are saved, listed in the admin under Embargoes with an end 12 months out
   (the daily pass, or `make -C deploy manage ARGS="release_expired_embargoes --apply"`, only records a restriction that has no row yet).
   Shorten its "Ends on"
-  to tomorrow in the admin; `make -C deploy manage ARGS="release_expired_embargoes"` lists nothing to lift yet. Rehearse
-  the lift with `release_expired_embargoes --as-of <the day after tomorrow, YYYY-MM-DD> --apply` (an end date cannot be set in
+  to 6 days from today in the admin → refused (« at least 7 days after today »: every lift follows its final notice by 7 days,
+  for a superuser too); to 7 days from today → saved. `make -C deploy manage ARGS="release_expired_embargoes"` lists nothing to
+  lift yet. Send the final notice with `release_expired_embargoes --apply` (Mailpit: the « Restriction ending on … » mail; without
+  it, the pass moves the end 7 days on and warns instead). Rehearse
+  the lift with `release_expired_embargoes --as-of <8 days from today, YYYY-MM-DD> --apply` (an end date cannot be set in
   the past; rehearsal only: `--as-of` with `--apply` is refused when `DEPLOY_ENVIRONMENT=production`): the resource is public, the creator got the "now public" mail in Mailpit, the history shows the lift,
   `manuspectrum_embargo_lifts_total{outcome="lifted"}` increased.
 - [ ] Only a superuser can clear "Ends on" (no end date): a staff account with the embargo permission is refused,
@@ -1485,6 +1508,16 @@ Create the test accounts in the admin and delete them afterwards.
   `release_expired_embargoes --apply`: the restriction is recorded again, dated 12 months from today.
 - [ ] `make -C deploy manage ARGS="prune_workflow_history"` (dry run) lists the idle runs and what it would delete and
   keep, and says "Dry run: nothing written or sent". Do not run `--apply` on the loaded snapshot.
+- [ ] A missed pass is not caught up when beat starts more than two hours after its time
+  (`CELERY_BEAT_CRON_STARTING_DEADLINE`; the rule itself is pinned by `tests.test_daily_pass_schedule`): in the evening
+  `dc stop beat`; the next day after 08:00 (Europe/Paris) `dc start beat`, wait two minutes:
+  `dc logs beat --since 5m | grep -E "Sending due task (workflow-cleanup|account-retention|embargo)-pass"` → nothing, and no
+  notice in Mailpit; the following night `dc logs beat` shows the three entries sent at 03:30, 04:30 and 06:00. Do not
+  call the tasks by hand to test this (`manage shell -c '…_pass_task()'`): that runs the real pass, mails included.
+- [ ] After `load-snapshot` (2.9; its step 10 voids the pending notices), the three dry runs list notices only:
+  `prune_workflow_history` cleans nothing, `anonymise_inactive_accounts` anonymises nobody, and
+  `release_expired_embargoes` lists every restriction ending within 7 days (or already ended) as « would be re-dated for a final
+  notice », none as due.
 
 ### 8.6 Deactivation and anonymisation
 
@@ -1497,6 +1530,33 @@ Create the test accounts in the admin and delete them afterwards.
   `former-user-<id>`, has no name, e-mail or two-factor secret, is inactive; the "Edit log" of a record it edited keeps
   its first and last names and no e-mail; `manuspectrum_account_anonymisations_total{outcome="anonymised"}` increased.
   A superuser in the same situation is only listed in the administrators' summary.
+
+### 8.6b Roles: superuser, site manager, editor (`ADMIN.md` « Who can do what »)
+
+Two test accounts besides the superuser: `mgr` (staff status + group **Site managers**, both set by the
+superuser) and `ed` (no staff status, group `Resource Editor`).
+
+- [ ] The Users list shows the column "Staff status" (FR « Statut équipe »).
+- [ ] Signed in as `mgr`, the admin index lists only Users, Site announcements, Restrictions, Terms acceptances and
+  Workflow cleanups. Groups, OAuth applications and Access attempts are absent, and their URLs answer `403`.
+- [ ] As `mgr`, add an account `ed2` with group `Resource Editor`: saved, invitation sent. The groups box offers no
+  `Site managers`, `System Administrator` nor `Application Administrator`; the change page of `ed2` shows the user
+  name, the e-mail address, "Staff status", "Superuser status", "User permissions", "Last login" and "Date joined" as
+  plain text and no password link.
+- [ ] As `mgr`, POST the change form of `ed2` with forged fields (browser devtools or `curl` with the session cookie and
+  CSRF token): `is_superuser=on`, `is_staff=on`, a `user_permissions` id → saved, and `ed2` is still neither staff nor
+  superuser and holds no permission; `email=<another address>`, `username=<another name>` or `last_login_0=2020-01-01`
+  → saved, and the e-mail, user name and last login are unchanged; a `groups` id of `Site managers` → the form
+  answers with an error, nothing saved.
+- [ ] As `mgr`, tick `ed2` and a staff account without password created by the superuser (box « Send the invitation
+  now » unticked), choose **Send invitation**: Mailpit holds one mail (to `ed2`), and the admin says one account was
+  skipped.
+- [ ] As `mgr`, the change page of the superuser, of `mgr` itself and of `anonymous` shows no Save button, a POST to it
+  answers `403`, and `/en/admin/auth/user/<id>/password/` answers `403` for every account, `ed2` included.
+- [ ] As `mgr`, edit a site announcement, then shorten a restriction's "Ends on" and extend it: all saved. Clearing
+  "Ends on" or setting a past date is refused.
+- [ ] Remove staff status from `mgr` (as the superuser): `mgr` no longer reaches `/en/admin/`. `ed` never does.
+- [ ] Delete the test accounts afterwards (as the superuser).
 
 ### 8.7 Report
 
