@@ -128,7 +128,9 @@ class RendererConfigView(APIBase):
                     _("<h1>Renderers config does not exist</h1>")
                 )
 
-    @method_decorator(group_required("Resource Editor", raise_exception=True))
+    @method_decorator(
+        group_required("Resource Editor", "Resource Reviewer", raise_exception=True)
+    )
     def post(self, request, renderer_config_id=None):
         """Create a configuration, or update ``renderer_config_id``.
 
@@ -205,7 +207,9 @@ class RendererConfigView(APIBase):
 
         return JSONResponse(JSONSerializer().serializeToPython(renderer_config))
 
-    @method_decorator(group_required("Resource Editor", raise_exception=True))
+    @method_decorator(
+        group_required("Resource Editor", "Resource Reviewer", raise_exception=True)
+    )
     def delete(self, request, renderer_config_id):
         """Delete a configuration no stored file points at.
 

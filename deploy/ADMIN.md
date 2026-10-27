@@ -80,7 +80,7 @@ server, not only by the forms.
     Service Manager's create, edit and delete, and the XY renderer configurations;
   - `Resource Reviewer`: approves or rejects the provisional edits of other users, and edits
     without going through provisional edits; creates, edits and deletes in the Image Service
-    Manager;
+    Manager and the XY renderer configurations;
   - `Resource Exporter`: exports search results; the bulk data manager shows it the Excel
     exporters (with `Resource Editor`, which opens the bulk data manager);
   - `Graph Editor`: the graph designer: create, edit, publish and delete resource models, and
@@ -114,7 +114,7 @@ reference:
 | Bulk Data Manager (`bulk-data-manager`) | `Resource Editor` |
 | Image Service Manager (`image-service-manager`) | open: everyone; create, edit, delete: `Resource Editor`, `Resource Reviewer` |
 | Controlled List Manager (`controlled-list-manager`) | `RDM Administrator` (set by Arches) |
-| XY renderer configurations: create, edit, delete (seeded presets: superusers only) | `Resource Editor` |
+| XY renderer configurations (seeded presets: superusers only) | open: everyone; create, edit, delete: `Resource Editor`, `Resource Reviewer` |
 | Model configuration: relatable nodes, summary configurations | `Graph Editor` |
 
 | Bulk data manager module | Shown to |

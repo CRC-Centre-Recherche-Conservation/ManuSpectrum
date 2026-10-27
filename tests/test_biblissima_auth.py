@@ -9,9 +9,10 @@ CI-safe: no Arches package (graphs) is required. Positive-path assertions only
 use request shapes that fail cheaply AFTER the auth check (400 validation
 errors, the stats endpoint, and a short-circuited/mocked suggest proxy).
 
-SECURITY INVARIANT under test: the Biblissima views and the renderer-config
-writes require the group « Resource Editor » (`group_required("Resource
-Editor", raise_exception=True)`, as Arches gates resource editing). Arches'
+SECURITY INVARIANT under test: the Biblissima views require the group
+« Resource Editor » (`group_required("Resource Editor", raise_exception=True)`,
+as Arches gates resource editing); the renderer-config writes require Resource
+Editor or Resource Reviewer. Arches'
 ``SetAnonymousUser`` middleware maps every unauthenticated visitor to the DB
 user ``anonymous``, which is *authenticated* and belongs to Guest + Resource
 Exporter: a login or ``is_authenticated`` check is no barrier under Arches,
@@ -32,6 +33,9 @@ from django.urls import resolve, reverse
 from manuspectrum.views import biblissima_proxy, renderer_config
 
 EDITOR_CHECK = 'group_required("Resource Editor", raise_exception=True)'
+RENDERER_WRITE_CHECK = (
+    'group_required("Resource Editor", "Resource Reviewer", raise_exception=True)'
+)
 
 
 class WritingGroupTests(TestCase):
@@ -43,11 +47,11 @@ class WritingGroupTests(TestCase):
             "would open every gated endpoint to unauthenticated traffic.",
         )
 
-    def test_renderer_config_writes_require_resource_editor(self):
+    def test_renderer_config_writes_require_an_editor_or_a_reviewer(self):
         view = renderer_config.RendererConfigView
         for method in (view.post, view.delete):
             with self.subTest(method=method.__name__):
-                self.assertIn(EDITOR_CHECK, inspect.getsource(method))
+                self.assertIn(RENDERER_WRITE_CHECK, inspect.getsource(method))
 
 
 class RendererConfigAuthTests(TestCase):
@@ -66,6 +70,8 @@ class RendererConfigAuthTests(TestCase):
         )
         cls.editor = User.objects.create_user("renderer_editor", password="pw")
         cls.editor.groups.add(Group.objects.get(name="Resource Editor"))
+        cls.reviewer = User.objects.create_user("renderer_reviewer", password="pw")
+        cls.reviewer.groups.add(Group.objects.get(name="Resource Reviewer"))
 
     def _post(self, body):
         # Plain path: SHOW_LANGUAGE_SWITCH is False (single-language LANGUAGES
@@ -103,6 +109,15 @@ class RendererConfigAuthTests(TestCase):
 
     def test_editor_passes_the_barrier_on_delete(self):
         self.client.force_login(self.editor)
+        resp = self.client.delete(f"/renderer_config/{uuid.uuid4()}")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_a_reviewer_passes_the_barrier(self):
+        self.client.force_login(self.reviewer)
+        resp = self._post(
+            {"rendererId": "9ec5c8f8-8a3f-4e6f-9dd8-7c1e5f5b0000", "name": "t"}
+        )
+        self.assertEqual(resp.status_code, 200)
         resp = self.client.delete(f"/renderer_config/{uuid.uuid4()}")
         self.assertEqual(resp.status_code, 404)
 
