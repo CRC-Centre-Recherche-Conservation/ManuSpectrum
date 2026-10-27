@@ -646,8 +646,7 @@ RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 # Upper bound of the relations Arches loads at once (paginate=false): the related
 # resources graph, « load all » on a report and the report API's summary. Arches'
 # default (10000) freezes the graph's browser tab on a resource with ~1650 relations;
-# 500 kept it responsive on the rehearsal VM. A report whose summary was cut pages
-# its related resources (media/js/models/report.js).
+# 500 kept it responsive on the rehearsal VM.
 RELATED_RESOURCES_EXPORT_LIMIT = 500
 
 # Dictionary containing any additional context items for customising email templates

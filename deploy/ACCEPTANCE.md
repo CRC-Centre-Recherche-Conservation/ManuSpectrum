@@ -822,8 +822,8 @@ change shows within a minute (reload after waiting). Browser in a private window
   (search → a result → the graph button) with `RELATED_RESOURCES_EXPORT_LIMIT` at 300, 500 and 1000 in `.env`
   (`make -C deploy up` between two values). For each value note whether the tab stays responsive (pan, zoom,
   select a node, search in the list) and how long the graph takes to settle; keep the highest value that does
-  not freeze. « Load all » in the report's related resources lists at most that many relations; the paginated
-  list still reaches every relation.
+  not freeze. The report's related resources list at most that many relations per model (Arches 8.1.5 has no
+  working « Load more » there; an upstream fix is proposed).
 - [ ] *Map tile load*: signed in or not, open `/fr/search`, switch on several resource layers on the map, then pan and zoom
   quickly for one minute. Meanwhile, *(service account)* every 15 seconds read the open scroll contexts:
   `dc exec -T elasticsearch sh -c 'curl -s -u "elastic:$(cat /run/secrets/elastic_password)" "localhost:9200/_nodes/stats/indices/search?filter_path=**.open_contexts"'`.

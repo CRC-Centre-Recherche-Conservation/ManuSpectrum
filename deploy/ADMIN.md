@@ -353,13 +353,10 @@ Arches' default of 10,000, a resource with about 1,650 relations froze the brows
 the graph: its layout and search grow with the square of the number of relations.
 
 `RELATED_RESOURCES_EXPORT_LIMIT` in `.env` caps those three lists (500 by default). Beyond
-the cap Arches keeps that many relations, in no guaranteed order, and says nothing. A report
-whose summary may have been cut lists each model's related resources from Arches' paginated
-route instead (15 per page, `media/js/models/report.js`): « Load more » reaches every
-relation, and on a model with more relations than the cap « Load all » adds the next ones up
-to about the cap (whole pages) and leaves both buttons for the rest. Search exports and ETL
-modules never read this value. To change it, edit `.env` and run
-`make -C deploy up` (web reads it at start); a value that is not a whole number above 0
+the cap Arches keeps that many relations, in no guaranteed order, and says nothing: a report
+lists at most that many relations per model (Arches 8.1.5 has no working « Load more » on the
+report; an upstream fix is proposed). Search exports and ETL modules never read this value.
+To change it, edit `.env` and run `make -C deploy up` (web reads it at start); a value that is not a whole number above 0
 stops web from starting.
 
 ## Explorer APIs: page only
