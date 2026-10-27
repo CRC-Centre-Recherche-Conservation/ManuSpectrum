@@ -114,8 +114,8 @@ dc logs --no-log-prefix -f web | jq -cR 'fromjson? | select(.logger=="manuspectr
 
 ## Alerts
 
-66 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
-(site, application, containers, host, storage, backup, tls, celery, datastores,
+72 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
+(site, application, containers, host, storage, backup, release, tls, celery, datastores,
 explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of
 [`runbooks/`](runbooks/site.md) named after the alert.
@@ -181,7 +181,7 @@ route since the web container started is not counted by `increase`. The two buck
 silences one alert; silences live on a volume and survive a restart.
 `make -C deploy observability-off` stops the stack (volumes kept).
 
-**Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`,
+**Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`,
 `HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` read series that only
 node_exporter carries. They count a missing series only while node_exporter is up,
 so its outage raises `NodeExporterDown` alone (critical, after 15 minutes, since it
@@ -195,7 +195,7 @@ does not verify. The Prometheus entrypoint marks a target `rehearsal="true"` whe
 `CERT_MODE=acme` against the Let's Encrypt staging authority it fires, as it should.
 
 **Fresh install.** Until the first backup, the first Sunday restore test and the
-first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing`,
+first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing`, `ReleaseWatchStale`,
 `HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` fire. Install the
 timers and take a first backup before `observability-on`, or run
 `make -C deploy silence-fresh-install` (48 h, with a comment) and let the first
@@ -275,6 +275,7 @@ everything; mail filters sort on either.
 | Report | Monthly report | `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>` | `Report` |
 | Contact | Public contact form | `[ManuSpectrum][Contact] <reason> — <name>` | none (a `mailto:` link cannot set a header: filter on the subject) |
 | Account | The application: invitation (`Your ManuSpectrum account`), embargo notices (`Restriction ending on <date>`, `Your data are now public`), workflow notices (`Unfinished workflow to be cleaned on <date>`, `Unfinished workflow cleaned`), the anonymisation notice (`Your account will be anonymised on <date>`), the deactivation notice (`Your account has been deactivated`), the administrator summaries of those notices, and the password-reset mail | `[ManuSpectrum][Account] …` | `Account` |
+| Release | The release watch and update engine, through the host `postfix` (`sendmail`): release available, scheduled, cancelled, refused, missed, installed, rolled back, `ROLLBACK FAILED` | `[ManuSpectrum][Release] …` | `Release` |
 | System | Host mail (`root` alias: unattended upgrades, cron) | Unchanged | none (filter on the sender `root@<host>`) |
 
 Arches' own two-factor reset mail (`two-factor-authentication-reset`) is no longer reachable: nginx refuses that route and the unsafe settings route (`two-factor-authentication-settings`), so no uncategorised account mail remains. A lost phone is handled by a superuser in the admin (`deploy/ADMIN.md`).
@@ -390,7 +391,18 @@ timeout, so a hard-hung mount can hold the run until systemd stops the unit at
 `TimeoutStartSec` (15 min); a `du` stuck in uninterruptible I/O is not killed by
 its timeout either. Either case leaves `DiskUsageStale` to report it.
 
-The backup and restore-test timers write their own textfiles (`BACKUP.md`). A
+The backup and restore-test timers write their own textfiles (`BACKUP.md`). The
+release watch (`manuspectrum-watch`, hourly) and the update engine write
+`manuspectrum_release.prom` through `scripts/lib-release.sh`: `manuspectrum_release_*`
+for the last run, the failing step (`watch_failed{step=git|registry|sigstore|pull|mail|state}`),
+the verification, the armed release and how long it waits (`pending_since_timestamp_seconds`,
+`pending_security`), rollbacks (`rollbacks_total`, `rollback_failed`), the last
+successful update and the scheduled slot (`scheduled_timestamp_seconds`,
+`schedule_failed{reason=refused|missed}`). No tag or version appears in a label.
+Six alerts read them (`rules/release.yml`, [release runbook](runbooks/release.md)):
+`ReleaseVerificationFailed` and `UpdateRolledBack` (critical), `ReleaseWatchFailing`,
+`ReleaseWatchStale`, `ReleasePendingTooLong` (30 days, 14 when the release carries a
+security fix) and `ReleaseScheduleFailed` (warning). A
 stale file raises `HostMetricsStale` or `DiskUsageStale`.
 
 **Labels.** Metric labels are closed vocabularies (service names, area names,
@@ -445,7 +457,7 @@ One file per area, one section per alert, each with prerequisites, symptom,
 diagnosis, remediation and escalation:
 [site](runbooks/site.md), [application](runbooks/application.md),
 [containers](runbooks/containers.md), [host](runbooks/host.md),
-[storage](runbooks/storage.md), [backup](runbooks/backup.md),
+[storage](runbooks/storage.md), [backup](runbooks/backup.md), [release](runbooks/release.md),
 [TLS](runbooks/tls.md), [Celery](runbooks/celery.md),
 [datastores](runbooks/datastores.md), [Explorer](runbooks/explorer.md),
 [Biblissima](runbooks/biblissima.md), [monitoring](runbooks/monitoring.md).

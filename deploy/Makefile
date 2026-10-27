@@ -227,7 +227,7 @@ silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh 
 # A new install raises, until the first backup, the first restore test and the
 # first run of the systemd timers, alerts that say nothing about a fault.
 silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test and timers
-	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
+	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|ReleaseWatchStale|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
 		--duration=48h --comment="fresh install: first backup, restore test and timers pending"
 
 # The monthly report (scripts/monthly-report.py, Python standard library only)

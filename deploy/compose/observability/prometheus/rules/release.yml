@@ -1,0 +1,86 @@
+# Alert rules of the monitoring stack: release watch and update.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: release
+    rules:
+      - alert: ReleaseVerificationFailed
+        expr: |
+          manuspectrum_release_verification_failed == 1
+        labels:
+          severity: critical
+          service: release
+        annotations:
+          summary: "A release failed its signature or revision check"
+          description: "The release watch found a tag whose image signature, digest or signed revision does not verify. It was not armed and nothing was pulled."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#releaseverificationfailed
+      - alert: UpdateRolledBack
+        expr: |
+          increase(manuspectrum_release_rollbacks_total[64h]) > 0
+        labels:
+          severity: critical
+          service: release
+        annotations:
+          summary: "An update was rolled back"
+          description: "An update failed its readiness checks and the previous release was restored. The release is still armed; the site runs the previous version."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#updaterolledback
+      - alert: ReleaseWatchFailing
+        expr: |
+          max by (step) (manuspectrum_release_watch_failed) == 1
+        for: 2h
+        labels:
+          severity: warning
+          service: release
+        annotations:
+          summary: "The release watch fails at step {{ $labels.step }}"
+          description: "The hourly release watch has failed at step {{ $labels.step }} for two hours; no new release can be detected or armed."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#releasewatchfailing
+      - alert: ReleaseWatchStale
+        expr: |
+          (
+            time() - manuspectrum_release_watch_last_run_timestamp_seconds > 3 * 3600
+            or
+            absent(manuspectrum_release_watch_last_run_timestamp_seconds)
+          )
+          and on() (up{job="node"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: release
+        annotations:
+          summary: "The release watch has not run for more than 3 hours"
+          description: "The release watch writes its metrics every hour; the last run is older than 3 hours, or no release metric exists."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#releasewatchstale
+      - alert: ReleasePendingTooLong
+        expr: |
+          manuspectrum_release_armed == 1
+          and on() manuspectrum_release_pending_since_timestamp_seconds > 0
+          and on() (
+            (
+              manuspectrum_release_pending_security == 0
+              and on() time() - manuspectrum_release_pending_since_timestamp_seconds > 30 * 86400
+            )
+            or
+            (
+              manuspectrum_release_pending_security == 1
+              and on() time() - manuspectrum_release_pending_since_timestamp_seconds > 14 * 86400
+            )
+          )
+        for: 15m
+        labels:
+          severity: warning
+          service: release
+        annotations:
+          summary: "A release has waited for an operator for too long"
+          description: "An armed release has been waiting more than 30 days, or more than 14 days when it carries a security fix."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#releasependingtoolong
+      - alert: ReleaseScheduleFailed
+        expr: |
+          max by (reason) (manuspectrum_release_schedule_failed) == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: release
+        annotations:
+          summary: "The scheduled update was {{ $labels.reason }}"
+          description: "The update slot was {{ $labels.reason }} (refused: a pre-check failed at the slot; missed: the host was off or the slot passed). Nothing was installed."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#releaseschedulefailed
