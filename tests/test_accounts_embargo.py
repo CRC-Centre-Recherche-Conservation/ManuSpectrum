@@ -80,6 +80,23 @@ class ValidationTests(EmbargoTestCase):
         with self.assertRaises(ValidationError):
             embargo.validate_end(TODAY, superuser=True, today=TODAY)
 
+    def test_an_end_closer_than_the_final_notice_is_refused_even_for_a_superuser(self):
+        embargo = self.make()
+        for superuser in (False, True):
+            with self.subTest(superuser=superuser):
+                with self.assertRaisesMessage(ValidationError, "at least 7 days"):
+                    embargo.validate_end(
+                        TODAY + timedelta(days=6), superuser=superuser, today=TODAY
+                    )
+        embargo.validate_end(TODAY + timedelta(days=7), today=TODAY)
+
+    def test_the_shortest_end_follows_the_final_notice_stage(self):
+        embargo = self.make()
+        with override_settings(EMBARGO_NOTICE_DAYS=(30, 14)):
+            with self.assertRaises(ValidationError):
+                embargo.validate_end(TODAY + timedelta(days=13), today=TODAY)
+            embargo.validate_end(TODAY + timedelta(days=14), today=TODAY)
+
     def test_no_end_date_is_accepted(self):
         self.make().validate_end(None, today=TODAY)
 

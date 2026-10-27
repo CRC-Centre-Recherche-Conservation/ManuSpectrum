@@ -262,6 +262,7 @@ order = [
     first(r"DELETE FROM django_session"),
     first(r"--entrypoint sh cantaloupe"),
     first(r"manage migrate"),
+    first(r"UPDATE ms_workflow_cleanup SET notices_sent"),
     first(r"^make admin-password"),
     first(r"refresh_geojson_geometries"),
     first(r"es reindex_database"),
@@ -269,10 +270,10 @@ order = [
     first(r"^make smoke$"),
 ]
 assert order == sorted(order) and len(set(order)) == len(order), order
-steps = re.findall(r"restore: step (\d+)/14", out)
-assert steps == [str(i) for i in range(1, 15)], steps
+steps = re.findall(r"restore: step (\d+)/15", out)
+assert steps == [str(i) for i in range(1, 16)], steps
 PY
-assert "ok-snapshot: restic restore of the dump and the uploads, then the 14 steps in order, make up and smoke called" $?
+assert "ok-snapshot: restic restore of the dump and the uploads, then the 15 steps in order, make up and smoke called" $?
 
 grep -c "restic --no-cache.* \(restore\|ls\) $LATEST_ID " "$TMP/calls" | grep -qx 3 \
   && [ "$(grep -c 'snapshots latest --json' "$TMP/calls")" -eq 1 ] \

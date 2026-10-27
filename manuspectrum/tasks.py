@@ -150,7 +150,9 @@ def embargo_pass_task():
         "locked": report.locked,
         "detected": len(report.detected),
         "released": len(report.released),
+        "redated": len(report.redated),
         "noticed": len(report.noticed),
+        "undelivered": len(report.undelivered),
         "lifted": len(report.lifted),
         "incomplete": len(report.incomplete),
         "skipped_extended": len(report.skipped_extended),
@@ -167,6 +169,7 @@ def workflow_cleanup_pass_task():
     return {
         "locked": report.locked,
         "noticed": len(report.noticed),
+        "undelivered": len(report.undelivered),
         "cleaned": len(report.cleaned),
         "kept_resources": len(report.kept_resources),
         "failed": len(report.failed),
@@ -184,6 +187,7 @@ def account_retention_pass_task():
     return {
         "locked": report.locked,
         "noticed": len(report.noticed),
+        "undelivered": len(report.undelivered),
         "reset": len(report.reset),
         "anonymised": len(report.anonymised),
         "superusers_due": len(report.superusers_due),

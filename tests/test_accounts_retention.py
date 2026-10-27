@@ -178,6 +178,53 @@ class NoticeTests(RetentionCase):
         self.assertIn("1 newly warned", summary.body)
 
 
+class UndeliveredNoticeTests(RetentionCase):
+    def test_a_notice_that_failed_is_not_recorded_and_the_delay_starts_at_delivery(
+        self,
+    ):
+        user = self.user(last_login=months_ago(30))
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            report = self.go()
+        self.assertEqual((report.noticed, report.undelivered), ([], [user.pk]))
+        self.assertFalse(
+            AccountRetention.objects.filter(
+                user_id=user.pk, noticed_on__isnull=False
+            ).exists()
+        )
+        self.assertEqual(self.go(NOW + timedelta(days=1)).noticed, [user.pk])
+        self.assertEqual(self.go(NOW + timedelta(days=30)).anonymised, [])
+        self.assertEqual(self.go(NOW + timedelta(days=31)).anonymised, [user.pk])
+
+    def test_a_send_that_raises_releases_only_its_claim(self):
+        broken = self.user("broken", last_login=months_ago(30))
+        fine = self.user("fine", last_login=months_ago(30))
+        real = retention.notices.send_account_mail
+
+        def send(user, *args, **kwargs):
+            if user.pk == broken.pk:
+                raise RuntimeError("smtp")
+            return real(user, *args, **kwargs)
+
+        with mock.patch.object(
+            retention.notices, "send_account_mail", side_effect=send
+        ):
+            with self.assertLogs("manuspectrum.accounts.retention", "ERROR"):
+                report = self.go()
+        self.assertEqual((report.noticed, report.undelivered), ([fine.pk], [broken.pk]))
+        noticed = set(
+            AccountRetention.objects.filter(noticed_on__isnull=False).values_list(
+                "user_id", flat=True
+            )
+        )
+        self.assertEqual(noticed, {fine.pk})
+
+    def test_the_dry_run_is_unchanged_by_a_failing_relay(self):
+        user = self.user(last_login=months_ago(30))
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            report = self.go(apply=False)
+        self.assertEqual((report.noticed, report.undelivered), ([user.pk], []))
+
+
 class AnonymiseTests(RetentionCase):
     def setUp(self):
         super().setUp()

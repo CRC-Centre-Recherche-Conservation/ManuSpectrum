@@ -18,6 +18,13 @@ Europe/Paris, does in order:
    visitor now reads the resource, and tell the people concerned.
 4. ``publish_gauges``.
 
+Every lift follows its final notice by at least ``min(EMBARGO_NOTICE_DAYS)``
+days: before step 2, ``redate_unwarned`` moves an active restriction that ends
+sooner than that without the final stage in ``notices_sent`` to that many days
+from today, so step 2 warns (saying the date was moved) and a later pass lifts.
+This covers a missed pass and a database replaced by a restore or a snapshot
+load, whose notices were voided.
+
 A lift that fails raises no mail to the depositor: it is counted
 (``manuspectrum_embargo_lifts_total{outcome="failed"}``), logged, and the row
 stays overdue until the next pass. A lift that leaves the resource hidden, by a
@@ -35,6 +42,7 @@ extension made in the admin while the pass runs wins.
 import contextlib
 import logging
 import uuid
+from collections import namedtuple
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -84,6 +92,10 @@ VISIBLE_KINDS = {
 }
 
 
+#: A notice stage this pass recorded, kept until its mail is known delivered.
+Claimed = namedtuple("Claimed", "row days moved stages event")
+
+
 @dataclass
 class PassReport:
     """What a pass did, or with ``apply=False`` would do."""
@@ -91,7 +103,9 @@ class PassReport:
     locked: bool = False
     detected: list = field(default_factory=list)
     released: list = field(default_factory=list)
+    redated: list = field(default_factory=list)
     noticed: list = field(default_factory=list)
+    undelivered: list = field(default_factory=list)
     lifted: list = field(default_factory=list)
     incomplete: list = field(default_factory=list)
     skipped_extended: list = field(default_factory=list)
@@ -156,6 +170,7 @@ def run_pass(now=None, *, apply=True, send_mail=True):
 
 def _run(now, report, *, apply, send_mail):
     reconcile(now, report, apply=apply)
+    redate_unwarned(now, report, apply=apply)
     send_notices(now, report, apply=apply, send_mail=send_mail)
     lift_due(now, report, apply=apply, send_mail=send_mail)
     if apply:
@@ -271,6 +286,61 @@ def _release(row_pk):
         EmbargoEvent.objects.create(embargo=row, kind=EmbargoEvent.RELEASED)
 
 
+def final_stage():
+    """The last notice stage (days before the end), as stored in ``notices_sent``."""
+    days = min(settings.EMBARGO_NOTICE_DAYS, default=None)
+    return None if days is None else str(days)
+
+
+def redate_unwarned(now, report=None, *, apply=True):
+    """Move a restriction that would end without its final notice to a new end.
+
+    The lift comes the morning after ``ends_on``, so a final notice sent today
+    still gives ``min(EMBARGO_NOTICE_DAYS)`` days when the row ends that many
+    days from today minus one. An active row ending sooner than that, without
+    the final stage in ``notices_sent``, ends ``min(EMBARGO_NOTICE_DAYS)`` days
+    from today instead, recorded as a ``dated`` event by nobody (old and new
+    end); ``send_notices`` then warns. An end set in the admin (at least that
+    many days out) is never moved. ``apply=False`` lists the rows in
+    ``redated`` and ``noticed`` and writes nothing.
+    """
+    report = report or PassReport()
+    final = final_stage()
+    if final is None:
+        return report
+    today = local_today(now)
+    new_end = today + timedelta(days=int(final))
+    earliest = new_end - timedelta(days=1)
+    candidates = Embargo.objects.filter(
+        state=Embargo.ACTIVE, ends_on__lt=earliest
+    ).order_by("ends_on", "pk")
+    for candidate in candidates:
+        if final in candidate.notices_sent:
+            continue
+        resource_id = str(candidate.resourceinstance_id)
+        if not apply:
+            report.redated.append(resource_id)
+            report.noticed.append(resource_id)
+            continue
+        with transaction.atomic():
+            row = Embargo.objects.select_for_update().get(pk=candidate.pk)
+            if (
+                row.state != Embargo.ACTIVE
+                or row.ends_on is None
+                or row.ends_on >= earliest
+                or final in row.notices_sent
+            ):
+                continue
+            old = row.ends_on
+            row.ends_on = new_end
+            row.save(update_fields=["ends_on"])
+            EmbargoEvent.objects.create(
+                embargo=row, kind=EmbargoEvent.DATED, from_date=old, to_date=new_end
+            )
+        report.redated.append(resource_id)
+    return report
+
+
 def due_stages(embargo, today):
     """Notice stages (as strings) reached and not yet sent for *embargo*."""
     if embargo.ends_on is None or embargo.ends_on <= today:
@@ -292,11 +362,13 @@ def send_notices(now, report=None, *, apply=True, send_mail=True):
         state=Embargo.ACTIVE, ends_on__gt=today, ends_on__lte=horizon
     ).order_by("ends_on", "pk")
     claimed = []
+    moved = set(report.redated)
     for candidate in candidates:
         if not due_stages(candidate, today):
             continue
         if not apply:
-            report.noticed.append(str(candidate.resourceinstance_id))
+            if str(candidate.resourceinstance_id) not in report.noticed:
+                report.noticed.append(str(candidate.resourceinstance_id))
             continue
         with transaction.atomic():
             row = Embargo.objects.select_for_update().get(pk=candidate.pk)
@@ -305,32 +377,99 @@ def send_notices(now, report=None, *, apply=True, send_mail=True):
                 continue
             row.notices_sent = sorted({*row.notices_sent, *stages})
             row.save(update_fields=["notices_sent"])
-            EmbargoEvent.objects.create(
+            event = EmbargoEvent.objects.create(
                 embargo=row, kind=EmbargoEvent.NOTICED, to_date=row.ends_on
             )
-        claimed.append((row, (row.ends_on - today).days))
+        claimed.append(
+            Claimed(
+                row,
+                (row.ends_on - today).days,
+                str(row.resourceinstance_id) in moved,
+                stages,
+                event.pk,
+            )
+        )
         report.noticed.append(str(row.resourceinstance_id))
     if send_mail and claimed:
-        _mail_notices(claimed)
+        _mail_notices(claimed, report)
     return report
 
 
-def _mail_notices(claimed):
+def _mail_notices(claimed, report):
+    """Send the notices claimed by this pass; forget those nobody received.
+
+    A row's stages stay recorded when one person concerned got the mail, or
+    when nobody could be written to (no recipient, no address: ``skipped``).
+    A send that raises is logged and counted as failed. Every claim not
+    confirmed that way loses, in a ``finally``, the stages this pass claimed
+    and their ``noticed`` event, so the next pass warns again (and
+    ``redate_unwarned`` keeps the lift ``min(EMBARGO_NOTICE_DAYS)`` days after
+    a delivered final notice). The administrators' summary goes out either way.
+    A worker killed between the claim and this release leaves the claim
+    recorded.
+    """
     groups = {}
-    for row, days in claimed:
-        groups.setdefault((row.ends_on, days), []).append(row)
-    for (ends_on, days), rows in groups.items():
-        by_user = _group_by_recipient(rows)
-        for user, user_rows in by_user.items():
-            notices.send_account_mail(
-                user,
-                "embargo_notice",
-                {"resources": _items(user_rows), "ends_on": ends_on, "days": days},
-            )
-        notices.send_summary_mail(
-            "embargo_notice",
-            {"resources": _items(rows), "ends_on": ends_on, "days": days},
+    for claim in claimed:
+        groups.setdefault((claim.row.ends_on, claim.days, claim.moved), []).append(
+            claim.row
         )
+    outcomes = {}
+    done = set()
+    try:
+        for (ends_on, days, moved), rows in groups.items():
+            context = {"ends_on": ends_on, "days": days, "moved": moved}
+            try:
+                by_user = _group_by_recipient(rows)
+                for user, user_rows in by_user.items():
+                    try:
+                        outcome = notices.send_account_mail(
+                            user,
+                            "embargo_notice",
+                            {"resources": _items(user_rows), **context},
+                        )
+                    except Exception:
+                        logger.exception("Embargo notice failed")
+                        outcome = notices.count_failure("embargo_notice")
+                    for row in user_rows:
+                        outcomes.setdefault(row.pk, []).append(outcome)
+            except Exception:
+                logger.exception("Embargo notice failed")
+                notices.count_failure("embargo_notice")
+                for row in rows:
+                    outcomes.setdefault(row.pk, []).append(notices.FAILED)
+            done.update(row.pk for row in rows)
+            try:
+                notices.send_summary_mail(
+                    "embargo_notice", {"resources": _items(rows), **context}
+                )
+            except Exception:
+                logger.exception("Embargo notice summary failed")
+    finally:
+        for claim in claimed:
+            sent = outcomes.get(claim.row.pk, [])
+            if claim.row.pk in done and (
+                notices.SENT in sent or notices.FAILED not in sent
+            ):
+                continue
+            try:
+                _release_notice(claim.row.pk, claim.stages, claim.event)
+            except Exception:
+                logger.exception("Releasing an undelivered embargo notice failed")
+            resource_id = str(claim.row.resourceinstance_id)
+            if resource_id in report.noticed:
+                report.noticed.remove(resource_id)
+            report.undelivered.append(resource_id)
+
+
+def _release_notice(row_pk, stages, event_pk):
+    """Remove the *stages* this pass claimed and their event, under a row lock."""
+    with transaction.atomic():
+        row = Embargo.objects.select_for_update().get(pk=row_pk)
+        kept = [stage for stage in row.notices_sent if stage not in stages]
+        if kept != row.notices_sent:
+            row.notices_sent = kept
+            row.save(update_fields=["notices_sent"])
+        EmbargoEvent.objects.filter(pk=event_pk).delete()
 
 
 def lift_due(now, report=None, *, apply=True, send_mail=True):
@@ -339,11 +478,14 @@ def lift_due(now, report=None, *, apply=True, send_mail=True):
     candidates = Embargo.objects.filter(
         state=Embargo.ACTIVE, ends_on__lt=local_today(now)
     ).order_by("ends_on", "pk")
+    redated = set(report.redated)
     lifted_rows = []
     for candidate in candidates:
         if not is_due(candidate, now):
             continue
         resource_id = str(candidate.resourceinstance_id)
+        if resource_id in redated:
+            continue
         report.due.append(resource_id)
         if not apply:
             continue

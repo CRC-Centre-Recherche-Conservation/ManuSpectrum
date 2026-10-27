@@ -139,6 +139,9 @@ tests:
     eval_time: 72h
     exp_samples: []
   - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
     eval_time: 80h
     exp_samples:
     - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
@@ -183,6 +186,9 @@ tests:
     eval_time: 72h
     exp_samples: []
   - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
     eval_time: 80h
     exp_samples:
     - labels: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing", service="celery", severity="warning"}
@@ -225,6 +231,9 @@ tests:
     exp_samples: []
   - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
     eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 75h30m
     exp_samples: []
   - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
     eval_time: 80h
