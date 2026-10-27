@@ -19,7 +19,7 @@ because an administrator created it. People ask for one through the contact page
    created with an unusable password. Leave **Send the invitation now** ticked (the default)
    and save: the person receives a mail `[ManuSpectrum][Account] Your ManuSpectrum
    account` (English, then French) with a personal link, valid for a limited time. Staff and
-   superuser rights are set on the change page afterwards.
+   superuser rights are set on the change page afterwards, by a superuser (below).
 2. To send the invitation again (lost mail, expired link), or when the box was unticked: in
    the Users list, tick the account and choose **Send invitation (account with no
    password)**. An account that is inactive, has no e-mail or already has a password is
@@ -32,6 +32,67 @@ because an administrator created it. People ask for one through the contact page
    authenticator application at `/<lang>/account/two-factor`.
 4. An invitation never activated shows in the monthly report (below) after three months.
 5. Advise editors not to switch on the spell checker (SCAYT) of the rich-text editor: it sends the typed text to a third party (WebSpellChecker); the browser's own spell checker does not.
+
+### Who can do what
+
+Three roles. The rule lives in `manuspectrum/accounts/roles.py` and is enforced by the
+server, not only by the forms.
+
+| | Superuser | Site manager | Editor |
+|---|---|---|---|
+| Reaches the admin | yes | yes (staff status + group) | no |
+| Creates and invites accounts | every account | ordinary accounts only | no |
+| Edits first and last name, "Active" | every account | ordinary accounts only | no |
+| Edits user name, e-mail address, last login, date joined | yes | no (set at creation only) | no |
+| Grants a group | any | the assignable groups only | no |
+| Grants staff or superuser status, direct permissions | yes | no | no |
+| Sets or changes a password in the admin | yes | no | no |
+| Resets two-factor, sends the enrolment link, copies the addresses | yes | no | no |
+| Site announcements | yes | add, edit, delete | no |
+| Restrictions (embargoes): end date | yes, beyond the maximum and without end date | shorten or extend (not past today), within the maximum | no |
+| Terms acceptances, workflow cleanups | view | view | no |
+| Groups, OAuth applications, Arches profiles, access attempts, every other admin page | yes | no | no |
+| Arches data entry | through Arches groups | through Arches groups | through Arches groups |
+
+- **Site manager** = the group **Site managers** (created by migration `0015`, an English
+  identifier like Arches' own groups) **and** staff status. Both are granted by a superuser on
+  the user's change page: the group alone opens no admin page, staff status alone grants
+  nothing. Only a superuser appoints or removes a site manager.
+- **Ordinary account**: not a superuser, not staff, not the visitors' system account
+  `anonymous`, no direct permission and only assignable groups. Any other account (another
+  manager, an administrator, the manager's own account) is read-only for a site manager:
+  its change page shows the values without a Save button, and a change, a delete or a
+  password change is refused (`403`). A site manager changes their own name or e-mail from
+  their Arches profile, and their own password there or through the admin's « Change
+  password » link (old password required).
+- **Identity and dates** of an existing account (user name, e-mail address, last login, date
+  joined) are read-only for a site manager: the e-mail receives invitations and password
+  resets, and the dates drive the anonymisation. This is also why a site manager needs no view
+  of the resource permissions an ordinary account may hold: it cannot redirect its mail.
+- **Assignable groups**: the groups holding no Django permission beyond Arches' nodegroup
+  permissions, except the Arches administrator roles (`System Administrator`, `Application
+  Administrator`, `RDM Administrator`, `Mobile Project Administrator`) and `Site managers`.
+  Today: `Resource Editor`, `Resource Reviewer`, `Resource Exporter`, `Crowdsource Editor`,
+  `Graph Editor`, `Guest`. A group created later with any admin permission becomes
+  superuser-only by itself. What each one unlocks in Arches:
+  - `Resource Editor`: the resource editor (create, edit and delete records) and the bulk
+    data managers (imports);
+  - `Resource Reviewer`: approves or rejects the provisional edits of other users, and edits
+    without going through provisional edits;
+  - `Resource Exporter`: exports search results;
+  - `Graph Editor`: the graph designer: create, edit, publish and delete resource models;
+  - `Crowdsource Editor`: read and write permission on the cards, without the resource editor
+    pages;
+  - `Guest`: read permission on the cards.
+- **Passwords** are never set by a site manager: an account gets its first password from its
+  invitation (« Send invitation » sends it again while the account has no password; a site
+  manager's selection skips the accounts only a superuser manages, with a message); a lost
+  password goes through the sign-in page's « forgot password » mail; a lost phone needs a
+  superuser (two-factor reset, below).
+- **Editors** are the Arches groups above; they never reach the admin.
+- The permissions of the group come from migration `0015`; do not edit them in the admin.
+  Reversing the migration leaves the group and its members in place; a change of its
+  permissions is a new data migration.
 
 ### Two-factor authentication
 
