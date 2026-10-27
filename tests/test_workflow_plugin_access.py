@@ -34,7 +34,18 @@ PLUGIN_GROUPS = {
     "create-project-workflow": {"Resource Editor"},
     "import-biblissima-workflow": {"Resource Editor"},
     "bulk-data-manager": {"Resource Editor"},
-    "image-service-manager": {"Resource Editor", "Resource Reviewer"},
+    "image-service-manager": {
+        "Guest",
+        "Resource Editor",
+        "Resource Reviewer",
+        "Crowdsource Editor",
+        "Resource Exporter",
+        "Graph Editor",
+        "RDM Administrator",
+        "Application Administrator",
+        "System Administrator",
+        "Mobile Project Administrator",
+    },
     "controlled-list-manager": {"RDM Administrator"},
 }
 
@@ -158,7 +169,9 @@ class GrantTests(TestCase):
         Group.objects.filter(name="Resource Reviewer").delete()
         migration.grant_access(apps, SCHEMA_EDITOR)
         names = {name for name, _, _ in all_grants()}
-        self.assertEqual(names, {"Resource Editor", "Resource Exporter"})
+        self.assertEqual(
+            names, PLUGIN_GROUPS["image-service-manager"] - {"Resource Reviewer"}
+        )
 
 
 @override_settings(LANGUAGE_CODE="en")
@@ -183,6 +196,12 @@ class ArchesPageTests(TestCase):
         for slug in workflow_slugs() + ["bulk-data-manager"]:
             with self.subTest(plugin=slug):
                 self.assertEqual(self.client.get(self.plugin(slug)).status_code, 302)
+
+    def test_the_image_service_manager_page_is_open_to_everyone(self):
+        url = self.plugin("image-service-manager")
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.client.force_login(member("Guest"))
+        self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_the_visitor_is_sent_to_sign_in(self):
         response = self.client.get(self.plugin("import-biblissima-workflow"))

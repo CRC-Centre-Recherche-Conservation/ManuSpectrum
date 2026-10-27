@@ -11,8 +11,10 @@ follow that rule:
 
 - `view_plugin`: the workflows (launcher `init-workflow`, `create-project-workflow`,
   `import-biblissima-workflow`, registered by `0008_workflow_plugins`) and the
-  Bulk Data Manager → Resource Editor; the Image Service Manager → Resource
-  Editor and Resource Reviewer. The Controlled List Manager keeps the grant
+  Bulk Data Manager → Resource Editor; the Image Service Manager → every
+  Arches group (`ARCHES_GROUPS`): its page is open to all, and the project's
+  view override limits its writes (create, edit, delete) to Resource Editor and
+  Resource Reviewer. The Controlled List Manager keeps the grant
   `arches_controlled_lists` gives it (RDM Administrator).
 - `view_etlmodule`: the import and edit modules → Resource Editor; the
   exporters → Resource Exporter; the bulk deletion module → nobody.
@@ -52,6 +54,22 @@ EDITOR = "Resource Editor"
 REVIEWER = "Resource Reviewer"
 EXPORTER = "Resource Exporter"
 
+# Every group Arches creates in its migrations (`models.0001_initial`,
+# `2891_tile_qa_schema`, `8010_export_permissions`). The visitor's `anonymous`
+# user is in Guest and Resource Exporter.
+ARCHES_GROUPS = (
+    "Guest",
+    EDITOR,
+    REVIEWER,
+    "Crowdsource Editor",
+    EXPORTER,
+    "Graph Editor",
+    "RDM Administrator",
+    "Application Administrator",
+    "System Administrator",
+    "Mobile Project Administrator",
+)
+
 # (pluginid, slug, groups)
 PLUGINS = (
     ("49507fb0-89c6-47b7-b506-9b2b29a3b8d8", "init-workflow", (EDITOR,)),
@@ -61,7 +79,7 @@ PLUGINS = (
     (
         "6f707d86-d49c-4ece-9883-8cbb2ecda1b5",
         "image-service-manager",
-        (EDITOR, REVIEWER),
+        ARCHES_GROUPS,
     ),
 )
 

@@ -77,9 +77,10 @@ server, not only by the forms.
   superuser-only by itself. What each one unlocks in Arches:
   - `Resource Editor`: the resource editor (create, edit and delete records), the workflows
     (New Project, Import Biblissima), the bulk data manager (imports and edits), the Image
-    Service Manager and the XY renderer configurations;
+    Service Manager's create, edit and delete, and the XY renderer configurations;
   - `Resource Reviewer`: approves or rejects the provisional edits of other users, and edits
-    without going through provisional edits; opens the Image Service Manager;
+    without going through provisional edits; creates, edits and deletes in the Image Service
+    Manager;
   - `Resource Exporter`: exports search results; the bulk data manager shows it the Excel
     exporters (with `Resource Editor`, which opens the bulk data manager);
   - `Graph Editor`: the graph designer: create, edit, publish and delete resource models, and
@@ -111,7 +112,7 @@ reference:
 | New Project (`create-project-workflow`) | `Resource Editor` |
 | Import Biblissima (`import-biblissima-workflow`) and its API (`api/biblissima/*`) | `Resource Editor` |
 | Bulk Data Manager (`bulk-data-manager`) | `Resource Editor` |
-| Image Service Manager (`image-service-manager`) | `Resource Editor`, `Resource Reviewer` |
+| Image Service Manager (`image-service-manager`) | open: everyone; create, edit, delete: `Resource Editor`, `Resource Reviewer` |
 | Controlled List Manager (`controlled-list-manager`) | `RDM Administrator` (set by Arches) |
 | XY renderer configurations: create, edit, delete (seeded presets: superusers only) | `Resource Editor` |
 | Model configuration: relatable nodes, summary configurations | `Graph Editor` |
