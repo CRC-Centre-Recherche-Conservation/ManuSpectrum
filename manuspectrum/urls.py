@@ -78,6 +78,7 @@ from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.health import HealthzView, ReadyzView
 from manuspectrum.views.knockout_templates import knockout_template
+from manuspectrum.views.manifest_manager import ManifestManagerView
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
 from manuspectrum.views.plugin import PluginView
@@ -136,6 +137,11 @@ urlpatterns = [
         r"^templates/(?P<template>[a-zA-Z_\-./]*)",
         knockout_template,
         name="templates",
+    ),
+    re_path(
+        r"^image-service-manager",
+        ManifestManagerView.as_view(),
+        name="manifest_manager",
     ),
 ]
 
