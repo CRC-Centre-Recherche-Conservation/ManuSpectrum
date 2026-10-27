@@ -1,0 +1,102 @@
+---
+- name: Install the tools the make targets and the checkout need
+  ansible.builtin.apt:
+    name: [make, git, openssl, python3]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Read the service account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ service_user }}"
+
+- name: Take the service account's uid and gid
+  ansible.builtin.set_fact:
+    app_uid: "{{ ansible_facts['getent_passwd'][service_user][1] }}"
+    app_gid: "{{ ansible_facts['getent_passwd'][service_user][2] }}"
+
+- name: Read the primary group of the service account
+  ansible.builtin.getent:
+    database: group
+    key: "{{ app_gid }}"
+
+- name: Take the name of that group
+  ansible.builtin.set_fact:
+    app_group: "{{ ansible_facts['getent_group'].keys() | first }}"
+
+- name: Create the data directory
+  ansible.builtin.file:
+    path: "{{ data_dir }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0755"
+
+# SECRETS_DIR itself is made by `make secrets` (0700); its parent is made here so
+# that the service account can create it.
+- name: Assert the secrets directory has a parent of its own
+  ansible.builtin.assert:
+    that:
+      - (env_secrets_dir | dirname).split('/') | select | list | length >= 2
+    quiet: true
+    fail_msg: >-
+      env_secrets_dir ({{ env_secrets_dir }}) sits directly under {{ env_secrets_dir | dirname }}:
+      that directory would be handed to the service account. Use a dedicated parent,
+      e.g. /srv/manuspectrum/secrets.
+
+- name: Create the parent of the secrets directory
+  ansible.builtin.file:
+    path: "{{ env_secrets_dir | dirname }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0750"
+
+- name: Create the host directories of the stack
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ env_media_host_dir }}", mode: "0750" }
+    - { path: "{{ env_media_host_dir }}/uploadedfiles", mode: "0750" }
+    - { path: "{{ env_backup_dump_dir }}", mode: "0700" }
+    - { path: "{{ env_restic_repository_dir | dirname }}", mode: "0750" }
+    - { path: "{{ env_restic_repository_dir }}", mode: "0700" }
+    - { path: "{{ env_metrics_textfile_dir }}", mode: "0755" }
+    - { path: "{{ env_certs_dir }}", mode: "0755" }
+    - { path: "{{ env_nginx_log_host_dir }}", mode: "0750" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Look for an existing checkout
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/.git"
+  register: app_checkout
+
+- name: Clone the application
+  ansible.builtin.git:
+    repo: "{{ app_git_url }}"
+    dest: "{{ app_dir }}"
+    version: "{{ app_git_ref }}"
+    recursive: true
+  become: true
+  become_user: "{{ service_user }}"
+  when: not app_checkout.stat.exists
+
+- name: Render the environment file, the units and the logrotate rule
+  ansible.builtin.include_tasks: render.yml
+  vars:
+    app_render_env_dest: "{{ app_dir }}/deploy/compose/.env"
+    app_render_env_owner: "{{ service_user }}"
+    app_render_env_group: "{{ app_gid }}"
+    app_render_units_dir: /etc/systemd/system
+    app_render_logrotate_dir: /etc/logrotate.d
+    app_render_owner: root
+    app_render_notify: [reload systemd]
+
+- name: Reload systemd before anything uses the new units
+  ansible.builtin.meta: flush_handlers

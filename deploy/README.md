@@ -71,7 +71,7 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `restic` | `ARGS="snapshots"`: run restic on the repository, interactive |
 | `monitoring-init` | Once per host, before the first `up` of the monitoring (starts `postgres` if needed): create or update the `ms_monitor` role and `pg_stat_statements` |
 | `observability-on`, `observability-off` | Start, or stop and remove, the monitoring containers (volumes kept) |
-| `alert-recipients` | After editing `ALERT_EMAILS`, the sender or the relay in `.env`: validate, recreate Alertmanager |
+| `alert-recipients` | After changing `env_alert_emails`, the sender or the relay in the inventory and running the playbook (`.env` is rendered from it): validate, recreate Alertmanager |
 | `alert-test` | Raise a critical `AlertTest` for five minutes: an e-mail must reach `ALERT_EMAILS` |
 | `alerts`, `silence` | List the alerts Alertmanager holds; `ARGS='alertname=… --duration=2h --comment="why"'` silences one |
 | `monthly-report`, `report-test` | Send the monthly report (the timer runs it on the 1st); `report-test [ARGS="--month YYYY-MM"]` sends one now |

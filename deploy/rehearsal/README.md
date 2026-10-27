@@ -52,7 +52,7 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 ## 2. Network and NFS
 
 - [ ] `sudo ./host-network.sh`: the `ms-rehearsal` libvirt network (192.168.123.0/24) is active. The `default` network is never modified.
-- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you). The script also sets `manage-gids=n` in the `[mountd]` section of `/etc/nfs.conf` (and removes `--manage-gids` from `RPCMOUNTDOPTS` in `/etc/default/nfs-kernel-server`), then restarts the NFS server only if something changed: as in production, the server must honour the client's supplementary groups, or Cantaloupe (`group_add: APP_GID`) is refused.
+- [ ] `sudo ./host-nfs.sh`: `NFS_EXPORT_DIR` (default `/srv/ms-rehearsal-data`) is exported to the VM only (192.168.123.10/32), with `NFS_EXPORT_OPTIONS` from `rehearsal.env`. With firewalld (Fedora, openSUSE...), the script opens `nfs` in the `libvirt` zone and says so; without it `/data` does not mount. With ufw active on the host, allow NFS from 192.168.123.0/24 (the script reminds you). The script also sets `manage-gids=n` in the `[mountd]` section of `/etc/nfs.conf` (and removes `--manage-gids` from `RPCMOUNTDOPTS` in `/etc/default/nfs-kernel-server`), then restarts the NFS server only if something changed: as in production, the server must honour the client's supplementary groups, or Cantaloupe (`group_add: APP_GID`) is refused. For a rehearsal driven by the Ansible `app` role, set `NFS_EXPORT_OPTIONS=rw,sync,no_root_squash,no_subtree_check` in `rehearsal.env`: the playbook runs as root on the VM and creates directories owned by the service account on the export, which `root_squash` refuses.
 
 ## 3. Install the VM
 
@@ -64,12 +64,13 @@ Useful habit: measure a subfolder of `/data` rather than the whole of `/data`.
 
 ## 4. Baseline
 
-- [ ] `scp host-baseline.sh verify-baseline.sh rehearsal.env <admin>@192.168.123.10:` (`<admin>` = `ADMIN_USER` of your `rehearsal.env`). After rebuilding the VM: `ssh-keygen -R 192.168.123.10`.
-- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'`: every line of `verify-baseline.sh` starts with `OK`, exit code 0. When `rehearsal.env` sets `REHEARSAL_HOST=yes` (the example does; never set it on a production host) the baseline also writes `/etc/manuspectrum/rehearsal-host`, the marker `make load-snapshot` requires, and `verify-baseline.sh` checks it; without it no marker is written. The script can be re-run; what is already in place is reported as "already done".
+- [ ] `scp host-baseline.sh rehearsal.env <admin>@192.168.123.10:` (`<admin>` = `ADMIN_USER` of your `rehearsal.env`). After rebuilding the VM: `ssh-keygen -R 192.168.123.10`.
+- [ ] `ssh -t <admin>@192.168.123.10 'sudo ./host-baseline.sh'`. When `rehearsal.env` sets `REHEARSAL_HOST=yes` (the example does; never set it on a production host) the baseline also writes `/etc/manuspectrum/rehearsal-host`, the marker `make load-snapshot` requires; without it no marker is written. The script can be re-run; what is already in place is reported as "already done".
+- [ ] Verify the baseline with Ansible (`deploy/ansible/README.md`): `ansible-playbook -i inventories/<rehearsal> site.yml --ask-become-pass --tags preflight,baseline` with `baseline_mode: verify` and `rehearsal_host: true` in the inventory. Every assertion passes (the marker included) and nothing changes. This script plays the system administrator; the playbook is what checks (and, on a fresh VM, `baseline_mode: apply` replaces the script).
 - [ ] If the Docker repository does not have the Ubuntu 26.04 suite yet, the script stops and suggests `DOCKER_APT_CODENAME=noble` in `rehearsal.env`; it never falls back silently. Note the suite actually used in production.
 - [ ] Shut the VM down (`virsh -c qemu:///system shutdown ms-rehearsal`) then `virsh -c qemu:///system snapshot-create-as ms-rehearsal baseline`: the starting point of every rehearsal, equivalent to the VM as delivered. Restart: `virsh -c qemu:///system start ms-rehearsal`. Take every snapshot with the VM shut down: a snapshot of a running VM, or a revert to one, leaves the guest clock wrong (minutes after a live snapshot, days after a revert), which breaks two-factor codes and announcements. After such a revert, `virsh shutdown` and `virsh start` the VM, and check `ssh <admin>@192.168.123.10 timedatectl` before time-sensitive steps.
 
-Before Ansible, `verify-baseline.sh` prints `vm.max_map_count` without checking it and requires `/etc/docker/daemon.json` to be absent. `verify-baseline.sh --after-ansible` requires `vm.max_map_count` >= 262144 and `/etc/docker/daemon.json` to be present. A failing point is printed as a `MISMATCH` line.
+`host-baseline.sh` leaves `vm.max_map_count` and `/etc/docker/daemon.json` to Ansible: the `preflight` role requires `vm.max_map_count` >= 262144 and the `host` role writes `daemon.json`. A failing assertion stops the play with a message saying what to do.
 
 ## 5. VM name on the host
 
@@ -98,7 +99,7 @@ NFS_EXPORT_DIR=/media/<user>/<label>/ms-rehearsal/data
 ```
 
 `NFS_EXPORT` (the path the VM mounts) follows `NFS_EXPORT_DIR`; if you set it too it must be
-equal, `host-baseline.sh` and `verify-baseline.sh` refuse otherwise. `make-vm.sh` and
+equal, `host-baseline.sh` refuses otherwise. `make-vm.sh` and
 `host-nfs.sh` check the directory before creating anything:
 
 - `NFS_EXPORT_DIR` must be on a Linux filesystem (ext4, xfs, btrfs): vfat, exfat and ntfs are
@@ -156,12 +157,11 @@ and again, from one snapshot directory.
   `sudo cp -r ms-snapshot-<date> /home/<service-account>/snapshots/`,
   `sudo chown -R <service-account>: /home/<service-account>/snapshots/ms-snapshot-<date>`
   (a glob run by the admin cannot expand inside a directory it cannot read: use `sudo sh -c '…'`).
-- [ ] On the VM, as the service account, set the environment explicitly: the template
-  `deploy/compose/.env.example` ships `DEPLOY_ENVIRONMENT=production`, so run
-  `V=rehearsal; sed -i "s/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=$V/" deploy/compose/.env`
-  (or edit the line with `nano deploy/compose/.env`). The command
+- [ ] Set the environment explicitly in the Ansible inventory of the VM: the template ships
+  `DEPLOY_ENVIRONMENT=production`, so put `env_deploy_environment: rehearsal` (and `rehearsal_host: true`)
+  in it and run the playbook again, which renders `deploy/compose/.env`. The command
   also requires the host marker `/etc/manuspectrum/rehearsal-host`, written by `host-baseline.sh`
-  in the VM and checked by `verify-baseline.sh`; without it (a production host) the command is
+  in the VM (and checked by the Ansible baseline verification); without it (a production host) the command is
   refused whatever `.env` says.
 - [ ] `sudo -u <service-account> make -C deploy load-snapshot SNAPSHOT=<path> CONFIRM=yes` (or as root; the
   uploads are then handled as the service account through `setpriv`; any other account is refused). Before anything is changed, a

@@ -1,0 +1,28 @@
+---
+# CI only: renders `.env`, the units and the logrotate rule of the app role from
+# an inventory into a scratch directory, on localhost, without privileges.
+#   ansible-playbook -i inventories/example render.yml -e render_dir=/tmp/out
+- name: Render the application files
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    app_uid: "10001"
+    app_gid: "10001"
+  tasks:
+    - name: Create the output directories
+      ansible.builtin.file:
+        path: "{{ render_dir }}/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: [env, units, logrotate]
+
+    - name: Render with the app role's templates
+      ansible.builtin.include_role:
+        name: app
+        tasks_from: render
+      vars:
+        app_render_env_dest: "{{ render_dir }}/env/.env"
+        app_render_units_dir: "{{ render_dir }}/units"
+        app_render_logrotate_dir: "{{ render_dir }}/logrotate"

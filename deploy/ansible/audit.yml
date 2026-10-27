@@ -1,0 +1,53 @@
+---
+# On demand, never scheduled: lynis audits the host and the play fails below
+# lynis_min_index (inventory, 70 in the example). Run it on a rehearsal VM.
+- name: Audit the host with lynis
+  hosts: all
+  become: true
+  vars:
+    lynis_report: /var/log/lynis-report.dat
+  tasks:
+    - name: Install lynis
+      ansible.builtin.apt:
+        name: lynis
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Run the audit
+      ansible.builtin.command: lynis audit system --quiet --no-colors
+      register: lynis_run
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Read the audit report
+      ansible.builtin.slurp:
+        src: "{{ lynis_report }}"
+      register: lynis_report_file
+
+    - name: Extract the hardening index and the warnings
+      ansible.builtin.set_fact:
+        lynis_index: >-
+          {{ lynis_text | regex_search('(?m)^hardening_index=([0-9]+)$', '\1') | default([-1], true) | first | int }}
+        lynis_warnings: >-
+          {{ lynis_text.splitlines() | select('match', '^warning\[\]=')
+          | map('regex_replace', '^warning\[\]=', '') | list }}
+      vars:
+        lynis_text: "{{ lynis_report_file.content | b64decode }}"
+
+    - name: Show the hardening index and the warnings
+      ansible.builtin.debug:
+        msg:
+          - "Hardening index: {{ lynis_index }} (floor {{ lynis_min_index }})"
+          - "Warnings: {{ lynis_warnings | length }}"
+          - "{{ lynis_warnings }}"
+
+    - name: Assert the hardening index reaches the floor
+      ansible.builtin.assert:
+        that:
+          - lynis_index | int >= lynis_min_index | int
+        quiet: true
+        fail_msg: >-
+          The lynis hardening index is {{ lynis_index }}, under lynis_min_index ({{ lynis_min_index }}).
+          Read the warnings above and /var/log/lynis.log on the host.

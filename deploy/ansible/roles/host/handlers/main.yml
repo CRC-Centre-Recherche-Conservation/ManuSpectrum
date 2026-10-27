@@ -1,0 +1,19 @@
+---
+- name: Warn that Docker is about to restart
+  ansible.builtin.debug:
+    msg: >-
+      Restarting Docker. The first time live-restore is set, the running containers stop
+      and the stack must be started again (make -C deploy up).
+  listen: restart docker
+
+- name: Restart Docker
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  listen: restart docker
+
+- name: Restart journald
+  ansible.builtin.service:
+    name: systemd-journald
+    state: restarted
+  listen: restart journald

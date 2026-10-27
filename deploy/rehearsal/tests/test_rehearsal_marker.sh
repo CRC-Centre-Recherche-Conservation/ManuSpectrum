@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests that the rehearsal host marker has one path in the script that creates
-# it (host-baseline.sh), the one that checks it (verify-baseline.sh) and the
-# one that requires it (load-snapshot.sh). Prints `ok N` / `not ok N`; exits
+# it (host-baseline.sh and the Ansible baseline role), the one that checks it
+# (the Ansible baseline verification) and the one that requires it (load-snapshot.sh). Prints `ok N` / `not ok N`; exits
 # non-zero on failure.
 set -uo pipefail
 
@@ -18,8 +18,11 @@ assert() {
 grep -q "write_file $MARKER" "$KIT/host-baseline.sh"
 assert "host-baseline.sh writes the marker" $?
 
-grep -q "$MARKER" "$KIT/verify-baseline.sh" && grep -q 'root:644' "$KIT/verify-baseline.sh"
-assert "verify-baseline.sh checks the marker, root-owned 0644" $?
+ROLE="$KIT/../ansible/roles/baseline/tasks"
+grep -q "$MARKER" "$ROLE/verify.yml" && grep -q "pw_name == 'root'" "$ROLE/verify.yml" && grep -q "mode == '0644'" "$ROLE/verify.yml"
+assert "the Ansible baseline verification checks the marker, root-owned 0644" $?
+grep -q "$MARKER" "$ROLE/apply.yml"
+assert "the Ansible baseline apply writes the marker" $?
 
 grep -q "^REHEARSAL_MARKER=$MARKER\$" "$KIT/../scripts/load-snapshot.sh"
 assert "load-snapshot.sh requires the same path by default" $?
@@ -41,16 +44,20 @@ done
 grep -q '^REHEARSAL_HOST=yes$' "$KIT/rehearsal.env.example" && grep -q 'Never set on a production host' "$KIT/rehearsal.env.example"
 assert "rehearsal.env.example sets REHEARSAL_HOST=yes with the production warning" $?
 
-check_marker_line() { # check_marker_line REHEARSAL_HOST-VALUE: runs the gated block of verify-baseline.sh
-  local vblock
-  # shellcheck disable=SC2016
-  vblock="$(sed -n '/^if \[ "\${REHEARSAL_HOST:-no}" = yes \]/,/^fi$/p' "$KIT/verify-baseline.sh")"
-  REHEARSAL_HOST="$1" bash -c 'check() { echo "CHECK $1"; }; '"$vblock" 2>&1
+# Every task that touches the marker or its directory carries the guard, in both files.
+guarded() { # guarded FILE EXPECTED: tasks naming /etc/manuspectrum and `when: rehearsal_host | bool` count the same
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+tasks = re.split(r"(?m)^(?=- name: )", text)
+touching = [t for t in tasks if "/etc/manuspectrum" in t]
+guarded = [t for t in touching if re.search(r"(?m)^  when: rehearsal_host \| bool$", t)]
+sys.exit(0 if len(touching) == int(sys.argv[2]) and len(guarded) == len(touching) else 1)
+PY
 }
-check_marker_line yes | grep -q "CHECK rehearsal host marker"
-assert "verify-baseline.sh checks the marker when REHEARSAL_HOST=yes" $?
-out="$(check_marker_line no)"
-! grep -q CHECK <<<"$out" && grep -q "not checked" <<<"$out"
-assert "verify-baseline.sh does not check the marker otherwise" $?
+guarded "$ROLE/apply.yml" 2
+assert "every apply task touching /etc/manuspectrum is guarded by rehearsal_host (the directory and the marker)" $?
+guarded "$ROLE/verify.yml" 2
+assert "every verify task touching /etc/manuspectrum is guarded by rehearsal_host (the look and the assertion)" $?
 
 exit "$failed"
