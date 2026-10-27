@@ -13,13 +13,17 @@ import uuid
 
 from django.contrib.auth.models import Group, User
 from django.db import connection
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from arches.app.models import models
 
-from manuspectrum.views.graph_nodes import RelatableNodesView
+from manuspectrum.views.graph_nodes import (
+    RelatableNodesView,
+    localized,
+    target_graphids,
+)
 
 
 def _graph(slug, name):
@@ -50,6 +54,30 @@ def _node(graph, nodegroup, alias, datatype, config=None):
         istopnode=False,
         config=config if config is not None else {},
     )
+
+
+class HelperTests(SimpleTestCase):
+    def test_localized_falls_back_to_any_other_language(self):
+        self.assertEqual(localized({"de": "Name"}, "fr"), "Name")
+
+    def test_localized_reads_nothing_from_an_empty_or_odd_value(self):
+        self.assertEqual(localized({"fr": ""}, "fr"), "")
+        self.assertEqual(localized(None, "fr"), "")
+
+    def test_target_graphids_skips_malformed_ids_and_dedupes_casings(self):
+        graphid = uuid.uuid4()
+        node = models.Node(
+            config={
+                "graphs": [
+                    {"graphid": str(graphid).upper()},
+                    {"graphid": "not-a-uuid"},
+                    "bare string",
+                    {"graphid": str(graphid)},
+                ]
+            }
+        )
+
+        self.assertEqual(target_graphids(node), [str(graphid)])
 
 
 class RelatableNodesFixtureTests(TestCase):
