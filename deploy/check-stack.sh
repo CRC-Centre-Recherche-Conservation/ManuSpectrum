@@ -78,6 +78,9 @@ bash deploy/scripts/tests/test_lib_release.sh
 step "release ref guard tests"
 bash deploy/scripts/tests/test_release_ref_guard.sh
 
+step "release managed files tests"
+bash deploy/scripts/tests/test_release_managed.sh
+
 step "release ruleset check tests"
 bash deploy/scripts/tests/test_release_ruleset_check.sh
 
