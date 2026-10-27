@@ -3,8 +3,13 @@
 import unittest
 
 import json
+import os
 import re
 import shlex
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 import yaml
 
@@ -234,23 +239,30 @@ class AppRoleTests(unittest.TestCase):
 
     def test_a_closed_gate_ends_the_host_with_one_summary_and_nothing_after(self):
         tasks = load_tasks(ROLES_DIR / "app" / "tasks" / "gates.yml")
-        self.assertEqual(module_of(tasks[-1]), "meta")
-        self.assertEqual(tasks[-1]["ansible.builtin.meta"], "end_host")
-        self.assertEqual(module_of(tasks[-2]), "debug")
+        self.assertEqual(module_of(tasks[-1]), "debug")
         self.assertEqual(
-            [t["name"] for t in tasks if module_of(t) == "debug"], [tasks[-2]["name"]]
+            [t["name"] for t in tasks if module_of(t) == "debug"], [tasks[-1]["name"]]
         )
-        main = load_tasks(ROLES_DIR / "app" / "tasks" / "main.yml")
         self.assertEqual(
-            [t["ansible.builtin.include_tasks"] for t in main],
+            main_includes(),
             [
+                "marker.yml",
                 "update_guard.yml",
+                "refusals.yml",
                 "prepare.yml",
                 "release.yml",
                 "gates.yml",
                 "start.yml",
             ],
         )
+        start = [
+            t
+            for t in load_tasks(ROLES_DIR / "app" / "tasks" / "main.yml")
+            if t.get("ansible.builtin.include_tasks") == "start.yml"
+        ][0]
+        self.assertEqual(start["when"], "app_todo | length == 0")
+        for _, task in role_tasks("app"):
+            self.assertNotEqual(task.get("ansible.builtin.meta"), "end_host")
 
     def test_the_stack_starts_after_monitoring_init(self):
         names = [
@@ -263,6 +275,7 @@ class AppRoleTests(unittest.TestCase):
 
 
 APP = ROLES_DIR / "app"
+ANSIBLE = ROLES_DIR.parent
 REPO = ROLES_DIR.parents[2]
 
 
@@ -413,20 +426,25 @@ class ReleaseInstallTests(unittest.TestCase):
         )
 
     def test_a_dirty_laptop_checkout_stops_before_anything_is_installed(self):
-        names = [t["name"] for t in release_tasks()]
+        names = [t["name"] for t in load_tasks(APP / "tasks" / "refusals.yml")]
         dirty = task_named(
-            "app", "release.yml", "Look for uncommitted changes in the managed paths"
+            "app", "refusals.yml", "Look for uncommitted changes in the managed paths"
         )
         self.assertIn("status --porcelain", command_line(dirty))
         self.assertEqual(dirty["delegate_to"], "localhost")
         self.assertIs(dirty["become"], False)
         check = names.index("Assert the laptop checkout is clean in the managed paths")
-        self.assertLess(check, names.index("Install the release programs"))
-        self.assertLess(check, names.index("Record the managed sources"))
+        self.assertGreater(len(names), check)
+        includes = main_includes()
+        self.assertLess(includes.index("refusals.yml"), includes.index("prepare.yml"))
+        self.assertNotIn(
+            "Assert the laptop checkout is clean in the managed paths",
+            [t["name"] for t in release_tasks()],
+        )
 
     def test_the_service_account_is_never_an_operator(self):
         task = task_named(
-            "app", "release.yml", "Assert the service account is not an operator"
+            "app", "refusals.yml", "Assert the service account is not an operator"
         )
         text = " ".join(strings(task))
         self.assertIn("service_user", text)
@@ -454,14 +472,10 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertIn("app_update_units", " ".join(strings(refuse)))
         start = load_tasks(APP / "tasks" / "start.yml")
         self.assertEqual(start[0]["ansible.builtin.include_tasks"], "update_guard.yml")
-        main = load_tasks(APP / "tasks" / "main.yml")
-        self.assertEqual(main[0]["ansible.builtin.include_tasks"], "update_guard.yml")
+        self.assertIn("update_guard.yml", main_includes())
 
     def test_release_comes_after_the_checkout_and_before_the_gates(self):
-        main = [
-            t["ansible.builtin.include_tasks"]
-            for t in load_tasks(APP / "tasks" / "main.yml")
-        ]
+        main = main_includes()
         self.assertLess(main.index("prepare.yml"), main.index("release.yml"))
         self.assertLess(main.index("release.yml"), main.index("start.yml"))
 
@@ -474,6 +488,14 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertTrue(
             {"curl", "tzdata", "util-linux"} <= set(task["ansible.builtin.apt"]["name"])
         )
+
+
+def main_includes():
+    return [
+        t["ansible.builtin.include_tasks"]
+        for t in load_tasks(APP / "tasks" / "main.yml")
+        if "ansible.builtin.include_tasks" in t
+    ]
 
 
 def task_named(role, file, name):
@@ -624,6 +646,153 @@ class FixWaveTests(unittest.TestCase):
             self.assertTrue(
                 str(task.get("register", "")).startswith("baseline_chk_"), task["name"]
             )
+
+
+class RunMarkerTests(unittest.TestCase):
+    """An Ansible run and an update never run together."""
+
+    def main_play(self):
+        return yaml.safe_load((APP / "tasks" / "main.yml").read_text(encoding="utf-8"))
+
+    def test_the_role_runs_in_a_block_that_always_removes_the_marker(self):
+        play = self.main_play()
+        self.assertEqual(len(play), 1)
+        block = play[0]
+        self.assertEqual(
+            block["block"][0]["ansible.builtin.include_tasks"], "marker.yml"
+        )
+        always = block["always"]
+        self.assertEqual(len(always), 1)
+        args = always[0]["ansible.builtin.file"]
+        self.assertEqual(args["state"], "absent")
+        self.assertEqual(args["path"], "{{ app_ansible_marker }}")
+        self.assertEqual(app_defaults()["app_ansible_marker"], "/run/manuspectrum/ansible-running")
+
+    def test_the_marker_is_taken_before_the_update_guard_looks(self):
+        names = [
+            t["ansible.builtin.include_tasks"]
+            for t in self.main_play()[0]["block"]
+            if "ansible.builtin.include_tasks" in t
+        ]
+        self.assertLess(names.index("marker.yml"), names.index("update_guard.yml"))
+        self.assertEqual(names.index("update_guard.yml"), 1)
+
+    def test_the_marker_is_a_root_file_in_a_root_directory(self):
+        tasks = load_tasks(APP / "tasks" / "marker.yml")
+        directory = tasks[0]["ansible.builtin.file"]
+        self.assertEqual(directory["path"], "{{ app_ansible_marker | dirname }}")
+        self.assertEqual(
+            (directory["state"], directory["owner"], directory["mode"]),
+            ("directory", "root", "0755"),
+        )
+        marker = tasks[1]["ansible.builtin.file"]
+        self.assertEqual(
+            (marker["state"], marker["owner"], marker["group"], marker["mode"]),
+            ("touch", "root", "root", "0644"),
+        )
+        self.assertEqual(marker["modification_time"], "preserve")
+
+    def test_the_stack_starts_only_if_the_image_and_checkout_are_unchanged(self):
+        start = load_tasks(APP / "tasks" / "start.yml")
+        names = [t["name"] for t in start]
+        self.assertEqual(start[0]["ansible.builtin.include_tasks"], "update_guard.yml")
+        self.assertEqual(start[1]["ansible.builtin.include_tasks"], "source_state.yml")
+        check = task_named(
+            "app",
+            "start.yml",
+            "Assert nothing changed the image or the checkout during the run",
+        )
+        text = " ".join(strings(check))
+        self.assertIn("app_current_image == app_seen_image", text)
+        self.assertIn("app_current_commit == app_seen_commit", text)
+        self.assertLess(
+            names.index(check["name"]), names.index("Start or update the stack")
+        )
+        prepare = load_tasks(APP / "tasks" / "prepare.yml")
+        self.assertEqual(
+            prepare[-2]["ansible.builtin.include_tasks"], "source_state.yml"
+        )
+        seen = prepare[-1]["ansible.builtin.set_fact"]
+        self.assertEqual(set(seen), {"app_seen_image", "app_seen_commit"})
+        state = " ".join(
+            strings(load_tasks(APP / "tasks" / "source_state.yml"))
+        )
+        self.assertIn("rev-parse HEAD", state)
+        self.assertIn("MANUSPECTRUM_IMAGE", state)
+
+
+class CheckModeTests(unittest.TestCase):
+    def test_a_group_created_in_the_same_run_is_not_read_in_check_mode(self):
+        for name in (
+            "Read the members of that group",
+            "Remove the members who are no longer operators",
+        ):
+            task = task_named("app", "release.yml", name)
+            self.assertEqual(task["when"], "not ansible_check_mode", name)
+
+
+class TimezoneTests(unittest.TestCase):
+    def test_baseline_sets_and_verifies_the_paris_time_zone(self):
+        defaults = yaml.safe_load(
+            (ROLES_DIR / "baseline" / "defaults" / "main.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(defaults["baseline_timezone"], "Europe/Paris")
+        apply = task_named("baseline", "apply.yml", "Set the host time zone")
+        self.assertEqual(
+            apply["community.general.timezone"], {"name": "{{ baseline_timezone }}"}
+        )
+        names = [t["name"] for t in load_tasks(ROLES_DIR / "baseline" / "tasks" / "apply.yml")]
+        self.assertLess(
+            names.index("Set the host time zone"),
+            names.index("Configure unattended-upgrades"),
+        )
+        check = task_named("baseline", "verify.yml", "Assert the host time zone")
+        self.assertIn("baseline_timezone", " ".join(strings(check)))
+        self.assertTrue(check["register"].startswith("baseline_chk_"))
+
+
+class ReadyWaitCapTests(unittest.TestCase):
+    def assert_with(self, value):
+        """Runs the inventory assertion of preflight with the given wait."""
+        first = load_tasks(ROLES_DIR / "preflight" / "tasks" / "main.yml")[0]
+        play = [
+            {
+                "hosts": "localhost",
+                "gather_facts": False,
+                "vars_files": [
+                    str(ANSIBLE / "inventories" / "example" / "group_vars" / "all.yml")
+                ],
+                "tasks": [first],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "play.yml"
+            path.write_text(yaml.safe_dump(play), encoding="utf-8")
+            return subprocess.run(
+                [
+                    str(Path(sys.executable).parent / "ansible-playbook"),
+                    "-i",
+                    "localhost,",
+                    "-c",
+                    "local",
+                    "-e",
+                    json.dumps({"env_release_ready_wait_seconds": value}),
+                    str(path),
+                ],
+                cwd=ANSIBLE,
+                env=dict(os.environ, ANSIBLE_HOME=tmp),
+                capture_output=True,
+                text=True,
+                check=False,
+            ).returncode
+
+    def test_the_readiness_wait_is_digits_and_at_most_1800(self):
+        self.assertEqual(self.assert_with("1800"), 0)
+        self.assertEqual(self.assert_with("600"), 0)
+        self.assertNotEqual(self.assert_with("1801"), 0)
+        self.assertNotEqual(self.assert_with("abc"), 0)
 
 
 if __name__ == "__main__":

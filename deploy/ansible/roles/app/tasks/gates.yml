@@ -1,7 +1,7 @@
 ---
 # Four gates, each a fact: secrets, image, certificate, database. A closed
-# gate is not a failure: one summary lists the commands to type and the role
-# ends for the host with rc 0, so the next run goes on from here. Nothing in
+# gate is not a failure: one summary lists the commands to type and main.yml
+# does not start the stack (rc 0), so the next run goes on from here. Nothing in
 # this role runs init, restore, cert-init, secrets or setup_db: they replace or
 # create what Ansible must never touch.
 #
@@ -212,8 +212,4 @@
 - name: Summarise what is still to do
   ansible.builtin.debug:
     msg: "{{ ['Still to do before the stack can start:'] + app_todo + ['Then run this playbook again.'] }}"
-  when: app_todo | length > 0
-
-- name: Stop here until the prerequisites are in place
-  ansible.builtin.meta: end_host
   when: app_todo | length > 0

@@ -112,6 +112,15 @@ class ExampleInventoryTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("env_release_channel in ['prod', 'rc']", preflight)
 
+    def test_the_example_installs_a_release_tag_and_a_digest(self):
+        variables = yaml.safe_load(
+            (EXAMPLE / "group_vars" / "all.yml").read_text(encoding="utf-8")
+        )
+        self.assertRegex(variables["app_git_ref"], r"^v[0-9A-Z]+\.[0-9A-Z]+\.[0-9A-Z]+$")
+        self.assertRegex(
+            variables["env_manuspectrum_image"], r"^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"
+        )
+
     def test_real_inventories_are_ignored(self):
         def ignored(path):
             return (

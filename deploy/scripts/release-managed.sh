@@ -5,7 +5,7 @@
 # Usage: release-managed.sh --worktree DIR           tracked files, worktree content
 #        release-managed.sh --ref REF [--repo DIR]   blobs at REF (default repo: cwd)
 # The managed list is_managed() is the only one; this script is itself installed.
-set -uo pipefail
+set -euo pipefail
 
 usage() { echo "usage: release-managed.sh --worktree DIR | --ref REF [--repo DIR]" >&2; exit 2; }
 refuse() { echo "release-managed: $*" >&2; exit 1; }
@@ -40,6 +40,13 @@ done
 
 emit() { LC_ALL=C sort -k2; }
 
+fingerprint() { # fingerprint PATH: prints `sha256  PATH` for the content on stdin
+  local sum
+  sum="$(sha256sum | cut -d' ' -f1)"
+  [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || refuse "no sha256 for '$1'"
+  printf '%s  %s\n' "$sum" "$1"
+}
+
 if [ "$mode" = worktree ]; then
   [ -n "$dir" ] || usage
   no_dotdot "$dir"
@@ -49,7 +56,7 @@ if [ "$mode" = worktree ]; then
   while IFS= read -r -d '' path; do
     is_managed "$path" || continue
     if [ ! -f "$top/$path" ] || [ -L "$top/$path" ]; then continue; fi
-    printf '%s  %s\n' "$(sha256sum <"$top/$path" | cut -d' ' -f1)" "$path"
+    fingerprint "$path" <"$top/$path"
   done < <(git -C "$top" ls-files -z) | emit
 else
   [[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/@-]*$ ]] || refuse "'$ref' is not a valid ref name"
@@ -66,6 +73,6 @@ else
     path="${entry#*$'\t'}"
     case "$mode_bits" in 100644 | 100755) ;; *) continue ;; esac
     is_managed "$path" || continue
-    printf '%s  %s\n' "$(git -C "$repo" cat-file blob "$commit:$path" | sha256sum | cut -d' ' -f1)" "$path"
+    git -C "$repo" cat-file blob "$commit:$path" | fingerprint "$path"
   done < <(git -C "$repo" ls-tree -r -z "$commit") | emit
 fi

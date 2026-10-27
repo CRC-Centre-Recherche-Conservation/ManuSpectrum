@@ -51,6 +51,7 @@ printf 'Unattended-Upgrade::Automatic-Reboot "true";\nUnattended-Upgrade::Automa
 cat >"$LIB/release-update.sh" <<'SH'
 #!/bin/bash
 echo "release-update $*" >>"$FAKE_LOG"
+echo "env APP_DIR=${APP_DIR-} STATE_DIR=${STATE_DIR-} RELEASE_LIB_DIR=${RELEASE_LIB_DIR-} ENV_FILE=${ENV_FILE-}" >>"$FAKE_LOG"
 if [ "${FAKE_CHECK_RC:-0}" != 0 ]; then
   echo "release-update: REFUSED: files installed by Ansible differ"
   echo "REASON=managed_sources"
@@ -65,7 +66,7 @@ stub systemctl 'echo "systemctl $*" >>"$FAKE_LOG"
 case "$1" in
   list-units) [ -z "${FAKE_ACTIVE-}" ] || echo "$FAKE_ACTIVE loaded active running" ;;
   show) case "$3" in
-      ExecMainStatus) echo "${FAKE_STATUS:-0}" ;;
+      ExecMainCode) printf "ExecMainCode=%s\nExecMainStatus=%s\n" "${FAKE_CODE:-1}" "${FAKE_STATUS:-0}" ;;
       Result) echo success ;;
       NextElapseUSecRealtime) echo "${FAKE_NEXT-}" ;;
     esac ;;
@@ -77,11 +78,13 @@ case "$1" in
 esac
 exit 0'
 stub journalctl 'echo "journalctl $*" >>"$FAKE_LOG"; exec sleep 30'
-stub runuser 'u=$2; shift 3; echo "runuser -u $u -- $*" >>"$FAKE_LOG"; exec "$@"'
+stub runuser 'u=$2; shift 3; echo "runuser -u $u -- $*" >>"$FAKE_LOG"
+pass=(); for v in $(compgen -v FAKE_); do pass+=("$v=${!v}"); done
+exec env -i PATH="$PATH" "${pass[@]}" "$@"'
+stub timedatectl 'echo "${FAKE_TZ:-Europe/Paris}"'
 stub make 'echo "make $*" >>"$FAKE_LOG"
 case "$*" in *"ARGS=plan"*) [ -z "${FAKE_NOTICE_FAIL-}" ] || { echo "boom"; exit 1; }; echo "planned notice id=42" ;; esac
 exit 0'
-stub chown 'echo "chown $*" >>"$FAKE_LOG"'
 stub sendmail 'echo "sendmail" >>"$FAKE_LOG"; cat >>"$FAKE_MAILS"'
 export FAKE_LOG="$LOG" FAKE_MAILS="$MAILS" FAKE_DROPIN="$DROP"
 export PATH="$BIN:$PATH"
@@ -98,6 +101,9 @@ mkfront() {
     -e "s|^STATE_DIR=.*|STATE_DIR=$STATE|" \
     -e "s|^DROPIN_DIR=.*|DROPIN_DIR=$DROP|" \
     -e "s|^UNATTENDED_CONF=.*|UNATTENDED_CONF=$TMP/unattended|" \
+    -e "s|^LOCK_FILE=.*|LOCK_FILE=$TMP/update.lock|" \
+    -e "s|^ANSIBLE_MARKER=.*|ANSIBLE_MARKER=$TMP/ansible-running|" \
+    -e "s|^  read -r answer .*|&; RELEASE_NOW_EPOCH=\$((RELEASE_NOW_EPOCH + \${PROMPT_DELAY:-0}))|" \
     -e "s|^RELEASE_SENDMAIL=.*|RELEASE_SENDMAIL=$BIN/sendmail|" \
     -e "s|^RELEASE_NOW_EPOCH=.*|RELEASE_NOW_EPOCH=${1:-$NOW_SPRING}|" \
     -e "s|^FOLLOW_GRACE=.*|FOLLOW_GRACE=0|" \
@@ -106,7 +112,7 @@ mkfront() {
 }
 
 reset() { # reset: fresh state, armed v1.2.0
-  rm -rf "$STATE" "$DROP" "$MAILS"
+  rm -rf "$STATE" "$DROP" "$MAILS" "$TMP/ansible-running"
   : >"$LOG"
   mkdir -p "$STATE"
   # shellcheck source=/dev/null
@@ -114,7 +120,7 @@ reset() { # reset: fresh state, armed v1.2.0
   release_state_write "$STATE/current" TAG=v1.1.0 IMAGE="${IMG%@*}@sha256:$(printf 'c%.0s' {1..64})" COMMIT="$(printf 'd%.0s' {1..40})" APPLIED_AT=1
   release_state_write "$STATE/armed" TAG=v1.2.0 IMAGE="$IMG" COMMIT="$COMMIT" ARMED_AT=2 SECURITY=1 NOTIFIED=1 NEEDS_ANSIBLE=0
   local v
-  for v in FAKE_ACTIVE FAKE_STATUS FAKE_NEXT FAKE_TIMER_FAIL FAKE_UNIT_FAIL FAKE_START_SLEEP FAKE_NOTICE_FAIL FAKE_CHECK_RC; do
+  for v in FAKE_ACTIVE FAKE_STATUS FAKE_NEXT FAKE_TIMER_FAIL FAKE_UNIT_FAIL FAKE_START_SLEEP FAKE_NOTICE_FAIL FAKE_CHECK_RC FAKE_CODE FAKE_TZ; do
     unset "$v"
     export "${v?}="
   done
@@ -122,7 +128,7 @@ reset() { # reset: fresh state, armed v1.2.0
 
 # run ARGS...: stdin is "yes"; prints combined output, sets RC
 run() { OUT="$(printf 'yes\n' | bash "$(mkfront "${NOW:-$NOW_SPRING}" "${TTY:-0}")" "$@" 2>&1)"; RC=$?; }
-logtext() { cat "$LOG"; }
+logtext() { grep -v "release_state_get" "$LOG" || true; }
 
 # --- arguments
 reset
@@ -188,7 +194,8 @@ run --now v1.2.0
 equals "--now check refusal exits 1" 1 "$RC"
 contains "--now shows the engine's refusal" "REASON=managed_sources" "$OUT"
 lacks "--now check refusal starts nothing" "systemctl start" "$(logtext)"
-contains "--now runs the check as the service user" "runuser -u $(id -un) -- $LIB/release-update.sh --check-only v1.2.0" "$(logtext)"
+contains "--now runs the check as the service user" "$LIB/release-update.sh --check-only v1.2.0" "$(grep '^runuser' "$LOG")"
+contains "--now runs the check through runuser" "runuser -u $(id -un) -- env APP_DIR=$APP" "$(logtext)"
 
 reset
 OUT="$(printf 'no\n' | bash "$(mkfront)" --now v1.2.0 2>&1)"; RC=$?
@@ -272,8 +279,8 @@ equals "--at accepted" 0 "$RC"
 L="$(logtext)"
 line() { grep -n -m1 -- "$1" "$LOG" | cut -d: -f1; }
 n_notice="$(line 'ARGS=plan')"; n_dropin="$(line 'dropin: ')"; n_timer="$(line 'systemctl start manuspectrum-update-at.timer')"
-n_chown="$(line 'chown ')"; n_mail="$(line sendmail)"
-if [ -n "$n_notice" ] && [ "$n_notice" -lt "${n_dropin:-0}" ] && [ "$n_dropin" -lt "${n_timer:-0}" ] && [ "${n_timer:-0}" -lt "${n_chown:-0}" ] && [ "${n_chown:-0}" -lt "${n_mail:-0}" ]; then ok "--at order: notice, drop-in, timer, state, mail"; else not_ok "--at order" "$L"; fi
+n_state="$(line 'release_state_write')"; n_mail="$(line sendmail)"
+if [ -n "$n_notice" ] && [ "$n_notice" -lt "${n_dropin:-0}" ] && [ "$n_dropin" -lt "${n_timer:-0}" ] && [ "${n_timer:-0}" -lt "${n_state:-0}" ] && [ "${n_state:-0}" -lt "${n_mail:-0}" ]; then ok "--at order: notice, drop-in, timer, state, mail"; else not_ok "--at order" "$L"; fi
 contains "--at plans the notice in Paris time" 'ARGS=plan --start 2027-03-22T23:00 --end 2027-03-22T23:45' "$L"
 contains "--at drop-in is UTC (22:00 in CET... 23:00 Paris on 22 March is CET+1=22:00)" 'dropin: [Timer]|OnCalendar=|OnCalendar=2027-03-22 22:00 UTC|' "$L"
 equals "--at state tag" v1.2.0 "$(release_state_get "$STATE/scheduled" TAG)"
@@ -283,7 +290,8 @@ equals "--at state window end" "$(date -u -d '2027-03-22 22:45' +%s)" "$(release
 equals "--at state notice id" 42 "$(release_state_get "$STATE/scheduled" NOTICE_ID)"
 equals "--at state outcome empty" "" "$(release_state_get "$STATE/scheduled" OUTCOME)"
 equals "--at state mode" 640 "$(stat -c %a "$STATE/scheduled")"
-contains "--at chowns the state to root and the service group" "chown root:$(id -gn) $STATE/scheduled" "$L"
+lacks "--at never chowns or chmods the service-owned state" "chown" "$L"
+contains "--at writes the state as the service account" "runuser -u $(id -un) -- env APP_DIR=$APP STATE_DIR=$STATE RELEASE_LIB_DIR=$LIB ENV_FILE=$APP/deploy/compose/.env bash -c" "$L"
 contains "--at mail subject" "Subject: [ManuSpectrum][Release] v1.2.0 scheduled for 2027-03-22 23:00 by root" "$(cat "$MAILS")"
 run --now v1.2.0
 equals "--now after --at refused" 1 "$RC"
@@ -354,7 +362,7 @@ run --fire
 equals "--fire with an OUTCOME refused" 1 "$RC"
 lacks "--fire with an OUTCOME starts nothing" "systemctl start" "$(logtext)"
 reset
-release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH=2 NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
+release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH=9999999999 NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
 mkdir -p "$DROP"; printf '[Timer]\n' >"$DROP/slot.conf"
 run --fire
 equals "--fire exits 0" 0 "$RC"
@@ -364,7 +372,7 @@ equals "--fire removed the drop-in" no "$([ -e "$DROP/slot.conf" ] && echo yes |
 contains "--fire stops the timer" "systemctl stop manuspectrum-update-at.timer" "$L"
 equals "--fire keeps the scheduled file for the engine" yes "$([ -e "$STATE/scheduled" ] && echo yes || echo no)"
 reset
-release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH=2 NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
+release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH=9999999999 NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
 FAKE_ACTIVE=manuspectrum-update@v1.2.0.service
 run --fire
 equals "--fire with a running unit refused" 1 "$RC"
@@ -372,6 +380,29 @@ equals "--fire busy records the outcome" refused "$(release_state_get "$STATE/sc
 equals "--fire busy records the reason" busy "$(release_state_get "$STATE/scheduled" REASON)"
 contains "--fire busy withdraws the notice" "ARGS=withdraw 7" "$(logtext)"
 lacks "--fire busy starts nothing" "systemctl start" "$(logtext)"
+
+reset
+release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH="$((NOW_SPRING - 60))" NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
+mkdir -p "$DROP"; printf '[Timer]\n' >"$DROP/slot.conf"
+run --fire
+equals "--fire past its window exits 1" 1 "$RC"
+equals "--fire past its window records missed" missed "$(release_state_get "$STATE/scheduled" OUTCOME)"
+equals "--fire past its window records the reason late" late "$(release_state_get "$STATE/scheduled" REASON)"
+lacks "--fire past its window starts no unit" "systemctl start" "$(logtext)"
+contains "--fire past its window withdraws the notice" "ARGS=withdraw 7" "$(logtext)"
+contains "--fire past its window mails the miss" "scheduled update of v1.2.0 missed" "$(cat "$MAILS")"
+reset
+release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH="$NOW_SPRING" NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
+run --fire
+equals "--fire exactly at the end of the window still starts" 0 "$RC"
+
+reset
+release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH=9999999999 NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
+: >"$TMP/ansible-running"
+run --fire
+equals "--fire while Ansible runs is refused" 1 "$RC"
+equals "--fire while Ansible runs records busy" busy "$(release_state_get "$STATE/scheduled" REASON)"
+lacks "--fire while Ansible runs starts nothing" "systemctl start" "$(logtext)"
 
 # --- --status
 reset
@@ -398,6 +429,102 @@ contains "--status held tag" "v1.3.0" "$OUT"
 contains "--status inflight" "inflight: v1.1.0 -> v1.2.0" "$OUT"
 contains "--status rollbacks" "rollbacks: 2" "$OUT"
 contains "--status rollback failed instructions" "remove $STATE/inflight" "$OUT"
+
+# --- the service account gets its environment on the command line
+reset
+FAKE_STATUS=0
+run --now v1.2.0
+contains "the check receives APP_DIR, STATE_DIR, RELEASE_LIB_DIR and ENV_FILE explicitly" "env APP_DIR=$APP STATE_DIR=$STATE RELEASE_LIB_DIR=$LIB ENV_FILE=$APP/deploy/compose/.env" "$(logtext)"
+
+# --- root never follows a state symlink
+reset
+printf 'TAG=v9.9.9\nAT_EPOCH=1\nAT_PARIS=2027-03-22 23:00\nWINDOW_END_EPOCH=9999999999\nNOTICE_ID=\nBY=ops\nCREATED_AT=1\nOUTCOME=\nREASON=\n' >"$TMP/outside"
+ln -s "$TMP/outside" "$STATE/scheduled"
+run --status
+equals "--status refuses a symlinked state file" 1 "$RC"
+lacks "--status does not print what the link points at" "v9.9.9" "$OUT"
+run --cancel
+equals "--cancel refuses a symlinked state file" 1 "$RC"
+equals "--cancel leaves the link target alone" yes "$([ -e "$TMP/outside" ] && echo yes || echo no)"
+reset
+printf 'TAG=v1.2.0\n' >"$TMP/outside"
+rm -f "$STATE/armed"; ln -s "$TMP/outside" "$STATE/armed"
+run --now v1.2.0
+equals "--now refuses a symlinked armed file" 1 "$RC"
+lacks "--now with a symlinked armed file starts nothing" "systemctl start" "$(logtext)"
+rm -f "$TMP/outside"
+reset
+run --status
+contains "state reads run as the service account" "runuser -u $(id -un) -- env APP_DIR=$APP STATE_DIR=$STATE RELEASE_LIB_DIR=$LIB ENV_FILE=$APP/deploy/compose/.env bash -c" "$(cat "$LOG")"
+run --at "2027-03-22 23:00" v1.2.0
+run --cancel
+contains "--cancel removes the state as the service account" "env APP_DIR=$APP STATE_DIR=$STATE RELEASE_LIB_DIR=$LIB ENV_FILE=$APP/deploy/compose/.env rm -f $STATE/scheduled" "$(cat "$LOG")"
+
+# --- host time zone
+reset
+FAKE_TZ=UTC
+run --at "2027-03-22 23:00" v1.2.0
+equals "--at on a host that is not on Paris time refused" 1 "$RC"
+contains "--at time zone message" "not Europe/Paris" "$OUT"
+equals "--at time zone refusal touched no unit, notice or state" "" "$(grep -E 'make|daemon-reload|systemctl start' "$LOG")"
+FAKE_TZ=
+run --at "2027-03-22 23:00" v1.2.0
+equals "--at on Paris time accepted" 0 "$RC"
+
+# --- --now result: only an exited unit maps its status
+for code in 2 3; do
+  reset
+  FAKE_CODE=$code FAKE_STATUS=9
+  run --now v1.2.0
+  equals "--now ExecMainCode $code (killed or dumped) exits 5" 5 "$RC"
+  contains "--now ExecMainCode $code says interrupted" "was interrupted (signal 9)" "$OUT"
+  contains "--now ExecMainCode $code points at --status and the runbook" "--status" "$OUT"
+  contains "--now ExecMainCode $code points at the runbook" "deploy/runbooks/release.md" "$OUT"
+done
+reset; FAKE_CODE=3 FAKE_STATUS=3; run --now v1.2.0
+equals "a killed unit is never read as a rollback" 5 "$RC"
+
+# --- one mutating command at a time
+reset
+( exec 8>"$TMP/update.lock"; flock -n 8; exec sleep 20 ) &
+holder=$!
+sleep 0.3
+for cmd in --now --at --cancel; do
+  : >"$LOG"
+  case "$cmd" in
+    --now) run --now v1.2.0 ;;
+    --at) run --at "2027-03-22 23:00" v1.2.0 ;;
+    --cancel) run --cancel ;;
+  esac
+  equals "another command is running: $cmd refused" 1 "$RC"
+  contains "lock message for $cmd" "another manuspectrum-update is running" "$OUT"
+  equals "lock refusal for $cmd changed nothing" "" "$(logtext)"
+done
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+reset
+run --status
+equals "--status takes no lock" 0 "$RC"
+
+# --- Ansible running
+reset
+: >"$TMP/ansible-running"
+run --now v1.2.0
+equals "--now while Ansible runs refused" 1 "$RC"
+contains "--now Ansible message" "Ansible is running on this host" "$OUT"
+run --at "2027-03-22 23:00" v1.2.0
+equals "--at while Ansible runs refused" 1 "$RC"
+contains "--at Ansible message" "Ansible is running on this host" "$OUT"
+equals "Ansible refusals started nothing" "" "$(logtext)"
+rm -f "$TMP/ansible-running"
+
+# --- the slot is parsed again after the confirmation
+reset
+PROMPT_DELAY=259200 run --at "2027-03-22 23:00" v1.2.0
+unset PROMPT_DELAY
+equals "--at whose slot passed during the prompt refused" 1 "$RC"
+contains "--at re-parse message" "no longer valid" "$OUT"
+equals "--at re-parse refusal scheduled nothing" no "$([ -e "$STATE/scheduled" ] && echo yes || echo no)"
+lacks "--at re-parse refusal touched no timer" "update-at.timer" "$(logtext)"
 
 echo "# $N tests"
 exit "$FAILED"

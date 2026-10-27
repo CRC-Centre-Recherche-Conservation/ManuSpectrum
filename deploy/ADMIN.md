@@ -496,6 +496,14 @@ To remove an operator, take the account out of `release_operators` and run the
 playbook again: the account leaves the group. An update already running is not
 affected, and the playbook refuses to run while an update unit is active.
 
+**Ansible and an update never run together.** While the `app` role runs, the
+file `/run/manuspectrum/ansible-running` exists (root, removed at the end of the
+run, failed or not; `/run` is emptied by a reboot). `--now`, `--at` and a
+scheduled slot refuse while it exists (`Ansible is running on this host`; a
+slot records `OUTCOME=refused REASON=busy`), and the playbook refuses to start
+while an update unit is active. Right after a crash of the Ansible controller
+the file may be left behind: when no run is active, remove it as root.
+
 ### Look before acting
 
 ```bash
@@ -540,7 +548,11 @@ What the update does, in order:
    the image in `.env` and runs `make up`.
 4. **Readiness.** It polls `/readyz` inside the `web` container until it answers
    200, for at most `RELEASE_READY_WAIT_SECONDS` (600 s by default, counted from
-   the start of the switch).
+   the start of the switch). The maximum is **1800 s** (inventory variable
+   `env_release_ready_wait_seconds`, refused above it at the next Ansible run).
+   A release whose migrations are long (a large table rewrite, a reindex) needs
+   a larger value, set **before** the update: raise it in the inventory and run
+   the playbook; a value set after the update started does not apply to it.
 5. **Success:** the release becomes the running one (the former one becomes the
    previous one), the armed and pending records are cleared, and a mail
    `<tag> installed on <host>` is sent.
@@ -557,6 +569,7 @@ Exit codes of `--now` (2 is a wrong command line):
 | 1 | Refused or not started, nothing was changed; the reason is the last `REASON=` line of `journalctl -u manuspectrum-update@<tag> -o cat` (`unarmed`, `drift`, `tag_moved`, `env_keys`, `managed_sources`, `verify`, `backup`, `lock`, `busy`, `fetch`) |
 | 3 | Rolled back: the new version did not become ready, the previous one is back, the release stays armed |
 | 4 | The rollback failed: the site may be down (see « After a failed rollback ») |
+| 5 | The update unit was killed (a signal: reboot, out-of-memory, `systemctl kill`); the host may be half updated, see « After an interrupted update » |
 
 A dropped SSH session, or Ctrl-C, stops only the on-screen follower: the update
 is a systemd unit and keeps running. Follow it again with
@@ -585,8 +598,15 @@ Rules, all checked before anything is set:
   when it reboots automatically;
 - 02:00 to 03:00 is accepted with a warning: the nightly backup runs then and the
   update waits for it. **23:00 is the recommended slot.**
+- the host time zone must be `Europe/Paris` (the baseline role sets it): the
+  reboot time and the backup timer are wall-clock times read as Paris time, and
+  `--at` refuses on a host set to another zone (`timedatectl show -p Timezone`);
 - `--window` (default `30m`, from 5 minutes to 4 hours) is how long after the
-  slot the update may still start and how long the announcement lasts;
+  slot the update may still start and how long the announcement lasts. **The
+  window is enforced**: a slot that cannot start before its window ends is
+  reported `missed` (reason `late`) and nothing is started, for example when the
+  pre-update backup runs past the end of the window, or when the timer fires
+  after it;
 - only one schedule exists at a time; a schedule and a running update exclude
   each other, and `--now` is refused while a schedule exists.
 
@@ -603,7 +623,9 @@ slot withdraws it; after a failed rollback it is extended by 24 hours.
 announcement and mails `schedule of <tag> cancelled`. It does not stop a running
 update.
 
-**A refused or missed slot.** At the slot the update repeats its checks. If one
+**A refused or missed slot.** At the slot the update repeats its checks. A slot
+that fires after its window is `missed` with no check made, and an Ansible run
+in progress at the slot makes it `refused` (`busy`). If one
 fails (a dirty worktree, a moved tag, a failed backup, another update running) the schedule is kept with the outcome `refused` and the reason, the
 announcement is withdrawn and a mail says why. If the host was off or busy and
 the slot passed more than 15 minutes ago without a run, the next watch marks it
@@ -648,6 +670,15 @@ image and commit, but the migrations the new version already applied stay
 applied; the previous version then runs on a database that may be ahead of it.
 That is why the update takes the `pre-update` backup first, and why a rolled-back
 release should be understood before it is retried.
+
+### After an interrupted update
+
+`--now` exits with 5, or `--status` shows an `inflight` line with no update unit
+running (a reboot or a kill in the middle of the switch). The update records its
+progress in `inflight`, so no other update starts. Follow
+[runbooks/release.md](runbooks/release.md) (« UpdateInterrupted » and
+« UpdateRollbackFailed »): find out which version runs, repair or roll back by
+hand, then remove the record as for a failed rollback.
 
 ### After a failed rollback
 

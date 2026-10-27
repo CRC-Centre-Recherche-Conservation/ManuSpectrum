@@ -160,12 +160,26 @@ Inventory variables:
   default every account of `admin_users`. A subset of `admin_users`, never the
   service account. An account removed from the list leaves the group at the next run.
 
-The playbook refuses to run while an update unit is active or activating, and
-refuses when the checkout it runs from has uncommitted changes in a managed
-path (the host would then compare the tag with files no tag holds).
+The `app` role holds the marker `/run/manuspectrum/ansible-running` for the
+whole run (taken first, then the role checks that no update unit is active; the
+marker is removed whatever the outcome). While it exists, `manuspectrum-update`,
+a scheduled slot and the release engine refuse to start an update, and the role
+refuses to run while an update unit is active or activating: an Ansible run and
+an update never overlap. Before `make up` the role also checks that the image in
+`.env` and the checked-out commit are the ones it prepared. Everything that can
+be refused (the operators, the paths, a checkout of the laptop with uncommitted
+changes in a managed path: the host would then compare the tag with files no tag
+holds) is refused before the first change.
+
+The baseline sets the host time zone to `Europe/Paris` (`baseline_timezone`,
+`community.general.timezone`) and verifies it: the reboot time of
+unattended-upgrades and the backup timers are wall-clock times, and
+`manuspectrum-update --at` refuses on another zone. `env_release_ready_wait_seconds`
+is at most 1800 (preflight refuses more).
 
 The first installation takes `env_manuspectrum_image` as a release image
-digest (`registry/name@sha256:...`) and `app_git_ref` as the matching tag.
+digest (`registry/name@sha256:...`) and `app_git_ref` as the matching tag
+(the example inventory holds placeholders: replace both).
 When the update refuses with "re-run Ansible at <tag>", a file Ansible manages
 differs in that tag: check out the tag on the laptop, run the playbook, then run
 the update again.

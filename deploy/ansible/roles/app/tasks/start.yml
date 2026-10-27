@@ -2,6 +2,23 @@
 - name: Stop again if an update started meanwhile
   ansible.builtin.include_tasks: update_guard.yml
 
+- name: Read the image and the commit again
+  ansible.builtin.include_tasks: source_state.yml
+
+# `make up` starts the image `.env` names from the checkout: neither may have
+# moved since the files were rendered.
+- name: Assert nothing changed the image or the checkout during the run
+  ansible.builtin.assert:
+    that:
+      - app_current_image == app_seen_image
+      - app_current_commit == app_seen_commit
+    quiet: true
+    fail_msg: >-
+      The image in .env ({{ app_current_image }}) or the checkout ({{ app_current_commit }}) is no longer what
+      this run prepared ({{ app_seen_image }}, {{ app_seen_commit }}): an update or a manual change ran
+      meanwhile. Nothing was started; check manuspectrum-update --status, then run the playbook again.
+  when: not ansible_check_mode
+
 # monitoring-init is idempotent (starts postgres if needed, creates or updates
 # the ms_monitor role); it reports no change. It never starts the monitoring
 # services themselves: `make up` does with the observability profile, and this

@@ -59,7 +59,10 @@ class ImageInServiceTests(unittest.TestCase):
     def test_a_first_installation_takes_the_inventory_image(self):
         with tempfile.TemporaryDirectory() as tmp:
             render(Path(tmp))
-            self.assertEqual(image_of(Path(tmp) / "env" / ".env"), "manuspectrum:local")
+            self.assertEqual(
+                image_of(Path(tmp) / "env" / ".env"),
+                "registry.example/manuspectrum@sha256:" + "0" * 64,
+            )
 
 
 class RenderedTests(unittest.TestCase):

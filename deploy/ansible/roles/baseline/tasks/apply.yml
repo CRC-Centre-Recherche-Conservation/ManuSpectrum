@@ -250,6 +250,10 @@
     mode: "0644"
   when: rehearsal_host | bool
 
+- name: Set the host time zone
+  community.general.timezone:
+    name: "{{ baseline_timezone }}"
+
 - name: Configure unattended-upgrades
   ansible.builtin.template:
     src: 50unattended-upgrades.j2

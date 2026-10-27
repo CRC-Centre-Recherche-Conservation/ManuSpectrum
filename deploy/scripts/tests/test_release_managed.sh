@@ -113,4 +113,13 @@ refused "--ref empty" --ref "" --repo "$REPO"
 refused "--repo with --worktree" --worktree "$REPO" --repo "$REPO"
 refused "--repo with .." --ref HEAD --repo "$REPO/../repo"
 
+mkdir -p "$TMP/nosum"
+printf '#!/bin/sh\ncat >/dev/null\n' >"$TMP/nosum/sha256sum"
+chmod +x "$TMP/nosum/sha256sum"
+for m in "--worktree $REPO" "--ref HEAD --repo $REPO"; do
+  # shellcheck disable=SC2086
+  out="$(PATH="$TMP/nosum:$PATH" "$SCRIPT" $m 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ] && ! grep -qE '^ ? ?  deploy|^[0-9a-f]{0,63}  ' <<<"$out" && grep -q "no sha256" <<<"$out"; then ok "a sha256sum that prints nothing fails ($m)"; else not_ok "empty sha256sum ($m)" "rc=$rc $out"; fi
+done
+
 exit "$FAILED"

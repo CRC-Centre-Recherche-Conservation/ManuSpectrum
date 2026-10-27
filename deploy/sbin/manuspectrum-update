@@ -16,24 +16,34 @@
 # service account; this front only checks, schedules and follows it.
 #
 # --now exit codes mirror the engine: 0 installed, 1 refused or not started
-# (nothing changed), 3 rolled back, 4 rollback failed; 2 is a usage error.
+# (nothing changed), 3 rolled back, 4 rollback failed, 5 the unit was killed
+# (signal; the host state is unknown: --status and deploy/runbooks/release.md);
+# 2 is a usage error. The result is read from ExecMainCode/ExecMainStatus: only
+# a unit that exited (code 1) maps its status.
 # Ctrl-C or a dropped SSH session stops the follower only; the unit keeps
 # running and the message names the journalctl command to resume.
+# --now, --at, --cancel and --fire exclude each other (flock on LOCK_FILE) and
+# refuse while an Ansible run holds ANSIBLE_MARKER. --at also refuses when the
+# host time zone is not Europe/Paris (the reboot and backup times are read in it).
 # --at accepts a Paris wall-clock slot 10 minutes to 30 days ahead, refuses a
 # time that does not exist or occurs twice (DST), a slot within the automatic
 # reboot window of unattended-upgrades (60 minutes before to 15 after, read in
 # Paris time) and warns for 02:00-03:00 (nightly backup). Order of effects: site
 # notice, timer drop-in and timer, `scheduled` state, mail; a failure of the
 # timer or of the state withdraws what was done before it.
-# --fire runs as root from the timer's service: it starts the update unit with
-# --no-block, then removes the slot drop-in, reloads systemd and stops the
-# timer, so the slot fires once and no reboot or reload can fire it again.
+# --fire runs as root from the timer's service: past the slot's window it
+# records OUTCOME=missed REASON=late and starts nothing; otherwise it starts the
+# update unit with --no-block, then removes the slot drop-in, reloads systemd
+# and stops the timer, so the slot fires once and no reboot or reload can fire
+# it again.
 #
 # Trust: this file and RELEASE_LIB_DIR are root-owned. Nothing is sourced or
 # executed from the checkout; the checkout is only passed to the service
 # account (runuser) or read as data. The command reads no environment
 # override (sudo resets the environment anyway); paths are the plain variables
-# below, which the tests rewrite in a copy.
+# below, which the tests rewrite in a copy. Root never writes in STATE_DIR,
+# which the service account owns, and never reads it directly: every state
+# read and write runs as the service account.
 #
 # CONF_FILE (/etc/manuspectrum/release.conf, root:root 0644, written by Ansible):
 # KEY=value lines, comments (#) and blank lines allowed, parsed by pattern and
@@ -52,6 +62,8 @@ STATE_DIR=/var/lib/manuspectrum/release
 TIMER_UNIT=manuspectrum-update-at.timer
 DROPIN_DIR=/etc/systemd/system/manuspectrum-update-at.timer.d
 UNATTENDED_CONF=/etc/apt/apt.conf.d/50unattended-upgrades
+LOCK_FILE=/run/manuspectrum-update.lock
+ANSIBLE_MARKER=/run/manuspectrum/ansible-running
 REBOOT_TZ=Europe/Paris
 FOLLOW_GRACE=1
 RELEASE_SENDMAIL=/usr/sbin/sendmail
@@ -100,8 +112,27 @@ source "$RELEASE_LIB_DIR/lib-release.sh" || die "cannot read $RELEASE_LIB_DIR/li
 
 now_epoch() { if [ -n "$RELEASE_NOW_EPOCH" ]; then echo "$RELEASE_NOW_EPOCH"; else date +%s; fi; }
 paris() { TZ=Europe/Paris date -d "@$1" "+$2"; }
-as_service() { runuser -u "$SERVICE_USER" -- "$@"; }
-state() { release_state_get "$STATE_DIR/$1" "$2" 2>/dev/null || true; }
+# The environment of the service account is not the caller's: what a release
+# program reads is passed on the command line.
+as_service() {
+  runuser -u "$SERVICE_USER" -- env "APP_DIR=$APP_DIR" "STATE_DIR=$STATE_DIR" \
+    "RELEASE_LIB_DIR=$RELEASE_LIB_DIR" "ENV_FILE=$ENV_FILE" "$@"
+}
+as_state() { # as_state FUNCTION ARGS...: a lib-release.sh function, run as the service account
+  # shellcheck disable=SC2016
+  as_service bash -c 'source "$RELEASE_LIB_DIR/lib-release.sh" && "$@"' _ "$@"
+}
+state_has() { # state_has NAME: the state file exists; a symbolic link is refused, never followed
+  [ ! -L "$STATE_DIR/$1" ] || die "$STATE_DIR/$1 is a symbolic link: refused"
+  [ -f "$STATE_DIR/$1" ]
+}
+state() { as_state release_state_get "$STATE_DIR/$1" "$2" 2>/dev/null || true; }
+
+acquire_lock() { # acquire_lock [WAIT_SECONDS]: status 1 when another command holds it
+  exec 9>"$LOCK_FILE" || return 1
+  if [ -n "${1-}" ]; then flock -w "$1" 9; else flock -n 9; fi
+}
+take_lock() { acquire_lock || die "another manuspectrum-update is running"; }
 
 need_tty() {
   [ "$REQUIRE_TTY" = 0 ] || { [ -t 0 ] && [ -t 1 ]; } || die "$1 needs a terminal: use ssh -t"
@@ -113,19 +144,19 @@ update_units_active() { # prints the active update units
 
 send_mail() { release_mail "$1" "$2" || echo "manuspectrum-update: warning: mail not sent ($1)" >&2; }
 
-state_perms() { # state_perms FILE: readable by the service account, written by root
-  chmod 0640 "$1"
-  chown "root:$(id -gn "$SERVICE_USER")" "$1"
-}
-
 armed_check() { # armed_check TAG: the tag is the armed release
   release_tag_valid "$1" || die "'$1' is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)"
-  [ -f "$STATE_DIR/armed" ] || die "no release is armed: nothing to install"
+  state_has armed || die "no release is armed: nothing to install"
   [ "$(state armed TAG)" = "$1" ] || die "$1 is not the armed release ($(state armed TAG)): only the armed release can be installed"
 }
 
+ansible_check() {
+  [ ! -e "$ANSIBLE_MARKER" ] || die "Ansible is running on this host: wait for it to end (if none is, remove $ANSIBLE_MARKER)"
+}
+
 idle_check() { # idle_check
-  if [ -f "$STATE_DIR/scheduled" ]; then
+  ansible_check
+  if state_has scheduled; then
     die "an update is already scheduled ($(state scheduled TAG) at $(state scheduled AT_PARIS) Paris): cancel it first with: sudo manuspectrum-update --cancel"
   fi
   if [ -n "$(update_units_active)" ]; then
@@ -165,17 +196,17 @@ cmd_status() {
   local t at next notice
   echo "current:   $(state current TAG) ($(state current COMMIT))"
   echo "previous: $(state previous TAG)"
-  if [ -f "$STATE_DIR/armed" ]; then
+  if state_has armed; then
     echo "armed:    $(state armed TAG) image $(state armed IMAGE)"
     echo "          security=$(state armed SECURITY) needs_ansible=$(state armed NEEDS_ANSIBLE) notified=$(state armed NOTIFIED)"
   else echo "armed:    none"; fi
-  if [ -f "$STATE_DIR/pending" ]; then
+  if state_has pending; then
     t="$(state pending SINCE)"
     echo "pending:  since $(paris "${t:-0}" '%Y-%m-%d %H:%M') Paris, security=$(state pending SECURITY)"
     if [ "$(state pending SECURITY)" = 1 ]; then echo "          deadline: 14 days after the oldest pending release"
     else echo "          deadline: 30 days after the oldest pending release"; fi
   else echo "pending:  none"; fi
-  if [ -f "$STATE_DIR/scheduled" ]; then
+  if state_has scheduled; then
     at="$(state scheduled AT_EPOCH)"
     echo "scheduled: $(state scheduled TAG) at $(state scheduled AT_PARIS) Paris / $(date -u -d "@${at:-0}" '+%Y-%m-%d %H:%M') UTC, window ends $(paris "$(state scheduled WINDOW_END_EPOCH)" '%H:%M') Paris"
     notice="$(state scheduled NOTICE_ID)"
@@ -188,7 +219,7 @@ cmd_status() {
     fi
     [ -z "$(state scheduled HELD_TAG)" ] || echo "          a newer release ($(state scheduled HELD_TAG)) is held back until this slot is over"
   else echo "scheduled: none"; fi
-  if [ -f "$STATE_DIR/inflight" ]; then
+  if state_has inflight; then
     echo "inflight: $(state inflight FROM_TAG) -> $(state inflight TO_TAG) since $(paris "$(state inflight STARTED_AT)" '%Y-%m-%d %H:%M') Paris"
   else echo "inflight: none"; fi
   echo "rollbacks: $(state rollbacks COUNT)"
@@ -210,7 +241,8 @@ cleanup_followers() {
 }
 
 cmd_now() {
-  local tag="$1" unit status result
+  local tag="$1" unit code status result line
+  take_lock
   armed_check "$tag"
   need_tty "--now"
   idle_check
@@ -230,8 +262,16 @@ cmd_now() {
   trap - INT TERM HUP
   sleep "$FOLLOW_GRACE"
   cleanup_followers
-  status="$(systemctl show -p ExecMainStatus --value "$unit" 2>/dev/null || echo "")"
+  code="" status=""
+  while IFS= read -r line; do
+    case "$line" in ExecMainCode=*) code="${line#*=}" ;; ExecMainStatus=*) status="${line#*=}" ;; esac
+  done < <(systemctl show -p ExecMainCode -p ExecMainStatus "$unit" 2>/dev/null || true)
   result="$(systemctl show -p Result --value "$unit" 2>/dev/null || echo "")"
+  if [ "$code" = 2 ] || [ "$code" = 3 ]; then
+    echo "The update was interrupted (signal ${status:-?}): the host may be half-updated. Read: sudo manuspectrum-update --status, then deploy/runbooks/release.md (UpdateInterrupted); journal: journalctl -u $unit -o cat"
+    exit 5
+  fi
+  [ "$code" = 1 ] || status=""
   case "$status" in
     0) echo "$tag is installed and the application answers." ; exit 0 ;;
     1) echo "REFUSED: $tag was not installed and nothing was changed. The reason is the last REASON= line of: journalctl -u $unit -o cat"; exit 1 ;;
@@ -261,16 +301,19 @@ undo_schedule() { # undo_schedule NOTICE_ID
   rm -f "$DROPIN_DIR/slot.conf"
   rmdir "$DROPIN_DIR" 2>/dev/null || true
   systemctl daemon-reload 2>/dev/null || true
-  rm -f "$STATE_DIR/scheduled"
+  as_service rm -f "$STATE_DIR/scheduled" || true
   if [ -n "${1-}" ]; then as_service make -C "$APP_DIR/deploy" site-notice ARGS="withdraw $1" >/dev/null 2>&1 || true; fi
 }
 
 cmd_at() {
   local slot="$1" window="$2" notice_flag="$3" tag="$4"
-  local parsed at_epoch utc_text at_paris wsec wend warnings="" reboot notice_id="" out by start_iso end_iso created
+  local parsed at_epoch utc_text at_paris wsec wend warnings="" reboot notice_id="" out by start_iso end_iso created tz
+  take_lock
   armed_check "$tag"
   need_tty "--at"
   idle_check
+  tz="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+  [ "$tz" = "$REBOOT_TZ" ] || die "the host time zone is '${tz:-unknown}', not $REBOOT_TZ: the reboot and backup times are read in $REBOOT_TZ. Run Ansible (baseline role) to set it"
   parsed="$(release_slot_parse "$slot")" || die "slot refused: $slot"
   IFS=$'\t' read -r at_epoch utc_text at_paris <<<"$parsed"
   if [[ "$window" =~ ^([0-9]{1,3})([mh])$ ]]; then
@@ -290,6 +333,9 @@ cmd_at() {
   if [ "$notice_flag" = 1 ]; then echo "  notice:   yes, a site announcement is planned for the window"; else echo "  notice:   no"; fi
   printf '%s' "$warnings"
   confirm
+  parsed="$(release_slot_parse "$slot")" || die "the slot is no longer valid after the confirmation: nothing was scheduled"
+  IFS=$'\t' read -r at_epoch utc_text at_paris <<<"$parsed"
+  wend=$((at_epoch + wsec))
   by="${SUDO_USER:-root}"
   [[ "$by" =~ ^[a-z_][a-z0-9_-]*$ ]] || by=root
   start_iso="$(paris "$at_epoch" '%Y-%m-%dT%H:%M')" end_iso="$(paris "$wend" '%Y-%m-%dT%H:%M')"
@@ -308,9 +354,8 @@ cmd_at() {
     && printf '[Timer]\nOnCalendar=\nOnCalendar=%s UTC\n' "$utc_text" >"$DROPIN_DIR/slot.conf" \
     && systemctl daemon-reload \
     && systemctl start "$TIMER_UNIT" \
-    && release_state_write "$STATE_DIR/scheduled" "TAG=$tag" "AT_EPOCH=$at_epoch" "AT_PARIS=$at_paris" "WINDOW_END_EPOCH=$wend" \
-      "NOTICE_ID=$notice_id" "BY=$by" "CREATED_AT=$created" "OUTCOME=" "REASON=" \
-    && state_perms "$STATE_DIR/scheduled"; }; then
+    && as_state release_state_write "$STATE_DIR/scheduled" "TAG=$tag" "AT_EPOCH=$at_epoch" "AT_PARIS=$at_paris" "WINDOW_END_EPOCH=$wend" \
+      "NOTICE_ID=$notice_id" "BY=$by" "CREATED_AT=$created" "OUTCOME=" "REASON="; }; then
     undo_schedule "$notice_id"
     die "the timer or the state could not be set: the schedule and the notice were withdrawn"
   fi
@@ -323,8 +368,9 @@ Cancel with: sudo manuspectrum-update --cancel"
 
 cmd_cancel() {
   local tag="" notice="" outcome="" had=0
+  take_lock
   if [ -n "$(update_units_active)" ]; then die "an update is running: it cannot be cancelled from here"; fi
-  if [ -f "$STATE_DIR/scheduled" ]; then
+  if state_has scheduled; then
     had=1
     tag="$(state scheduled TAG)" notice="$(state scheduled NOTICE_ID)" outcome="$(state scheduled OUTCOME)"
   fi
@@ -344,18 +390,26 @@ cmd_cancel() {
 # --- --fire
 
 cmd_fire() {
-  local tag unit notice
-  [ -f "$STATE_DIR/scheduled" ] || die "nothing is scheduled"
+  local tag unit notice end locked=1
+  acquire_lock 60 || locked=0
+  state_has scheduled || die "nothing is scheduled"
   [ -z "$(state scheduled OUTCOME)" ] || die "the schedule already has an outcome ($(state scheduled OUTCOME)): not started"
   tag="$(state scheduled TAG)"
   release_tag_valid "$tag" || die "the scheduled tag is unreadable"
   unit="manuspectrum-update@$tag.service"
   notice="$(state scheduled NOTICE_ID)"
-  if [ -n "$(update_units_active)" ] || ! systemctl start --no-block "$unit"; then
-    release_state_set "$STATE_DIR/scheduled" OUTCOME refused REASON busy || true
-    state_perms "$STATE_DIR/scheduled" || true
+  end="$(state scheduled WINDOW_END_EPOCH)"
+  if [ -n "$end" ] && [ "$(now_epoch)" -gt "$end" ]; then
+    as_state release_state_set "$STATE_DIR/scheduled" OUTCOME missed REASON late NOTIFIED 1 || true
     if [ -n "$notice" ]; then as_service make -C "$APP_DIR/deploy" site-notice ARGS="withdraw $notice" >/dev/null 2>&1 || true; fi
-    send_mail "scheduled update of $tag refused: busy" "The scheduled update of $tag on $PUBLIC_HOST could not start: another update unit was running or $unit would not start. Nothing was changed."
+    send_mail "scheduled update of $tag missed" "The scheduled update of $tag on $PUBLIC_HOST missed (past its window): the slot came after the window closed at $(paris "$end" '%H:%M') Paris, so nothing was started and nothing was changed.
+Schedule a new slot, or run it now: sudo manuspectrum-update --now $tag"
+    die "the window of the slot closed at $(paris "$end" '%H:%M') Paris: $unit was not started"
+  fi
+  if [ "$locked" = 0 ] || [ -e "$ANSIBLE_MARKER" ] || [ -n "$(update_units_active)" ] || ! systemctl start --no-block "$unit"; then
+    as_state release_state_set "$STATE_DIR/scheduled" OUTCOME refused REASON busy || true
+    if [ -n "$notice" ]; then as_service make -C "$APP_DIR/deploy" site-notice ARGS="withdraw $notice" >/dev/null 2>&1 || true; fi
+    send_mail "scheduled update of $tag refused: busy" "The scheduled update of $tag on $PUBLIC_HOST could not start: another update unit or an Ansible run was active, or $unit would not start. Nothing was changed."
     die "$unit was not started"
   fi
   rm -f "$DROPIN_DIR/slot.conf"

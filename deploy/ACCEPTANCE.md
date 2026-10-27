@@ -1756,6 +1756,22 @@ read and record »). Paris time everywhere.
   - `--window 1m` → `--window must be between 5m and 4h`;
   - a slot at 02:10 (not a DST night) → accepted after the check, with the `warning:  02:00-03:00 Paris is when the nightly backup
     runs` line before the confirmation; answer anything but `yes`, then `--status` → `scheduled: none`.
+- [ ] *(window passes during the pre-update backup)* Make the pre-update backup slow (for example a large `MEDIA_HOST_DIR`, or
+  `sudo ionice -c3` on the repository disk) and schedule a slot with `--window 5m`. At the slot the unit starts and the backup runs
+  past the end of the window: the update stops after the backup with `REASON=late` and changes nothing (no `inflight`), `--status`
+  → `OUTCOME=missed REASON=late` (or `refused` when the engine decided), the announcement is withdrawn, a mail says the slot
+  missed. A timer that fires after the window (stop the timer, wait out the window, `sudo systemctl start
+  manuspectrum-update-at.service`) → `--status` → `OUTCOME=missed REASON=late`, `systemctl is-active
+  manuspectrum-update@vA.service` → `inactive`, mail `scheduled update of vA missed`.
+- [ ] *(Ansible started during a scheduled slot)* Schedule a slot 12 minutes ahead; from the laptop start `ansible-playbook … site.yml
+  --tags app` shortly before it and keep it paused (a `pause` or a slow gate); `ls -l /run/manuspectrum/ansible-running` → a
+  root-owned file. At the slot the unit is not started or exits 1 with `Ansible is running on this host`: `--status` →
+  `OUTCOME=refused REASON=busy`, mail `scheduled update of … refused: busy`. Meanwhile `--now vA` and `--at …` answer `Ansible is
+  running on this host`. When the playbook ends (also when it fails or is interrupted with Ctrl-C) the file is gone. The reverse: with
+  an update unit running, the playbook stops at once with `An update is running`, and the marker is removed.
+- [ ] *(host time zone)* `timedatectl show -p Timezone --value` → `Europe/Paris` after the baseline role ran (`baseline_mode: apply`;
+  `verify` reports `The host time zone is …` otherwise). `sudo timedatectl set-timezone UTC`, then `--at "<slot>" vA` → `the host time
+  zone is 'UTC', not Europe/Paris`, nothing scheduled; set `Europe/Paris` back and the same command is accepted (cancel it).
 - [ ] *(`--now` while scheduled)* With a schedule open, `--now vA` → `an update is already scheduled … cancel it first`.
 - [ ] *(`--no-notice`)* A schedule with `--no-notice` shows `notice id: none` and creates no announcement.
 

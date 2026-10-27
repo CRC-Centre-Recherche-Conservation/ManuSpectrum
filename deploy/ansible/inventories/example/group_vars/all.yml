@@ -49,7 +49,9 @@ root_alias: "alerts@manuspectrum.example"
 # --- Application ---
 app_dir: /home/manuspectrum/manuspectrum
 app_git_url: "https://git.example/manuspectrum.git"
-app_git_ref: main
+# A release tag, never a branch: the host installs that tag and the update command
+# compares what Ansible manages with it. Use the tag whose image is named below.
+app_git_ref: "vX.Y.Z"
 data_dir: /data/manuspectrum
 lynis_min_index: 70
 # Accounts that may run `sudo manuspectrum-update` (group manuspectrum-ops). A
@@ -61,7 +63,9 @@ release_operators:
 # --- deploy/compose/.env: one variable per key of .env.example ---
 # APP_UID and APP_GID are read from the host. No secret belongs here.
 env_deploy_environment: "production"
-env_manuspectrum_image: "manuspectrum:local"
+# The release image by digest (the digest printed by the release workflow); it is
+# used only on a first installation, the update command changes it afterwards.
+env_manuspectrum_image: "registry.example/manuspectrum@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 env_compose_profiles: "observability"
 env_media_host_dir: "{{ data_dir }}/media"
 env_pkg_dir: "{{ app_dir }}/pkg"
