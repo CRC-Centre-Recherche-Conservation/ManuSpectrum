@@ -75,12 +75,16 @@ server, not only by the forms.
   Today: `Resource Editor`, `Resource Reviewer`, `Resource Exporter`, `Crowdsource Editor`,
   `Graph Editor`, `Guest`. A group created later with any admin permission becomes
   superuser-only by itself. What each one unlocks in Arches:
-  - `Resource Editor`: the resource editor (create, edit and delete records) and the bulk
-    data managers (imports);
+  - `Resource Editor`: the resource editor (create, edit and delete records), the workflows
+    (New Project, Import Biblissima), the bulk data manager (imports and edits), the Image
+    Service Manager's create, edit and delete, and the XY renderer configurations;
   - `Resource Reviewer`: approves or rejects the provisional edits of other users, and edits
-    without going through provisional edits;
-  - `Resource Exporter`: exports search results;
-  - `Graph Editor`: the graph designer: create, edit, publish and delete resource models;
+    without going through provisional edits; creates, edits and deletes in the Image Service
+    Manager and the XY renderer configurations;
+  - `Resource Exporter`: exports search results; the bulk data manager shows it the Excel
+    exporters (with `Resource Editor`, which opens the bulk data manager);
+  - `Graph Editor`: the graph designer: create, edit, publish and delete resource models, and
+    the model configuration, summary configurations included;
   - `Crowdsource Editor`: read and write permission on the cards, without the resource editor
     pages;
   - `Guest`: read permission on the cards.
@@ -93,6 +97,48 @@ server, not only by the forms.
 - The permissions of the group come from migration `0015`; do not edit them in the admin.
   Reversing the migration leaves the group and its members in place; a change of its
   permissions is a new data migration.
+
+### Workflows and data-management tools
+
+Arches opens a tool page only for a holder of `view_plugin` on that tool, and lists a bulk data
+manager module only for a holder of `view_etlmodule` on that module; a superuser holds both
+everywhere. Behind the pages, Arches lets only `Resource Editor` write records, keep a
+workflow's progress and run the bulk data manager. The grants (migration `0016`) are the
+reference:
+
+| Tool | Groups |
+|---|---|
+| Workflows launcher (`init-workflow`) | `Resource Editor` |
+| New Project (`create-project-workflow`) | `Resource Editor` |
+| Import Biblissima (`import-biblissima-workflow`) and its API (`api/biblissima/*`) | `Resource Editor` |
+| Bulk Data Manager (`bulk-data-manager`) | `Resource Editor` |
+| Image Service Manager (`image-service-manager`) | open: everyone; create, edit, delete: `Resource Editor`, `Resource Reviewer` |
+| Controlled List Manager (`controlled-list-manager`) | `RDM Administrator` (set by Arches) |
+| XY renderer configurations (seeded presets: superusers only) | open: everyone; create, edit, delete: `Resource Editor`, `Resource Reviewer` |
+| Model configuration: relatable nodes, summary configurations | `Graph Editor` |
+
+| Bulk data manager module | Shown to |
+|---|---|
+| Imports: branch Excel, tile Excel, single CSV, JSON-LD | `Resource Editor` |
+| Edits: replace, trim, case, concept, migrate to reference | `Resource Editor` |
+| Exports: branch Excel, tile Excel | `Resource Exporter` |
+| Deletion | superusers only |
+
+- A person combines groups: a modeller or an administrator who also produces data is given
+  `Resource Editor` too, as Arches reserves resource editing to that group; the export modules
+  appear to a member of both `Resource Editor` (who opens the bulk data manager) and
+  `Resource Exporter`.
+- « Shown to » is what the bulk data manager lists. Arches does not check `view_etlmodule`
+  again when a module runs: any `Resource Editor` can still run the deletion module or an
+  exporter by a direct request.
+- The bulk data manager's exports read the database directly: they ignore embargoes and
+  nodegroup restrictions. Grant `Resource Exporter` to trusted accounts only.
+- Do not edit these grants in the admin; a change is a new data migration. A new workflow (a
+  file in `manuspectrum/workflows/`) needs a migration that registers it and grants it to
+  `Resource Editor`; `tests/test_workflow_plugin_access.py` fails until it exists.
+- `migrate-to-reference-datatype` is registered by hand (`manage.py etl_module register`);
+  registered after `0016` has run, it needs a new data migration for its grant, and until then
+  it shows to superusers only.
 
 ### Two-factor authentication
 
