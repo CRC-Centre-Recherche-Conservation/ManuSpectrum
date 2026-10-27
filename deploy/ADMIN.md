@@ -94,6 +94,13 @@ server, not only by the forms.
   Reversing the migration leaves the group and its members in place; a change of its
   permissions is a new data migration.
 
+### Image Service Manager
+
+The Image Service Manager's save and delete actions answer only to `Resource Editor`,
+`Resource Reviewer` and superusers; any other account gets a refusal, and the tool shows
+« Request Failed ». The same rule applies to the manifest upload of the resource editor's
+IIIF manifest widget, which then shows « An error occurred while creating the manifest. ».
+
 ### Two-factor authentication
 
 - TOTP, with any authenticator application. Enrolment is self-service at

@@ -60,6 +60,7 @@ IGNORED = {
     "plugins": "back-office pages and workflow steps, one route for every plugin",
     "mvt": "map tiles",
     "templates": "Knockout templates",
+    "manifest_manager": "back-office Image Service Manager",
     "model-graph": "UI plumbing",
     "relatable-nodes": "UI plumbing",
     "summary-config": "designer configuration",
