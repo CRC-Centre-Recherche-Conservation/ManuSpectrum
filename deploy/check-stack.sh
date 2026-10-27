@@ -72,6 +72,9 @@ bash deploy/scripts/tests/test_host_metrics.sh
 step "monthly-report tests"
 python3 -m unittest discover -s deploy/scripts/tests -p 'test_monthly_report.py'
 
+step "release library tests"
+bash deploy/scripts/tests/test_lib_release.sh
+
 step "release ref guard tests"
 bash deploy/scripts/tests/test_release_ref_guard.sh
 
