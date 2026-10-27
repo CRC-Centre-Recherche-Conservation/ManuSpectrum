@@ -105,3 +105,24 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="AccountRetentionFailures", alertstate="firing", service="application", severity="warning"}
       value: 1
+
+- name: a failure series that appears directly at 1 has no earlier sample and is not counted, which is why the application primes every label set at 0
+  interval: 1m
+  input_series:
+  - series: manuspectrum_account_mails_total{instance="web:8000", job="web", kind="invitation", outcome="failed"}
+    values: _x10 1x120
+  - series: manuspectrum_embargo_lifts_total{instance="worker:9808", outcome="failed"}
+    values: _x10 1x120
+  - series: manuspectrum_workflow_cleanups_total{instance="worker:9808", kind="import-biblissima-workflow", outcome="failed"}
+    values: _x10 1x120
+  - series: manuspectrum_account_anonymisations_total{instance="worker:9808", outcome="failed"}
+    values: _x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+  - expr: sum(increase(manuspectrum_account_mails_total{outcome="failed"}[64h]))
+    eval_time: 40m
+    exp_samples:
+    - labels: '{}'
+      value: 0

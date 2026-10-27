@@ -345,3 +345,31 @@ tests:
   - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
     eval_time: 10h
     exp_samples: []
+
+- name: a task or indexing failure series that appears directly at 1 is not counted, which is why each worker process primes every label set at 0
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="manuspectrum.embargo_pass", outcome="failure"}
+    values: _x10 1x120
+  - series: manuspectrum_index_resources_total{mode="resource", outcome="failed"}
+    values: _x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+
+- name: a primed task failure series fires on its first failure
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="manuspectrum.embargo_pass", outcome="failure"}
+    values: 0x10 1x120
+  - series: manuspectrum_index_resources_total{mode="resource", outcome="failed"}
+    values: 0x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", task="manuspectrum.embargo_pass", service="celery", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="resource", service="celery", severity="warning"}
+      value: 1

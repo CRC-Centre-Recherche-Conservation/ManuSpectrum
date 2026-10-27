@@ -8,10 +8,20 @@ string a client sent. gunicorn and Celery run several processes sharing
 ``PROMETHEUS_MULTIPROC_DIR``: a Gauge is created through ``gauge()``, which
 requires its multiprocess mode, and only Counter, Gauge and Histogram are used
 (Info, Enum and Summary quantiles do not aggregate across processes).
+
+Every labelled Counter and Histogram is primed at 0 from its vocabulary in each
+process (``prime_label_sets()``): a series that appears with its first event has
+no earlier sample, and Prometheus' ``increase()`` and ``rate()`` do not count
+that event.
 """
+
+import itertools
+import logging
 
 from django.conf import settings
 from prometheus_client import Counter, Gauge, Histogram
+
+logger = logging.getLogger(__name__)
 
 OTHER = "other"
 
@@ -530,3 +540,91 @@ ACTIVITY_MEASURED = gauge(
     "Unix time of the last refresh of the activity gauges.",
     mode="mostrecent",
 )
+
+
+# Labelled metrics left out of prime_label_sets(), by name: one series per task
+# and bucket, read only by a p95 panel.
+UNPRIMED_METRICS = frozenset({"manuspectrum_celery_task_seconds"})
+
+
+def _vocabularies(tasks):
+    """``(metric, {label: values})`` for every labelled Counter and Histogram except
+    ``UNPRIMED_METRICS``. ``other`` is primed only where open input lands in it
+    every day (log sources)."""
+    languages = tuple(code for code, _ in settings.LANGUAGES)
+    tiers = tuple(str(tier) for tier in settings.SPECTRUM_PREVIEW_TIERS) + ("full",)
+    task_names = tuple(sorted({task_label(name) for name in tasks} - {OTHER}))
+    return (
+        (LOG_RECORDS, {"level": LOG_LEVELS, "source": LOG_SOURCES + (OTHER,)}),
+        (MEMO_LOOKUPS, {"memo": MEMO_NAMES, "outcome": MEMO_OUTCOMES}),
+        (IIIF_ANSWERS, {"mode": IIIF_ANSWER_MODES}),
+        (IIIF_AUTH_TOKENS, {"outcome": IIIF_TOKEN_OUTCOMES}),
+        (READ_REFUSALS, {"surface": READ_SURFACES}),
+        (
+            EXPLORER_UI_CHECKS,
+            {"outcome": EXPLORER_UI_OUTCOMES, "reason": EXPLORER_UI_REASONS},
+        ),
+        (AUTH_LOGINS, {"outcome": LOGIN_OUTCOMES}),
+        (ACCOUNT_MAILS, {"kind": ACCOUNT_MAIL_KINDS, "outcome": ACCOUNT_MAIL_OUTCOMES}),
+        (EMBARGO_LIFTS, {"outcome": EMBARGO_LIFT_OUTCOMES}),
+        (
+            WORKFLOW_CLEANUPS,
+            {"kind": WORKFLOW_KINDS, "outcome": WORKFLOW_CLEANUP_OUTCOMES},
+        ),
+        (WORKFLOW_CLEANUP_RESOURCES, {"outcome": WORKFLOW_CLEANUP_RESOURCE_OUTCOMES}),
+        (ACCOUNT_ANONYMISATIONS, {"outcome": ACCOUNT_ANONYMISATION_OUTCOMES}),
+        (SPECTRUM_PREVIEWS, {"tier": tiers}),
+        (EXPLORER_BUNDLE_BUILD_SECONDS, {"language": languages}),
+        (
+            EXPLORER_BUNDLE_BUILDS,
+            {
+                "language": languages,
+                "reason": BUNDLE_REASONS,
+                "background": ("true", "false"),
+            },
+        ),
+        (EXPLORER_STALE_SERVED, {"language": languages}),
+        (EXPLORER_REBUILD_FAILURES, {"language": languages}),
+        (
+            BIBLISSIMA_UPSTREAM_REQUESTS,
+            {"endpoint": BIBLISSIMA_ENDPOINTS, "outcome": UPSTREAM_OUTCOMES},
+        ),
+        (BIBLISSIMA_UPSTREAM_LATENCY, {"endpoint": BIBLISSIMA_ENDPOINTS}),
+        (BIBLISSIMA_CACHE, {"outcome": CACHE_OUTCOMES}),
+        (BIBLISSIMA_SUGGEST_PREFIX, {"source": SUGGEST_SOURCES}),
+        (UPSTREAM_BUDGET_SPENT, {"kind": BUDGET_KINDS}),
+        (
+            BIBLISSIMA_CREATED_ITEMS,
+            {"resource_type": RESOURCE_TYPES, "outcome": CREATE_OUTCOMES},
+        ),
+        (OUTBOUND_FETCHES, {"purpose": FETCH_PURPOSES, "outcome": FETCH_OUTCOMES}),
+        (OUTBOUND_FETCH_SECONDS, {"purpose": FETCH_PURPOSES}),
+        (SSRF_REJECTIONS, {"reason": SSRF_REASONS}),
+        (CSP_VIOLATIONS, {"directive": CSP_DIRECTIVES}),
+        (CELERY_TASKS, {"task": task_names, "outcome": TASK_OUTCOMES}),
+        (INDEX_RESOURCES, {"mode": INDEX_MODES, "outcome": INDEX_OUTCOMES}),
+    )
+
+
+def prime_label_sets(tasks=()):
+    """Create every known label set of the labelled Counters and Histograms at 0.
+
+    Runs in each process that increments them: ``AppConfig.ready()`` (gunicorn
+    workers, the Celery main process) and Celery's ``worker_process_init``, which
+    passes the registered task names in *tasks* (the only label set without a
+    declared vocabulary; names outside ``TASK_PREFIXES`` are dropped). Under
+    ``PROMETHEUS_MULTIPROC_DIR`` each new child writes a 0 into the process's
+    file. Idempotent; an error is logged, never raised. Returns the number of
+    label sets primed.
+    """
+    try:
+        primed = 0
+        for metric, vocabulary in _vocabularies(tasks):
+            names = tuple(vocabulary)
+            for values in itertools.product(*vocabulary.values()):
+                metric.labels(**dict(zip(names, values)))
+                primed += 1
+        return primed
+    except Exception:
+        logger.warning("metrics: label sets not primed", exc_info=True)
+        return 0

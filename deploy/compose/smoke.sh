@@ -287,6 +287,9 @@ prom_scalar() { # prom_scalar EXPR: the first value of an instant query, "none" 
   prom_get "/api/v1/query?query=$(url_encode "$1")" \
     | json_field 'r["data"]["result"][0]["value"][1] if r["data"]["result"] else "none"'
 }
+has_series() { # has_series METRIC: Prometheus holds at least one series of METRIC
+  [ "$(prom_scalar "count($1)")" != none ]
+}
 # retry DESCRIPTION SECONDS COMMAND...: the command until it succeeds
 retry() {
   local what="$1" deadline=$((SECONDS + $2))
@@ -343,6 +346,8 @@ cmd_monitoring() {
   done <<<"$queries"
   ok "$(wc -l <<<"$queries") dashboard expressions evaluate"
 
+  # The task series exist once a worker pool process has primed them.
+  retry "the worker exposes its primed task series" 120 has_series manuspectrum_celery_tasks_total
   tmp="$(mktemp -d)"
   prom_get /api/v1/rules >"$tmp/rules.json"
   prom_get /api/v1/label/__name__/values >"$tmp/names.json"

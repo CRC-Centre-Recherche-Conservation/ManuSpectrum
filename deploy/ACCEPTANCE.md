@@ -124,6 +124,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 - [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then `sudo ./verify-baseline.sh` → everything `OK`.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
+- [ ] `chronyc tracking` → `Leap status : Normal` and a `Reference ID` naming a server (the clock is
+  synchronised). `Not synchronised` with every source `^?` in `chronyc sources -v`: follow the runbook
+  `deploy/runbooks/host.md#clocknotsynchronised` (NTS blocked on the network) and note the server used.
 - [ ] `findmnt /data` → type `nfs4`, version `NFS_VERS` in the options.
 - [ ] `sudo touch /data/.t && sudo chown 1000 /data/.t; ls -ln /data/.t; sudo rm /data/.t`
   → the result (owner changed or not) matches the NFS options of `rehearsal.env`

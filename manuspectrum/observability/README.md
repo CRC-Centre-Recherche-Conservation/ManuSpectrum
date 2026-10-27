@@ -77,6 +77,17 @@ Both live below the language boundary of `urls.py` (`/en/readyz` is 404).
 - `manuspectrum_metrics_dir_bytes` (mostrecent gauge, updated on each archive) is the space
   the directory occupies. Alert when it exceeds 70 % of the tmpfs (`size=64m` of web and
   worker, so 45 MB) for 10 minutes: live files alone should stay a few MB.
+- Every labelled Counter and Histogram is primed at 0 from its vocabulary in each process
+  (`metrics.prime_label_sets()`): Django's `AppConfig.ready` runs it in every gunicorn worker
+  and in the Celery main process, Celery's `worker_process_init` in each pool process with
+  the registered task names (`task_label`; the only label without a declared vocabulary).
+  A series that appeared with its first event would have no earlier sample, and
+  `increase()`/`rate()` would not count that event (an alert on `increase(...) > 0` would
+  never fire for an isolated failure). Without `PROMETHEUS_MULTIPROC_DIR` (dev, tests) the
+  zeros live in memory. About 290 label sets in a web process (≈ 400 exposed series), 96
+  more for the 32 registered tasks in a worker; about 60 KB of counter file and 24 KB of
+  histogram file per process. `UNPRIMED_METRICS` lists what is left out
+  (`manuspectrum_celery_task_seconds`); `other` is primed only for the log source.
 - A one-off process started with `docker compose exec web python ...` would write its own
   files there and be summed into `/metrics`: run it with `env -u PROMETHEUS_MULTIPROC_DIR`,
   or through `make -C deploy manage`.
@@ -140,6 +151,9 @@ django-prometheus adds the HTTP request metrics (`django_http_*`).
 - Labels come from `ALLOWED_LABELS`; values come from a closed vocabulary through `bounded()`
   or a helper (`language_label`, `memo_label`, `task_label`, ...), an unknown value becoming
   `other`. Never an id, a user, a URL, a path or a string a client sent.
+- A labelled Counter or Histogram is primed at 0 in each process: add its label vocabularies
+  to `_vocabularies()` in `metrics.py`, or its name to `UNPRIMED_METRICS` with a reason
+  (`tests/test_observability_metrics.py` checks that every labelled one is in one of them).
 - Test it where the code increments it, with `tests/observability_helpers.delta`;
   `tests/test_observability_metrics.py` enforces the naming and label rules.
 - Say which alert or dashboard panel reads it in the pull request.

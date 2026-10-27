@@ -89,3 +89,25 @@ tests:
       value: 1
     - labels: ALERTS{alertname="DataChangeLedgerNotPruned", alertstate="firing", service="celery", severity="warning"}
       value: 1
+
+- name: a rebuild failure series that appears directly at 1 is not counted, which is why the application primes every label set at 0
+  interval: 1m
+  input_series:
+  - series: manuspectrum_explorer_rebuild_failures_total{language="fr"}
+    values: _x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+
+- name: a primed rebuild failure series fires on its first failure
+  interval: 1m
+  input_series:
+  - series: manuspectrum_explorer_rebuild_failures_total{language="fr"}
+    values: 0x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="ExplorerRebuildFailing", alertstate="firing", language="fr", service="explorer", severity="warning"}
+      value: 1

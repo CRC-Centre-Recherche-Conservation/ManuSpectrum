@@ -5,7 +5,9 @@ The request id follows a task from its publisher to the worker (message header
 (``manuspectrum_celery_tasks_total``, ``manuspectrum_celery_task_seconds``). A
 worker whose environment sets ``MS_CELERY_METRICS_PORT`` and
 ``PROMETHEUS_MULTIPROC_DIR`` serves the metrics of all its processes on that port
-from its main process; a child that exits has its metric files archived (``multiproc``).
+from its main process; each child primes the task label sets at 0
+(``metrics.prime_label_sets``) and a child that exits has its metric files archived
+(``multiproc``).
 """
 
 import logging
@@ -16,6 +18,7 @@ from celery.signals import (
     before_task_publish,
     task_postrun,
     task_prerun,
+    worker_process_init,
     worker_process_shutdown,
     worker_ready,
 )
@@ -68,6 +71,19 @@ def unbind_task(task_id=None, task=None, state=None, **kwargs):
         metrics.CELERY_TASK_SECONDS.labels(task=name).observe(
             time.monotonic() - started
         )
+
+
+@worker_process_init.connect(weak=False, dispatch_uid="ms-prime-worker-metrics")
+def prime_worker_metrics(**kwargs):
+    """Prime every label set at 0 in a new pool process, the registered tasks included."""
+    from manuspectrum.celery import app
+
+    try:
+        tasks = list(app.tasks.keys())
+    except Exception:
+        logger.warning("task names not read for metric priming", exc_info=True)
+        tasks = ()
+    metrics.prime_label_sets(tasks=tasks)
 
 
 @worker_ready.connect(weak=False, dispatch_uid="ms-worker-metrics")
