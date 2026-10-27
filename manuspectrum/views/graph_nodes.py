@@ -14,6 +14,9 @@ Labels are the widget label of the active language, so the form shows the
 same words as the data-entry form; a node with no card falls back to its
 name. Draft models are out of scope — the function manager runs on published
 models — and so is the system-settings model.
+
+Only the group « Graph Editor » reads it, as Arches gates its graph designer;
+a superuser passes Arches' check.
 """
 
 import uuid
@@ -27,13 +30,6 @@ from django.views import View
 from arches.app.models import models
 from arches.app.models.system_settings import settings as system_settings
 from arches.app.utils.decorators import group_required
-
-# Who may read a model's structure here: the group that edits graphs, and the
-# two administrator groups. Never "Guest" or "Resource Exporter" — Arches'
-# SetAnonymousUser maps every unauthenticated visitor to the `anonymous` user,
-# which belongs to both (see views/permissions.py). Django superusers pass the
-# check in Arches itself.
-CONFIG_GROUPS = ("Graph Editor", "Application Administrator", "System Administrator")
 
 RELATION_DATATYPES = ("resource-instance", "resource-instance-list")
 AGGREGATABLE_DATATYPES = ("reference",)
@@ -77,7 +73,7 @@ def target_graphids(node):
     return seen
 
 
-@method_decorator(group_required(*CONFIG_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(group_required("Graph Editor", raise_exception=True), name="dispatch")
 class RelatableNodesView(View):
     """``GET /<lang>/function-config/relatable-nodes/<graphid>``.
 

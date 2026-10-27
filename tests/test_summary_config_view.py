@@ -303,6 +303,18 @@ class SummaryConfigViewTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.get(self.url).status_code, 403)
 
+    def test_an_administrator_alone_is_refused(self):
+        for name in ("Application Administrator", "System Administrator"):
+            admin = User.objects.create_user(f"sc_{name}", password="x")
+            admin.groups.add(Group.objects.get_or_create(name=name)[0])
+            self.client.logout()
+            self.client.force_login(admin)
+            with self.subTest(group=name):
+                self.assertEqual(self.client.get(self.url).status_code, 403)
+                self.assertEqual(
+                    self.put(json.dumps({"config": valid_config()})).status_code, 403
+                )
+
     def test_rejects_a_put_without_a_csrf_token(self):
         client = self.client_class(enforce_csrf_checks=True)
         client.force_login(self.editor)

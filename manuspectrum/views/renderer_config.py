@@ -12,7 +12,6 @@ from django.utils.decorators import method_decorator
 from arches.app.utils.decorators import group_required
 from arches.app.views.api import APIBase
 from manuspectrum.models import RendererConfig
-from manuspectrum.views.permissions import EDITOR_GROUPS
 from manuspectrum.constants.xy_presets import (
     canonical_config_id,
     is_seeded_preset,
@@ -129,7 +128,7 @@ class RendererConfigView(APIBase):
                     _("<h1>Renderers config does not exist</h1>")
                 )
 
-    @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
+    @method_decorator(group_required("Resource Editor", raise_exception=True))
     def post(self, request, renderer_config_id=None):
         """Create a configuration, or update ``renderer_config_id``.
 
@@ -206,7 +205,7 @@ class RendererConfigView(APIBase):
 
         return JSONResponse(JSONSerializer().serializeToPython(renderer_config))
 
-    @method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True))
+    @method_decorator(group_required("Resource Editor", raise_exception=True))
     def delete(self, request, renderer_config_id):
         """Delete a configuration no stored file points at.
 

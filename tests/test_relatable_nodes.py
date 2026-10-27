@@ -19,7 +19,7 @@ from django.urls import reverse
 
 from arches.app.models import models
 
-from manuspectrum.views.graph_nodes import CONFIG_GROUPS, RelatableNodesView
+from manuspectrum.views.graph_nodes import RelatableNodesView
 
 
 def _graph(slug, name):
@@ -59,10 +59,6 @@ class RelatableNodesFixtureTests(TestCase):
     def setUpTestData(cls):
         cls.editor = User.objects.create_user("rn_editor", password="pw")
         cls.editor.groups.add(Group.objects.get_or_create(name="Graph Editor")[0])
-        cls.admin = User.objects.create_user("rn_admin", password="pw")
-        cls.admin.groups.add(
-            Group.objects.get_or_create(name="Application Administrator")[0]
-        )
         cls.outsider = User.objects.create_user("rn_outsider", password="pw")
         cls.outsider.groups.add(Group.objects.get_or_create(name="Guest")[0])
 
@@ -227,19 +223,19 @@ class RelatableNodesFixtureTests(TestCase):
         response = self.client.get(reverse("relatable-nodes", args=[uuid.uuid4()]))
         self.assertEqual(response.status_code, 404)
 
-    def test_administrators_may_read_it_too(self):
-        self.client.logout()
-        self.client.force_login(self.admin)
-        self.assertEqual(self.client.get(self.url).status_code, 200)
+    def test_an_administrator_alone_is_refused(self):
+        for name in ("Application Administrator", "System Administrator"):
+            admin = User.objects.create_user(f"rn_{name}", password="pw")
+            admin.groups.add(Group.objects.get_or_create(name=name)[0])
+            self.client.logout()
+            self.client.force_login(admin)
+            with self.subTest(group=name):
+                self.assertEqual(self.client.get(self.url).status_code, 403)
 
     def test_rejects_a_member_of_no_configuration_group(self):
         self.client.logout()
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(self.url).status_code, 403)
-
-    def test_the_configuration_groups_never_include_an_anonymous_group(self):
-        self.assertNotIn("Guest", CONFIG_GROUPS)
-        self.assertNotIn("Resource Exporter", CONFIG_GROUPS)
 
     def test_rejects_anonymous_callers(self):
         self.client.logout()
