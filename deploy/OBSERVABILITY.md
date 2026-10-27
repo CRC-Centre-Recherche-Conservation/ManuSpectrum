@@ -142,6 +142,18 @@ falls inside the weekday 08:00-19:00 window (Alertmanager drops the resolved
 notification of a muted warning group, so an event of Tuesday noon, resolved on
 Friday 04:00, is usually never closed by a mail). The monthly report counts one
 episode per 64 h of such an event.
+`increase()` and `rate()` need a sample before the event: a series whose first
+sample already holds 1 counts 0. Every labelled application counter and histogram
+is therefore primed at 0 from its vocabulary in each process
+(`metrics.prime_label_sets()`, run by Django's `AppConfig.ready` and by Celery's
+`worker_process_init` with the registered task names), so the first failure of
+a known label set fires its alert and counts whole on the panels. Two cases stay
+out: an `other` value outside the log source (a task outside `TASK_PREFIXES`, an
+unknown CSP directive), and an event before the first scrape of a series
+Prometheus has never seen (a new stack or an emptied TSDB). The promtool cases
+of these alerts show both a primed series and one that appears at 1 (not counted).
+`manuspectrum_celery_task_seconds` (one series per task and bucket, read by a p95
+panel) is the one labelled metric left unprimed (`UNPRIMED_METRICS`).
 `ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` fire when more than
 half of the builds of the last hour (at least three) took longer than 13 s, and
 longer than 55 s, respectively (histogram bucket boundaries): one slow cold build
@@ -385,6 +397,10 @@ stale file raises `HostMetricsStale` or `DiskUsageStale`.
 severities), never an id, a user, a URL or a path. Textfile label values match
 `^[a-z0-9_-]+$`; an application label comes from `ALLOWED_LABELS`
 (`manuspectrum/observability/metrics.py`). Metrics carry no personal data.
+A new labelled application counter or histogram gets its vocabulary in
+`metrics._vocabularies()` (primed at 0 in every process; `smoke.sh monitoring` then
+requires its series), or its name in `UNPRIMED_METRICS` and a reason
+(`tests/test_observability_metrics.py` fails otherwise).
 
 ## Checking a running stack
 

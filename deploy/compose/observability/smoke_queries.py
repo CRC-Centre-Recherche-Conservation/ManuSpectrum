@@ -23,57 +23,23 @@ import sys
 import urllib.parse
 from pathlib import Path
 
-# Every labelled Counter and Histogram of manuspectrum/observability/metrics.py
-# (with the _total, _bucket, _count and _sum suffixes): under prometheus_client
-# multiprocess a labelled metric is exposed only after its first `.labels()`
-# call, so on a fresh stack these names do not exist yet. An unlabelled one
-# exports 0 from the start and stays strict.
+# The labelled Counters and Histograms of manuspectrum/observability/metrics.py
+# that are not primed at 0 (`UNPRIMED_METRICS`, with the _total, _bucket, _count
+# and _sum suffixes): under prometheus_client multiprocess such a metric is
+# exposed only after its first `.labels()` call, so on a fresh stack these names
+# do not exist yet. Every other labelled metric is primed in each process
+# (`prime_label_sets`) and, like an unlabelled one, stays strict.
 # tests/test_smoke_queries.py derives this set from metrics.py and compares.
 LABELLED_APP_METRICS = frozenset(
     {
-        "manuspectrum_account_anonymisations_total",
-        "manuspectrum_account_mails_total",
-        "manuspectrum_auth_logins_total",
-        "manuspectrum_biblissima_cache_total",
-        "manuspectrum_biblissima_created_items_total",
-        "manuspectrum_biblissima_suggest_prefix_total",
-        "manuspectrum_biblissima_upstream_latency_seconds_bucket",
-        "manuspectrum_biblissima_upstream_latency_seconds_count",
-        "manuspectrum_biblissima_upstream_latency_seconds_sum",
-        "manuspectrum_biblissima_upstream_requests_total",
         "manuspectrum_celery_task_seconds_bucket",
         "manuspectrum_celery_task_seconds_count",
         "manuspectrum_celery_task_seconds_sum",
-        "manuspectrum_celery_tasks_total",
-        "manuspectrum_csp_violations_total",
-        "manuspectrum_embargo_lifts_total",
-        "manuspectrum_explorer_bundle_build_seconds_bucket",
-        "manuspectrum_explorer_bundle_build_seconds_count",
-        "manuspectrum_explorer_bundle_build_seconds_sum",
-        "manuspectrum_explorer_bundle_builds_total",
-        "manuspectrum_explorer_rebuild_failures_total",
-        "manuspectrum_explorer_stale_served_total",
-        "manuspectrum_explorer_ui_checks_total",
-        "manuspectrum_iiif_answers_total",
-        "manuspectrum_iiif_auth_tokens_total",
-        "manuspectrum_index_resources_total",
-        "manuspectrum_log_records_total",
-        "manuspectrum_memo_lookups_total",
-        "manuspectrum_outbound_fetch_seconds_bucket",
-        "manuspectrum_outbound_fetch_seconds_count",
-        "manuspectrum_outbound_fetch_seconds_sum",
-        "manuspectrum_outbound_fetches_total",
-        "manuspectrum_read_refusals_total",
-        "manuspectrum_spectrum_previews_total",
-        "manuspectrum_ssrf_rejections_total",
-        "manuspectrum_upstream_budget_spent_total",
-        "manuspectrum_workflow_cleanup_resources_total",
-        "manuspectrum_workflow_cleanups_total",
     }
 )
 
 # Series that can be legitimately absent from a running stack: the labelled
-# application metrics above, the backup and restore-test gauges (they exist
+# application metrics above (not primed), the backup and restore-test gauges (they exist
 # only after the first run of those jobs), the gauges the daily account
 # passes set (their run timestamps and the embargo counts, from the first
 # pass on), ALERTS (only while an alert is

@@ -57,3 +57,25 @@ tests:
   - expr: ALERTS{alertname="WriteBudgetSpent", alertstate="firing"}
     eval_time: 70h
     exp_samples: []
+
+- name: a spent write budget that appears directly at 1 is not counted, which is why the application primes every label set at 0
+  interval: 1m
+  input_series:
+  - series: manuspectrum_upstream_budget_spent_total{kind="write"}
+    values: _x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteBudgetSpent", alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+
+- name: a primed write budget series fires on its first spent budget
+  interval: 1m
+  input_series:
+  - series: manuspectrum_upstream_budget_spent_total{kind="write"}
+    values: 0x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteBudgetSpent", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteBudgetSpent", alertstate="firing", service="biblissima", severity="warning"}
+      value: 1
