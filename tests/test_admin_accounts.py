@@ -69,6 +69,7 @@ class ListTests(AdminCase):
                 "two_factor",
                 "last_login",
                 "planned_anonymisation",
+                "is_staff",
                 "is_superuser",
             ],
         )

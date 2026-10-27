@@ -1506,6 +1506,33 @@ Create the test accounts in the admin and delete them afterwards.
   its first and last names and no e-mail; `manuspectrum_account_anonymisations_total{outcome="anonymised"}` increased.
   A superuser in the same situation is only listed in the administrators' summary.
 
+### 8.6b Roles: superuser, site manager, editor (`ADMIN.md` « Who can do what »)
+
+Two test accounts besides the superuser: `mgr` (staff status + group **Site managers**, both set by the
+superuser) and `ed` (no staff status, group `Resource Editor`).
+
+- [ ] The Users list shows the column "Staff status" (FR « Statut équipe »).
+- [ ] Signed in as `mgr`, the admin index lists only Users, Site announcements, Restrictions, Terms acceptances and
+  Workflow cleanups. Groups, OAuth applications and Access attempts are absent, and their URLs answer `403`.
+- [ ] As `mgr`, add an account `ed2` with group `Resource Editor`: saved, invitation sent. The groups box offers no
+  `Site managers`, `System Administrator` nor `Application Administrator`; the change page of `ed2` shows the user
+  name, the e-mail address, "Staff status", "Superuser status", "User permissions", "Last login" and "Date joined" as
+  plain text and no password link.
+- [ ] As `mgr`, POST the change form of `ed2` with forged fields (browser devtools or `curl` with the session cookie and
+  CSRF token): `is_superuser=on`, `is_staff=on`, a `user_permissions` id → saved, and `ed2` is still neither staff nor
+  superuser and holds no permission; `email=<another address>`, `username=<another name>` or `last_login_0=2020-01-01`
+  → saved, and the e-mail, user name and last login are unchanged; a `groups` id of `Site managers` → the form
+  answers with an error, nothing saved.
+- [ ] As `mgr`, tick `ed2` and a staff account without password created by the superuser (box « Send the invitation
+  now » unticked), choose **Send invitation**: Mailpit holds one mail (to `ed2`), and the admin says one account was
+  skipped.
+- [ ] As `mgr`, the change page of the superuser, of `mgr` itself and of `anonymous` shows no Save button, a POST to it
+  answers `403`, and `/en/admin/auth/user/<id>/password/` answers `403` for every account, `ed2` included.
+- [ ] As `mgr`, edit a site announcement, then shorten a restriction's "Ends on" and extend it: all saved. Clearing
+  "Ends on" or setting a past date is refused.
+- [ ] Remove staff status from `mgr` (as the superuser): `mgr` no longer reaches `/en/admin/`. `ed` never does.
+- [ ] Delete the test accounts afterwards (as the superuser).
+
 ### 8.7 Report
 
 - [ ] `make -C deploy report-test`: the message has the sections "Comptes inactifs", "Verrouillages de comptes",

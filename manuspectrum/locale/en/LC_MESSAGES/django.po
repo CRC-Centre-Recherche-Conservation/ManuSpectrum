@@ -547,6 +547,14 @@ msgstr ""
 msgid "The invitation to %(user)s could not be sent."
 msgstr "The invitation to %(user)s could not be sent."
 
+#: admin.py:846
+#, python-format
+msgid "%(count)d account was skipped: only a superuser can invite it."
+msgid_plural ""
+"%(count)d accounts were skipped: only a superuser can invite them."
+msgstr[0] "%(count)d account was skipped: only a superuser can invite it."
+msgstr[1] "%(count)d accounts were skipped: only a superuser can invite them."
+
 #: admin.py:539
 #, python-format
 msgid "%(count)d invitation was sent."
