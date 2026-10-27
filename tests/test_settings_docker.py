@@ -178,7 +178,7 @@ class SettingsDockerTests(SimpleTestCase):
                 self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
 
     def test_the_related_resources_cap_comes_from_the_environment(self):
-        self.assertEqual(load(BASE_ENV)["RELATED_RESOURCES_EXPORT_LIMIT"], 1000)
+        self.assertEqual(load(BASE_ENV)["RELATED_RESOURCES_EXPORT_LIMIT"], 500)
         values = load(dict(BASE_ENV, RELATED_RESOURCES_EXPORT_LIMIT="300"))
         self.assertEqual(values["RELATED_RESOURCES_EXPORT_LIMIT"], 300)
 
