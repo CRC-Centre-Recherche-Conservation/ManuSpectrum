@@ -18,6 +18,7 @@ Special routes:
   /api/site-notice          answers with the status of X-Stub-Status when it is sent
   .../iiifannotations       answered after 0.5 s; the highest number of them in
                             flight at once is read, and reset, at /__peak_annotations
+  /api/spectrum-preview/... answered after 0.5 s when the query holds slow=1
 """
 
 import json
@@ -132,6 +133,8 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(0.5)  # in-flight requests overlap, as the viewer's batches do
             with _annotations_lock:
                 _annotations["now"] -= 1
+        if path.startswith("/api/spectrum-preview/") and "slow=1" in self.path:
+            time.sleep(0.5)
         if path.startswith("/iiif/"):
             return self.echo([("Access-Control-Allow-Origin", "*")])
         return self.echo()

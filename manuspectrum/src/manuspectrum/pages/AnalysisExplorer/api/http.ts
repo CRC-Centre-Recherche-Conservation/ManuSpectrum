@@ -44,6 +44,12 @@ export const EVENTS_ROUTE: ExplorerRoute = "manuspectrum:explorer-events";
 const MEMO_TTL_MS = 5 * 60 * 1000;
 /** Prefetches nobody waits for yet that run at once; a new one drops the oldest. */
 export const PREFETCHES_IN_FLIGHT = 4;
+/**
+ * Spectrum previews a tab fetches at once; the others wait their turn. The
+ * edge bounds the connections of one address (the `preview_conn` zone of
+ * deploy/compose/nginx/snippets/edge-rules.conf, sized from this number).
+ */
+export const PREVIEW_FETCHES_IN_FLIGHT = 6;
 
 /** The API answered 404: unknown and refused look the same (spec §4). */
 export class UnavailableError extends Error {
@@ -129,6 +135,66 @@ async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
     return await response.json();
 }
 
+let previewsInFlight = 0;
+/**
+ * Previews waiting for a slot, in arrival order, one lane per kind: a quick
+ * tier (a popup, the quick view) takes the next free slot before any full
+ * series still waiting.
+ */
+const previewQueues: Record<"quick" | "full", (() => void)[]> = {
+    quick: [],
+    full: [],
+};
+
+/** Resolves once a preview slot is free; an abort while waiting leaves the queue. */
+function previewSlot(
+    lane: "quick" | "full",
+    signal?: AbortSignal,
+): Promise<void> {
+    if (signal?.aborted) return Promise.reject(abortError(signal));
+    if (previewsInFlight < PREVIEW_FETCHES_IN_FLIGHT) {
+        previewsInFlight += 1;
+        return Promise.resolve();
+    }
+    const queue = previewQueues[lane];
+    return new Promise<void>((resolve, reject) => {
+        function onAbort(): void {
+            const index = queue.indexOf(turn);
+            if (index >= 0) queue.splice(index, 1);
+            reject(abortError(signal as AbortSignal));
+        }
+        function turn(): void {
+            signal?.removeEventListener("abort", onAbort);
+            previewsInFlight += 1;
+            resolve();
+        }
+        queue.push(turn);
+        signal?.addEventListener("abort", onAbort, { once: true });
+    });
+}
+
+/** `fetchJson` of a spectrum preview, at most `PREVIEW_FETCHES_IN_FLIGHT` at once. */
+async function fetchPreview(
+    lane: "quick" | "full",
+    url: string,
+    signal?: AbortSignal,
+): Promise<unknown> {
+    await previewSlot(lane, signal);
+    try {
+        return await fetchJson(url, signal);
+    } finally {
+        previewsInFlight -= 1;
+        (previewQueues.quick.shift() ?? previewQueues.full.shift())?.();
+    }
+}
+
+/** Forgets the preview slots and queues; for specs only, between two tests. */
+export function resetPreviewQueueForTests(): void {
+    previewsInFlight = 0;
+    previewQueues.quick.length = 0;
+    previewQueues.full.length = 0;
+}
+
 function forget(memo: Memo, url: string, entry: MemoEntry): void {
     if (memo.entries.get(url) === entry) memo.entries.delete(url);
 }
@@ -144,7 +210,12 @@ function lookup(memo: Memo, url: string): MemoEntry | null {
     return entry;
 }
 
-function start(memo: Memo, url: string, pinned: boolean): MemoEntry {
+function start(
+    memo: Memo,
+    url: string,
+    pinned: boolean,
+    read: typeof fetchJson = fetchJson,
+): MemoEntry {
     const controller = new AbortController();
     const entry: MemoEntry = {
         promise: Promise.resolve(),
@@ -154,7 +225,7 @@ function start(memo: Memo, url: string, pinned: boolean): MemoEntry {
         arrivedAt: null,
         value: null,
     };
-    entry.promise = fetchJson(url, controller.signal).then(
+    entry.promise = read(url, controller.signal).then(
         (value) => {
             entry.value = value;
             entry.arrivedAt = Date.now();
@@ -330,6 +401,8 @@ export function setFullSeriesRoom(spectra: number): void {
  * `FULL_SERIES_ENTRIES` files or the room Compare asks (`setFullSeriesRoom`), with the rules of the payloads' memo (TTL,
  * shared requests, `reload` replaces the entry): a Compare view drawing many
  * spectra never evicts an Explorer payload. The tiers are asked each time.
+ * At most `PREVIEW_FETCHES_IN_FLIGHT` previews are fetched at once, the
+ * others in the order they were asked, the quick tiers before the full series.
  */
 export async function getSeries(
     previewUrl: string,
@@ -341,8 +414,12 @@ export async function getSeries(
     const url = `${path}?n=${n}`;
     if (n === "full") {
         if (reload) fullSeries.entries.delete(url);
-        const entry = lookup(fullSeries, url) ?? start(fullSeries, url, false);
+        const entry =
+            lookup(fullSeries, url) ??
+            start(fullSeries, url, false, (path, signal) =>
+                fetchPreview("full", path, signal),
+            );
         return wait<Series | null>(fullSeries, url, entry, signal);
     }
-    return (await fetchJson(url, signal)) as Series | null;
+    return (await fetchPreview("quick", url, signal)) as Series | null;
 }

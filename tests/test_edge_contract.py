@@ -26,7 +26,7 @@ NGINX_DIR = Path(
 LOCATION = re.compile(
     r"^\s*location\s+(?:(~\*?|=|\^~)\s+)?(\"[^\"]+\"|[^\s{]+)\s*\{", re.M
 )
-LANGUAGE_ALTERNATION = re.compile(r"/\(([a-z]{2}(?:\|[a-z]{2})*)\)")
+LANGUAGE_ALTERNATION = re.compile(r"/\((?:\?P<\w+>)?([a-z]{2}(?:\|[a-z]{2})*)\)")
 UUID = str(uuid.uuid4())
 
 QUERYSETS_BLOCK = "snippets/edge-rules.conf"
@@ -89,7 +89,6 @@ DENIED = [
     ("auth/signup", "signup"),
     ("auth/confirm_signup", "confirm_signup"),
     ("two-factor-authentication-settings", "two-factor-authentication-settings"),
-    ("two-factor-authentication-reset", "two-factor-authentication-reset"),
 ]
 BARE = [
     ("snippets/edge-rules.conf", "/healthz", "healthz"),
@@ -386,6 +385,76 @@ class EdgeContractTests(SimpleTestCase):
                 )
                 self.assertIsNotNone(body, f"{path}: location block not found")
                 self.assertEqual(body.group(1).strip(), "return 404;", path)
+
+    def test_two_factor_reset_link_gets_a_static_page_and_never_reaches_django(self):
+        page = (NGINX_DIR / "errors/two-factor-reset.html").read_text()
+        for code, _ in settings.LANGUAGES:
+            path = f"/{code}/two-factor-authentication-reset"
+            self.assertView(path, "two-factor-authentication-reset")
+            body = self.location_body("snippets/edge-rules.conf", path)
+            self.assertNotIn("proxy_pass", body)
+            self.assertRegex(
+                body,
+                r"if \(\$request_method !~ \^\(\?:GET\|HEAD\)\$\) \{\s*"
+                r"return 303 /\$lang/two-factor-authentication-reset;",
+            )
+            self.assertIn("root /etc/nginx/errors;", body)
+            self.assertIn("try_files /two-factor-reset.html =404;", body)
+            self.assertIn("include snippets/security-headers.conf;", body)
+            with translation.override(code):
+                auth = reverse("auth")
+                contact = reverse("about-contact")
+            self.assertIn(f'href="{auth}"', page)
+            self.assertIn(f'href="{contact}"', page)
+            self.assertView(auth, "auth")
+            self.assertView(contact, "about-contact")
+        self.assertIn('<html lang="en">', page)
+        self.assertIn('lang="fr"', page)
+        self.assertNotIn("<script", page)
+
+    def test_root_favicon_is_the_icon_the_templates_link(self):
+        from django.contrib.staticfiles import finders
+
+        template = Path(settings.APP_ROOT, "templates", "ms_base.htm").read_text()
+        icon = re.search(r"webpack_static '([^']*favicon\.ico)'", template)
+        self.assertIsNotNone(icon, "ms_base.htm links no favicon.ico")
+        self.assertIsNotNone(finders.find(icon[1]), f"{icon[1]} is not collected")
+        text = (NGINX_DIR / "snippets/static.conf").read_text()
+        block = re.search(r"location = /favicon\.ico\s*\{(.*?)\n\}", text, re.S)
+        self.assertIsNotNone(block, "static.conf: no location = /favicon.ico")
+        self.assertIn(f"alias /srv/static/current/{icon[1]};", block[1])
+        self.assertIn("include snippets/security-headers.conf;", block[1])
+
+    def test_spectrum_previews_have_their_own_connection_zone(self):
+        body = self.location_body(
+            "snippets/edge-rules.conf", f"/api/spectrum-preview/{UUID}"
+        )
+        self.assertNotIn("perip", body)
+        bound = re.search(r"limit_conn preview_conn (\d+);", body)
+        self.assertIsNotNone(bound)
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertIn("zone=preview_conn:", zones)
+        http = Path(
+            settings.APP_ROOT,
+            "src/manuspectrum/pages/AnalysisExplorer/api/http.ts",
+        ).read_text()
+        in_flight = re.search(r"PREVIEW_FETCHES_IN_FLIGHT = (\d+);", http)
+        self.assertIsNotNone(in_flight, "http.ts: no PREVIEW_FETCHES_IN_FLIGHT")
+        self.assertGreaterEqual(int(bound[1]), 5 * int(in_flight[1]))
+
+    def test_one_compare_view_of_full_series_fits_the_preview_full_burst(self):
+        body = self.location_body(
+            "snippets/edge-rules.conf", f"/api/spectrum-preview/{UUID}"
+        )
+        burst = re.search(r"limit_req zone=preview_full burst=(\d+) nodelay;", body)
+        self.assertIsNotNone(burst)
+        http = Path(
+            settings.APP_ROOT,
+            "src/manuspectrum/pages/AnalysisExplorer/api/http.ts",
+        ).read_text()
+        room = re.search(r"FULL_SERIES_MAX_ENTRIES = (\d+);", http)
+        self.assertIsNotNone(room, "http.ts: no FULL_SERIES_MAX_ENTRIES")
+        self.assertGreaterEqual(int(burst[1]) + 1, int(room[1]))
 
     def test_silk_is_named_in_every_language_without_requiring_the_app(self):
         for code, _ in settings.LANGUAGES:
