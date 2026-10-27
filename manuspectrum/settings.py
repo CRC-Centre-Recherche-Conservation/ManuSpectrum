@@ -634,8 +634,10 @@ RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 
 # Upper bound of the relations Arches loads at once (paginate=false): the related
 # resources graph, « load all » on a report and the report API's summary. Arches'
-# default (10000) freezes the graph's browser tab on a resource with ~1650 relations.
-RELATED_RESOURCES_EXPORT_LIMIT = 1000
+# default (10000) freezes the graph's browser tab on a resource with ~1650 relations;
+# 500 kept it responsive on the rehearsal VM. A report whose summary was cut pages
+# its related resources (media/js/models/report.js).
+RELATED_RESOURCES_EXPORT_LIMIT = 500
 
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
@@ -781,6 +783,14 @@ IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
 # plus an image fetch from the provider, so the browser and any intermediary
 # must be told the answer keeps.
 SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
+# One search thumbnail's outbound calls (manifest, then image) share this
+# budget in seconds, without retry, each connect within the timeout below. A
+# host that does not accept a connection is skipped by every thumbnail for
+# SEARCH_THUMBNAIL_HOST_DOWN_TTL seconds, so a server that is down never holds
+# a request thread for long (views/thumbnail.py).
+SEARCH_THUMBNAIL_DEADLINE = 8
+SEARCH_THUMBNAIL_CONNECT_TIMEOUT = 2.5
+SEARCH_THUMBNAIL_HOST_DOWN_TTL = 5 * 60
 
 # Knockout component templates (manuspectrum.views.knockout_templates).
 # max-age: how long a browser reuses a template without asking. The URL carries
