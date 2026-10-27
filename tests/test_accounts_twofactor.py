@@ -1,9 +1,11 @@
 """Two-factor enrolment and the second-factor sign-in step (PP-4, T4)."""
 
+import base64
 from unittest import mock
 
 import pyotp
 from arches.app.models.models import UserProfile
+from arches.app.utils.arches_crypto import AESCipher
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.models import User
@@ -201,6 +203,58 @@ class EnrolmentTests(SetupBase):
     def test_the_french_page_is_translated(self):
         response = self.client.get("/fr/account/two-factor")
         self.assertContains(response, "Authentification à deux facteurs")
+
+
+class StoredSecretFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(
+            "alice", "alice@manuspectrum.test", PASSWORD
+        )
+
+    def setUp(self):
+        cache.clear()
+
+    def test_the_stored_form_is_the_repr_arches_reads(self):
+        secret = enrol(self.alice)
+        value = stored(self.alice)
+        self.assertTrue(value.startswith("b'") and value.endswith("'"), value[:4])
+        self.assertEqual(
+            AESCipher(settings.SECRET_KEY).decrypt(value[1:]),
+            secret,
+        )
+
+    def test_a_secret_written_by_arches_settings_view_is_read(self):
+        secret = pyotp.random_base32()
+        profile, _ = UserProfile.objects.get_or_create(user=self.alice)
+        profile.encrypted_mfa_hash = AESCipher(settings.SECRET_KEY).encrypt(secret)
+        profile.save()
+        profile.refresh_from_db()
+        self.assertEqual(decrypt_secret(profile.encrypted_mfa_hash), secret)
+
+    def test_a_bare_base64_secret_is_read(self):
+        secret = pyotp.random_base32()
+        bare = AESCipher(settings.SECRET_KEY).encrypt(secret).decode()
+        base64.b64decode(bare, validate=True)
+        self.assertEqual(decrypt_secret(bare), secret)
+
+    def test_a_secret_stored_under_another_key_is_never_replaced_or_removed(self):
+        secret = pyotp.random_base32()
+        foreign = str(AESCipher("a-previous-secret-key").encrypt(secret))
+        UserProfile.objects.update_or_create(
+            user=self.alice, defaults={"encrypted_mfa_hash": foreign}
+        )
+        client = Client(raise_request_exception=False)
+        client.force_login(self.alice)
+        for action in ("start", "remove"):
+            response = post(client, PAGE, action=action, code=current_code(secret))
+            self.assertIn(response.status_code, (400, 500), action)
+            self.assertEqual(stored(self.alice), foreign)
+            self.assertNotIn("ms_pending_mfa_secret", client.session)
+
+    def test_nothing_stored_reads_as_none(self):
+        self.assertIsNone(decrypt_secret(None))
+        self.assertIsNone(decrypt_secret(""))
 
 
 class SecondFactorSignInTests(TestCase):
