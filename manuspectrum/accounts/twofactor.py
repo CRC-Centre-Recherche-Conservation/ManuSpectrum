@@ -80,10 +80,19 @@ def encrypt_secret(secret):
 
 
 def decrypt_secret(stored):
-    """The TOTP secret held in *stored*, or None when nothing is stored."""
+    """The TOTP secret held in *stored*, or None when nothing is stored.
+
+    Reads the `repr` form Arches writes (`b'<base64>'`), and a bare base64
+    value for a later Arches that would store the decoded text. Decryption
+    errors are not caught; a value encrypted under another key usually reads
+    as an empty string, which callers treat as no secret.
+    """
     if not stored:
         return None
-    return AESCipher(settings.SECRET_KEY).decrypt(stored[1:])
+    stored = stored.strip()
+    if stored[:2] in ("b'", 'b"') and stored[-1] == stored[1]:
+        stored = stored[2:-1]
+    return AESCipher(settings.SECRET_KEY).decrypt(stored)
 
 
 def code_matches(secret, code):
@@ -335,6 +344,12 @@ class TwoFactorResetView(View):
             request.session.pop(key, None)
 
     def check_password(self, request):
+        """Verify the password and open the enrolment step.
+
+        When `authenticate` rehashes the password (an older hasher or new
+        parameters), the session token, bound to the password hash, is
+        re-signed for the new hash: its 24 hours restart at this step.
+        """
         user = authenticate(
             request=request,
             username=self.account.get_username(),
@@ -344,6 +359,8 @@ class TwoFactorResetView(View):
             return self.render(
                 request, error=_("The password is not valid."), status=400
             )
+        if user.password != self.account.password:
+            request.session[RESET_TOKEN_KEY] = reset_token(user)
         request.session[RESET_VERIFIED_KEY] = user.pk
         request.session[RESET_PENDING_KEY] = encrypt_secret(pyotp.random_base32())
         return self.render(request)

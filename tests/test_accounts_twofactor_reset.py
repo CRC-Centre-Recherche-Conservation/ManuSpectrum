@@ -7,6 +7,7 @@ from unittest import mock
 import pyotp
 from arches.app.models.models import UserProfile
 from axes.models import AccessAttempt
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.core import mail, signing
 from django.core.cache import cache
@@ -270,6 +271,25 @@ class ResetPageTests(TestCase):
         self.assertEqual(self.client.session["_auth_user_id"], str(self.alice.pk))
         self.assertEqual(Client().get(self.path).status_code, 410)
         self.assertEqual(self.client.get(self.page).status_code, 410)
+
+    def test_a_password_rehashed_at_the_password_step_keeps_the_link_working(self):
+        bob = User.objects.create(
+            username="bob",
+            email="b@manuspectrum.test",
+            password=make_password(PASSWORD, hasher="pbkdf2_sha256"),
+        )
+        self.client.get(token_path(bob))
+        response = post(self.client, self.page, action="password", password=PASSWORD)
+        self.assertEqual(response.status_code, 200)
+        bob.refresh_from_db()
+        self.assertTrue(bob.password.startswith("argon2$"), bob.password[:12])
+        secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
+        done = post(self.client, self.page, action="confirm", code=current_code(secret))
+        self.assertRedirects(
+            done, "/en/account/two-factor", fetch_redirect_response=False
+        )
+        self.assertEqual(decrypt_secret(stored(bob)), secret)
+        self.assertEqual(self.client.session["_auth_user_id"], str(bob.pk))
 
     def test_a_code_without_the_password_step_enrols_nothing(self):
         self.open()

@@ -118,9 +118,11 @@ server, not only by the forms.
   (superuser)** mails the link again to the selected accounts that hold no secret (lost
   mail, expired link). An account without an address or inactive gets no mail: the action
   says so.
-- **New `SECRET_KEY`.** Every stored secret becomes unreadable (`SECRETS.md`). In the Users
-  list, use the filter **By two-factor authentication** → **Enrolled**, select all and run **Reset two-factor authentication
-  (superuser)**: every person gets their link. Rotate when the working hours allow, since
+- **New `SECRET_KEY`.** Every stored secret becomes unreadable. Clear them all before `web`
+  serves sign-ins on the new key, in the same maintenance window, never afterwards: the
+  rotation procedure of `SECRETS.md` does it with only PostgreSQL running. Once the stack is
+  up, select every active account in the Users list and run **Send the two-factor enrolment
+  link (superuser)**: every person gets their link. Rotate when the working hours allow, since
   those who do not follow their link stay locked out until they do (re-send it as needed).
 - An OAuth2 application with the password grant signs a user in at `o/token/` with a password
   alone, whatever `FORCE_TWO_FACTOR_AUTHENTICATION` says. System check `manuspectrum.W004`
@@ -130,6 +132,11 @@ server, not only by the forms.
   through the project pages above, and no mail comes from Arches' routes.
 - The secrets are encrypted with `SECRET_KEY`: a new key makes everyone re-enrol
   (`SECRETS.md`).
+- Upgrading Arches or Django keeps every password hash valid (Django's, Argon2 first, PBKDF2
+  still read; Django may rehash one at its next sign-in) and changes none of the two-factor
+  secrets (Arches' field, in the form its sign-in step
+  reads); tests fail if either drifts. Keep `argon2-cffi` installed wherever these hashes are
+  read, a plain Arches install included.
 
 ### Unlock a locked account
 

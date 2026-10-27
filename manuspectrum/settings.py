@@ -1031,7 +1031,16 @@ IIIF_AUTH_TOKEN_RATE = "30/m"
 CORS_URLS_REGEX = r"^(?!/iiif/).*$"
 
 ####### PASSWORDS #######
-# Argon2 first: PBKDF2 hashes stay valid and are rehashed at the next sign-in.
+# Argon2 first. A PBKDF2 hash stays valid and is rehashed at the next sign-in;
+# so is an Argon2 hash whose parameters a Django upgrade changes. The hashes
+# are plain Django (auth_user): a plain Arches install, on Django's default
+# list (which includes Argon2 and which Arches keeps), reads them as long as
+# argon2-cffi is installed. Never remove Argon2PasswordHasher from this list,
+# nor argon2-cffi from pyproject.toml, while a hash or a django-oauth-toolkit
+# client secret (verified, never rehashed) starts with "argon2$": those
+# accounts and clients would stop signing in. To leave Argon2, move PBKDF2
+# first and keep Argon2 listed until every account has signed in again and
+# every OAuth client secret has been regenerated.
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
