@@ -53,6 +53,19 @@ image too.
 
 3. Final release: merge to `main`, wait for `staging.yml` on `main` to
    finish, then tag that commit `v0.1.0` and push it.
+
+   A release that fixes a security problem says so in its signed tag, as a
+   trailer in the last paragraph of the message:
+
+   ```bash
+   git tag -s v0.1.1 -m v0.1.1 -m 'Security-Fix: yes' <commit>
+   ```
+
+   The release watch of a host reads the trailer (`Security-Fix: yes`, on an
+   annotated tag). Its effect is on the host only: the « ready to install » mail
+   gets « (security fix) » in its subject and a line in its body, and the
+   `ReleasePendingTooLong` alert fires after 14 days instead of 30 while the
+   release waits. Nothing is installed by it.
 4. Follow `release.yml`. A failure before the `sign` job leaves no signature.
    `release.yml` has no manual trigger. Once the cause is outside the commit
    (a registry outage, a scan that needs a newer database), use « Re-run jobs »
@@ -66,6 +79,31 @@ A tag that is not `vX.Y.Z` or `vX.Y.Z-rc.N`, a final tag outside the
 first-parent line of `main` and a candidate outside the integration branch are
 refused by the `guard` job before anything is pushed. Never move or delete a
 pushed tag: a signature names the tag, and the repository ruleset forbids it.
+
+## On the host
+
+A host follows one channel, set by `env_release_channel` in the Ansible
+inventory (`RELEASE_CHANNEL` in `.env`): `prod` offers final tags
+(`vX.Y.Z`) only, `rc` also offers release candidates (`vX.Y.Z-rc.N`). A rehearsal
+host uses `rc`, production uses `prod`.
+
+- **The watch** (`manuspectrum-watch.timer`, hourly) fetches the tags, picks the
+  highest one the channel allows that is newer than the running version, and
+  checks it: the registry digest, the signature and revision
+  (`scripts/release-verify.sh`, with the channel policy) and whether Ansible
+  must run first. It then marks the release as *armed* and mails
+  `ALERT_EMAILS` once. It installs nothing and never moves the checkout. A tag
+  whose image or signature is not published yet is waited for six hours before
+  it counts as a failure (`ReleaseVerificationFailed`).
+- **The update** is started by an operator, now or at a scheduled time, with
+  `sudo manuspectrum-update`. It installs the armed release only, after a
+  backup, and rolls back on its own when the application does not become ready.
+- A host holds no registry credential: the package is public and pulled
+  anonymously (`SECRETS.md`).
+
+The operator's steps, the schedule, the refusals and what to do after a
+rollback are in [ADMIN.md](ADMIN.md#updating-the-application); the alerts are in
+[runbooks/release.md](runbooks/release.md).
 
 ## Verify an image by hand
 
@@ -125,8 +163,10 @@ the first tag is pushed; the chain relies on all of them.
 - The default workflow token permission is `read` (each workflow widens it per
   job).
 - `main` and the integration branch are protected against force-push.
-- When branch protection requires status checks, require only `conclusion`,
-  the job that gathers the workflows of `deploy-lint.yml`. The jobs of
+- When branch protection requires status checks, require `conclusion` (the
+  job that gathers the workflows of `deploy-lint.yml`) and `gitleaks` (the job
+  of `secret-scan.yml`). Both workflows run on every pull request, with no
+  `paths:` filter, so the checks are never missing. The jobs of
   `stack-proof.yml` are called workflows with generated names.
 - The GHCR package is made public after its first push, so a host can pull it
   without credentials.
@@ -136,7 +176,8 @@ the first tag is pushed; the chain relies on all of them.
 1. Ruleset: it includes exactly `refs/tags/v*`, carries `creation`, `update`
    and `deletion`, and its bypass list is administrators only and holds the
    person who tags.
-2. `main` and the integration branch are protected (no force-push).
+2. `main` and the integration branch are protected (no force-push), and the
+   required checks are `conclusion` and `gitleaks`.
 3. The default workflow token permission is `read`.
 4. Merge, then wait for the warm-cache run on the integration branch (and, for
    a final release, for `staging.yml` on `main`).

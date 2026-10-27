@@ -45,6 +45,9 @@ and the backup procedures are in `BACKUP.md`.
 - Never in Git, even encrypted. A test (`test_every_secret_is_documented`)
   fails when a secret has no row above; another one ties the list to the
   Compose file.
+- No registry credential on the host: the application image is public on GHCR
+  and is pulled anonymously by the release watch and the update (`RELEASES.md`,
+  « On the host »). Never run `docker login` for it on a host.
 - Never in an argument list (`ps`), a log line, an error message or a
   clear-text backup. `secret-set` reads a value from the terminal or from
   stdin, and `secrets-check` prints names and problems, never values.

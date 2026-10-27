@@ -279,8 +279,8 @@ every commit for secrets with a pinned image, so it needs Docker
 ## What comes next
 
 - PP-8: Ansible writes `.env` and creates the volumes.
-- PP-10b: the update command on the host, which verifies a release with
-  `scripts/release-verify.sh`.
+- PP-10b (done): the release watch and the update command on the host, which
+  verify a release with `scripts/release-verify.sh`.
 
 ## Releases
 
@@ -289,3 +289,9 @@ only ever pulls a signed digest. `staging.yml` publishes `sha-<commit>` for
 every merge to `main`, `release.yml` turns a `v*` tag into a signed release.
 How to cut a candidate or a final release, what each workflow proves and how to
 verify an image by hand: [RELEASES.md](RELEASES.md).
+
+On the host, an hourly watch arms the newest verified release and mails the
+operators; they install it with `sudo manuspectrum-update` (not a `make`
+target: a root command installed by Ansible), now or at a scheduled time. The
+steps are in [ADMIN.md](ADMIN.md#updating-the-application), the alerts in
+[runbooks/release.md](runbooks/release.md).

@@ -1320,8 +1320,9 @@ reboot.
   `DEFAULT_FROM_EMAIL` (`grep -E '^(COMPOSE_PROFILES|ALERT_EMAILS|ALERT_EMAIL_FROM|DEFAULT_FROM_EMAIL)=' deploy/compose/.env`
   → four lines; both senders are the same address on the VM's own domain).
   - On failure: without `DEFAULT_FROM_EMAIL`, `web` refuses to start (`Set the DEFAULT_FROM_EMAIL environment variable`).
-- [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test and timer runs:
-  `make -C deploy silence-fresh-install` (48 h), or install the timers and take a backup before `observability-on`.
+- [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test, release watch run and
+  timer runs (`BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`...): `make -C deploy silence-fresh-install` (48 h),
+  or install the timers and take a backup before `observability-on`.
 - [ ] `make -C deploy volumes secrets monitoring-init up observability-on` → `grafana_admin_password: created`,
   `pg_monitor_password: created`, the others `kept`; `monitoring-init` ends without error; then
   `make -C deploy status` → the seven monitoring containers `healthy`.
@@ -1577,6 +1578,216 @@ Delivery of the account mail by the real relay (SPF, DMARC, quarantine); the rea
 - [ ] The legal notice, privacy policy and terms carry no `[À CONFIRMER]` (`manuspectrum.E003` refuses it in
   production); the legal notice details are confirmed by the scientific lead and the CNRS communication service.
 - [ ] The CNRS data protection officer is informed (privacy policy and the register of processing in `ADMIN.md`).
+
+## Step 9 — Release watch and update (`deploy/RELEASES.md`, `deploy/ADMIN.md`)
+
+The hourly watch that arms a verified release, and the `manuspectrum-update` command that installs it, now or
+at a scheduled time, with a backup before and an automatic rollback after. Played on the rehearsal VM, which
+follows the `rc` channel (`env_release_channel: "rc"` in its inventory), from the installed stack of step 2 with
+the timers of 6.9. *(admin)* commands run as an account of `release_operators` (`ssh -t <admin>@192.168.123.10`, with
+`sudo`); *(service account)* commands run after `sudo -iu manuspectrum` and `cd ~/manuspectrum`. `<host>` is the
+public host name of the rehearsal VM. Two published release candidates newer than the running version are needed
+for most checks (`RELEASES.md`, « Cut a release »): call them `vA` (the first) and `vB` (the next). Mails are read in
+the VM's mail catcher or `mailq`; the state is read with `sudo manuspectrum-update --status`.
+
+**What CI already proves.** The stub tests of the scripts (`deploy/scripts/tests/test_release_*.sh`,
+`deploy/sbin/tests`), the unit checks (`deploy/systemd/tests/test_units.sh`), the Ansible contract tests and the
+alert rule tests. What follows proves them on the production-shaped VM, with real tags, a real registry, real
+signatures, the real systemd timers and the real mail relay.
+
+### 9.1 Installation
+
+- [ ] *(admin)* `ls -l /usr/local/sbin/manuspectrum-update /usr/local/lib/manuspectrum/release/ /etc/manuspectrum/release.conf /etc/manuspectrum/managed-sources /etc/sudoers.d/manuspectrum-update`
+  → the command and the programs owned by `root:root`, `release.conf` mode `0644`, the sudoers file mode `0440`.
+- [ ] *(admin)* `stat -c '%U:%G %a' /var/lib/manuspectrum/release` → the service account, mode `750`.
+- [ ] *(admin)* `getent group manuspectrum-ops` → exactly the accounts of `release_operators`.
+- [ ] *(admin)* `systemctl is-enabled manuspectrum-watch.timer` → `enabled`; `systemctl is-enabled manuspectrum-update-at.timer manuspectrum-update@x.service`
+  → not enabled (`disabled` or `static`, never `enabled`); `systemctl list-timers 'manuspectrum-watch*' 'manuspectrum-update*'`
+  → only the watch timer has a next elapse.
+- [ ] *(admin)* `sudo -k; sudo manuspectrum-update --status` → asks for **your** password (no `NOPASSWD`), then prints
+  `current:` with the installed tag and `armed:    none`.
+- [ ] *(admin)* `systemd-analyze verify /etc/systemd/system/manuspectrum-watch.service /etc/systemd/system/manuspectrum-watch.timer /etc/systemd/system/manuspectrum-update@.service /etc/systemd/system/manuspectrum-update-at.service /etc/systemd/system/manuspectrum-update-at.timer`
+  → no output.
+  - On failure: a `@…@` left in a unit; the Ansible tests catch it in CI.
+
+### 9.2 Outbound access and the first watch
+
+- [ ] *(service account)* `curl -sS -m 15 -o /dev/null -w '%{http_code}\n' https://github.com/ https://tuf-repo-cdn.sigstore.dev/`
+  → two 2xx or 3xx codes; `curl -sS -m 15 -o /dev/null -w '%{http_code}\n' https://ghcr.io/v2/` → `401`.
+  - On failure: open 443 to `github.com`, `ghcr.io`, `pkg-containers.githubusercontent.com`, `tuf-repo-cdn.sigstore.dev`
+    and `rekor.sigstore.dev` (`runbooks/release.md`).
+- [ ] *(service account)* `docker logout ghcr.io; ls ~/.docker/config.json` → no credential for ghcr.io (the package is public;
+  `SECRETS.md`); the checks below pull anonymously.
+- [ ] *(admin)* **No release.** While the running version is the newest the channel allows:
+  `sudo systemctl start manuspectrum-watch; journalctl -u manuspectrum-watch -o cat -n 5`
+  → `no release newer than <tag>`; `--status` still shows `armed:    none`; no mail.
+  `grep -c . "$(grep ^METRICS_TEXTFILE_DIR= deploy/compose/.env | cut -d= -f2)/manuspectrum_release.prom"` → the file exists
+  (it is written on every run, `ReleaseWatchStale` reads it).
+
+### 9.3 Arming
+
+- [ ] Publish `vA` (a candidate newer than the running version). *(admin)* `sudo systemctl start manuspectrum-watch;
+  journalctl -u manuspectrum-watch -o cat -n 8` → `armed vA (sha256:…), needs_ansible=0, security=0`; `--status` shows
+  `armed:    vA image …@sha256:…` and `pending:  since …`; the registry digest of `vA` equals the armed one.
+- [ ] One mail `[ManuSpectrum][Release] vA ready to install on <host>` with the version, channel, digest, commit, the
+  release link, `Install by:` 30 days ahead, the release notes and the two commands. A second run of the watch sends
+  nothing more (`NOTIFIED=1`).
+- [ ] The next hourly run by the timer: `journalctl -u manuspectrum-watch -o cat` shows it armed and unchanged.
+- [ ] *(security)* Publish a candidate whose signed tag carries `-m 'Security-Fix: yes'`: after the watch the mail subject
+  ends `(security fix)`, the body has « This release carries a security fix. », `Install by:` is 14 days after the
+  oldest waiting release and `--status` shows `security=1`.
+- [ ] *(Ansible first)* On a release whose managed files differ from the host (or after removing one key of `.env`, restored
+  afterwards): the mail says « Re-run Ansible first » and `--status` shows `needs_ansible=1`.
+
+### 9.4 Access control
+
+- [ ] *(service account, not an operator)* `sudo manuspectrum-update --status` → refused by sudo (not in the sudoers file).
+  An account that is neither an operator nor the service account: same refusal.
+- [ ] *(admin)* `manuspectrum-update --status` without `sudo` → `run it through sudo`.
+- [ ] *(admin)* `sudo manuspectrum-update --now vA < /dev/null` (no terminal) → `needs a terminal: use ssh -t`.
+- [ ] *(admin)* `ssh -t … sudo manuspectrum-update --now v9.9.9` → `v9.9.9 is not the armed release (vA)`; nothing started.
+- [ ] Remove an operator from `release_operators`, run the playbook: the account leaves `manuspectrum-ops` and `sudo
+  manuspectrum-update` is refused for it; put it back and run the playbook again.
+
+### 9.5 Ansible first
+
+- [ ] *(admin)* With the host last configured from a checkout of an older tag, so that a file Ansible manages differs in `vA`
+  (or with a key of `.env.example` removed from `.env`, restored afterwards), `ssh -t … sudo manuspectrum-update --now vA` →
+  the check refuses: `files installed by Ansible differ between vA and this host` followed by the files (or `lacks keys that vA
+  expects`), `the check refused vA: nothing was started`; no backup was taken and nothing changed.
+- [ ] On the laptop, `git switch --detach vA` with a clean tree, run the playbook, then `--now vA` passes its check.
+- [ ] A laptop checkout with an uncommitted change in a managed path: the playbook stops with « uncommitted changes in files the
+  update compares with the release tag ».
+
+### 9.6 Forced rollback
+
+Needs the stack running `vOld` and `vA` armed.
+
+- [ ] *(admin)* `ssh -t … sudo manuspectrum-update --now vA`, type `yes`. While the log says `readiness:`, *(service account)*
+  stop a dependency of readiness: `docker compose … stop cantaloupe` (the `dc` alias of step 2).
+  - Expected: after `RELEASE_READY_WAIT_SECONDS` the log says `step 10: vA failed (the application was not ready within …)`,
+    `rolling back to vOld`, then `readiness: 200`; the command ends `ROLLED BACK: vA did not start; the previous version is
+    back` with exit status 3 (`echo $?`).
+- [ ] `--status` → `current: vOld`, `armed:    vA`, `rollbacks: 1`, no `ROLLBACK FAILED`, no `inflight`. Mail `vA rolled back`;
+  `UpdateRolledBack` fires (it reads the rollback counter, 64 hours). `git -C ~/manuspectrum describe --tags` → `vOld`; `grep ^MANUSPECTRUM_IMAGE= deploy/compose/.env`
+  → the digest of `vOld`.
+- [ ] `docker compose … start cantaloupe`, `make -C deploy smoke` → passes (the data were not touched).
+- [ ] A snapshot tagged `pre-update` exists: `make -C deploy restic ARGS="snapshots --tag pre-update"`.
+
+### 9.7 SSH disconnect
+
+- [ ] *(admin)* Start `--now vA`, type `yes`, then close the terminal (kill the SSH client) while the log runs.
+  → the update goes on: `systemctl status 'manuspectrum-update@vA'` shows it active; reconnect and `journalctl -fu
+  manuspectrum-update@vA -o cat` follows it to the end.
+- [ ] `--status` after it ends: `current: vA`, `armed:    none`, `inflight: none`; mail `vA installed on <host>`.
+
+### 9.8 Real update
+
+- [ ] Publish `vB`, wait for the watch (or `sudo systemctl start manuspectrum-watch`), then `ssh -t … sudo manuspectrum-update --now vB`:
+  the checks end with `check passed for vB`, the description shows `release: vB (installed: vA)`, `yes` →
+  `step 5: backup (pre-update)`, `step 7: switching vA -> vB`, `readiness: 200`, `vB is installed and the application answers.`,
+  exit status 0.
+- [ ] `--status` → `current: vB (…)`, `previous: vA`, `armed:    none`, `pending:  none`, `rollbacks:` unchanged. `curl -sk
+  https://<host>/readyz` → `200`. The site answers; `smoke.sh edge` passes. `ReleasePendingTooLong` and `UpdateRolledBack`
+  are not firing once the 64 hours of a previous rollback are over.
+- [ ] `docker image ls` holds the images of `vB` and `vA` (current and previous), no older armed one.
+
+### 9.9 Refusals of the update
+
+- [ ] *(sigstore blocked)* *(admin)* Block the sigstore hosts on the VM (`sudo iptables -I OUTPUT -d <address of
+  tuf-repo-cdn.sigstore.dev> -j REJECT`, or a hosts-file entry to an unroutable address), arm a release, then run the watch:
+  → `probe sigstore: … unreachable`, nothing armed, `failed_sigstore 1` in the metrics; after two hours `ReleaseWatchFailing`
+  names `sigstore`. Remove the rule; the next run clears it. With `--now` on an armed release while blocked: the check refuses with
+  `REASON=verify` and nothing changes.
+- [ ] *(backup failure)* *(service account)* `chmod 000 "$RESTIC_REPOSITORY_DIR"` (see 6.8 for a mount that ignores it), then
+  `--now` → `step 5: backup (pre-update)`, then `REFUSED: the pre-update backup failed: nothing was changed`; `git describe`,
+  the `.env` image and the running containers are as before; no `inflight`. Restore the mode afterwards.
+- [ ] *(dirty worktree)* `touch deploy/stray.txt; git add -N deploy/stray.txt` (a tracked change) →
+  the check refuses with `local changes` (`REASON=drift`); remove it.
+- [ ] *(concurrency)* In two sessions start `--now vB` at once: the second answers `an update is running` or, past the
+  first checks, `another update or watch holds … lock`; exactly one update runs. While an update runs,
+  `sudo systemctl start manuspectrum-watch; journalctl -u manuspectrum-watch -o cat -n 2` → `update running …: nothing to do`
+  and the exit status is 0.
+- [ ] *(inflight)* With a file `/var/lib/manuspectrum/release/inflight` present (as after a failed rollback), `--now` refuses with
+  `an update is in flight or was interrupted` (`REASON=busy`). Remove the file afterwards.
+
+### 9.10 Production channel
+
+- [ ] Set `env_release_channel: "prod"` in a copy of the inventory and run the playbook (or set `RELEASE_CHANNEL=prod` in `.env`),
+  with a candidate newer than the running version published: the watch logs `no release newer than …` (a candidate is not
+  offered); with a newer final tag it arms that one. Restore `rc`.
+- [ ] `RELEASE_CHANNEL=beta` in `.env` → the watch logs `RELEASE_CHANNEL … must be prod or rc` and fails (`failed_state 1`);
+  restore it.
+
+### 9.11 Scheduling
+
+Needs a release armed (`vA`) and no schedule. Use a slot more than 10 minutes ahead; the VM clock must be right (« How to
+read and record »). Paris time everywhere.
+
+- [ ] *(5 minutes ahead, with notice)* *(admin)* `ssh -t … sudo manuspectrum-update --at "<now+12 min, YYYY-MM-DD HH:MM>" vA`,
+  `yes` → `Scheduled vA for … Paris`; mail `vA scheduled for … by <account>`; `--status` shows `scheduled: vA at …`,
+  `notice id: <n>` and a `timer next elapse`; `systemctl list-timers manuspectrum-update-at.timer` shows the slot;
+  `/etc/systemd/system/manuspectrum-update-at.timer.d/slot.conf` exists; the admin « Site announcements » lists a
+  Maintenance announcement from the slot to the end of the window.
+  - At the slot: the update runs (`journalctl -u 'manuspectrum-update@*' -f`); the announcement ends when it finishes;
+    `scheduled: none`, the drop-in is gone, `systemctl is-active manuspectrum-update-at.timer` → `inactive`; mail `vA installed`.
+    During the restart `curl -sk -o /dev/null -w '%{http_code}\n' https://<host>/` answers `502`/`503`, with the site error page
+    holding the announcement box.
+- [ ] *(cancelled)* Schedule another slot, then `sudo manuspectrum-update --cancel` → `The schedule of … is cancelled.`; the timer
+  is stopped, the drop-in removed, the announcement deleted, mail `schedule of … cancelled`. At the old slot nothing runs.
+  `--cancel` again → `Nothing is scheduled.`
+- [ ] *(missed)* Schedule a slot 15 minutes ahead, then `virsh shutdown` the VM before it, wait past the slot plus 20 minutes,
+  `virsh start`. After boot (and the watch's `Persistent` run): nothing installs at boot; `journalctl -u manuspectrum-watch -o cat`
+  → `scheduled update of … missed`; `--status` → `OUTCOME=missed`; mail `scheduled update of … missed`; the announcement is
+  withdrawn; `ReleaseScheduleFailed` fires. `sudo manuspectrum-update --cancel` → `Acknowledged: the missed schedule … is
+  cleared.`; the alert clears at the next watch.
+- [ ] *(refused at the slot)* Schedule a slot 12 minutes ahead, then make the worktree dirty (`git add -N` a new file). At the slot:
+  the unit exits 1; `--status` → `OUTCOME=refused REASON=drift`, the announcement withdrawn, mail `scheduled update of … refused:
+  drift`, nothing changed. Acknowledge with `--cancel`.
+- [ ] *(a newer release during a schedule)* Schedule `vA`, publish `vB` and run the watch: mail `vB available while vA is
+  scheduled`; `--status` shows `a newer release (vB) is held back`; `armed:` still `vA`. After `vA` installs, the next watch arms `vB`
+  and mails.
+- [ ] *(`--at` refusals)* Each answers a refusal and leaves no schedule (`--status` → `scheduled: none`):
+  - `--at "2027-03-28 02:30" vA` → `does not exist in Paris (clocks go forward)`;
+  - `--at "2027-10-31 02:30" vA` → `occurs twice in Paris (clocks go back)`;
+  - a past time, or one less than 10 minutes ahead → `at least 10 minutes ahead`; more than 30 days → `at most 30 days ahead`;
+  - a slot within the reboot window of the host (`grep Automatic-Reboot /etc/apt/apt.conf.d/50unattended-upgrades`, 60 minutes
+    before to 15 after the reboot time) → `within the automatic reboot window of this host`;
+  - `--window 1m` → `--window must be between 5m and 4h`;
+  - a slot at 02:10 (not a DST night) → accepted after the check, with the `warning:  02:00-03:00 Paris is when the nightly backup
+    runs` line before the confirmation; answer anything but `yes`, then `--status` → `scheduled: none`.
+- [ ] *(`--now` while scheduled)* With a schedule open, `--now vA` → `an update is already scheduled … cancel it first`.
+- [ ] *(`--no-notice`)* A schedule with `--no-notice` shows `notice id: none` and creates no announcement.
+
+### 9.12 Mail when the stack is down
+
+- [ ] *(service account)* `make -C deploy down`, then *(admin)* `sudo systemctl start manuspectrum-watch` with a release to arm
+  (or `sudo manuspectrum-update --cancel` after a schedule): the host's own mail service still delivers the mail
+  (`mailq` empty, the message in the catcher). `make -C deploy up` afterwards.
+- [ ] *(failed rollback)* Start `--now` on an armed tag. When the log shows `step 10`, make the rollback's own start fail by
+  stopping Docker (`sudo systemctl stop docker.socket docker`).
+  - Expected: the update ends with exit status 4 and `ROLLBACK FAILED`; mail `vA ROLLBACK FAILED`, delivered although the stack is
+    down, with the restore commands; `--status` prints the `ROLLBACK FAILED` block and `inflight:`;
+    `manuspectrum_release_rollback_failed 1` in the release metrics file (no alert reads it: only the mail and `--status`
+    announce a failed rollback). A new `--now` refuses until `sudo rm /var/lib/manuspectrum/release/inflight`.
+  - Start Docker and the stack again (`make -C deploy up`), remove the file, and check that `ROLLBACK_FAILED` returns to 0 after
+    the next successful update.
+
+### 9.13 What cannot be tested in rehearsal
+
+The real production channel (`prod`) against the final tags of `main`; the real mail relay's delivery to the operators
+(SPF, DMARC); the real unattended reboot hour of production; a security release judged by the technical lead.
+
+### 9.14 Before production (updates)
+
+- [ ] `env_release_channel: "prod"` in the production inventory and `release_operators` lists exactly the people who may
+  install.
+- [ ] The GHCR package is public (`docker logout ghcr.io; docker pull ghcr.io/crc-centre-recherche-conservation/manuspectrum:<tag>`
+  works anonymously) and the branch protection requires `conclusion` and `gitleaks` (`RELEASES.md`).
+- [ ] `ALERT_EMAILS` reaches the operators (`make -C deploy alert-test`) and one `[ManuSpectrum][Release]` mail was received.
+- [ ] The first real update is scheduled for 23:00, not at 02:00-03:00.
+
+---
 
 ---
 

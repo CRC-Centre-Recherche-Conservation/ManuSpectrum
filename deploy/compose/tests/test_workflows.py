@@ -346,5 +346,41 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(f"cosign:{version}@sha256:", script)
 
 
+class RequiredChecksTests(unittest.TestCase):
+    """The checks RELEASES.md tells to require are jobs that run on every pull request."""
+
+    @staticmethod
+    def documented():
+        text = (ROOT / "deploy" / "RELEASES.md").read_text()
+        match = re.search(
+            r"^- When branch protection requires status checks, (.+?)(?=\n- |\n\n)",
+            text,
+            re.S | re.M,
+        )
+        assert match, "RELEASES.md no longer names the required checks"
+        return re.findall(r"`([\w-]+)`", match[1].split("The jobs of")[0])
+
+    def test_the_documented_checks_are_jobs_of_workflows_without_a_paths_filter(self):
+        runs_everywhere = set()
+        for path in project_workflows():
+            workflow = yaml.safe_load(path.read_text())
+            pull = triggers(workflow) or {}
+            if not isinstance(pull, dict) or "pull_request" not in pull:
+                continue
+            filters = pull["pull_request"] or {}
+            if "paths" in filters or "paths-ignore" in filters:
+                continue
+            runs_everywhere |= set(workflow["jobs"])
+        named = self.documented()
+        self.assertEqual(sorted(named), ["conclusion", "gitleaks"])
+        self.assertEqual([c for c in named if c not in runs_everywhere], [])
+
+    def test_the_tag_checklist_repeats_the_required_checks(self):
+        text = (ROOT / "deploy" / "RELEASES.md").read_text()
+        checklist = text.split("## Before pushing a tag (checklist)")[1]
+        for check in self.documented():
+            self.assertIn(f"`{check}`", checklist)
+
+
 if __name__ == "__main__":
     unittest.main()

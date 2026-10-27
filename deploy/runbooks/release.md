@@ -2,7 +2,7 @@
 
 Alerts of the monitoring stack that point here. Each section has the same five parts. Commands run on the host as an operator of the `manuspectrum-ops` group; the update commands go through `sudo`. How alerts reach people, and how to open Grafana, is in `deploy/OBSERVABILITY.md`; the release procedure is in `deploy/RELEASES.md`.
 
-Outbound hosts of the release watch (HTTPS, port 443), checked at installation: `github.com`, `ghcr.io`, `pkg-containers.githubusercontent.com`, `tuf-repo-cdn.sigstore.dev`, `rekor.sigstore.dev`. A refused connection to one of them fails the matching step of `ReleaseWatchFailing` (`git`: github.com; `registry`: ghcr.io and pkg-containers.githubusercontent.com; `sigstore`: the two sigstore hosts).
+Outbound hosts of the release watch and update (HTTPS, port 443): `github.com`, `ghcr.io`, `pkg-containers.githubusercontent.com` (image layers), `tuf-repo-cdn.sigstore.dev`, `rekor.sigstore.dev`. Each watch run probes `https://github.com/` (step `git`), `https://ghcr.io/v2/`, which must answer 401 (step `registry`), and `https://tuf-repo-cdn.sigstore.dev/` (step `sigstore`); a blocked layer or Rekor host shows as a failed pull or verification.
 
 `sudo manuspectrum-update --status` prints the current release, the armed one, how long it has waited, the schedule and the last rollback; start every diagnosis with it.
 
@@ -124,7 +124,7 @@ A release is armed and nobody installed it: more than 30 days, or more than 14 d
 
 ### Remediation
 
-Install it (`sudo manuspectrum-update <TAG>`) or schedule it (`sudo manuspectrum-update --at "YYYY-MM-DD HH:MM" <TAG>`). If the release was judged unfit, a newer tag replaces it when published. The alert clears once the release is installed.
+Install it (`sudo manuspectrum-update --now <TAG>`) or schedule it (`sudo manuspectrum-update --at "YYYY-MM-DD HH:MM" <TAG>`). If the release was judged unfit, a newer tag replaces it when published. The alert clears once the release is installed.
 
 ### Escalation
 
@@ -140,7 +140,7 @@ SSH access to the host as an operator (`manuspectrum-ops`). RELEASES.md.
 
 ### Symptom
 
-At the slot the update did not run. Refused: a pre-check failed (dirty worktree, free space, a newer release, a reboot window; the reason is in the mail). Missed: the host was off or the watch noticed the slot had passed more than 15 minutes ago; a missed slot is never run afterwards. Nothing was installed and the site notice, if any, was withdrawn.
+At the slot the update did not run. Refused: a check failed at the slot (worktree or image drift, tag or registry digest moved, new `.env` keys, managed files changed, signature, pre-update backup, lock; the reason is in the mail and in `--status`). Missed: the host was off or the watch noticed the slot had passed more than 15 minutes ago; a missed slot is never run afterwards. Nothing was installed and the site notice, if any, was withdrawn.
 
 ### Diagnosis
 
