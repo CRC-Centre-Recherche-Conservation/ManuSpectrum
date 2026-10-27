@@ -3,10 +3,12 @@
 # arbitrary uid on a read-only root, ships no build tool and no development
 # file, and raises no warning in `check --deploy --tag security` (the command
 # the entrypoint runs before web and init).
-# Usage: probe-image.sh IMAGE
+# Usage: probe-image.sh IMAGE [REVISION]
+# With REVISION, the image must carry it as org.opencontainers.image.revision.
 set -euo pipefail
 
 IMAGE="${1:?usage: probe-image.sh IMAGE}"
+REVISION="${2:-}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -19,6 +21,12 @@ run() {
 [ "$(docker image inspect --format '{{.Config.User}}' "$IMAGE")" = "10001:10001" ] \
   || fail "default user is not 10001:10001"
 ok "default user 10001:10001"
+
+if [ -n "$REVISION" ]; then
+  label="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMAGE")"
+  [ "$label" = "$REVISION" ] || fail "revision label is '$label', expected '$REVISION'"
+  ok "revision label $REVISION"
+fi
 
 run python -c 'import django; django.setup()' || fail "django.setup() under uid 4242 on a read-only root"
 ok "Django starts under an arbitrary uid on a read-only root"
