@@ -1,0 +1,9 @@
+---
+- name: Prepare the application host
+  ansible.builtin.include_tasks: prepare.yml
+
+- name: Check the prerequisites of the stack
+  ansible.builtin.include_tasks: gates.yml
+
+- name: Start the stack and enable the timers
+  ansible.builtin.include_tasks: start.yml

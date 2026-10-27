@@ -1,0 +1,13 @@
+---
+- name: Install and verify a ManuSpectrum host
+  hosts: all
+  become: true
+  roles:
+    - role: preflight
+      tags: [preflight]
+    - role: baseline
+      tags: [baseline]
+    - role: host
+      tags: [host]
+    - role: app
+      tags: [app]

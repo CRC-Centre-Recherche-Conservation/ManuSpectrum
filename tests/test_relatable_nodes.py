@@ -13,13 +13,17 @@ import uuid
 
 from django.contrib.auth.models import Group, User
 from django.db import connection
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from arches.app.models import models
 
-from manuspectrum.views.graph_nodes import CONFIG_GROUPS, RelatableNodesView
+from manuspectrum.views.graph_nodes import (
+    RelatableNodesView,
+    localized,
+    target_graphids,
+)
 
 
 def _graph(slug, name):
@@ -52,6 +56,30 @@ def _node(graph, nodegroup, alias, datatype, config=None):
     )
 
 
+class HelperTests(SimpleTestCase):
+    def test_localized_falls_back_to_any_other_language(self):
+        self.assertEqual(localized({"de": "Name"}, "fr"), "Name")
+
+    def test_localized_reads_nothing_from_an_empty_or_odd_value(self):
+        self.assertEqual(localized({"fr": ""}, "fr"), "")
+        self.assertEqual(localized(None, "fr"), "")
+
+    def test_target_graphids_skips_malformed_ids_and_dedupes_casings(self):
+        graphid = uuid.uuid4()
+        node = models.Node(
+            config={
+                "graphs": [
+                    {"graphid": str(graphid).upper()},
+                    {"graphid": "not-a-uuid"},
+                    "bare string",
+                    {"graphid": str(graphid)},
+                ]
+            }
+        )
+
+        self.assertEqual(target_graphids(node), [str(graphid)])
+
+
 class RelatableNodesFixtureTests(TestCase):
     """The payload, on graphs built here rather than loaded from a package."""
 
@@ -59,10 +87,6 @@ class RelatableNodesFixtureTests(TestCase):
     def setUpTestData(cls):
         cls.editor = User.objects.create_user("rn_editor", password="pw")
         cls.editor.groups.add(Group.objects.get_or_create(name="Graph Editor")[0])
-        cls.admin = User.objects.create_user("rn_admin", password="pw")
-        cls.admin.groups.add(
-            Group.objects.get_or_create(name="Application Administrator")[0]
-        )
         cls.outsider = User.objects.create_user("rn_outsider", password="pw")
         cls.outsider.groups.add(Group.objects.get_or_create(name="Guest")[0])
 
@@ -227,19 +251,19 @@ class RelatableNodesFixtureTests(TestCase):
         response = self.client.get(reverse("relatable-nodes", args=[uuid.uuid4()]))
         self.assertEqual(response.status_code, 404)
 
-    def test_administrators_may_read_it_too(self):
-        self.client.logout()
-        self.client.force_login(self.admin)
-        self.assertEqual(self.client.get(self.url).status_code, 200)
+    def test_an_administrator_alone_is_refused(self):
+        for name in ("Application Administrator", "System Administrator"):
+            admin = User.objects.create_user(f"rn_{name}", password="pw")
+            admin.groups.add(Group.objects.get_or_create(name=name)[0])
+            self.client.logout()
+            self.client.force_login(admin)
+            with self.subTest(group=name):
+                self.assertEqual(self.client.get(self.url).status_code, 403)
 
     def test_rejects_a_member_of_no_configuration_group(self):
         self.client.logout()
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(self.url).status_code, 403)
-
-    def test_the_configuration_groups_never_include_an_anonymous_group(self):
-        self.assertNotIn("Guest", CONFIG_GROUPS)
-        self.assertNotIn("Resource Exporter", CONFIG_GROUPS)
 
     def test_rejects_anonymous_callers(self):
         self.client.logout()

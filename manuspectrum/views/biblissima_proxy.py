@@ -125,7 +125,6 @@ from manuspectrum.utils.http import (
     get_user_agent,
     safe_fetch,
 )
-from manuspectrum.views.permissions import EDITOR_GROUPS
 
 logger = logging.getLogger(__name__)
 
@@ -1707,7 +1706,9 @@ def _build_suggestions(folded, lang, type_qid, limit, deadline):
     }
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaSuggestView(View):
     """Proxy for Biblissima Wikibase entity search (autocomplete).
 
@@ -1777,7 +1778,9 @@ class BiblissimaSuggestView(View):
         return response
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaEntityView(View):
     """Proxy for fetching a single Wikibase entity with extracted properties.
 
@@ -1840,7 +1843,9 @@ class BiblissimaEntityView(View):
         return _budgeted_answer(entity, budget)
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaSearchManuscriptsView(View):
     """Search manuscripts on Biblissima with full batch enrichment.
 
@@ -2449,7 +2454,9 @@ def _write_deadline_error(budget, exc):
     return None
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaSearchView(View):
     """Search Biblissima via IIIF manifest by iconographic descriptors.
 
@@ -2544,7 +2551,9 @@ class BiblissimaSearchView(View):
         )
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaCheckDuplicatesView(View):
     """Find potential duplicate resources in Arches using flexible matching.
 
@@ -3032,7 +3041,9 @@ _DEFAULT_ILLUMINATIONS_PAGE_SIZE = 20
 _MAX_ILLUMINATIONS_PAGE_SIZE = 200
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaManuscriptIlluminationsView(View):
     """Scrape Biblissima portal page for a manuscript to list its illuminations.
 
@@ -3258,7 +3269,9 @@ def _iiif_thumbnail_from_service(service_id, width=200):
     return f"{service_id.rstrip('/')}/full/{width},/0/default.jpg"
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaIlluminationDetailView(View):
     """Scrape a single illumination page from the Biblissima portal.
 
@@ -3544,7 +3557,9 @@ class BiblissimaIlluminationDetailView(View):
         return _budgeted_answer(result, budget)
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaCreateResourceView(View):
     """Create one Arches resource per POST — the only write-path view.
 
@@ -3592,7 +3607,7 @@ class BiblissimaCreateResourceView(View):
     ``Tile.save()`` without a user, so provisional edits do not apply there
     either; ``_attribute_tile_save`` then names the requesting user on the
     edit-log rows those saves wrote. The endpoints are restricted to
-    ``EDITOR_GROUPS``.
+    the group « Resource Editor ».
     """
 
     # Graph ID mapping for all supported resource types
@@ -5781,7 +5796,9 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         return JsonResponse({"results": results})
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaAddAltNameView(View):
     """Add a Biblissima label as alternative name to an existing resource.
 
@@ -5877,7 +5894,9 @@ class BiblissimaAddAltNameView(View):
         )
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaStatsView(View):
     """Debug/admin tool exposing outbound Biblissima traffic counters.
 
@@ -5910,7 +5929,9 @@ class BiblissimaStatsView(View):
         return JsonResponse(stats)
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaLinkToProjectView(View):
     """Idempotently link an existing resource to a Project's studied objects.
 

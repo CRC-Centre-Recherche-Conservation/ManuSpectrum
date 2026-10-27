@@ -1,0 +1,12 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  listen: reload systemd
+
+- name: Remind to silence the alerts of a fresh installation
+  ansible.builtin.debug:
+    msg: >-
+      First installation: run "make -C deploy silence-fresh-install" now. The alerts a new host raises
+      before its first backup, restore test and timers are expected for 48 hours.
+  listen: remind to silence a fresh installation

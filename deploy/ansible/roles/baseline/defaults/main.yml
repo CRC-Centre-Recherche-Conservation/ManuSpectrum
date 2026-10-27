@@ -1,0 +1,4 @@
+---
+# Fingerprint of the key that signs the Docker apt repository, as published in
+# Docker's installation guide. Apply refuses a key that does not carry it.
+baseline_docker_key_fingerprint: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88

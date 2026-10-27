@@ -55,3 +55,7 @@ deploy/compose/.smoke-state
 *.age
 age-recipients.txt
 **/sops/age/keys.txt
+
+# Ansible: real inventories stay on the administrator's laptop (deploy/ansible/README.md)
+deploy/ansible/inventories/*
+!deploy/ansible/inventories/example/

@@ -352,6 +352,8 @@ cat <<NEXT
 
 VM installed, snapshot "installed" taken. Next (paths from any directory):
   ssh-keygen -R ${VM_IP}   # if an earlier VM had this address
-  scp ${HERE}/host-baseline.sh ${HERE}/verify-baseline.sh ${env_file} ${ADMIN_USER}@${VM_IP}:
-  ssh -t ${ADMIN_USER}@${VM_IP} 'sudo ./host-baseline.sh && sudo ./verify-baseline.sh'
+  scp ${HERE}/host-baseline.sh ${env_file} ${ADMIN_USER}@${VM_IP}:
+  ssh -t ${ADMIN_USER}@${VM_IP} 'sudo ./host-baseline.sh'
+  # then, from the laptop: baseline_mode: verify in your inventory (deploy/ansible/README.md)
+  #   cd deploy/ansible && ansible-playbook -i inventories/<rehearsal> site.yml --ask-become-pass --tags preflight,baseline
 NEXT

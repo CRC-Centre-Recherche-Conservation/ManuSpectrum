@@ -111,6 +111,9 @@ COPY deploy/docker/gunicorn.conf.py /app/gunicorn.conf.py
 COPY --chmod=0755 deploy/docker/entrypoint.sh /usr/local/bin/entrypoint
 COPY --chmod=0755 deploy/docker/publish-static.sh /usr/local/bin/publish-static
 RUN ln -s /tmp/frontend_configuration /app/frontend_configuration
+# Last, so a new commit changes metadata only and keeps every layer above cached.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
 USER 10001:10001
 WORKDIR /app
 EXPOSE 8000

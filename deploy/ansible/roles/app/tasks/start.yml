@@ -1,0 +1,90 @@
+---
+# monitoring-init is idempotent (starts postgres if needed, creates or updates
+# the ms_monitor role); it reports no change. It never starts the monitoring
+# services themselves: `make up` does with the observability profile, and this
+# role never runs observability-on.
+- name: Start the monitoring prerequisites
+  ansible.builtin.command: make --no-print-directory -C {{ (app_dir ~ '/deploy') | quote }} monitoring-init
+  become: true
+  become_user: "{{ service_user }}"
+  changed_when: false
+  when: "'observability' in (env_compose_profiles | split(','))"
+
+- name: Start or update the stack
+  ansible.builtin.command: make --no-print-directory -C {{ (app_dir ~ '/deploy') | quote }} up
+  become: true
+  become_user: "{{ service_user }}"
+  register: app_up
+  changed_when: (app_up.stdout ~ app_up.stderr) is search('Container \S+\s+(Created|Recreated|Started)\s*$', multiline=True)
+
+- name: List the published container ports
+  ansible.builtin.command: docker ps --format '{% raw %}{{.Ports}}{% endraw %}'
+  become: true
+  become_user: "{{ service_user }}"
+  register: app_ports
+  changed_when: false
+  check_mode: false
+
+- name: Assert only the web ports are published on every interface
+  ansible.builtin.assert:
+    that:
+      - app_published_hosts | difference(app_allowed_hosts) | length == 0
+    quiet: true
+    fail_msg: >-
+      A container publishes a port besides {{ env_http_port }} and {{ env_https_port }}:
+      {{ app_published_hosts | difference(app_allowed_hosts) | join(', ') }}. Only nginx is published
+      (Grafana stays on 127.0.0.1:3000); fix the Compose files.
+  vars:
+    app_published_hosts: >-
+      {{ app_ports.stdout_lines | map('split', ', ') | flatten | select('search', '->')
+      | map('regex_replace', '->.*$', '') | unique | list }}
+    app_allowed_hosts:
+      - "0.0.0.0:{{ env_http_port }}"
+      - "0.0.0.0:{{ env_https_port }}"
+      - "[::]:{{ env_http_port }}"
+      - "[::]:{{ env_https_port }}"
+      - "127.0.0.1:3000"
+
+- name: Find the web container
+  ansible.builtin.command: >-
+    docker ps --quiet --filter status=running
+    --filter label=com.docker.compose.project={{ app_compose_project }}
+    --filter label=com.docker.compose.service=web
+  become: true
+  become_user: "{{ service_user }}"
+  register: app_web_container
+  changed_when: false
+  check_mode: false
+
+- name: Ask the application whether it is ready
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ app_web_container.stdout_lines[0] }}"
+      - curl
+      - -s
+      - -o
+      - /dev/null
+      - -w
+      - "%{http_code}"
+      - -H
+      - "Host: web"
+      - http://127.0.0.1:8000/readyz
+  become: true
+  become_user: "{{ service_user }}"
+  register: app_readyz
+  changed_when: false
+  failed_when: app_readyz.stdout != '200'
+  check_mode: false
+  retries: 12
+  delay: 5
+  until: app_readyz.stdout == '200'
+
+- name: Enable the timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ app_timer_names + (app_acme_timer_names if env_cert_mode == 'acme' else []) }}"
+  notify: remind to silence a fresh installation

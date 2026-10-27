@@ -39,7 +39,6 @@ from manuspectrum.functions.resource_summary import (
     normalize_config,
 )
 from manuspectrum.utils.cache import if_match_allows
-from manuspectrum.views.graph_nodes import CONFIG_GROUPS
 
 
 def config_etag(attachment):
@@ -54,7 +53,7 @@ def config_etag(attachment):
     return f'"{digest}"'
 
 
-@method_decorator(group_required(*CONFIG_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(group_required("Graph Editor", raise_exception=True), name="dispatch")
 class SummaryConfigView(View):
     """``GET|PUT|DELETE /<lang>/api/summary-config/<graphid>``.
 
