@@ -2,12 +2,13 @@
 
 import json
 
-from django.contrib.auth.hashers import make_password
+from django.conf import global_settings, settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.password_validation import password_validators_help_texts
-from django.test import Client, SimpleTestCase, TestCase
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -35,6 +36,18 @@ class PasswordHashingTests(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.password.startswith("argon2$"), user.password[:12])
         self.assertTrue(user.check_password(OLD_PASSWORD))
+
+    def test_argon2_is_first_and_pbkdf2_stays_in_the_list(self):
+        hashers = settings.PASSWORD_HASHERS
+        self.assertEqual(hashers[0], "django.contrib.auth.hashers.Argon2PasswordHasher")
+        self.assertIn("django.contrib.auth.hashers.PBKDF2PasswordHasher", hashers)
+
+    def test_an_argon2_hash_verifies_under_djangos_default_hashers(self):
+        encoded = make_password(STRONG)
+        self.assertTrue(encoded.startswith("argon2$"), encoded[:12])
+        with override_settings(PASSWORD_HASHERS=global_settings.PASSWORD_HASHERS):
+            self.assertTrue(check_password(STRONG, encoded))
+            self.assertFalse(check_password(OLD_PASSWORD, encoded))
 
 
 class PasswordRulesTests(TestCase):
