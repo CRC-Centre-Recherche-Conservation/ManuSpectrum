@@ -51,6 +51,7 @@ class Command(BaseCommand):
         prefix = "" if apply else "would be "
         for label, ids in (
             ("noticed", report.noticed),
+            ("undelivered (will be retried)", report.undelivered),
             ("cleaned" if apply else "cleaned (see below)", report.cleaned),
             ("cleaned with resources kept", report.kept_resources),
             ("failed", report.failed),

@@ -21,8 +21,9 @@
 # restore the dump, flush the Redis caches and the Celery queues, move the
 # contents of uploadedfiles/ aside (never deleted) and put the new ones there as
 # APP_UID:APP_GID, clear the Cantaloupe cache and recreate Cantaloupe, migrate,
-# replace the admin password, refresh the map geometries, reindex
-# Elasticsearch, compare the counts with the manifest (load), start the stack,
+# void the pending notices of the daily passes, replace the admin password,
+# refresh the map geometries, reindex Elasticsearch, compare the counts with
+# the manifest (load), start the stack,
 # smoke test it, check that Cantaloupe sees the new uploads, write
 # <aside>/.complete and keep the two newest complete aside directories.
 #
@@ -56,7 +57,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 REHEARSAL_MARKER=/etc/manuspectrum/rehearsal-host
 if [ "${MS_TEST_MODE:-}" = 1 ]; then REHEARSAL_MARKER="${MS_REHEARSAL_MARKER:-$REHEARSAL_MARKER}"; fi
 ASIDE_NAME_RE='^previous-[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9]{6}$'
-TOTAL=14
+TOTAL=15
 KEEP_ASIDE=2
 LOG_NAME=load-snapshot
 ASIDE_DUMP=rehearsal-before.dump
@@ -150,6 +151,15 @@ verify_source() {
       [ "$actual" = "$expected" ] || die "sha256 mismatch for $f (manifest $expected, file $actual): copy the snapshot again"
     done
     log "checksums match"
+    local cited missing
+    cited="$(manifest_value uploaded_files/cited 2>/dev/null || true)"
+    missing="$(manifest_value uploaded_files/missing 2>/dev/null || true)"
+    if [ -n "$cited" ] && [ -n "$missing" ]; then
+      log "uploaded files: $cited cited by the snapshot's database, $missing missing from media.tar (counted by make-dev-snapshot.sh)"
+      [ "$missing" = 0 ] || log "WARNING: $missing uploaded files are missing: the rehearsal shows them as broken images and failed downloads"
+    else
+      log "uploaded files: not counted in this manifest (made before make-dev-snapshot.sh counted them)"
+    fi
 
     step 2 "checking the media archive: only uploadedfiles/, no parent path, no link"
     local bad links

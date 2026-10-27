@@ -162,7 +162,7 @@ No notice or "now public" mail went out; the Embargoes panel of the Activity das
 
 ### Diagnosis
 
-`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.embargo_pass` (scheduled at 06:00 Europe/Paris, entry `embargo-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails.
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.embargo_pass` (scheduled at 06:00 Europe/Paris, entry `embargo-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails. Beat does not catch up a run that fell due more than two hours ago (`CELERY_BEAT_CRON_STARTING_DEADLINE`), and a message of the pass left in the queue for more than two hours expires (worker log `Discarding revoked task`): after a stop over the scheduled hour nothing runs at start, the next night runs it at its normal hour, and the rule (two days and three hours) tolerates that one skipped night.
 
 ### Remediation
 
@@ -188,7 +188,7 @@ No "Unfinished workflow" mail went out; the Workflows panel of the Activity dash
 
 ### Diagnosis
 
-`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.workflow_cleanup_pass` (scheduled at 03:30 Europe/Paris, entry `workflow-cleanup-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails.
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.workflow_cleanup_pass` (scheduled at 03:30 Europe/Paris, entry `workflow-cleanup-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails. Beat does not catch up a run that fell due more than two hours ago (`CELERY_BEAT_CRON_STARTING_DEADLINE`), and a message of the pass left in the queue for more than two hours expires (worker log `Discarding revoked task`): after a stop over the scheduled hour nothing runs at start, the next night runs it at its normal hour, and the rule (two days and three hours) tolerates that one skipped night.
 
 ### Remediation
 
@@ -214,7 +214,7 @@ No "Your account will be anonymised" mail went out; the administrators received 
 
 ### Diagnosis
 
-`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.account_retention_pass` (scheduled at 04:30 Europe/Paris, entry `account-retention-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails.
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.account_retention_pass` (scheduled at 04:30 Europe/Paris, entry `account-retention-pass`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails. Beat does not catch up a run that fell due more than two hours ago (`CELERY_BEAT_CRON_STARTING_DEADLINE`), and a message of the pass left in the queue for more than two hours expires (worker log `Discarding revoked task`): after a stop over the scheduled hour nothing runs at start, the next night runs it at its normal hour, and the rule (two days and three hours) tolerates that one skipped night.
 
 ### Remediation
 

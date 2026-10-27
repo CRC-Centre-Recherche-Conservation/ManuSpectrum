@@ -519,6 +519,14 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_SEARCH_EXPORT_EXPIRES = 24 * 3600  # seconds
 CELERY_SEARCH_EXPORT_CHECK = 3600  # seconds
 
+# The daily passes below mail people and change their data: they run only at
+# their hour. Beat skips any crontab entry (every crontab of this schedule, not
+# only the passes) that fell due more than this many seconds ago (after a stop,
+# a restore) instead of catching it up at start, and each pass's message expires
+# as long after it was sent, so a worker that was down discards it; the next
+# night runs it at its normal hour.
+CELERY_BEAT_CRON_STARTING_DEADLINE = 2 * 3600
+
 CELERY_BEAT_SCHEDULE = {
     "delete-expired-search-export": {
         "task": "arches.app.tasks.delete_file",
@@ -539,18 +547,21 @@ CELERY_BEAT_SCHEDULE = {
     "embargo-pass": {
         "task": "manuspectrum.embargo_pass",
         "schedule": crontab(hour=6, minute=0),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
     # Notices and cleanup of abandoned workflow runs at 03:30 Europe/Paris
     # (accounts/workflows.py).
     "workflow-cleanup-pass": {
         "task": "manuspectrum.workflow_cleanup_pass",
         "schedule": crontab(hour=3, minute=30),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
     # Notices and anonymisation of long-inactive accounts at 04:30 Europe/Paris
     # (accounts/retention.py).
     "account-retention-pass": {
         "task": "manuspectrum.account_retention_pass",
         "schedule": crontab(hour=4, minute=30),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
     # Login records older than LOGIN_RECORDS_RETENTION_DAYS.
     "prune-login-records": {
@@ -635,8 +646,7 @@ RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
 # Upper bound of the relations Arches loads at once (paginate=false): the related
 # resources graph, « load all » on a report and the report API's summary. Arches'
 # default (10000) freezes the graph's browser tab on a resource with ~1650 relations;
-# 500 kept it responsive on the rehearsal VM. A report whose summary was cut pages
-# its related resources (media/js/models/report.js).
+# 500 kept it responsive on the rehearsal VM.
 RELATED_RESOURCES_EXPORT_LIMIT = 500
 
 # Dictionary containing any additional context items for customising email templates

@@ -16,7 +16,8 @@ the exception class, never an address, a name or a link.
 Context per kind (`resources` and `kept` are lists of `{"name", "url"}`,
 `url` optional and absolute):
 
-- `embargo_notice`: `resources`, `ends_on` (date), `days` (days left).
+- `embargo_notice`: `resources`, `ends_on` (date), `days` (days left), `moved`
+  (optional, True when the daily pass moved the end so the notice gives `days`).
 - `embargo_lifted`: `resources`.
 - `workflow_notice`: `workflow` (label), `cleanup_on` (date), `days`, `resources`.
 - `workflow_cleaned`: `workflow`, `deleted`, `kept`.
@@ -96,6 +97,17 @@ def _embargo_notice(ctx):
                 "and the data become visible to everyone."
             )
             % {"date": _day(ctx["ends_on"]), "when": _when(ctx["days"])},
+            *(
+                [
+                    _(
+                        "This end date was moved: the restriction was due to end "
+                        "sooner, before this notice could reach you, and it is "
+                        "never lifted without this much warning."
+                    )
+                ]
+                if ctx.get("moved")
+                else []
+            ),
             _(
                 "If it must last longer, ask an administrator to extend it before "
                 "that date, by replying to the contact address below."
@@ -404,6 +416,14 @@ def _skip(kind):
         kind=metrics.bounded(kind, metrics.ACCOUNT_MAIL_KINDS), outcome=SKIPPED
     ).inc()
     return SKIPPED
+
+
+def count_failure(kind):
+    """Count a notice that raised before it could be sent; returns `failed`."""
+    metrics.ACCOUNT_MAILS.labels(
+        kind=metrics.bounded(kind, metrics.ACCOUNT_MAIL_KINDS), outcome=FAILED
+    ).inc()
+    return FAILED
 
 
 def send_account_mail(user, kind, context, *, allow_inactive=False):

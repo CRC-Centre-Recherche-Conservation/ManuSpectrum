@@ -36,9 +36,11 @@ files = {}
 for name in ("db.dump", "media.tar"):
     data = open(os.path.join(d, name), "rb").read()
     files[name] = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
-json.dump({"counts": {"resource_instances": 7, "tiles": 9}, "arches_version": arches,
-           "migrations": json.loads(migrations), "files": files},
-          open(os.path.join(d, "manifest.json"), "w"))
+manifest = {"counts": {"resource_instances": 7, "tiles": 9}, "arches_version": arches,
+            "migrations": json.loads(migrations), "files": files}
+if os.environ.get("SNAP_MISSING"):
+    manifest["uploaded_files"] = {"cited": 40, "missing": int(os.environ["SNAP_MISSING"])}
+json.dump(manifest, open(os.path.join(d, "manifest.json"), "w"))
 PY
 }
 make_snap "$TMP/snap" "$TMP/src"
@@ -86,6 +88,7 @@ case "$*" in
     echo 'pg_restore: error: could not execute query: ERROR:  must be owner of extension postgis' >&2
     echo 'pg_restore: warning: errors ignored on restore: 1' >&2
     exit 1 ;;
+  *"UPDATE ms_workflow_cleanup"*) [ -z "${STUB_VOID_FAIL:-}" ] || exit 1 ;;
   *"FROM resource_instances"*) echo "${STUB_RESOURCES:-7}" ;;
   *"FROM tiles"*) echo 9 ;;
 esac
@@ -297,10 +300,31 @@ for mode in foo mixed prefix; do
   assert "an unknown extension error ($mode) stops before migrate" $?
 done
 
+SNAP_MISSING=3 make_snap "$TMP/snap-counted" "$TMP/src"
+SNAP_DIR="$TMP/snap-counted"
+reset_media
+run_load CONFIRM=yes && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q "uploaded files: 40 cited by the snapshot's database, 3 missing from media.tar" "$TMP/out" \
+  && grep -q "WARNING: 3 uploaded files are missing" "$TMP/out"
+assert "the file counts of the manifest are printed, a missing count with a warning" $?
+SNAP_DIR="$TMP/snap"
+
 reset_media
 inode_before="$(stat -c %i "$TMP/media/uploadedfiles")"
 run_load CONFIRM=yes && status=0 || status=$?
 assert "happy path exits 0" "$status"
+grep -q "uploaded files: not counted in this manifest" "$TMP/out" && [ "$status" -eq 0 ]
+assert "a manifest without the file counts says so and the load goes on" $?
+
+reset_media
+run_load CONFIRM=yes STUB_VOID_FAIL=1 && void_status=0 || void_status=$?
+[ "$void_status" -ne 0 ] && grep -q "voiding the pending notices failed. The database is already replaced and the stack is stopped: do not start it" "$TMP/out" \
+  && ! grep -q "^make up" "$TMP/calls" && ! grep -q "reindex_database" "$TMP/calls"
+assert "a failed voiding of the notices stops before the stack starts, telling what to do" $?
+reset_media
+inode_before="$(stat -c %i "$TMP/media/uploadedfiles")"
+run_load CONFIRM=yes && status=0 || status=$?
+
 
 expected=(
   "up -d --wait postgres elasticsearch redis-broker redis-cache"
@@ -315,6 +339,7 @@ expected=(
   "--entrypoint sh cantaloupe"
   "up -d --force-recreate cantaloupe"
   "manage migrate"
+  "UPDATE ms_workflow_cleanup SET notices_sent"
   "make admin-password"
   "refresh_geojson_geometries"
   "manage es reindex_database"
@@ -496,6 +521,7 @@ expected_restore=(
   "--entrypoint sh cantaloupe"
   "up -d --force-recreate cantaloupe"
   "manage migrate"
+  "UPDATE ms_workflow_cleanup SET notices_sent"
   "make admin-password"
   "refresh_geojson_geometries"
   "manage es reindex_database"

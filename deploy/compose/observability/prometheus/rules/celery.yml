@@ -87,7 +87,7 @@ groups:
       - alert: EmbargoPassStale
         expr: |
           (
-            time() - max(manuspectrum_embargo_pass_timestamp_seconds) > 2 * 24 * 3600
+            time() - max(manuspectrum_embargo_pass_timestamp_seconds) > 2 * 24 * 3600 + 3 * 3600
             or
             absent_over_time(manuspectrum_embargo_pass_timestamp_seconds[26h])
           )
@@ -103,7 +103,7 @@ groups:
       - alert: WorkflowCleanupStale
         expr: |
           (
-            time() - max(manuspectrum_workflow_cleanup_timestamp_seconds) > 2 * 24 * 3600
+            time() - max(manuspectrum_workflow_cleanup_timestamp_seconds) > 2 * 24 * 3600 + 3 * 3600
             or
             absent_over_time(manuspectrum_workflow_cleanup_timestamp_seconds[26h])
           )
@@ -119,7 +119,7 @@ groups:
       - alert: AccountRetentionStale
         expr: |
           (
-            time() - max(manuspectrum_account_retention_timestamp_seconds) > 2 * 24 * 3600
+            time() - max(manuspectrum_account_retention_timestamp_seconds) > 2 * 24 * 3600 + 3 * 3600
             or
             absent_over_time(manuspectrum_account_retention_timestamp_seconds[26h])
           )

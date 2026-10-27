@@ -651,6 +651,90 @@ class ScheduleTests(PassCase):
         self.assertEqual(settings.WORKFLOW_NOTICE_DAYS, (21, 7))
 
 
+class UndeliveredNoticeTests(PassCase):
+    def test_a_notice_nobody_received_is_not_recorded_and_retried(self):
+        workflow = self.begin(idle=100)
+        made = self.made(workflow, self.creator, idle=100)
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            report = self.go(NOW)
+        self.assertEqual((report.noticed, report.undelivered), ([], [str(workflow)]))
+        self.assertEqual(
+            WorkflowCleanup.objects.get(workflowid=workflow).notices_sent, []
+        )
+        report = self.go(NOW + timedelta(days=1))
+        self.assertEqual(report.noticed, [str(workflow)])
+        self.go(NOW + timedelta(days=7))
+        self.assertTrue(self.exists(made))
+        self.assertEqual(self.go(NOW + timedelta(days=8)).cleaned, [str(workflow)])
+
+    def test_a_notice_with_no_address_to_send_to_is_recorded(self):
+        workflow = self.begin(idle=100)
+        self.made(workflow, self.creator, idle=100)
+        User.objects.filter(pk=self.creator.pk).update(email="")
+        with mock.patch("manuspectrum.accounts.notices.deliver") as deliver:
+            report = self.go(NOW)
+        self.assertEqual((report.noticed, report.undelivered), ([str(workflow)], []))
+        self.assertEqual(
+            len(WorkflowCleanup.objects.get(workflowid=workflow).notices_sent), 2
+        )
+        self.assertEqual(deliver.call_count, len(SUMMARY))
+
+    def test_a_send_that_raises_releases_the_claim(self):
+        workflow = self.begin(idle=100)
+        self.made(workflow, self.creator, idle=100)
+        with mock.patch(
+            "manuspectrum.accounts.notices.send_account_mail",
+            side_effect=RuntimeError("smtp"),
+        ):
+            with self.assertLogs("manuspectrum.accounts.workflows", "ERROR"):
+                report = self.go(NOW)
+        self.assertEqual(report.undelivered, [str(workflow)])
+        self.assertEqual(
+            WorkflowCleanup.objects.get(workflowid=workflow).notices_sent, []
+        )
+
+    def test_the_command_names_the_undelivered_notices_when_applied(self):
+        workflow = self.begin(idle=100)
+        self.made(workflow, self.creator, idle=100)
+        out = io.StringIO()
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            call_command("prune_workflow_history", "--apply", stdout=out)
+        self.assertIn("1 undelivered (will be retried)", out.getvalue())
+        self.assertIn(str(workflow), out.getvalue())
+
+    def test_a_helper_that_raises_releases_only_its_run(self):
+        broken = self.begin(idle=100)
+        broken_made = self.made(broken, self.creator, idle=100)
+        fine = self.begin(idle=100)
+        self.made(fine, self.creator, idle=100)
+        real = workflows._items_by_user
+
+        def items_by_user(created, resource_ids):
+            if str(broken_made.pk) in map(str, resource_ids):
+                raise RuntimeError("query")
+            return real(created, resource_ids)
+
+        with mock.patch.object(workflows, "_items_by_user", side_effect=items_by_user):
+            with self.assertLogs("manuspectrum.accounts.workflows", "ERROR"):
+                report = self.go(NOW)
+        self.assertEqual(
+            (report.noticed, report.undelivered), ([str(fine)], [str(broken)])
+        )
+        self.assertEqual(
+            WorkflowCleanup.objects.get(workflowid=broken).notices_sent, []
+        )
+        self.assertEqual(
+            len(WorkflowCleanup.objects.get(workflowid=fine).notices_sent), 2
+        )
+
+    def test_the_dry_run_is_unchanged_by_a_failing_relay(self):
+        workflow = self.begin(idle=100)
+        self.made(workflow, self.creator, idle=100)
+        with mock.patch("manuspectrum.accounts.notices.deliver", return_value="failed"):
+            report = self.go(NOW, apply=False)
+        self.assertEqual((report.noticed, report.undelivered), ([str(workflow)], []))
+
+
 class CreatedInTransactionTests(PassCase):
     def test_creators_are_those_of_the_creation_rows_of_the_run(self):
         workflow = self.begin()

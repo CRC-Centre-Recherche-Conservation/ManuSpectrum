@@ -61,6 +61,7 @@ class Command(BaseCommand):
         prefix = "" if apply else "would be "
         for label, ids in (
             ("notice sent", report.noticed),
+            ("undelivered (will be retried)", report.undelivered),
             ("notice void (signed in since)", report.reset),
             ("anonymised", report.anonymised),
             ("superusers due for a decision (never anonymised)", report.superusers_due),

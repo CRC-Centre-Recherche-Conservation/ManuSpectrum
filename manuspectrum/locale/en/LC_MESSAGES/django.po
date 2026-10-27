@@ -53,6 +53,14 @@ msgstr ""
 "(%(when)s). The day after, it is lifted automatically and the data become "
 "visible to everyone."
 
+#: accounts/notices.py:99
+msgid ""
+"This end date was moved: the restriction was due to end sooner, before this "
+"notice could reach you, and it is never lifted without this much warning."
+msgstr ""
+"This end date was moved: the restriction was due to end sooner, before this "
+"notice could reach you, and it is never lifted without this much warning."
+
 #: accounts/notices.py:97
 msgid ""
 "If it must last longer, ask an administrator to extend it before that date, "
@@ -885,9 +893,14 @@ msgstr "restriction"
 msgid "restrictions"
 msgstr "restrictions"
 
-#: models.py:126
-msgid "The end date must be after today."
-msgstr "The end date must be after today."
+#: models.py:133
+#, python-format
+msgid ""
+"The end date must be at least %(days)d days after today: the final notice "
+"is sent that many days before the restriction is lifted."
+msgstr ""
+"The end date must be at least %(days)d days after today: the final notice "
+"is sent that many days before the restriction is lifted."
 
 #: models.py:131
 #, python-format
