@@ -1,0 +1,395 @@
+#!/usr/bin/env bash
+# manuspectrum-update: the one command that starts, schedules or cancels an
+# application update on the host. Installed as /usr/local/sbin/manuspectrum-update
+# (root, 0755) and run through sudo by the members of `manuspectrum-ops`
+# (/etc/sudoers.d/manuspectrum-update, password required).
+#
+#   manuspectrum-update --status
+#   manuspectrum-update --now TAG
+#   manuspectrum-update --at "YYYY-MM-DD HH:MM" [--window 30m] [--no-notice] TAG
+#   manuspectrum-update --cancel
+#   manuspectrum-update --fire            (manuspectrum-update-at.service only)
+#
+# TAG must be the armed release (STATE_DIR/armed). --now and --at need a
+# terminal and ask for `yes`. The update itself is the unit
+# manuspectrum-update@TAG.service, which runs release-update.sh under the
+# service account; this front only checks, schedules and follows it.
+#
+# --now exit codes mirror the engine: 0 installed, 1 refused or not started
+# (nothing changed), 3 rolled back, 4 rollback failed; 2 is a usage error.
+# Ctrl-C or a dropped SSH session stops the follower only; the unit keeps
+# running and the message names the journalctl command to resume.
+# --at accepts a Paris wall-clock slot 10 minutes to 30 days ahead, refuses a
+# time that does not exist or occurs twice (DST), a slot within the automatic
+# reboot window of unattended-upgrades (60 minutes before to 15 after, read in
+# Paris time) and warns for 02:00-03:00 (nightly backup). Order of effects: site
+# notice, timer drop-in and timer, `scheduled` state, mail; a failure of the
+# timer or of the state withdraws what was done before it.
+# --fire runs as root from the timer's service: it starts the update unit with
+# --no-block, then removes the slot drop-in, reloads systemd and stops the
+# timer, so the slot fires once and no reboot or reload can fire it again.
+#
+# Trust: this file and RELEASE_LIB_DIR are root-owned. Nothing is sourced or
+# executed from the checkout; the checkout is only passed to the service
+# account (runuser) or read as data. The command reads no environment
+# override (sudo resets the environment anyway); paths are the plain variables
+# below, which the tests rewrite in a copy.
+#
+# CONF_FILE (/etc/manuspectrum/release.conf, root:root 0644, written by Ansible):
+# KEY=value lines, comments (#) and blank lines allowed, parsed by pattern and
+# never sourced. All three keys are required, any other line is refused.
+#   SERVICE_USER=manuspectrum                 account that runs the engine and the app
+#   APP_DIR=/home/manuspectrum/manuspectrum   absolute path of the checkout
+#   PUBLIC_HOST=manuspectrum.example          public host name, shown in mails
+set -euo pipefail
+
+CONF_FILE=/etc/manuspectrum/release.conf
+CONF_OWNER_UID=0
+ROOT_UID=0
+REQUIRE_TTY=1
+RELEASE_LIB_DIR=/usr/local/lib/manuspectrum/release
+STATE_DIR=/var/lib/manuspectrum/release
+TIMER_UNIT=manuspectrum-update-at.timer
+DROPIN_DIR=/etc/systemd/system/manuspectrum-update-at.timer.d
+UNATTENDED_CONF=/etc/apt/apt.conf.d/50unattended-upgrades
+REBOOT_TZ=Europe/Paris
+FOLLOW_GRACE=1
+RELEASE_SENDMAIL=/usr/sbin/sendmail
+RELEASE_NOW_EPOCH=
+export RELEASE_SENDMAIL RELEASE_NOW_EPOCH
+
+die() { echo "manuspectrum-update: $*" >&2; exit 1; }
+usage() {
+  cat >&2 <<'EOF'
+usage: manuspectrum-update --status
+       manuspectrum-update --now TAG
+       manuspectrum-update --at "YYYY-MM-DD HH:MM" [--window 30m|2h] [--no-notice] TAG
+       manuspectrum-update --cancel
+EOF
+  exit 2
+}
+
+[ "$(id -u)" = "$ROOT_UID" ] || die "run it through sudo: sudo manuspectrum-update ..."
+
+# --- configuration
+
+SERVICE_USER="" APP_DIR="" PUBLIC_HOST=""
+read_conf() {
+  local line
+  [ -f "$CONF_FILE" ] || die "$CONF_FILE is missing: run Ansible to install it"
+  [ "$(stat -c %u "$CONF_FILE")" = "$CONF_OWNER_UID" ] || die "$CONF_FILE is not owned by root"
+  case "$(stat -c %a "$CONF_FILE")" in *[2367]? | *[2367]) die "$CONF_FILE is writable by group or others" ;; esac
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '' | '#'*) continue ;; esac
+    if [[ "$line" =~ ^SERVICE_USER=([a-z_][a-z0-9_-]{0,31})$ ]]; then SERVICE_USER="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ^APP_DIR=(/[A-Za-z0-9._/-]+)$ && "$line" != *..* ]]; then APP_DIR="${BASH_REMATCH[1]%/}"
+    elif [[ "$line" =~ ^PUBLIC_HOST=([A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?)$ ]]; then PUBLIC_HOST="${BASH_REMATCH[1]}"
+    else die "$CONF_FILE: unexpected line"; fi
+  done <"$CONF_FILE"
+  { [ -n "$SERVICE_USER" ] && [ -n "$APP_DIR" ] && [ -n "$PUBLIC_HOST" ]; } || die "$CONF_FILE must set SERVICE_USER, APP_DIR and PUBLIC_HOST"
+}
+read_conf
+ENV_FILE="$APP_DIR/deploy/compose/.env"
+export ENV_FILE
+
+# shellcheck source=../scripts/lib-release.sh
+# shellcheck source-path=SCRIPTDIR
+source "$RELEASE_LIB_DIR/lib-release.sh" || die "cannot read $RELEASE_LIB_DIR/lib-release.sh"
+
+# --- helpers
+
+now_epoch() { if [ -n "$RELEASE_NOW_EPOCH" ]; then echo "$RELEASE_NOW_EPOCH"; else date +%s; fi; }
+paris() { TZ=Europe/Paris date -d "@$1" "+$2"; }
+as_service() { runuser -u "$SERVICE_USER" -- "$@"; }
+state() { release_state_get "$STATE_DIR/$1" "$2" 2>/dev/null || true; }
+
+need_tty() {
+  [ "$REQUIRE_TTY" = 0 ] || { [ -t 0 ] && [ -t 1 ]; } || die "$1 needs a terminal: use ssh -t"
+}
+
+update_units_active() { # prints the active update units
+  systemctl list-units --state=active,activating,reloading,deactivating --no-legend --plain 'manuspectrum-update@*' 2>/dev/null || true
+}
+
+send_mail() { release_mail "$1" "$2" || echo "manuspectrum-update: warning: mail not sent ($1)" >&2; }
+
+state_perms() { # state_perms FILE: readable by the service account, written by root
+  chmod 0640 "$1"
+  chown "root:$(id -gn "$SERVICE_USER")" "$1"
+}
+
+armed_check() { # armed_check TAG: the tag is the armed release
+  release_tag_valid "$1" || die "'$1' is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)"
+  [ -f "$STATE_DIR/armed" ] || die "no release is armed: nothing to install"
+  [ "$(state armed TAG)" = "$1" ] || die "$1 is not the armed release ($(state armed TAG)): only the armed release can be installed"
+}
+
+idle_check() { # idle_check
+  if [ -f "$STATE_DIR/scheduled" ]; then
+    die "an update is already scheduled ($(state scheduled TAG) at $(state scheduled AT_PARIS) Paris): cancel it first with: sudo manuspectrum-update --cancel"
+  fi
+  if [ -n "$(update_units_active)" ]; then
+    die "an update is running: follow it with journalctl -fu 'manuspectrum-update@*' -o cat"
+  fi
+}
+
+check_only() { # check_only TAG: the engine's checks, its refusal shown as is
+  local out
+  echo "Checking $1 (nothing is changed) ..."
+  if ! out="$(as_service "$RELEASE_LIB_DIR/release-update.sh" --check-only "$1" 2>&1)"; then
+    printf '%s\n' "$out" >&2
+    die "the check refused $1: nothing was started"
+  fi
+  tail -n 2 <<<"$out"
+}
+
+confirm() {
+  local answer=""
+  printf 'Type yes to continue: '
+  read -r answer || true
+  [ "$answer" = yes ] || die "not confirmed: nothing was started"
+}
+
+describe_release() { # describe_release TAG
+  local image sec need
+  image="$(state armed IMAGE)" sec="$(state armed SECURITY)" need="$(state armed NEEDS_ANSIBLE)"
+  echo "  release:  $1 (installed: $(state current TAG))"
+  echo "  image:    $image"
+  [ "$sec" != 1 ] || echo "  security: this release carries a security fix"
+  [ "$need" != 1 ] || echo "  note:     the host needs an Ansible run for this release; the check below decides"
+}
+
+# --- --status
+
+cmd_status() {
+  local t at next notice
+  echo "current:   $(state current TAG) ($(state current COMMIT))"
+  echo "previous: $(state previous TAG)"
+  if [ -f "$STATE_DIR/armed" ]; then
+    echo "armed:    $(state armed TAG) image $(state armed IMAGE)"
+    echo "          security=$(state armed SECURITY) needs_ansible=$(state armed NEEDS_ANSIBLE) notified=$(state armed NOTIFIED)"
+  else echo "armed:    none"; fi
+  if [ -f "$STATE_DIR/pending" ]; then
+    t="$(state pending SINCE)"
+    echo "pending:  since $(paris "${t:-0}" '%Y-%m-%d %H:%M') Paris, security=$(state pending SECURITY)"
+    if [ "$(state pending SECURITY)" = 1 ]; then echo "          deadline: 14 days after the oldest pending release"
+    else echo "          deadline: 30 days after the oldest pending release"; fi
+  else echo "pending:  none"; fi
+  if [ -f "$STATE_DIR/scheduled" ]; then
+    at="$(state scheduled AT_EPOCH)"
+    echo "scheduled: $(state scheduled TAG) at $(state scheduled AT_PARIS) Paris / $(date -u -d "@${at:-0}" '+%Y-%m-%d %H:%M') UTC, window ends $(paris "$(state scheduled WINDOW_END_EPOCH)" '%H:%M') Paris"
+    notice="$(state scheduled NOTICE_ID)"
+    echo "          by $(state scheduled BY), notice id: ${notice:-none}"
+    next="$(systemctl show -p NextElapseUSecRealtime --value "$TIMER_UNIT" 2>/dev/null || true)"
+    echo "          timer next elapse: ${next:-not armed}"
+    if [ -n "$(state scheduled OUTCOME)" ]; then
+      echo "          OUTCOME=$(state scheduled OUTCOME) REASON=$(state scheduled REASON): the slot did not run."
+      echo "          Acknowledge it with: sudo manuspectrum-update --cancel"
+    fi
+    [ -z "$(state scheduled HELD_TAG)" ] || echo "          a newer release ($(state scheduled HELD_TAG)) is held back until this slot is over"
+  else echo "scheduled: none"; fi
+  if [ -f "$STATE_DIR/inflight" ]; then
+    echo "inflight: $(state inflight FROM_TAG) -> $(state inflight TO_TAG) since $(paris "$(state inflight STARTED_AT)" '%Y-%m-%d %H:%M') Paris"
+  else echo "inflight: none"; fi
+  echo "rollbacks: $(state rollbacks COUNT)"
+  if [ "$(state rollbacks ROLLBACK_FAILED)" = 1 ]; then
+    echo "ROLLBACK FAILED: the last rollback did not bring the previous version back."
+    echo "  Repair or restore the site (deploy/BACKUP.md, snapshots tagged pre-update), check it answers,"
+    echo "  then remove $STATE_DIR/inflight (as root): no update runs while it exists."
+    echo "  ROLLBACK_FAILED returns to 0 after the next successful update."
+  fi
+  if [ -n "$(update_units_active)" ]; then echo "unit:     an update unit is running (journalctl -fu 'manuspectrum-update@*' -o cat)"; fi
+}
+
+# --- --now
+
+follower="" starter=""
+cleanup_followers() {
+  [ -z "$follower" ] || kill "$follower" 2>/dev/null || true
+  [ -z "$starter" ] || kill "$starter" 2>/dev/null || true
+}
+
+cmd_now() {
+  local tag="$1" unit status result
+  armed_check "$tag"
+  need_tty "--now"
+  idle_check
+  check_only "$tag"
+  echo "About to install now:"
+  describe_release "$tag"
+  echo "  The site restarts; it is unavailable while the new version starts."
+  confirm
+  unit="manuspectrum-update@$tag.service"
+  journalctl -fu "$unit" -n 0 -o cat &
+  follower=$!
+  trap 'cleanup_followers; echo; echo "Disconnected. The update keeps running. Follow it with: journalctl -fu $unit -o cat; result: sudo manuspectrum-update --status"; exit 130' INT TERM HUP
+  systemctl start "$unit" &
+  starter=$!
+  wait "$starter" || true
+  starter=""
+  trap - INT TERM HUP
+  sleep "$FOLLOW_GRACE"
+  cleanup_followers
+  status="$(systemctl show -p ExecMainStatus --value "$unit" 2>/dev/null || echo "")"
+  result="$(systemctl show -p Result --value "$unit" 2>/dev/null || echo "")"
+  case "$status" in
+    0) echo "$tag is installed and the application answers." ; exit 0 ;;
+    1) echo "REFUSED: $tag was not installed and nothing was changed. The reason is the last REASON= line of: journalctl -u $unit -o cat"; exit 1 ;;
+    3) echo "ROLLED BACK: $tag did not start; the previous version is back. $tag stays armed. Nothing was restored."; exit 3 ;;
+    4) echo "ROLLBACK FAILED: the site may be down. See: sudo manuspectrum-update --status"; exit 4 ;;
+    *) echo "The update unit ended unexpectedly (status '${status:-?}', result '${result:-?}'): journalctl -u $unit -o cat"; exit 1 ;;
+  esac
+}
+
+# --- --at
+
+reboot_conflict() { # reboot_conflict SLOT_EPOCH PARIS_DATE: prints the reboot time when the slot falls in its window
+  local time="" day d epoch
+  grep -Eq '^[[:space:]]*Unattended-Upgrade::Automatic-Reboot[[:space:]]+"true"[[:space:]]*;' "$UNATTENDED_CONF" 2>/dev/null || return 1
+  time="$(sed -nE 's/^[[:space:]]*Unattended-Upgrade::Automatic-Reboot-Time[[:space:]]+"([0-2][0-9]:[0-5][0-9])"[[:space:]]*;.*/\1/p' "$UNATTENDED_CONF" | tail -n 1)"
+  [ -n "$time" ] || return 1
+  for day in -1 0 1; do
+    d="$(TZ=$REBOOT_TZ date -d "$2 $day day" +%F)"
+    epoch="$(TZ=$REBOOT_TZ date -d "$d $time" +%s 2>/dev/null)" || continue
+    if [ "$1" -ge "$((epoch - 3600))" ] && [ "$1" -le "$((epoch + 900))" ]; then echo "$time"; return 0; fi
+  done
+  return 1
+}
+
+undo_schedule() { # undo_schedule NOTICE_ID
+  systemctl stop "$TIMER_UNIT" 2>/dev/null || true
+  rm -f "$DROPIN_DIR/slot.conf"
+  rmdir "$DROPIN_DIR" 2>/dev/null || true
+  systemctl daemon-reload 2>/dev/null || true
+  rm -f "$STATE_DIR/scheduled"
+  if [ -n "${1-}" ]; then as_service make -C "$APP_DIR/deploy" site-notice ARGS="withdraw $1" >/dev/null 2>&1 || true; fi
+}
+
+cmd_at() {
+  local slot="$1" window="$2" notice_flag="$3" tag="$4"
+  local parsed at_epoch utc_text at_paris wsec wend warnings="" reboot notice_id="" out by start_iso end_iso created
+  armed_check "$tag"
+  need_tty "--at"
+  idle_check
+  parsed="$(release_slot_parse "$slot")" || die "slot refused: $slot"
+  IFS=$'\t' read -r at_epoch utc_text at_paris <<<"$parsed"
+  if [[ "$window" =~ ^([0-9]{1,3})([mh])$ ]]; then
+    wsec=$((10#${BASH_REMATCH[1]} * $([ "${BASH_REMATCH[2]}" = h ] && echo 3600 || echo 60)))
+  else die "--window must look like 30m or 2h"; fi
+  { [ "$wsec" -ge 300 ] && [ "$wsec" -le 14400 ]; } || die "--window must be between 5m and 4h"
+  if reboot="$(reboot_conflict "$at_epoch" "${at_paris%% *}")"; then
+    die "$at_paris Paris is within the automatic reboot window of this host (reboot at $reboot, refused from 60 minutes before to 15 after): choose another time, for example 23:00"
+  fi
+  case "${at_paris#* }" in 02:*) warnings+="  warning:  02:00-03:00 Paris is when the nightly backup runs; the update waits for it (23:00 is a better slot)"$'\n' ;; esac
+  wend=$((at_epoch + wsec))
+  check_only "$tag"
+  echo "About to schedule:"
+  describe_release "$tag"
+  echo "  slot:     $at_paris Paris / $utc_text UTC"
+  echo "  window:   ends $(paris "$wend" '%H:%M') Paris (the update must start before it)"
+  if [ "$notice_flag" = 1 ]; then echo "  notice:   yes, a site announcement is planned for the window"; else echo "  notice:   no"; fi
+  printf '%s' "$warnings"
+  confirm
+  by="${SUDO_USER:-root}"
+  [[ "$by" =~ ^[a-z_][a-z0-9_-]*$ ]] || by=root
+  start_iso="$(paris "$at_epoch" '%Y-%m-%dT%H:%M')" end_iso="$(paris "$wend" '%Y-%m-%dT%H:%M')"
+  if [ "$notice_flag" = 1 ]; then
+    if ! out="$(as_service make -C "$APP_DIR/deploy" site-notice ARGS="plan --start $start_iso --end $end_iso" 2>&1)"; then
+      printf '%s\n' "$out" >&2
+      die "the site notice could not be planned: nothing was scheduled (use --no-notice to schedule without one)"
+    fi
+    if [[ "$out" =~ (^|[[:space:]])id=([0-9]{1,12})($|[[:space:]]) ]]; then notice_id="${BASH_REMATCH[2]}"; else
+      printf '%s\n' "$out" >&2
+      die "the site notice answered without an id: nothing was scheduled"
+    fi
+  fi
+  created="$(now_epoch)"
+  if ! { mkdir -p "$DROPIN_DIR" \
+    && printf '[Timer]\nOnCalendar=\nOnCalendar=%s UTC\n' "$utc_text" >"$DROPIN_DIR/slot.conf" \
+    && systemctl daemon-reload \
+    && systemctl start "$TIMER_UNIT" \
+    && release_state_write "$STATE_DIR/scheduled" "TAG=$tag" "AT_EPOCH=$at_epoch" "AT_PARIS=$at_paris" "WINDOW_END_EPOCH=$wend" \
+      "NOTICE_ID=$notice_id" "BY=$by" "CREATED_AT=$created" "OUTCOME=" "REASON=" \
+    && state_perms "$STATE_DIR/scheduled"; }; then
+    undo_schedule "$notice_id"
+    die "the timer or the state could not be set: the schedule and the notice were withdrawn"
+  fi
+  send_mail "$tag scheduled for $at_paris by $by" "$tag is scheduled on $PUBLIC_HOST for $at_paris Paris ($utc_text UTC) by $by. The window ends at $(paris "$wend" '%H:%M') Paris.
+Cancel with: sudo manuspectrum-update --cancel"
+  echo "Scheduled $tag for $at_paris Paris. Cancel with: sudo manuspectrum-update --cancel"
+}
+
+# --- --cancel
+
+cmd_cancel() {
+  local tag="" notice="" outcome="" had=0
+  if [ -n "$(update_units_active)" ]; then die "an update is running: it cannot be cancelled from here"; fi
+  if [ -f "$STATE_DIR/scheduled" ]; then
+    had=1
+    tag="$(state scheduled TAG)" notice="$(state scheduled NOTICE_ID)" outcome="$(state scheduled OUTCOME)"
+  fi
+  [ -n "$outcome" ] && notice=""
+  [ "$had" = 1 ] || [ -e "$DROPIN_DIR/slot.conf" ] || { echo "Nothing is scheduled."; return 0; }
+  undo_schedule "$notice"
+  if [ "$had" = 1 ]; then
+    if [ -n "$outcome" ]; then
+      echo "Acknowledged: the $outcome schedule of $tag is cleared."
+    else
+      send_mail "schedule of $tag cancelled" "The scheduled update of $tag on $PUBLIC_HOST was cancelled by ${SUDO_USER:-root}."
+      echo "The schedule of $tag is cancelled."
+    fi
+  else echo "Removed a leftover timer slot."; fi
+}
+
+# --- --fire
+
+cmd_fire() {
+  local tag unit notice
+  [ -f "$STATE_DIR/scheduled" ] || die "nothing is scheduled"
+  [ -z "$(state scheduled OUTCOME)" ] || die "the schedule already has an outcome ($(state scheduled OUTCOME)): not started"
+  tag="$(state scheduled TAG)"
+  release_tag_valid "$tag" || die "the scheduled tag is unreadable"
+  unit="manuspectrum-update@$tag.service"
+  notice="$(state scheduled NOTICE_ID)"
+  if [ -n "$(update_units_active)" ] || ! systemctl start --no-block "$unit"; then
+    release_state_set "$STATE_DIR/scheduled" OUTCOME refused REASON busy || true
+    state_perms "$STATE_DIR/scheduled" || true
+    if [ -n "$notice" ]; then as_service make -C "$APP_DIR/deploy" site-notice ARGS="withdraw $notice" >/dev/null 2>&1 || true; fi
+    send_mail "scheduled update of $tag refused: busy" "The scheduled update of $tag on $PUBLIC_HOST could not start: another update unit was running or $unit would not start. Nothing was changed."
+    die "$unit was not started"
+  fi
+  rm -f "$DROPIN_DIR/slot.conf"
+  rmdir "$DROPIN_DIR" 2>/dev/null || true
+  systemctl daemon-reload || true
+  systemctl stop "$TIMER_UNIT" || true
+  echo "started $unit"
+}
+
+# --- dispatch
+
+[ "$#" -ge 1 ] || usage
+case "$1" in
+  --status) [ "$#" -eq 1 ] || usage; cmd_status ;;
+  --cancel) [ "$#" -eq 1 ] || usage; cmd_cancel ;;
+  --fire) [ "$#" -eq 1 ] || usage; cmd_fire ;;
+  --now)
+    [ "$#" -eq 2 ] || usage
+    [[ "$2" =~ ^v[0-9A-Za-z.-]{1,40}$ ]] || usage
+    cmd_now "$2" ;;
+  --at)
+    [ "$#" -ge 3 ] || usage
+    slot="$2" window=30m notice_flag=1 tag=""
+    [[ "$slot" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]] || usage
+    shift 2
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --window) [ "$#" -ge 2 ] || usage; window="$2"; [[ "$window" =~ ^[0-9]{1,3}[mh]$ ]] || usage; shift 2 ;;
+        --no-notice) notice_flag=0; shift ;;
+        -*) usage ;;
+        *) [ -z "$tag" ] || usage; [[ "$1" =~ ^v[0-9A-Za-z.-]{1,40}$ ]] || usage; tag="$1"; shift ;;
+      esac
+    done
+    [ -n "$tag" ] || usage
+    cmd_at "$slot" "$window" "$notice_flag" "$tag" ;;
+  *) usage ;;
+esac

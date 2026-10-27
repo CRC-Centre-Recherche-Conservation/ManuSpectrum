@@ -29,7 +29,8 @@ docker run --rm -v "$ROOT:/mnt:ro" -w /mnt "$SHELLCHECK_IMAGE" -x \
   deploy/compose/certbot/*.sh deploy/compose/nginx/tests/*.sh \
   deploy/scripts/*.sh deploy/scripts/tests/*.sh \
   deploy/compose/observability/check.sh deploy/compose/observability/alertmanager/render.sh \
-  deploy/certs/*.sh deploy/certs/tests/*.sh deploy/logrotate/tests/*.sh deploy/systemd/tests/*.sh
+  deploy/certs/*.sh deploy/certs/tests/*.sh deploy/logrotate/tests/*.sh deploy/systemd/tests/*.sh \
+  deploy/sbin/manuspectrum-update deploy/sbin/tests/*.sh
 echo "shellcheck: no warning"
 
 step "hadolint"
@@ -92,6 +93,9 @@ bash deploy/scripts/tests/test_release_watch.sh
 
 step "release update tests"
 bash deploy/scripts/tests/test_release_update.sh
+
+step "update front tests"
+bash deploy/sbin/tests/test_manuspectrum_update.sh
 
 step "local CA tests"
 bash deploy/certs/tests/test_make_local_ca.sh
